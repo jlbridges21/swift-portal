@@ -1,0 +1,46 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { getProfile, logActivity } from "@/lib/auth";
+import { logProjectActivity } from "@/lib/activity";
+import { notifyAdmins } from "@/lib/notifications";
+
+export async function POST(request: Request) {
+  const profile = await getProfile();
+  if (!profile || !profile.client_id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json();
+  if (!body.project_id) {
+    return NextResponse.json({ error: "Project required" }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("projects")
+    .update({
+      deliverables_approved_at: new Date().toISOString(),
+      deliverables_approved_by: profile.id,
+    })
+    .eq("id", body.project_id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  await logProjectActivity("deliverables_approved", "Deliverables approved by client", {
+    projectId: body.project_id,
+    userId: profile.id,
+  });
+
+  await notifyAdmins({
+    type: "status_changed",
+    title: "Deliverables approved",
+    body: "A client has approved their deliverables.",
+    link: `/admin/projects/${body.project_id}`,
+    projectId: body.project_id,
+  });
+
+  return NextResponse.json({ success: true });
+}

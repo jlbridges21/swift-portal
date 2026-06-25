@@ -1,0 +1,155 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import type { MediaAsset, Tour, AssetReview } from "@/lib/types";
+import { Check, X, MessageSquare, Images, Clapperboard, Globe, FileText } from "lucide-react";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+interface DeliverableReviewProps {
+  projectId: string;
+  photos: MediaAsset[];
+  videos: MediaAsset[];
+  tours: Tour[];
+  documents: MediaAsset[];
+  reviews: AssetReview[];
+  isPreview?: boolean;
+}
+
+export function DeliverableReview({
+  projectId,
+  photos,
+  videos,
+  tours,
+  documents,
+  reviews: initialReviews,
+  isPreview,
+}: DeliverableReviewProps) {
+  const router = useRouter();
+  const [reviews, setReviews] = useState(initialReviews);
+  const [feedbackMap, setFeedbackMap] = useState<Record<string, string>>({});
+  const [expandedFeedback, setExpandedFeedback] = useState<string | null>(null);
+
+  const allItems = [
+    ...photos.map((p) => ({ type: "photo" as const, id: p.id, name: p.file_name, icon: Images })),
+    ...videos.map((v) => ({ type: "video" as const, id: v.id, name: v.file_name, icon: Clapperboard })),
+    ...tours.map((t) => ({ type: "tour" as const, id: t.id, name: t.tour_name, icon: Globe })),
+    ...documents.map((d) => ({ type: "document" as const, id: d.id, name: d.file_name, icon: FileText })),
+  ];
+
+  if (allItems.length === 0) return null;
+
+  function getReview(assetType: string, assetId: string) {
+    return reviews.find((r) => r.asset_type === assetType && r.asset_id === assetId);
+  }
+
+  async function submitReview(assetType: string, assetId: string, status: "approved" | "rejected") {
+    const key = `${assetType}:${assetId}`;
+    const res = await fetch("/api/asset-reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        project_id: projectId,
+        asset_type: assetType,
+        asset_id: assetId,
+        status,
+        feedback: feedbackMap[key] || null,
+      }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setReviews((prev) => {
+        const filtered = prev.filter((r) => !(r.asset_type === assetType && r.asset_id === assetId));
+        return [...filtered, updated];
+      });
+      toast.success(status === "approved" ? "Approved" : "Feedback submitted");
+      setExpandedFeedback(null);
+      router.refresh();
+    }
+  }
+
+  return (
+    <Card className="shadow-sm border-purple-200" id="deliverables">
+      <CardHeader>
+        <CardTitle className="text-base">Review Deliverables</CardTitle>
+        <p className="text-sm text-muted">Approve each item or provide feedback for changes.</p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {allItems.map((item) => {
+          const review = getReview(item.type, item.id);
+          const key = `${item.type}:${item.id}`;
+          const isRejected = review?.status === "rejected";
+          const isApproved = review?.status === "approved";
+          const Icon = item.icon;
+
+          return (
+            <div
+              key={key}
+              className={cn(
+                "rounded-lg border p-4 transition-colors",
+                isRejected && "border-red-300 bg-red-50/80",
+                isApproved && "border-emerald-200 bg-emerald-50/50",
+                !review && "border-border"
+              )}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Icon className={cn("h-5 w-5 shrink-0", isRejected ? "text-red-500" : "text-muted")} />
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{item.name}</p>
+                    <p className="text-xs text-muted capitalize">{item.type}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {isApproved && <Badge variant="success">Approved</Badge>}
+                  {isRejected && <Badge variant="danger">Changes Requested</Badge>}
+                  {!isPreview && !isApproved && (
+                    <>
+                      <Button variant="accent" size="sm" onClick={() => submitReview(item.type, item.id, "approved")}>
+                        <Check className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setExpandedFeedback(expandedFeedback === key ? null : key)}
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+              {review?.feedback && (
+                <p className="mt-2 text-sm text-red-700 bg-red-50 rounded p-2">{review.feedback}</p>
+              )}
+              {expandedFeedback === key && (
+                <div className="mt-3 space-y-2 border-t border-border pt-3">
+                  <Textarea
+                    placeholder="Describe what you'd like changed..."
+                    value={feedbackMap[key] || ""}
+                    onChange={(e) => setFeedbackMap({ ...feedbackMap, [key]: e.target.value })}
+                    rows={2}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 border-red-200"
+                    onClick={() => submitReview(item.type, item.id, "rejected")}
+                  >
+                    <X className="h-3.5 w-3.5" /> Submit Feedback
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
