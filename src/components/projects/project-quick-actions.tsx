@@ -6,7 +6,7 @@ import {
   Calendar, Eye, CreditCard, Download, Images,
 } from "lucide-react";
 import { normalizeStatus } from "@/lib/constants";
-import { canDownloadDeliverables, showDeliverablesToClient } from "@/lib/deliverables";
+import { canDownloadDeliverables } from "@/lib/deliverables";
 
 interface QuickActionsProps {
   status: string;
@@ -22,7 +22,7 @@ export function ProjectQuickActions({
   className,
 }: QuickActionsProps) {
   const s = normalizeStatus(status);
-  const canPreview = showDeliverablesToClient(s);
+  const canPreview = hasMedia;
   const canDownload = canDownloadDeliverables(s);
 
   const actions = [

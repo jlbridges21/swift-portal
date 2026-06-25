@@ -87,7 +87,7 @@ export function AdminPhotoGrid({
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {photos.map((p, i) => (
         <div
-          key={`photo-card-${p.id}`}
+          key={`photo-card-${p.project_id}-${p.id}-${i}`}
           draggable
           onDragStart={() => setDragId(p.id)}
           onDragEnd={() => { setDragId(null); setOverId(null); }}

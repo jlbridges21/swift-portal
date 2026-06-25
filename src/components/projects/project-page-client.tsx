@@ -19,7 +19,7 @@ import { getClientNextStep } from "@/lib/journey";
 import { QuoteSection } from "@/components/projects/quote-section";
 import { DeliverableReview } from "@/components/projects/deliverable-review";
 import { normalizeStatus } from "@/lib/constants";
-import { canDownloadDeliverables, showDeliverablesToClient } from "@/lib/deliverables";
+import { canDownloadDeliverables } from "@/lib/deliverables";
 import type { Project, MediaAsset, Tour, Payment, Revision, ShootProposal, ActivityLog, ProjectQuote, AssetReview } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 import {
@@ -107,7 +107,8 @@ export function ProjectPageClient({
 
   const status = normalizeStatus(project.status);
   const downloadsUnlocked = isPreview || isAdmin || canDownloadDeliverables(status);
-  const mediaVisible = isPreview || isAdmin || showDeliverablesToClient(status);
+  const hasAnyMedia = photos.length > 0 || videos.length > 0 || tours.length > 0 || documents.length > 0;
+  const mediaVisible = isPreview || isAdmin || hasAnyMedia;
   const pendingPayments = payments.filter((p) => p.status === "pending");
   const clientStep = getClientNextStep(project, pendingPayments.length > 0, shootProposals);
   const uploadedVideos = videos.filter((v) => v.media_source !== "youtube");
@@ -204,7 +205,7 @@ export function ProjectPageClient({
             <ProjectQuickActions
               status={project.status}
               hasPendingPayment={pendingPayments.length > 0}
-              hasMedia={hasMedia && mediaVisible}
+              hasMedia={hasAnyMedia}
             />
           </div>
         )}

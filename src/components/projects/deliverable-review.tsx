@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +22,48 @@ interface DeliverableReviewProps {
   isPreview?: boolean;
 }
 
+function isJpgOrPng(asset: MediaAsset): boolean {
+  const mime = asset.mime_type?.toLowerCase() ?? "";
+  if (mime === "image/jpeg" || mime === "image/png") return true;
+  const ext = asset.file_name.split(".").pop()?.toLowerCase() ?? "";
+  return ext === "jpg" || ext === "jpeg" || ext === "png";
+}
+
+function PhotoReviewThumb({ assetId, fileName }: { assetId: string; fileName: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/media/download/${assetId}?thumb=1`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d.url) setUrl(d.url);
+        else if (!cancelled) setFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [assetId]);
+
+  return (
+    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-black/5">
+      {url ? (
+        <Image src={url} alt={fileName} fill className="object-cover" sizes="64px" />
+      ) : failed ? (
+        <div className="flex h-full items-center justify-center">
+          <Images className="h-5 w-5 text-muted" />
+        </div>
+      ) : (
+        <div className="h-full w-full animate-pulse bg-slate-200" />
+      )}
+    </div>
+  );
+}
+
 export function DeliverableReview({
   projectId,
   photos,
@@ -36,10 +79,34 @@ export function DeliverableReview({
   const [expandedFeedback, setExpandedFeedback] = useState<string | null>(null);
 
   const allItems = [
-    ...photos.map((p) => ({ type: "photo" as const, id: p.id, name: p.file_name, icon: Images })),
-    ...videos.map((v) => ({ type: "video" as const, id: v.id, name: v.file_name, icon: Clapperboard })),
-    ...tours.map((t) => ({ type: "tour" as const, id: t.id, name: t.tour_name, icon: Globe })),
-    ...documents.map((d) => ({ type: "document" as const, id: d.id, name: d.file_name, icon: FileText })),
+    ...photos.map((p) => ({
+      type: "photo" as const,
+      id: p.id,
+      name: p.file_name,
+      icon: Images,
+      asset: p,
+    })),
+    ...videos.map((v) => ({
+      type: "video" as const,
+      id: v.id,
+      name: v.file_name,
+      icon: Clapperboard,
+      asset: null as MediaAsset | null,
+    })),
+    ...tours.map((t) => ({
+      type: "tour" as const,
+      id: t.id,
+      name: t.tour_name,
+      icon: Globe,
+      asset: null as MediaAsset | null,
+    })),
+    ...documents.map((d) => ({
+      type: "document" as const,
+      id: d.id,
+      name: d.file_name,
+      icon: FileText,
+      asset: d,
+    })),
   ];
 
   if (allItems.length === 0) return null;
@@ -87,6 +154,8 @@ export function DeliverableReview({
           const isRejected = review?.status === "rejected";
           const isApproved = review?.status === "approved";
           const Icon = item.icon;
+          const showPhotoThumb =
+            item.type === "photo" && item.asset && isJpgOrPng(item.asset);
 
           return (
             <div
@@ -100,7 +169,13 @@ export function DeliverableReview({
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <Icon className={cn("h-5 w-5 shrink-0", isRejected ? "text-red-500" : "text-muted")} />
+                  {showPhotoThumb ? (
+                    <PhotoReviewThumb assetId={item.id} fileName={item.name} />
+                  ) : (
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-slate-100 ring-1 ring-black/5">
+                      <Icon className={cn("h-6 w-6", isRejected ? "text-red-500" : "text-muted")} />
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <p className="font-medium text-sm truncate">{item.name}</p>
                     <p className="text-xs text-muted capitalize">{item.type}</p>

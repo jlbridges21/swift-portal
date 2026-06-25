@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireAdminApi } from "@/lib/api-auth";
-import {
-  ALLOWED_PHOTO_TYPES,
-  ALLOWED_VIDEO_TYPES,
-  ALLOWED_DOCUMENT_TYPES,
-} from "@/lib/constants";
 import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
+import {
+  buildMediaStoragePath,
+  validateMediaFile,
+} from "@/lib/media-upload";
 import { logActivity } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
@@ -47,29 +46,18 @@ export async function POST(request: Request) {
   let nextOrder = (existing?.display_order ?? -1) + 1;
 
   for (const file of files) {
-    const allowedTypes =
-      mediaType === "photo"
-        ? ALLOWED_PHOTO_TYPES
-        : mediaType === "video"
-          ? ALLOWED_VIDEO_TYPES
-          : ALLOWED_DOCUMENT_TYPES;
-
-    if (!allowedTypes.includes(file.type)) {
-      errors.push(`${file.name}: unsupported file type`);
-      continue;
-    }
-
-    if (file.size > sizeLimit) {
-      errors.push(`${file.name}: exceeds ${formatFileSize(sizeLimit)} limit`);
+    const validation = validateMediaFile(file, mediaType, sizeLimit);
+    if (!validation.ok) {
+      errors.push(validation.error);
       continue;
     }
 
     const bucket = mediaType === "document" ? "project-documents" : "project-media";
-    const filePath = `${projectId}/${Date.now()}-${file.name}`;
+    const filePath = buildMediaStoragePath(projectId, file.name);
 
     const { error: uploadError } = await supabase.storage
       .from(bucket)
-      .upload(filePath, file, { contentType: file.type, upsert: false });
+      .upload(filePath, file, { contentType: validation.mimeType, upsert: false });
 
     if (uploadError) {
       errors.push(`${file.name}: ${uploadError.message}`);
@@ -83,7 +71,7 @@ export async function POST(request: Request) {
         file_name: file.name,
         file_path: filePath,
         file_size: file.size,
-        mime_type: file.type,
+        mime_type: validation.mimeType,
         media_type: mediaType,
         media_source: "upload",
         display_order: nextOrder++,
@@ -141,7 +129,10 @@ export async function POST(request: Request) {
   }
 
   if (uploaded.length === 0 && errors.length > 0) {
-    return NextResponse.json({ error: errors.join("; "), errors }, { status: 400 });
+    return NextResponse.json(
+      { error: errors.join("; "), errors, uploaded: [] },
+      { status: 400 }
+    );
   }
 
   return NextResponse.json({ uploaded, errors });

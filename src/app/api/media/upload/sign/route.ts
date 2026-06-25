@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireAdminApi } from "@/lib/api-auth";
-import {
-  ALLOWED_PHOTO_TYPES,
-  ALLOWED_VIDEO_TYPES,
-  ALLOWED_DOCUMENT_TYPES,
-} from "@/lib/constants";
 import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
+import {
+  buildMediaStoragePath,
+  validateMediaFile,
+} from "@/lib/media-upload";
 
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
@@ -15,19 +14,8 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { projectId, fileName, mimeType, fileSize, mediaType } = body;
 
-  if (!projectId || !fileName || !mimeType || !mediaType) {
+  if (!projectId || !fileName || !mediaType || fileSize == null) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-  }
-
-  const allowedTypes =
-    mediaType === "photo"
-      ? ALLOWED_PHOTO_TYPES
-      : mediaType === "video"
-        ? ALLOWED_VIDEO_TYPES
-        : ALLOWED_DOCUMENT_TYPES;
-
-  if (!allowedTypes.includes(mimeType)) {
-    return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
   }
 
   const sizeLimit =
@@ -37,16 +25,19 @@ export async function POST(request: Request) {
         ? FILE_SIZE_LIMITS.video
         : FILE_SIZE_LIMITS.document;
 
-  if (fileSize > sizeLimit) {
-    return NextResponse.json(
-      { error: `File exceeds ${formatFileSize(sizeLimit)} limit` },
-      { status: 400 }
-    );
+  const validation = validateMediaFile(
+    { name: fileName, type: mimeType || "", size: fileSize },
+    mediaType,
+    sizeLimit
+  );
+
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
   }
 
   const supabase = await createServiceClient();
   const bucket = mediaType === "document" ? "project-documents" : "project-media";
-  const filePath = `${projectId}/${Date.now()}-${fileName}`;
+  const filePath = buildMediaStoragePath(projectId, fileName);
 
   const { data: existing } = await supabase
     .from("media_assets")
@@ -73,5 +64,6 @@ export async function POST(request: Request) {
     filePath,
     bucket,
     displayOrder,
+    mimeType: validation.mimeType,
   });
 }

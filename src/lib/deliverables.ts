@@ -5,13 +5,7 @@ export function canDownloadDeliverables(status: string): boolean {
   return normalizeStatus(status) === "delivered";
 }
 
-/** Watermarked / preview access during review and payment stages. */
-export function canPreviewDeliverables(status: string): boolean {
-  const s = normalizeStatus(status);
-  return ["ready_for_review", "awaiting_payment", "delivered"].includes(s);
-}
-
-/** Hide deliverable media from client until sent for review. */
-export function showDeliverablesToClient(status: string): boolean {
-  return canPreviewDeliverables(status);
+/** Clients can always preview uploaded media; downloads are gated separately. */
+export function showDeliverablesToClient(_status?: string): boolean {
+  return true;
 }

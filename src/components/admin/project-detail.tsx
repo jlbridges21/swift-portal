@@ -30,7 +30,17 @@ import {
 } from "lucide-react";
 import { UploadProgressList, type UploadProgressItem } from "@/components/admin/upload-progress-list";
 import { defaultProjectName } from "@/lib/utils";
+import { resolveMimeType } from "@/lib/media-upload";
 import { toast } from "sonner";
+
+function dedupeMedia<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
 
 interface AdminProjectDetailProps {
   project: Project & { clients: Client };
@@ -111,7 +121,9 @@ export function AdminProjectDetail({
   const [media, setMedia] = useState(initialMedia);
   const [tours, setTours] = useState(initialTours);
 
-  const photos = media.filter((m) => m.media_type === "photo").sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+  const photos = dedupeMedia(
+    media.filter((m) => m.media_type === "photo").sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+  );
   const videos = media.filter((m) => m.media_type === "video").sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
   const documents = media.filter((m) => m.media_type === "document").sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
 
@@ -205,7 +217,7 @@ export function AdminProjectDetail({
       body: JSON.stringify({
         projectId: initialProject.id,
         fileName: file.name,
-        mimeType: file.type,
+        mimeType: resolveMimeType(file),
         fileSize: file.size,
         mediaType,
       }),
@@ -225,7 +237,7 @@ export function AdminProjectDetail({
         projectId: initialProject.id,
         filePath: signData.filePath,
         fileName: file.name,
-        mimeType: file.type,
+        mimeType: resolveMimeType(file),
         fileSize: file.size,
         mediaType,
         displayOrder: signData.displayOrder,
@@ -255,10 +267,10 @@ export function AdminProjectDetail({
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve((data.uploaded ?? []) as MediaAsset[]);
           } else {
-            reject(new Error(data.error || "Upload failed"));
+            reject(new Error(data.error || `Upload failed (${xhr.status})`));
           }
         } catch {
-          reject(new Error("Invalid server response"));
+          reject(new Error(xhr.responseText || "Invalid server response"));
         }
       });
       xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
@@ -306,7 +318,7 @@ export function AdminProjectDetail({
       }
 
       if (uploaded.length) {
-        setMedia((prev) => [...prev, ...uploaded]);
+        setMedia((prev) => dedupeMedia([...prev, ...uploaded]));
         if (mediaType === "photo") {
           setPendingNewPhotoIds((prev) => [...prev, ...uploaded.map((u) => u.id)]);
         }
@@ -706,55 +718,6 @@ export function AdminProjectDetail({
         onStatusChange={(status) => setForm((f) => ({ ...f, status: status as Project["status"] }))}
       />
 
-      {/* Payments */}
-      <Card id="payments">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2"><CreditCard className="h-5 w-5" /> Payments</CardTitle>
-          <Button variant="outline" size="sm" onClick={() => setShowPaymentForm(!showPaymentForm)}>Create Payment</Button>
-        </CardHeader>
-        <CardContent>
-          {showPaymentForm && (
-            <form onSubmit={handleCreatePayment} className="mb-4 space-y-3 rounded-lg border border-border p-4">
-              <Input name="amount" type="number" step="0.01" min="0" required placeholder="Amount (USD)" />
-              <Input name="description" required placeholder="Description" />
-              <Input name="due_date" type="date" />
-              <Button type="submit" variant="accent" size="sm">Create Payment Link</Button>
-            </form>
-          )}
-          {paymentList.map((p) => (
-            <div key={`payment-${p.id}`} className="flex flex-col gap-2 border-b border-border py-4 text-sm last:border-0 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <span className="font-medium">${(p.amount / 100).toFixed(2)}</span>
-                <span className="text-muted ml-2">{p.description}</span>
-                <p className="text-xs text-muted mt-1">
-                  Created {new Date(p.created_at).toLocaleDateString()}
-                  {p.paid_at && ` · Paid ${new Date(p.paid_at).toLocaleDateString()}`}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`text-xs font-medium capitalize ${p.status === "paid" ? "text-emerald-600" : p.status === "cancelled" ? "text-muted" : "text-amber-600"}`}>
-                  {p.status}
-                </span>
-                {p.status === "pending" && (
-                  <Button variant="ghost" size="sm" onClick={() => markPaid(p.id)}>Mark Paid</Button>
-                )}
-                {p.stripe_payment_link_url && (
-                  <a href={p.stripe_payment_link_url} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" size="sm">Open Link</Button>
-                  </a>
-                )}
-                <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deletePayment(p.id)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-          {paymentList.length === 0 && (
-            <p className="text-sm text-muted text-center py-4">No payment links yet</p>
-          )}
-        </CardContent>
-      </Card>
-
       {normalizeStatus(form.status) === "shoot_complete_editing" && (
         <div id="deliverables-admin" className="flex justify-end">
           <Button variant="accent" onClick={sendForReview}>Send Deliverables for Review</Button>
@@ -946,6 +909,55 @@ export function AdminProjectDetail({
           </CardContent>
         </Card>
       )}
+
+      {/* Payments */}
+      <Card id="payments">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2"><CreditCard className="h-5 w-5" /> Payments</CardTitle>
+          <Button variant="outline" size="sm" onClick={() => setShowPaymentForm(!showPaymentForm)}>Create Payment</Button>
+        </CardHeader>
+        <CardContent>
+          {showPaymentForm && (
+            <form onSubmit={handleCreatePayment} className="mb-4 space-y-3 rounded-lg border border-border p-4">
+              <Input name="amount" type="number" step="0.01" min="0" required placeholder="Amount (USD)" />
+              <Input name="description" required placeholder="Description" />
+              <Input name="due_date" type="date" />
+              <Button type="submit" variant="accent" size="sm">Create Payment Link</Button>
+            </form>
+          )}
+          {paymentList.map((p) => (
+            <div key={`payment-${p.id}`} className="flex flex-col gap-2 border-b border-border py-4 text-sm last:border-0 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <span className="font-medium">${(p.amount / 100).toFixed(2)}</span>
+                <span className="text-muted ml-2">{p.description}</span>
+                <p className="text-xs text-muted mt-1">
+                  Created {new Date(p.created_at).toLocaleDateString()}
+                  {p.paid_at && ` · Paid ${new Date(p.paid_at).toLocaleDateString()}`}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`text-xs font-medium capitalize ${p.status === "paid" ? "text-emerald-600" : p.status === "cancelled" ? "text-muted" : "text-amber-600"}`}>
+                  {p.status}
+                </span>
+                {p.status === "pending" && (
+                  <Button variant="ghost" size="sm" onClick={() => markPaid(p.id)}>Mark Paid</Button>
+                )}
+                {p.stripe_payment_link_url && (
+                  <a href={p.stripe_payment_link_url} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="sm">Open Link</Button>
+                  </a>
+                )}
+                <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deletePayment(p.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+          {paymentList.length === 0 && (
+            <p className="text-sm text-muted text-center py-4">No payment links yet</p>
+          )}
+        </CardContent>
+      </Card>
 
       <ProjectActivityTimeline
         activities={activities}

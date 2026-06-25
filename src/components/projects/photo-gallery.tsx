@@ -56,7 +56,7 @@ export function PhotoGallery({ photos, getDownloadUrl, downloadsAllowed = true }
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 sm:gap-3">
         {photos.map((photo, index) => (
           <PhotoThumbnail
-            key={photo.id}
+            key={`gallery-${photo.project_id}-${photo.id}-${index}`}
             photo={photo}
             thumbUrl={thumbUrls[photo.id]}
             failed={loadErrors[photo.id]}
