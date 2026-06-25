@@ -144,6 +144,8 @@ export async function PATCH(request: Request) {
       .in("status", ["pending"]);
 
     const dateStr = new Date(proposal.proposed_at).toLocaleString();
+    const clientAcceptedAdminProposal = !isAdmin && proposal.proposed_by === "admin";
+
     await setProjectStatus({
       projectId: proposal.project_id,
       status: "scheduled",
@@ -164,8 +166,10 @@ export async function PATCH(request: Request) {
 
     await notifyAdmins({
       type: "shoot_proposed",
-      title: "Shoot confirmed",
-      body: `Shoot confirmed for ${dateStr}.`,
+      title: clientAcceptedAdminProposal ? "Client approved shoot time" : "Shoot confirmed",
+      body: clientAcceptedAdminProposal
+        ? `The client confirmed the shoot for ${dateStr}.`
+        : `Shoot confirmed for ${dateStr}.`,
       link: `/admin/projects/${proposal.project_id}`,
       projectId: proposal.project_id,
     });

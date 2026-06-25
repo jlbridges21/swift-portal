@@ -149,7 +149,7 @@ export async function POST(request: Request) {
 
     await notifyAdmins({
       type: "proposal_submitted",
-      title: "New project request",
+      title: "New Project Request",
       body: `${name} submitted a request for ${service_requested} at ${property_address}.`,
       link: `/admin/projects/${project.id}`,
       projectId: project.id,

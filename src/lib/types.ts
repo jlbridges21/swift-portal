@@ -49,6 +49,8 @@ export interface Profile {
   avatar_url: string | null;
   role: UserRole;
   client_id: string | null;
+  push_notifications_enabled?: boolean;
+  onesignal_subscription_id?: string | null;
   created_at: string;
   updated_at: string;
 }

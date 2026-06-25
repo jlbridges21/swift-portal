@@ -64,10 +64,13 @@ export async function setProjectStatus(options: SetStatusOptions) {
   }
 
   if (options.notifyAdmin) {
+    const deliverablesApproved = options.activityType === "deliverables_approved";
     await notifyAdmins({
       type: "status_changed",
-      title: `Project update: ${label}`,
-      body: `Project moved to "${label}".`,
+      title: deliverablesApproved ? "Deliverables Approved" : `Project update: ${label}`,
+      body: deliverablesApproved
+        ? "The client approved all deliverables. Final payment is next."
+        : `Project moved to "${label}".`,
       link: `/admin/projects/${options.projectId}`,
       projectId: options.projectId,
     });

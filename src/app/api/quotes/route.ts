@@ -162,8 +162,8 @@ export async function PATCH(request: Request) {
 
     await notifyAdmins({
       type: "proposal_approved",
-      title: "Proposal approved",
-      body: `Client approved the quote "${quote.title}".`,
+      title: "Proposal Approved",
+      body: `The client approved the proposal for "${quote.title}".`,
       link: `/admin/projects/${quote.project_id}`,
       projectId: quote.project_id,
     });
@@ -188,8 +188,8 @@ export async function PATCH(request: Request) {
 
     await notifyAdmins({
       type: "proposal_changes",
-      title: "Proposal changes requested",
-      body: feedback || "Client requested changes to the quote.",
+      title: "Proposal Changes Requested",
+      body: feedback || "The client requested changes to the proposal.",
       link: `/admin/projects/${quote.project_id}#quote`,
       projectId: quote.project_id,
     });

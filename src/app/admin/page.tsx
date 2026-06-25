@@ -11,6 +11,7 @@ import {
   Inbox, FolderKanban, Pencil, CreditCard, CheckCircle, Users, Plus, Eye,
 } from "lucide-react";
 import { ActivityFeed } from "@/components/admin/activity-feed";
+import { PushNotificationsCard } from "@/components/admin/push-notifications-card";
 
 export default async function AdminDashboard() {
   const profile = await getProfile();
@@ -58,6 +59,8 @@ export default async function AdminDashboard() {
           <Link href="/admin/projects/new"><Button variant="accent" size="sm"><Plus className="h-4 w-4" /> New Project</Button></Link>
           <Link href="/admin/clients/new"><Button variant="outline" size="sm"><Users className="h-4 w-4" /> New Client</Button></Link>
         </PageHeader>
+
+        <PushNotificationsCard />
 
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-10">
           {stats.map((stat) => (

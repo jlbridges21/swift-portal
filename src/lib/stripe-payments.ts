@@ -50,8 +50,8 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
 
   await notifyAdmins({
     type: "payment_received",
-    title: "Payment received",
-    body: `${amountStr} received for ${payment.description}.`,
+    title: "Payment Received",
+    body: `${amountStr} received for ${payment.description}. Downloads are unlocked.`,
     link: `/admin/projects/${payment.project_id}#payments`,
     projectId: payment.project_id,
   });
@@ -100,7 +100,7 @@ export async function handlePaymentFailed(payment: Payment, reason: string) {
 
   await notifyAdmins({
     type: "payment_received",
-    title: "Payment failed",
+    title: "Payment Failed",
     body: `Payment failed for ${payment.description}: ${reason}`,
     link: `/admin/projects/${payment.project_id}#payments`,
     projectId: payment.project_id,

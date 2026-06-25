@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendBrandedEmail } from "@/lib/email";
+import { sendAdminPushNotification } from "@/lib/onesignal-push";
 
 export type NotificationType =
   | "proposal_submitted"
@@ -121,6 +122,18 @@ export async function notifyUsers(options: NotifyOptions) {
         ctaUrl: options.link ? link : undefined,
       });
     }
+  }
+
+  if (options.notifyAdmins) {
+    void sendAdminPushNotification({
+      title: options.title,
+      message: options.body || options.title,
+      url: options.link,
+      projectId: options.projectId,
+      eventType: options.type,
+    }).catch((error) => {
+      console.error("[onesignal] admin push failed:", error);
+    });
   }
 }
 
