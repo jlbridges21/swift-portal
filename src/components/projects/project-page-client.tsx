@@ -211,7 +211,7 @@ export function ProjectPageClient({
         )}
       </ProjectHero>
 
-      <main className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8 space-y-16">
+      <main className="mx-auto max-w-6xl px-4 py-12 pb-16 sm:px-6 lg:px-8 space-y-16 safe-area-x">
         {!isPreview && (
           <NextStepBanner step={clientStep} />
         )}
@@ -302,7 +302,7 @@ export function ProjectPageClient({
               {documents.map((doc) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between gap-3 rounded-xl bg-white p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg"
+                  className="flex flex-col gap-3 rounded-xl bg-white p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium text-primary">{doc.file_name}</p>
@@ -313,14 +313,14 @@ export function ProjectPageClient({
                     )}
                   </div>
                   {!isPreview && (
-                    <div className="flex shrink-0 gap-2">
+                    <div className="flex shrink-0 flex-wrap gap-2">
                       {isPdf(doc) && (
-                        <Button variant="outline" size="sm" onClick={() => handleView(doc)}>
+                        <Button variant="outline" size="sm" className="min-h-11 flex-1 sm:flex-none" onClick={() => handleView(doc)}>
                           <Eye className="h-4 w-4" /> Preview
                         </Button>
                       )}
                       {downloadsUnlocked && (
-                        <Button variant="accent" size="sm" onClick={() => handleDownload(doc)}>
+                        <Button variant="accent" size="sm" className="min-h-11 flex-1 sm:flex-none" onClick={() => handleDownload(doc)}>
                           <Download className="h-4 w-4" />
                         </Button>
                       )}

@@ -79,7 +79,7 @@ export default async function ClientDashboard() {
         userAvatar={profile.avatar_url}
       />
 
-      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-6xl px-4 py-10 pb-12 sm:px-6 lg:px-8 safe-area-x">
         <div className="mb-10 flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-accent uppercase tracking-wider">Swift Aerial Media</p>
@@ -112,7 +112,7 @@ export default async function ClientDashboard() {
                       <StatusBadge status={featured.status} />
                     </div>
                   </div>
-                  <CardContent className="md:col-span-3 p-8 flex flex-col justify-center">
+                  <CardContent className="md:col-span-3 p-6 sm:p-8 flex flex-col justify-center">
                     <h2 className="text-2xl font-bold text-primary">{featured.project_name}</h2>
                     <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
                       <MapPin className="h-4 w-4 shrink-0" /> {featured.property_address}

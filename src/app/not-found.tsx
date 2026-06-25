@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { MapPin, ArrowLeft } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Page Not Found | Swift Portal",
+  title: "Page Not Found",
 };
 
 export default function NotFound() {

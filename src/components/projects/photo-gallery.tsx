@@ -150,28 +150,28 @@ function Lightbox({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95">
-      <button onClick={onClose} className="absolute right-4 top-4 z-10 rounded-full bg-white/10 p-2.5 text-white hover:bg-white/20">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 safe-area-x">
+      <button onClick={onClose} className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-10 rounded-full bg-white/10 p-3 text-white hover:bg-white/20">
         <X className="h-6 w-6" />
       </button>
       {currentIndex > 0 && (
-        <button onClick={() => onNavigate(currentIndex - 1)} className="absolute left-4 z-10 rounded-full bg-white/10 p-2.5 text-white hover:bg-white/20">
+        <button onClick={() => onNavigate(currentIndex - 1)} className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white hover:bg-white/20">
           <ChevronLeft className="h-6 w-6" />
         </button>
       )}
       {currentIndex < photos.length - 1 && (
-        <button onClick={() => onNavigate(currentIndex + 1)} className="absolute right-16 z-10 rounded-full bg-white/10 p-2.5 text-white hover:bg-white/20">
+        <button onClick={() => onNavigate(currentIndex + 1)} className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white hover:bg-white/20 sm:right-16">
           <ChevronRight className="h-6 w-6" />
         </button>
       )}
-      <div className="relative h-[80vh] w-[92vw] max-w-6xl">
+      <div className="relative h-[min(80dvh,80vh)] w-[min(92vw,100%)] max-w-6xl px-2">
         {url ? (
           <Image src={url} alt={photo.file_name} fill className="object-contain" sizes="92vw" />
         ) : (
           <div className="flex h-full items-center justify-center text-white/60">Loading preview…</div>
         )}
       </div>
-      <div className="absolute bottom-6 flex items-center gap-4">
+      <div className="absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-wrap items-center justify-center gap-4 px-4">
         <span className="text-sm text-white/70">{currentIndex + 1} / {photos.length}</span>
         {!downloadsAllowed && (
           <span className="text-xs text-white/50">Preview only</span>

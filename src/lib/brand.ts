@@ -5,6 +5,7 @@ export const BRAND = {
   name: "Swift Aerial Media",
   portalName: "Swift Portal",
   logoUrl: LOGO_URL,
+  faviconUrl: "/icons/icon-192.png",
 } as const;
 
 // File size limits in bytes

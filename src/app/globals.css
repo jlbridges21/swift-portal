@@ -11,7 +11,33 @@
   --font-sans: var(--font-geist-sans);
 }
 
+html {
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   background: var(--color-background);
   color: var(--color-foreground);
+  min-height: 100dvh;
+}
+
+@media (display-mode: standalone) {
+  html {
+    background-color: #0f172a;
+  }
+}
+
+@utility safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility safe-area-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }

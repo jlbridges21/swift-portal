@@ -6,8 +6,7 @@ export const LANDING = {
     "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a358e50f2131051b8eefbec.png",
   logoStackedWhite:
     "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a347eb5671890ccaad77c04.png",
-  favicon:
-    "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a36e07b6a6dd1b69a575a68.png",
+  favicon: "/icons/icon-192.png",
   ownerHeadshot:
     "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a3496ab04386d4d76546ec3.png",
   luxuryHome:

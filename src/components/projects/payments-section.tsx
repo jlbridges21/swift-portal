@@ -42,7 +42,7 @@ export function PaymentsSection({ payments, isPreview }: PaymentsSectionProps) {
                     </div>
                     {p.stripe_payment_link_url && !isPreview && (
                       <a href={p.stripe_payment_link_url} target="_blank" rel="noopener noreferrer">
-                        <Button variant="accent" className="w-full sm:w-auto">
+                        <Button variant="accent" className="w-full min-h-11 sm:w-auto">
                           Pay Now <ExternalLink className="h-4 w-4" />
                         </Button>
                       </a>
