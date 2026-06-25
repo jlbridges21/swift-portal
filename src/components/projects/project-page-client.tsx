@@ -502,7 +502,7 @@ export function ProjectPageClient({
           </Card>
         )}
 
-        <PaymentsSection payments={payments} isPreview={isPreview} />
+        <PaymentsSection payments={payments} isPreview={isPreview} alwaysShow={isClientView} />
 
         {!isPreview && status !== "ready_for_review" && status !== "awaiting_payment" && (
           <Card className="border-0 shadow-lg rounded-2xl">

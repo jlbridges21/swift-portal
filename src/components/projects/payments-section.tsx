@@ -2,22 +2,24 @@
 
 import type { Payment } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CreditCard, Download, ExternalLink, Receipt } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface PaymentsSectionProps {
   payments: Payment[];
   isPreview?: boolean;
+  alwaysShow?: boolean;
 }
 
-export function PaymentsSection({ payments, isPreview }: PaymentsSectionProps) {
+export function PaymentsSection({ payments, isPreview, alwaysShow }: PaymentsSectionProps) {
   const outstanding = payments.filter((p) => p.status === "pending");
   const paid = payments.filter((p) => p.status === "paid");
   const cancelled = payments.filter((p) => p.status === "cancelled");
 
-  if (!payments.length) return null;
+  if (!payments.length && !alwaysShow) return null;
 
   return (
     <section id="payments">
@@ -25,6 +27,13 @@ export function PaymentsSection({ payments, isPreview }: PaymentsSectionProps) {
         <CreditCard className="h-5 w-5" /> Payments
       </h2>
 
+      {!payments.length ? (
+        <EmptyState
+          icon={CreditCard}
+          title="No payment requested yet"
+          description="No payment has been requested yet. Once your project is approved, Swift Aerial Media will send your secure payment link here. You'll be able to pay online and immediately unlock your high-resolution downloads."
+        />
+      ) : (
       <div className="space-y-6">
         {outstanding.length > 0 && (
           <div>
@@ -106,6 +115,7 @@ export function PaymentsSection({ payments, isPreview }: PaymentsSectionProps) {
           </div>
         )}
       </div>
+      )}
     </section>
   );
 }
