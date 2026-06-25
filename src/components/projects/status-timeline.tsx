@@ -39,7 +39,8 @@ export function StatusTimeline({ currentStatus, audience = "client" }: StatusTim
                 </div>
                 <span
                   className={cn(
-                    "mt-2 text-center text-xs font-medium max-w-[80px]",
+                    "mt-2 text-center font-medium leading-tight",
+                    audience === "client" ? "text-[10px] max-w-[92px] sm:text-xs sm:max-w-[100px]" : "text-xs max-w-[80px]",
                     isCurrent ? "text-accent" : isComplete ? "text-foreground" : "text-muted"
                   )}
                 >

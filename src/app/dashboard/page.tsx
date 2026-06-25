@@ -38,7 +38,7 @@ export default async function ClientDashboard() {
       .select("*, projects(id, project_name)")
       .order("created_at", { ascending: false })
       .limit(15),
-    supabase.from("shoot_proposals").select("*").eq("status", "confirmed"),
+    supabase.from("shoot_proposals").select("*").in("status", ["confirmed", "pending"]),
   ]);
 
   const proposalsByProject = new Map<string, ShootProposal[]>();
@@ -79,9 +79,9 @@ export default async function ClientDashboard() {
         userAvatar={profile.avatar_url}
       />
 
-      <main className="mx-auto max-w-6xl px-4 py-10 pb-12 sm:px-6 lg:px-8 safe-area-x">
-        <div className="mb-10 flex items-start justify-between gap-4">
-          <div>
+      <main className="mobile-container py-10 pb-28 sm:pb-10">
+        <div className="mb-10 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-start">
+          <div className="min-w-0">
             <p className="text-sm font-medium text-accent uppercase tracking-wider">Swift Aerial Media</p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-primary sm:text-4xl">
               Welcome back, {firstName}.
@@ -90,7 +90,14 @@ export default async function ClientDashboard() {
               You have {activeProjects.length} active project{activeProjects.length !== 1 ? "s" : ""}.
             </p>
           </div>
-          <Avatar name={profile.full_name || profile.email} src={profile.avatar_url} size="lg" className="hidden sm:flex" />
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
+            <Link href="/dashboard/request" className="w-full sm:w-auto">
+              <Button variant="accent" className="w-full min-h-12 sm:w-auto">
+                <Plus className="h-4 w-4" /> Request New Project
+              </Button>
+            </Link>
+            <Avatar name={profile.full_name || profile.email} src={profile.avatar_url} size="lg" className="hidden sm:flex" />
+          </div>
         </div>
 
         {featured && featuredStep && (
@@ -273,6 +280,14 @@ export default async function ClientDashboard() {
           </section>
         )}
       </main>
+
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-white/95 p-4 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] backdrop-blur-md safe-area-bottom safe-area-x sm:hidden">
+        <Link href="/dashboard/request">
+          <Button variant="accent" className="w-full min-h-12 text-base">
+            <Plus className="h-4 w-4" /> Request New Project
+          </Button>
+        </Link>
+      </div>
     </div>
   );
 }

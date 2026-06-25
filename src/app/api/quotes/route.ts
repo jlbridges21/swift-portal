@@ -82,8 +82,8 @@ export async function POST(request: Request) {
 
     await notifyProjectClients({
       type: "quote_sent",
-      title: "Your quote is ready",
-      body: `Swift Aerial Media sent a quote for "${title}". Review and approve in your portal.`,
+      title: "Review Your Proposal",
+      body: `Swift Aerial Media sent a proposal for "${title}". Review and approve in your portal.`,
       link: `/dashboard/projects/${project_id}#quote`,
       projectId: project_id,
     });
@@ -128,8 +128,8 @@ export async function PATCH(request: Request) {
 
     await notifyProjectClients({
       type: "quote_sent",
-      title: "Your quote is ready",
-      body: `Review your quote for "${quote.title}".`,
+      title: "Review Your Proposal",
+      body: `Review your proposal for "${quote.title}".`,
       link: `/dashboard/projects/${quote.project_id}#quote`,
       projectId: quote.project_id,
     });

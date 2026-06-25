@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { ShootProposal } from "@/lib/types";
 import { formatShootDateTime } from "@/lib/scheduling";
-import { Calendar, Check, MessageSquare, X, Pencil } from "lucide-react";
+import { Calendar, Check, MessageSquare, X, Pencil, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 interface ShootSchedulingProps {
@@ -33,6 +33,10 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
 
   const pending = proposals.filter((p) => p.status === "pending");
   const confirmed = proposals.find((p) => p.status === "confirmed");
+  const pendingFromAdmin = pending.filter((p) => p.proposed_by === "admin");
+  const pendingFromClient = pending.filter((p) => p.proposed_by === "client");
+
+  const canProposeNew = !confirmed && pending.length === 0;
 
   async function proposeShoot(e: React.FormEvent) {
     e.preventDefault();
@@ -49,7 +53,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
     });
     setLoading(false);
     if (res.ok) {
-      toast.success("Shoot date proposed");
+      toast.success(isAdmin ? "Shoot time proposed" : "Shoot time suggested");
       setShowForm(false);
       setProposedAt("");
       setMessage("");
@@ -76,7 +80,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
     });
     setLoading(false);
     if (res.ok) {
-      toast.success("Shoot rescheduled — awaiting client confirmation");
+      toast.success("New shoot time proposed — awaiting confirmation");
       setShowReschedule(false);
       setRescheduleAt("");
       setRescheduleMsg("");
@@ -94,8 +98,10 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
       body: JSON.stringify({ id, action: "accept" }),
     });
     if (res.ok) {
-      toast.success("Shoot scheduled!");
+      toast.success("Shoot time approved!");
       onUpdate();
+    } else {
+      toast.error("Failed to approve time");
     }
   }
 
@@ -116,6 +122,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
 
   async function counterProposal(id: string) {
     if (!counterAt) return;
+    setLoading(true);
     const res = await fetch("/api/shoot-proposals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -127,29 +134,73 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
         message: counterMsg,
       }),
     });
+    setLoading(false);
     if (res.ok) {
-      toast.success("Alternative date proposed");
+      toast.success("Alternative time sent");
       setShowCounter(null);
+      setCounterAt("");
+      setCounterMsg("");
       onUpdate();
+    } else {
+      toast.error("Failed to send alternative time");
     }
+  }
+
+  function openCounter(id: string) {
+    setShowCounter(id);
+    setCounterAt("");
+    setCounterMsg("");
+  }
+
+  function ProposalActions({
+    proposal,
+    viewerIsAdmin,
+  }: {
+    proposal: ShootProposal;
+    viewerIsAdmin: boolean;
+  }) {
+    const fromOtherParty =
+      (viewerIsAdmin && proposal.proposed_by === "client") ||
+      (!viewerIsAdmin && proposal.proposed_by === "admin");
+
+    if (!fromOtherParty) return null;
+
+    return (
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="accent" size="sm" className="min-h-11" onClick={() => acceptProposal(proposal.id)}>
+          <Check className="h-4 w-4" /> Approve Time
+        </Button>
+        <Button variant="outline" size="sm" className="min-h-11" onClick={() => openCounter(proposal.id)}>
+          <MessageSquare className="h-4 w-4" /> Request a Different Time
+        </Button>
+        <Button variant="outline" size="sm" className="min-h-11" onClick={() => declineProposal(proposal.id)}>
+          <X className="h-4 w-4" /> Decline
+        </Button>
+      </div>
+    );
   }
 
   return (
     <Card className="shadow-sm" id="scheduling">
-      <CardHeader className="flex flex-row items-center justify-between gap-2">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle className="flex items-center gap-2 text-base">
           <Calendar className="h-5 w-5 text-accent" /> Shoot Scheduling
         </CardTitle>
-        {isAdmin && !confirmed && (
-          <Button variant="outline" size="sm" onClick={() => setShowForm(!showForm)}>
-            Propose Date
+        {canProposeNew && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="min-h-11 w-full sm:w-auto"
+            onClick={() => setShowForm(!showForm)}
+          >
+            {isAdmin ? "Propose a Shoot Time" : "Suggest a Shoot Time"}
           </Button>
         )}
       </CardHeader>
       <CardContent className="space-y-4">
         {confirmed && (
           <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="font-semibold text-emerald-800">Shoot Scheduled</p>
                 <p className="text-sm text-emerald-700 mt-1">
@@ -160,7 +211,12 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
                 )}
               </div>
               {isAdmin && (
-                <Button variant="outline" size="sm" onClick={() => setShowReschedule(!showReschedule)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11 shrink-0"
+                  onClick={() => setShowReschedule(!showReschedule)}
+                >
                   <Pencil className="h-3.5 w-3.5" /> Reschedule
                 </Button>
               )}
@@ -170,7 +226,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
 
         {showReschedule && isAdmin && (
           <form onSubmit={rescheduleShoot} className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
-            <p className="text-sm font-medium text-amber-900">Reschedule confirmed shoot</p>
+            <p className="text-sm font-medium text-amber-900">Propose a new confirmed shoot time</p>
             <div className="space-y-2">
               <Label>New Date & Time</Label>
               <Input type="datetime-local" value={rescheduleAt} onChange={(e) => setRescheduleAt(e.target.value)} required />
@@ -179,73 +235,98 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
               <Label>Message to client</Label>
               <Textarea value={rescheduleMsg} onChange={(e) => setRescheduleMsg(e.target.value)} rows={2} placeholder="Reason for reschedule..." />
             </div>
-            <div className="flex gap-2">
-              <Button type="submit" variant="accent" size="sm" disabled={loading}>Send New Date</Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setShowReschedule(false)}>Cancel</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" variant="accent" size="sm" className="min-h-11" disabled={loading}>
+                Send New Time
+              </Button>
+              <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => setShowReschedule(false)}>
+                Cancel
+              </Button>
             </div>
           </form>
         )}
 
-        {showForm && isAdmin && (
+        {showForm && canProposeNew && (
           <form onSubmit={proposeShoot} className="space-y-3 rounded-lg border border-border p-4">
+            <p className="text-sm font-medium text-primary">
+              {isAdmin ? "Propose a shoot date and time for the client to review." : "Suggest a date and time that works for your shoot."}
+            </p>
             <div className="space-y-2">
               <Label>Date & Time</Label>
               <Input type="datetime-local" value={proposedAt} onChange={(e) => setProposedAt(e.target.value)} required />
             </div>
             <div className="space-y-2">
               <Label>Message (optional)</Label>
-              <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={2} placeholder="Weather backup, access notes..." />
+              <Textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={2}
+                placeholder={isAdmin ? "Weather backup, access notes..." : "Access instructions or scheduling notes..."}
+              />
             </div>
-            <Button type="submit" variant="accent" size="sm" disabled={loading}>Send Proposal</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" variant="accent" size="sm" className="min-h-11" disabled={loading}>
+                {isAdmin ? "Send Proposal" : "Send Suggestion"}
+              </Button>
+              <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => setShowForm(false)}>
+                Cancel
+              </Button>
+            </div>
           </form>
+        )}
+
+        {!isAdmin && pendingFromClient.length > 0 && (
+          <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50/60 p-4 text-sm text-blue-900">
+            <Clock className="h-5 w-5 shrink-0 mt-0.5" />
+            <p>Your suggested shoot time is awaiting review from Swift Aerial Media.</p>
+          </div>
+        )}
+
+        {isAdmin && pendingFromAdmin.length > 0 && pendingFromClient.length === 0 && (
+          <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-muted">
+            <Clock className="h-5 w-5 shrink-0 mt-0.5" />
+            <p>Waiting for the client to respond to your proposed shoot time.</p>
+          </div>
         )}
 
         {pending.map((p) => (
           <div key={p.id} className="rounded-lg border border-border p-4">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="font-medium">{new Date(p.proposed_at).toLocaleString()}</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="font-medium">{formatShootDateTime(p.proposed_at)}</p>
                 <p className="text-xs text-muted mt-0.5">
-                  Proposed by {p.proposed_by === "admin" ? "Swift Aerial Media" : "You"}
+                  Proposed by {p.proposed_by === "admin" ? "Swift Aerial Media" : "Client"}
                 </p>
                 {p.message && <p className="text-sm text-muted mt-2">{p.message}</p>}
               </div>
-              <Badge variant={p.proposed_by === "admin" ? "default" : "warning"}>
-                {p.status === "pending" ? "Awaiting response" : p.status}
+              <Badge variant={p.proposed_by === "admin" ? "default" : "warning"} className="shrink-0 w-fit">
+                Awaiting response
               </Badge>
             </div>
-            {!isAdmin && p.proposed_by === "admin" && p.status === "pending" && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button variant="accent" size="sm" onClick={() => acceptProposal(p.id)}>
-                  <Check className="h-4 w-4" /> Accept
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setShowCounter(p.id)}>
-                  <MessageSquare className="h-4 w-4" /> Request Different Time
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => declineProposal(p.id)}>
-                  <X className="h-4 w-4" /> Decline
-                </Button>
-              </div>
-            )}
-            {isAdmin && p.proposed_by === "client" && p.status === "pending" && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button variant="accent" size="sm" onClick={() => acceptProposal(p.id)}>Confirm</Button>
-                <Button variant="outline" size="sm" onClick={() => setShowCounter(p.id)}>Counter</Button>
-                <Button variant="outline" size="sm" onClick={() => declineProposal(p.id)}>Decline</Button>
-              </div>
-            )}
-            {isAdmin && p.proposed_by === "admin" && p.status === "pending" && (
+
+            <ProposalActions proposal={p} viewerIsAdmin={isAdmin} />
+
+            {isAdmin && p.proposed_by === "admin" && (
               <div className="mt-3">
-                <Button variant="outline" size="sm" onClick={() => declineProposal(p.id)}>
-                  <X className="h-4 w-4" /> Withdraw
+                <Button variant="outline" size="sm" className="min-h-11" onClick={() => declineProposal(p.id)}>
+                  <X className="h-4 w-4" /> Withdraw Proposal
                 </Button>
               </div>
             )}
+
             {showCounter === p.id && (
-              <div className="mt-3 space-y-2 border-t border-border pt-3">
-                <Input type="datetime-local" value={counterAt} onChange={(e) => setCounterAt(e.target.value)} />
-                <Textarea value={counterMsg} onChange={(e) => setCounterMsg(e.target.value)} placeholder="Brief message..." rows={2} />
-                <Button size="sm" variant="accent" onClick={() => counterProposal(p.id)}>Send Alternative</Button>
+              <div className="mt-3 space-y-3 border-t border-border pt-3">
+                <p className="text-sm font-medium text-primary">Request a different time</p>
+                <Input type="datetime-local" value={counterAt} onChange={(e) => setCounterAt(e.target.value)} required />
+                <Textarea
+                  value={counterMsg}
+                  onChange={(e) => setCounterMsg(e.target.value)}
+                  placeholder="Brief message..."
+                  rows={2}
+                />
+                <Button size="sm" variant="accent" className="min-h-11" disabled={loading} onClick={() => counterProposal(p.id)}>
+                  Send Alternative Time
+                </Button>
               </div>
             )}
           </div>
@@ -253,7 +334,9 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
 
         {proposals.length === 0 && !showForm && (
           <p className="text-sm text-muted text-center py-4">
-            {isAdmin ? "Propose a shoot date for the client to confirm." : "No shoot dates proposed yet — we'll reach out soon."}
+            {isAdmin
+              ? "Propose a shoot date and time for the client to confirm."
+              : "No shoot time scheduled yet. Suggest a date and time that works for you."}
           </p>
         )}
       </CardContent>

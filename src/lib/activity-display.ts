@@ -11,6 +11,8 @@ export const ACTIVITY_CONFIG: Record<string, ActivityConfig> = {
   shoot_proposed: { icon: "📅", label: "Shoot proposed" },
   shoot_confirmed: { icon: "✅", label: "Shoot confirmed" },
   shoot_rescheduled: { icon: "📍", label: "Shoot rescheduled" },
+  shoot_declined: { icon: "✖️", label: "Shoot time declined" },
+  shoot_withdrawn: { icon: "↩️", label: "Shoot proposal withdrawn" },
   status_updated: { icon: "🔄", label: "Status updated" },
   shoot_completed: { icon: "🚁", label: "Shoot completed" },
   photos_uploaded: { icon: "📸", label: "Photos uploaded" },

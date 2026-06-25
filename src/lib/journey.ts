@@ -24,31 +24,52 @@ export function getClientNextStep(
     day: "numeric",
     year: "numeric",
   });
+  const pendingAdminProposal = proposals.find((p) => p.status === "pending" && p.proposed_by === "admin");
+  const pendingClientProposal = proposals.find((p) => p.status === "pending" && p.proposed_by === "client");
 
   switch (status) {
     case "new_request":
       return {
-        title: "Request received",
-        description: "Swift Aerial Media is reviewing your request. We'll send your quote soon.",
+        title: getClientStatusLabel("new_request"),
+        description: "Swift Aerial Media is reviewing your request. We'll send your proposal soon.",
         variant: "info",
       };
     case "quote_sent":
       return {
-        title: "Your quote is ready",
-        description: "Review your proposal and approve it to move forward with scheduling.",
-        actionLabel: "Review Quote",
+        title: getClientStatusLabel("quote_sent"),
+        description: "Review your proposal and approve it to move forward with scheduling your shoot.",
+        actionLabel: "Review Proposal",
         actionHref: "#quote",
         variant: "accent",
       };
     case "proposal_approved":
+      if (pendingAdminProposal) {
+        return {
+          title: getClientStatusLabel("proposal_approved"),
+          description: `Swift Aerial Media proposed ${formatShootDateTime(pendingAdminProposal.proposed_at)}. Approve the time or request a different one.`,
+          actionLabel: "Review Schedule",
+          actionHref: "#scheduling",
+          variant: "accent",
+        };
+      }
+      if (pendingClientProposal) {
+        return {
+          title: getClientStatusLabel("proposal_approved"),
+          description: "Your suggested shoot time is awaiting review from Swift Aerial Media.",
+          actionHref: "#scheduling",
+          variant: "info",
+        };
+      }
       return {
-        title: "Awaiting scheduling",
-        description: "Your proposal is approved. We'll propose a shoot date for your confirmation.",
-        variant: "info",
+        title: getClientStatusLabel("proposal_approved"),
+        description: "Suggest a shoot date and time that works for you, or wait for our team to propose one.",
+        actionLabel: "Suggest a Time",
+        actionHref: "#scheduling",
+        variant: "accent",
       };
     case "scheduled":
       return {
-        title: "Shoot scheduled",
+        title: getClientStatusLabel("scheduled"),
         description: shootFormatted
           ? `Your shoot is confirmed for ${shootFormatted}.`
           : "Your shoot date is confirmed. We'll see you on site!",
@@ -56,13 +77,13 @@ export function getClientNextStep(
       };
     case "shoot_complete_editing":
       return {
-        title: "Media being prepared",
-        description: "Your shoot is complete. We're preparing your finished deliverables and will notify you when they're ready for review.",
+        title: getClientStatusLabel("shoot_complete_editing"),
+        description: "Your shoot is complete. We're preparing your finished deliverables and will notify you when they're ready to review.",
         variant: "info",
       };
     case "ready_for_review":
       return {
-        title: "Review your deliverables",
+        title: getClientStatusLabel("ready_for_review"),
         description: "Preview your photos, videos, and tours. Approve each item when you're satisfied.",
         actionLabel: "Review Deliverables",
         actionHref: "#deliverables",
@@ -70,9 +91,9 @@ export function getClientNextStep(
       };
     case "awaiting_payment":
       return {
-        title: "Final payment",
+        title: getClientStatusLabel("awaiting_payment"),
         description: hasPendingPayment
-          ? "Your project has been approved. Complete your payment to unlock all final downloads."
+          ? "Your deliverables are approved. Complete your final payment to unlock all downloads."
           : "Please complete your outstanding invoice to receive your deliverables.",
         actionLabel: "View Invoice",
         actionHref: "#payments",
@@ -80,7 +101,7 @@ export function getClientNextStep(
       };
     case "delivered":
       return {
-        title: "Project complete",
+        title: getClientStatusLabel("delivered"),
         description: "Thank you for choosing Swift Aerial Media! All deliverables are available to download.",
         actionLabel: "Request Another Project",
         actionHref: "/dashboard/request",
@@ -98,6 +119,8 @@ export function getClientNextStep(
 export function getAdminNextStep(project: Project, proposals: ShootProposal[] = []): NextStepInfo {
   const status = normalizeStatus(project.status);
   const shootWhen = getProjectShootDateTime(project, proposals);
+  const pendingClientProposal = proposals.find((p) => p.status === "pending" && p.proposed_by === "client");
+  const pendingAdminProposal = proposals.find((p) => p.status === "pending" && p.proposed_by === "admin");
 
   switch (status) {
     case "new_request":
@@ -115,9 +138,26 @@ export function getAdminNextStep(project: Project, proposals: ShootProposal[] = 
         variant: "info",
       };
     case "proposal_approved":
+      if (pendingClientProposal) {
+        return {
+          title: "Client suggested a shoot time",
+          description: `Review ${formatShootDateTime(pendingClientProposal.proposed_at)} and approve or propose a different time.`,
+          actionLabel: "Review Schedule",
+          actionHref: "#scheduling",
+          variant: "accent",
+        };
+      }
+      if (pendingAdminProposal) {
+        return {
+          title: "Awaiting client confirmation",
+          description: "The client is reviewing your proposed shoot time.",
+          actionHref: "#scheduling",
+          variant: "info",
+        };
+      }
       return {
         title: "Proposal approved",
-        description: "Propose a shoot date for the client to confirm.",
+        description: "Propose a shoot date for the client to confirm, or wait for their suggestion.",
         actionLabel: "Propose Shoot Date",
         actionHref: "#scheduling",
         variant: "accent",

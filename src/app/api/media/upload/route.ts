@@ -121,8 +121,8 @@ export async function POST(request: Request) {
 
     await notifyProjectClients({
       type: "deliverables_uploaded",
-      title: "New deliverables available",
-      body: label,
+      title: "Media in Production",
+      body: `${label} View progress in your portal.`,
       link: `/dashboard/projects/${projectId}#deliverables`,
       projectId,
     });

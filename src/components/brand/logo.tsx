@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 
 interface LogoProps {
   showText?: boolean;
+  compact?: boolean;
   size?: "sm" | "md" | "lg";
   href?: string;
   className?: string;
@@ -16,11 +17,11 @@ const sizes = {
   lg: { box: "h-12 w-12 p-2", img: 32, text: "text-xl" },
 };
 
-export function Logo({ showText = true, size = "md", href = "/", className }: LogoProps) {
-  const s = sizes[size];
+export function Logo({ showText = true, compact = false, size = "md", href = "/", className }: LogoProps) {
+  const s = sizes[compact ? "sm" : size];
 
   const content = (
-    <div className={cn("flex items-center gap-2.5", className)}>
+    <div className={cn("flex min-w-0 items-center gap-2", compact ? "gap-2" : "gap-2.5", className)}>
       <div
         className={cn(
           "flex shrink-0 items-center justify-center rounded-lg bg-primary shadow-sm",
@@ -37,10 +38,12 @@ export function Logo({ showText = true, size = "md", href = "/", className }: Lo
         />
       </div>
       {showText && (
-        <div className="flex flex-col leading-tight">
-          <span className={cn("font-semibold text-primary", s.text)}>{BRAND.portalName}</span>
-          {size !== "sm" && (
-            <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+        <div className="flex min-w-0 flex-col leading-tight">
+          <span className={cn("truncate font-semibold text-primary", compact ? "text-sm" : s.text)}>
+            {BRAND.portalName}
+          </span>
+          {!compact && size !== "sm" && (
+            <span className="hidden text-[10px] font-medium uppercase tracking-wider text-muted sm:block">
               {BRAND.name}
             </span>
           )}

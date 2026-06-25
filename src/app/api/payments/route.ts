@@ -85,7 +85,7 @@ export async function POST(request: Request) {
       activityDescription: `Invoice sent for ${amountStr}`,
       skipIfSame: true,
       notifyClient: true,
-      clientTitle: "Your invoice is ready",
+      clientTitle: "Final Payment",
       clientBody: `Complete your ${amountStr} payment to unlock your final downloads.`,
       link: `/dashboard/projects/${body.project_id}#payments`,
     });

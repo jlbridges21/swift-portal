@@ -58,7 +58,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
 
   await notifyProjectClients({
     type: "payment_confirmed",
-    title: "Your project is complete",
+    title: "Project Complete",
     body: "Payment confirmed — all deliverables are now available to download. Thank you for choosing Swift Aerial Media!",
     link: `/dashboard/projects/${payment.project_id}#payments`,
     projectId: payment.project_id,

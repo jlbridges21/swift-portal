@@ -50,7 +50,7 @@ export async function POST(request: Request) {
 
   await notifyProjectClients({
     type: "deliverables_uploaded",
-    title: "New 360° tour available",
+    title: "Media in Production",
     body: `A virtual tour "${body.tour_name}" has been added to your project.`,
     link: `/dashboard/projects/${body.project_id}`,
     projectId: body.project_id,

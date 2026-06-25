@@ -19,7 +19,7 @@ const STEPS = [
   },
   {
     step: "02",
-    title: "Review your quote",
+    title: "Review your proposal",
     description: "Approve proposals, request changes, and move forward with confidence.",
     image: LANDING.screenshots.quote,
     alt: "Quote and proposal screen",

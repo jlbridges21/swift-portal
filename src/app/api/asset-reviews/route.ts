@@ -124,7 +124,7 @@ export async function POST(request: Request) {
         activityDescription: "All deliverables approved",
         notifyAdmin: true,
         notifyClient: true,
-        clientTitle: "Deliverables approved",
+        clientTitle: "Final Payment",
         clientBody: "Thank you! Complete your final payment to unlock all downloads.",
         link: `/dashboard/projects/${project_id}#payments`,
       });
@@ -162,7 +162,7 @@ export async function PATCH(request: Request) {
     activityType: "sent_for_review",
     activityDescription: "Deliverables sent for client review",
     notifyClient: true,
-    clientTitle: "Your deliverables are ready",
+    clientTitle: "Review Your Deliverables",
     clientBody: "Preview your photos, videos, and tours. Approve each item when you're satisfied.",
     link: `/dashboard/projects/${project_id}#deliverables`,
   });

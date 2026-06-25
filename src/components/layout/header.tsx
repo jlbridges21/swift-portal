@@ -7,7 +7,7 @@ import { Logo } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { Settings } from "lucide-react";
+import { Menu, Plus, Settings, X } from "lucide-react";
 
 interface HeaderProps {
   variant?: "public" | "dashboard";
@@ -64,13 +64,23 @@ function ClientProfileNav({
 }
 
 export function Header({ variant = "public", userRole, userName, userAvatar }: HeaderProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const homeHref =
     variant === "public" ? "/" : userRole === "admin" ? "/admin" : "/dashboard";
 
+  const clientMobileLinks = [
+    { href: "/dashboard", label: "My Projects" },
+    { href: "/dashboard/request", label: "Request New Project" },
+    { href: "/dashboard/settings", label: "Settings" },
+  ];
+
+  const adminMobileLinks = adminLinks;
+
   return (
     <header className="sticky top-0 z-50 border-b border-border/80 bg-white/90 backdrop-blur-lg safe-area-top safe-area-x">
-      <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-2 px-4 py-2 sm:px-6 lg:px-8">
-        <Logo href={homeHref} size="md" />
+      <div className="relative mx-auto flex min-h-14 max-w-7xl items-center justify-between gap-2 px-5 py-2 sm:min-h-16 sm:px-6 lg:px-8">
+        <Logo href={homeHref} compact className="max-w-[52vw] sm:max-w-none sm:hidden" />
+        <Logo href={homeHref} size="md" className="hidden sm:flex" />
 
         <nav className="flex items-center gap-1 sm:gap-2 shrink-0">
           {variant === "public" ? (
@@ -97,39 +107,73 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
                   </Link>
                 ))}
               </div>
-              <Link
-                href="/admin/projects"
-                className="md:hidden rounded-md px-3 py-1.5 text-sm text-muted"
-              >
-                Projects
-              </Link>
               <NotificationBell />
-              <form action="/api/auth/signout" method="POST">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="md:hidden min-h-11 min-w-11"
+                onClick={() => setMenuOpen((open) => !open)}
+                aria-label={menuOpen ? "Close menu" : "Open menu"}
+              >
+                {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </Button>
+              <form action="/api/auth/signout" method="POST" className="hidden md:block">
                 <Button variant="ghost" size="sm" type="submit" className="min-h-11 px-3">Sign Out</Button>
               </form>
             </>
           ) : (
             <>
               <Link
-                href="/dashboard"
-                className="rounded-md px-3 py-2.5 min-h-11 inline-flex items-center text-sm text-muted transition-colors hover:bg-slate-100 hover:text-foreground"
-              >
-                My Projects
-              </Link>
-              <Link
                 href="/dashboard/request"
-                className="hidden rounded-md px-3 py-1.5 text-sm text-muted transition-colors hover:bg-slate-100 hover:text-foreground sm:inline-block"
+                className="hidden sm:inline-flex"
               >
-                New Request
+                <Button variant="accent" size="sm" className="min-h-11">
+                  <Plus className="h-4 w-4" /> New Request
+                </Button>
               </Link>
               <NotificationBell />
-              <ClientProfileNav userName={userName} userAvatar={userAvatar} />
-              <form action="/api/auth/signout" method="POST">
+              <div className="hidden sm:block">
+                <ClientProfileNav userName={userName} userAvatar={userAvatar} />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="sm:hidden min-h-11 min-w-11"
+                onClick={() => setMenuOpen((open) => !open)}
+                aria-label={menuOpen ? "Close menu" : "Open menu"}
+              >
+                {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </Button>
+              <form action="/api/auth/signout" method="POST" className="hidden sm:block">
                 <Button variant="ghost" size="sm" type="submit" className="min-h-11 px-3">Sign Out</Button>
               </form>
             </>
           )}
         </nav>
+
+        {variant === "dashboard" && menuOpen && (
+          <div className="absolute left-0 right-0 top-full border-b border-border bg-white shadow-lg sm:hidden">
+            <div className="space-y-1 px-5 py-3 safe-area-x">
+              {(userRole === "admin" ? adminMobileLinks : clientMobileLinks).map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-foreground hover:bg-slate-100"
+                >
+                  {link.label}
+                </Link>
+              ))}
+              <form action="/api/auth/signout" method="POST" className="pt-2 border-t border-border">
+                <Button variant="ghost" type="submit" className="w-full min-h-11 justify-start px-3">
+                  Sign Out
+                </Button>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );

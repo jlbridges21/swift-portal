@@ -77,7 +77,7 @@ export async function POST(request: Request) {
   if (isAdmin) {
     await notifyProjectClients({
       type: "shoot_proposed",
-      title: "Shoot date proposed",
+      title: "Scheduling Your Shoot",
       body: `Swift Aerial Media proposed a shoot for ${dateStr}. Please review and confirm in your portal.`,
       link: `/dashboard/projects/${body.project_id}#scheduling`,
       projectId: body.project_id,
@@ -151,7 +151,7 @@ export async function PATCH(request: Request) {
       activityType: "shoot_confirmed",
       activityDescription: `Shoot confirmed for ${dateStr}`,
       notifyClient: true,
-      clientTitle: "Your shoot is scheduled",
+      clientTitle: "Shoot Scheduled",
       clientBody: `Your shoot is confirmed for ${dateStr}. We'll see you on site!`,
       link: `/dashboard/projects/${proposal.project_id}#scheduling`,
       skipIfSame: true,
@@ -204,7 +204,7 @@ export async function PATCH(request: Request) {
 
     await notifyProjectClients({
       type: "shoot_proposed",
-      title: "Your shoot date was updated",
+      title: "Shoot Scheduled",
       body: `Your shoot is now scheduled for ${dateStr}.`,
       link: `/dashboard/projects/${shoot.project_id}#scheduling`,
       projectId: shoot.project_id,
@@ -251,6 +251,11 @@ export async function PATCH(request: Request) {
       .single();
 
     const dateStr = new Date(proposed_at).toLocaleString();
+    await logProjectActivity("shoot_proposed", `New shoot date proposed: ${dateStr}`, {
+      projectId,
+      userId: profile.id,
+      metadata: { proposed_by: "admin", rescheduled: true },
+    });
     await setProjectStatus({
       projectId,
       status: "proposal_approved",
@@ -261,7 +266,7 @@ export async function PATCH(request: Request) {
 
     await notifyProjectClients({
       type: "shoot_proposed",
-      title: "New shoot date proposed",
+      title: "Scheduling Your Shoot",
       body: `Please confirm the new shoot date: ${dateStr}.`,
       link: `/dashboard/projects/${projectId}#scheduling`,
       projectId,
@@ -299,7 +304,7 @@ export async function PATCH(request: Request) {
     if (isAdmin) {
       await notifyProjectClients({
         type: "shoot_proposed",
-        title: "Alternative shoot date proposed",
+        title: "Scheduling Your Shoot",
         body: `Swift Aerial Media proposed ${dateStr}. Please review.`,
         link: `/dashboard/projects/${proposal.project_id}#scheduling`,
         projectId: proposal.project_id,
@@ -318,7 +323,51 @@ export async function PATCH(request: Request) {
   }
 
   if (action === "decline") {
+    if (!proposal) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
     await supabase.from("shoot_proposals").update({ status: "declined" }).eq("id", id);
+
+    const dateStr = new Date(proposal.proposed_at).toLocaleString();
+    const withdrawn = isAdmin && proposal.proposed_by === "admin";
+
+    await logProjectActivity(
+      withdrawn ? "shoot_withdrawn" : "shoot_declined",
+      withdrawn
+        ? `Shoot proposal withdrawn (${dateStr})`
+        : `${isAdmin ? "Swift Aerial Media declined" : "Client declined"} shoot time ${dateStr}`,
+      {
+        projectId: proposal.project_id,
+        userId: profile.id,
+        metadata: { proposed_by: proposal.proposed_by, declined_by: isAdmin ? "admin" : "client" },
+      }
+    );
+
+    if (withdrawn) {
+      await notifyProjectClients({
+        type: "schedule_change_requested",
+        title: "Shoot proposal withdrawn",
+        body: `The proposed shoot time (${dateStr}) was withdrawn. We'll follow up with a new option soon.`,
+        link: `/dashboard/projects/${proposal.project_id}#scheduling`,
+        projectId: proposal.project_id,
+      });
+    } else if (isAdmin && proposal.proposed_by === "client") {
+      await notifyProjectClients({
+        type: "schedule_change_requested",
+        title: "Shoot time declined",
+        body: `Your suggested shoot time (${dateStr}) was declined. You can suggest another time in your portal.`,
+        link: `/dashboard/projects/${proposal.project_id}#scheduling`,
+        projectId: proposal.project_id,
+      });
+    } else if (!isAdmin && proposal.proposed_by === "admin") {
+      await notifyAdmins({
+        type: "schedule_change_requested",
+        title: "Client declined shoot time",
+        body: `The client declined the proposed shoot time: ${dateStr}`,
+        link: `/admin/projects/${proposal.project_id}#scheduling`,
+        projectId: proposal.project_id,
+      });
+    }
+
     return NextResponse.json({ success: true });
   }
 

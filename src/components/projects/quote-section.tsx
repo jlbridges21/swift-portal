@@ -404,7 +404,7 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
         {mainQuote && !showForm && renderQuote(mainQuote)}
         {!mainQuote && !showForm && (
           <p className="text-sm text-muted text-center py-6">
-            {isAdmin ? "Create a quote to send to the client." : "Your quote will appear here once Swift Aerial Media sends it."}
+            {isAdmin ? "Create a quote to send to the client." : "Your proposal will appear here once Swift Aerial Media sends it."}
           </p>
         )}
 

@@ -79,7 +79,7 @@ export function ProjectHero({
         <CoverPlaceholder variant="hero" />
       )}
 
-      <div className={`relative mx-auto max-w-6xl px-4 ${padding} sm:px-6 lg:px-8`}>
+      <div className={`relative mx-auto max-w-6xl px-5 ${padding} sm:px-6 lg:px-8 safe-area-x`}>
         {isMicrosite && (
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
             Swift Aerial Media
