@@ -145,6 +145,109 @@ export interface EmailCommunicationGroup {
   }[];
 }
 
+export interface EmailCommunicationSummary extends EmailCommunicationGroup {
+  statusIcon: string;
+  statusLabel: string;
+  sentAt?: string;
+  deliveredAt?: string;
+  openedAt?: string;
+  clickedAt?: string;
+  bouncedAt?: string;
+  complainedAt?: string;
+  failureDetail?: string;
+  ctaUrl?: string;
+  ctaLabel?: string;
+  latestAt: string;
+}
+
+function eventIcon(eventType: EmailLifecycleEvent): string {
+  switch (eventType) {
+    case "sent":
+      return "📨";
+    case "delivered":
+      return "✅";
+    case "opened":
+      return "👀";
+    case "clicked":
+      return "🔗";
+    case "bounced":
+      return "⚠️";
+    case "complained":
+      return "🚫";
+    default:
+      return "•";
+  }
+}
+
+function resolveEmailStatus(events: EmailCommunicationGroup["events"]) {
+  const has = (type: EmailLifecycleEvent) => events.some((e) => e.eventType === type);
+  if (has("complained")) return { icon: "🚫", label: "Complaint / Spam" };
+  if (has("bounced")) return { icon: "⚠️", label: "Bounced" };
+  if (has("clicked")) return { icon: "🔗", label: "Clicked" };
+  if (has("opened")) return { icon: "👀", label: "Opened" };
+  if (has("delivered")) return { icon: "✅", label: "Delivered" };
+  if (has("sent")) return { icon: "📨", label: "Sent" };
+  return { icon: "❌", label: "Failed" };
+}
+
+function timestampFor(
+  events: EmailCommunicationGroup["events"],
+  type: EmailLifecycleEvent
+): string | undefined {
+  return events.find((e) => e.eventType === type)?.occurredAt;
+}
+
+export function buildEmailCommunicationSummaries(
+  events: EmailEventRecord[]
+): EmailCommunicationSummary[] {
+  const groups = groupEmailEvents(events);
+
+  return groups.map((group) => {
+    const rawEvents = events.filter(
+      (e) =>
+        (e.resend_email_id && e.resend_email_id === group.resendEmailId) ||
+        (!e.resend_email_id &&
+          `${e.email_type}-${e.recipient}-${e.occurred_at.slice(0, 16)}` === group.resendEmailId)
+    );
+
+    const failureEvent = rawEvents.find(
+      (e) => e.event_type === "bounced" || e.event_type === "complained"
+    );
+    const clickEvent = rawEvents.find((e) => e.event_type === "clicked");
+
+    const status = resolveEmailStatus(group.events);
+    const latestAt =
+      group.events[group.events.length - 1]?.occurredAt ??
+      group.events[0]?.occurredAt ??
+      new Date().toISOString();
+
+    return {
+      ...group,
+      statusIcon: status.icon,
+      statusLabel: status.label,
+      sentAt: timestampFor(group.events, "sent"),
+      deliveredAt: timestampFor(group.events, "delivered"),
+      openedAt: timestampFor(group.events, "opened"),
+      clickedAt: timestampFor(group.events, "clicked"),
+      bouncedAt: timestampFor(group.events, "bounced"),
+      complainedAt: timestampFor(group.events, "complained"),
+      failureDetail:
+        typeof failureEvent?.metadata?.bounceMessage === "string"
+          ? failureEvent.metadata.bounceMessage
+          : undefined,
+      ctaUrl:
+        typeof clickEvent?.metadata?.clickLink === "string"
+          ? clickEvent.metadata.clickLink
+          : undefined,
+      ctaLabel:
+        typeof clickEvent?.metadata?.ctaLabel === "string"
+          ? clickEvent.metadata.ctaLabel
+          : group.events.find((e) => e.eventType === "clicked")?.label,
+      latestAt,
+    };
+  });
+}
+
 export function groupEmailEvents(events: EmailEventRecord[]): EmailCommunicationGroup[] {
   const groups = new Map<string, EmailCommunicationGroup>();
 
@@ -163,16 +266,7 @@ export function groupEmailEvents(events: EmailEventRecord[]): EmailCommunication
         event.event_type === "clicked" && event.metadata?.ctaLabel
           ? String(event.metadata.ctaLabel)
           : event.event_type,
-      icon:
-        event.event_type === "sent"
-          ? "📨"
-          : event.event_type === "delivered"
-            ? "✅"
-            : event.event_type === "opened"
-              ? "👀"
-              : event.event_type === "clicked"
-                ? "🔗"
-                : "⚠️",
+      icon: eventIcon(event.event_type),
     };
 
     if (existing) {

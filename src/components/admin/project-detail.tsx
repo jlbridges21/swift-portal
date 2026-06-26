@@ -21,8 +21,9 @@ import type { Project, Client, MediaAsset, Tour, Payment, ShootProposal, Activit
 import { normalizeStatus } from "@/lib/constants";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
-import { EmailCommunicationHistory } from "@/components/admin/email-communication-history";
-import type { EmailCommunicationGroup } from "@/lib/email-analytics";
+import { CommunicationsHub } from "@/components/admin/communications-hub";
+import type { EmailCommunicationSummary } from "@/lib/email-analytics";
+import type { ProjectNotificationRow } from "@/lib/communications";
 import { NextStepBanner } from "@/components/projects/next-step-banner";
 import { getAdminNextStep } from "@/lib/journey";
 import { getProjectShootDateTime } from "@/lib/scheduling";
@@ -57,7 +58,9 @@ interface AdminProjectDetailProps {
   quotes: ProjectQuote[];
   assetReviews: AssetReview[];
   portalUrl: string;
-  emailGroups: EmailCommunicationGroup[];
+  communicationEmails: EmailCommunicationSummary[];
+  communicationNotifications: ProjectNotificationRow[];
+  communicationActivities: ActivityLog[];
 }
 
 export function AdminProjectDetail({
@@ -73,7 +76,9 @@ export function AdminProjectDetail({
   quotes,
   assetReviews,
   portalUrl,
-  emailGroups,
+  communicationEmails,
+  communicationNotifications,
+  communicationActivities,
 }: AdminProjectDetailProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -963,7 +968,12 @@ export function AdminProjectDetail({
         </CardContent>
       </Card>
 
-      <EmailCommunicationHistory projectId={initialProject.id} initialGroups={emailGroups} />
+      <CommunicationsHub
+        projectId={initialProject.id}
+        initialEmails={communicationEmails}
+        initialNotifications={communicationNotifications}
+        initialActivities={communicationActivities}
+      />
 
       <ProjectActivityTimeline
         activities={activities}

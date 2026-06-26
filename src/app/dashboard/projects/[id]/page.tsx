@@ -3,6 +3,7 @@ import { getProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getProjectHeroMedia } from "@/lib/cover";
 import { redirect, notFound } from "next/navigation";
+import { filterClientVisibleActivities } from "@/lib/communications";
 import { ProjectPageClient } from "@/components/projects/project-page-client";
 import { UrlToastHandler } from "@/components/ui/url-toast-handler";
 
@@ -71,7 +72,7 @@ async function ProjectContent({
         payments={payments ?? []}
         revisions={revisions ?? []}
         shootProposals={shootProposals ?? []}
-        activities={activities ?? []}
+        activities={filterClientVisibleActivities(activities ?? [])}
         quotes={quotes ?? []}
         assetReviews={assetReviews ?? []}
         isPreview={preview && profile.role === "admin"}
