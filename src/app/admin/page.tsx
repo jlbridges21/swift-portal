@@ -49,7 +49,7 @@ export default async function AdminDashboard() {
   ];
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-background">
+    <div className="min-h-screen w-full bg-background">
       <Header variant="dashboard" userRole="admin" />
       <main className="mx-auto w-full max-w-7xl min-w-0 overflow-x-hidden px-4 py-8 sm:px-6 lg:px-8">
         <PageHeader
