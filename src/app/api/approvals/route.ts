@@ -36,8 +36,8 @@ export async function POST(request: Request) {
 
   await notifyAdmins({
     type: "status_changed",
-    title: "Deliverables approved",
-    body: "A client has approved their deliverables.",
+    title: "Deliverables Approved",
+    body: "A client approved their deliverables.",
     link: `/admin/projects/${body.project_id}`,
     projectId: body.project_id,
   });

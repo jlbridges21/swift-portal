@@ -124,16 +124,28 @@ export async function notifyUsers(options: NotifyOptions) {
     }
   }
 
+  // OneSignal is an additional admin-only channel — never blocks in-app notifications.
   if (options.notifyAdmins) {
-    void sendAdminPushNotification({
-      title: options.title,
-      message: options.body || options.title,
-      url: options.link,
-      projectId: options.projectId,
-      eventType: options.type,
-    }).catch((error) => {
-      console.error("[onesignal] admin push failed:", error);
-    });
+    try {
+      const pushResult = await sendAdminPushNotification({
+        title: options.title,
+        message: options.body || options.title,
+        url: options.link,
+        projectId: options.projectId,
+        eventType: options.type,
+      });
+
+      if (!pushResult.sent) {
+        console.warn(
+          "[onesignal] admin push skipped:",
+          options.type,
+          pushResult.reason,
+          pushResult.detail ?? ""
+        );
+      }
+    } catch (error) {
+      console.error("[onesignal] admin push unexpected error:", options.type, error);
+    }
   }
 }
 

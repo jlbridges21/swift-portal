@@ -108,7 +108,7 @@ export function PushNotificationsCard() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to send test push");
+        throw new Error(data.error || data.detail || "Failed to send test push");
       }
 
       toast.success("Test push sent — check this device");

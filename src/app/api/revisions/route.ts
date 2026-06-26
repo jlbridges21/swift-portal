@@ -79,8 +79,8 @@ export async function POST(request: Request) {
 
   await notifyAdmins({
     type: "revision_requested",
-    title: "Revision requested",
-    body: body.description.slice(0, 200),
+    title: "Revision Requested",
+    body: body.description.slice(0, 160),
     link: `/admin/projects/${body.project_id}#activity`,
     projectId: body.project_id,
   });

@@ -152,7 +152,6 @@ export async function PATCH(request: Request) {
       userId: profile.id,
       activityType: "quote_approved",
       activityDescription: "✅ Proposal approved",
-      notifyAdmin: true,
     });
 
     await logProjectActivity("quote_approved", "✅ Proposal approved", {

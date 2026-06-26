@@ -40,8 +40,14 @@ export async function POST(request: Request) {
   if (action === "test") {
     const result = await sendAdminTestPush(profile.id);
     if (!result.sent) {
+      const message =
+        result.reason === "not_configured"
+          ? "OneSignal is not configured"
+          : result.detail
+            ? `Failed to send test push: ${result.detail}`
+            : "Failed to send test push. Enable notifications on this device first.";
       return NextResponse.json(
-        { error: result.reason === "not_configured" ? "OneSignal is not configured" : "Failed to send test push" },
+        { error: message, reason: result.reason, detail: result.detail },
         { status: result.reason === "not_configured" ? 503 : 502 }
       );
     }
