@@ -9,11 +9,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import { ProposalCard } from "@/components/projects/proposal-card";
 import type { ProjectQuote, QuoteLineItem } from "@/lib/types";
-import { PRELIMINARY_ESTIMATE_DISCLAIMER } from "@/lib/service-templates";
+import {
+  getClientActiveQuote,
+  getMainOfficialQuote,
+  getPreliminaryQuote,
+  isPreliminaryQuote,
+} from "@/lib/quote-display";
 import { formatCurrency } from "@/lib/utils";
 import {
-  FileText, Plus, Trash2, Send, Check, MessageSquare, CheckCircle2,
+  FileText, Plus, Trash2, Send, Check, MessageSquare,
   Copy, Pencil, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -23,35 +29,6 @@ interface QuoteSectionProps {
   quotes: ProjectQuote[];
   isAdmin: boolean;
   onStatusChange?: (status: string) => void;
-}
-
-function isPreliminaryQuote(quote: ProjectQuote): boolean {
-  return quote.quote_kind === "preliminary" || quote.title.startsWith("Preliminary Estimate");
-}
-
-function getPreliminaryQuote(quotes: ProjectQuote[]): ProjectQuote | null {
-  return quotes.find((q) => isPreliminaryQuote(q)) ?? null;
-}
-
-function getMainOfficialQuote(quotes: ProjectQuote[], isAdmin: boolean): ProjectQuote | null {
-  const official = quotes.filter((q) => !isPreliminaryQuote(q));
-  const visible = isAdmin ? official : official.filter((q) => q.status !== "draft");
-  const approved = visible.find((q) => q.status === "approved");
-  if (approved) return approved;
-
-  const latestSent = [...visible]
-    .filter((q) => q.status === "sent")
-    .sort(
-      (a, b) =>
-        new Date(b.sent_at ?? b.created_at).getTime() -
-        new Date(a.sent_at ?? a.created_at).getTime()
-    )[0];
-  if (latestSent) return latestSent;
-
-  const changesRequested = visible.find((q) => q.status === "changes_requested");
-  if (changesRequested) return changesRequested;
-
-  return visible.find((q) => q.status === "draft") ?? null;
 }
 
 const emptyForm = {
@@ -79,6 +56,17 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
 
   const preliminaryQuote = getPreliminaryQuote(quotes);
   const mainOfficialQuote = getMainOfficialQuote(quotes, isAdmin);
+  const clientActive = !isAdmin ? getClientActiveQuote(quotes) : null;
+  const adminActiveQuote = isAdmin
+    ? mainOfficialQuote
+      ? { quote: mainOfficialQuote, kind: "official" as const }
+      : preliminaryQuote
+        ? { quote: preliminaryQuote, kind: "preliminary" as const }
+        : null
+    : null;
+
+  const activeDisplay = isAdmin ? adminActiveQuote : clientActive;
+
   const changesRequestedQuote = quotes.find(
     (q) => !isPreliminaryQuote(q) && q.status === "changes_requested"
   );
@@ -279,19 +267,6 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
     }
   }
 
-  function renderDisclaimer() {
-    return (
-      <div className="rounded-xl border border-sky-200 bg-sky-50/80 p-4 space-y-2">
-        <p className="text-sm font-semibold text-primary">About this Preliminary Estimate</p>
-        <p className="text-sm text-muted leading-relaxed">{PRELIMINARY_ESTIMATE_DISCLAIMER}</p>
-        <p className="text-xs text-muted">
-          This is not the final proposal. Final pricing will be confirmed after Swift Aerial Media
-          reviews the property, schedules the shoot, and confirms the project scope.
-        </p>
-      </div>
-    );
-  }
-
   async function quoteAction(id: string, action: string, feedback?: string) {
     if (action === "approve") setApproving(true);
     const res = await fetch("/api/quotes", {
@@ -314,9 +289,84 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
     setApproving(false);
   }
 
+  function renderAdminActions(quote: ProjectQuote) {
+    const preliminary = isPreliminaryQuote(quote);
+
+    if (preliminary) {
+      return (
+        <>
+          <Button variant="outline" size="sm" onClick={() => openEditForm(quote)}>
+            <Pencil className="h-4 w-4" /> Edit Estimate
+          </Button>
+        </>
+      );
+    }
+
+    if (quote.status === "draft") {
+      return (
+        <>
+          <Button variant="outline" size="sm" onClick={() => openEditForm(quote)}>
+            <Pencil className="h-4 w-4" /> Edit Draft
+          </Button>
+          <Button
+            variant="accent"
+            size="sm"
+            disabled={loading}
+            onClick={async () => {
+              const res = await fetch("/api/quotes", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ id: quote.id, action: "send" }),
+              });
+              if (res.ok) {
+                toast.success("Proposal sent");
+                router.refresh();
+              }
+            }}
+          >
+            <Send className="h-4 w-4" /> Send
+          </Button>
+        </>
+      );
+    }
+
+    if (quote.status !== "approved") {
+      return (
+        <Button variant="outline" size="sm" disabled={loading} onClick={() => duplicateQuote(quote)}>
+          <Copy className="h-4 w-4" /> Duplicate & Revise
+        </Button>
+      );
+    }
+
+    return null;
+  }
+
+  function renderClientActions(quote: ProjectQuote) {
+    if (quote.status === "sent") {
+      return (
+        <>
+          <Button variant="accent" disabled={approving} onClick={() => quoteAction(quote.id, "approve")}>
+            <Check className="h-4 w-4" /> Approve Proposal
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              const fb = changeFeedback || prompt("What changes would you like?");
+              if (fb) quoteAction(quote.id, "request_changes", fb);
+            }}
+          >
+            <MessageSquare className="h-4 w-4" /> Request Changes
+          </Button>
+        </>
+      );
+    }
+    return null;
+  }
+
   function renderQuoteForm() {
     return (
-      <div className="space-y-4 rounded-xl border border-border p-5 bg-slate-50/50">
+      <div className="space-y-4 rounded-2xl bg-slate-50/60 p-6 ring-1 ring-black/[0.04]">
         <p className="text-sm font-medium text-primary">
           {editingId ? "Edit draft proposal" : "New proposal"}
         </p>
@@ -325,15 +375,20 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
           <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Aerial Media Package" />
         </div>
         <div className="space-y-2">
-          <Label>Description</Label>
-          <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
+          <Label>Description & Includes</Label>
+          <Textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            rows={8}
+            placeholder={"Optional intro paragraph\n\nIncludes\n• Deliverable one\n• Deliverable two"}
+          />
         </div>
         <div className="space-y-2">
           <Label>Line Items</Label>
           {form.line_items.map((item, i) => (
             <div key={`form-line-${i}`} className="flex gap-2">
               <Input
-                placeholder="Service description"
+                placeholder="Package name"
                 value={item.description}
                 onChange={(e) => updateLineItem(i, "description", e.target.value)}
                 className="flex-1"
@@ -382,183 +437,92 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
     );
   }
 
-  function renderQuote(quote: ProjectQuote, options?: { showDisclaimer?: boolean }) {
-    const isApproved = quote.status === "approved";
-    const preliminary = isPreliminaryQuote(quote);
-
-    return (
-      <div className="rounded-xl border border-border bg-white p-6 space-y-4">
-        {options?.showDisclaimer && renderDisclaimer()}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-semibold text-primary">
-              {preliminary ? quote.title.replace(/^Preliminary Estimate — /, "") : quote.title}
-            </h3>
-            {quote.description && (
-              <p className="text-sm text-muted mt-1 whitespace-pre-line">{quote.description}</p>
-            )}
-          </div>
-          <Badge variant={isApproved ? "success" : quote.status === "changes_requested" ? "warning" : "default"}>
-            {preliminary ? "Preliminary" : isApproved ? "Approved" : quote.status.replace("_", " ")}
-          </Badge>
-        </div>
-        <div className="divide-y divide-border rounded-lg border border-border">
-          {(quote.line_items as QuoteLineItem[]).map((item, i) => (
-            <div key={`line-${quote.id}-${i}`} className="flex justify-between px-4 py-3 text-sm">
-              <span>{item.description}</span>
-              <span className="font-medium">{formatCurrency(item.amount_cents)}</span>
-            </div>
-          ))}
-          <div className="flex justify-between px-4 py-3 font-semibold bg-slate-50">
-            <span>Total</span>
-            <span className="text-primary">{formatCurrency(quote.total_cents)}</span>
-          </div>
-        </div>
-        {quote.notes && <p className="text-sm text-muted"><strong>Notes:</strong> {quote.notes}</p>}
-        {quote.expires_at && (
-          <p className="text-xs text-muted">Valid until {new Date(quote.expires_at).toLocaleDateString()}</p>
-        )}
-
-        {isAdmin && (
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-            {preliminary && (
-              <>
-                <Button variant="outline" size="sm" onClick={() => openEditForm(quote)}>
-                  <Pencil className="h-4 w-4" /> Edit Estimate
-                </Button>
-              </>
-            )}
-            {!preliminary && quote.status === "draft" && (
-              <>
-                <Button variant="outline" size="sm" onClick={() => openEditForm(quote)}>
-                  <Pencil className="h-4 w-4" /> Edit Draft
-                </Button>
-                <Button variant="accent" size="sm" disabled={loading} onClick={async () => {
-                  const res = await fetch("/api/quotes", {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: "include",
-                    body: JSON.stringify({ id: quote.id, action: "send" }),
-                  });
-                  if (res.ok) {
-                    toast.success("Proposal sent");
-                    router.refresh();
-                  }
-                }}>
-                  <Send className="h-4 w-4" /> Send
-                </Button>
-              </>
-            )}
-            {!preliminary && quote.status !== "draft" && quote.status !== "approved" && (
-              <Button variant="outline" size="sm" disabled={loading} onClick={() => duplicateQuote(quote)}>
-                <Copy className="h-4 w-4" /> Duplicate & Revise
-              </Button>
-            )}
-          </div>
-        )}
-
-        {!isAdmin && !preliminary && quote.status === "sent" && (
-          <div className="flex flex-wrap gap-2 pt-2">
-            <Button variant="accent" disabled={approving} onClick={() => quoteAction(quote.id, "approve")}>
-              <Check className="h-4 w-4" /> Approve Proposal
-            </Button>
-            <Button variant="outline" onClick={() => {
-              const fb = changeFeedback || prompt("What changes would you like?");
-              if (fb) quoteAction(quote.id, "request_changes", fb);
-            }}>
-              <MessageSquare className="h-4 w-4" /> Request Changes
-            </Button>
-          </div>
-        )}
-        {isApproved && !isAdmin && (
-          <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
-            <CheckCircle2 className="h-5 w-5 shrink-0" />
-            <span>Proposal approved{quote.approved_at ? ` on ${new Date(quote.approved_at).toLocaleDateString()}` : ""}</span>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   const sectionTitle = isAdmin
     ? "Estimates & Proposals"
-    : mainOfficialQuote
+    : activeDisplay?.kind === "official"
       ? "Official Proposal"
       : "Preliminary Estimate";
 
   return (
-    <Card className="shadow-sm" id="quote">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <FileText className="h-5 w-5 text-accent" /> {sectionTitle}
-        </CardTitle>
+    <section id="quote" className="scroll-mt-20">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+          <FileText className="h-5 w-5 text-accent" />
+          {sectionTitle}
+        </h2>
         {isAdmin && !showForm && (
           <Button variant="outline" size="sm" onClick={openCreateForm}>
             {mainOfficialQuote ? "New Official Proposal" : "Create Official Proposal"}
           </Button>
         )}
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </div>
+
+      <div className="space-y-6">
         {isAdmin && changesRequestedQuote && !showForm && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium text-amber-900">Client requested changes</p>
-                {changesRequestedQuote.changes_feedback && (
-                  <p className="text-sm text-amber-800 mt-1">&ldquo;{changesRequestedQuote.changes_feedback}&rdquo;</p>
-                )}
+          <Card className="border-amber-200/80 bg-amber-50/50 shadow-none">
+            <CardContent className="space-y-3 p-5">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-amber-900">Client requested changes</p>
+                  {changesRequestedQuote.changes_feedback && (
+                    <p className="text-sm text-amber-800 mt-1">&ldquo;{changesRequestedQuote.changes_feedback}&rdquo;</p>
+                  )}
+                </div>
               </div>
-            </div>
-            <Button variant="accent" size="sm" disabled={loading} onClick={() => duplicateQuote(changesRequestedQuote)}>
-              <Copy className="h-4 w-4" /> Create Revised Proposal
-            </Button>
-          </div>
+              <Button variant="accent" size="sm" disabled={loading} onClick={() => duplicateQuote(changesRequestedQuote)}>
+                <Copy className="h-4 w-4" /> Create Revised Proposal
+              </Button>
+            </CardContent>
+          </Card>
         )}
 
-        {preliminaryQuote && !showForm && (
-          <div className="space-y-3">
-            {!isAdmin && renderDisclaimer()}
-            {renderQuote(preliminaryQuote, { showDisclaimer: false })}
-          </div>
+        {activeDisplay && !showForm && (
+          <ProposalCard
+            quote={activeDisplay.quote}
+            kind={activeDisplay.kind}
+            isAdmin={isAdmin}
+            actions={
+              isAdmin
+                ? renderAdminActions(activeDisplay.quote)
+                : activeDisplay.kind === "official"
+                  ? renderClientActions(activeDisplay.quote)
+                  : null
+            }
+          />
         )}
 
-        {mainOfficialQuote && !showForm && (
-          <div className="space-y-3">
-            {preliminaryQuote && (
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Official Proposal</p>
-            )}
-            {renderQuote(mainOfficialQuote)}
-          </div>
-        )}
-
-        {!preliminaryQuote && !mainOfficialQuote && !showForm && (
-          <p className="text-sm text-muted text-center py-6">
-            {isAdmin
-              ? "A preliminary estimate is generated automatically when a client requests a project."
-              : "Your preliminary estimate will appear here shortly after your request is submitted."}
-          </p>
+        {!activeDisplay && !showForm && (
+          <Card className="border-0 bg-slate-50/50 shadow-none ring-1 ring-black/[0.04]">
+            <CardContent className="py-12 text-center">
+              <p className="text-sm text-muted">
+                {isAdmin
+                  ? "A preliminary estimate is generated automatically when a client requests a project."
+                  : "Your preliminary estimate will appear here shortly after your request is submitted."}
+              </p>
+            </CardContent>
+          </Card>
         )}
 
         {showForm && (
           <>
             {editingPreliminary ? (
-              <div className="space-y-4 rounded-xl border border-border p-5 bg-slate-50/50">
+              <div className="space-y-4 rounded-2xl bg-slate-50/60 p-6 ring-1 ring-black/[0.04]">
                 <p className="text-sm font-medium text-primary">Edit preliminary estimate</p>
                 <div className="space-y-2">
                   <Label>Title</Label>
                   <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Package Description</Label>
-                  <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={6} />
+                  <Label>Description & Includes</Label>
+                  <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={8} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Line Items</Label>
+                  <Label>Package Price</Label>
                   {form.line_items.map((item, i) => (
                     <div key={`prelim-line-${i}`} className="flex gap-2">
                       <Input
-                        placeholder="Service description"
+                        placeholder="Package name"
                         value={item.description}
                         onChange={(e) => updateLineItem(i, "description", e.target.value)}
                         className="flex-1"
@@ -568,16 +532,8 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
                         onChangeCents={(cents) => updateLineItem(i, "amount_cents", cents)}
                         className="w-32"
                       />
-                      {form.line_items.length > 1 && (
-                        <Button variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, line_items: f.line_items.filter((_, j) => j !== i) }))}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
                     </div>
                   ))}
-                  <Button variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, line_items: [...f.line_items, { description: "", amount_cents: 0 }] }))}>
-                    <Plus className="h-4 w-4" /> Add Line Item
-                  </Button>
                 </div>
                 <p className="text-sm font-medium">Total: {formatCurrency(totalCents)}</p>
                 <div className="space-y-2">
@@ -603,25 +559,29 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
         )}
 
         {isAdmin && draftQuotes.length > 0 && !showForm && (
-          <div className="rounded-lg border border-dashed border-border p-4">
-            <p className="text-xs font-semibold uppercase text-muted mb-2">Draft proposals</p>
-            <div className="space-y-2">
+          <Card className="border-dashed shadow-none">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold text-muted">Draft proposals</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
               {draftQuotes.map((d) => (
                 <div key={`draft-${d.id}`} className="flex items-center justify-between text-sm">
                   <span>{d.title}</span>
                   <Button variant="ghost" size="sm" onClick={() => openEditForm(d)}>Edit</Button>
                 </div>
               ))}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
 
         {isAdmin && quotes.length > 0 && (
-          <div className="border-t border-border pt-6">
-            <h3 className="text-sm font-semibold text-primary mb-3">Proposal History</h3>
-            <div className="space-y-2">
+          <Card className="border-0 bg-transparent shadow-none">
+            <CardHeader className="px-0">
+              <CardTitle className="text-sm font-semibold text-slate-700">Proposal History</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 px-0">
               {quotes.map((q) => (
-                <div key={`history-${q.id}`} className="rounded-lg border border-border px-4 py-3 text-sm">
+                <div key={`history-${q.id}`} className="rounded-xl bg-slate-50/80 px-4 py-3 text-sm ring-1 ring-black/[0.04]">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-medium">{q.title}</span>
                     <Badge variant={q.status === "approved" ? "success" : q.status === "changes_requested" ? "warning" : "default"}>
@@ -641,10 +601,10 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
                   {q.notes && <p className="text-xs text-muted mt-1"><strong>Notes:</strong> {q.notes}</p>}
                 </div>
               ))}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

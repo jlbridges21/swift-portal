@@ -42,6 +42,7 @@ export const SERVICE_TYPES = [
   "Land Listing Package",
   "Golf Course & Resort Marketing",
   "Roof Inspection",
+  "Property Documentation",
   "Marina & Waterfront Marketing",
   "HOA & Community Marketing",
   "Custom Project",

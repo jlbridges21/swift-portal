@@ -341,10 +341,34 @@ CREATE POLICY "Authenticated users can log activity" ON activity_logs
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES
   ('project-media', 'project-media', false, 524288000, ARRAY['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime']),
-  ('project-documents', 'project-documents', false, 104857600, ARRAY['application/pdf', 'application/zip', 'application/x-zip-compressed'])
+  ('project-documents', 'project-documents', false, 104857600, ARRAY['application/pdf', 'application/zip', 'application/x-zip-compressed']),
+  ('avatars', 'avatars', true, 5242880, ARRAY['image/jpeg', 'image/png', 'image/webp'])
 ON CONFLICT (id) DO NOTHING;
 
--- Storage policies
+-- Avatar storage policies
+CREATE POLICY "Users upload own avatar" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'avatars'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+CREATE POLICY "Users update own avatar" ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'avatars'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+CREATE POLICY "Users delete own avatar" ON storage.objects
+  FOR DELETE TO authenticated
+  USING (
+    bucket_id = 'avatars'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+CREATE POLICY "Anyone can view avatars" ON storage.objects
+  FOR SELECT
+  USING (bucket_id = 'avatars');
+
+-- Storage policies (project media)
 CREATE POLICY "Admins can upload media" ON storage.objects
   FOR INSERT WITH CHECK (
     bucket_id IN ('project-media', 'project-documents') AND is_admin()

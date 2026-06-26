@@ -1,4 +1,5 @@
 import type { QuoteLineItem } from "@/lib/types";
+import { formatIncludesBlock } from "@/lib/quote-display";
 
 export interface ServiceTemplate {
   id: string;
@@ -7,8 +8,11 @@ export interface ServiceTemplate {
   startingAtCents: number | null;
   startingLabel: string;
   lineItems: QuoteLineItem[];
-  description: string;
+  includes: string[];
+  description?: string;
   notes: string;
+  hidePricing?: boolean;
+  recommended?: boolean;
 }
 
 export const PRELIMINARY_ESTIMATE_DISCLAIMER =
@@ -18,118 +22,139 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
   {
     id: "aerial_photography",
     serviceNames: ["Aerial Photography"],
-    title: "Essential Aerial Photography Package",
+    title: "Aerial Photography",
     startingAtCents: 24900,
     startingLabel: "Starting at $249",
-    lineItems: [
-      { description: "Essential Aerial Photography Package", amount_cents: 24900 },
-      { description: "Commercial Usage Rights", amount_cents: 0 },
-      { description: "Secure Swift Portal Delivery", amount_cents: 0 },
+    lineItems: [{ description: "Aerial Photography", amount_cents: 24900 }],
+    includes: [
+      "FAA Part 107 licensed pilot",
+      "20–30 professionally edited aerial images",
+      "Multiple property overview angles",
+      "Waterfront or neighborhood context (when applicable)",
+      "MLS-ready high-resolution images",
+      "Commercial usage rights",
+      "Secure Swift Portal delivery",
+      "Typical turnaround: 24–48 hours",
     ],
-    description:
-      "Professional aerial photography for residential, waterfront, commercial, and land listings.\n\nIncludes:\n• 20–30 professionally edited drone photographs\n• Multiple property overview angles\n• MLS-ready formatting\n• High-resolution downloads\n• Commercial usage rights\n• Secure delivery through Swift Portal\n• Standard 24–48 hour turnaround",
-    notes:
-      "Final pricing depends on property size, accessibility, airspace, travel, and requested shot list.",
+    notes: "Final pricing depends on property size, accessibility, airspace, travel, and requested shot list.",
   },
   {
     id: "aerial_videography",
     serviceNames: ["Aerial Videography"],
-    title: "Cinematic Aerial Video Package",
+    title: "Aerial Videography",
     startingAtCents: 39900,
     startingLabel: "Starting at $399",
-    lineItems: [
-      { description: "Cinematic Aerial Video Package", amount_cents: 39900 },
-      { description: "Commercial Usage Rights", amount_cents: 0 },
-      { description: "Swift Portal Delivery", amount_cents: 0 },
+    lineItems: [{ description: "Aerial Videography", amount_cents: 39900 }],
+    includes: [
+      "Cinematic drone flight",
+      "Professionally edited highlight video",
+      "Licensed music",
+      "Color grading",
+      "Social media version",
+      "Website version",
+      "Commercial usage rights",
+      "Swift Portal delivery",
     ],
-    description:
-      "Professional cinematic aerial video for real estate, commercial marketing, resorts, developments, and businesses.\n\nIncludes:\n• Cinematic drone footage\n• Professionally edited highlight video\n• Licensed music\n• Color correction\n• Social media export\n• Commercial usage rights\n• Swift Portal delivery",
     notes: "",
   },
   {
     id: "exterior_360_tour",
     serviceNames: ["360 Virtual Tour", "Exterior 360° Virtual Tour"],
-    title: "Exterior 360° Virtual Tour Package",
+    title: "Exterior 360° Virtual Tour",
     startingAtCents: 29900,
     startingLabel: "Starting at $299",
-    lineItems: [
-      { description: "Exterior 360° Virtual Tour Package", amount_cents: 29900 },
-      { description: "Hosted Interactive Tour", amount_cents: 0 },
-      { description: "Embed Code & Share Link", amount_cents: 0 },
+    lineItems: [{ description: "Exterior 360° Virtual Tour", amount_cents: 29900 }],
+    includes: [
+      "Exterior-only 360° capture",
+      "Hosted interactive tour",
+      "Shareable tour link",
+      "Website embed code",
+      "Swift Portal access",
     ],
     description:
-      "Interactive exterior-only 360° virtual tour.\n\nIncludes:\n• Exterior-only 360° capture\n• Hosted interactive tour\n• Shareable tour link\n• Website embed code\n• Swift Portal access",
+      "Designed for homes, commercial properties, developments, golf courses, resorts, marinas, and outdoor spaces.",
     notes:
-      "This service is for exterior virtual tours only. Interior Matterport-style walkthroughs are not included. Pricing varies significantly based on project size. Large commercial properties, golf courses, resorts, and country clubs may exceed several thousand dollars.",
+      "This service is for exterior virtual tours only. Interior Matterport-style walkthroughs are not included. Pricing varies based on project size.",
   },
   {
     id: "drone_mapping",
     serviceNames: ["Drone Mapping"],
-    title: "Drone Mapping Package",
+    title: "Drone Mapping",
     startingAtCents: 59900,
     startingLabel: "Starting at $599",
-    lineItems: [
-      { description: "Drone Mapping Package", amount_cents: 59900 },
-      { description: "Processed Deliverables", amount_cents: 0 },
+    lineItems: [{ description: "Drone Mapping", amount_cents: 59900 }],
+    includes: [
+      "High-overlap mapping mission",
+      "Orthomosaic map",
+      "Site documentation",
+      "Organized digital deliverables",
     ],
-    description:
-      "Professional mapping for land, construction, and development projects.\n\nIncludes:\n• High-overlap mapping flight\n• Orthomosaic processing\n• Organized digital delivery",
     notes: "",
   },
   {
     id: "real_estate_media_package",
     serviceNames: ["Real Estate Media Package"],
-    title: "Complete Listing Media Package",
+    title: "Real Estate Media Package",
     startingAtCents: 49900,
     startingLabel: "Starting at $499",
-    lineItems: [
-      { description: "Complete Listing Media Package", amount_cents: 49900 },
-      { description: "MLS Delivery & Licensing", amount_cents: 0 },
+    recommended: true,
+    lineItems: [{ description: "Real Estate Media Package", amount_cents: 49900 }],
+    includes: [
+      "Professional aerial photography",
+      "Cinematic aerial video",
+      "MLS-ready media",
+      "Social media video",
+      "Commercial usage rights",
+      "Swift Portal delivery",
     ],
-    description:
-      "Complete marketing package for residential listings.\n\nIncludes:\n• 20–30 edited aerial photographs\n• Cinematic aerial video\n• MLS-ready media\n• Commercial licensing\n• Swift Portal delivery",
     notes: "",
   },
   {
     id: "commercial_aerial",
     serviceNames: ["Commercial Aerial", "Commercial Aerial Media"],
-    title: "Commercial Marketing Package",
+    title: "Commercial Aerial Media",
     startingAtCents: 79900,
     startingLabel: "Starting at $799",
-    lineItems: [
-      { description: "Commercial Marketing Package", amount_cents: 79900 },
-      { description: "Commercial Usage Rights", amount_cents: 0 },
+    lineItems: [{ description: "Commercial Aerial Media", amount_cents: 79900 }],
+    includes: [
+      "Discovery consultation",
+      "Commercial aerial photography",
+      "Commercial aerial video",
+      "Marketing-ready media",
+      "Commercial licensing",
     ],
-    description:
-      "Designed for businesses, developers, apartment communities, hotels, resorts, and commercial properties.\n\nIncludes:\n• Drone photography\n• Drone videography\n• Edited media\n• Commercial licensing",
     notes: "",
   },
   {
     id: "event_coverage",
     serviceNames: ["Event Coverage"],
-    title: "Event Coverage Package",
+    title: "Event Coverage",
     startingAtCents: 59900,
     startingLabel: "Starting at $599",
-    lineItems: [
-      { description: "Event Coverage Package", amount_cents: 59900 },
-      { description: "Edited Deliverables", amount_cents: 0 },
+    lineItems: [{ description: "Event Coverage", amount_cents: 59900 }],
+    includes: [
+      "Drone photography",
+      "Drone videography",
+      "Highlight video",
+      "Commercial licensing",
+      "Swift Portal delivery",
     ],
-    description:
-      "Professional aerial event coverage.\n\nIncludes:\n• Drone photography\n• Drone videography\n• Highlight video\n• Commercial licensing",
     notes: "",
   },
   {
     id: "construction_progress",
     serviceNames: ["Construction Progress Documentation"],
-    title: "Construction Progress Visit",
+    title: "Construction Progress Documentation",
     startingAtCents: 29900,
     startingLabel: "Starting at $299 per visit",
-    lineItems: [
-      { description: "Construction Progress Visit", amount_cents: 29900 },
-      { description: "Project Archive", amount_cents: 0 },
+    lineItems: [{ description: "Construction Progress Documentation", amount_cents: 29900 }],
+    includes: [
+      "Scheduled drone site visit",
+      "Progress photography",
+      "Progress video",
+      "Chronological project archive",
+      "Secure Swift Portal delivery",
     ],
-    description:
-      "Recurring aerial documentation for builders and developers.\n\nIncludes:\n• Scheduled drone site visit\n• Progress photography\n• Progress video\n• Organized project archive\n\nPerfect for recurring monthly documentation.",
     notes: "",
   },
   {
@@ -138,12 +163,15 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
     title: "Land Listing Package",
     startingAtCents: 34900,
     startingLabel: "Starting at $349",
-    lineItems: [
-      { description: "Land Listing Package", amount_cents: 34900 },
-      { description: "MLS Delivery", amount_cents: 0 },
+    lineItems: [{ description: "Land Listing Package", amount_cents: 34900 }],
+    includes: [
+      "Property overview photography",
+      "Boundary highlight imagery",
+      "Access road imagery",
+      "Nearby landmarks",
+      "Waterfront context when applicable",
+      "MLS-ready images",
     ],
-    description:
-      "Designed specifically for vacant land marketing.\n\nIncludes:\n• Boundary overview imagery\n• Property overview shots\n• Access road imagery\n• Waterfront imagery when applicable",
     notes: "",
   },
   {
@@ -151,61 +179,91 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
     serviceNames: ["Golf Course & Resort Marketing"],
     title: "Golf Course & Resort Marketing",
     startingAtCents: 0,
-    startingLabel: "Custom Quote",
+    startingLabel: "Custom Proposal Required",
+    hidePricing: true,
     lineItems: [{ description: "Custom Proposal Required", amount_cents: 0 }],
-    description:
-      "Designed for golf courses, resorts, country clubs, and destination properties.\n\nPricing depends on acreage, amenities, deliverables, and marketing goals.",
+    includes: [],
+    description: "Custom proposal based on property size, deliverables, and marketing goals.",
     notes: "A custom official proposal will be prepared after project review.",
   },
   {
     id: "roof_inspection",
     serviceNames: ["Roof Inspection"],
-    title: "Roof Inspection Package",
+    title: "Roof Inspection",
     startingAtCents: 19900,
     startingLabel: "Starting at $199",
-    lineItems: [
-      { description: "Roof Inspection Package", amount_cents: 19900 },
-      { description: "Digital Inspection Report", amount_cents: 0 },
+    lineItems: [{ description: "Roof Inspection", amount_cents: 19900 }],
+    includes: [
+      "High-resolution inspection imagery",
+      "Roof overview",
+      "Chimney",
+      "Flashing",
+      "Gutters",
+      "Roof penetrations",
+      "Secure digital delivery",
     ],
-    description:
-      "Drone roof inspections for homeowners, contractors, and insurance documentation.",
     notes: "",
+  },
+  {
+    id: "property_documentation",
+    serviceNames: ["Property Documentation", "Insurance Documentation"],
+    title: "Property Documentation",
+    startingAtCents: 24900,
+    startingLabel: "Starting at $249",
+    lineItems: [{ description: "Property Documentation", amount_cents: 24900 }],
+    includes: [
+      "Exterior property overview",
+      "Roof imagery",
+      "Storm damage documentation",
+      "High-resolution photography",
+      "Date-stamped digital delivery",
+      "Secure Swift Portal delivery",
+    ],
+    notes:
+      "Swift Aerial Media documents visible property conditions from the air. We do not provide engineering reports or insurance adjusting services.",
   },
   {
     id: "marina_waterfront",
     serviceNames: ["Marina & Waterfront Marketing"],
-    title: "Waterfront Marketing Package",
+    title: "Marina & Waterfront Marketing",
     startingAtCents: 39900,
     startingLabel: "Starting at $399",
-    lineItems: [
-      { description: "Waterfront Marketing Package", amount_cents: 39900 },
-      { description: "Commercial Usage Rights", amount_cents: 0 },
+    lineItems: [{ description: "Marina & Waterfront Marketing", amount_cents: 39900 }],
+    includes: [
+      "Marina overview imagery",
+      "Waterfront context",
+      "Lifestyle photography",
+      "Commercial usage rights",
     ],
-    description:
-      "Photography and video for waterfront homes, marinas, and coastal businesses.",
     notes: "",
   },
   {
     id: "hoa_community",
     serviceNames: ["HOA & Community Marketing"],
-    title: "Community Marketing Package",
+    title: "HOA & Community Marketing",
     startingAtCents: 49900,
     startingLabel: "Starting at $499",
-    lineItems: [
-      { description: "Community Marketing Package", amount_cents: 49900 },
-      { description: "Commercial Licensing", amount_cents: 0 },
+    lineItems: [{ description: "HOA & Community Marketing", amount_cents: 49900 }],
+    includes: [
+      "Entrance monument",
+      "Amenities",
+      "Pool",
+      "Clubhouse",
+      "Walking trails",
+      "Common areas",
+      "Aerial overview",
     ],
-    description:
-      "Photography for neighborhoods, amenities, clubhouses, apartment communities, and HOAs.",
     notes: "",
   },
   {
     id: "custom_project",
     serviceNames: ["Other", "Custom Project"],
-    title: "Custom Project Estimate",
+    title: "Custom Project",
     startingAtCents: 0,
     startingLabel: "Custom Quote",
+    hidePricing: true,
     lineItems: [{ description: "Custom Proposal Required", amount_cents: 0 }],
+    includes: [],
     description:
       "Swift Aerial Media will review your request and prepare a custom proposal based on the project scope.",
     notes: "Final pricing will be confirmed after scope review and scheduling.",
@@ -235,13 +293,16 @@ export function getServiceTemplate(serviceType: string): ServiceTemplate {
     return SERVICE_TEMPLATES.find((t) => t.id === "exterior_360_tour")!;
   }
   if (lower.includes("mapping")) return SERVICE_TEMPLATES.find((t) => t.id === "drone_mapping")!;
-  if (lower.includes("real estate") || lower.includes("listing")) {
+  if (lower.includes("real estate") || lower.includes("listing media")) {
     return SERVICE_TEMPLATES.find((t) => t.id === "real_estate_media_package")!;
   }
   if (lower.includes("commercial")) return SERVICE_TEMPLATES.find((t) => t.id === "commercial_aerial")!;
   if (lower.includes("event")) return SERVICE_TEMPLATES.find((t) => t.id === "event_coverage")!;
   if (lower.includes("construction")) return SERVICE_TEMPLATES.find((t) => t.id === "construction_progress")!;
   if (lower.includes("roof")) return SERVICE_TEMPLATES.find((t) => t.id === "roof_inspection")!;
+  if (lower.includes("insurance") || lower.includes("documentation")) {
+    return SERVICE_TEMPLATES.find((t) => t.id === "property_documentation")!;
+  }
   if (lower.includes("waterfront") || lower.includes("marina")) {
     return SERVICE_TEMPLATES.find((t) => t.id === "marina_waterfront")!;
   }
@@ -258,12 +319,20 @@ export function getServiceTemplate(serviceType: string): ServiceTemplate {
 export function buildPreliminaryEstimatePayload(serviceType: string) {
   const template = getServiceTemplate(serviceType);
   const total_cents = template.lineItems.reduce((sum, item) => sum + item.amount_cents, 0);
+  const includesBlock = formatIncludesBlock(template.includes);
+  const description = [template.description, includesBlock].filter(Boolean).join("\n\n");
+
+  const noteParts = [
+    template.hidePricing ? "Custom Proposal Required" : template.startingLabel,
+    template.notes,
+  ].filter(Boolean);
+
   return {
     title: `Preliminary Estimate — ${template.title}`,
-    description: template.description,
+    description,
     line_items: template.lineItems,
     total_cents,
-    notes: [template.startingLabel, template.notes].filter(Boolean).join("\n\n"),
+    notes: noteParts.join("\n\n"),
     quote_kind: "preliminary" as const,
   };
 }

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 
+const AVATAR_BUCKET = "avatars";
+
 export async function POST(request: Request) {
   const profile = await getProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,27 +21,35 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createServiceClient();
-  const ext = file.name.split(".").pop() || "jpg";
-  const path = `avatars/${profile.id}.${ext}`;
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const safeExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
+  const path = `${profile.id}/avatar.${safeExt}`;
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const { error: uploadError } = await supabase.storage
-    .from("media")
+    .from(AVATAR_BUCKET)
     .upload(path, buffer, { upsert: true, contentType: file.type });
 
   if (uploadError) {
+    console.error("[avatar] upload failed:", uploadError.message);
     return NextResponse.json({ error: uploadError.message }, { status: 500 });
   }
 
-  const { data: signed, error: signError } = await supabase.storage
-    .from("media")
-    .createSignedUrl(path, 60 * 60 * 24 * 365);
-
-  if (signError || !signed?.signedUrl) {
-    return NextResponse.json({ error: signError?.message || "Failed to sign URL" }, { status: 500 });
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) {
+    return NextResponse.json({ error: "Storage URL not configured" }, { status: 500 });
   }
 
-  await supabase.from("profiles").update({ avatar_url: signed.signedUrl }).eq("id", profile.id);
+  const avatarUrl = `${supabaseUrl}/storage/v1/object/public/${AVATAR_BUCKET}/${path}?v=${Date.now()}`;
 
-  return NextResponse.json({ avatar_url: signed.signedUrl });
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ avatar_url: avatarUrl })
+    .eq("id", profile.id);
+
+  if (profileError) {
+    return NextResponse.json({ error: profileError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ avatar_url: avatarUrl });
 }
