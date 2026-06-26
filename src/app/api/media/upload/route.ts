@@ -121,6 +121,7 @@ export async function POST(request: Request) {
 
     await notifyProjectClients({
       type: "deliverables_uploaded",
+      eventKey: "deliverables_ready",
       title: "Media in Production",
       body: `${label} View progress in your portal.`,
       link: `/dashboard/projects/${projectId}#deliverables`,

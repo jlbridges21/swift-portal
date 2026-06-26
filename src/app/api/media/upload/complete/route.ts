@@ -61,6 +61,7 @@ export async function POST(request: Request) {
   if (mediaType !== "document") {
     await notifyProjectClients({
       type: "deliverables_uploaded",
+      eventKey: "deliverables_ready",
       title: "Media in Production",
       body:
         mediaType === "video"

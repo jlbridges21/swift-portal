@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getProjectHeroMedia } from "@/lib/cover";
 import { redirect, notFound } from "next/navigation";
 import { filterClientVisibleActivities } from "@/lib/communications";
+import { getClientVisibleQuotes } from "@/lib/quote-display";
+import { getAppSettings } from "@/lib/app-settings";
 import { ProjectPageClient } from "@/components/projects/project-page-client";
 import { UrlToastHandler } from "@/components/ui/url-toast-handler";
 
@@ -52,6 +54,7 @@ async function ProjectContent({
 
   if (!project) notFound();
 
+  const appSettings = await getAppSettings();
   const hero = await getProjectHeroMedia(supabase, project);
   const photos = media?.filter((m) => m.media_type === "photo") ?? [];
   const videos = media?.filter((m) => m.media_type === "video") ?? [];
@@ -73,7 +76,10 @@ async function ProjectContent({
         revisions={revisions ?? []}
         shootProposals={shootProposals ?? []}
         activities={filterClientVisibleActivities(activities ?? [])}
-        quotes={quotes ?? []}
+        quotes={getClientVisibleQuotes(quotes ?? [], {
+          showPreliminaryToClients: appSettings.proposals.showPreliminaryToClients,
+        })}
+        allowClientProposalChanges={appSettings.proposals.allowClientProposalChanges}
         assetReviews={assetReviews ?? []}
         isPreview={preview && profile.role === "admin"}
         isAdmin={profile.role === "admin"}

@@ -77,6 +77,7 @@ export async function POST(request: Request) {
   if (isAdmin) {
     await notifyProjectClients({
       type: "shoot_proposed",
+      eventKey: "shoot_time_proposed",
       title: "Scheduling Your Shoot",
       body: `Swift Aerial Media proposed a shoot for ${dateStr}. Please review and confirm in your portal.`,
       link: `/dashboard/projects/${body.project_id}#scheduling`,
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
   } else {
     await notifyAdmins({
       type: "schedule_change_requested",
+      eventKey: "shoot_time_proposed",
       title: "Client proposed a shoot date",
       body: `A client proposed a new shoot date: ${dateStr}`,
       link: `/admin/projects/${body.project_id}`,
@@ -156,6 +158,7 @@ export async function PATCH(request: Request) {
       clientTitle: "Shoot Scheduled",
       clientBody: `Your shoot is confirmed for ${dateStr}. We'll see you on site!`,
       link: `/dashboard/projects/${proposal.project_id}#scheduling`,
+      clientEventKey: "shoot_scheduled",
       skipIfSame: true,
     });
 
@@ -166,6 +169,7 @@ export async function PATCH(request: Request) {
 
     await notifyAdmins({
       type: "shoot_proposed",
+      eventKey: "shoot_time_confirmed",
       title: clientAcceptedAdminProposal ? "Client approved shoot time" : "Shoot confirmed",
       body: clientAcceptedAdminProposal
         ? `The client confirmed the shoot for ${dateStr}.`
@@ -208,6 +212,7 @@ export async function PATCH(request: Request) {
 
     await notifyProjectClients({
       type: "shoot_proposed",
+      eventKey: "shoot_rescheduled",
       title: "Shoot Scheduled",
       body: `Your shoot is now scheduled for ${dateStr}.`,
       link: `/dashboard/projects/${shoot.project_id}#scheduling`,
@@ -270,6 +275,7 @@ export async function PATCH(request: Request) {
 
     await notifyProjectClients({
       type: "shoot_proposed",
+      eventKey: "shoot_rescheduled",
       title: "Scheduling Your Shoot",
       body: `Please confirm the new shoot date: ${dateStr}.`,
       link: `/dashboard/projects/${projectId}#scheduling`,
@@ -308,6 +314,7 @@ export async function PATCH(request: Request) {
     if (isAdmin) {
       await notifyProjectClients({
         type: "shoot_proposed",
+        eventKey: "shoot_time_proposed",
         title: "Scheduling Your Shoot",
         body: `Swift Aerial Media proposed ${dateStr}. Please review.`,
         link: `/dashboard/projects/${proposal.project_id}#scheduling`,
@@ -316,6 +323,7 @@ export async function PATCH(request: Request) {
     } else {
       await notifyAdmins({
         type: "schedule_change_requested",
+        eventKey: "shoot_time_proposed",
         title: "Client requested schedule change",
         body: `Client proposed an alternative date: ${dateStr}`,
         link: `/admin/projects/${proposal.project_id}`,
@@ -349,6 +357,7 @@ export async function PATCH(request: Request) {
     if (withdrawn) {
       await notifyProjectClients({
         type: "schedule_change_requested",
+        eventKey: "shoot_time_declined",
         title: "Shoot proposal withdrawn",
         body: `The proposed shoot time (${dateStr}) was withdrawn. We'll follow up with a new option soon.`,
         link: `/dashboard/projects/${proposal.project_id}#scheduling`,
@@ -357,6 +366,7 @@ export async function PATCH(request: Request) {
     } else if (isAdmin && proposal.proposed_by === "client") {
       await notifyProjectClients({
         type: "schedule_change_requested",
+        eventKey: "shoot_time_declined",
         title: "Shoot time declined",
         body: `Your suggested shoot time (${dateStr}) was declined. You can suggest another time in your portal.`,
         link: `/dashboard/projects/${proposal.project_id}#scheduling`,
@@ -365,6 +375,7 @@ export async function PATCH(request: Request) {
     } else if (!isAdmin && proposal.proposed_by === "admin") {
       await notifyAdmins({
         type: "schedule_change_requested",
+        eventKey: "shoot_time_declined",
         title: "Client declined shoot time",
         body: `The client declined the proposed shoot time: ${dateStr}`,
         link: `/admin/projects/${proposal.project_id}#scheduling`,

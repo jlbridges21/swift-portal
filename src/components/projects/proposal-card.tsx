@@ -29,6 +29,7 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
   const intro = getQuoteIntroText(quote.description);
   const isApproved = quote.status === "approved";
   const isPreliminary = kind === "preliminary";
+  const needsReview = !isAdmin && kind === "official" && quote.status === "sent";
 
   return (
     <div
@@ -49,6 +50,12 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
             reviews the property, schedules the shoot, and confirms the project scope.
           </p>
         </div>
+      )}
+
+      {needsReview && (
+        <p className="mb-6 text-sm font-medium text-accent">
+          Please review and approve this proposal to continue.
+        </p>
       )}
 
       <div className="flex flex-wrap items-start justify-between gap-4">

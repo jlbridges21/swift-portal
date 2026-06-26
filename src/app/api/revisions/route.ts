@@ -79,6 +79,7 @@ export async function POST(request: Request) {
 
   await notifyAdmins({
     type: "revision_requested",
+    eventKey: "revision_requested",
     title: "Revision Requested",
     body: body.description.slice(0, 160),
     link: `/admin/projects/${body.project_id}#activity`,
@@ -144,6 +145,7 @@ export async function PATCH(request: Request) {
   const { notifyProjectClients } = await import("@/lib/notifications");
   await notifyProjectClients({
     type: "revision_requested",
+    eventKey: status === "completed" ? "revision_completed" : undefined,
     title: msg.title,
     body: msg.body,
     link: `/dashboard/projects/${data.project_id}#activity`,

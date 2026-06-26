@@ -49,7 +49,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole="admin" />
-      <main className="mx-auto max-w-4xl px-4 py-4 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-4xl px-4 py-4 pb-6 sm:px-6 sm:pb-8 lg:px-8 md:pb-8">
         <AdminProjectDetail
           project={project}
           media={media ?? []}

@@ -10,6 +10,7 @@ import {
   getLocalPushSubscriptionStatus,
   isOneSignalConfigured,
 } from "@/lib/onesignal-client";
+import { useIsMobileOrPwa } from "@/lib/use-mobile-or-pwa";
 
 interface PushStatus {
   configured: boolean;
@@ -19,13 +20,18 @@ interface PushStatus {
 }
 
 export function PushNotificationsCard() {
+  const isMobileOrPwa = useIsMobileOrPwa();
   const [status, setStatus] = useState<PushStatus | null>(null);
-  /** null = checking on load; false = fully subscribed (hide card); true = show setup card */
   const [setupNeeded, setSetupNeeded] = useState<boolean | null>(null);
   const [enabling, setEnabling] = useState(false);
   const [testing, setTesting] = useState(false);
 
   const refreshStatus = useCallback(async () => {
+    if (!isMobileOrPwa) {
+      setSetupNeeded(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/admin/push", { credentials: "include" });
       const data = res.ok ? await res.json() : null;
@@ -34,22 +40,14 @@ export function PushNotificationsCard() {
       const enabled = data?.enabled ?? false;
       const subscriptionId = data?.subscriptionId ?? null;
 
-      if (!configured || !enabled || !subscriptionId) {
-        setStatus({
-          configured,
-          enabled,
-          subscriptionId,
-          localOptedIn: false,
-        });
-        setSetupNeeded(true);
+      if (!configured) {
+        setStatus({ configured, enabled, subscriptionId, localOptedIn: false });
+        setSetupNeeded(false);
         return;
       }
 
-      const local = isOneSignalConfigured()
-        ? await getLocalPushSubscriptionStatus()
-        : { optedIn: false };
-
-      const isFullySubscribed = local.optedIn;
+      const local = await getLocalPushSubscriptionStatus();
+      const isFullySubscribed = enabled && local.optedIn;
 
       setStatus({
         configured,
@@ -67,7 +65,7 @@ export function PushNotificationsCard() {
       });
       setSetupNeeded(true);
     }
-  }, []);
+  }, [isMobileOrPwa]);
 
   useEffect(() => {
     refreshStatus();
@@ -134,11 +132,11 @@ export function PushNotificationsCard() {
     }
   }
 
-  const isEnabledOnDevice = Boolean(status?.enabled && status?.localOptedIn);
-
-  if (setupNeeded === null || setupNeeded === false) {
+  if (!isMobileOrPwa || setupNeeded === null || setupNeeded === false) {
     return null;
   }
+
+  const isEnabledOnDevice = Boolean(status?.enabled && status?.localOptedIn);
 
   return (
     <Card className="mb-10 border-sky-100 bg-gradient-to-br from-sky-50/50 to-white">
@@ -148,25 +146,16 @@ export function PushNotificationsCard() {
           Enable Push Notifications
         </CardTitle>
         <CardDescription>
-          Get instant alerts on your phone when new requests, proposal approvals, scheduling changes,
-          revision requests, or payments happen in Swift Portal.
+          Get instant alerts when new requests, approvals, scheduling changes, revisions, or payments
+          happen in Swift Portal.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {!status?.configured ? (
-          <p className="text-sm text-muted">
-            Push notifications are not configured. Add <code className="text-xs">NEXT_PUBLIC_ONESIGNAL_APP_ID</code>{" "}
-            and <code className="text-xs">ONESIGNAL_REST_API_KEY</code> to enable them.
-          </p>
-        ) : isEnabledOnDevice ? (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-            Push notifications are enabled on this device.
-          </div>
-        ) : status.enabled ? (
+        {status?.enabled && !status.localOptedIn && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Push notifications were enabled on another device. Tap below to enable them on this device too.
+            Push is enabled on your account. Tap below to activate notifications on this device.
           </div>
-        ) : null}
+        )}
 
         <div className="flex flex-wrap gap-3">
           <Button
@@ -188,7 +177,7 @@ export function PushNotificationsCard() {
             )}
           </Button>
 
-          {(isEnabledOnDevice || status?.enabled) && status?.configured && (
+          {isEnabledOnDevice && status?.configured && (
             <Button variant="outline" className="min-h-11" onClick={handleTestPush} disabled={testing}>
               {testing ? (
                 <>
@@ -205,8 +194,8 @@ export function PushNotificationsCard() {
         <div className="flex items-start gap-2 rounded-lg border border-border bg-white/80 px-4 py-3 text-sm text-muted">
           <Smartphone className="h-4 w-4 shrink-0 mt-0.5" />
           <p>
-            For iPhone lock-screen alerts, save Swift Portal to your Home Screen, open it from the Home
-            Screen icon, then enable notifications.
+            For iPhone lock-screen alerts, open Swift Portal from your Home Screen icon, then enable
+            notifications here.
           </p>
         </div>
       </CardContent>

@@ -62,7 +62,7 @@ export default function NewProjectPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole="admin" />
-      <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8 pb-24">
+      <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8 pb-6 md:pb-24">
         <Card>
           <CardHeader>
             <CardTitle>Create Project</CardTitle>

@@ -5,42 +5,72 @@ export function isPreliminaryQuote(quote: ProjectQuote): boolean {
   return quote.quote_kind === "preliminary" || quote.title.startsWith("Preliminary Estimate");
 }
 
+export function hasOfficialProposal(quotes: ProjectQuote[]): boolean {
+  return quotes.some((q) => !isPreliminaryQuote(q) && q.status !== "draft");
+}
+
+function getQuoteRecency(quote: ProjectQuote): number {
+  const timestamps = [quote.sent_at, quote.approved_at, quote.created_at].filter(Boolean) as string[];
+  return Math.max(...timestamps.map((t) => new Date(t).getTime()));
+}
+
+/** The single official proposal clients should see — always the newest non-draft official. */
+export function getClientOfficialQuote(quotes: ProjectQuote[]): ProjectQuote | null {
+  const officials = quotes.filter((q) => !isPreliminaryQuote(q) && q.status !== "draft");
+  if (!officials.length) return null;
+  return [...officials].sort((a, b) => getQuoteRecency(b) - getQuoteRecency(a))[0];
+}
+
 export function getPreliminaryQuote(quotes: ProjectQuote[]): ProjectQuote | null {
   return quotes.find((q) => isPreliminaryQuote(q)) ?? null;
 }
 
+/** Admin workflow: prefer actionable quotes, then latest. */
 export function getMainOfficialQuote(quotes: ProjectQuote[], isAdmin: boolean): ProjectQuote | null {
   const official = quotes.filter((q) => !isPreliminaryQuote(q));
   const visible = isAdmin ? official : official.filter((q) => q.status !== "draft");
-  const approved = visible.find((q) => q.status === "approved");
-  if (approved) return approved;
 
-  const latestSent = [...visible]
-    .filter((q) => q.status === "sent")
-    .sort(
-      (a, b) =>
-        new Date(b.sent_at ?? b.created_at).getTime() -
-        new Date(a.sent_at ?? a.created_at).getTime()
-    )[0];
-  if (latestSent) return latestSent;
+  if (!isAdmin) {
+    return getClientOfficialQuote(quotes);
+  }
 
   const changesRequested = visible.find((q) => q.status === "changes_requested");
   if (changesRequested) return changesRequested;
 
-  return visible.find((q) => q.status === "draft") ?? null;
+  const draft = visible.find((q) => q.status === "draft");
+  if (draft) return draft;
+
+  return getClientOfficialQuote(quotes);
 }
 
-/** Clients see exactly one proposal — official replaces preliminary when present. */
+/**
+ * Clients see exactly one proposal:
+ * - Newest official proposal when one exists (replaces preliminary entirely)
+ * - Otherwise the preliminary estimate
+ */
 export function getClientActiveQuote(
   quotes: ProjectQuote[]
 ): { quote: ProjectQuote; kind: "preliminary" | "official" } | null {
-  const official = getMainOfficialQuote(quotes, false);
+  const official = getClientOfficialQuote(quotes);
   if (official) return { quote: official, kind: "official" };
 
   const preliminary = getPreliminaryQuote(quotes);
   if (preliminary) return { quote: preliminary, kind: "preliminary" };
 
   return null;
+}
+
+/** Server-side filter: clients only receive their single active proposal. */
+export function getClientVisibleQuotes(
+  quotes: ProjectQuote[],
+  options?: { showPreliminaryToClients?: boolean }
+): ProjectQuote[] {
+  const active = getClientActiveQuote(quotes);
+  if (!active) return [];
+  if (options?.showPreliminaryToClients === false && active.kind === "preliminary") {
+    return [];
+  }
+  return [active.quote];
 }
 
 export function parseQuoteIncludes(description: string | null | undefined): string[] {
@@ -80,8 +110,9 @@ export function getQuotePackageName(quote: ProjectQuote): string {
   const paid = getPaidLineItems(quote);
   if (paid.length === 1) return paid[0].description;
   return quote.title
-    .replace(/^Preliminary Estimate — /, "")
-    .replace(/^Official Proposal — /, "")
+    .replace(/^Preliminary Estimate — /i, "")
+    .replace(/^Official Proposal — /i, "")
+    .replace(/\s*\([^)]*revised[^)]*\)/i, "")
     .trim();
 }
 
@@ -91,7 +122,10 @@ export function getQuotePriceDisplay(quote: ProjectQuote): {
   priceCents: number;
 } {
   const startingNote = quote.notes?.split("\n").find((line) => /starting at|per visit|custom/i.test(line));
-  const isCustom = quote.total_cents === 0 || /custom proposal required/i.test(getQuotePackageName(quote));
+  const isCustom =
+    quote.total_cents === 0 ||
+    getPaidLineItems(quote).length === 0 ||
+    /custom proposal required/i.test(getQuotePackageName(quote));
 
   if (isCustom) {
     return {

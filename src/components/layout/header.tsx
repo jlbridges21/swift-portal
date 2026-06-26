@@ -74,15 +74,31 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
     { href: "/dashboard/settings", label: "Settings" },
   ];
 
-  const adminMobileLinks = adminLinks;
+  const adminMobileLinks = [...adminLinks, { href: "/admin/settings", label: "Settings" }];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/80 bg-white/90 backdrop-blur-lg safe-area-top safe-area-x">
-      <div className="relative mx-auto flex min-h-14 max-w-7xl items-center justify-between gap-2 px-5 py-2 sm:min-h-16 sm:px-6 lg:px-8">
-        <Logo href={homeHref} compact className="max-w-[52vw] sm:max-w-none sm:hidden" />
-        <Logo href={homeHref} size="md" className="hidden sm:flex" />
+    <header className="sticky top-0 z-50 border-b border-border/80 bg-white/90 backdrop-blur-lg safe-area-top safe-area-x relative">
+      <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-3 px-5 sm:h-16 sm:gap-4 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 shrink-0 items-center justify-start">
+          <Logo href={homeHref} compact className="flex sm:hidden" />
+          <Logo href={homeHref} size="md" className="hidden sm:flex" />
+        </div>
 
-        <nav className="flex items-center gap-1 sm:gap-2 shrink-0">
+        {variant === "dashboard" && userRole === "admin" && (
+          <nav className="hidden lg:flex flex-1 items-center justify-center gap-0.5">
+            {adminLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="rounded-md px-2.5 py-1.5 text-sm text-muted transition-colors hover:bg-slate-100 hover:text-foreground xl:px-3"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        )}
+
+        <nav className="ml-auto flex items-center gap-1 sm:gap-2">
           {variant === "public" ? (
             <>
               <Link href="/request">
@@ -96,23 +112,19 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
             </>
           ) : userRole === "admin" ? (
             <>
-              <div className="hidden md:contents">
-                {adminLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="rounded-md px-3 py-1.5 text-sm text-muted transition-colors hover:bg-slate-100 hover:text-foreground"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
               <NotificationBell />
+              <Link
+                href="/admin/settings"
+                className="hidden md:inline-flex rounded-md p-2 text-muted transition-colors hover:bg-slate-100 hover:text-foreground"
+                title="Settings"
+              >
+                <Settings className="h-5 w-5" />
+              </Link>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="md:hidden min-h-11 min-w-11"
+                className="lg:hidden min-h-11 min-w-11"
                 onClick={() => setMenuOpen((open) => !open)}
                 aria-label={menuOpen ? "Close menu" : "Open menu"}
               >
@@ -124,10 +136,7 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
             </>
           ) : (
             <>
-              <Link
-                href="/dashboard/request"
-                className="hidden sm:inline-flex"
-              >
+              <Link href="/dashboard/request" className="hidden sm:inline-flex">
                 <Button variant="accent" size="sm" className="min-h-11">
                   <Plus className="h-4 w-4" /> New Request
                 </Button>
@@ -154,7 +163,7 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
         </nav>
 
         {variant === "dashboard" && menuOpen && (
-          <div className="absolute left-0 right-0 top-full border-b border-border bg-white shadow-lg sm:hidden">
+          <div className="absolute left-0 right-0 top-full border-b border-border bg-white shadow-lg lg:hidden">
             <div className="space-y-1 px-5 py-3 safe-area-x">
               {(userRole === "admin" ? adminMobileLinks : clientMobileLinks).map((link) => (
                 <Link

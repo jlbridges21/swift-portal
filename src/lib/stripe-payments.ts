@@ -50,6 +50,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
 
   await notifyAdmins({
     type: "payment_received",
+    eventKey: "payment_received",
     title: "Payment Received",
     body: `${amountStr} received for ${payment.description}. Downloads are unlocked.`,
     link: `/admin/projects/${payment.project_id}#payments`,
@@ -58,6 +59,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
 
   await notifyProjectClients({
     type: "payment_confirmed",
+    eventKey: "project_delivered",
     title: "Project Complete",
     body: "Payment confirmed — all deliverables are now available to download. Thank you for choosing Swift Aerial Media!",
     link: `/dashboard/projects/${payment.project_id}#payments`,
@@ -100,6 +102,7 @@ export async function handlePaymentFailed(payment: Payment, reason: string) {
 
   await notifyAdmins({
     type: "payment_received",
+    eventKey: "payment_failed",
     title: "Payment Failed",
     body: `Payment failed for ${payment.description}: ${reason}`,
     link: `/admin/projects/${payment.project_id}#payments`,
@@ -115,6 +118,7 @@ export async function handleCheckoutExpired(payment: Payment) {
 
   await notifyAdmins({
     type: "invoice_available",
+    eventKey: "payment_link_sent",
     title: "Checkout session expired",
     body: `Client checkout expired for ${payment.description}. Resend the payment link if needed.`,
     link: `/admin/projects/${payment.project_id}#payments`,

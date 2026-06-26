@@ -7,10 +7,16 @@ const SDK_SRC = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
 
 let scriptPromise: Promise<void> | null = null;
 let initPromise: Promise<OneSignalNamespace> | null = null;
+let sdkInstance: OneSignalNamespace | null = null;
 
 function ensureDeferredQueue() {
   if (typeof window === "undefined") return;
   window.OneSignalDeferred = window.OneSignalDeferred || [];
+}
+
+function isAlreadyInitializedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /already initialized/i.test(message);
 }
 
 function loadOneSignalScript(): Promise<void> {
@@ -43,30 +49,51 @@ export function isOneSignalConfigured(): boolean {
   return Boolean(APP_ID);
 }
 
+async function initializeSdk(OneSignal: OneSignalNamespace): Promise<OneSignalNamespace> {
+  if (sdkInstance) return sdkInstance;
+
+  try {
+    await OneSignal.init({
+      appId: APP_ID!,
+      serviceWorkerPath: "/OneSignalSDKWorker.js",
+      allowLocalhostAsSecureOrigin: process.env.NODE_ENV === "development",
+    });
+  } catch (error) {
+    if (!isAlreadyInitializedError(error)) {
+      throw error;
+    }
+  }
+
+  sdkInstance = OneSignal;
+  return OneSignal;
+}
+
 export async function initOneSignal(): Promise<OneSignalNamespace> {
   if (!APP_ID) {
     throw new Error("OneSignal is not configured");
   }
 
+  if (sdkInstance) return sdkInstance;
+  if (initPromise) return initPromise;
+
   await loadOneSignalScript();
 
-  if (!initPromise) {
-    initPromise = new Promise((resolve, reject) => {
-      window.OneSignalDeferred!.push(async (OneSignal) => {
-        try {
-          await OneSignal.init({
-            appId: APP_ID!,
-            serviceWorkerPath: "/OneSignalSDKWorker.js",
-            allowLocalhostAsSecureOrigin: process.env.NODE_ENV === "development",
-          });
+  initPromise = new Promise((resolve, reject) => {
+    window.OneSignalDeferred!.push(async (OneSignal) => {
+      try {
+        const instance = await initializeSdk(OneSignal);
+        resolve(instance);
+      } catch (error) {
+        if (isAlreadyInitializedError(error)) {
+          sdkInstance = OneSignal;
           resolve(OneSignal);
-        } catch (error) {
-          initPromise = null;
-          reject(error);
+          return;
         }
-      });
+        initPromise = null;
+        reject(error);
+      }
     });
-  }
+  });
 
   return initPromise;
 }

@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { buildPremiumEmailHtml } from "@/lib/email-templates";
 import { recordEmailEvent } from "@/lib/email-analytics";
+import { getAppSettings } from "@/lib/app-settings";
 
 let resend: Resend | null = null;
 
@@ -33,6 +34,15 @@ function getResend() {
 
 export function getResendFromEmail(): string {
   return process.env.RESEND_FROM_EMAIL || "Swift Portal <portal@swiftaerialmedia.com>";
+}
+
+export async function getConfiguredFromEmail(): Promise<string> {
+  const settings = await getAppSettings();
+  const { fromName, senderEmail } = settings.email;
+  if (fromName && senderEmail) {
+    return `${fromName} <${senderEmail}>`;
+  }
+  return getResendFromEmail();
 }
 
 export function getEmailConfigStatus() {
@@ -102,6 +112,7 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
     return { ...result, at: new Date().toISOString() };
   }
 
+  const appSettings = await getAppSettings();
   const html = buildPremiumEmailHtml({
     title: options.title,
     body: options.body,
@@ -110,17 +121,27 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
     ctaLabel: options.ctaLabel,
     ctaUrl: options.ctaUrl,
     progressStep: options.progressStep,
+    branding: {
+      portalName: appSettings.business.portalName,
+      businessName: appSettings.business.businessName,
+      logoUrl: appSettings.business.logoUrl,
+      footerText: appSettings.email.footerText,
+      accentColor: appSettings.business.brandAccentColor,
+      primaryColor: appSettings.business.brandPrimaryColor,
+    },
   });
 
+  const from = await getConfiguredFromEmail();
   const tags = buildResendTags(options.analytics);
   const emailType = options.analytics?.emailType ?? options.emailType ?? "general";
 
   try {
     const { data, error } = await client.emails.send({
-      from: getResendFromEmail(),
+      from,
       to: options.to,
       subject: options.subject,
       html,
+      replyTo: appSettings.email.replyTo || undefined,
       tags: tags.length ? tags : undefined,
     });
 

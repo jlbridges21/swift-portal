@@ -2,6 +2,9 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { sendBrandedEmail } from "@/lib/email";
 import { sendAdminPushNotification } from "@/lib/onesignal-push";
 import { sendClientEmailNotification } from "@/lib/client-email-notifications";
+import { getAppSettings } from "@/lib/app-settings";
+import type { NotificationEventKey } from "@/lib/app-settings";
+import { resolveNotificationEventKey } from "@/lib/notification-settings";
 import type { NotificationType } from "@/lib/types";
 import { getStatusOrder } from "@/lib/constants";
 
@@ -17,6 +20,7 @@ interface NotifyOptions {
   notifyClients?: boolean;
   clientId?: string;
   sendEmail?: boolean;
+  eventKey?: NotificationEventKey;
 }
 
 interface NotificationRecipient {
@@ -157,6 +161,10 @@ export async function notifyUsers(options: NotifyOptions) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const recipients: NotificationRecipient[] = [];
 
+  const appSettings = await getAppSettings();
+  const eventKey = resolveNotificationEventKey(options);
+  const channelSettings = eventKey ? appSettings.notifications[eventKey] : null;
+
   let projectContext: { project_name: string; status: string } | null = null;
   if (options.projectId) {
     const { data } = await supabase
@@ -182,11 +190,15 @@ export async function notifyUsers(options: NotifyOptions) {
 
   const link = options.link?.startsWith("http") ? options.link : `${appUrl}${options.link || ""}`;
 
+  const allowInApp = channelSettings?.inApp !== false;
+  const allowEmail = channelSettings?.email !== false;
+  const allowPush = channelSettings?.push !== false;
+
   for (const user of unique.values()) {
     if (!user.id || user.id.includes("@")) continue;
 
     const shouldCreateInApp =
-      user.role === "admin" || user.in_app_notifications_enabled !== false;
+      allowInApp && (user.role === "admin" || user.in_app_notifications_enabled !== false);
 
     let notificationId: string | null = null;
 
@@ -206,7 +218,7 @@ export async function notifyUsers(options: NotifyOptions) {
       notificationId = notification?.id ?? null;
     }
 
-    if (options.sendEmail === false || !user.email) {
+    if (options.sendEmail === false || !user.email || !allowEmail) {
       if (options.sendEmail !== false && !user.email) {
         console.warn("[email] skipped — missing email for user:", user.id, options.type);
       }
@@ -267,7 +279,7 @@ export async function notifyUsers(options: NotifyOptions) {
     }
   }
 
-  if (options.notifyAdmins) {
+  if (options.notifyAdmins && allowPush) {
     try {
       const pushResult = await sendAdminPushNotification({
         title: options.title,

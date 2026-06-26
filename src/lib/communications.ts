@@ -10,7 +10,7 @@ export const EMAIL_ANALYTICS_ACTIVITY_TYPES = new Set<string>([
   "email_complained",
 ]);
 
-/** In-app + business communication events worth showing in the Communications hub. */
+/** In-app + business communication events for admin project activity. */
 export const COMMUNICATION_ACTIVITY_TYPES = new Set<string>([
   "quote_sent",
   "quote_approved",

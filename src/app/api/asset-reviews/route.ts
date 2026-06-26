@@ -108,6 +108,7 @@ export async function POST(request: Request) {
 
     await notifyAdmins({
       type: "revision_requested",
+      eventKey: "revision_requested",
       title: "Deliverable feedback",
       body: feedback || "A client flagged a deliverable for changes.",
       link: `/admin/projects/${project_id}`,

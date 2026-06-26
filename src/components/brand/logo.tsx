@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { BRAND } from "@/lib/brand";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 import { cn } from "@/lib/utils";
 
 interface LogoProps {
@@ -18,33 +18,36 @@ const sizes = {
 };
 
 export function Logo({ showText = true, compact = false, size = "md", href = "/", className }: LogoProps) {
+  const brand = usePortalBrand();
   const s = sizes[compact ? "sm" : size];
 
   const content = (
     <div className={cn("flex min-w-0 items-center gap-2", compact ? "gap-2" : "gap-2.5", className)}>
       <div
         className={cn(
-          "flex shrink-0 items-center justify-center rounded-lg bg-primary shadow-sm",
+          "flex shrink-0 items-center justify-center rounded-lg shadow-sm",
           s.box
         )}
+        style={{ backgroundColor: brand.primaryColor }}
       >
         <Image
-          src={BRAND.logoUrl}
-          alt={BRAND.name}
+          src={brand.logoUrl}
+          alt={brand.name}
           width={s.img}
           height={s.img}
           className="h-auto w-full object-contain"
           priority
+          unoptimized={brand.logoUrl.startsWith("http")}
         />
       </div>
       {showText && (
         <div className="flex min-w-0 flex-col leading-tight">
           <span className={cn("truncate font-semibold text-primary", compact ? "text-sm" : s.text)}>
-            {BRAND.portalName}
+            {brand.portalName}
           </span>
           {!compact && size !== "sm" && (
             <span className="hidden text-[10px] font-medium uppercase tracking-wider text-muted sm:block">
-              {BRAND.name}
+              {brand.name}
             </span>
           )}
         </div>

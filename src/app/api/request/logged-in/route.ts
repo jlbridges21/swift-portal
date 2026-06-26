@@ -67,8 +67,9 @@ export async function POST(request: Request) {
     metadata: { client_id: clientId },
   });
 
-  await notifyAdmins({
-    type: "proposal_submitted",
+    await notifyAdmins({
+      type: "proposal_submitted",
+      eventKey: "new_project_request",
     title: "New Project Request",
     body: `${client?.name || profile.full_name} requested ${service_requested} at ${property_address}. A preliminary estimate was generated automatically.`,
     link: `/admin/projects/${project.id}`,

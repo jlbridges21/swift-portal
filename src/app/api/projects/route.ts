@@ -2,9 +2,27 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin, logActivity } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
-import { getStatusLabel } from "@/lib/constants";
+import { getStatusLabel, normalizeStatus } from "@/lib/constants";
 import { clientStatusNotification } from "@/lib/client-messages";
 import { notifyProjectClients } from "@/lib/notifications";
+import type { NotificationEventKey } from "@/lib/app-settings";
+
+function clientEventKeyForStatus(status: string): NotificationEventKey | undefined {
+  switch (normalizeStatus(status)) {
+    case "scheduled":
+      return "shoot_scheduled";
+    case "shoot_complete_editing":
+      return "shoot_completed";
+    case "ready_for_review":
+      return "deliverables_ready";
+    case "awaiting_payment":
+      return "payment_link_sent";
+    case "delivered":
+      return "project_delivered";
+    default:
+      return undefined;
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -91,7 +109,8 @@ export async function PATCH(request: Request) {
       );
 
       await notifyProjectClients({
-        type: "status_changed",
+        type: updates.status === "awaiting_payment" ? "invoice_available" : "status_changed",
+        eventKey: clientEventKeyForStatus(updates.status),
         title: clientStatusNotification(updates.status).title,
         body: clientStatusNotification(updates.status).body,
         link: `/dashboard/projects/${id}`,

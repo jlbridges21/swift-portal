@@ -15,6 +15,7 @@ import {
   getClientActiveQuote,
   getMainOfficialQuote,
   getPreliminaryQuote,
+  hasOfficialProposal,
   isPreliminaryQuote,
 } from "@/lib/quote-display";
 import { formatCurrency } from "@/lib/utils";
@@ -28,6 +29,7 @@ interface QuoteSectionProps {
   projectId: string;
   quotes: ProjectQuote[];
   isAdmin: boolean;
+  allowClientProposalChanges?: boolean;
   onStatusChange?: (status: string) => void;
 }
 
@@ -39,7 +41,13 @@ const emptyForm = {
   line_items: [{ description: "", amount_cents: 0 }] as QuoteLineItem[],
 };
 
-export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStatusChange }: QuoteSectionProps) {
+export function QuoteSection({
+  projectId,
+  quotes: initialQuotes,
+  isAdmin,
+  allowClientProposalChanges = true,
+  onStatusChange,
+}: QuoteSectionProps) {
   const router = useRouter();
   const [quotes, setQuotes] = useState(initialQuotes);
   const [showForm, setShowForm] = useState(false);
@@ -71,6 +79,13 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
     (q) => !isPreliminaryQuote(q) && q.status === "changes_requested"
   );
   const draftQuotes = quotes.filter((q) => !isPreliminaryQuote(q) && q.status === "draft");
+  const officialExists = hasOfficialProposal(quotes);
+  const historyQuotes = quotes.filter((q) => {
+    if (activeDisplay?.quote.id === q.id) return false;
+    if (draftQuotes.some((d) => d.id === q.id)) return false;
+    if (officialExists && isPreliminaryQuote(q)) return false;
+    return true;
+  });
   const editingPreliminary = editingId && preliminaryQuote?.id === editingId;
 
   function updateLineItem(index: number, field: keyof QuoteLineItem, value: string | number) {
@@ -349,15 +364,17 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
           <Button variant="accent" disabled={approving} onClick={() => quoteAction(quote.id, "approve")}>
             <Check className="h-4 w-4" /> Approve Proposal
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              const fb = changeFeedback || prompt("What changes would you like?");
-              if (fb) quoteAction(quote.id, "request_changes", fb);
-            }}
-          >
-            <MessageSquare className="h-4 w-4" /> Request Changes
-          </Button>
+          {allowClientProposalChanges && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const fb = changeFeedback || prompt("What changes would you like?");
+                if (fb) quoteAction(quote.id, "request_changes", fb);
+              }}
+            >
+              <MessageSquare className="h-4 w-4" /> Request Changes
+            </Button>
+          )}
         </>
       );
     }
@@ -574,19 +591,24 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
           </Card>
         )}
 
-        {isAdmin && quotes.length > 0 && (
+        {isAdmin && historyQuotes.length > 0 && (
           <Card className="border-0 bg-transparent shadow-none">
             <CardHeader className="px-0">
               <CardTitle className="text-sm font-semibold text-slate-700">Proposal History</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 px-0">
-              {quotes.map((q) => (
+              {historyQuotes.map((q) => (
                 <div key={`history-${q.id}`} className="rounded-xl bg-slate-50/80 px-4 py-3 text-sm ring-1 ring-black/[0.04]">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-medium">{q.title}</span>
-                    <Badge variant={q.status === "approved" ? "success" : q.status === "changes_requested" ? "warning" : "default"}>
-                      {isPreliminaryQuote(q) ? "preliminary" : q.status.replace("_", " ")}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {q.total_cents > 0 && (
+                        <span className="text-xs font-medium text-muted">{formatCurrency(q.total_cents)}</span>
+                      )}
+                      <Badge variant={q.status === "approved" ? "success" : q.status === "changes_requested" ? "warning" : "default"}>
+                        {isPreliminaryQuote(q) ? "preliminary" : q.status.replace("_", " ")}
+                      </Badge>
+                    </div>
                   </div>
                   <p className="text-xs text-muted mt-1">
                     Created {new Date(q.created_at).toLocaleString()}

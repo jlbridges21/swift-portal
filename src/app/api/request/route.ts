@@ -150,6 +150,7 @@ export async function POST(request: Request) {
 
     await notifyAdmins({
       type: "proposal_submitted",
+      eventKey: "new_project_request",
       title: "New Project Request",
       body: `${name} submitted a request for ${service_requested} at ${property_address}. A preliminary estimate was generated automatically.`,
       link: `/admin/projects/${project.id}`,

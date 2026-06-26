@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
-import { setProjectStatus } from "@/lib/status-automation";
+import { setProjectStatus, setProjectStatusForward } from "@/lib/status-automation";
+import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 
 export async function GET(request: Request) {
@@ -42,7 +43,13 @@ export async function POST(request: Request) {
   );
 
   const supabase = await createServiceClient();
-  const status = send ? "sent" : "draft";
+  const appSettings = await getAppSettings();
+  const requireReview = appSettings.proposals.requireAdminReviewBeforeOfficial;
+  const willSend = Boolean(send) && !requireReview;
+  const status = willSend ? "sent" : send ? "draft" : "draft";
+  const expiresAt = willSend
+    ? addProposalExpiration(new Date(), appSettings.proposals.defaultProposalExpirationDays)
+    : null;
 
   const { data: quote, error } = await supabase
     .from("project_quotes")
@@ -53,10 +60,10 @@ export async function POST(request: Request) {
       line_items,
       total_cents,
       notes: notes || null,
-      expires_at: expires_at || null,
+      expires_at: expires_at || expiresAt,
       status,
       quote_kind: "official",
-      sent_at: send ? new Date().toISOString() : null,
+      sent_at: willSend ? new Date().toISOString() : null,
       created_by: profile.id,
     })
     .select()
@@ -64,8 +71,8 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  if (send) {
-    await setProjectStatus({
+  if (willSend) {
+    await setProjectStatusForward({
       projectId: project_id,
       status: "quote_sent",
       userId: profile.id,
@@ -83,6 +90,7 @@ export async function POST(request: Request) {
 
     await notifyProjectClients({
       type: "quote_sent",
+      eventKey: "official_proposal_sent",
       title: "Your official proposal is ready",
       body: `Swift Aerial Media sent an official proposal for "${title}". Review and approve in your portal.`,
       link: `/dashboard/projects/${project_id}#quote`,
@@ -124,7 +132,7 @@ export async function PATCH(request: Request) {
       .select()
       .single();
 
-    await setProjectStatus({
+    await setProjectStatusForward({
       projectId: quote.project_id,
       status: "quote_sent",
       userId: profile.id,
@@ -141,6 +149,7 @@ export async function PATCH(request: Request) {
 
     await notifyProjectClients({
       type: "quote_sent",
+      eventKey: "official_proposal_sent",
       title: "Review Your Official Proposal",
       body: `Review your official proposal for "${quote.title}".`,
       link: `/dashboard/projects/${quote.project_id}#quote`,
@@ -154,6 +163,13 @@ export async function PATCH(request: Request) {
     if (quote.quote_kind !== "preliminary") {
       return NextResponse.json({ error: "Only preliminary estimates can be converted." }, { status: 400 });
     }
+
+    const appSettings = await getAppSettings();
+    const requireReview = appSettings.proposals.requireAdminReviewBeforeOfficial;
+    const proposalExpiresAt = addProposalExpiration(
+      new Date(),
+      appSettings.proposals.defaultProposalExpirationDays
+    );
 
     const { title, description, line_items, notes, expires_at } = body;
     const finalLineItems = line_items?.length ? line_items : quote.line_items;
@@ -190,10 +206,10 @@ export async function PATCH(request: Request) {
         line_items: finalLineItems,
         total_cents,
         notes: notes ?? quote.notes,
-        expires_at: expires_at ?? quote.expires_at,
-        status: "sent",
+        expires_at: expires_at ?? proposalExpiresAt ?? quote.expires_at,
+        status: requireReview ? "draft" : "sent",
         quote_kind: "official",
-        sent_at: new Date().toISOString(),
+        sent_at: requireReview ? null : new Date().toISOString(),
         created_by: profile.id,
       })
       .select()
@@ -203,29 +219,38 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: officialError.message }, { status: 500 });
     }
 
-    await setProjectStatus({
-      projectId: quote.project_id,
-      status: "quote_sent",
-      userId: profile.id,
-      activityType: "quote_sent",
-      activityDescription: `Official proposal sent: ${official.title}`,
-      notifyClient: false,
-      skipIfSame: true,
-    });
+    if (!requireReview) {
+      await setProjectStatusForward({
+        projectId: quote.project_id,
+        status: "quote_sent",
+        userId: profile.id,
+        activityType: "quote_sent",
+        activityDescription: `Official proposal sent: ${official.title}`,
+        notifyClient: false,
+        skipIfSame: true,
+      });
 
-    await logProjectActivity("official_proposal_sent", "📄 Official Proposal sent", {
-      projectId: quote.project_id,
-      userId: profile.id,
-      metadata: { quoteId: official.id, preliminaryQuoteId: id },
-    });
+      await logProjectActivity("official_proposal_sent", "📄 Official Proposal sent", {
+        projectId: quote.project_id,
+        userId: profile.id,
+        metadata: { quoteId: official.id, preliminaryQuoteId: id },
+      });
 
-    await notifyProjectClients({
-      type: "quote_sent",
-      title: "Your official proposal is ready",
-      body: `Swift Aerial Media sent your official proposal. Review and approve it in your portal.`,
-      link: `/dashboard/projects/${quote.project_id}#quote`,
-      projectId: quote.project_id,
-    });
+      await notifyProjectClients({
+        type: "quote_sent",
+        eventKey: "official_proposal_sent",
+        title: "Your official proposal is ready",
+        body: `Swift Aerial Media sent your official proposal. Review and approve it in your portal.`,
+        link: `/dashboard/projects/${quote.project_id}#quote`,
+        projectId: quote.project_id,
+      });
+    } else {
+      await logProjectActivity("quote_sent", `Official proposal draft created: ${official.title}`, {
+        projectId: quote.project_id,
+        userId: profile.id,
+        metadata: { quoteId: official.id, preliminaryQuoteId: id, requiresReview: true },
+      });
+    }
 
     return NextResponse.json(official);
   }
@@ -260,6 +285,7 @@ export async function PATCH(request: Request) {
 
     await notifyAdmins({
       type: "proposal_approved",
+      eventKey: "proposal_approved",
       title: "Proposal Approved",
       body: `The client approved the proposal for "${quote.title}".`,
       link: `/admin/projects/${quote.project_id}`,
@@ -292,6 +318,7 @@ export async function PATCH(request: Request) {
 
     await notifyAdmins({
       type: "proposal_changes",
+      eventKey: "proposal_changes_requested",
       title: "Proposal Changes Requested",
       body: feedback || "The client requested changes to the proposal.",
       link: `/admin/projects/${quote.project_id}#quote`,

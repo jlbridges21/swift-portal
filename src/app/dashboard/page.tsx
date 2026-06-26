@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { getProfile } from "@/lib/auth";
+import { getAppSettings } from "@/lib/app-settings";
+import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { createClient } from "@/lib/supabase/server";
 import { getProjectHeroPosterUrl } from "@/lib/cover";
 import { CoverPlaceholder } from "@/components/projects/cover-placeholder";
@@ -18,7 +20,7 @@ import { normalizeStatus } from "@/lib/constants";
 import { redirect } from "next/navigation";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
-  ArrowRight, Calendar, CreditCard, MapPin, Plus, Sparkles,
+  ArrowRight, Calendar, CreditCard, MapPin, Sparkles,
 } from "lucide-react";
 import { formatShootDateTime, getProjectShootDateTime } from "@/lib/scheduling";
 import type { Project, ShootProposal, ActivityLog } from "@/lib/types";
@@ -29,6 +31,8 @@ export default async function ClientDashboard() {
   if (profile.role === "admin") redirect("/admin");
 
   const supabase = await createClient();
+  const appSettings = await getAppSettings();
+  const brand = getPortalBrandFromSettings(appSettings);
   const firstName = profile.full_name?.split(" ")[0] || "there";
 
   const [{ data: projects }, { data: payments }, { data: activities }, { data: shootProposals }] = await Promise.all([
@@ -83,7 +87,7 @@ export default async function ClientDashboard() {
       <main className="mobile-container py-10">
         <div className="mb-10 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-start">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-accent uppercase tracking-wider">Swift Aerial Media</p>
+            <p className="text-sm font-medium text-accent uppercase tracking-wider">{brand.name}</p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-primary sm:text-4xl">
               Welcome back, {firstName}.
             </h1>
@@ -91,13 +95,8 @@ export default async function ClientDashboard() {
               You have {activeProjects.length} active project{activeProjects.length !== 1 ? "s" : ""}.
             </p>
           </div>
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
-            <Link href="/dashboard/request" className="w-full sm:w-auto">
-              <Button variant="accent" className="w-full min-h-12 sm:w-auto">
-                <Plus className="h-4 w-4" /> Request New Project
-              </Button>
-            </Link>
-            <Avatar name={profile.full_name || profile.email} src={profile.avatar_url} size="lg" className="hidden sm:flex" />
+          <div className="hidden sm:flex sm:items-center">
+            <Avatar name={profile.full_name || profile.email} src={profile.avatar_url} size="lg" />
           </div>
         </div>
 
@@ -158,7 +157,7 @@ export default async function ClientDashboard() {
           <Card className="mb-10 border-dashed shadow-sm">
             <CardContent className="py-16 text-center">
               <p className="text-lg font-medium text-primary">No active projects yet</p>
-              <p className="text-muted mt-2">Request a shoot to get started with Swift Aerial Media.</p>
+              <p className="text-muted mt-2">Request a shoot to get started with {brand.name}.</p>
               <Link href="/dashboard/request">
                 <Button variant="accent" className="mt-6">Request a Shoot</Button>
               </Link>

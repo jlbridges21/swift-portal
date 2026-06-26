@@ -1,9 +1,10 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { logProjectActivity } from "@/lib/activity";
-import { getStatusLabel } from "@/lib/constants";
+import { getStatusLabel, getStatusOrder, normalizeStatus } from "@/lib/constants";
 import type { ProjectStatus } from "@/lib/constants";
 import { clientStatusNotification } from "@/lib/client-messages";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
+import type { NotificationEventKey } from "@/lib/app-settings";
 
 interface SetStatusOptions {
   projectId: string;
@@ -17,6 +18,8 @@ interface SetStatusOptions {
   link?: string;
   clientTitle?: string;
   clientBody?: string;
+  clientEventKey?: NotificationEventKey;
+  adminEventKey?: NotificationEventKey;
 }
 
 export async function setProjectStatus(options: SetStatusOptions) {
@@ -57,6 +60,7 @@ export async function setProjectStatus(options: SetStatusOptions) {
     const clientType = options.status === "awaiting_payment" ? "invoice_available" : "status_changed";
     await notifyProjectClients({
       type: clientType,
+      eventKey: options.clientEventKey,
       title: options.clientTitle ?? clientMsg.title,
       body: options.clientBody ?? clientMsg.body,
       link: options.link || `/dashboard/projects/${options.projectId}`,
@@ -68,6 +72,7 @@ export async function setProjectStatus(options: SetStatusOptions) {
     const deliverablesApproved = options.activityType === "deliverables_approved";
     await notifyAdmins({
       type: "status_changed",
+      eventKey: options.adminEventKey,
       title: deliverablesApproved ? "Deliverables Approved" : `Project update: ${label}`,
       body: deliverablesApproved
         ? "The client approved all deliverables. Final payment is next."
@@ -78,4 +83,26 @@ export async function setProjectStatus(options: SetStatusOptions) {
   }
 
   return data;
+}
+
+/** Updates project status only when moving forward in the workflow (never regresses). */
+export async function setProjectStatusForward(
+  options: SetStatusOptions
+): Promise<{ status: string } | null> {
+  const supabase = await createServiceClient();
+
+  const { data: existing } = await supabase
+    .from("projects")
+    .select("status")
+    .eq("id", options.projectId)
+    .single();
+
+  const currentOrder = getStatusOrder(normalizeStatus(existing?.status ?? "new_request"));
+  const targetOrder = getStatusOrder(options.status);
+
+  if (targetOrder < currentOrder) {
+    return existing;
+  }
+
+  return setProjectStatus(options);
 }

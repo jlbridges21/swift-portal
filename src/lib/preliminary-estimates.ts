@@ -1,13 +1,19 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { logProjectActivity } from "@/lib/activity";
-import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
+import { notifyProjectClients } from "@/lib/notifications";
 import { buildPreliminaryEstimatePayload } from "@/lib/service-templates";
+import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
 
 export async function createPreliminaryEstimate(
   projectId: string,
   serviceType: string,
   options?: { userId?: string | null; skipIfExists?: boolean }
 ) {
+  const appSettings = await getAppSettings();
+  if (!appSettings.proposals.autoPreliminaryEstimate) {
+    return null;
+  }
+
   const supabase = await createServiceClient();
 
   if (options?.skipIfExists) {
@@ -21,6 +27,10 @@ export async function createPreliminaryEstimate(
   }
 
   const payload = buildPreliminaryEstimatePayload(serviceType);
+  const expiresAt = addProposalExpiration(
+    new Date(),
+    appSettings.proposals.defaultEstimateExpirationDays
+  );
 
   const { data: quote, error } = await supabase
     .from("project_quotes")
@@ -34,6 +44,7 @@ export async function createPreliminaryEstimate(
       status: "sent",
       quote_kind: "preliminary",
       sent_at: new Date().toISOString(),
+      expires_at: expiresAt,
       created_by: options?.userId ?? null,
     })
     .select()
@@ -56,6 +67,7 @@ export async function createPreliminaryEstimate(
 
   await notifyProjectClients({
     type: "status_changed",
+    eventKey: "preliminary_estimate_created",
     title: "Your preliminary estimate is ready",
     body: "Your automatically generated preliminary estimate is ready to review in Swift Portal.",
     link: `/dashboard/projects/${projectId}#quote`,

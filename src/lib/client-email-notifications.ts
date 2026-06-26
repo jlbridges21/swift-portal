@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendBrandedEmail } from "@/lib/email";
+import { getAppSettings } from "@/lib/app-settings";
 import type { PremiumEmailContent } from "@/lib/email-templates";
 import { getStatusOrder } from "@/lib/constants";
 import type { NotificationType } from "@/lib/types";
@@ -69,8 +70,11 @@ export function getClientEmailPresentation(
   title: string,
   message: string,
   url?: string,
-  projectStatus?: string
+  projectStatus?: string,
+  brand?: { businessName: string; portalName: string }
 ): PremiumEmailContent {
+  const businessName = brand?.businessName ?? "Swift Aerial Media";
+  const portalName = brand?.portalName ?? "Swift Portal";
   const ctaUrl = resolvePortalUrl(url);
   const progressStep =
     projectStatus !== undefined ? getStatusOrder(projectStatus) : undefined;
@@ -78,30 +82,31 @@ export function getClientEmailPresentation(
 
   const presets: Record<PremiumEmailContent["template"], Omit<PremiumEmailContent, "template" | "ctaUrl">> = {
     proposal_ready: {
-      subject: "Your Swift Aerial Media proposal is ready",
-      title: "Your proposal is ready",
+      subject: `Your ${businessName} proposal is ready`,
+      title: title || "Your proposal is ready",
       body:
-        "Your proposal is ready to review inside Swift Portal. You can review the details, approve the proposal, or request changes.",
+        message ||
+        `Your proposal is ready to review inside ${portalName}. You can review the details, approve the proposal, or request changes.`,
       ctaLabel: "Review Proposal",
       secondaryInfo: "Most clients review and approve within a few minutes.",
       progressStep: progressStep ?? 1,
     },
     proposal_updated: {
       subject: "Your proposal has been updated",
-      title: "Proposal updated",
+      title: title || "Proposal updated",
       body:
         message ||
-        "Swift Aerial Media updated your proposal. Review the latest details and let us know if you have any questions.",
+        `${businessName} updated your proposal. Review the latest details and let us know if you have any questions.`,
       ctaLabel: "Review Proposal",
       secondaryInfo: "Changes are highlighted in your portal.",
       progressStep: progressStep ?? 1,
     },
     shoot_proposed: {
       subject: "Your shoot time is ready to review",
-      title: "Review your shoot time",
+      title: title || "Review your shoot time",
       body:
         message ||
-        "Swift Aerial Media proposed a shoot time for your project. Review the date and confirm or suggest another time inside Swift Portal.",
+        `${businessName} proposed a shoot time for your project. Review the date and confirm or suggest another time inside ${portalName}.`,
       ctaLabel: "Review Schedule",
       secondaryInfo: "Confirming your shoot time helps us plan your production day.",
       progressStep: progressStep ?? 2,
@@ -150,24 +155,24 @@ export function getClientEmailPresentation(
         message ||
         "Payment confirmed. Your final deliverables are now available to download in Swift Portal.",
       ctaLabel: "Download Deliverables",
-      secondaryInfo: "Thank you for choosing Swift Aerial Media.",
+      secondaryInfo: `Thank you for choosing ${businessName}.`,
       progressStep: progressStep ?? 7,
     },
     project_complete: {
       subject: "Your project is complete",
-      title: "Project complete",
+      title: title || "Project complete",
       body:
         message ||
-        "Your project is complete. All deliverables are available in Swift Portal whenever you need them.",
-      ctaLabel: "Open Swift Portal",
-      secondaryInfo: "Thank you for trusting Swift Aerial Media with your project.",
+        `Your project is complete. All deliverables are available in ${portalName} whenever you need them.`,
+      ctaLabel: "Open Portal",
+      secondaryInfo: `Thank you for trusting ${businessName} with your project.`,
       progressStep: progressStep ?? 7,
     },
     general: {
       subject: title,
       title,
       body: message,
-      ctaLabel: ctaUrl ? "Open Swift Portal" : "Review in Swift Portal",
+      ctaLabel: ctaUrl ? "Open Portal" : "Review in Portal",
       progressStep,
     },
   };
@@ -230,12 +235,19 @@ export async function sendClientEmailNotification(
     }
   }
 
+  const appSettings = await getAppSettings();
+  const brandNames = {
+    businessName: appSettings.business.businessName,
+    portalName: appSettings.business.portalName,
+  };
+
   const presentation = getClientEmailPresentation(
     options.eventType,
     options.title,
     options.message,
     options.url,
-    options.projectStatus
+    options.projectStatus,
+    brandNames
   );
 
   try {

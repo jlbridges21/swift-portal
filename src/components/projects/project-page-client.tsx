@@ -49,6 +49,7 @@ interface ProjectPageClientProps {
   assetReviews: AssetReview[];
   isPreview?: boolean;
   isAdmin?: boolean;
+  allowClientProposalChanges?: boolean;
 }
 
 const REVISION_STATUS_LABEL: Record<string, string> = {
@@ -99,6 +100,7 @@ export function ProjectPageClient({
   assetReviews,
   isPreview,
   isAdmin,
+  allowClientProposalChanges = true,
 }: ProjectPageClientProps) {
   const router = useRouter();
   const [showRevisionForm, setShowRevisionForm] = useState(false);
@@ -227,7 +229,12 @@ export function ProjectPageClient({
         </Card>
 
         {!isPreview && (
-          <QuoteSection projectId={project.id} quotes={quotes} isAdmin={!!isAdmin} />
+          <QuoteSection
+            projectId={project.id}
+            quotes={quotes}
+            isAdmin={!!isAdmin}
+            allowClientProposalChanges={allowClientProposalChanges}
+          />
         )}
 
         {!isPreview && (

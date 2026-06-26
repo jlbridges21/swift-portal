@@ -589,7 +589,7 @@ export function AdminProjectDetail({
   const displayName = form.project_name.trim() || defaultProjectName(form.property_address, form.service_type);
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-6 md:pb-24">
       {/* Sticky project header */}
       <div className="sticky top-0 z-40 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-white/95 backdrop-blur-md border-b border-border shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -600,7 +600,7 @@ export function AdminProjectDetail({
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <StatusBadge status={form.status} />
-            <Button variant="accent" size="sm" onClick={saveProject} disabled={saving}>
+            <Button variant="accent" size="sm" onClick={saveProject} disabled={saving} className="hidden md:inline-flex">
               {saving ? "Saving…" : "Save"}
             </Button>
             <Link href={portalUrl} target="_blank">
@@ -988,7 +988,7 @@ export function AdminProjectDetail({
       </Modal>
 
       {uploadItems.length > 0 && (
-        <div className="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-md">
+        <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md md:bottom-20">
           <UploadProgressList items={uploadItems} className="shadow-xl bg-white" />
         </div>
       )}
