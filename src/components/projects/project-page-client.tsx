@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
@@ -238,12 +238,14 @@ export function ProjectPageClient({
         )}
 
         {!isPreview && (
-          <ShootScheduling
-            projectId={project.id}
-            proposals={shootProposals}
-            isAdmin={!!isAdmin}
-            onUpdate={() => router.refresh()}
-          />
+          <Suspense fallback={null}>
+            <ShootScheduling
+              projectId={project.id}
+              proposals={shootProposals}
+              isAdmin={!!isAdmin}
+              onUpdate={() => router.refresh()}
+            />
+          </Suspense>
         )}
 
         {isClientView && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -738,12 +738,14 @@ export function AdminProjectDetail({
         </CardContent>
       </Card>
 
-      <ShootScheduling
-        projectId={initialProject.id}
-        proposals={shootProposals}
-        isAdmin
-        onUpdate={() => router.refresh()}
-      />
+      <Suspense fallback={null}>
+        <ShootScheduling
+          projectId={initialProject.id}
+          proposals={shootProposals}
+          isAdmin
+          onUpdate={() => router.refresh()}
+        />
+      </Suspense>
 
       <QuoteSection
         projectId={initialProject.id}

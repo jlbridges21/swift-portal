@@ -4,6 +4,8 @@ import { getProfile } from "@/lib/auth";
 import { getAppSettings, NOTIFICATION_EVENT_DEFINITIONS } from "@/lib/app-settings";
 import { redirect } from "next/navigation";
 import { AdminSettingsClient } from "@/components/admin/admin-settings-client";
+import { GoogleCalendarCard } from "@/components/admin/google-calendar-card";
+import { Suspense } from "react";
 
 export default async function AdminSettingsPage() {
   const profile = await getProfile();
@@ -20,6 +22,11 @@ export default async function AdminSettingsPage() {
           title="Admin Settings"
           description="Manage global notification, email, business, and proposal settings for Swift Portal."
         />
+        <div className="mb-8">
+          <Suspense fallback={null}>
+            <GoogleCalendarCard />
+          </Suspense>
+        </div>
         <AdminSettingsClient
           initialSettings={settings}
           notificationEvents={NOTIFICATION_EVENT_DEFINITIONS}

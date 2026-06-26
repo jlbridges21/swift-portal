@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
+import { loadShootSyncContext, syncShootToGoogleCalendar } from "@/lib/google-calendar";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
       eventKey: "shoot_time_proposed",
       title: "Scheduling Your Shoot",
       body: `Swift Aerial Media proposed a shoot for ${dateStr}. Please review and confirm in your portal.`,
-      link: `/dashboard/projects/${body.project_id}#scheduling`,
+      link: `/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`,
       projectId: body.project_id,
     });
   } else {
@@ -184,6 +185,9 @@ export async function PATCH(request: Request) {
       projectId: proposal.project_id,
     });
 
+    const syncCtx = await loadShootSyncContext(id);
+    if (syncCtx) void syncShootToGoogleCalendar(syncCtx);
+
     return NextResponse.json({ success: true, status: "confirmed" });
   }
 
@@ -214,6 +218,7 @@ export async function PATCH(request: Request) {
     await logProjectActivity("shoot_rescheduled", `Shoot rescheduled to ${dateStr}`, {
       projectId: shoot.project_id,
       userId: profile.id,
+      idempotencyKey: idempotencyKey("shoot", id, "update_date", proposed_at),
     });
 
     await notifyProjectClients({
@@ -224,6 +229,9 @@ export async function PATCH(request: Request) {
       link: `/dashboard/projects/${shoot.project_id}#scheduling`,
       projectId: shoot.project_id,
     });
+
+    const syncCtx = await loadShootSyncContext(id);
+    if (syncCtx) void syncShootToGoogleCalendar({ ...syncCtx, proposedAt: proposed_at });
 
     return NextResponse.json({ success: true, proposed_at });
   }
@@ -284,7 +292,7 @@ export async function PATCH(request: Request) {
       eventKey: "shoot_rescheduled",
       title: "Scheduling Your Shoot",
       body: `Please confirm the new shoot date: ${dateStr}.`,
-      link: `/dashboard/projects/${projectId}#scheduling`,
+      link: `/dashboard/projects/${projectId}?scheduling=pending#scheduling`,
       projectId,
     });
 
@@ -323,7 +331,7 @@ export async function PATCH(request: Request) {
         eventKey: "shoot_time_proposed",
         title: "Scheduling Your Shoot",
         body: `Swift Aerial Media proposed ${dateStr}. Please review.`,
-        link: `/dashboard/projects/${proposal.project_id}#scheduling`,
+        link: `/dashboard/projects/${proposal.project_id}?scheduling=pending#scheduling`,
         projectId: proposal.project_id,
       });
     } else {
@@ -371,7 +379,7 @@ export async function PATCH(request: Request) {
         eventKey: "shoot_time_declined",
         title: "Shoot proposal withdrawn",
         body: `The proposed shoot time (${dateStr}) was withdrawn. We'll follow up with a new option soon.`,
-        link: `/dashboard/projects/${proposal.project_id}#scheduling`,
+        link: `/dashboard/projects/${proposal.project_id}?scheduling=pending#scheduling`,
         projectId: proposal.project_id,
       });
     } else if (isAdmin && proposal.proposed_by === "client") {
@@ -380,7 +388,7 @@ export async function PATCH(request: Request) {
         eventKey: "shoot_time_declined",
         title: "Shoot time declined",
         body: `Your suggested shoot time (${dateStr}) was declined. You can suggest another time in your portal.`,
-        link: `/dashboard/projects/${proposal.project_id}#scheduling`,
+        link: `/dashboard/projects/${proposal.project_id}?scheduling=pending#scheduling`,
         projectId: proposal.project_id,
       });
     } else if (!isAdmin && proposal.proposed_by === "admin") {

@@ -13,7 +13,7 @@ export function StatusBadge({ status, className, audience = "admin" }: BadgeProp
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex max-w-full items-center rounded-full px-2.5 py-0.5 text-xs font-medium break-words whitespace-normal text-left",
         getStatusColor(normalized),
         className
       )}

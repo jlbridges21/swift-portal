@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
+import { RemoteImage } from "@/components/ui/remote-image";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -420,9 +420,9 @@ function AssetCard({
       >
         <div className="relative aspect-[4/3] bg-slate-100">
           {thumbUrl ? (
-            <Image src={thumbUrl} alt={asset.title} fill className="object-cover" sizes="200px" />
+            <RemoteImage src={thumbUrl} alt={asset.title} fill className="object-cover" sizes="200px" />
           ) : asset.thumbnail_url ? (
-            <Image src={asset.thumbnail_url} alt={asset.title} fill className="object-cover" sizes="200px" />
+            <RemoteImage src={asset.thumbnail_url} alt={asset.title} fill className="object-cover" sizes="200px" />
           ) : (
             <div className="flex h-full items-center justify-center">
               <Icon className="h-10 w-10 text-muted" />
@@ -574,7 +574,7 @@ function AssetDrawer({
             ) : asset.media_source === "youtube" && asset.embed_url ? (
               <iframe src={asset.embed_url} className="h-full w-full" title={asset.title} allowFullScreen />
             ) : previewUrl ? (
-              <Image src={previewUrl} alt={asset.title} fill className="object-contain" sizes="500px" />
+              <RemoteImage src={previewUrl} alt={asset.title} fill className="object-contain" sizes="500px" />
             ) : (
               <div className="flex h-full items-center justify-center text-muted">No preview</div>
             )}

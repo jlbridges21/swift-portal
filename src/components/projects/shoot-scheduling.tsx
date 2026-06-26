@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +13,7 @@ import { formatShootDateTime } from "@/lib/scheduling";
 import { useAsyncAction } from "@/lib/use-async-action";
 import { Calendar, Check, MessageSquare, X, Pencil, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface ShootSchedulingProps {
   projectId: string;
@@ -21,6 +23,10 @@ interface ShootSchedulingProps {
 }
 
 export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: ShootSchedulingProps) {
+  const searchParams = useSearchParams();
+  const focusPending = searchParams.get("scheduling") === "pending";
+  const cardRef = useRef<HTMLDivElement>(null);
+
   const [showForm, setShowForm] = useState(false);
   const [showReschedule, setShowReschedule] = useState(false);
   const [showCounter, setShowCounter] = useState<string | null>(null);
@@ -62,6 +68,16 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
   const pendingFromClient = pending.filter((p) => p.proposed_by === "client");
 
   const canProposeNew = !confirmed && pending.length === 0;
+
+  const actionablePending = pending.filter(
+    (p) =>
+      (isAdmin && p.proposed_by === "client") || (!isAdmin && p.proposed_by === "admin")
+  );
+
+  useEffect(() => {
+    if (!focusPending || !cardRef.current) return;
+    cardRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusPending]);
 
   async function proposeShoot(e: React.FormEvent) {
     e.preventDefault();
@@ -199,7 +215,14 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
   }
 
   return (
-    <Card className="shadow-sm" id="scheduling">
+    <Card
+      ref={cardRef}
+      className={cn(
+        "shadow-sm scroll-mt-24",
+        focusPending && actionablePending.length > 0 && "ring-2 ring-accent ring-offset-2"
+      )}
+      id="scheduling"
+    >
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle className="flex items-center gap-2 text-base">
           <Calendar className="h-5 w-5 text-accent" /> Shoot Scheduling
@@ -216,6 +239,15 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
         )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {focusPending && actionablePending.length > 0 && (
+          <div className="rounded-lg border border-accent/30 bg-accent/5 p-4">
+            <p className="font-semibold text-primary">Action needed — shoot time proposed</p>
+            <p className="text-sm text-muted mt-1">
+              Review the proposed time below. Approve, suggest another time, or decline.
+            </p>
+          </div>
+        )}
+
         {confirmed && (
           <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -307,8 +339,17 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
           </div>
         )}
 
-        {pending.map((p) => (
-          <div key={p.id} className="rounded-lg border border-border p-4">
+        {pending.map((p) => {
+          const needsAction =
+            (isAdmin && p.proposed_by === "client") || (!isAdmin && p.proposed_by === "admin");
+          return (
+          <div
+            key={p.id}
+            className={cn(
+              "rounded-lg border p-4",
+              focusPending && needsAction ? "border-accent bg-accent/5 shadow-sm" : "border-border"
+            )}
+          >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <p className="font-medium">{formatShootDateTime(p.proposed_at)}</p>
@@ -348,7 +389,8 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
               </div>
             )}
           </div>
-        ))}
+        );
+        })}
 
         {proposals.length === 0 && !showForm && (
           <p className="text-sm text-muted text-center py-4">

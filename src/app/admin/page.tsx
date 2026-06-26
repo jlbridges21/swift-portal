@@ -49,12 +49,13 @@ export default async function AdminDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-background">
       <Header variant="dashboard" userRole="admin" />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-7xl min-w-0 overflow-x-hidden px-4 py-8 sm:px-6 lg:px-8">
         <PageHeader
           title="Command Center"
           description={`Welcome back, ${profile.full_name || profile.email}`}
+          className="min-w-0"
         >
           <Link href="/admin/projects/new"><Button variant="accent" size="sm"><Plus className="h-4 w-4" /> New Project</Button></Link>
           <Link href="/admin/clients/new"><Button variant="outline" size="sm"><Users className="h-4 w-4" /> New Client</Button></Link>
@@ -62,53 +63,53 @@ export default async function AdminDashboard() {
 
         <PushNotificationsCard />
 
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-10">
+        <div className="mb-10 grid w-full max-w-full min-w-0 grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
           {stats.map((stat) => (
-            <Link key={stat.label} href={stat.href}>
-              <Card className="hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer h-full">
+            <Link key={stat.label} href={stat.href} className="min-w-0">
+              <Card className="h-full w-full max-w-full cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <CardContent className="p-4">
-                  <div className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${stat.color} mb-3`}>
+                  <div className={`mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg ${stat.color}`}>
                     <stat.icon className="h-4 w-4" />
                   </div>
                   <p className="text-2xl font-bold text-primary">{stat.value}</p>
-                  <p className="text-xs text-muted mt-0.5">{stat.label}</p>
+                  <p className="mt-0.5 text-xs text-muted break-words">{stat.label}</p>
                 </CardContent>
               </Card>
             </Link>
           ))}
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Recent Projects</CardTitle>
-                <Link href="/admin/projects" className="text-sm text-accent hover:underline">View all</Link>
+        <div className="grid w-full max-w-full min-w-0 gap-8 lg:grid-cols-3">
+          <div className="min-w-0 lg:col-span-2">
+            <Card className="w-full max-w-full overflow-hidden">
+              <CardHeader className="flex min-w-0 flex-row items-center justify-between gap-2">
+                <CardTitle className="min-w-0">Recent Projects</CardTitle>
+                <Link href="/admin/projects" className="shrink-0 text-sm text-accent hover:underline">View all</Link>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="min-w-0 space-y-3">
                 {recentProjects?.map((project) => (
-                  <Link key={project.id} href={`/admin/projects/${project.id}`}>
-                    <div className="flex items-center justify-between rounded-lg border border-border p-4 hover:bg-slate-50 transition-colors">
-                      <div className="min-w-0">
-                        <p className="font-medium text-primary truncate">{project.project_name}</p>
-                        <p className="text-xs text-muted mt-0.5">
+                  <Link key={project.id} href={`/admin/projects/${project.id}`} className="block min-w-0">
+                    <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border p-4 transition-colors hover:bg-slate-50 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <p className="font-medium text-primary break-words whitespace-normal">{project.project_name}</p>
+                        <p className="mt-0.5 text-xs text-muted break-words whitespace-normal">
                           {(project.clients as { name: string })?.name} · {formatDate(project.created_at)}
                         </p>
                       </div>
-                      <StatusBadge status={project.status} />
+                      <StatusBadge status={project.status} className="max-w-full shrink-0 self-start whitespace-normal sm:text-right" />
                     </div>
                   </Link>
                 ))}
                 {(!recentProjects || recentProjects.length === 0) && (
-                  <p className="text-sm text-muted text-center py-6">No projects yet</p>
+                  <p className="py-6 text-center text-sm text-muted">No projects yet</p>
                 )}
               </CardContent>
             </Card>
           </div>
 
-          <Card>
-            <CardHeader><CardTitle>Recent Activity</CardTitle></CardHeader>
-            <CardContent>
+          <Card className="w-full max-w-full min-w-0 overflow-hidden">
+            <CardHeader className="min-w-0"><CardTitle>Recent Activity</CardTitle></CardHeader>
+            <CardContent className="min-w-0 overflow-hidden">
               <ActivityFeed logs={recentActivity ?? []} />
             </CardContent>
           </Card>

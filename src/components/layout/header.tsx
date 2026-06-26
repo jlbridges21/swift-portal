@@ -78,8 +78,8 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
   const adminMobileLinks = [...adminLinks, { href: "/admin/settings", label: "Settings" }];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/80 bg-white/90 backdrop-blur-lg safe-area-top safe-area-x relative">
-      <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-3 px-5 sm:h-16 sm:gap-4 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-50 w-full max-w-full overflow-x-hidden border-b border-border/80 bg-white/90 backdrop-blur-lg safe-area-top safe-area-x relative">
+      <div className="mx-auto flex h-14 w-full max-w-7xl min-w-0 items-center gap-3 px-4 sm:h-16 sm:gap-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 shrink-0 items-center justify-start">
           <Logo href={homeHref} compact className="flex sm:hidden" />
           <Logo href={homeHref} size="md" className="hidden sm:flex" />
@@ -99,7 +99,7 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
           </nav>
         )}
 
-        <nav className="ml-auto flex items-center gap-1 sm:gap-2">
+        <nav className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
           {variant === "public" ? (
             <>
               <Link href="/request">
@@ -201,12 +201,12 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between", className)}>
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-primary sm:text-3xl">{title}</h1>
-        {description && <p className="mt-1 text-muted">{description}</p>}
+    <div className={cn("mb-8 flex min-w-0 w-full max-w-full flex-col gap-4 sm:flex-row sm:items-start sm:justify-between", className)}>
+      <div className="min-w-0">
+        <h1 className="break-words text-2xl font-bold tracking-tight text-primary sm:text-3xl">{title}</h1>
+        {description && <p className="mt-1 break-words text-muted">{description}</p>}
       </div>
-      {children && <div className="flex flex-wrap gap-2">{children}</div>}
+      {children && <div className="flex min-w-0 flex-wrap gap-2">{children}</div>}
     </div>
   );
 }
