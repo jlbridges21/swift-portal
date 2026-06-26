@@ -1,20 +1,10 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendBrandedEmail } from "@/lib/email";
 import { sendAdminPushNotification } from "@/lib/onesignal-push";
+import { sendClientEmailNotification } from "@/lib/client-email-notifications";
+import type { NotificationType } from "@/lib/types";
 
-export type NotificationType =
-  | "proposal_submitted"
-  | "proposal_approved"
-  | "proposal_changes"
-  | "schedule_change_requested"
-  | "payment_received"
-  | "revision_requested"
-  | "shoot_proposed"
-  | "quote_sent"
-  | "status_changed"
-  | "deliverables_uploaded"
-  | "invoice_available"
-  | "payment_confirmed";
+export type { NotificationType };
 
 interface NotifyOptions {
   type: NotificationType;
@@ -28,16 +18,34 @@ interface NotifyOptions {
   sendEmail?: boolean;
 }
 
-async function getAdminUserIds(): Promise<{ id: string; email: string; full_name: string | null }[]> {
+interface NotificationRecipient {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: "admin" | "client";
+  client_id?: string | null;
+  email_notifications_enabled: boolean;
+  in_app_notifications_enabled: boolean;
+}
+
+async function getAdminRecipients(): Promise<NotificationRecipient[]> {
   const supabase = await createServiceClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, email, full_name")
+    .select("id, email, full_name, email_notifications_enabled, in_app_notifications_enabled")
     .eq("role", "admin");
-  return data ?? [];
+
+  return (data ?? []).map((profile) => ({
+    id: profile.id,
+    email: profile.email,
+    full_name: profile.full_name,
+    role: "admin" as const,
+    email_notifications_enabled: profile.email_notifications_enabled ?? true,
+    in_app_notifications_enabled: profile.in_app_notifications_enabled ?? true,
+  }));
 }
 
-async function getProjectClientUsers(projectId: string): Promise<{ id: string; email: string; full_name: string | null }[]> {
+async function getProjectClientRecipients(projectId: string): Promise<NotificationRecipient[]> {
   const supabase = await createServiceClient();
 
   const { data: project } = await supabase
@@ -60,42 +68,61 @@ async function getProjectClientUsers(projectId: string): Promise<{ id: string; e
 
   const { data: clients } = await supabase
     .from("clients")
-    .select("user_id, email, name")
+    .select("id, user_id, email, name")
     .in("id", Array.from(clientIds));
 
   const userIds = clients?.map((c) => c.user_id).filter(Boolean) as string[] ?? [];
+
   if (!userIds.length) {
-    return (clients ?? []).map((c) => ({
-      id: c.user_id || c.email,
-      email: c.email,
-      full_name: c.name,
-    }));
+    return (clients ?? [])
+      .filter((c) => c.user_id)
+      .map((c) => ({
+        id: c.user_id!,
+        email: c.email,
+        full_name: c.name,
+        role: "client" as const,
+        client_id: c.id,
+        email_notifications_enabled: true,
+        in_app_notifications_enabled: true,
+      }));
   }
 
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, email, full_name")
+    .select(
+      "id, email, full_name, client_id, email_notifications_enabled, in_app_notifications_enabled"
+    )
     .in("id", userIds);
 
-  return profiles ?? [];
+  const clientByUserId = new Map(clients?.map((c) => [c.user_id, c.id]) ?? []);
+
+  return (profiles ?? []).map((profile) => ({
+    id: profile.id,
+    email: profile.email,
+    full_name: profile.full_name,
+    role: "client" as const,
+    client_id: profile.client_id ?? clientByUserId.get(profile.id) ?? null,
+    email_notifications_enabled: profile.email_notifications_enabled ?? true,
+    in_app_notifications_enabled: profile.in_app_notifications_enabled ?? true,
+  }));
 }
 
 export async function notifyUsers(options: NotifyOptions) {
   const supabase = await createServiceClient();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const recipients: { id: string; email: string; full_name: string | null }[] = [];
+  const recipients: NotificationRecipient[] = [];
 
   if (options.notifyAdmins) {
-    recipients.push(...(await getAdminUserIds()));
+    recipients.push(...(await getAdminRecipients()));
   }
 
   if (options.notifyClients && options.projectId) {
-    recipients.push(...(await getProjectClientUsers(options.projectId)));
+    recipients.push(...(await getProjectClientRecipients(options.projectId)));
   }
 
-  const unique = new Map<string, typeof recipients[0]>();
-  for (const r of recipients) {
-    if (r.id && !unique.has(r.id)) unique.set(r.id, r);
+  const unique = new Map<string, NotificationRecipient>();
+  for (const recipient of recipients) {
+    if (recipient.id && !unique.has(recipient.id)) unique.set(recipient.id, recipient);
   }
 
   const link = options.link?.startsWith("http") ? options.link : `${appUrl}${options.link || ""}`;
@@ -103,17 +130,24 @@ export async function notifyUsers(options: NotifyOptions) {
   for (const user of unique.values()) {
     if (!user.id || user.id.includes("@")) continue;
 
-    await supabase.from("notifications").insert({
-      user_id: user.id,
-      type: options.type,
-      title: options.title,
-      body: options.body ?? null,
-      link: options.link ?? null,
-      project_id: options.projectId ?? null,
-    });
+    const shouldCreateInApp =
+      user.role === "admin" || user.in_app_notifications_enabled !== false;
 
-    if (options.sendEmail !== false && user.email) {
-      await sendBrandedEmail({
+    if (shouldCreateInApp) {
+      await supabase.from("notifications").insert({
+        user_id: user.id,
+        type: options.type,
+        title: options.title,
+        body: options.body ?? null,
+        link: options.link ?? null,
+        project_id: options.projectId ?? null,
+      });
+    }
+
+    if (options.sendEmail === false || !user.email) continue;
+
+    if (user.role === "admin") {
+      void sendBrandedEmail({
         to: user.email,
         subject: options.title,
         title: options.title,
@@ -121,10 +155,20 @@ export async function notifyUsers(options: NotifyOptions) {
         ctaLabel: options.link ? "View in Portal" : undefined,
         ctaUrl: options.link ? link : undefined,
       });
+      continue;
     }
+
+    void sendClientEmailNotification({
+        userId: user.id,
+        clientId: user.client_id,
+        email: user.email,
+        title: options.title,
+        message: options.body || options.title,
+      url: options.link,
+      eventType: options.type,
+    });
   }
 
-  // OneSignal is an additional admin-only channel — never blocks in-app notifications.
   if (options.notifyAdmins) {
     try {
       const pushResult = await sendAdminPushNotification({
@@ -153,6 +197,8 @@ export async function notifyAdmins(options: Omit<NotifyOptions, "notifyAdmins" |
   return notifyUsers({ ...options, notifyAdmins: true, notifyClients: false });
 }
 
-export async function notifyProjectClients(options: Omit<NotifyOptions, "notifyAdmins" | "notifyClients"> & { projectId: string }) {
+export async function notifyProjectClients(
+  options: Omit<NotifyOptions, "notifyAdmins" | "notifyClients"> & { projectId: string }
+) {
   return notifyUsers({ ...options, notifyAdmins: false, notifyClients: true });
 }

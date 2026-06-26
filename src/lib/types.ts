@@ -1,5 +1,19 @@
 export type UserRole = "admin" | "client";
 
+export type NotificationType =
+  | "proposal_submitted"
+  | "proposal_approved"
+  | "proposal_changes"
+  | "schedule_change_requested"
+  | "payment_received"
+  | "revision_requested"
+  | "shoot_proposed"
+  | "quote_sent"
+  | "status_changed"
+  | "deliverables_uploaded"
+  | "invoice_available"
+  | "payment_confirmed";
+
 export type ProjectStatus =
   | "new_request"
   | "quote_sent"
@@ -51,6 +65,8 @@ export interface Profile {
   client_id: string | null;
   push_notifications_enabled?: boolean;
   onesignal_subscription_id?: string | null;
+  email_notifications_enabled?: boolean;
+  in_app_notifications_enabled?: boolean;
   created_at: string;
   updated_at: string;
 }

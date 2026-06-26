@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Avatar } from "@/components/ui/avatar";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Camera, Lock } from "lucide-react";
+import { Bell, Camera, Lock } from "lucide-react";
 import type { Client, Profile } from "@/lib/types";
 
 interface SettingsClientProps {
@@ -29,6 +29,13 @@ export function SettingsClient({ profile: initialProfile, client: initialClient 
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ password: "", confirm: "" });
+  const [emailNotifications, setEmailNotifications] = useState(
+    initialProfile.email_notifications_enabled !== false
+  );
+  const [inAppNotifications, setInAppNotifications] = useState(
+    initialProfile.in_app_notifications_enabled !== false
+  );
+  const [savingNotifications, setSavingNotifications] = useState(false);
 
   async function saveProfile() {
     setSaving(true);
@@ -63,6 +70,31 @@ export function SettingsClient({ profile: initialProfile, client: initialClient 
     } else {
       const data = await res.json();
       toast.error(data.error || "Upload failed");
+    }
+  }
+
+  async function saveNotificationPreferences() {
+    setSavingNotifications(true);
+    const res = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        email_notifications_enabled: emailNotifications,
+        in_app_notifications_enabled: inAppNotifications,
+      }),
+    });
+    setSavingNotifications(false);
+    if (res.ok) {
+      setProfile((p) => ({
+        ...p,
+        email_notifications_enabled: emailNotifications,
+        in_app_notifications_enabled: inAppNotifications,
+      }));
+      toast.success("Notification preferences saved");
+      router.refresh();
+    } else {
+      toast.error("Failed to save notification preferences");
     }
   }
 
@@ -148,6 +180,48 @@ export function SettingsClient({ profile: initialProfile, client: initialClient 
             </div>
             <Button variant="accent" onClick={saveProfile} disabled={saving}>
               {saving ? "Saving..." : "Save Changes"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Bell className="h-4 w-4" /> Notifications
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <label className="flex items-start justify-between gap-4 cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-primary">Email notifications</p>
+                <p className="text-xs text-muted mt-1">
+                  Receive project updates by email. Payment-related emails are always sent when
+                  required.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-accent focus:ring-accent"
+                checked={emailNotifications}
+                onChange={(e) => setEmailNotifications(e.target.checked)}
+              />
+            </label>
+            <label className="flex items-start justify-between gap-4 cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-primary">In-app notifications</p>
+                <p className="text-xs text-muted mt-1">
+                  Show updates in your Swift Portal notification bell.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-accent focus:ring-accent"
+                checked={inAppNotifications}
+                onChange={(e) => setInAppNotifications(e.target.checked)}
+              />
+            </label>
+            <Button variant="outline" onClick={saveNotificationPreferences} disabled={savingNotifications}>
+              {savingNotifications ? "Saving..." : "Save Notification Preferences"}
             </Button>
           </CardContent>
         </Card>

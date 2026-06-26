@@ -54,8 +54,9 @@ export async function setProjectStatus(options: SetStatusOptions) {
 
   if (options.notifyClient) {
     const clientMsg = clientStatusNotification(options.status);
+    const clientType = options.status === "awaiting_payment" ? "invoice_available" : "status_changed";
     await notifyProjectClients({
-      type: "status_changed",
+      type: clientType,
       title: options.clientTitle ?? clientMsg.title,
       body: options.clientBody ?? clientMsg.body,
       link: options.link || `/dashboard/projects/${options.projectId}`,
