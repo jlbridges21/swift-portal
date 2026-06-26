@@ -12,6 +12,7 @@ import { getProjectHeroPosterUrl } from "@/lib/cover";
 import { CoverPlaceholder } from "@/components/projects/cover-placeholder";
 import { UrlToastHandler } from "@/components/ui/url-toast-handler";
 import { ActivityFeed } from "@/components/admin/activity-feed";
+import { filterClientVisibleActivities } from "@/lib/communications";
 import { getClientNextStep } from "@/lib/journey";
 import { normalizeStatus } from "@/lib/constants";
 import { redirect } from "next/navigation";
@@ -79,7 +80,7 @@ export default async function ClientDashboard() {
         userAvatar={profile.avatar_url}
       />
 
-      <main className="mobile-container py-10 pb-28 sm:pb-10">
+      <main className="mobile-container py-10">
         <div className="mb-10 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-start">
           <div className="min-w-0">
             <p className="text-sm font-medium text-accent uppercase tracking-wider">Swift Aerial Media</p>
@@ -213,7 +214,7 @@ export default async function ClientDashboard() {
             <Card className="shadow-sm">
               <CardContent className="p-6">
                 <ActivityFeed
-                  logs={(activities ?? []) as (ActivityLog & { projects?: { id: string; project_name: string } | null })[]}
+                  logs={filterClientVisibleActivities((activities ?? []) as (ActivityLog & { projects?: { id: string; project_name: string } | null })[])}
                   projectLinkPrefix="/dashboard/projects"
                 />
               </CardContent>
@@ -247,11 +248,6 @@ export default async function ClientDashboard() {
               </section>
             )}
 
-            <Link href="/dashboard/request">
-              <Button variant="outline" className="w-full">
-                <Plus className="h-4 w-4" /> Request Another Project
-              </Button>
-            </Link>
           </div>
         </div>
 
@@ -280,14 +276,6 @@ export default async function ClientDashboard() {
           </section>
         )}
       </main>
-
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-white/95 p-4 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] backdrop-blur-md safe-area-bottom safe-area-x sm:hidden">
-        <Link href="/dashboard/request">
-          <Button variant="accent" className="w-full min-h-12 text-base">
-            <Plus className="h-4 w-4" /> Request New Project
-          </Button>
-        </Link>
-      </div>
     </div>
   );
 }

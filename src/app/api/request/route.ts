@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins } from "@/lib/notifications";
+import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
 
 export async function POST(request: Request) {
   try {
@@ -150,9 +151,14 @@ export async function POST(request: Request) {
     await notifyAdmins({
       type: "proposal_submitted",
       title: "New Project Request",
-      body: `${name} submitted a request for ${service_requested} at ${property_address}.`,
+      body: `${name} submitted a request for ${service_requested} at ${property_address}. A preliminary estimate was generated automatically.`,
       link: `/admin/projects/${project.id}`,
       projectId: project.id,
+    });
+
+    await createPreliminaryEstimate(project.id, service_requested, {
+      userId,
+      skipIfExists: true,
     });
 
     return NextResponse.json({

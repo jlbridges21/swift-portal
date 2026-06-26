@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins } from "@/lib/notifications";
+import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
 
 export async function POST(request: Request) {
   const profile = await getProfile();
@@ -69,9 +70,14 @@ export async function POST(request: Request) {
   await notifyAdmins({
     type: "proposal_submitted",
     title: "New Project Request",
-    body: `${client?.name || profile.full_name} requested ${service_requested} at ${property_address}.`,
+    body: `${client?.name || profile.full_name} requested ${service_requested} at ${property_address}. A preliminary estimate was generated automatically.`,
     link: `/admin/projects/${project.id}`,
     projectId: project.id,
+  });
+
+  await createPreliminaryEstimate(project.id, service_requested, {
+    userId: profile.id,
+    skipIfExists: true,
   });
 
   return NextResponse.json({ success: true, projectId: project.id });

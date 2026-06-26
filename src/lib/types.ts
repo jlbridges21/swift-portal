@@ -60,7 +60,9 @@ export type ActivityType =
   | "email_opened"
   | "email_clicked"
   | "email_bounced"
-  | "email_complained";
+  | "email_complained"
+  | "preliminary_estimate_created"
+  | "official_proposal_sent";
 
 export interface Profile {
   id: string;
@@ -208,6 +210,7 @@ export interface QuoteLineItem {
 }
 
 export type QuoteStatus = "draft" | "sent" | "approved" | "changes_requested";
+export type QuoteKind = "preliminary" | "official";
 
 export interface ProjectQuote {
   id: string;
@@ -219,6 +222,7 @@ export interface ProjectQuote {
   notes: string | null;
   expires_at: string | null;
   status: QuoteStatus;
+  quote_kind?: QuoteKind;
   sent_at: string | null;
   approved_at: string | null;
   changes_feedback: string | null;

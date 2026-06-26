@@ -1,6 +1,6 @@
 export const PROJECT_STATUSES = [
   { value: "new_request", label: "New Request", clientLabel: "Request Received", order: 0 },
-  { value: "quote_sent", label: "Quote Sent", clientLabel: "Review Your Proposal", order: 1 },
+  { value: "quote_sent", label: "Quote Sent", clientLabel: "Review Your Official Proposal", order: 1 },
   { value: "proposal_approved", label: "Proposal Approved – Awaiting Schedule", clientLabel: "Scheduling Your Shoot", order: 2 },
   { value: "scheduled", label: "Scheduled", clientLabel: "Shoot Scheduled", order: 3 },
   { value: "shoot_complete_editing", label: "Shoot Complete", clientLabel: "Media in Production", order: 4 },
@@ -33,12 +33,18 @@ export function normalizeStatus(status: string): ProjectStatus {
 export const SERVICE_TYPES = [
   "Aerial Photography",
   "Aerial Videography",
-  "360 Virtual Tour",
+  "Exterior 360° Virtual Tour",
   "Drone Mapping",
   "Real Estate Media Package",
-  "Commercial Aerial",
+  "Commercial Aerial Media",
   "Event Coverage",
-  "Other",
+  "Construction Progress Documentation",
+  "Land Listing Package",
+  "Golf Course & Resort Marketing",
+  "Roof Inspection",
+  "Marina & Waterfront Marketing",
+  "HOA & Community Marketing",
+  "Custom Project",
 ] as const;
 
 export const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];

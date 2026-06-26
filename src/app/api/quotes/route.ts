@@ -55,6 +55,7 @@ export async function POST(request: Request) {
       notes: notes || null,
       expires_at: expires_at || null,
       status,
+      quote_kind: "official",
       sent_at: send ? new Date().toISOString() : null,
       created_by: profile.id,
     })
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
       skipIfSame: true,
     });
 
-    await logProjectActivity("quote_sent", `💼 Quote sent: ${title}`, {
+    await logProjectActivity("official_proposal_sent", "📄 Official Proposal sent", {
       projectId: project_id,
       userId: profile.id,
       metadata: { quoteId: quote.id, total_cents },
@@ -82,8 +83,8 @@ export async function POST(request: Request) {
 
     await notifyProjectClients({
       type: "quote_sent",
-      title: "Review Your Proposal",
-      body: `Swift Aerial Media sent a proposal for "${title}". Review and approve in your portal.`,
+      title: "Your official proposal is ready",
+      body: `Swift Aerial Media sent an official proposal for "${title}". Review and approve in your portal.`,
       link: `/dashboard/projects/${project_id}#quote`,
       projectId: project_id,
     });
@@ -109,6 +110,12 @@ export async function PATCH(request: Request) {
   if (!quote) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (action === "send" && profile.role === "admin") {
+    if (quote.quote_kind === "preliminary") {
+      return NextResponse.json(
+        { error: "Use Convert to Official Proposal for preliminary estimates." },
+        { status: 400 }
+      );
+    }
     const service = await createServiceClient();
     const { data: updated } = await service
       .from("project_quotes")
@@ -126,10 +133,16 @@ export async function PATCH(request: Request) {
       skipIfSame: true,
     });
 
+    await logProjectActivity("official_proposal_sent", "📄 Official Proposal sent", {
+      projectId: quote.project_id,
+      userId: profile.id,
+      metadata: { quoteId: id },
+    });
+
     await notifyProjectClients({
       type: "quote_sent",
-      title: "Review Your Proposal",
-      body: `Review your proposal for "${quote.title}".`,
+      title: "Review Your Official Proposal",
+      body: `Review your official proposal for "${quote.title}".`,
       link: `/dashboard/projects/${quote.project_id}#quote`,
       projectId: quote.project_id,
     });
@@ -137,7 +150,93 @@ export async function PATCH(request: Request) {
     return NextResponse.json(updated);
   }
 
+  if (action === "convert_to_official" && profile.role === "admin") {
+    if (quote.quote_kind !== "preliminary") {
+      return NextResponse.json({ error: "Only preliminary estimates can be converted." }, { status: 400 });
+    }
+
+    const { title, description, line_items, notes, expires_at } = body;
+    const finalLineItems = line_items?.length ? line_items : quote.line_items;
+    const finalTitle = title || quote.title.replace(/^Preliminary Estimate — /, "Official Proposal — ");
+    const total_cents = finalLineItems.reduce(
+      (sum: number, item: { amount_cents: number }) => sum + (item.amount_cents || 0),
+      0
+    );
+
+    const service = await createServiceClient();
+
+    if (line_items?.length || title || description !== undefined || notes !== undefined) {
+      await service
+        .from("project_quotes")
+        .update({
+          title: title || quote.title,
+          description: description ?? quote.description,
+          line_items: finalLineItems,
+          total_cents,
+          notes: notes ?? quote.notes,
+          expires_at: expires_at ?? quote.expires_at,
+        })
+        .eq("id", id);
+    }
+
+    const { data: official, error: officialError } = await service
+      .from("project_quotes")
+      .insert({
+        project_id: quote.project_id,
+        title: finalTitle.startsWith("Official Proposal")
+          ? finalTitle
+          : `Official Proposal — ${finalTitle}`,
+        description: description ?? quote.description,
+        line_items: finalLineItems,
+        total_cents,
+        notes: notes ?? quote.notes,
+        expires_at: expires_at ?? quote.expires_at,
+        status: "sent",
+        quote_kind: "official",
+        sent_at: new Date().toISOString(),
+        created_by: profile.id,
+      })
+      .select()
+      .single();
+
+    if (officialError) {
+      return NextResponse.json({ error: officialError.message }, { status: 500 });
+    }
+
+    await setProjectStatus({
+      projectId: quote.project_id,
+      status: "quote_sent",
+      userId: profile.id,
+      activityType: "quote_sent",
+      activityDescription: `Official proposal sent: ${official.title}`,
+      notifyClient: false,
+      skipIfSame: true,
+    });
+
+    await logProjectActivity("official_proposal_sent", "📄 Official Proposal sent", {
+      projectId: quote.project_id,
+      userId: profile.id,
+      metadata: { quoteId: official.id, preliminaryQuoteId: id },
+    });
+
+    await notifyProjectClients({
+      type: "quote_sent",
+      title: "Your official proposal is ready",
+      body: `Swift Aerial Media sent your official proposal. Review and approve it in your portal.`,
+      link: `/dashboard/projects/${quote.project_id}#quote`,
+      projectId: quote.project_id,
+    });
+
+    return NextResponse.json(official);
+  }
+
   if (action === "approve" && profile.role === "client") {
+    if (quote.quote_kind === "preliminary") {
+      return NextResponse.json(
+        { error: "Preliminary estimates cannot be approved. Wait for the official proposal." },
+        { status: 400 }
+      );
+    }
     const service = await createServiceClient();
     const { data: updated } = await service
       .from("project_quotes")
@@ -171,6 +270,12 @@ export async function PATCH(request: Request) {
   }
 
   if (action === "request_changes" && profile.role === "client") {
+    if (quote.quote_kind === "preliminary") {
+      return NextResponse.json(
+        { error: "Request changes on the official proposal once it is sent." },
+        { status: 400 }
+      );
+    }
     const service = await createServiceClient();
     const { data: updated } = await service
       .from("project_quotes")
@@ -197,9 +302,10 @@ export async function PATCH(request: Request) {
   }
 
   if (action === "update" && profile.role === "admin") {
-    if (quote.status !== "draft") {
+    const isPreliminary = quote.quote_kind === "preliminary";
+    if (!isPreliminary && quote.status !== "draft") {
       return NextResponse.json(
-        { error: "Only draft proposals can be edited. Duplicate to create a revision." },
+        { error: "Only draft proposals or preliminary estimates can be edited. Duplicate to create a revision." },
         { status: 400 }
       );
     }
@@ -247,6 +353,7 @@ export async function PATCH(request: Request) {
         notes: body.notes ?? quote.notes,
         expires_at: quote.expires_at,
         status: "draft",
+        quote_kind: "official",
         created_by: profile.id,
       })
       .select()

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import type { ProjectQuote, QuoteLineItem } from "@/lib/types";
+import { PRELIMINARY_ESTIMATE_DISCLAIMER } from "@/lib/service-templates";
 import { formatCurrency } from "@/lib/utils";
 import {
   FileText, Plus, Trash2, Send, Check, MessageSquare, CheckCircle2,
@@ -24,8 +25,17 @@ interface QuoteSectionProps {
   onStatusChange?: (status: string) => void;
 }
 
-function getMainQuote(quotes: ProjectQuote[], isAdmin: boolean): ProjectQuote | null {
-  const visible = isAdmin ? quotes : quotes.filter((q) => q.status !== "draft");
+function isPreliminaryQuote(quote: ProjectQuote): boolean {
+  return quote.quote_kind === "preliminary" || quote.title.startsWith("Preliminary Estimate");
+}
+
+function getPreliminaryQuote(quotes: ProjectQuote[]): ProjectQuote | null {
+  return quotes.find((q) => isPreliminaryQuote(q)) ?? null;
+}
+
+function getMainOfficialQuote(quotes: ProjectQuote[], isAdmin: boolean): ProjectQuote | null {
+  const official = quotes.filter((q) => !isPreliminaryQuote(q));
+  const visible = isAdmin ? official : official.filter((q) => q.status !== "draft");
   const approved = visible.find((q) => q.status === "approved");
   if (approved) return approved;
 
@@ -41,7 +51,7 @@ function getMainQuote(quotes: ProjectQuote[], isAdmin: boolean): ProjectQuote | 
   const changesRequested = visible.find((q) => q.status === "changes_requested");
   if (changesRequested) return changesRequested;
 
-  return visible[0] ?? null;
+  return visible.find((q) => q.status === "draft") ?? null;
 }
 
 const emptyForm = {
@@ -59,6 +69,7 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [changeFeedback, setChangeFeedback] = useState("");
   const [form, setForm] = useState(emptyForm);
 
@@ -66,9 +77,13 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
     setQuotes(initialQuotes);
   }, [initialQuotes]);
 
-  const mainQuote = getMainQuote(quotes, isAdmin);
-  const changesRequestedQuote = quotes.find((q) => q.status === "changes_requested");
-  const draftQuotes = quotes.filter((q) => q.status === "draft");
+  const preliminaryQuote = getPreliminaryQuote(quotes);
+  const mainOfficialQuote = getMainOfficialQuote(quotes, isAdmin);
+  const changesRequestedQuote = quotes.find(
+    (q) => !isPreliminaryQuote(q) && q.status === "changes_requested"
+  );
+  const draftQuotes = quotes.filter((q) => !isPreliminaryQuote(q) && q.status === "draft");
+  const editingPreliminary = editingId && preliminaryQuote?.id === editingId;
 
   function updateLineItem(index: number, field: keyof QuoteLineItem, value: string | number) {
     setForm((f) => {
@@ -196,6 +211,87 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
     }
   }
 
+  async function convertToOfficial() {
+    if (!preliminaryQuote) return;
+    setConverting(true);
+    const res = await fetch("/api/quotes", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        id: preliminaryQuote.id,
+        action: "convert_to_official",
+        title: form.title || undefined,
+        description: form.description || undefined,
+        notes: form.notes || undefined,
+        expires_at: form.expires_at || null,
+        line_items: form.line_items.map((i) => ({
+          description: i.description,
+          amount_cents: Number(i.amount_cents) || 0,
+        })),
+      }),
+    });
+    setConverting(false);
+    if (res.ok) {
+      const official = await res.json();
+      setQuotes((prev) => [official, ...prev]);
+      onStatusChange?.("quote_sent");
+      toast.success("Official proposal sent to client");
+      setShowForm(false);
+      setEditingId(null);
+      router.refresh();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error || "Failed to convert estimate");
+    }
+  }
+
+  async function savePreliminaryEdits() {
+    if (!preliminaryQuote) return;
+    setLoading(true);
+    const res = await fetch("/api/quotes", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        id: preliminaryQuote.id,
+        action: "update",
+        title: form.title,
+        description: form.description,
+        notes: form.notes,
+        expires_at: form.expires_at || null,
+        line_items: form.line_items.map((i) => ({
+          description: i.description,
+          amount_cents: Number(i.amount_cents) || 0,
+        })),
+      }),
+    });
+    setLoading(false);
+    if (res.ok) {
+      const updated = await res.json();
+      setQuotes((prev) => prev.map((q) => (q.id === updated.id ? updated : q)));
+      toast.success("Preliminary estimate saved");
+      setShowForm(false);
+      setEditingId(null);
+      router.refresh();
+    } else {
+      toast.error("Failed to save estimate");
+    }
+  }
+
+  function renderDisclaimer() {
+    return (
+      <div className="rounded-xl border border-sky-200 bg-sky-50/80 p-4 space-y-2">
+        <p className="text-sm font-semibold text-primary">About this Preliminary Estimate</p>
+        <p className="text-sm text-muted leading-relaxed">{PRELIMINARY_ESTIMATE_DISCLAIMER}</p>
+        <p className="text-xs text-muted">
+          This is not the final proposal. Final pricing will be confirmed after Swift Aerial Media
+          reviews the property, schedules the shoot, and confirms the project scope.
+        </p>
+      </div>
+    );
+  }
+
   async function quoteAction(id: string, action: string, feedback?: string) {
     if (action === "approve") setApproving(true);
     const res = await fetch("/api/quotes", {
@@ -286,18 +382,24 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
     );
   }
 
-  function renderQuote(quote: ProjectQuote) {
+  function renderQuote(quote: ProjectQuote, options?: { showDisclaimer?: boolean }) {
     const isApproved = quote.status === "approved";
+    const preliminary = isPreliminaryQuote(quote);
 
     return (
       <div className="rounded-xl border border-border bg-white p-6 space-y-4">
+        {options?.showDisclaimer && renderDisclaimer()}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-primary">{quote.title}</h3>
-            {quote.description && <p className="text-sm text-muted mt-1">{quote.description}</p>}
+            <h3 className="text-lg font-semibold text-primary">
+              {preliminary ? quote.title.replace(/^Preliminary Estimate — /, "") : quote.title}
+            </h3>
+            {quote.description && (
+              <p className="text-sm text-muted mt-1 whitespace-pre-line">{quote.description}</p>
+            )}
           </div>
           <Badge variant={isApproved ? "success" : quote.status === "changes_requested" ? "warning" : "default"}>
-            {isApproved ? "Approved" : quote.status.replace("_", " ")}
+            {preliminary ? "Preliminary" : isApproved ? "Approved" : quote.status.replace("_", " ")}
           </Badge>
         </div>
         <div className="divide-y divide-border rounded-lg border border-border">
@@ -319,7 +421,14 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
 
         {isAdmin && (
           <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-            {quote.status === "draft" && (
+            {preliminary && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => openEditForm(quote)}>
+                  <Pencil className="h-4 w-4" /> Edit Estimate
+                </Button>
+              </>
+            )}
+            {!preliminary && quote.status === "draft" && (
               <>
                 <Button variant="outline" size="sm" onClick={() => openEditForm(quote)}>
                   <Pencil className="h-4 w-4" /> Edit Draft
@@ -340,7 +449,7 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
                 </Button>
               </>
             )}
-            {quote.status !== "draft" && quote.status !== "approved" && (
+            {!preliminary && quote.status !== "draft" && quote.status !== "approved" && (
               <Button variant="outline" size="sm" disabled={loading} onClick={() => duplicateQuote(quote)}>
                 <Copy className="h-4 w-4" /> Duplicate & Revise
               </Button>
@@ -348,7 +457,7 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
           </div>
         )}
 
-        {!isAdmin && quote.status === "sent" && (
+        {!isAdmin && !preliminary && quote.status === "sent" && (
           <div className="flex flex-wrap gap-2 pt-2">
             <Button variant="accent" disabled={approving} onClick={() => quoteAction(quote.id, "approve")}>
               <Check className="h-4 w-4" /> Approve Proposal
@@ -371,15 +480,21 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
     );
   }
 
+  const sectionTitle = isAdmin
+    ? "Estimates & Proposals"
+    : mainOfficialQuote
+      ? "Official Proposal"
+      : "Preliminary Estimate";
+
   return (
     <Card className="shadow-sm" id="quote">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-base">
-          <FileText className="h-5 w-5 text-accent" /> Quote & Proposal
+          <FileText className="h-5 w-5 text-accent" /> {sectionTitle}
         </CardTitle>
         {isAdmin && !showForm && (
           <Button variant="outline" size="sm" onClick={openCreateForm}>
-            {mainQuote ? "New Proposal" : "Create Quote"}
+            {mainOfficialQuote ? "New Official Proposal" : "Create Official Proposal"}
           </Button>
         )}
       </CardHeader>
@@ -401,14 +516,91 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
           </div>
         )}
 
-        {mainQuote && !showForm && renderQuote(mainQuote)}
-        {!mainQuote && !showForm && (
+        {preliminaryQuote && !showForm && (
+          <div className="space-y-3">
+            {!isAdmin && renderDisclaimer()}
+            {renderQuote(preliminaryQuote, { showDisclaimer: false })}
+          </div>
+        )}
+
+        {mainOfficialQuote && !showForm && (
+          <div className="space-y-3">
+            {preliminaryQuote && (
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Official Proposal</p>
+            )}
+            {renderQuote(mainOfficialQuote)}
+          </div>
+        )}
+
+        {!preliminaryQuote && !mainOfficialQuote && !showForm && (
           <p className="text-sm text-muted text-center py-6">
-            {isAdmin ? "Create a quote to send to the client." : "Your proposal will appear here once Swift Aerial Media sends it."}
+            {isAdmin
+              ? "A preliminary estimate is generated automatically when a client requests a project."
+              : "Your preliminary estimate will appear here shortly after your request is submitted."}
           </p>
         )}
 
-        {showForm && renderQuoteForm()}
+        {showForm && (
+          <>
+            {editingPreliminary ? (
+              <div className="space-y-4 rounded-xl border border-border p-5 bg-slate-50/50">
+                <p className="text-sm font-medium text-primary">Edit preliminary estimate</p>
+                <div className="space-y-2">
+                  <Label>Title</Label>
+                  <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Package Description</Label>
+                  <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={6} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Line Items</Label>
+                  {form.line_items.map((item, i) => (
+                    <div key={`prelim-line-${i}`} className="flex gap-2">
+                      <Input
+                        placeholder="Service description"
+                        value={item.description}
+                        onChange={(e) => updateLineItem(i, "description", e.target.value)}
+                        className="flex-1"
+                      />
+                      <CurrencyInput
+                        valueCents={item.amount_cents}
+                        onChangeCents={(cents) => updateLineItem(i, "amount_cents", cents)}
+                        className="w-32"
+                      />
+                      {form.line_items.length > 1 && (
+                        <Button variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, line_items: f.line_items.filter((_, j) => j !== i) }))}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, line_items: [...f.line_items, { description: "", amount_cents: 0 }] }))}>
+                    <Plus className="h-4 w-4" /> Add Line Item
+                  </Button>
+                </div>
+                <p className="text-sm font-medium">Total: {formatCurrency(totalCents)}</p>
+                <div className="space-y-2">
+                  <Label>Notes</Label>
+                  <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" disabled={loading || !form.title} onClick={savePreliminaryEdits}>
+                    Save Estimate
+                  </Button>
+                  <Button variant="accent" disabled={converting || loading || !form.title} onClick={convertToOfficial}>
+                    <Send className="h-4 w-4" /> Convert to Official Proposal
+                  </Button>
+                  <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm); }}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              renderQuoteForm()
+            )}
+          </>
+        )}
 
         {isAdmin && draftQuotes.length > 0 && !showForm && (
           <div className="rounded-lg border border-dashed border-border p-4">
@@ -433,7 +625,7 @@ export function QuoteSection({ projectId, quotes: initialQuotes, isAdmin, onStat
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-medium">{q.title}</span>
                     <Badge variant={q.status === "approved" ? "success" : q.status === "changes_requested" ? "warning" : "default"}>
-                      {q.status.replace("_", " ")}
+                      {isPreliminaryQuote(q) ? "preliminary" : q.status.replace("_", " ")}
                     </Badge>
                   </div>
                   <p className="text-xs text-muted mt-1">

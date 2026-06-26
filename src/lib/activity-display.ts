@@ -38,6 +38,8 @@ export const ACTIVITY_CONFIG: Record<string, ActivityConfig> = {
   email_clicked: { icon: "🔗", label: "Email link clicked" },
   email_bounced: { icon: "⚠️", label: "Email bounced" },
   email_complained: { icon: "⚠️", label: "Email marked as spam" },
+  preliminary_estimate_created: { icon: "📄", label: "Preliminary estimate created" },
+  official_proposal_sent: { icon: "📄", label: "Official proposal sent" },
 };
 
 export function getActivityDisplay(type: string, description: string) {

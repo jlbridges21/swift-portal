@@ -31,8 +31,10 @@ export function getClientNextStep(
     case "new_request":
       return {
         title: getClientStatusLabel("new_request"),
-        description: "Swift Aerial Media is reviewing your request. We'll send your proposal soon.",
-        variant: "info",
+        description: "Review your preliminary estimate below. Swift Aerial Media will confirm final pricing after reviewing your property and scope.",
+        actionLabel: "View Estimate",
+        actionHref: "#quote",
+        variant: "accent",
       };
     case "quote_sent":
       return {
