@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { ActivityFeed } from "@/components/admin/activity-feed";
 import { PushNotificationsCard } from "@/components/admin/push-notifications-card";
+import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
 
 export default async function AdminDashboard() {
   const profile = await getProfile();
@@ -61,6 +62,7 @@ export default async function AdminDashboard() {
         </PageHeader>
 
         <PushNotificationsCard />
+        <EmailDiagnosticsCard />
 
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-10">
           {stats.map((stat) => (

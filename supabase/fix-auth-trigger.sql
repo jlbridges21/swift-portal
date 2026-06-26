@@ -9,7 +9,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role)
+  INSERT INTO public.profiles (id, email, full_name, role, email_notifications_enabled, in_app_notifications_enabled)
   VALUES (
     NEW.id,
     NEW.email,
@@ -17,7 +17,9 @@ BEGIN
     CASE
       WHEN NEW.raw_user_meta_data->>'role' = 'admin' THEN 'admin'::public.user_role
       ELSE 'client'::public.user_role
-    END
+    END,
+    true,
+    true
   );
   RETURN NEW;
 EXCEPTION

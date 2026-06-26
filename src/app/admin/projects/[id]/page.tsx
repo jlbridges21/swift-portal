@@ -3,6 +3,7 @@ import { getProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { AdminProjectDetail } from "@/components/admin/project-detail";
+import { getProjectEmailEvents, groupEmailEvents } from "@/lib/email-analytics";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -43,6 +44,8 @@ export default async function AdminProjectPage({ params }: PageProps) {
 
   if (!project) notFound();
 
+  const emailGroups = groupEmailEvents(await getProjectEmailEvents(id));
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const portalUrl = `${appUrl}/dashboard/projects/${id}?preview=1`;
 
@@ -63,6 +66,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
           quotes={quotes ?? []}
           assetReviews={assetReviews ?? []}
           portalUrl={portalUrl}
+          emailGroups={emailGroups}
         />
       </main>
     </div>

@@ -54,7 +54,13 @@ export type ActivityType =
   | "quote_approved"
   | "quote_changes_requested"
   | "asset_reviewed"
-  | "sent_for_review";
+  | "sent_for_review"
+  | "email_sent"
+  | "email_delivered"
+  | "email_opened"
+  | "email_clicked"
+  | "email_bounced"
+  | "email_complained";
 
 export interface Profile {
   id: string;

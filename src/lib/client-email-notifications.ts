@@ -1,5 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendBrandedEmail } from "@/lib/email";
+import type { PremiumEmailContent } from "@/lib/email-templates";
+import { getStatusOrder } from "@/lib/constants";
 import type { NotificationType } from "@/lib/types";
 
 /** Payment-related emails always send even if the client opted out of marketing-style emails. */
@@ -16,14 +18,17 @@ export interface ClientEmailNotificationOptions {
   message: string;
   url?: string;
   eventType: NotificationType;
+  projectId?: string | null;
+  projectName?: string;
+  projectStatus?: string;
+  notificationId?: string | null;
 }
 
-export interface ClientEmailPresentation {
-  subject: string;
-  title: string;
-  body: string;
-  ctaLabel: string;
-  ctaUrl?: string;
+export interface ClientEmailNotificationResult {
+  sent: boolean;
+  reason?: string;
+  error?: string;
+  messageId?: string;
 }
 
 function resolvePortalUrl(path?: string): string | undefined {
@@ -35,106 +40,171 @@ function resolvePortalUrl(path?: string): string | undefined {
   return path.startsWith("http") ? path : `${appUrl}${path}`;
 }
 
+function resolveTemplate(
+  eventType: NotificationType,
+  title: string,
+  message: string
+): PremiumEmailContent["template"] {
+  if (eventType === "quote_sent") return "proposal_ready";
+  if (eventType === "proposal_changes") return "proposal_updated";
+  if (eventType === "shoot_proposed" || eventType === "schedule_change_requested") return "shoot_proposed";
+  if (eventType === "deliverables_uploaded") return "deliverables_ready";
+  if (eventType === "revision_requested") return "revision_response";
+  if (eventType === "invoice_available") return "payment_requested";
+  if (eventType === "payment_confirmed") return "payment_received";
+
+  if (eventType === "status_changed") {
+    const lower = `${title} ${message}`.toLowerCase();
+    if (lower.includes("shoot scheduled") || lower.includes("shoot confirmed")) return "shoot_confirmed";
+    if (lower.includes("complete") || lower.includes("delivered")) return "project_complete";
+    if (lower.includes("deliverable") || lower.includes("review")) return "deliverables_ready";
+    if (lower.includes("payment")) return "payment_requested";
+  }
+
+  return "general";
+}
+
 export function getClientEmailPresentation(
   eventType: NotificationType,
   title: string,
   message: string,
-  url?: string
-): ClientEmailPresentation {
+  url?: string,
+  projectStatus?: string
+): PremiumEmailContent {
   const ctaUrl = resolvePortalUrl(url);
-  const defaults: Partial<
-    Record<NotificationType, { subject: string; title: string; body: string; ctaLabel: string }>
-  > = {
-    quote_sent: {
-      subject: "Your proposal is ready to review",
-      title: "Your proposal is ready to review",
+  const progressStep =
+    projectStatus !== undefined ? getStatusOrder(projectStatus) : undefined;
+  const template = resolveTemplate(eventType, title, message);
+
+  const presets: Record<PremiumEmailContent["template"], Omit<PremiumEmailContent, "template" | "ctaUrl">> = {
+    proposal_ready: {
+      subject: "Your Swift Aerial Media proposal is ready",
+      title: "Your proposal is ready",
+      body:
+        "Your proposal is ready to review inside Swift Portal. You can review the details, approve the proposal, or request changes.",
+      ctaLabel: "Review Proposal",
+      secondaryInfo: "Most clients review and approve within a few minutes.",
+      progressStep: progressStep ?? 1,
+    },
+    proposal_updated: {
+      subject: "Your proposal has been updated",
+      title: "Proposal updated",
       body:
         message ||
-        "Swift Aerial Media prepared a proposal for your project. Review the details and approve it inside Swift Portal.",
-      ctaLabel: "Review in Swift Portal",
+        "Swift Aerial Media updated your proposal. Review the latest details and let us know if you have any questions.",
+      ctaLabel: "Review Proposal",
+      secondaryInfo: "Changes are highlighted in your portal.",
+      progressStep: progressStep ?? 1,
     },
     shoot_proposed: {
       subject: "Your shoot time is ready to review",
-      title: "Your shoot time is ready to review",
+      title: "Review your shoot time",
       body:
         message ||
-        "Swift Aerial Media proposed a shoot time for your project. Review the proposed date and confirm or request another time inside Swift Portal.",
-      ctaLabel: "Review in Swift Portal",
+        "Swift Aerial Media proposed a shoot time for your project. Review the date and confirm or suggest another time inside Swift Portal.",
+      ctaLabel: "Review Schedule",
+      secondaryInfo: "Confirming your shoot time helps us plan your production day.",
+      progressStep: progressStep ?? 2,
     },
-    schedule_change_requested: {
-      subject: "Update on your shoot schedule",
-      title: "Update on your shoot schedule",
-      body: message,
-      ctaLabel: "Review in Swift Portal",
+    shoot_confirmed: {
+      subject: "Your shoot is confirmed",
+      title: "Shoot confirmed",
+      body:
+        message ||
+        "Your shoot is confirmed. We'll see you on site — check Swift Portal for the latest schedule details.",
+      ctaLabel: "View Schedule",
+      secondaryInfo: "We'll notify you when your media is in production.",
+      progressStep: progressStep ?? 3,
     },
-    status_changed: {
-      subject: title,
-      title,
-      body: message,
-      ctaLabel: "Open Swift Portal",
-    },
-    deliverables_uploaded: {
+    deliverables_ready: {
       subject: "Your deliverables are ready to review",
-      title: "Your deliverables are ready to review",
+      title: "Deliverables ready for review",
       body:
         message ||
-        "New media has been added to your project. Review your deliverables inside Swift Portal.",
-      ctaLabel: "Review in Swift Portal",
+        "New media has been added to your project. Review your deliverables and share feedback inside Swift Portal.",
+      ctaLabel: "Review Deliverables",
+      secondaryInfo: "You can approve assets or request revisions directly in your portal.",
+      progressStep: progressStep ?? 5,
     },
-    revision_requested: {
+    revision_response: {
       subject: title,
       title,
       body: message,
       ctaLabel: "Open Swift Portal",
+      progressStep: progressStep ?? 5,
     },
-    invoice_available: {
+    payment_requested: {
       subject: "Your payment link is ready",
       title: "Complete your payment",
-      body: message,
+      body:
+        message ||
+        "Your final payment is ready inside Swift Portal. Complete payment to unlock your final downloads.",
       ctaLabel: "Pay in Swift Portal",
+      secondaryInfo: "Secure payment powered by Stripe.",
+      progressStep: progressStep ?? 6,
     },
-    payment_confirmed: {
-      subject: "Payment received — your downloads are ready",
-      title: "Project complete",
+    payment_received: {
+      subject: "Payment received — thank you",
+      title: "Payment received",
       body:
         message ||
         "Payment confirmed. Your final deliverables are now available to download in Swift Portal.",
+      ctaLabel: "Download Deliverables",
+      secondaryInfo: "Thank you for choosing Swift Aerial Media.",
+      progressStep: progressStep ?? 7,
+    },
+    project_complete: {
+      subject: "Your project is complete",
+      title: "Project complete",
+      body:
+        message ||
+        "Your project is complete. All deliverables are available in Swift Portal whenever you need them.",
       ctaLabel: "Open Swift Portal",
+      secondaryInfo: "Thank you for trusting Swift Aerial Media with your project.",
+      progressStep: progressStep ?? 7,
+    },
+    general: {
+      subject: title,
+      title,
+      body: message,
+      ctaLabel: ctaUrl ? "Open Swift Portal" : "Review in Swift Portal",
+      progressStep,
     },
   };
 
-  const preset = defaults[eventType];
-  if (preset) {
-    return { ...preset, ctaUrl };
-  }
-
-  return {
-    subject: title,
-    title,
-    body: message,
-    ctaLabel: ctaUrl ? "Open Swift Portal" : "Review in Swift Portal",
-    ctaUrl,
-  };
+  const preset = presets[template];
+  return { template, ...preset, ctaUrl };
 }
 
 export async function getClientNotificationPreferences(userId: string) {
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("email_notifications_enabled, in_app_notifications_enabled, role")
+    .select("email_notifications_enabled, in_app_notifications_enabled, role, email")
     .eq("id", userId)
     .single();
 
-  if (error || !data || data.role !== "client") {
+  if (error) {
+    console.warn("[email] preference lookup failed, defaulting to enabled:", userId, error.message);
     return {
       email_notifications_enabled: true,
       in_app_notifications_enabled: true,
+      email: null as string | null,
+    };
+  }
+
+  if (!data || data.role !== "client") {
+    return {
+      email_notifications_enabled: true,
+      in_app_notifications_enabled: true,
+      email: data?.email ?? null,
     };
   }
 
   return {
-    email_notifications_enabled: data.email_notifications_enabled ?? true,
-    in_app_notifications_enabled: data.in_app_notifications_enabled ?? true,
+    email_notifications_enabled: data.email_notifications_enabled !== false,
+    in_app_notifications_enabled: data.in_app_notifications_enabled !== false,
+    email: data.email ?? null,
   };
 }
 
@@ -143,8 +213,10 @@ export async function getClientNotificationPreferences(userId: string) {
  */
 export async function sendClientEmailNotification(
   options: ClientEmailNotificationOptions
-): Promise<{ sent: boolean; reason?: string }> {
-  if (!options.email) {
+): Promise<ClientEmailNotificationResult> {
+  const recipientEmail = options.email?.trim();
+  if (!recipientEmail) {
+    console.warn("[email] skipped — no recipient email:", options.eventType, options.userId);
     return { sent: false, reason: "no_email" };
   }
 
@@ -162,27 +234,42 @@ export async function sendClientEmailNotification(
     options.eventType,
     options.title,
     options.message,
-    options.url
+    options.url,
+    options.projectStatus
   );
 
   try {
-    const sent = await sendBrandedEmail({
-      to: options.email,
+    const result = await sendBrandedEmail({
+      to: recipientEmail,
       subject: presentation.subject,
       title: presentation.title,
       body: presentation.body,
+      projectName: options.projectName,
+      secondaryInfo: presentation.secondaryInfo,
       ctaLabel: presentation.ctaUrl ? presentation.ctaLabel : undefined,
       ctaUrl: presentation.ctaUrl,
+      progressStep: presentation.progressStep,
+      emailType: options.eventType,
+      analytics: {
+        projectId: options.projectId,
+        notificationId: options.notificationId,
+        emailType: options.eventType,
+      },
     });
 
-    if (sent) {
-      console.info("[email] client notification sent:", options.eventType, "→", options.email);
-      return { sent: true };
+    if (result.sent) {
+      console.info("[email] client notification sent:", options.eventType, "→", recipientEmail);
+      return { sent: true, messageId: result.messageId };
     }
 
-    return { sent: false, reason: "send_failed" };
+    if (result.skipped) {
+      return { sent: false, reason: result.skipReason ?? "skipped", error: result.error };
+    }
+
+    return { sent: false, reason: "send_failed", error: result.error };
   } catch (error) {
-    console.error("[email] client notification error:", options.eventType, error);
-    return { sent: false, reason: "error" };
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[email] client notification error:", options.eventType, message);
+    return { sent: false, reason: "error", error: message };
   }
 }

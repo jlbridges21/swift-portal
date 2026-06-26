@@ -20,28 +20,44 @@ interface PushStatus {
 
 export function PushNotificationsCard() {
   const [status, setStatus] = useState<PushStatus | null>(null);
-  const [loading, setLoading] = useState(true);
+  /** null = checking on load; false = fully subscribed (hide card); true = show setup card */
+  const [setupNeeded, setSetupNeeded] = useState<boolean | null>(null);
   const [enabling, setEnabling] = useState(false);
   const [testing, setTesting] = useState(false);
 
   const refreshStatus = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await fetch("/api/admin/push", { credentials: "include" });
       const data = res.ok ? await res.json() : null;
 
-      let localOptedIn = false;
-      if (isOneSignalConfigured() && data?.enabled) {
-        const local = await getLocalPushSubscriptionStatus();
-        localOptedIn = local.optedIn;
+      const configured = data?.configured ?? isOneSignalConfigured();
+      const enabled = data?.enabled ?? false;
+      const subscriptionId = data?.subscriptionId ?? null;
+
+      if (!configured || !enabled || !subscriptionId) {
+        setStatus({
+          configured,
+          enabled,
+          subscriptionId,
+          localOptedIn: false,
+        });
+        setSetupNeeded(true);
+        return;
       }
 
+      const local = isOneSignalConfigured()
+        ? await getLocalPushSubscriptionStatus()
+        : { optedIn: false };
+
+      const isFullySubscribed = local.optedIn;
+
       setStatus({
-        configured: data?.configured ?? isOneSignalConfigured(),
-        enabled: data?.enabled ?? false,
-        subscriptionId: data?.subscriptionId ?? null,
-        localOptedIn,
+        configured,
+        enabled,
+        subscriptionId,
+        localOptedIn: local.optedIn,
       });
+      setSetupNeeded(!isFullySubscribed);
     } catch {
       setStatus({
         configured: isOneSignalConfigured(),
@@ -49,8 +65,7 @@ export function PushNotificationsCard() {
         subscriptionId: null,
         localOptedIn: false,
       });
-    } finally {
-      setLoading(false);
+      setSetupNeeded(true);
     }
   }, []);
 
@@ -121,6 +136,10 @@ export function PushNotificationsCard() {
 
   const isEnabledOnDevice = Boolean(status?.enabled && status?.localOptedIn);
 
+  if (setupNeeded === null || setupNeeded === false) {
+    return null;
+  }
+
   return (
     <Card className="mb-10 border-sky-100 bg-gradient-to-br from-sky-50/50 to-white">
       <CardHeader>
@@ -134,12 +153,7 @@ export function PushNotificationsCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Checking notification status…
-          </div>
-        ) : !status?.configured ? (
+        {!status?.configured ? (
           <p className="text-sm text-muted">
             Push notifications are not configured. Add <code className="text-xs">NEXT_PUBLIC_ONESIGNAL_APP_ID</code>{" "}
             and <code className="text-xs">ONESIGNAL_REST_API_KEY</code> to enable them.

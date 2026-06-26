@@ -69,7 +69,12 @@ export async function POST(request: Request) {
 
         await supabase
           .from("profiles")
-          .update({ client_id: client.id, role: "client" })
+          .update({
+            client_id: client.id,
+            role: "client",
+            email_notifications_enabled: true,
+            in_app_notifications_enabled: true,
+          })
           .eq("id", authUser.user.id);
       }
     }

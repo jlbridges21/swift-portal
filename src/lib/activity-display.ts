@@ -32,6 +32,12 @@ export const ACTIVITY_CONFIG: Record<string, ActivityConfig> = {
   quote_changes_requested: { icon: "✏️", label: "Proposal changes requested" },
   asset_reviewed: { icon: "📋", label: "Asset reviewed" },
   sent_for_review: { icon: "👀", label: "Sent for review" },
+  email_sent: { icon: "📨", label: "Email sent" },
+  email_delivered: { icon: "✅", label: "Email delivered" },
+  email_opened: { icon: "👀", label: "Email opened" },
+  email_clicked: { icon: "🔗", label: "Email link clicked" },
+  email_bounced: { icon: "⚠️", label: "Email bounced" },
+  email_complained: { icon: "⚠️", label: "Email marked as spam" },
 };
 
 export function getActivityDisplay(type: string, description: string) {

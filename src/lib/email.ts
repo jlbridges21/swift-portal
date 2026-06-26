@@ -1,7 +1,29 @@
 import { Resend } from "resend";
-import { BRAND } from "@/lib/brand";
+import { buildPremiumEmailHtml } from "@/lib/email-templates";
+import { recordEmailEvent } from "@/lib/email-analytics";
 
 let resend: Resend | null = null;
+
+export interface EmailSendResult {
+  sent: boolean;
+  skipped?: boolean;
+  skipReason?: string;
+  error?: string;
+  messageId?: string;
+  to?: string;
+  subject?: string;
+  at: string;
+}
+
+let lastEmailSendResult: EmailSendResult | null = null;
+
+export function getLastEmailSendResult(): EmailSendResult | null {
+  return lastEmailSendResult;
+}
+
+function recordEmailResult(result: Omit<EmailSendResult, "at">) {
+  lastEmailSendResult = { ...result, at: new Date().toISOString() };
+}
 
 function getResend() {
   if (!process.env.RESEND_API_KEY) return null;
@@ -9,43 +31,21 @@ function getResend() {
   return resend;
 }
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "Swift Portal <portal@swiftaerialmedia.com>";
+export function getResendFromEmail(): string {
+  return process.env.RESEND_FROM_EMAIL || "Swift Portal <portal@swiftaerialmedia.com>";
+}
 
-function emailLayout(content: string) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://portal.swiftaerialmedia.com";
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Swift Portal</title>
-</head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f8fafc;padding:32px 16px;">
-    <tr><td align="center">
-      <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(15,23,42,0.08);">
-        <tr><td style="background:#0F172A;padding:28px 32px;">
-          <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.02em;">${BRAND.name}</p>
-          <p style="margin:6px 0 0;color:#94a3b8;font-size:13px;font-weight:500;">Swift Portal</p>
-        </td></tr>
-        <tr><td style="padding:32px 32px 28px;">
-          ${content}
-        </td></tr>
-        <tr><td style="padding:20px 32px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;">
-          <p style="margin:0 0 8px;color:#64748b;font-size:12px;line-height:1.5;text-align:center;">
-            You received this because you have a project with Swift Aerial Media.
-          </p>
-          <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">
-            <a href="${appUrl}" style="color:#3B82F6;text-decoration:none;font-weight:600;">Open Swift Portal</a>
-            &nbsp;·&nbsp; ${BRAND.name}
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+export function getEmailConfigStatus() {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL;
+  return {
+    resendApiKeyPresent: Boolean(apiKey),
+    resendFromEmailPresent: Boolean(fromEmail),
+    resendWebhookSecretPresent: Boolean(process.env.RESEND_WEBHOOK_SECRET),
+    fromEmail: getResendFromEmail(),
+    environment: process.env.NODE_ENV || "development",
+    appUrl: process.env.NEXT_PUBLIC_APP_URL || null,
+  };
 }
 
 export interface SendEmailOptions {
@@ -53,38 +53,122 @@ export interface SendEmailOptions {
   subject: string;
   title: string;
   body: string;
+  projectName?: string;
+  secondaryInfo?: string;
   ctaLabel?: string;
   ctaUrl?: string;
+  progressStep?: number;
+  emailType?: string;
+  analytics?: {
+    projectId?: string | null;
+    notificationId?: string | null;
+    emailType?: string;
+  };
 }
 
-export async function sendBrandedEmail(options: SendEmailOptions): Promise<boolean> {
+function formatResendError(error: unknown): string {
+  if (!error) return "Unknown Resend error";
+  if (typeof error === "string") return error;
+  if (typeof error === "object") {
+    const e = error as { message?: string; name?: string; statusCode?: number };
+    const parts = [e.name, e.message, e.statusCode ? `(${e.statusCode})` : ""].filter(Boolean);
+    if (parts.length) return parts.join(" ");
+    return JSON.stringify(error);
+  }
+  return String(error);
+}
+
+function buildResendTags(analytics?: SendEmailOptions["analytics"]): { name: string; value: string }[] {
+  const tags: { name: string; value: string }[] = [];
+  if (analytics?.projectId) tags.push({ name: "project_id", value: analytics.projectId });
+  if (analytics?.notificationId) tags.push({ name: "notification_id", value: analytics.notificationId });
+  if (analytics?.emailType) tags.push({ name: "email_type", value: analytics.emailType });
+  return tags;
+}
+
+export async function sendBrandedEmail(options: SendEmailOptions): Promise<EmailSendResult> {
+  const base = {
+    to: options.to,
+    subject: options.subject,
+    sent: false,
+  };
+
   const client = getResend();
   if (!client) {
-    console.log("[email skipped — no RESEND_API_KEY]", options.subject, "→", options.to);
-    return false;
+    const msg = "RESEND_API_KEY is not set — email sending skipped";
+    console.warn("[email]", msg, options.subject, "→", options.to);
+    const result = { ...base, skipped: true, skipReason: "missing_api_key", error: msg };
+    recordEmailResult(result);
+    return { ...result, at: new Date().toISOString() };
   }
 
-  const cta =
-    options.ctaLabel && options.ctaUrl
-      ? `<p style="margin:28px 0 0;"><a href="${options.ctaUrl}" style="display:inline-block;background:#3B82F6;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:600;font-size:15px;">${options.ctaLabel}</a></p>`
-      : "";
+  const html = buildPremiumEmailHtml({
+    title: options.title,
+    body: options.body,
+    projectName: options.projectName,
+    secondaryInfo: options.secondaryInfo,
+    ctaLabel: options.ctaLabel,
+    ctaUrl: options.ctaUrl,
+    progressStep: options.progressStep,
+  });
 
-  const html = emailLayout(`
-    <h1 style="margin:0 0 16px;color:#0F172A;font-size:24px;font-weight:700;line-height:1.3;letter-spacing:-0.02em;">${options.title}</h1>
-    <p style="margin:0;color:#475569;font-size:16px;line-height:1.65;">${options.body}</p>
-    ${cta}
-  `);
+  const tags = buildResendTags(options.analytics);
+  const emailType = options.analytics?.emailType ?? options.emailType ?? "general";
 
   try {
-    await client.emails.send({
-      from: FROM_EMAIL,
+    const { data, error } = await client.emails.send({
+      from: getResendFromEmail(),
       to: options.to,
       subject: options.subject,
       html,
+      tags: tags.length ? tags : undefined,
     });
-    return true;
+
+    if (error) {
+      const errorMessage = formatResendError(error);
+      console.error("[email] Resend API error:", options.subject, "→", options.to, errorMessage, error);
+      const result = { ...base, error: errorMessage };
+      recordEmailResult(result);
+      return { ...result, at: new Date().toISOString() };
+    }
+
+    console.info("[email] sent:", options.subject, "→", options.to, data?.id ?? "");
+
+    void recordEmailEvent({
+      resendEmailId: data?.id,
+      projectId: options.analytics?.projectId,
+      notificationId: options.analytics?.notificationId,
+      recipient: options.to,
+      emailType,
+      eventType: "sent",
+      metadata: { subject: options.subject, ctaLabel: options.ctaLabel },
+      ctaLabel: options.ctaLabel,
+    });
+
+    const result = { ...base, sent: true, messageId: data?.id };
+    recordEmailResult(result);
+    return { ...result, at: new Date().toISOString() };
   } catch (err) {
-    console.error("[email] send failed:", options.subject, "→", options.to, err);
-    return false;
+    const errorMessage = formatResendError(err);
+    console.error("[email] send failed:", options.subject, "→", options.to, errorMessage, err);
+    const result = { ...base, error: errorMessage };
+    recordEmailResult(result);
+    return { ...result, at: new Date().toISOString() };
   }
+}
+
+export async function sendTestEmail(to: string): Promise<EmailSendResult> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://portal.swiftaerialmedia.com";
+  return sendBrandedEmail({
+    to,
+    subject: "Swift Portal Test Email",
+    title: "Email notifications are working",
+    body: "Email notifications are working for Swift Portal. Your clients will receive polished, branded updates for proposals, scheduling, deliverables, and payments.",
+    secondaryInfo: "This is a test message from your Swift Portal admin dashboard.",
+    ctaLabel: "Open Swift Portal",
+    ctaUrl: appUrl,
+    progressStep: 0,
+    emailType: "test",
+    analytics: { emailType: "test" },
+  });
 }
