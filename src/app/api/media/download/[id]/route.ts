@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canDownloadDeliverables } from "@/lib/deliverables";
 import { canAccessProject } from "@/lib/project-access";
+import { logMediaEvent, trackMediaDownload } from "@/lib/media-library";
 import { normalizeStatus } from "@/lib/constants";
 
 export async function GET(
@@ -70,6 +71,22 @@ export async function GET(
     if (downloadError || !fileData) {
       return NextResponse.json({ error: "Failed to download file" }, { status: 500 });
     }
+
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+    void trackMediaDownload({
+      mediaAssetId: id,
+      userId: profile.id,
+      email: profile.email,
+      ipAddress: ip,
+    });
+    void logMediaEvent({
+      mediaAssetId: id,
+      projectId: asset.project_id,
+      userId: profile.id,
+      eventType: "downloaded",
+      description: `Downloaded ${asset.file_name}`,
+      metadata: { by: profile.email },
+    });
 
     const disposition = inline ? "inline" : "attachment";
     const mimeType = asset.mime_type || "application/octet-stream";

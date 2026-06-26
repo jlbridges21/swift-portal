@@ -20,6 +20,7 @@ const adminLinks = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/new-requests", label: "New Requests" },
   { href: "/admin/projects", label: "Projects" },
+  { href: "/admin/media", label: "Media" },
   { href: "/admin/calendar", label: "Calendar" },
   { href: "/admin/clients", label: "Clients" },
 ];

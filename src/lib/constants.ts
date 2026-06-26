@@ -30,6 +30,54 @@ export function normalizeStatus(status: string): ProjectStatus {
   return LEGACY_STATUS_MAP[status] ?? "new_request";
 }
 
+export const PROPERTY_TYPES = [
+  "Residential",
+  "Waterfront",
+  "Land",
+  "Commercial",
+  "Construction Site",
+  "Golf Course",
+  "Resort",
+  "Marina",
+  "HOA / Community",
+  "Roof / Inspection",
+  "Other",
+] as const;
+
+/** DAM filter labels mapped to stored service_type values */
+export const DAM_SERVICE_FILTERS = [
+  { label: "Aerial Photography", value: "Aerial Photography" },
+  { label: "Aerial Video", value: "Aerial Videography" },
+  { label: "Exterior 360 Tour", value: "Exterior 360° Virtual Tour" },
+  { label: "Real Estate Package", value: "Real Estate Media Package" },
+  { label: "Commercial", value: "Commercial Aerial Media" },
+  { label: "Construction", value: "Construction Progress Documentation" },
+  { label: "Drone Mapping", value: "Drone Mapping" },
+  { label: "Land Listing", value: "Land Listing Package" },
+  { label: "Golf Course", value: "Golf Course & Resort Marketing" },
+  { label: "Marina", value: "Marina & Waterfront Marketing" },
+  { label: "HOA", value: "HOA & Community Marketing" },
+  { label: "Roof Inspection", value: "Roof Inspection" },
+  { label: "Property Documentation", value: "Property Documentation" },
+  { label: "Event Coverage", value: "Event Coverage" },
+] as const;
+
+export const DAM_SUGGESTED_TAGS = [
+  "Luxury",
+  "Waterfront",
+  "Sunset",
+  "Twilight",
+  "Construction",
+  "Golf",
+  "Commercial",
+  "Residential",
+  "Drone",
+  "Hero Image",
+  "Social Media",
+  "MLS",
+  "Cover Photo",
+] as const;
+
 export const SERVICE_TYPES = [
   "Aerial Photography",
   "Aerial Videography",

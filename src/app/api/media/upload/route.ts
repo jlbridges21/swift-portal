@@ -8,6 +8,7 @@ import {
 } from "@/lib/media-upload";
 import { logActivity } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
+import { logMediaEvent } from "@/lib/media-library";
 import { notifyProjectClients } from "@/lib/notifications";
 
 export async function POST(request: Request) {
@@ -112,6 +113,15 @@ export async function POST(request: Request) {
   }
 
   if (uploaded.length > 0) {
+    for (const item of uploaded as { id: string }[]) {
+      await logMediaEvent({
+        mediaAssetId: item.id,
+        projectId,
+        userId: auth.profile.id,
+        eventType: "uploaded",
+        description: `Uploaded ${mediaType}`,
+      });
+    }
     const count = uploaded.length;
     const activityType =
       mediaType === "photo"

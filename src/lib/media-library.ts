@@ -1,0 +1,487 @@
+import { createServiceClient } from "@/lib/supabase/server";
+import type { MediaAsset, Tour } from "@/lib/types";
+
+export type LibraryAssetKind = "photo" | "video" | "document" | "tour";
+
+export interface LibraryAsset {
+  id: string;
+  kind: LibraryAssetKind;
+  title: string;
+  file_name: string | null;
+  thumbnail_url: string | null;
+  project_id: string;
+  project_name: string;
+  project_status: string;
+  service_type: string;
+  property_address: string;
+  property_type: string | null;
+  client_id: string | null;
+  client_name: string;
+  client_company: string | null;
+  property_id: string | null;
+  media_source: string;
+  file_size: number | null;
+  width: number | null;
+  height: number | null;
+  duration_seconds: number | null;
+  download_count: number;
+  is_favorite: boolean;
+  tags: string[];
+  description: string | null;
+  alt_text: string | null;
+  notes: string | null;
+  created_at: string;
+  captured_at: string | null;
+  is_cover: boolean;
+  mime_type: string | null;
+  youtube_url: string | null;
+  embed_url: string | null;
+  kuula_url: string | null;
+  visibility: string | null;
+  downloadable: boolean | null;
+  camera_model: string | null;
+  orientation: string | null;
+  version: number;
+}
+
+export interface LibraryFilters {
+  q?: string;
+  type?: string;
+  service?: string;
+  propertyType?: string;
+  projectStatus?: string;
+  source?: string;
+  datePreset?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  clientId?: string;
+  propertyId?: string;
+  favoritesOnly?: boolean;
+  page?: number;
+  limit?: number;
+}
+
+export interface LibraryResult {
+  assets: LibraryAsset[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export interface MediaAssetEvent {
+  id: string;
+  event_type: string;
+  description: string | null;
+  created_at: string;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface MediaDownloadRecord {
+  id: string;
+  downloaded_by_email: string | null;
+  created_at: string;
+}
+
+const DEFAULT_LIMIT = 48;
+
+export async function logMediaEvent(options: {
+  mediaAssetId: string;
+  projectId?: string | null;
+  userId?: string | null;
+  eventType: string;
+  description?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    const supabase = await createServiceClient();
+    await supabase.from("media_asset_events").insert({
+      media_asset_id: options.mediaAssetId,
+      project_id: options.projectId ?? null,
+      user_id: options.userId ?? null,
+      event_type: options.eventType,
+      description: options.description ?? null,
+      metadata: options.metadata ?? null,
+    });
+  } catch {
+    // non-blocking
+  }
+}
+
+export async function trackMediaDownload(options: {
+  mediaAssetId: string;
+  userId?: string | null;
+  email?: string | null;
+  ipAddress?: string | null;
+}) {
+  try {
+    const supabase = await createServiceClient();
+    await supabase.from("media_downloads").insert({
+      media_asset_id: options.mediaAssetId,
+      user_id: options.userId ?? null,
+      downloaded_by_email: options.email ?? null,
+      ip_address: options.ipAddress ?? null,
+    });
+    const { data } = await supabase
+      .from("media_assets")
+      .select("download_count")
+      .eq("id", options.mediaAssetId)
+      .single();
+    await supabase
+      .from("media_assets")
+      .update({
+        download_count: (data?.download_count ?? 0) + 1,
+        last_downloaded_at: new Date().toISOString(),
+      })
+      .eq("id", options.mediaAssetId);
+  } catch {
+    // non-blocking
+  }
+}
+
+function dateRangeFromPreset(preset?: string): { from?: string; to?: string } {
+  const now = new Date();
+  const to = now.toISOString();
+  if (!preset || preset === "all") return {};
+  if (preset === "today") {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    return { from: start.toISOString(), to };
+  }
+  if (preset === "7d") {
+    const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    return { from: start.toISOString(), to };
+  }
+  if (preset === "30d") {
+    const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return { from: start.toISOString(), to };
+  }
+  if (preset === "year") {
+    const start = new Date(now.getFullYear(), 0, 1);
+    return { from: start.toISOString(), to };
+  }
+  return {};
+}
+
+function matchesProjectStatus(status: string, filter?: string): boolean {
+  if (!filter || filter === "all") return true;
+  if (filter === "active") return status !== "delivered";
+  if (filter === "awaiting_payment") return status === "awaiting_payment";
+  if (filter === "delivered") return status === "delivered";
+  return true;
+}
+
+function matchesSearch(asset: LibraryAsset, q: string): boolean {
+  const hay = [
+    asset.title,
+    asset.file_name,
+    asset.description,
+    asset.notes,
+    asset.property_address,
+    asset.client_name,
+    asset.client_company,
+    asset.project_name,
+    asset.service_type,
+    ...asset.tags,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q.toLowerCase());
+}
+
+function mapMediaRow(
+  row: MediaAsset & {
+    projects: {
+      id: string;
+      project_name: string;
+      service_type: string;
+      status: string;
+      property_address: string;
+      cover_image_id: string | null;
+      client_id: string;
+      property_id: string | null;
+      clients: { id: string; name: string; full_name: string | null; company: string | null } | null;
+      properties: { property_type: string | null } | null;
+    };
+    media_asset_tags?: { tag: string }[];
+  }
+): LibraryAsset {
+  const project = row.projects;
+  const client = project.clients;
+  return {
+    id: row.id,
+    kind: row.media_type as LibraryAssetKind,
+    title: row.title || row.file_name,
+    file_name: row.file_name,
+    thumbnail_url: row.thumbnail_url ?? null,
+    project_id: row.project_id,
+    project_name: project.project_name,
+    project_status: project.status,
+    service_type: project.service_type,
+    property_address: project.property_address,
+    property_type: project.properties?.property_type ?? null,
+    client_id: row.client_id ?? project.client_id,
+    client_name: client?.full_name || client?.name || "—",
+    client_company: client?.company ?? null,
+    property_id: row.property_id ?? project.property_id,
+    media_source: row.media_source,
+    file_size: row.file_size,
+    width: (row as MediaAsset & { width?: number }).width ?? null,
+    height: (row as MediaAsset & { height?: number }).height ?? null,
+    duration_seconds: (row as MediaAsset & { duration_seconds?: number }).duration_seconds ?? null,
+    download_count: (row as MediaAsset & { download_count?: number }).download_count ?? 0,
+    is_favorite: (row as MediaAsset & { is_favorite?: boolean }).is_favorite ?? false,
+    tags: (row.media_asset_tags ?? []).map((t) => t.tag),
+    description: (row as MediaAsset & { description?: string }).description ?? null,
+    alt_text: (row as MediaAsset & { alt_text?: string }).alt_text ?? null,
+    notes: (row as MediaAsset & { notes?: string }).notes ?? null,
+    created_at: row.created_at,
+    captured_at: (row as MediaAsset & { captured_at?: string }).captured_at ?? null,
+    is_cover: project.cover_image_id === row.id,
+    mime_type: row.mime_type,
+    youtube_url: row.youtube_url,
+    embed_url: row.embed_url,
+    kuula_url: null,
+    visibility: row.visibility ?? null,
+    downloadable: row.downloadable ?? null,
+    camera_model: (row as MediaAsset & { camera_model?: string }).camera_model ?? null,
+    orientation: (row as MediaAsset & { orientation?: string }).orientation ?? null,
+    version: (row as MediaAsset & { version?: number }).version ?? 1,
+  };
+}
+
+function mapTourRow(
+  row: Tour & {
+    is_favorite?: boolean;
+    description?: string | null;
+    download_count?: number;
+    projects: {
+      id: string;
+      project_name: string;
+      service_type: string;
+      status: string;
+      property_address: string;
+      client_id: string;
+      property_id: string | null;
+      clients: { id: string; name: string; full_name: string | null; company: string | null } | null;
+      properties: { property_type: string | null } | null;
+    };
+  }
+): LibraryAsset {
+  const project = row.projects;
+  const client = project.clients;
+  return {
+    id: row.id,
+    kind: "tour",
+    title: row.tour_name,
+    file_name: null,
+    thumbnail_url: row.thumbnail_url,
+    project_id: row.project_id,
+    project_name: project.project_name,
+    project_status: project.status,
+    service_type: project.service_type,
+    property_address: project.property_address,
+    property_type: project.properties?.property_type ?? null,
+    client_id: project.client_id,
+    client_name: client?.full_name || client?.name || "—",
+    client_company: client?.company ?? null,
+    property_id: project.property_id,
+    media_source: "kuula",
+    file_size: null,
+    width: null,
+    height: null,
+    duration_seconds: null,
+    download_count: row.download_count ?? 0,
+    is_favorite: row.is_favorite ?? false,
+    tags: [],
+    description: row.description ?? null,
+    alt_text: null,
+    notes: row.notes,
+    created_at: row.created_at,
+    captured_at: null,
+    is_cover: false,
+    mime_type: null,
+    youtube_url: null,
+    embed_url: row.embed_code,
+    kuula_url: row.kuula_url,
+    visibility: null,
+    downloadable: null,
+    camera_model: null,
+    orientation: null,
+    version: 1,
+  };
+}
+
+export async function queryMediaLibrary(filters: LibraryFilters): Promise<LibraryResult> {
+  const supabase = await createServiceClient();
+  const page = Math.max(1, filters.page ?? 1);
+  const limit = Math.min(100, filters.limit ?? DEFAULT_LIMIT);
+  const includeTours = !filters.type || filters.type === "tour";
+  const includeMedia = !filters.type || filters.type !== "tour";
+
+  const presetRange = dateRangeFromPreset(filters.datePreset);
+  const from = filters.dateFrom ?? presetRange.from;
+  const to = filters.dateTo ?? presetRange.to;
+
+  const projectSelect = `
+    id, project_name, service_type, status, property_address, cover_image_id, client_id, property_id,
+    clients(id, name, full_name, company),
+    properties(property_type)
+  `;
+
+  let mediaRows: LibraryAsset[] = [];
+  let tourRows: LibraryAsset[] = [];
+
+  if (includeMedia) {
+    let query = supabase
+      .from("media_assets")
+      .select(`*, projects!inner(${projectSelect}), media_asset_tags(tag)`)
+      .order("created_at", { ascending: false });
+
+    if (filters.type && filters.type !== "tour") {
+      query = query.eq("media_type", filters.type);
+    }
+    if (filters.source && filters.source !== "kuula") {
+      query = query.eq("media_source", filters.source);
+    }
+    if (filters.source === "kuula") {
+      query = query.eq("id", "00000000-0000-0000-0000-000000000000");
+    }
+    if (filters.clientId) query = query.eq("client_id", filters.clientId);
+    if (filters.propertyId) query = query.eq("property_id", filters.propertyId);
+    if (filters.favoritesOnly) query = query.eq("is_favorite", true);
+    if (from) query = query.gte("created_at", from);
+    if (to) query = query.lte("created_at", to);
+
+    const { data } = await query.limit(500);
+    mediaRows = (data ?? []).map((row) => mapMediaRow(row as Parameters<typeof mapMediaRow>[0]));
+  }
+
+  if (includeTours && (!filters.source || filters.source === "kuula")) {
+    let tourQuery = supabase
+      .from("tours")
+      .select(`*, projects!inner(${projectSelect})`)
+      .order("created_at", { ascending: false });
+
+    if (filters.favoritesOnly) tourQuery = tourQuery.eq("is_favorite", true);
+    if (from) tourQuery = tourQuery.gte("created_at", from);
+    if (to) tourQuery = tourQuery.lte("created_at", to);
+
+    const { data: tours } = await tourQuery.limit(200);
+    tourRows = (tours ?? []).map((row) => mapTourRow(row as Parameters<typeof mapTourRow>[0]));
+  }
+
+  let combined = [...mediaRows, ...tourRows];
+
+  if (filters.service) {
+    combined = combined.filter((a) => a.service_type === filters.service);
+  }
+  if (filters.propertyType) {
+    combined = combined.filter((a) => a.property_type === filters.propertyType);
+  }
+  if (filters.projectStatus) {
+    combined = combined.filter((a) => matchesProjectStatus(a.project_status, filters.projectStatus));
+  }
+  if (filters.clientId) {
+    combined = combined.filter((a) => a.client_id === filters.clientId);
+  }
+  if (filters.propertyId) {
+    combined = combined.filter((a) => a.property_id === filters.propertyId);
+  }
+  if (filters.q?.trim()) {
+    combined = combined.filter((a) => matchesSearch(a, filters.q!.trim()));
+  }
+
+  combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const total = combined.length;
+  const offset = (page - 1) * limit;
+  const assets = combined.slice(offset, offset + limit);
+
+  return {
+    assets,
+    total,
+    page,
+    limit,
+    hasMore: offset + limit < total,
+  };
+}
+
+export async function getMediaAssetDetail(assetId: string, kind: LibraryAssetKind) {
+  const supabase = await createServiceClient();
+  const projectSelect = `
+    id, project_name, service_type, status, property_address, cover_image_id, client_id, property_id,
+    clients(id, name, full_name, company, email),
+    properties(id, property_type, address)
+  `;
+
+  if (kind === "tour") {
+    const { data } = await supabase
+      .from("tours")
+      .select(`*, projects!inner(${projectSelect})`)
+      .eq("id", assetId)
+      .maybeSingle();
+    if (!data) return null;
+    return mapTourRow(data as Parameters<typeof mapTourRow>[0]);
+  }
+
+  const { data } = await supabase
+    .from("media_assets")
+    .select(`*, projects!inner(${projectSelect}), media_asset_tags(tag)`)
+    .eq("id", assetId)
+    .maybeSingle();
+
+  if (!data) return null;
+  return mapMediaRow(data as Parameters<typeof mapMediaRow>[0]);
+}
+
+export async function getMediaAssetEvents(assetId: string): Promise<MediaAssetEvent[]> {
+  const supabase = await createServiceClient();
+  const { data } = await supabase
+    .from("media_asset_events")
+    .select("id, event_type, description, created_at, metadata")
+    .eq("media_asset_id", assetId)
+    .order("created_at", { ascending: false })
+    .limit(30);
+  return (data ?? []) as MediaAssetEvent[];
+}
+
+export async function getMediaDownloadHistory(assetId: string): Promise<MediaDownloadRecord[]> {
+  const supabase = await createServiceClient();
+  const { data } = await supabase
+    .from("media_downloads")
+    .select("id, downloaded_by_email, created_at")
+    .eq("media_asset_id", assetId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  return (data ?? []) as MediaDownloadRecord[];
+}
+
+export async function getRelatedAssets(asset: LibraryAsset, limit = 6): Promise<LibraryAsset[]> {
+  const result = await queryMediaLibrary({
+    propertyId: asset.property_id ?? undefined,
+    limit: limit + 1,
+  });
+  return result.assets.filter((a) => a.id !== asset.id).slice(0, limit);
+}
+
+export async function setMediaTags(assetId: string, tags: string[]) {
+  const supabase = await createServiceClient();
+  const normalized = [...new Set(tags.map((t) => t.trim().toLowerCase()).filter(Boolean))];
+  await supabase.from("media_asset_tags").delete().eq("media_asset_id", assetId);
+  if (normalized.length) {
+    await supabase.from("media_asset_tags").insert(
+      normalized.map((tag) => ({ media_asset_id: assetId, tag }))
+    );
+  }
+}
+
+export async function getLibraryFilterOptions() {
+  const supabase = await createServiceClient();
+  const [{ data: clients }, { data: properties }] = await Promise.all([
+    supabase.from("clients").select("id, name, full_name, company").order("name"),
+    supabase.from("properties").select("id, address, nickname").order("address").limit(200),
+  ]);
+  return { clients: clients ?? [], properties: properties ?? [] };
+}

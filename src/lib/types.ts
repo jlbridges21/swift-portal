@@ -186,11 +186,24 @@ export interface MediaAsset {
   display_order: number;
   media_source: MediaSource;
   title?: string | null;
+  description?: string | null;
+  alt_text?: string | null;
+  notes?: string | null;
   thumbnail_url?: string | null;
   downloadable?: boolean;
   visibility?: MediaVisibility;
   youtube_url: string | null;
   embed_url: string | null;
+  captured_at?: string | null;
+  camera_model?: string | null;
+  orientation?: string | null;
+  width?: number | null;
+  height?: number | null;
+  duration_seconds?: number | null;
+  is_favorite?: boolean;
+  download_count?: number;
+  last_downloaded_at?: string | null;
+  version?: number;
   created_at: string;
   updated_at?: string;
 }
@@ -204,7 +217,11 @@ export interface Tour {
   embed_code: string | null;
   display_order: number;
   notes: string | null;
+  description?: string | null;
+  is_favorite?: boolean;
+  download_count?: number;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Payment {
