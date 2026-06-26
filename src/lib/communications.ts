@@ -36,7 +36,10 @@ export function isEmailAnalyticsActivity(type: string): boolean {
 }
 
 export function filterClientVisibleActivities(activities: ActivityLog[]): ActivityLog[] {
-  return activities.filter((activity) => !isEmailAnalyticsActivity(activity.activity_type));
+  return activities.filter((activity) => {
+    if (activity.visibility === "admin") return false;
+    return !isEmailAnalyticsActivity(activity.activity_type);
+  });
 }
 
 export function filterCommunicationActivities(activities: ActivityLog[]): ActivityLog[] {

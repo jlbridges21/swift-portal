@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { logProjectActivity } from "@/lib/activity";
+import { logCommunication } from "@/lib/communication-records";
 import { EMAIL_TYPE_LABELS } from "@/lib/email-templates";
 import type { ActivityType } from "@/lib/types";
 
@@ -111,6 +112,7 @@ export async function recordEmailEvent(params: {
         getActivityDescription(params.emailType, params.eventType, params.ctaLabel),
         {
           projectId: params.projectId,
+          visibility: "admin",
           metadata: {
             resendEmailId: params.resendEmailId,
             emailType: params.emailType,
@@ -122,6 +124,32 @@ export async function recordEmailEvent(params: {
         }
       );
     }
+
+    const commStatusMap: Record<EmailLifecycleEvent, import("@/lib/communication-records").CommunicationStatus> = {
+      sent: "sent",
+      delivered: "delivered",
+      opened: "opened",
+      clicked: "clicked",
+      bounced: "bounced",
+      complained: "failed",
+    };
+
+    await logCommunication({
+      projectId: params.projectId,
+      commType: "email",
+      title: params.emailType,
+      message: params.recipient,
+      status: commStatusMap[params.eventType],
+      provider: "resend",
+      providerEventId: params.resendEmailId ?? null,
+      metadata: {
+        notificationId: params.notificationId,
+        emailType: params.emailType,
+        eventType: params.eventType,
+        ...params.metadata,
+      },
+      createdAt: occurredAt,
+    });
   } catch (error) {
     console.error("[email-analytics] unexpected error:", error);
   }

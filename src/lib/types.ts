@@ -24,8 +24,31 @@ export type ProjectStatus =
   | "awaiting_payment"
   | "delivered";
 
-export type PaymentStatus = "pending" | "paid" | "cancelled";
+export type PaymentStatus =
+  | "draft"
+  | "sent"
+  | "pending"
+  | "paid"
+  | "failed"
+  | "expired"
+  | "cancelled";
 export type MediaType = "photo" | "video" | "document";
+export type MediaSource = "upload" | "youtube" | "kuula" | "external";
+export type MediaVisibility = "client" | "admin" | "both";
+export type ActivityVisibility = "admin" | "client" | "both";
+
+export type PropertyType =
+  | "Residential"
+  | "Waterfront"
+  | "Land"
+  | "Commercial"
+  | "Construction Site"
+  | "Golf Course"
+  | "Resort"
+  | "Marina"
+  | "HOA / Community"
+  | "Roof / Inspection"
+  | "Other";
 export type RevisionStatus = "pending" | "in_progress" | "completed";
 
 export type ActivityType =
@@ -82,11 +105,32 @@ export interface Profile {
 export interface Client {
   id: string;
   name: string;
+  full_name?: string | null;
   email: string;
   phone: string | null;
   company: string | null;
   notes: string | null;
   user_id: string | null;
+  referral_source?: string | null;
+  last_login_at?: string | null;
+  last_activity_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Property {
+  id: string;
+  client_id: string | null;
+  address: string;
+  normalized_address: string;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  property_type: PropertyType;
+  nickname: string | null;
+  notes: string | null;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -109,6 +153,7 @@ export interface Lead {
 export interface Project {
   id: string;
   client_id: string;
+  property_id?: string | null;
   property_address: string;
   project_name: string;
   service_type: string;
@@ -123,21 +168,31 @@ export interface Project {
   created_at: string;
   updated_at: string;
   clients?: Client;
+  properties?: Property;
 }
 
 export interface MediaAsset {
   id: string;
   project_id: string;
+  property_id?: string | null;
+  client_id?: string | null;
   file_name: string;
   file_path: string;
+  file_url?: string | null;
+  storage_path?: string | null;
   file_size: number | null;
   mime_type: string;
   media_type: MediaType;
   display_order: number;
-  media_source: "upload" | "youtube";
+  media_source: MediaSource;
+  title?: string | null;
+  thumbnail_url?: string | null;
+  downloadable?: boolean;
+  visibility?: MediaVisibility;
   youtube_url: string | null;
   embed_url: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Tour {
@@ -156,13 +211,17 @@ export interface Payment {
   id: string;
   project_id: string;
   client_id: string;
+  quote_id?: string | null;
   amount: number;
   description: string;
   due_date: string | null;
   status: PaymentStatus;
   stripe_payment_link_id: string | null;
   stripe_payment_link_url: string | null;
+  payment_link_url?: string | null;
   stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id?: string | null;
+  stripe_invoice_id?: string | null;
   stripe_receipt_url: string | null;
   paid_at: string | null;
   created_at: string;
@@ -262,9 +321,29 @@ export interface ActivityLog {
   id: string;
   activity_type: ActivityType;
   description: string;
+  title?: string | null;
   user_id: string | null;
   project_id: string | null;
+  client_id?: string | null;
+  property_id?: string | null;
   lead_id: string | null;
+  visibility?: ActivityVisibility;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface Communication {
+  id: string;
+  project_id: string | null;
+  client_id: string | null;
+  user_id: string | null;
+  comm_type: string;
+  direction: string;
+  title: string | null;
+  message: string | null;
+  status: string;
+  provider: string;
+  provider_event_id: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
 }

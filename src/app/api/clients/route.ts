@@ -91,10 +91,16 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const { id, ...updates } = body;
 
+    const allowed = ["name", "email", "phone", "company", "notes", "full_name", "referral_source"];
+    const sanitized: Record<string, unknown> = {};
+    for (const key of allowed) {
+      if (key in updates) sanitized[key] = updates[key];
+    }
+
     const supabase = await createServiceClient();
     const { data, error } = await supabase
       .from("clients")
-      .update(updates)
+      .update(sanitized)
       .eq("id", id)
       .select()
       .single();

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
+import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 
@@ -133,6 +134,10 @@ export async function PATCH(request: Request) {
   if (action === "accept") {
     if (!proposal) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    if (proposal.status === "confirmed") {
+      return NextResponse.json({ success: true, status: "confirmed", alreadyConfirmed: true });
+    }
+
     await serviceClient
       .from("shoot_proposals")
       .update({ status: "confirmed" })
@@ -160,6 +165,7 @@ export async function PATCH(request: Request) {
       link: `/dashboard/projects/${proposal.project_id}#scheduling`,
       clientEventKey: "shoot_scheduled",
       skipIfSame: true,
+      idempotencyKey: idempotencyKey("shoot", id, "accept"),
     });
 
     await serviceClient
@@ -337,6 +343,10 @@ export async function PATCH(request: Request) {
   if (action === "decline") {
     if (!proposal) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    if (proposal.status === "declined") {
+      return NextResponse.json({ success: true, alreadyDeclined: true });
+    }
+
     await supabase.from("shoot_proposals").update({ status: "declined" }).eq("id", id);
 
     const dateStr = new Date(proposal.proposed_at).toLocaleString();
@@ -350,6 +360,7 @@ export async function PATCH(request: Request) {
       {
         projectId: proposal.project_id,
         userId: profile.id,
+        idempotencyKey: idempotencyKey("shoot", id, withdrawn ? "withdrawn" : "decline"),
         metadata: { proposed_by: proposal.proposed_by, declined_by: isAdmin ? "admin" : "client" },
       }
     );

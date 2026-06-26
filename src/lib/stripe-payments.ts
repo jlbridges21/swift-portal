@@ -36,6 +36,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
 
   await logProjectActivity("payment_received", `Payment received: ${amountStr}`, {
     projectId: payment.project_id,
+    idempotencyKey: `payment:${payment.id}:received`,
     metadata: { paymentId: payment.id, source },
   });
 

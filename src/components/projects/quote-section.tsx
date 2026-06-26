@@ -283,25 +283,31 @@ export function QuoteSection({
   }
 
   async function quoteAction(id: string, action: string, feedback?: string) {
+    if (action === "approve" && approving) return;
     if (action === "approve") setApproving(true);
-    const res = await fetch("/api/quotes", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ id, action, feedback }),
-    });
-    if (res.ok) {
-      const updated = await res.json();
-      setQuotes((prev) => prev.map((q) => (q.id === id ? updated : q)));
-      if (action === "approve") {
-        onStatusChange?.("proposal_approved");
-        toast.success("Proposal approved!");
+    try {
+      const res = await fetch("/api/quotes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id, action, feedback }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setQuotes((prev) => prev.map((q) => (q.id === id ? updated : q)));
+        if (action === "approve") {
+          onStatusChange?.("proposal_approved");
+          toast.success("Proposal approved!");
+        } else {
+          toast.success("Feedback sent");
+        }
+        router.refresh();
       } else {
-        toast.success("Feedback sent");
+        toast.error("Action failed");
       }
-      router.refresh();
+    } finally {
+      setApproving(false);
     }
-    setApproving(false);
   }
 
   function renderAdminActions(quote: ProjectQuote) {
@@ -362,7 +368,7 @@ export function QuoteSection({
       return (
         <>
           <Button variant="accent" disabled={approving} onClick={() => quoteAction(quote.id, "approve")}>
-            <Check className="h-4 w-4" /> Approve Proposal
+            <Check className="h-4 w-4" /> {approving ? "Approving..." : "Approve Proposal"}
           </Button>
           {allowClientProposalChanges && (
             <Button
@@ -495,6 +501,7 @@ export function QuoteSection({
         )}
 
         {activeDisplay && !showForm && (
+          <div className="mx-auto w-full max-w-2xl lg:max-w-xl">
           <ProposalCard
             quote={activeDisplay.quote}
             kind={activeDisplay.kind}
@@ -507,6 +514,7 @@ export function QuoteSection({
                   : null
             }
           />
+          </div>
         )}
 
         {!activeDisplay && !showForm && (

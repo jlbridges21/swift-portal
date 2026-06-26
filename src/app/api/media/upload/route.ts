@@ -70,11 +70,13 @@ export async function POST(request: Request) {
         project_id: projectId,
         file_name: file.name,
         file_path: filePath,
+        storage_path: filePath,
         file_size: file.size,
         mime_type: validation.mimeType,
         media_type: mediaType,
         media_source: "upload",
         display_order: nextOrder++,
+        title: file.name,
       })
       .select()
       .single();
@@ -84,16 +86,26 @@ export async function POST(request: Request) {
       continue;
     }
 
+    const { data: projectRow } = await supabase
+      .from("projects")
+      .select("client_id, property_id, cover_image_id")
+      .eq("id", projectId)
+      .single();
+
+    if (projectRow?.client_id || projectRow?.property_id) {
+      await supabase
+        .from("media_assets")
+        .update({
+          client_id: projectRow.client_id,
+          property_id: projectRow.property_id,
+        })
+        .eq("id", asset.id);
+    }
+
     uploaded.push(asset);
 
     if (mediaType === "photo") {
-      const { data: project } = await supabase
-        .from("projects")
-        .select("cover_image_id")
-        .eq("id", projectId)
-        .single();
-
-      if (!project?.cover_image_id) {
+      if (!projectRow?.cover_image_id) {
         await supabase.from("projects").update({ cover_image_id: asset.id }).eq("id", projectId);
       }
     }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
+import { idempotencyKey } from "@/lib/idempotency";
 import { notifyAdmins } from "@/lib/notifications";
 
 export async function GET(request: Request) {
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
   await logProjectActivity("revision_requested", "Revision requested", {
     projectId: body.project_id,
     userId: profile.id,
+    idempotencyKey: idempotencyKey("revision", data.id, "requested"),
     metadata: { revisionId: data.id },
   });
 

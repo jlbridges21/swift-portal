@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
+import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus, setProjectStatusForward } from "@/lib/status-automation";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
@@ -124,6 +125,9 @@ export async function PATCH(request: Request) {
         { status: 400 }
       );
     }
+    if (quote.status === "sent" || quote.status === "approved") {
+      return NextResponse.json(quote);
+    }
     const service = await createServiceClient();
     const { data: updated } = await service
       .from("project_quotes")
@@ -144,6 +148,7 @@ export async function PATCH(request: Request) {
     await logProjectActivity("official_proposal_sent", "📄 Official Proposal sent", {
       projectId: quote.project_id,
       userId: profile.id,
+      idempotencyKey: idempotencyKey("quote", id, "send"),
       metadata: { quoteId: id },
     });
 
@@ -262,6 +267,9 @@ export async function PATCH(request: Request) {
         { status: 400 }
       );
     }
+    if (quote.status === "approved") {
+      return NextResponse.json(quote);
+    }
     const service = await createServiceClient();
     const { data: updated } = await service
       .from("project_quotes")
@@ -276,11 +284,7 @@ export async function PATCH(request: Request) {
       userId: profile.id,
       activityType: "quote_approved",
       activityDescription: "✅ Proposal approved",
-    });
-
-    await logProjectActivity("quote_approved", "✅ Proposal approved", {
-      projectId: quote.project_id,
-      userId: profile.id,
+      idempotencyKey: idempotencyKey("quote", id, "approve"),
     });
 
     await notifyAdmins({
@@ -302,6 +306,9 @@ export async function PATCH(request: Request) {
         { status: 400 }
       );
     }
+    if (quote.status === "changes_requested") {
+      return NextResponse.json(quote);
+    }
     const service = await createServiceClient();
     const { data: updated } = await service
       .from("project_quotes")
@@ -313,6 +320,7 @@ export async function PATCH(request: Request) {
     await logProjectActivity("quote_changes_requested", `Client requested quote changes: ${feedback || "No details"}`, {
       projectId: quote.project_id,
       userId: profile.id,
+      idempotencyKey: idempotencyKey("quote", id, "changes_requested"),
       metadata: { feedback, quoteId: id },
     });
 

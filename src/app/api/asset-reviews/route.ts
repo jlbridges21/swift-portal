@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
+import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins } from "@/lib/notifications";
 
@@ -94,6 +95,7 @@ export async function POST(request: Request) {
   await logProjectActivity("asset_reviewed", `Deliverable ${actionLabel}`, {
     projectId: project_id,
     userId: profile.id,
+    idempotencyKey: idempotencyKey("asset_review", project_id, asset_type, asset_id, status),
     metadata: { asset_type, asset_id, status },
   });
 
@@ -117,26 +119,35 @@ export async function POST(request: Request) {
   } else {
     const allApproved = await checkAllApproved(project_id);
     if (allApproved) {
-      await setProjectStatus({
-        projectId: project_id,
-        status: "awaiting_payment",
-        userId: profile.id,
-        activityType: "deliverables_approved",
-        activityDescription: "All deliverables approved",
-        notifyAdmin: true,
-        notifyClient: true,
-        clientTitle: "Final Payment",
-        clientBody: "Thank you! Complete your final payment to unlock all downloads.",
-        link: `/dashboard/projects/${project_id}#payments`,
-      });
-
-      await supabase
+      const { data: project } = await supabase
         .from("projects")
-        .update({
-          deliverables_approved_at: new Date().toISOString(),
-          deliverables_approved_by: profile.id,
-        })
-        .eq("id", project_id);
+        .select("deliverables_approved_at")
+        .eq("id", project_id)
+        .single();
+
+      if (!project?.deliverables_approved_at) {
+        await setProjectStatus({
+          projectId: project_id,
+          status: "awaiting_payment",
+          userId: profile.id,
+          activityType: "deliverables_approved",
+          activityDescription: "All deliverables approved",
+          notifyAdmin: true,
+          notifyClient: true,
+          clientTitle: "Final Payment",
+          clientBody: "Thank you! Complete your final payment to unlock all downloads.",
+          link: `/dashboard/projects/${project_id}#payments`,
+          idempotencyKey: idempotencyKey("project", project_id, "deliverables_approved"),
+        });
+
+        await supabase
+          .from("projects")
+          .update({
+            deliverables_approved_at: new Date().toISOString(),
+            deliverables_approved_by: profile.id,
+          })
+          .eq("id", project_id);
+      }
     }
   }
 
@@ -156,6 +167,17 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
+  const supabase = await createServiceClient();
+  const { data: project } = await supabase
+    .from("projects")
+    .select("status")
+    .eq("id", project_id)
+    .single();
+
+  if (project?.status === "ready_for_review") {
+    return NextResponse.json({ success: true, alreadySent: true });
+  }
+
   await setProjectStatus({
     projectId: project_id,
     status: "ready_for_review",
@@ -166,9 +188,9 @@ export async function PATCH(request: Request) {
     clientTitle: "Review Your Deliverables",
     clientBody: "Preview your photos, videos, and tours. Approve each item when you're satisfied.",
     link: `/dashboard/projects/${project_id}#deliverables`,
+    idempotencyKey: idempotencyKey("project", project_id, "send_for_review"),
   });
 
-  const supabase = await createServiceClient();
   await supabase
     .from("projects")
     .update({ deliverables_approved_at: null, deliverables_approved_by: null })

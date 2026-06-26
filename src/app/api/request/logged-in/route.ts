@@ -4,6 +4,9 @@ import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins } from "@/lib/notifications";
 import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
+import { defaultProjectTitle } from "@/lib/address";
+import { linkProjectToProperty } from "@/lib/properties";
+import { touchClientActivity } from "@/lib/clients-data";
 
 export async function POST(request: Request) {
   const profile = await getProfile();
@@ -23,7 +26,7 @@ export async function POST(request: Request) {
 
   const { data: client } = await supabase.from("clients").select("name, email").eq("id", clientId).single();
 
-  const projectName = `${property_address.split(",")[0]} — ${service_requested}`;
+  const projectName = defaultProjectTitle(property_address, service_requested);
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
@@ -42,6 +45,9 @@ export async function POST(request: Request) {
   if (projectError) {
     return NextResponse.json({ error: projectError.message }, { status: 500 });
   }
+
+  await linkProjectToProperty(project.id, clientId, property_address);
+  await touchClientActivity(clientId);
 
   await supabase.from("project_clients").upsert(
     { project_id: project.id, client_id: clientId, is_primary: true },

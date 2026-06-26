@@ -77,6 +77,7 @@ export function DeliverableReview({
   const [reviews, setReviews] = useState(initialReviews);
   const [feedbackMap, setFeedbackMap] = useState<Record<string, string>>({});
   const [expandedFeedback, setExpandedFeedback] = useState<string | null>(null);
+  const [reviewingKey, setReviewingKey] = useState<string | null>(null);
 
   const allItems = [
     ...photos.map((p) => ({
@@ -117,27 +118,35 @@ export function DeliverableReview({
 
   async function submitReview(assetType: string, assetId: string, status: "approved" | "rejected") {
     const key = `${assetType}:${assetId}`;
-    const res = await fetch("/api/asset-reviews", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        project_id: projectId,
-        asset_type: assetType,
-        asset_id: assetId,
-        status,
-        feedback: feedbackMap[key] || null,
-      }),
-    });
-    if (res.ok) {
-      const updated = await res.json();
-      setReviews((prev) => {
-        const filtered = prev.filter((r) => !(r.asset_type === assetType && r.asset_id === assetId));
-        return [...filtered, updated];
+    if (reviewingKey) return;
+    setReviewingKey(key);
+    try {
+      const res = await fetch("/api/asset-reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          project_id: projectId,
+          asset_type: assetType,
+          asset_id: assetId,
+          status,
+          feedback: feedbackMap[key] || null,
+        }),
       });
-      toast.success(status === "approved" ? "Approved" : "Feedback submitted");
-      setExpandedFeedback(null);
-      router.refresh();
+      if (res.ok) {
+        const updated = await res.json();
+        setReviews((prev) => {
+          const filtered = prev.filter((r) => !(r.asset_type === assetType && r.asset_id === assetId));
+          return [...filtered, updated];
+        });
+        toast.success(status === "approved" ? "Approved" : "Feedback submitted");
+        setExpandedFeedback(null);
+        router.refresh();
+      } else {
+        toast.error("Failed to submit review");
+      }
+    } finally {
+      setReviewingKey(null);
     }
   }
 
@@ -186,8 +195,13 @@ export function DeliverableReview({
                   {isRejected && <Badge variant="danger">Changes Requested</Badge>}
                   {!isPreview && !isApproved && (
                     <>
-                      <Button variant="accent" size="sm" onClick={() => submitReview(item.type, item.id, "approved")}>
-                        <Check className="h-3.5 w-3.5" />
+                      <Button
+                        variant="accent"
+                        size="sm"
+                        disabled={!!reviewingKey}
+                        onClick={() => submitReview(item.type, item.id, "approved")}
+                      >
+                        {reviewingKey === key ? "..." : <Check className="h-3.5 w-3.5" />}
                       </Button>
                       <Button
                         variant="outline"
@@ -215,9 +229,10 @@ export function DeliverableReview({
                     variant="outline"
                     size="sm"
                     className="text-red-600 border-red-200"
+                    disabled={!!reviewingKey}
                     onClick={() => submitReview(item.type, item.id, "rejected")}
                   >
-                    <X className="h-3.5 w-3.5" /> Submit Feedback
+                    <X className="h-3.5 w-3.5" /> {reviewingKey === key ? "Submitting..." : "Submit Feedback"}
                   </Button>
                 </div>
               )}

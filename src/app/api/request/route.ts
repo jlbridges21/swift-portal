@@ -3,6 +3,9 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins } from "@/lib/notifications";
 import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
+import { defaultProjectTitle } from "@/lib/address";
+import { linkProjectToProperty } from "@/lib/properties";
+import { touchClientActivity } from "@/lib/clients-data";
 
 export async function POST(request: Request) {
   try {
@@ -68,9 +71,10 @@ export async function POST(request: Request) {
       .insert({
         name,
         email,
-        phone: phone || null,
-        company: company || null,
-        notes: notes || null,
+        phone: body.phone || null,
+        company: body.company || null,
+        notes: body.notes || null,
+        referral_source: body.referral_source || null,
         user_id: userId,
       })
       .select()
@@ -86,7 +90,7 @@ export async function POST(request: Request) {
       .update({ client_id: client.id, full_name: name, role: "client" })
       .eq("id", userId);
 
-    const projectName = `${property_address.split(",")[0]} — ${service_requested}`;
+    const projectName = defaultProjectTitle(property_address, service_requested);
 
     const { data: project, error: projectError } = await supabase
       .from("projects")
@@ -105,6 +109,9 @@ export async function POST(request: Request) {
     if (projectError) {
       return NextResponse.json({ error: projectError.message }, { status: 500 });
     }
+
+    await linkProjectToProperty(project.id, client.id, property_address);
+    await touchClientActivity(client.id);
 
     const { data: lead } = await supabase
       .from("leads")

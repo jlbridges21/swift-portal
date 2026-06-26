@@ -26,7 +26,7 @@ import { getAdminNextStep } from "@/lib/journey";
 import { getProjectShootDateTime } from "@/lib/scheduling";
 import {
   Upload, CreditCard, Globe, Trash2, ChevronUp, ChevronDown,
-  ExternalLink, Check, Video, ImageIcon, Eye, Link2, Pencil, Users, Plus,
+  ExternalLink, Check, Video, ImageIcon, Eye, Link2, Pencil, Users, Plus, MapPin,
 } from "lucide-react";
 import { UploadProgressList, type UploadProgressItem } from "@/components/admin/upload-progress-list";
 import { defaultProjectName } from "@/lib/utils";
@@ -90,6 +90,10 @@ export function AdminProjectDetail({
   const [showShootCompleteModal, setShowShootCompleteModal] = useState(false);
   const [selectedRevision, setSelectedRevision] = useState<Revision | null>(null);
   const [coverImageId, setCoverImageId] = useState(initialProject.cover_image_id);
+  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  const [sendingForReview, setSendingForReview] = useState(false);
+  const [markingShootComplete, setMarkingShootComplete] = useState(false);
+  const [creatingPayment, setCreatingPayment] = useState(false);
 
   useEffect(() => {
     setPaymentList(payments);
@@ -376,14 +380,20 @@ export function AdminProjectDetail({
     setShowShootCompleteModal(false);
     setPendingNewPhotoIds([]);
     if (complete) {
-      await fetch("/api/projects", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ id: initialProject.id, status: "shoot_complete_editing" }),
-      });
-      setForm((f) => ({ ...f, status: "shoot_complete_editing" }));
-      toast.success("Marked shoot complete");
+      if (markingShootComplete) return;
+      setMarkingShootComplete(true);
+      try {
+        await fetch("/api/projects", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ id: initialProject.id, status: "shoot_complete_editing" }),
+        });
+        setForm((f) => ({ ...f, status: "shoot_complete_editing" }));
+        toast.success("Marked shoot complete");
+      } finally {
+        setMarkingShootComplete(false);
+      }
     }
     router.refresh();
   }
@@ -512,42 +522,54 @@ export function AdminProjectDetail({
 
   async function handleCreatePayment(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (creatingPayment) return;
+    setCreatingPayment(true);
     const fd = new FormData(e.currentTarget);
-    const res = await fetch("/api/payments", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        project_id: initialProject.id,
-        client_id: initialProject.client_id,
-        amount: Math.round(parseFloat(fd.get("amount") as string) * 100),
-        description: fd.get("description"),
-        due_date: fd.get("due_date") || null,
-      }),
-    });
-    if (res.ok) {
-      const payment = await res.json();
-      setPaymentList((prev) => [payment, ...prev]);
-      setForm((f) => ({ ...f, status: "awaiting_payment" }));
-      setShowPaymentForm(false);
-      toast.success("Payment link created");
-      router.refresh();
-    } else toast.error("Failed to create payment");
+    try {
+      const res = await fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: initialProject.id,
+          client_id: initialProject.client_id,
+          amount: Math.round(parseFloat(fd.get("amount") as string) * 100),
+          description: fd.get("description"),
+          due_date: fd.get("due_date") || null,
+        }),
+      });
+      if (res.ok) {
+        const payment = await res.json();
+        setPaymentList((prev) => [payment, ...prev]);
+        setForm((f) => ({ ...f, status: "awaiting_payment" }));
+        setShowPaymentForm(false);
+        toast.success("Payment link created");
+        router.refresh();
+      } else toast.error("Failed to create payment");
+    } finally {
+      setCreatingPayment(false);
+    }
   }
 
   async function markPaid(paymentId: string) {
-    const res = await fetch(`/api/payments/${paymentId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ project_id: initialProject.id }),
-    });
-    if (res.ok) {
-      setPaymentList((prev) =>
-        prev.map((p) => (p.id === paymentId ? { ...p, status: "paid" as const, paid_at: new Date().toISOString() } : p))
-      );
-      setForm((f) => ({ ...f, status: "delivered" }));
-      toast.success("Marked as paid — project delivered");
-      router.refresh();
+    if (markingPaidId) return;
+    setMarkingPaidId(paymentId);
+    try {
+      const res = await fetch(`/api/payments/${paymentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ project_id: initialProject.id }),
+      });
+      if (res.ok) {
+        setPaymentList((prev) =>
+          prev.map((p) => (p.id === paymentId ? { ...p, status: "paid" as const, paid_at: new Date().toISOString() } : p))
+        );
+        setForm((f) => ({ ...f, status: "delivered" }));
+        toast.success("Marked as paid — project delivered");
+        router.refresh();
+      }
+    } finally {
+      setMarkingPaidId(null);
     }
   }
 
@@ -567,15 +589,21 @@ export function AdminProjectDetail({
   }
 
   async function sendForReview() {
-    const res = await fetch("/api/asset-reviews", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ project_id: initialProject.id, action: "send_for_review" }),
-    });
-    if (res.ok) {
-      toast.success("Sent for client review");
-      router.refresh();
+    if (sendingForReview) return;
+    setSendingForReview(true);
+    try {
+      const res = await fetch("/api/asset-reviews", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ project_id: initialProject.id, action: "send_for_review" }),
+      });
+      if (res.ok) {
+        toast.success("Sent for client review");
+        router.refresh();
+      }
+    } finally {
+      setSendingForReview(false);
     }
   }
 
@@ -596,6 +624,12 @@ export function AdminProjectDetail({
           <div className="min-w-0">
             <h1 className="text-lg font-bold text-primary truncate">{displayName}</h1>
             <p className="text-sm text-muted truncate">{form.property_address}</p>
+            {initialProject.properties && (
+              <p className="text-xs text-accent truncate flex items-center gap-1">
+                <MapPin className="h-3 w-3 shrink-0" />
+                Property: {(initialProject.properties as { nickname?: string; address: string }).nickname || (initialProject.properties as { address: string }).address}
+              </p>
+            )}
             <p className="text-xs text-muted">{form.service_type}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -720,7 +754,9 @@ export function AdminProjectDetail({
 
       {normalizeStatus(form.status) === "shoot_complete_editing" && (
         <div id="deliverables-admin" className="flex justify-end">
-          <Button variant="accent" onClick={sendForReview}>Send Deliverables for Review</Button>
+          <Button variant="accent" onClick={sendForReview} disabled={sendingForReview}>
+            {sendingForReview ? "Sending..." : "Send Deliverables for Review"}
+          </Button>
         </div>
       )}
 
@@ -940,7 +976,9 @@ export function AdminProjectDetail({
                   {p.status}
                 </span>
                 {p.status === "pending" && (
-                  <Button variant="ghost" size="sm" onClick={() => markPaid(p.id)}>Mark Paid</Button>
+                  <Button variant="ghost" size="sm" disabled={!!markingPaidId} onClick={() => markPaid(p.id)}>
+                    {markingPaidId === p.id ? "Marking..." : "Mark Paid"}
+                  </Button>
                 )}
                 {p.stripe_payment_link_url && (
                   <a href={p.stripe_payment_link_url} target="_blank" rel="noopener noreferrer">

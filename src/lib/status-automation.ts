@@ -15,6 +15,7 @@ interface SetStatusOptions {
   notifyClient?: boolean;
   notifyAdmin?: boolean;
   skipIfSame?: boolean;
+  idempotencyKey?: string;
   link?: string;
   clientTitle?: string;
   clientBody?: string;
@@ -51,6 +52,9 @@ export async function setProjectStatus(options: SetStatusOptions) {
     {
       projectId: options.projectId,
       userId: options.userId ?? null,
+      idempotencyKey:
+        options.idempotencyKey ??
+        `status:${options.projectId}:${options.activityType || options.status}`,
       metadata: { from: existing?.status, to: options.status },
     }
   );

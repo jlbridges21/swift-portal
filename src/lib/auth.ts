@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
+import { touchClientLogin } from "@/lib/clients-crm";
 
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient();
@@ -14,6 +15,15 @@ export async function getProfile(): Promise<Profile | null> {
     .select("*")
     .eq("id", user.id)
     .single();
+
+  if (profile?.role === "client" && profile.client_id) {
+    const { data: client } = await supabase
+      .from("clients")
+      .select("last_login_at")
+      .eq("id", profile.client_id)
+      .maybeSingle();
+    void touchClientLogin(profile.client_id, client?.last_login_at ?? null);
+  }
 
   return profile as Profile | null;
 }

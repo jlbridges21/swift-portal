@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { ShootProposal } from "@/lib/types";
 import { formatShootDateTime } from "@/lib/scheduling";
+import { useAsyncAction } from "@/lib/use-async-action";
 import { Calendar, Check, MessageSquare, X, Pencil, Clock } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,7 +30,31 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
   const [rescheduleMsg, setRescheduleMsg] = useState("");
   const [counterAt, setCounterAt] = useState("");
   const [counterMsg, setCounterMsg] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [actionId, setActionId] = useState<string | null>(null);
+
+  const { run: runPropose, pending: proposing } = useAsyncAction(async (body: object) => {
+    const res = await fetch("/api/shoot-proposals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error("Failed");
+    return res;
+  });
+
+  const { run: runPatch, pending: patching } = useAsyncAction(async (body: object) => {
+    const res = await fetch("/api/shoot-proposals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error("Failed");
+    return res;
+  });
+
+  const busy = proposing || patching;
 
   const pending = proposals.filter((p) => p.status === "pending");
   const confirmed = proposals.find((p) => p.status === "confirmed");
@@ -40,25 +65,18 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
 
   async function proposeShoot(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    const res = await fetch("/api/shoot-proposals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
+    try {
+      await runPropose({
         project_id: projectId,
         proposed_at: new Date(proposedAt).toISOString(),
         message,
-      }),
-    });
-    setLoading(false);
-    if (res.ok) {
+      });
       toast.success(isAdmin ? "Shoot time proposed" : "Shoot time suggested");
       setShowForm(false);
       setProposedAt("");
       setMessage("");
       onUpdate();
-    } else {
+    } catch {
       toast.error("Failed to propose date");
     }
   }
@@ -66,82 +84,70 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
   async function rescheduleShoot(e: React.FormEvent) {
     e.preventDefault();
     if (!rescheduleAt) return;
-    setLoading(true);
-    const res = await fetch("/api/shoot-proposals", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
+    try {
+      await runPatch({
         action: "reschedule",
         project_id: projectId,
         proposed_at: new Date(rescheduleAt).toISOString(),
         message: rescheduleMsg,
-      }),
-    });
-    setLoading(false);
-    if (res.ok) {
+      });
       toast.success("New shoot time proposed — awaiting confirmation");
       setShowReschedule(false);
       setRescheduleAt("");
       setRescheduleMsg("");
       onUpdate();
-    } else {
+    } catch {
       toast.error("Failed to reschedule");
     }
   }
 
   async function acceptProposal(id: string) {
-    const res = await fetch("/api/shoot-proposals", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ id, action: "accept" }),
-    });
-    if (res.ok) {
-      toast.success("Shoot time approved!");
-      onUpdate();
-    } else {
+    if (actionId) return;
+    setActionId(id);
+    try {
+      const res = await runPatch({ id, action: "accept" });
+      if (res) {
+        toast.success("Shoot time approved!");
+        onUpdate();
+      }
+    } catch {
       toast.error("Failed to approve time");
+    } finally {
+      setActionId(null);
     }
   }
 
   async function declineProposal(id: string) {
-    const res = await fetch("/api/shoot-proposals", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ id, action: "decline" }),
-    });
-    if (res.ok) {
-      toast.success("Proposal declined");
-      onUpdate();
-    } else {
+    if (actionId) return;
+    setActionId(id);
+    try {
+      const res = await runPatch({ id, action: "decline" });
+      if (res) {
+        toast.success("Proposal declined");
+        onUpdate();
+      }
+    } catch {
       toast.error("Failed to decline proposal");
+    } finally {
+      setActionId(null);
     }
   }
 
   async function counterProposal(id: string) {
     if (!counterAt) return;
-    setLoading(true);
-    const res = await fetch("/api/shoot-proposals", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
+    try {
+      await runPatch({
         id,
         action: "counter",
         proposed_at: new Date(counterAt).toISOString(),
         message: counterMsg,
-      }),
-    });
-    setLoading(false);
-    if (res.ok) {
+      });
       toast.success("Alternative time sent");
       setShowCounter(null);
       setCounterAt("");
       setCounterMsg("");
       onUpdate();
-    } else {
+    } catch {
       toast.error("Failed to send alternative time");
     }
   }
@@ -167,13 +173,25 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
 
     return (
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button variant="accent" size="sm" className="min-h-11" onClick={() => acceptProposal(proposal.id)}>
-          <Check className="h-4 w-4" /> Approve Time
+        <Button
+          variant="accent"
+          size="sm"
+          className="min-h-11"
+          disabled={busy || actionId === proposal.id}
+          onClick={() => acceptProposal(proposal.id)}
+        >
+          <Check className="h-4 w-4" /> {actionId === proposal.id ? "Approving..." : "Approve Time"}
         </Button>
         <Button variant="outline" size="sm" className="min-h-11" onClick={() => openCounter(proposal.id)}>
           <MessageSquare className="h-4 w-4" /> Request a Different Time
         </Button>
-        <Button variant="outline" size="sm" className="min-h-11" onClick={() => declineProposal(proposal.id)}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-h-11"
+          disabled={busy || actionId === proposal.id}
+          onClick={() => declineProposal(proposal.id)}
+        >
           <X className="h-4 w-4" /> Decline
         </Button>
       </div>
@@ -236,7 +254,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
               <Textarea value={rescheduleMsg} onChange={(e) => setRescheduleMsg(e.target.value)} rows={2} placeholder="Reason for reschedule..." />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" variant="accent" size="sm" className="min-h-11" disabled={loading}>
+              <Button type="submit" variant="accent" size="sm" className="min-h-11" disabled={busy}>
                 Send New Time
               </Button>
               <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => setShowReschedule(false)}>
@@ -265,7 +283,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" variant="accent" size="sm" className="min-h-11" disabled={loading}>
+              <Button type="submit" variant="accent" size="sm" className="min-h-11" disabled={busy}>
                 {isAdmin ? "Send Proposal" : "Send Suggestion"}
               </Button>
               <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => setShowForm(false)}>
@@ -324,7 +342,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
                   placeholder="Brief message..."
                   rows={2}
                 />
-                <Button size="sm" variant="accent" className="min-h-11" disabled={loading} onClick={() => counterProposal(p.id)}>
+                <Button size="sm" variant="accent" className="min-h-11" disabled={busy} onClick={() => counterProposal(p.id)}>
                   Send Alternative Time
                 </Button>
               </div>

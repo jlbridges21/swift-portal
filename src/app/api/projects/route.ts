@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin, logActivity } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
+import { idempotencyKey } from "@/lib/idempotency";
 import { getStatusLabel, normalizeStatus } from "@/lib/constants";
 import { clientStatusNotification } from "@/lib/client-messages";
 import { notifyProjectClients } from "@/lib/notifications";
+import { defaultProjectTitle } from "@/lib/address";
+import { linkProjectToProperty } from "@/lib/properties";
 import type { NotificationEventKey } from "@/lib/app-settings";
 
 function clientEventKeyForStatus(status: string): NotificationEventKey | undefined {
@@ -29,9 +32,12 @@ export async function POST(request: Request) {
     await requireAdmin();
     const body = await request.json();
 
-    if (!body.client_id || !body.project_name || !body.property_address || !body.service_type) {
+    if (!body.client_id || !body.property_address || !body.service_type) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+
+    const projectName =
+      body.project_name || defaultProjectTitle(body.property_address, body.service_type);
 
     const supabase = await createClient();
 
@@ -39,7 +45,7 @@ export async function POST(request: Request) {
       .from("projects")
       .insert({
         client_id: body.client_id,
-        project_name: body.project_name,
+        project_name: projectName,
         property_address: body.property_address,
         service_type: body.service_type,
         status: body.status || "new_request",
@@ -53,6 +59,8 @@ export async function POST(request: Request) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await linkProjectToProperty(project.id, body.client_id, body.property_address);
 
     await logActivity("project_created", `Project "${project.project_name}" created`, {
       projectId: project.id,
@@ -105,7 +113,11 @@ export async function PATCH(request: Request) {
           : activityType === "sent_for_review"
             ? "Deliverables sent for review"
             : `Status updated to ${label}`,
-        { projectId: id, metadata: { from: existing.status, to: updates.status } }
+        {
+          projectId: id,
+          idempotencyKey: idempotencyKey("project", id, activityType),
+          metadata: { from: existing.status, to: updates.status },
+        }
       );
 
       await notifyProjectClients({

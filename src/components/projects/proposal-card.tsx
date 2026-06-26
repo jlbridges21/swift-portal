@@ -34,13 +34,13 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
   return (
     <div
       className={cn(
-        "rounded-3xl bg-gradient-to-b from-white via-white to-slate-50/60 p-8 sm:p-10",
-        "shadow-[0_2px_40px_-12px_rgba(15,23,42,0.12)] ring-1 ring-black/[0.04]",
+        "rounded-2xl bg-gradient-to-b from-white via-white to-slate-50/60 p-5 sm:p-6",
+        "shadow-[0_2px_24px_-10px_rgba(15,23,42,0.12)] ring-1 ring-black/[0.04]",
         className
       )}
     >
       {isPreliminary && !isAdmin && (
-        <div className="mb-8 space-y-3 rounded-2xl bg-sky-50/70 px-5 py-4">
+        <div className="mb-5 space-y-2 rounded-xl bg-sky-50/70 px-4 py-3">
           <p className="text-sm font-semibold tracking-tight text-slate-900">
             About this Preliminary Estimate
           </p>
@@ -53,28 +53,28 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
       )}
 
       {needsReview && (
-        <p className="mb-6 text-sm font-medium text-accent">
+        <p className="mb-4 text-sm font-medium text-accent">
           Please review and approve this proposal to continue.
         </p>
       )}
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1 space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-2">
           {showPrice && priceLabel.toLowerCase().includes("starting") && (
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">
               {priceLabel}
             </p>
           )}
-          <h3 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+          <h3 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
             {packageName}
           </h3>
           {showPrice && (
-            <p className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+            <p className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
               {priceLabel.toLowerCase().includes("starting") ? formatCurrency(priceCents) : priceLabel}
             </p>
           )}
           {!showPrice && (
-            <p className="text-xl font-semibold tracking-tight text-slate-700">{priceLabel}</p>
+            <p className="text-lg font-semibold tracking-tight text-slate-700">{priceLabel}</p>
           )}
         </div>
         {isAdmin && (
@@ -89,16 +89,16 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
       </div>
 
       {intro && (
-        <p className="mt-6 text-base leading-relaxed text-slate-600">{intro}</p>
+        <p className="mt-4 text-sm leading-relaxed text-slate-600">{intro}</p>
       )}
 
       {includes.length > 0 && (
-        <div className="mt-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.15em] text-slate-500">Includes</p>
-          <ul className="mt-4 space-y-3">
+        <div className="mt-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Includes</p>
+          <ul className="mt-3 space-y-2">
             {includes.map((item) => (
-              <li key={item} className="flex gap-3 text-base leading-relaxed text-slate-700">
-                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
+              <li key={item} className="flex gap-2.5 text-sm leading-relaxed text-slate-700">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
                 <span>{item}</span>
               </li>
             ))}
@@ -117,7 +117,7 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
           );
         if (!filteredNotes.length) return null;
         return (
-          <div className="mt-8 space-y-2 rounded-2xl bg-slate-50/80 px-5 py-4">
+          <div className="mt-5 space-y-2 rounded-xl bg-slate-50/80 px-4 py-3">
             {filteredNotes.map((note) => (
               <p key={note.slice(0, 40)} className="text-sm leading-relaxed text-slate-600">
                 {note}
@@ -128,14 +128,14 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
       })()}
 
       {quote.expires_at && (
-        <p className="mt-6 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-slate-500">
           Valid until {new Date(quote.expires_at).toLocaleDateString()}
         </p>
       )}
 
       {isApproved && !isAdmin && (
-        <div className="mt-8 flex items-center gap-3 rounded-2xl bg-emerald-50/80 px-5 py-4 text-sm text-emerald-800">
-          <CheckCircle2 className="h-5 w-5 shrink-0" />
+        <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-emerald-50/80 px-4 py-3 text-sm text-emerald-800">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>
             Proposal approved
             {quote.approved_at ? ` on ${new Date(quote.approved_at).toLocaleDateString()}` : ""}
@@ -143,7 +143,7 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
         </div>
       )}
 
-      {actions && <div className="mt-8 flex flex-wrap gap-3 border-t border-slate-100 pt-8">{actions}</div>}
+      {actions && <div className="mt-5 flex flex-wrap gap-2.5 border-t border-slate-100 pt-5">{actions}</div>}
     </div>
   );
 }

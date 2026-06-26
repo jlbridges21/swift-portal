@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getProfile, logActivity } from "@/lib/auth";
+import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
+import { idempotencyKey } from "@/lib/idempotency";
 import { notifyAdmins } from "@/lib/notifications";
 
 export async function POST(request: Request) {
@@ -16,6 +17,16 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("deliverables_approved_at")
+    .eq("id", body.project_id)
+    .single();
+
+  if (project?.deliverables_approved_at) {
+    return NextResponse.json({ success: true, alreadyApproved: true });
+  }
 
   const { error } = await supabase
     .from("projects")
@@ -32,6 +43,7 @@ export async function POST(request: Request) {
   await logProjectActivity("deliverables_approved", "Deliverables approved by client", {
     projectId: body.project_id,
     userId: profile.id,
+    idempotencyKey: idempotencyKey("project", body.project_id, "deliverables_approved"),
   });
 
   await notifyAdmins({

@@ -68,6 +68,8 @@ export async function POST(request: Request) {
       .update({
         stripe_payment_link_id: paymentLink.id,
         stripe_payment_link_url: paymentLink.url,
+        payment_link_url: paymentLink.url,
+        status: "sent",
       })
       .eq("id", paymentRow.id)
       .select()
