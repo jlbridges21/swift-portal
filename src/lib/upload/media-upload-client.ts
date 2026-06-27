@@ -18,12 +18,22 @@ export interface UploadProgressUpdate {
   bytesTotal?: number;
 }
 
+import { uploadVideoThumbnail } from "./video-thumbnail";
+export { captureVideoThumbnailBlob, uploadVideoThumbnail, buildThumbnailStoragePath } from "./video-thumbnail";
+
+export interface UploadMediaMetadata {
+  title?: string;
+  description?: string;
+  tags?: string[];
+}
+
 export interface UploadMediaOptions {
-  projectId: string;
+  projectId: string | null;
   file: File;
   mediaType: "photo" | "video" | "document";
   onProgress: (update: UploadProgressUpdate) => void;
   signal?: AbortSignal;
+  metadata?: UploadMediaMetadata;
 }
 
 export interface UploadMediaResult {
@@ -50,14 +60,14 @@ interface CompleteApiResponse {
 }
 
 async function fetchSign(
-  projectId: string,
+  projectId: string | null,
   file: File,
   mediaType: string,
   mimeType: string
 ): Promise<SignResponse> {
   logUploadStep("info", {
     step: "sign_request",
-    projectId,
+    projectId: projectId ?? undefined,
     fileName: file.name,
     fileSize: file.size,
     fileType: mimeType,
@@ -68,7 +78,7 @@ async function fetchSign(
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({
-      projectId,
+      projectId: projectId ?? undefined,
       fileName: file.name,
       mimeType,
       fileSize: file.size,
@@ -308,7 +318,7 @@ export async function retryMediaSave(
 
 /** Upload a media file directly to Supabase Storage with validation, progress, and finalize. */
 export async function uploadMediaFile(options: UploadMediaOptions): Promise<UploadMediaResult> {
-  const { projectId, file, mediaType, onProgress, signal } = options;
+  const { projectId, file, mediaType, onProgress, signal, metadata } = options;
 
   onProgress({ phase: "validating", progress: 0, bytesTotal: file.size });
 
@@ -316,7 +326,7 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
   if (!validation.ok) {
     logUploadStep("error", {
       step: "client_validation",
-      projectId,
+      projectId: projectId ?? undefined,
       fileName: file.name,
       fileSize: file.size,
       fileType: file.type,
@@ -330,7 +340,7 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
   if (mediaType === "video" && file.size > 100 * 1024 * 1024) {
     logUploadStep("info", {
       step: "large_file_warning",
-      projectId,
+      projectId: projectId ?? undefined,
       fileName: file.name,
       fileSize: file.size,
       fileType: mimeType,
@@ -357,6 +367,9 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
     fileSize: file.size,
     mediaType,
     displayOrder: sign.displayOrder,
+    title: metadata?.title,
+    description: metadata?.description,
+    tags: metadata?.tags,
   };
 
   try {
@@ -365,7 +378,7 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
     };
 
     if (useTus) {
-      await uploadViaTus(file, sign.bucket, sign.filePath, mimeType, projectId, report, signal);
+      await uploadViaTus(file, sign.bucket, sign.filePath, mimeType, projectId ?? "", report, signal);
     } else if (sign.signedUrl) {
       await uploadViaSignedPut(sign.signedUrl, file, mimeType, report, signal);
     } else {
@@ -374,6 +387,14 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
   } catch (err) {
     if (err instanceof UploadSaveError) throw err;
     throw new Error(getUploadErrorMessage(err, { phase: "uploading" }));
+  }
+
+  if (mediaType === "video") {
+    const thumbnailPath = await uploadVideoThumbnail(sign.bucket, sign.filePath, file, {
+      fileName: file.name,
+      projectId,
+    });
+    if (thumbnailPath) pendingSave.thumbnailPath = thumbnailPath;
   }
 
   onProgress({ phase: "finalizing", progress: 95, bytesLoaded: file.size, bytesTotal: file.size });

@@ -1,14 +1,11 @@
-import Link from "next/link";
-import { Header } from "@/components/layout/header";
-import { PageHeader } from "@/components/layout/header";
-import { Button } from "@/components/ui/button";
+import { Suspense } from "react";
+import { Header, PageHeader } from "@/components/layout/header";
 import { getProfile } from "@/lib/auth";
 import { getAppSettings, NOTIFICATION_EVENT_DEFINITIONS } from "@/lib/app-settings";
 import { redirect } from "next/navigation";
 import { AdminSettingsClient } from "@/components/admin/admin-settings-client";
 import { GoogleCalendarCard } from "@/components/admin/google-calendar-card";
 import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
-import { Suspense } from "react";
 
 export default async function AdminSettingsPage() {
   const profile = await getProfile();
@@ -25,13 +22,6 @@ export default async function AdminSettingsPage() {
           title="Admin Settings"
           description="Manage global notification, email, business, and proposal settings for Swift Portal."
         />
-        <div className="mb-6 flex flex-wrap gap-3">
-          <Link href="/admin/launch-checklist">
-            <Button variant="outline" size="sm" className="min-h-11">
-              Launch Checklist
-            </Button>
-          </Link>
-        </div>
         <SettingsCollapsible
           title="Google Calendar"
           description="Connect Google Calendar to sync confirmed shoot dates."

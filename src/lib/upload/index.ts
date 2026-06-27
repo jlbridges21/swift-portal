@@ -8,5 +8,6 @@ export {
   completeUpload,
   UploadSaveError,
   type UploadProgressUpdate,
+  type UploadMediaMetadata,
   type PendingSavePayload,
 } from "./media-upload-client";

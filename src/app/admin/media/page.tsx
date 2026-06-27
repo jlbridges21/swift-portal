@@ -4,9 +4,15 @@ import { redirect } from "next/navigation";
 import { MediaLibraryClient } from "@/components/admin/media-library-client";
 import { getLibraryFilterOptions, queryMediaLibrary } from "@/lib/media-library";
 
-export default async function AdminMediaPage() {
+interface PageProps {
+  searchParams: Promise<{ upload?: string }>;
+}
+
+export default async function AdminMediaPage({ searchParams }: PageProps) {
   const profile = await getProfile();
   if (!profile || profile.role !== "admin") redirect("/dashboard");
+
+  const sp = await searchParams;
 
   const [result, filterOptions] = await Promise.all([
     queryMediaLibrary({ page: 1, limit: 48 }),
@@ -25,6 +31,7 @@ export default async function AdminMediaPage() {
           initialAssets={result.assets}
           initialTotal={result.total}
           filterOptions={filterOptions}
+          openUploadOnMount={sp.upload === "1"}
         />
       </main>
     </div>

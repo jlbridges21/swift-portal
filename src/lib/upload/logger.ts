@@ -3,7 +3,7 @@ type UploadLogContext = {
   fileName?: string;
   fileSize?: number;
   fileType?: string;
-  projectId?: string;
+  projectId?: string | null;
   filePath?: string;
   statusCode?: number;
   providerMessage?: string;

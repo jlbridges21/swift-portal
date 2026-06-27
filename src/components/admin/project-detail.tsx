@@ -885,7 +885,7 @@ export function AdminProjectDetail({
                   <iframe src={v.embed_url} className="h-full w-full" title={v.file_name} allowFullScreen />
                 </div>
               )}
-              {v.media_source !== "youtube" && <AdminVideoThumb assetId={v.id} />}
+              {v.media_source !== "youtube" && <AdminVideoThumb asset={v} />}
               {editingMedia === v.id ? (
                 <div className="space-y-2 p-3 border-t border-border">
                   <Input value={editMediaForm.file_name} onChange={(e) => setEditMediaForm({ ...editMediaForm, file_name: e.target.value })} placeholder="Title" />
@@ -1116,15 +1116,49 @@ export function AdminProjectDetail({
   );
 }
 
-function AdminVideoThumb({ assetId }: { assetId: string }) {
-  const [url, setUrl] = useState<string | null>(null);
+function AdminVideoThumb({ asset }: { asset: MediaAsset }) {
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(false);
+
   useEffect(() => {
-    fetch(`/api/media/download/${assetId}`, { credentials: "include" })
+    fetch(`/api/media/download/${asset.id}?thumb=1`, { credentials: "include" })
       .then((r) => r.json())
-      .then((d) => setUrl(d.url));
-  }, [assetId]);
-  if (!url) return <div className="h-20 bg-slate-100 animate-pulse" />;
-  return <video src={url} className="w-full max-h-40" controls preload="metadata" />;
+      .then((d) => { if (d.url) setPosterUrl(d.url); });
+  }, [asset.id]);
+
+  async function play() {
+    if (playing) return;
+    const res = await fetch(`/api/media/download/${asset.id}`, { credentials: "include" });
+    const d = await res.json();
+    if (d.url) {
+      setStreamUrl(d.url);
+      setPlaying(true);
+    }
+  }
+
+  if (playing && streamUrl) {
+    return <video src={streamUrl} className="w-full max-h-40" controls playsInline poster={posterUrl ?? undefined} />;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={play}
+      className="relative flex w-full max-h-40 min-h-[5rem] items-center justify-center overflow-hidden rounded-lg bg-slate-900"
+    >
+      {posterUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={posterUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-950" />
+      )}
+      <div className="absolute inset-0 bg-black/25" />
+      <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow">
+        <Video className="ml-0.5 h-5 w-5 text-slate-900" />
+      </div>
+    </button>
+  );
 }
 
 function AssetRow({

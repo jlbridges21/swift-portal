@@ -173,7 +173,7 @@ export interface Project {
 
 export interface MediaAsset {
   id: string;
-  project_id: string;
+  project_id: string | null;
   property_id?: string | null;
   client_id?: string | null;
   file_name: string;

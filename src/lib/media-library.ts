@@ -9,7 +9,7 @@ export interface LibraryAsset {
   title: string;
   file_name: string | null;
   thumbnail_url: string | null;
-  project_id: string;
+  project_id: string | null;
   project_name: string;
   project_status: string;
   service_type: string;
@@ -235,6 +235,49 @@ async function loadProjectMap(
   return map;
 }
 
+function mapUnassignedMediaRow(row: MediaAsset): LibraryAsset {
+  return {
+    id: row.id,
+    kind: row.media_type as LibraryAssetKind,
+    title: row.title || row.file_name,
+    file_name: row.file_name,
+    thumbnail_url: row.thumbnail_url ?? null,
+    project_id: null,
+    project_name: "Unassigned",
+    project_status: "—",
+    service_type: "—",
+    property_address: "—",
+    property_type: null,
+    client_id: row.client_id ?? null,
+    client_name: "—",
+    client_company: null,
+    property_id: row.property_id ?? null,
+    media_source: row.media_source,
+    file_size: row.file_size,
+    width: row.width ?? null,
+    height: row.height ?? null,
+    duration_seconds: row.duration_seconds ?? null,
+    download_count: row.download_count ?? 0,
+    is_favorite: row.is_favorite ?? false,
+    tags: [],
+    description: row.description ?? null,
+    alt_text: row.alt_text ?? null,
+    notes: row.notes ?? null,
+    created_at: row.created_at,
+    captured_at: row.captured_at ?? null,
+    is_cover: false,
+    mime_type: row.mime_type,
+    youtube_url: row.youtube_url,
+    embed_url: row.embed_url,
+    kuula_url: null,
+    visibility: row.visibility ?? null,
+    downloadable: row.downloadable ?? null,
+    camera_model: row.camera_model ?? null,
+    orientation: row.orientation ?? null,
+    version: row.version ?? 1,
+  };
+}
+
 function mapMediaRowWithProject(
   row: MediaAsset,
   project: ProjectRow
@@ -371,16 +414,16 @@ async function fetchMediaAssets(filters: LibraryFilters): Promise<LibraryAsset[]
 
   const projectMap = await loadProjectMap(
     supabase,
-    filtered.map((r) => r.project_id)
+    filtered.map((r) => r.project_id).filter((id): id is string => !!id)
   );
 
   return filtered
     .map((row) => {
+      if (!row.project_id) return mapUnassignedMediaRow(row);
       const project = projectMap.get(row.project_id);
-      if (!project) return null;
+      if (!project) return mapUnassignedMediaRow(row);
       return mapMediaRowWithProject(row, project);
-    })
-    .filter((a): a is LibraryAsset => a !== null);
+    });
 }
 
 async function fetchTourAssets(filters: LibraryFilters): Promise<LibraryAsset[]> {
@@ -568,9 +611,18 @@ export async function setMediaTags(assetId: string, tags: string[]) {
 
 export async function getLibraryFilterOptions() {
   const supabase = await createServiceClient();
-  const [{ data: clients }, { data: properties }] = await Promise.all([
+  const [{ data: clients }, { data: properties }, { data: projects }] = await Promise.all([
     supabase.from("clients").select("id, name, full_name, company").order("name"),
     supabase.from("properties").select("id, address, nickname").order("address").limit(200),
+    supabase
+      .from("projects")
+      .select("id, project_name, property_address")
+      .order("updated_at", { ascending: false })
+      .limit(500),
   ]);
-  return { clients: clients ?? [], properties: properties ?? [] };
+  return {
+    clients: clients ?? [],
+    properties: properties ?? [],
+    projects: projects ?? [],
+  };
 }

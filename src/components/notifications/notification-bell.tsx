@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
 
 interface NotificationItem {
   id: string;
@@ -17,12 +18,18 @@ interface NotificationItem {
   created_at: string;
 }
 
+const PWA_NAV_HEIGHT = 72;
+
 export function NotificationBell() {
   const router = useRouter();
+  const isPwaMobile = useIsStandalonePwaMobile();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [useFixedPanel, setUseFixedPanel] = useState(false);
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
   const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read_at).length;
 
@@ -50,6 +57,48 @@ export function NotificationBell() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  useEffect(() => {
+    if (!open || typeof window === "undefined") return;
+
+    function positionPanel() {
+      const mobile = window.matchMedia("(max-width: 767px)").matches;
+      setUseFixedPanel(mobile);
+
+      if (!mobile) {
+        setPanelStyle({});
+        return;
+      }
+
+      const rect = buttonRef.current?.getBoundingClientRect();
+      const top = (rect?.bottom ?? 56) + 8;
+      const sidePad = 16;
+      const bottomReserve = (isPwaMobile ? PWA_NAV_HEIGHT : 0) + sidePad;
+      const maxHeight = Math.max(160, window.innerHeight - top - bottomReserve);
+
+      setPanelStyle({
+        position: "fixed",
+        top,
+        right: sidePad,
+        left: sidePad,
+        width: "auto",
+        maxWidth: 384,
+        marginLeft: "auto",
+        maxHeight,
+        zIndex: 200,
+        display: "flex",
+        flexDirection: "column",
+      });
+    }
+
+    positionPanel();
+    window.addEventListener("resize", positionPanel);
+    window.addEventListener("scroll", positionPanel, true);
+    return () => {
+      window.removeEventListener("resize", positionPanel);
+      window.removeEventListener("scroll", positionPanel, true);
+    };
+  }, [open, isPwaMobile]);
 
   async function markRead(id: string) {
     await fetch("/api/notifications", {
@@ -90,14 +139,16 @@ export function NotificationBell() {
   return (
     <div className="relative" ref={ref}>
       <Button
+        ref={buttonRef}
         variant="ghost"
         size="sm"
-        className="relative h-9 w-9 p-0"
+        className="relative h-9 w-9 p-0 min-h-11 min-w-11"
         onClick={() => {
           setOpen(!open);
           if (!open) fetchNotifications();
         }}
         aria-label="Notifications"
+        aria-expanded={open}
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
@@ -108,20 +159,33 @@ export function NotificationBell() {
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-border bg-white shadow-lg sm:w-96">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div
+          className={cn(
+            "rounded-xl border border-border bg-white shadow-lg",
+            !useFixedPanel && "absolute right-0 top-full z-50 mt-2 w-80 sm:w-96"
+          )}
+          style={useFixedPanel ? panelStyle : undefined}
+        >
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
             <p className="font-semibold text-sm text-primary">Notifications</p>
             {unreadCount > 0 && (
               <button
                 type="button"
                 onClick={markAllRead}
-                className="text-xs text-accent hover:underline"
+                className="text-xs text-accent hover:underline min-h-11 px-2"
               >
                 Mark all read
               </button>
             )}
           </div>
-          <div className="max-h-80 overflow-y-auto">
+          <div
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+            style={
+              useFixedPanel
+                ? undefined
+                : { maxHeight: "min(20rem, calc(100dvh - 8rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)))" }
+            }
+          >
             {loading && notifications.length === 0 ? (
               <p className="text-sm text-muted text-center py-8">Loading...</p>
             ) : notifications.length === 0 ? (

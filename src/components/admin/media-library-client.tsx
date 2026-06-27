@@ -18,20 +18,24 @@ import {
 import type { LibraryAsset, LibraryAssetKind } from "@/lib/media-library";
 import {
   Search, Star, ImageIcon, Video, FileText, Globe, Download, ExternalLink,
-  X, Filter, ChevronDown, Trash2, Tag, Copy, Pencil, Loader2, CheckSquare, Square,
+  X, Filter, ChevronDown, Trash2, Tag, Copy, Pencil, Loader2, CheckSquare, Square, Upload, Play,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { MediaUploadModal } from "@/components/admin/media-upload-modal";
+import { useRouter } from "next/navigation";
 
 interface FilterOptions {
   clients: { id: string; name: string; full_name: string | null; company: string | null }[];
   properties: { id: string; address: string; nickname: string | null }[];
+  projects: { id: string; project_name: string; property_address: string }[];
 }
 
 interface MediaLibraryClientProps {
   initialAssets: LibraryAsset[];
   initialTotal: number;
   filterOptions: FilterOptions;
+  openUploadOnMount?: boolean;
 }
 
 const TYPE_OPTIONS = [
@@ -83,9 +87,12 @@ export function MediaLibraryClient({
   initialAssets,
   initialTotal,
   filterOptions,
+  openUploadOnMount = false,
 }: MediaLibraryClientProps) {
+  const router = useRouter();
   const [assets, setAssets] = useState(initialAssets);
   const [total, setTotal] = useState(initialTotal);
+  const [uploadOpen, setUploadOpen] = useState(openUploadOnMount);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(initialAssets.length < initialTotal);
   const [loading, setLoading] = useState(false);
@@ -241,6 +248,9 @@ export function MediaLibraryClient({
           />
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="accent" size="sm" className="min-h-11" onClick={() => setUploadOpen(true)}>
+            <Upload className="h-4 w-4" /> Add Media
+          </Button>
           <Button
             variant={favoritesOnly ? "accent" : "outline"}
             size="sm"
@@ -363,6 +373,7 @@ export function MediaLibraryClient({
       {drawerAsset && (
         <AssetDrawer
           asset={drawerAsset}
+          projects={filterOptions.projects}
           onClose={() => setDrawerAsset(null)}
           onUpdate={(updated) => {
             setAssets((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
@@ -375,6 +386,18 @@ export function MediaLibraryClient({
           }}
         />
       )}
+
+      <MediaUploadModal
+        open={uploadOpen}
+        onClose={() => {
+          setUploadOpen(false);
+          if (openUploadOnMount) router.replace("/admin/media");
+        }}
+        projects={filterOptions.projects}
+        onUploaded={() => {
+          fetchPage(1, true);
+        }}
+      />
     </div>
   );
 }
@@ -428,6 +451,13 @@ function AssetCard({
               <Icon className="h-10 w-10 text-muted" />
             </div>
           )}
+          {asset.kind === "video" && (thumbUrl || asset.thumbnail_url) && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow">
+                <Play className="ml-0.5 h-5 w-5 text-slate-900" fill="currentColor" />
+              </div>
+            </div>
+          )}
           {asset.is_cover && (
             <Badge className="absolute left-2 top-2 text-[10px] bg-accent text-white">Cover</Badge>
           )}
@@ -459,9 +489,10 @@ function AssetCard({
 }
 
 function AssetDrawer({
-  asset, onClose, onUpdate, onFavorite, onDeleted,
+  asset, projects, onClose, onUpdate, onFavorite, onDeleted,
 }: {
   asset: LibraryAsset;
+  projects: { id: string; project_name: string; property_address: string }[];
   onClose: () => void;
   onUpdate: (a: LibraryAsset) => void;
   onFavorite: () => void;
@@ -480,6 +511,7 @@ function AssetDrawer({
     alt_text: asset.alt_text ?? "",
     notes: asset.notes ?? "",
     tags: asset.tags.join(", "),
+    project_id: asset.project_id ?? "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -510,6 +542,7 @@ function AssetDrawer({
           description: form.description || null,
           alt_text: form.alt_text || null,
           notes: form.notes || null,
+          project_id: form.project_id || null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -520,7 +553,16 @@ function AssetDrawer({
         credentials: "include",
         body: JSON.stringify({ action: "set_tags", ids: [asset.id], tags }),
       });
-      onUpdate({ ...asset, ...form, tags, title: form.title });
+      onUpdate({
+        ...asset,
+        ...form,
+        tags,
+        title: form.title,
+        project_id: form.project_id || null,
+        project_name: form.project_id
+          ? projects.find((p) => p.id === form.project_id)?.project_name ?? asset.project_name
+          : "Unassigned",
+      });
       setEditing(false);
       toast.success("Saved");
     } catch {
@@ -608,6 +650,18 @@ function AssetDrawer({
 
           {editing ? (
             <div className="space-y-3 rounded-xl border border-border p-4">
+              <Select
+                value={form.project_id}
+                onChange={(e) => setForm((f) => ({ ...f, project_id: e.target.value }))}
+                placeholder="Assign to project"
+                options={[
+                  { value: "", label: "Unassigned" },
+                  ...projects.map((p) => ({
+                    value: p.id,
+                    label: p.property_address ? `${p.project_name} — ${p.property_address}` : p.project_name,
+                  })),
+                ]}
+              />
               <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Title" />
               <Input value={form.alt_text} onChange={(e) => setForm((f) => ({ ...f, alt_text: e.target.value }))} placeholder="Alt text" />
               <textarea

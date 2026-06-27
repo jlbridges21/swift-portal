@@ -5,6 +5,7 @@ import { requireAdminApi } from "@/lib/api-auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
 import { logUploadStep } from "@/lib/upload/logger";
+import { setMediaTags } from "@/lib/media-library";
 
 const STORAGE_VERIFY_ATTEMPTS = 6;
 const STORAGE_VERIFY_DELAY_MS = 1500;
@@ -13,7 +14,7 @@ async function verifyStorageObject(
   supabase: SupabaseClient,
   bucket: string,
   filePath: string,
-  context: { projectId: string; fileName: string; fileSize?: number; fileType?: string }
+  context: { projectId?: string | null; fileName: string; fileSize?: number; fileType?: string }
 ): Promise<{ ok: true } | { ok: false; error: string; details?: unknown }> {
   for (let attempt = 1; attempt <= STORAGE_VERIFY_ATTEMPTS; attempt++) {
     const { data, error } = await supabase.storage.from(bucket).createSignedUrl(filePath, 60);
@@ -53,17 +54,29 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
 
   const body = await request.json();
-  const { projectId, filePath, fileName, mimeType, fileSize, mediaType, displayOrder } = body;
+  const {
+    projectId,
+    filePath,
+    fileName,
+    mimeType,
+    fileSize,
+    mediaType,
+    displayOrder,
+    title,
+    description,
+    tags,
+    thumbnailPath,
+  } = body;
 
   const logContext = {
-    projectId,
+    projectId: projectId ?? null,
     fileName,
     fileSize,
     fileType: mimeType,
     filePath,
   };
 
-  if (!projectId || !filePath || !fileName || !mimeType || !mediaType) {
+  if (!filePath || !fileName || !mimeType || !mediaType) {
     logUploadStep("error", { step: "validate_request", ...logContext, details: body });
     return NextResponse.json(
       { success: false, error: "Missing required fields.", step: "validate_request" },
@@ -74,7 +87,6 @@ export async function POST(request: Request) {
   const supabase = await createServiceClient();
   const bucket = mediaType === "document" ? "project-documents" : "project-media";
 
-  // Idempotent: return existing record if this storage path was already saved.
   const { data: existingAsset, error: existingError } = await supabase
     .from("media_assets")
     .select("*")
@@ -115,7 +127,7 @@ export async function POST(request: Request) {
   const { data: asset, error: dbError } = await supabase
     .from("media_assets")
     .insert({
-      project_id: projectId,
+      project_id: projectId || null,
       file_name: fileName,
       file_path: filePath,
       storage_path: filePath,
@@ -124,13 +136,14 @@ export async function POST(request: Request) {
       media_type: mediaType,
       media_source: "upload",
       display_order: displayOrder ?? 0,
-      title: fileName,
+      title: title?.trim() || fileName,
+      description: description?.trim() || null,
+      thumbnail_url: thumbnailPath || null,
     })
     .select()
     .single();
 
   if (dbError) {
-    // Race: another request may have inserted the same path.
     if (dbError.code === "23505") {
       const { data: raced } = await supabase
         .from("media_assets")
@@ -154,9 +167,13 @@ export async function POST(request: Request) {
     );
   }
 
+  if (Array.isArray(tags) && tags.length) {
+    await setMediaTags(asset.id, tags);
+  }
+
   logUploadStep("info", { step: "database_insert", ...logContext, details: { assetId: asset.id } });
 
-  if (mediaType === "photo") {
+  if (projectId && mediaType === "photo") {
     const { data: project } = await supabase
       .from("projects")
       .select("cover_image_id")
@@ -168,28 +185,30 @@ export async function POST(request: Request) {
     }
   }
 
-  const activityType =
-    mediaType === "photo" ? "photos_uploaded" : mediaType === "video" ? "videos_uploaded" : "documents_uploaded";
-  const label =
-    mediaType === "photo" ? "Photo uploaded" : mediaType === "video" ? "Video uploaded" : "Document uploaded";
+  if (projectId) {
+    const activityType =
+      mediaType === "photo" ? "photos_uploaded" : mediaType === "video" ? "videos_uploaded" : "documents_uploaded";
+    const label =
+      mediaType === "photo" ? "Photo uploaded" : mediaType === "video" ? "Video uploaded" : "Document uploaded";
 
-  await logProjectActivity(activityType, label, {
-    projectId,
-    metadata: { mediaType, assetId: asset.id },
-  });
-
-  if (mediaType !== "document") {
-    await notifyProjectClients({
-      type: "deliverables_uploaded",
-      eventKey: "deliverables_ready",
-      title: "Media in Production",
-      body:
-        mediaType === "video"
-          ? "A new video has been added to your project."
-          : "New photos have been added to your project.",
-      link: `/dashboard/projects/${projectId}#deliverables`,
+    await logProjectActivity(activityType, label, {
       projectId,
+      metadata: { mediaType, assetId: asset.id },
     });
+
+    if (mediaType !== "document") {
+      await notifyProjectClients({
+        type: "deliverables_uploaded",
+        eventKey: "deliverables_ready",
+        title: "Media in Production",
+        body:
+          mediaType === "video"
+            ? "A new video has been added to your project."
+            : "New photos have been added to your project.",
+        link: `/dashboard/projects/${projectId}#deliverables`,
+        projectId,
+      });
+    }
   }
 
   return NextResponse.json({ success: true, media: asset });

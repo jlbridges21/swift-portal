@@ -21,6 +21,7 @@ const ALLOWED_PATCH_FIELDS = [
   "duration_seconds",
   "is_favorite",
   "thumbnail_url",
+  "project_id",
 ] as const;
 
 export async function PATCH(request: Request) {

@@ -35,19 +35,28 @@ export async function GET(
     return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
   }
 
-  const hasAccess = await canAccessProject(profile, asset.project_id);
-  if (!hasAccess) {
-    return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
+  const isAdmin = profile.role === "admin";
+
+  if (!asset.project_id) {
+    if (!isAdmin) {
+      return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
+    }
+  } else {
+    const hasAccess = await canAccessProject(profile, asset.project_id);
+    if (!hasAccess) {
+      return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
+    }
   }
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("status")
-    .eq("id", asset.project_id)
-    .maybeSingle();
-
-  const projectStatus = normalizeStatus(project?.status ?? "new_request");
-  const isAdmin = profile.role === "admin";
+  let projectStatus = "new_request";
+  if (asset.project_id) {
+    const { data: project } = await supabase
+      .from("projects")
+      .select("status")
+      .eq("id", asset.project_id)
+      .maybeSingle();
+    projectStatus = normalizeStatus(project?.status ?? "new_request");
+  }
   if (!isAdmin && !isClientVisibleMedia(asset)) {
     return NextResponse.json({ error: "This file is not available." }, { status: 404 });
   }
@@ -106,6 +115,20 @@ export async function GET(
   }
 
   const forcePreview = preview || (!downloadsAllowed && !isAdmin);
+
+  if (thumb && asset.thumbnail_url) {
+    const { data: thumbData, error: thumbError } = await storageClient.storage
+      .from(bucket)
+      .createSignedUrl(asset.thumbnail_url, 3600);
+    if (!thumbError && thumbData?.signedUrl) {
+      return NextResponse.json({
+        url: thumbData.signedUrl,
+        preview: true,
+        downloadsAllowed,
+      });
+    }
+  }
+
   const options =
     thumb || forcePreview
       ? asset.media_type === "photo"

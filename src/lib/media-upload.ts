@@ -38,9 +38,16 @@ export function sanitizeStorageFileName(fileName: string): string {
   return ext ? `${base}.${ext}` : base;
 }
 
-export function buildMediaStoragePath(projectId: string, fileName: string): string {
+export function buildMediaStoragePath(projectId: string | null | undefined, fileName: string): string {
   const safeName = sanitizeStorageFileName(fileName);
-  return `${projectId}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeName}`;
+  const prefix = projectId ? projectId : "library/unassigned";
+  return `${prefix}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeName}`;
+}
+
+export function buildThumbnailStoragePath(videoFilePath: string): string {
+  const dot = videoFilePath.lastIndexOf(".");
+  const base = dot > 0 ? videoFilePath.slice(0, dot) : videoFilePath;
+  return `${base}-thumb.jpg`;
 }
 
 export function getAllowedTypes(mediaType: string): readonly string[] {

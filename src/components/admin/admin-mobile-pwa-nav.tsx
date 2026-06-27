@@ -8,7 +8,7 @@ import {
   FolderKanban,
   Plus,
   Users,
-  Settings,
+  ImageIcon,
   FolderPlus,
   UserPlus,
   ImagePlus,
@@ -20,7 +20,7 @@ const NAV_ITEMS = [
   { href: "/admin/projects", label: "Projects", icon: FolderKanban },
   { href: "__action__", label: "Add", icon: Plus, isAction: true },
   { href: "/admin/clients", label: "Clients", icon: Users },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/admin/media", label: "Media", icon: ImageIcon },
 ] as const;
 
 function isActive(pathname: string, href: string, exact?: boolean) {
@@ -111,7 +111,7 @@ export function AdminMobilePwaNav() {
                 label="Add Media"
                 onClick={() => {
                   setSheetOpen(false);
-                  router.push("/admin/media");
+                  router.push("/admin/media?upload=1");
                 }}
               />
               <button

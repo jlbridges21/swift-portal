@@ -5,6 +5,7 @@ import { formatFileSize } from "@/lib/brand";
 import { buildMediaStoragePath } from "@/lib/media-upload";
 import { validateMediaFileBeforeUpload } from "@/lib/upload/validation";
 import { MAX_VIDEO_FILE_SIZE_BYTES } from "@/lib/upload/constants";
+import { logUploadStep } from "@/lib/upload/logger";
 
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { projectId, fileName, mimeType, fileSize, mediaType } = body;
 
-    if (!projectId || !fileName || !mediaType || fileSize == null) {
+    if (!fileName || !mediaType || fileSize == null) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }
 
@@ -29,18 +30,27 @@ export async function POST(request: Request) {
 
     const supabase = await createServiceClient();
     const bucket = mediaType === "document" ? "project-documents" : "project-media";
-    const filePath = buildMediaStoragePath(projectId, fileName);
+    const storageProjectId = projectId || null;
+    const filePath = buildMediaStoragePath(storageProjectId, fileName);
 
-    const { data: existing } = await supabase
-      .from("media_assets")
-      .select("display_order")
-      .eq("project_id", projectId)
-      .eq("media_type", mediaType)
-      .order("display_order", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const displayOrder = (existing?.display_order ?? -1) + 1;
+    let displayOrder = 0;
+    if (projectId) {
+      const { data: existing } = await supabase
+        .from("media_assets")
+        .select("display_order")
+        .eq("project_id", projectId)
+        .eq("media_type", mediaType)
+        .order("display_order", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      displayOrder = (existing?.display_order ?? -1) + 1;
+    } else {
+      const { count } = await supabase
+        .from("media_assets")
+        .select("id", { count: "exact", head: true })
+        .is("project_id", null);
+      displayOrder = count ?? 0;
+    }
 
     const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(filePath);
 
@@ -53,6 +63,16 @@ export async function POST(request: Request) {
     }
 
     const resumable = mediaType === "video" || fileSize > MAX_VIDEO_FILE_SIZE_BYTES / 10;
+
+    logUploadStep("info", {
+      step: "sign_prepared",
+      projectId: projectId ?? undefined,
+      fileName,
+      fileSize,
+      fileType: validation.mimeType,
+      filePath,
+      details: { resumable, unassigned: !projectId },
+    });
 
     return NextResponse.json({
       signedUrl: data.signedUrl,
