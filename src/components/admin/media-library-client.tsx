@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { MediaUploadModal } from "@/components/admin/media-upload-modal";
 import { useRouter } from "next/navigation";
+import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
 
 interface FilterOptions {
   clients: { id: string; name: string; full_name: string | null; company: string | null }[];
@@ -488,6 +489,14 @@ function AssetCard({
   );
 }
 
+function isVideoAsset(asset: LibraryAsset): boolean {
+  if (asset.kind === "video") return true;
+  const mime = asset.mime_type?.toLowerCase() ?? "";
+  if (mime.startsWith("video/")) return true;
+  const ext = asset.file_name?.split(".").pop()?.toLowerCase();
+  return ext === "mp4" || ext === "mov" || ext === "m4v";
+}
+
 function AssetDrawer({
   asset, projects, onClose, onUpdate, onFavorite, onDeleted,
 }: {
@@ -501,9 +510,9 @@ function AssetDrawer({
   const [detail, setDetail] = useState<{
     events: { id: string; event_type: string; description: string | null; created_at: string }[];
     downloads: { id: string; downloaded_by_email: string | null; created_at: string }[];
-    related: LibraryAsset[];
   } | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const isPwaMobile = useIsStandalonePwaMobile();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     title: asset.title,
@@ -518,7 +527,8 @@ function AssetDrawer({
   useEffect(() => {
     fetch(`/api/media/library/${asset.id}?kind=${asset.kind}`, { credentials: "include" })
       .then((r) => r.json())
-      .then((d) => setDetail({ events: d.events ?? [], downloads: d.downloads ?? [], related: d.related ?? [] }));
+      .then((d) => setDetail({ events: d.events ?? [], downloads: d.downloads ?? [] }));
+    if (isVideoAsset(asset)) return;
     if (asset.kind !== "tour" && asset.media_source !== "youtube") {
       fetch(`/api/media/download/${asset.id}?thumb=1`, { credentials: "include" })
         .then((r) => r.json())
@@ -617,12 +627,16 @@ function AssetDrawer({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        <div
+          className={cn("flex-1 overflow-y-auto p-4 space-y-6", isPwaMobile && "admin-pwa-fixed-bottom-pad")}
+        >
           <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-100">
             {asset.kind === "tour" && asset.kuula_url ? (
               <iframe src={asset.kuula_url} className="h-full w-full" title={asset.title} />
             ) : asset.media_source === "youtube" && asset.embed_url ? (
               <iframe src={asset.embed_url} className="h-full w-full" title={asset.title} allowFullScreen />
+            ) : isVideoAsset(asset) ? (
+              <MediaDetailVideoPlayer asset={asset} />
             ) : previewUrl ? (
               <RemoteImage src={previewUrl} alt={asset.title} fill className="object-contain" sizes="500px" />
             ) : (
@@ -634,9 +648,11 @@ function AssetDrawer({
             <Button variant="outline" size="sm" onClick={handleDownload} disabled={asset.kind === "tour"}>
               <Download className="h-4 w-4" /> Download
             </Button>
-            <Link href={`/admin/projects/${asset.project_id}`}>
-              <Button variant="outline" size="sm"><ExternalLink className="h-4 w-4" /> Open Project</Button>
-            </Link>
+            {asset.project_id && (
+              <Link href={`/admin/projects/${asset.project_id}`}>
+                <Button variant="outline" size="sm"><ExternalLink className="h-4 w-4" /> Open Project</Button>
+              </Link>
+            )}
             <Button variant="outline" size="sm" onClick={onFavorite}>
               <Star className={cn("h-4 w-4", asset.is_favorite && "fill-amber-400 text-amber-400")} />
             </Button>
@@ -733,23 +749,91 @@ function AssetDrawer({
             </section>
           )}
 
-          {detail && detail.related.length > 0 && (
-            <section>
-              <h3 className="text-sm font-semibold text-primary mb-2">Related Assets</h3>
-              <div className="flex gap-2 overflow-x-auto">
-                {detail.related.map((r) => (
-                  <div key={r.id} className="shrink-0 w-24 text-xs truncate text-muted">{r.title}</div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          <Button variant="ghost" size="sm" className="text-red-600" onClick={handleDelete}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="min-h-11 text-red-600"
+            onClick={handleDelete}
+          >
             <Trash2 className="h-4 w-4" /> Delete Asset
           </Button>
         </div>
       </aside>
     </>
+  );
+}
+
+function MediaDetailVideoPlayer({ asset }: { asset: LibraryAsset }) {
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadError(false);
+    setLoading(true);
+    setStreamUrl(null);
+    setPosterUrl(null);
+
+    async function load() {
+      try {
+        const [thumbRes, streamRes] = await Promise.all([
+          fetch(`/api/media/download/${asset.id}?thumb=1`, { credentials: "include" }),
+          fetch(`/api/media/download/${asset.id}?preview=1`, { credentials: "include" }),
+        ]);
+        if (cancelled) return;
+
+        const thumbData = await thumbRes.json();
+        const streamData = await streamRes.json();
+
+        if (thumbData.url) setPosterUrl(thumbData.url);
+        if (streamRes.ok && streamData.url) {
+          setStreamUrl(streamData.url);
+        } else {
+          setLoadError(true);
+        }
+      } catch {
+        if (!cancelled) setLoadError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [asset.id]);
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center text-muted">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  if (loadError || !streamUrl) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted">
+        <Video className="h-8 w-8 opacity-50" />
+        <p>Video preview unavailable.</p>
+      </div>
+    );
+  }
+
+  return (
+    <video
+      key={streamUrl}
+      src={streamUrl}
+      poster={posterUrl ?? undefined}
+      controls
+      playsInline
+      preload="metadata"
+      className="h-full w-full bg-black object-contain"
+      onError={() => setLoadError(true)}
+    />
   );
 }
 

@@ -9,6 +9,7 @@
   --color-border: #e2e8f0;
   --color-card: #ffffff;
   --font-sans: var(--font-geist-sans);
+  --admin-pwa-nav-height: 72px;
 }
 
 html {
@@ -80,5 +81,10 @@ body {
 
 /* Reserve space above iPhone home indicator when admin PWA bottom nav is visible */
 .admin-pwa-content-pad {
-  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(var(--admin-pwa-nav-height) + env(safe-area-inset-bottom, 0px));
+}
+
+/* Fixed drawers/modals that scroll above the admin PWA bottom nav */
+.admin-pwa-fixed-bottom-pad {
+  padding-bottom: calc(var(--admin-pwa-nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);
 }
