@@ -16,6 +16,8 @@ import { AdminPhotoGrid } from "@/components/admin/admin-photo-grid";
 import { RevisionDrawer } from "@/components/admin/revision-drawer";
 import { PROJECT_STATUSES } from "@/lib/constants";
 import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
+import { PricingPaymentWorkflow } from "@/components/admin/pricing-payment-workflow";
+import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
 import { QuoteSection } from "@/components/projects/quote-section";
 import type { Project, Client, MediaAsset, Tour, Payment, ShootProposal, ActivityLog, Revision, ProjectQuote, AssetReview } from "@/lib/types";
 import { normalizeStatus } from "@/lib/constants";
@@ -94,7 +96,6 @@ export function AdminProjectDetail({
   const [showShootCompleteModal, setShowShootCompleteModal] = useState(false);
   const [selectedRevision, setSelectedRevision] = useState<Revision | null>(null);
   const [coverImageId, setCoverImageId] = useState(initialProject.cover_image_id);
-  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [sendingForReview, setSendingForReview] = useState(false);
   const [markingShootComplete, setMarkingShootComplete] = useState(false);
   const [creatingPayment, setCreatingPayment] = useState(false);
@@ -593,42 +594,6 @@ export function AdminProjectDetail({
     }
   }
 
-  async function markPaid(paymentId: string) {
-    if (markingPaidId) return;
-    setMarkingPaidId(paymentId);
-    try {
-      const res = await fetch(`/api/payments/${paymentId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ project_id: initialProject.id }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        const { alreadyPaid, ...updated } = data as Payment & { alreadyPaid?: boolean };
-        setPaymentList((prev) =>
-          prev.map((p) => (p.id === paymentId ? (updated as Payment) : p))
-        );
-        toast.success(
-          alreadyPaid
-            ? "Payment was already marked as paid"
-            : "Marked as paid"
-        );
-        router.refresh();
-      } else {
-        toast.error(
-          typeof data.error === "string"
-            ? data.error
-            : "Failed to mark payment as paid"
-        );
-      }
-    } catch {
-      toast.error("Failed to mark payment as paid — network error");
-    } finally {
-      setMarkingPaidId(null);
-    }
-  }
-
   async function deletePayment(paymentId: string) {
     if (!confirm("Delete this payment link? This cannot be undone.")) return;
     const res = await fetch(`/api/payments/${paymentId}`, {
@@ -819,6 +784,12 @@ export function AdminProjectDetail({
           onUpdate={() => router.refresh()}
         />
       </Suspense>
+
+      <PricingPaymentWorkflow
+        project={initialProject}
+        quotes={quotes}
+        payments={paymentList}
+      />
 
       <QuoteSection
         projectId={initialProject.id}
@@ -1048,33 +1019,16 @@ export function AdminProjectDetail({
             </form>
           )}
           {paymentList.map((p) => (
-            <div key={`payment-${p.id}`} className="flex flex-col gap-2 border-b border-border py-4 text-sm last:border-0 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <span className="font-medium">${(p.amount / 100).toFixed(2)}</span>
-                <span className="text-muted ml-2">{p.description}</span>
-                <p className="text-xs text-muted mt-1">
-                  Created {new Date(p.created_at).toLocaleDateString()}
-                  {p.paid_at && ` · Paid ${new Date(p.paid_at).toLocaleDateString()}`}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`text-xs font-medium capitalize ${p.status === "paid" ? "text-emerald-600" : p.status === "cancelled" ? "text-muted" : "text-amber-600"}`}>
-                  {p.status}
-                </span>
-                {p.status === "pending" || p.status === "sent" ? (
-                  <Button variant="ghost" size="sm" disabled={!!markingPaidId} onClick={() => markPaid(p.id)}>
-                    {markingPaidId === p.id ? "Marking..." : "Mark Paid"}
-                  </Button>
-                ) : null}
-                {p.stripe_payment_link_url && (
-                  <a href={p.stripe_payment_link_url} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" size="sm">Open Link</Button>
-                  </a>
-                )}
-                <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deletePayment(p.id)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
+            <div key={`payment-${p.id}`} className="border-b border-border py-4 last:border-0">
+              <AdminPaymentActions
+                payment={p}
+                showProjectLink={false}
+                showDelete
+                onUpdated={(updated) =>
+                  setPaymentList((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
+                }
+                onDeleted={deletePayment}
+              />
             </div>
           ))}
           {paymentList.length === 0 && (

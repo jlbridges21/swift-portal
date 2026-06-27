@@ -22,6 +22,8 @@ import {
   DollarSign, FolderKanban, Pencil, Trash2, Copy, MessageSquare, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
+import type { Payment } from "@/lib/types";
 
 export type { ClientListRow } from "@/lib/clients-crm";
 import type { ClientListRow } from "@/lib/clients-crm";
@@ -306,7 +308,8 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
     referral_source: initialData.client.referral_source || "",
   });
 
-  const { client, stats, properties, projects, payments, communications, recentActivities, lastLogin } = data;
+  const { client, stats, properties, projects, communications, recentActivities, lastLogin } = data;
+  const [payments, setPayments] = useState(initialData.payments);
   const displayName = client.full_name || client.name;
 
   const activeProjects = projects.filter((p) => normalizeStatus(p.status) !== "delivered");
@@ -497,9 +500,29 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
       {/* Payments */}
       <section>
         <h2 className="text-base font-semibold text-primary mb-3">Payments</h2>
-        <PaymentGroup title="Outstanding" payments={outstandingPayments} />
-        <PaymentGroup title="Paid" payments={paidPayments} />
-        {failedPayments.length > 0 && <PaymentGroup title="Failed / Expired" payments={failedPayments} />}
+        <PaymentGroup
+          title="Outstanding"
+          payments={outstandingPayments}
+          onPaymentUpdated={(updated) =>
+            setPayments((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
+          }
+        />
+        <PaymentGroup
+          title="Paid"
+          payments={paidPayments}
+          onPaymentUpdated={(updated) =>
+            setPayments((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
+          }
+        />
+        {failedPayments.length > 0 && (
+          <PaymentGroup
+            title="Failed / Expired"
+            payments={failedPayments}
+            onPaymentUpdated={(updated) =>
+              setPayments((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
+            }
+          />
+        )}
         {payments.length === 0 && <p className="text-sm text-muted py-4 text-center">No payments yet.</p>}
       </section>
 
@@ -686,49 +709,25 @@ function ProjectGroup({
 function PaymentGroup({
   title,
   payments,
+  onPaymentUpdated,
 }: {
   title: string;
   payments: ClientCrmProfile["payments"];
+  onPaymentUpdated?: (payment: Payment) => void;
 }) {
   if (!payments.length) return null;
   return (
     <div className="mb-4">
       <h3 className="text-sm font-medium text-muted mb-2">{title} ({payments.length})</h3>
       <div className="rounded-xl border border-border bg-white divide-y divide-border shadow-sm">
-        {payments.map((payment) => {
-          const projectName = payment.projects?.project_name;
-          const projectId = payment.project_id;
-          return (
-          <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-            <div>
-              <p className="font-medium text-primary">{payment.description}</p>
-              {projectId ? (
-                <p className="text-xs text-muted mt-0.5">
-                  Project:{" "}
-                  <Link href={`/admin/projects/${projectId}`} className="text-accent hover:underline">
-                    {projectName || "View project"}
-                  </Link>
-                </p>
-              ) : (
-                <p className="text-xs text-muted/80 mt-0.5">No Project Assigned</p>
-              )}
-              <p className="text-xs text-muted">
-                {formatDate(payment.created_at)}
-                {payment.paid_at && ` · Paid ${formatDate(payment.paid_at)}`}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="font-medium">{formatCurrency(payment.amount)}</p>
-              <p className="text-xs capitalize text-muted">{payment.status}</p>
-              {payment.payment_link_url && payment.status !== "paid" && (
-                <a href={payment.payment_link_url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">
-                  Open link
-                </a>
-              )}
-            </div>
+        {payments.map((payment) => (
+          <div key={payment.id} className="px-4 py-3">
+            <AdminPaymentActions
+              payment={payment}
+              onUpdated={onPaymentUpdated}
+            />
           </div>
-          );
-        })}
+        ))}
       </div>
     </div>
   );

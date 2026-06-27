@@ -78,7 +78,9 @@ export function ProjectHero({
         <CoverPlaceholder variant="hero" />
       )}
 
-      <div className={`relative mx-auto max-w-6xl px-5 ${padding} sm:px-6 lg:px-8 safe-area-x`}>
+      <div
+        className={`relative mx-auto w-full max-w-6xl px-6 ${padding} sm:px-8 lg:px-10 safe-area-x overflow-x-hidden`}
+      >
         {isMicrosite && (
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
             Swift Aerial Media
@@ -86,7 +88,7 @@ export function ProjectHero({
         )}
         <StatusBadge status={status} audience={audience} className="mb-4" />
         <h1
-          className={`font-bold tracking-tight text-white ${
+          className={`font-bold tracking-tight text-white break-words ${
             isMicrosite
               ? "text-3xl sm:text-4xl lg:text-5xl leading-tight max-w-4xl"
               : "text-3xl sm:text-4xl"
@@ -96,9 +98,9 @@ export function ProjectHero({
         </h1>
         {subtitle && (
           <p
-            className={`mt-3 ${
+            className={`mt-3 break-words ${
               isMicrosite
-                ? "text-lg sm:text-xl text-slate-300 font-medium"
+                ? "text-lg sm:text-xl text-slate-300 font-medium max-w-3xl"
                 : "flex items-center gap-2 text-slate-300"
             }`}
           >
@@ -110,7 +112,7 @@ export function ProjectHero({
             {projectName}
           </p>
         )}
-        {children}
+        {children && <div className="mt-8 max-w-3xl">{children}</div>}
       </div>
     </section>
   );

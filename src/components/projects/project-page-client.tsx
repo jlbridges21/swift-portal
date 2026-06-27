@@ -32,6 +32,7 @@ import {
 import type { HeroMedia } from "@/lib/cover";
 import { ProjectHero } from "@/components/projects/project-hero";
 import { ProjectQuickActions } from "@/components/projects/project-quick-actions";
+import { ClientPricingCta } from "@/components/projects/client-pricing-cta";
 import { HashScrollHandler } from "@/components/ui/hash-scroll-handler";
 import { downloadMediaAsset, viewMediaAsset, isPdf } from "@/lib/download";
 import { toast } from "sonner";
@@ -206,14 +207,12 @@ export function ProjectPageClient({
         microsite={isClientView || isPreview}
       >
         {(isClientView || isPreview) && (
-          <div className="mt-8">
-            <ProjectQuickActions
-              status={project.status}
-              hasPendingPayment={pendingPayments.length > 0}
-              hasMedia={hasAnyMedia}
-              projectId={project.id}
-            />
-          </div>
+          <ProjectQuickActions
+            status={project.status}
+            hasPendingPayment={pendingPayments.length > 0}
+            hasMedia={hasAnyMedia}
+            projectId={project.id}
+          />
         )}
       </ProjectHero>
 
@@ -230,6 +229,10 @@ export function ProjectPageClient({
             <StatusTimeline currentStatus={project.status} />
           </CardContent>
         </Card>
+
+        {!isPreview && isClientView && (
+          <ClientPricingCta project={project} quotes={quotes} payments={payments} />
+        )}
 
         {!isPreview && (
           <QuoteSection

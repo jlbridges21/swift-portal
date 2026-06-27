@@ -216,6 +216,27 @@ export function QuoteSection({
     }
   }
 
+  async function quickConvertToOfficial(quote: ProjectQuote) {
+    setConverting(true);
+    const res = await fetch("/api/quotes", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id: quote.id, action: "convert_to_official" }),
+    });
+    setConverting(false);
+    if (res.ok) {
+      const official = await res.json();
+      setQuotes((prev) => [official, ...prev]);
+      onStatusChange?.("quote_sent");
+      toast.success("Official estimate created from preliminary quote");
+      router.refresh();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error((data as { error?: string }).error || "Failed to convert estimate");
+    }
+  }
+
   async function convertToOfficial() {
     if (!preliminaryQuote) return;
     setConverting(true);
@@ -324,6 +345,14 @@ export function QuoteSection({
     if (preliminary) {
       return (
         <>
+          <Button
+            variant="accent"
+            size="sm"
+            disabled={converting || loading}
+            onClick={() => quickConvertToOfficial(quote)}
+          >
+            <Send className="h-4 w-4" /> {converting ? "Converting…" : "Convert to Official Estimate"}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => openEditForm(quote)}>
             <Pencil className="h-4 w-4" /> Edit Estimate
           </Button>
