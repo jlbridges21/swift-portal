@@ -28,7 +28,9 @@ const PHASE_LABEL: Record<UploadPhase, string> = {
   queued: "Queued",
   validating: "Checking file…",
   uploading: "Uploading",
-  finalizing: "Uploaded, saving...",
+  generating_thumbnail: "Processing thumbnail…",
+  finalizing: "Uploaded, saving…",
+  saving: "Saving to library…",
   uploaded: "Complete",
   failed: "Failed",
 };
@@ -92,7 +94,12 @@ export function UploadProgressList({ items, className, onRetry, onRetrySave, onC
                     <>
                       <span className="text-xs text-muted">
                         {statusLabel(item)}
-                        {(item.phase === "uploading" || item.phase === "finalizing") && ` ${item.progress}%`}
+                        {item.phase === "uploading" && ` ${item.progress}%`}
+                        {(item.phase === "finalizing" ||
+                          item.phase === "generating_thumbnail" ||
+                          item.phase === "saving") &&
+                          item.progress > 0 &&
+                          ` ${item.progress}%`}
                       </span>
                       {eta && <span className="hidden text-xs text-muted sm:inline">{eta}</span>}
                       {onCancel && (

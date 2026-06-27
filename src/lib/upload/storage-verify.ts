@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logUploadStep } from "./logger";
 
-const BASE_ATTEMPTS = 8;
-const VIDEO_ATTEMPTS = 14;
-const BASE_DELAY_MS = 1500;
+const BASE_ATTEMPTS = 6;
+const VIDEO_ATTEMPTS = 10;
+const BASE_DELAY_MS = 1200;
+/** Hard cap so the complete API always returns within Vercel limits. */
+const MAX_VERIFY_DURATION_MS = 55_000;
 
 function splitStoragePath(filePath: string): { folder: string; fileName: string } {
   const idx = filePath.lastIndexOf("/");
@@ -53,15 +55,34 @@ export async function verifyStorageObject(
 ): Promise<{ ok: true } | { ok: false; error: string; details?: unknown }> {
   const isVideo = context.mediaType === "video";
   const maxAttempts = isVideo ? VIDEO_ATTEMPTS : BASE_ATTEMPTS;
+  const startedAt = Date.now();
+
+  logUploadStep("info", {
+    step: "verifying_storage_path",
+    ...context,
+    filePath,
+    details: { bucket, maxAttempts },
+  });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (Date.now() - startedAt > MAX_VERIFY_DURATION_MS) {
+      logUploadStep("warn", {
+        step: "verifying_storage_path",
+        ...context,
+        filePath,
+        providerMessage: "Storage verification time limit reached",
+        details: { attempt, elapsedMs: Date.now() - startedAt },
+      });
+      break;
+    }
+
     const listed = await verifyViaList(supabase, bucket, filePath);
     if (listed) {
       logUploadStep("info", {
-        step: "storage_verify",
+        step: "verifying_storage_path",
         ...context,
         filePath,
-        details: { attempt, bucket, method: "list" },
+        details: { attempt, bucket, method: "list", elapsedMs: Date.now() - startedAt },
       });
       return { ok: true };
     }
@@ -69,10 +90,10 @@ export async function verifyStorageObject(
     const signed = await verifyViaSignedUrl(supabase, bucket, filePath);
     if (signed) {
       logUploadStep("info", {
-        step: "storage_verify",
+        step: "verifying_storage_path",
         ...context,
         filePath,
-        details: { attempt, bucket, method: "signed_url" },
+        details: { attempt, bucket, method: "signed_url", elapsedMs: Date.now() - startedAt },
       });
       return { ok: true };
     }
@@ -81,11 +102,11 @@ export async function verifyStorageObject(
       step: "storage_verify_retry",
       ...context,
       filePath,
-      details: { attempt, bucket, maxAttempts },
+      details: { attempt, bucket, maxAttempts, elapsedMs: Date.now() - startedAt },
     });
 
-    if (attempt < maxAttempts) {
-      const delay = BASE_DELAY_MS * Math.min(attempt, 6);
+    if (attempt < maxAttempts && Date.now() - startedAt < MAX_VERIFY_DURATION_MS) {
+      const delay = BASE_DELAY_MS * Math.min(attempt, 5);
       await new Promise((r) => setTimeout(r, delay));
     }
   }

@@ -22,6 +22,18 @@ export type UploadPhase =
   | "queued"
   | "validating"
   | "uploading"
+  | "generating_thumbnail"
   | "finalizing"
+  | "saving"
   | "uploaded"
   | "failed";
+
+/** Max time to wait for client-side video frame capture (iPhone MP4 can hang without this). */
+export const THUMBNAIL_CAPTURE_TIMEOUT_MS = 12_000;
+
+/** Client fetch timeout for complete/save API (storage verify can retry server-side). */
+export const COMPLETE_UPLOAD_TIMEOUT_MS = 120_000;
+export const COMPLETE_UPLOAD_TIMEOUT_VIDEO_MS = 180_000;
+
+/** If TUS reports all bytes sent but onSuccess never fires (mobile Safari), resolve after this. */
+export const TUS_SUCCESS_FALLBACK_MS = 45_000;

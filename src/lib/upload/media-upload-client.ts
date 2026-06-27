@@ -1,6 +1,13 @@
 import * as tus from "tus-js-client";
 import { createClient } from "@/lib/supabase/client";
-import { DIRECT_UPLOAD_THRESHOLD_BYTES, UPLOAD_CHUNK_SIZE_BYTES, type UploadPhase } from "./constants";
+import {
+  COMPLETE_UPLOAD_TIMEOUT_MS,
+  COMPLETE_UPLOAD_TIMEOUT_VIDEO_MS,
+  DIRECT_UPLOAD_THRESHOLD_BYTES,
+  TUS_SUCCESS_FALLBACK_MS,
+  UPLOAD_CHUNK_SIZE_BYTES,
+  type UploadPhase,
+} from "./constants";
 import { getUploadErrorMessage } from "./errors";
 import { logUploadStep } from "./logger";
 import { UploadSaveError, type PendingSavePayload } from "./pending-save";
@@ -54,19 +61,55 @@ interface CompleteApiResponse {
   details?: unknown;
 }
 
+function uploadLogContext(
+  file: File,
+  mimeType: string,
+  projectId: string | null | undefined,
+  filePath?: string
+) {
+  return {
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: mimeType,
+    projectId: projectId ?? undefined,
+    filePath,
+  };
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const parentSignal = init.signal;
+  const onParentAbort = () => controller.abort();
+  parentSignal?.addEventListener("abort", onParentAbort);
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted && !parentSignal?.aborted) {
+      throw Object.assign(new Error(`Save request timed out after ${Math.round(timeoutMs / 1000)}s. Retry save.`), {
+        step: "saving_metadata",
+        timedOut: true,
+      });
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    parentSignal?.removeEventListener("abort", onParentAbort);
+  }
+}
+
 async function fetchSign(
   projectId: string | null,
   file: File,
   mediaType: string,
   mimeType: string
 ): Promise<SignResponse> {
-  logUploadStep("info", {
-    step: "sign_request",
-    projectId: projectId ?? undefined,
-    fileName: file.name,
-    fileSize: file.size,
-    fileType: mimeType,
-  });
+  logUploadStep("info", { step: "sign_request", ...uploadLogContext(file, mimeType, projectId) });
 
   const res = await fetch("/api/media/upload/sign", {
     method: "POST",
@@ -84,10 +127,7 @@ async function fetchSign(
   if (!res.ok) {
     logUploadStep("error", {
       step: "sign_request",
-      projectId,
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: mimeType,
+      ...uploadLogContext(file, mimeType, projectId),
       statusCode: res.status,
       providerMessage: data.error,
     });
@@ -96,9 +136,7 @@ async function fetchSign(
 
   logUploadStep("info", {
     step: "sign_response",
-    projectId,
-    fileName: file.name,
-    filePath: data.filePath,
+    ...uploadLogContext(file, mimeType, projectId, data.filePath),
     details: { bucket: data.bucket, resumable: data.resumable },
   });
 
@@ -107,20 +145,50 @@ async function fetchSign(
 
 export async function completeUpload(payload: PendingSavePayload): Promise<Record<string, unknown>> {
   logUploadStep("info", {
-    step: "complete_request",
+    step: "saving_metadata",
     projectId: payload.projectId,
     fileName: payload.fileName,
     fileSize: payload.fileSize,
     fileType: payload.mimeType,
     filePath: payload.filePath,
+    details: { skipStorageVerify: payload.skipStorageVerify ?? false },
   });
 
-  const res = await fetch("/api/media/upload/complete", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(payload),
-  });
+  const timeoutMs =
+    payload.mediaType === "video" ? COMPLETE_UPLOAD_TIMEOUT_VIDEO_MS : COMPLETE_UPLOAD_TIMEOUT_MS;
+
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      "/api/media/upload/complete",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      },
+      timeoutMs
+    );
+  } catch (err) {
+    const timedOut = (err as { timedOut?: boolean }).timedOut;
+    logUploadStep("error", {
+      step: timedOut ? "saving_metadata" : "complete_request",
+      projectId: payload.projectId,
+      fileName: payload.fileName,
+      fileSize: payload.fileSize,
+      fileType: payload.mimeType,
+      filePath: payload.filePath,
+      providerMessage: err instanceof Error ? err.message : String(err),
+    });
+    if (timedOut) {
+      throw new UploadSaveError(
+        err instanceof Error ? err.message : "Save timed out. Retry save.",
+        payload,
+        { step: "saving_metadata" }
+      );
+    }
+    throw err;
+  }
 
   let data: CompleteApiResponse = {};
   try {
@@ -133,15 +201,15 @@ export async function completeUpload(payload: PendingSavePayload): Promise<Recor
       filePath: payload.filePath,
       statusCode: res.status,
     });
-    throw Object.assign(new Error("Invalid server response while saving upload."), {
-      status: res.status,
-      phase: "finalizing",
+    throw new UploadSaveError("Invalid server response while saving upload.", payload, {
+      step: "saving_metadata",
+      statusCode: res.status,
     });
   }
 
   if (!res.ok || data.success === false) {
     logUploadStep("error", {
-      step: data.step || "complete_request",
+      step: data.step || "saving_metadata",
       projectId: payload.projectId,
       fileName: payload.fileName,
       fileSize: payload.fileSize,
@@ -160,7 +228,7 @@ export async function completeUpload(payload: PendingSavePayload): Promise<Recor
 
   const media = data.media ?? data;
   logUploadStep("info", {
-    step: "complete_success",
+    step: "save_complete",
     projectId: payload.projectId,
     fileName: payload.fileName,
     filePath: payload.filePath,
@@ -174,11 +242,15 @@ function uploadViaSignedPut(
   signedUrl: string,
   file: File,
   mimeType: string,
+  projectId: string | null,
   onProgress: (pct: number, loaded: number, total: number) => void,
+  onBinaryComplete: () => void,
   signal?: AbortSignal
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    let binaryCompleteFired = false;
+
     const onAbort = () => {
       xhr.abort();
       reject(new Error("Upload cancelled"));
@@ -189,17 +261,32 @@ function uploadViaSignedPut(
       if (e.lengthComputable) {
         const pct = Math.min(90, Math.round((e.loaded / e.total) * 90));
         onProgress(pct, e.loaded, e.total);
+        if (e.loaded >= e.total && !binaryCompleteFired) {
+          binaryCompleteFired = true;
+          logUploadStep("info", {
+            step: "binary_upload_complete",
+            ...uploadLogContext(file, mimeType, projectId),
+          });
+          onBinaryComplete();
+        }
       }
     });
     xhr.addEventListener("load", () => {
       signal?.removeEventListener("abort", onAbort);
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (!binaryCompleteFired) {
+          binaryCompleteFired = true;
+          logUploadStep("info", {
+            step: "binary_upload_complete",
+            ...uploadLogContext(file, mimeType, projectId),
+          });
+          onBinaryComplete();
+        }
+        resolve();
+      } else {
         logUploadStep("error", {
-          step: "storage_put",
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: mimeType,
+          step: "uploading_binary",
+          ...uploadLogContext(file, mimeType, projectId),
           statusCode: xhr.status,
         });
         reject(
@@ -226,6 +313,7 @@ function uploadViaTus(
   mimeType: string,
   projectId: string,
   onProgress: (pct: number, loaded: number, total: number) => void,
+  onBinaryComplete: () => void,
   signal?: AbortSignal
 ): Promise<void> {
   return new Promise(async (resolve, reject) => {
@@ -239,6 +327,28 @@ function uploadViaTus(
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const endpoint = `${supabaseUrl}/storage/v1/upload/resumable`;
+
+    let settled = false;
+    let binaryCompleteFired = false;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const finish = (via: "onSuccess" | "fallback") => {
+      if (settled) return;
+      settled = true;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      signal?.removeEventListener("abort", onAbort);
+      logUploadStep("info", {
+        step: "binary_upload_complete",
+        projectId,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: mimeType,
+        filePath,
+        details: { via },
+      });
+      if (!binaryCompleteFired) onBinaryComplete();
+      resolve();
+    };
 
     const upload = new tus.Upload(file, {
       endpoint,
@@ -257,8 +367,12 @@ function uploadViaTus(
         cacheControl: "3600",
       },
       onError: (error) => {
+        if (settled) return;
+        settled = true;
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        signal?.removeEventListener("abort", onAbort);
         logUploadStep("error", {
-          step: "storage_tus",
+          step: "uploading_binary",
           projectId,
           fileName: file.name,
           fileSize: file.size,
@@ -269,19 +383,39 @@ function uploadViaTus(
         reject(error);
       },
       onProgress: (bytesUploaded, bytesTotal) => {
-        const pct = Math.min(90, Math.round((bytesUploaded / bytesTotal) * 90));
+        const pct =
+          bytesTotal > 0 && bytesUploaded >= bytesTotal
+            ? 90
+            : Math.min(90, Math.round((bytesUploaded / bytesTotal) * 90));
         onProgress(pct, bytesUploaded, bytesTotal);
+
+        if (bytesTotal > 0 && bytesUploaded >= bytesTotal && !binaryCompleteFired) {
+          binaryCompleteFired = true;
+          logUploadStep("info", {
+            step: "binary_upload_complete",
+            projectId,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: mimeType,
+            filePath,
+            details: { via: "onProgress", awaitingOnSuccess: true },
+          });
+          onBinaryComplete();
+
+          fallbackTimer = setTimeout(() => {
+            logUploadStep("warn", {
+              step: "uploading_binary",
+              projectId,
+              fileName: file.name,
+              filePath,
+              providerMessage: "TUS onSuccess did not fire — continuing with fallback",
+              details: { fallbackMs: TUS_SUCCESS_FALLBACK_MS },
+            });
+            finish("fallback");
+          }, TUS_SUCCESS_FALLBACK_MS);
+        }
       },
-      onSuccess: () => {
-        logUploadStep("info", {
-          step: "storage_tus_complete",
-          projectId,
-          fileName: file.name,
-          filePath,
-          fileSize: file.size,
-        });
-        resolve();
-      },
+      onSuccess: () => finish("onSuccess"),
     });
 
     const onAbort = () => {
@@ -290,13 +424,40 @@ function uploadViaTus(
     };
     signal?.addEventListener("abort", onAbort);
 
-    upload
-      .findPreviousUploads()
-      .then((previous) => {
-        if (previous.length) upload.resumeFromPreviousUpload(previous[0]);
-        upload.start();
-      })
-      .catch(reject);
+    logUploadStep("info", {
+      step: "uploading_binary",
+      projectId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: mimeType,
+      filePath,
+      details: { bucket, endpoint: "tus" },
+    });
+
+    try {
+      const previous = await upload.findPreviousUploads();
+      if (previous.length) upload.resumeFromPreviousUpload(previous[0]);
+      upload.start();
+    } catch (err) {
+      if (!settled) {
+        settled = true;
+        signal?.removeEventListener("abort", onAbort);
+        reject(err);
+      }
+    }
+  });
+}
+
+function markBinaryComplete(
+  onProgress: UploadMediaOptions["onProgress"],
+  file: File,
+  mimeType: string
+) {
+  onProgress({
+    phase: "finalizing",
+    progress: 92,
+    bytesLoaded: file.size,
+    bytesTotal: file.size,
   });
 }
 
@@ -305,9 +466,20 @@ export async function retryMediaSave(
   pending: PendingSavePayload,
   onProgress?: (update: UploadProgressUpdate) => void
 ): Promise<UploadMediaResult> {
-  onProgress?.({ phase: "finalizing", progress: 95, bytesLoaded: pending.fileSize, bytesTotal: pending.fileSize });
+  onProgress?.({
+    phase: "saving",
+    progress: 96,
+    bytesLoaded: pending.fileSize,
+    bytesTotal: pending.fileSize,
+  });
   const asset = await completeUpload(pending);
   onProgress?.({ phase: "uploaded", progress: 100, bytesLoaded: pending.fileSize, bytesTotal: pending.fileSize });
+  logUploadStep("info", {
+    step: "ui_marked_complete",
+    fileName: pending.fileName,
+    filePath: pending.filePath,
+    projectId: pending.projectId,
+  });
   return { asset };
 }
 
@@ -315,16 +487,14 @@ export async function retryMediaSave(
 export async function uploadMediaFile(options: UploadMediaOptions): Promise<UploadMediaResult> {
   const { projectId, file, mediaType, onProgress, signal, metadata } = options;
 
+  logUploadStep("info", { step: "validating", ...uploadLogContext(file, file.type, projectId) });
   onProgress({ phase: "validating", progress: 0, bytesTotal: file.size });
 
   const validation = validateMediaFileBeforeUpload(file, mediaType);
   if (!validation.ok) {
     logUploadStep("error", {
-      step: "client_validation",
-      projectId: projectId ?? undefined,
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: file.type,
+      step: "validating",
+      ...uploadLogContext(file, file.type, projectId),
       providerMessage: validation.error,
     });
     throw new Error(validation.error);
@@ -335,13 +505,11 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
   if (mediaType === "video" && file.size > 100 * 1024 * 1024) {
     logUploadStep("info", {
       step: "large_file_warning",
-      projectId: projectId ?? undefined,
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: mimeType,
+      ...uploadLogContext(file, mimeType, projectId),
     });
   }
 
+  logUploadStep("info", { step: "queued", ...uploadLogContext(file, mimeType, projectId) });
   onProgress({ phase: "queued", progress: 2, bytesTotal: file.size });
 
   let sign: SignResponse;
@@ -368,40 +536,91 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
     binaryUploaded: true,
   };
 
+  const onBinaryComplete = () => markBinaryComplete(onProgress, file, mimeType);
+
   try {
     const report = (pct: number, loaded: number, total: number) => {
       onProgress({ phase: "uploading", progress: pct, bytesLoaded: loaded, bytesTotal: total });
     };
 
     if (useTus) {
-      await uploadViaTus(file, sign.bucket, sign.filePath, mimeType, projectId ?? "", report, signal);
-      // Allow Supabase storage to finalize large TUS objects before save verification.
-      await new Promise((r) => setTimeout(r, mediaType === "video" ? 2500 : 500));
+      await uploadViaTus(
+        file,
+        sign.bucket,
+        sign.filePath,
+        mimeType,
+        projectId ?? "",
+        report,
+        onBinaryComplete,
+        signal
+      );
     } else if (sign.signedUrl) {
-      await uploadViaSignedPut(sign.signedUrl, file, mimeType, report, signal);
+      await uploadViaSignedPut(
+        sign.signedUrl,
+        file,
+        mimeType,
+        projectId,
+        report,
+        onBinaryComplete,
+        signal
+      );
     } else {
       throw new Error("No upload URL returned from server.");
     }
   } catch (err) {
+    logUploadStep("error", {
+      step: "failed",
+      ...uploadLogContext(file, mimeType, projectId, sign.filePath),
+      providerMessage: err instanceof Error ? err.message : String(err),
+    });
     if (err instanceof UploadSaveError) throw err;
     throw new Error(getUploadErrorMessage(err, { phase: "uploading" }));
   }
 
+  // Brief settle for storage eventual consistency (UI already shows post-upload state).
+  await new Promise((r) => setTimeout(r, mediaType === "video" ? 800 : 200));
+
   if (mediaType === "video") {
-    const thumbnailPath = await uploadVideoThumbnail(sign.bucket, sign.filePath, file, {
-      fileName: file.name,
-      projectId,
+    onProgress({
+      phase: "generating_thumbnail",
+      progress: 94,
+      bytesLoaded: file.size,
+      bytesTotal: file.size,
     });
-    if (thumbnailPath) pendingSave.thumbnailPath = thumbnailPath;
+    try {
+      const thumbnailPath = await uploadVideoThumbnail(sign.bucket, sign.filePath, file, {
+        fileName: file.name,
+        projectId,
+        filePath: sign.filePath,
+      });
+      if (thumbnailPath) pendingSave.thumbnailPath = thumbnailPath;
+    } catch (thumbErr) {
+      logUploadStep("warn", {
+        step: "generating_thumbnail",
+        ...uploadLogContext(file, mimeType, projectId, sign.filePath),
+        providerMessage: thumbErr instanceof Error ? thumbErr.message : String(thumbErr),
+      });
+    }
   }
 
-  onProgress({ phase: "finalizing", progress: 95, bytesLoaded: file.size, bytesTotal: file.size });
+  onProgress({ phase: "saving", progress: 96, bytesLoaded: file.size, bytesTotal: file.size });
 
   try {
     const asset = await completeUpload(pendingSave);
     onProgress({ phase: "uploaded", progress: 100, bytesLoaded: file.size, bytesTotal: file.size });
+    logUploadStep("info", {
+      step: "ui_marked_complete",
+      ...uploadLogContext(file, mimeType, projectId, sign.filePath),
+      details: { assetId: (asset as { id?: string }).id },
+    });
     return { asset };
   } catch (err) {
+    logUploadStep("error", {
+      step: "failed",
+      ...uploadLogContext(file, mimeType, projectId, sign.filePath),
+      providerMessage: err instanceof Error ? err.message : String(err),
+      details: err instanceof UploadSaveError ? { saveStep: err.step } : undefined,
+    });
     if (err instanceof UploadSaveError) throw err;
     throw new Error(getUploadErrorMessage(err, { phase: "finalizing", status: (err as { status?: number }).status }));
   }

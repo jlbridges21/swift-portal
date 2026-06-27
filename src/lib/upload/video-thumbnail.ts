@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/client";
 import { buildThumbnailStoragePath } from "@/lib/media-upload";
+import { THUMBNAIL_CAPTURE_TIMEOUT_MS } from "./constants";
 import { logUploadStep } from "./logger";
 
-/** Capture a JPEG thumbnail from a local video file (~1s in). */
-export async function captureVideoThumbnailBlob(file: File, seekSeconds = 1): Promise<Blob | null> {
-  if (typeof window === "undefined") return null;
+function captureVideoThumbnailBlobInner(file: File, seekSeconds: number): Promise<Blob | null> {
+  if (typeof window === "undefined") return Promise.resolve(null);
 
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
@@ -13,6 +13,14 @@ export async function captureVideoThumbnailBlob(file: File, seekSeconds = 1): Pr
     video.playsInline = true;
     video.preload = "metadata";
     video.src = url;
+
+    let settled = false;
+    const finish = (blob: Blob | null) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(blob);
+    };
 
     const cleanup = () => {
       URL.revokeObjectURL(url);
@@ -24,8 +32,7 @@ export async function captureVideoThumbnailBlob(file: File, seekSeconds = 1): Pr
       try {
         video.currentTime = Math.min(seekSeconds, Math.max(0, (video.duration || seekSeconds) - 0.1));
       } catch {
-        cleanup();
-        resolve(null);
+        finish(null);
       }
     });
 
@@ -40,49 +47,69 @@ export async function captureVideoThumbnailBlob(file: File, seekSeconds = 1): Pr
         canvas.height = height;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          cleanup();
-          resolve(null);
+          finish(null);
           return;
         }
         ctx.drawImage(video, 0, 0, width, height);
         canvas.toBlob(
-          (blob) => {
-            cleanup();
-            resolve(blob);
-          },
+          (blob) => finish(blob),
           "image/jpeg",
           0.82
         );
       } catch {
-        cleanup();
-        resolve(null);
+        finish(null);
       }
     });
 
-    video.addEventListener("error", () => {
-      cleanup();
-      resolve(null);
-    });
+    video.addEventListener("error", () => finish(null));
   });
+}
+
+/** Capture a JPEG thumbnail from a local video file (~1s in). Times out on mobile/iPhone MP4. */
+export async function captureVideoThumbnailBlob(
+  file: File,
+  seekSeconds = 1,
+  timeoutMs = THUMBNAIL_CAPTURE_TIMEOUT_MS
+): Promise<Blob | null> {
+  const result = await Promise.race([
+    captureVideoThumbnailBlobInner(file, seekSeconds),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+
+  if (result === null) {
+    logUploadStep("warn", {
+      step: "thumbnail_generate",
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      providerMessage: "Thumbnail capture timed out or failed — continuing without thumbnail",
+      details: { timeoutMs },
+    });
+  }
+
+  return result;
 }
 
 export { buildThumbnailStoragePath };
 
-/** Upload a small JPEG thumbnail alongside the video. Non-blocking on failure. */
+/** Upload a small JPEG thumbnail alongside the video. Never blocks upload on failure. */
 export async function uploadVideoThumbnail(
   bucket: string,
   videoFilePath: string,
   file: File,
-  context?: { fileName?: string; projectId?: string | null }
+  context?: { fileName?: string; projectId?: string | null; filePath?: string }
 ): Promise<string | null> {
+  logUploadStep("info", {
+    step: "generating_thumbnail",
+    fileName: context?.fileName ?? file.name,
+    fileSize: file.size,
+    fileType: file.type,
+    projectId: context?.projectId ?? undefined,
+    filePath: context?.filePath ?? videoFilePath,
+  });
+
   const blob = await captureVideoThumbnailBlob(file);
   if (!blob) {
-    logUploadStep("warn", {
-      step: "thumbnail_generate",
-      fileName: context?.fileName ?? file.name,
-      projectId: context?.projectId ?? undefined,
-      providerMessage: "Could not capture video frame",
-    });
     return null;
   }
 

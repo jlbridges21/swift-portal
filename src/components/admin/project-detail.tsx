@@ -281,7 +281,7 @@ export function AdminProjectDetail({
     const item = uploadItems.find((i) => i.id === uploadId);
     if (!item?.pendingSave) return;
 
-    patchUploadItem(uploadId, { status: "uploading", phase: "finalizing", progress: 95, error: undefined });
+    patchUploadItem(uploadId, { status: "uploading", phase: "saving", progress: 96, error: undefined });
     try {
       const retryPayload = {
         ...item.pendingSave,
