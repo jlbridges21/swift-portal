@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins } from "@/lib/notifications";
 import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
-import { defaultProjectTitle } from "@/lib/address";
+import { defaultProjectTitle, resolveAddressFromBody } from "@/lib/address";
 import { linkProjectToProperty } from "@/lib/properties";
 import { touchClientActivity } from "@/lib/clients-data";
 
@@ -16,7 +16,6 @@ export async function POST(request: Request) {
       email,
       phone,
       company,
-      property_address,
       service_requested,
       preferred_date,
       notes,
@@ -24,7 +23,12 @@ export async function POST(request: Request) {
       confirm_password,
     } = body;
 
-    if (!name || !email || !property_address || !service_requested || !password) {
+    const { property_address, error: addressError } = resolveAddressFromBody(body);
+    if (addressError) {
+      return NextResponse.json({ error: addressError }, { status: 400 });
+    }
+
+    if (!name || !email || !service_requested || !password) {
       return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
     }
 

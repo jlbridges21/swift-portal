@@ -190,25 +190,57 @@ function matchesSearch(asset: LibraryAsset, q: string): boolean {
   return hay.includes(q.toLowerCase());
 }
 
-function mapMediaRow(
-  row: MediaAsset & {
-    projects: {
-      id: string;
-      project_name: string;
-      service_type: string;
-      status: string;
-      property_address: string;
-      cover_image_id: string | null;
-      client_id: string;
-      property_id: string | null;
-      clients: { id: string; name: string; full_name: string | null; company: string | null } | null;
-      properties: { property_type: string | null } | null;
-    };
-    media_asset_tags?: { tag: string }[];
+type ProjectRow = {
+  id: string;
+  project_name: string;
+  service_type: string;
+  status: string;
+  property_address: string;
+  cover_image_id: string | null;
+  client_id: string;
+  property_id: string | null;
+  clients: { id: string; name: string; full_name: string | null; company: string | null } | { id: string; name: string; full_name: string | null; company: string | null }[] | null;
+  properties: { property_type: string | null } | { property_type: string | null }[] | null;
+};
+
+function unwrapRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+async function loadProjectMap(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  projectIds: string[]
+): Promise<Map<string, ProjectRow>> {
+  const map = new Map<string, ProjectRow>();
+  if (!projectIds.length) return map;
+
+  const unique = [...new Set(projectIds)];
+  const chunkSize = 100;
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from("projects")
+      .select(
+        "id, project_name, service_type, status, property_address, cover_image_id, client_id, property_id, clients(id, name, full_name, company), properties(property_type)"
+      )
+      .in("id", chunk);
+
+    if (error) {
+      console.error("[media-library] projects batch failed:", error.message);
+      continue;
+    }
+    (data ?? []).forEach((row) => map.set(row.id, row as ProjectRow));
   }
+  return map;
+}
+
+function mapMediaRowWithProject(
+  row: MediaAsset,
+  project: ProjectRow
 ): LibraryAsset {
-  const project = row.projects;
-  const client = project.clients;
+  const client = unwrapRelation(project.clients);
+  const property = unwrapRelation(project.properties);
   return {
     id: row.id,
     kind: row.media_type as LibraryAssetKind,
@@ -220,24 +252,24 @@ function mapMediaRow(
     project_status: project.status,
     service_type: project.service_type,
     property_address: project.property_address,
-    property_type: project.properties?.property_type ?? null,
+    property_type: property?.property_type ?? null,
     client_id: row.client_id ?? project.client_id,
     client_name: client?.full_name || client?.name || "—",
     client_company: client?.company ?? null,
     property_id: row.property_id ?? project.property_id,
     media_source: row.media_source,
     file_size: row.file_size,
-    width: (row as MediaAsset & { width?: number }).width ?? null,
-    height: (row as MediaAsset & { height?: number }).height ?? null,
-    duration_seconds: (row as MediaAsset & { duration_seconds?: number }).duration_seconds ?? null,
-    download_count: (row as MediaAsset & { download_count?: number }).download_count ?? 0,
-    is_favorite: (row as MediaAsset & { is_favorite?: boolean }).is_favorite ?? false,
-    tags: (row.media_asset_tags ?? []).map((t) => t.tag),
-    description: (row as MediaAsset & { description?: string }).description ?? null,
-    alt_text: (row as MediaAsset & { alt_text?: string }).alt_text ?? null,
-    notes: (row as MediaAsset & { notes?: string }).notes ?? null,
+    width: row.width ?? null,
+    height: row.height ?? null,
+    duration_seconds: row.duration_seconds ?? null,
+    download_count: row.download_count ?? 0,
+    is_favorite: row.is_favorite ?? false,
+    tags: [],
+    description: row.description ?? null,
+    alt_text: row.alt_text ?? null,
+    notes: row.notes ?? null,
     created_at: row.created_at,
-    captured_at: (row as MediaAsset & { captured_at?: string }).captured_at ?? null,
+    captured_at: row.captured_at ?? null,
     is_cover: project.cover_image_id === row.id,
     mime_type: row.mime_type,
     youtube_url: row.youtube_url,
@@ -245,32 +277,15 @@ function mapMediaRow(
     kuula_url: null,
     visibility: row.visibility ?? null,
     downloadable: row.downloadable ?? null,
-    camera_model: (row as MediaAsset & { camera_model?: string }).camera_model ?? null,
-    orientation: (row as MediaAsset & { orientation?: string }).orientation ?? null,
-    version: (row as MediaAsset & { version?: number }).version ?? 1,
+    camera_model: row.camera_model ?? null,
+    orientation: row.orientation ?? null,
+    version: row.version ?? 1,
   };
 }
 
-function mapTourRow(
-  row: Tour & {
-    is_favorite?: boolean;
-    description?: string | null;
-    download_count?: number;
-    projects: {
-      id: string;
-      project_name: string;
-      service_type: string;
-      status: string;
-      property_address: string;
-      client_id: string;
-      property_id: string | null;
-      clients: { id: string; name: string; full_name: string | null; company: string | null } | null;
-      properties: { property_type: string | null } | null;
-    };
-  }
-): LibraryAsset {
-  const project = row.projects;
-  const client = project.clients;
+function mapTourRowWithProject(row: Tour, project: ProjectRow): LibraryAsset {
+  const client = unwrapRelation(project.clients);
+  const property = unwrapRelation(project.properties);
   return {
     id: row.id,
     kind: "tour",
@@ -282,7 +297,7 @@ function mapTourRow(
     project_status: project.status,
     service_type: project.service_type,
     property_address: project.property_address,
-    property_type: project.properties?.property_type ?? null,
+    property_type: property?.property_type ?? null,
     client_id: project.client_id,
     client_name: client?.full_name || client?.name || "—",
     client_company: client?.company ?? null,
@@ -305,7 +320,7 @@ function mapTourRow(
     youtube_url: null,
     embed_url: row.embed_code,
     kuula_url: row.kuula_url,
-    visibility: null,
+    visibility: row.client_visible === false ? "admin" : "client",
     downloadable: null,
     camera_model: null,
     orientation: null,
@@ -313,99 +328,111 @@ function mapTourRow(
   };
 }
 
-async function attachTagsToAssets(
-  supabase: Awaited<ReturnType<typeof createServiceClient>>,
-  assets: LibraryAsset[]
-): Promise<LibraryAsset[]> {
-  if (!assets.length) return assets;
-  const ids = assets.map((a) => a.id);
-  const { data: tagRows, error } = await supabase
-    .from("media_asset_tags")
-    .select("media_asset_id, tag")
-    .in("media_asset_id", ids);
+async function fetchMediaAssets(filters: LibraryFilters): Promise<LibraryAsset[]> {
+  const supabase = await createServiceClient();
+  const presetRange = dateRangeFromPreset(filters.datePreset);
+  const from = filters.dateFrom ?? presetRange.from;
+  const to = filters.dateTo ?? presetRange.to;
 
-  if (error || !tagRows?.length) return assets;
+  if (filters.type === "tour" || filters.source === "kuula") {
+    return [];
+  }
 
-  const tagMap = new Map<string, string[]>();
-  tagRows.forEach((row) => {
-    const list = tagMap.get(row.media_asset_id) ?? [];
-    list.push(row.tag);
-    tagMap.set(row.media_asset_id, list);
-  });
+  let query = supabase.from("media_assets").select("*").order("created_at", { ascending: false });
 
-  return assets.map((a) => ({ ...a, tags: tagMap.get(a.id) ?? a.tags }));
+  if (filters.type && filters.type !== "tour") {
+    if (filters.type === "video") {
+      query = query.in("media_type", ["video"]);
+    } else {
+      query = query.eq("media_type", filters.type);
+    }
+  }
+  if (filters.source && filters.source !== "kuula") {
+    query = query.eq("media_source", filters.source);
+  }
+  if (filters.clientId) query = query.eq("client_id", filters.clientId);
+  if (filters.propertyId) query = query.eq("property_id", filters.propertyId);
+  if (from) query = query.gte("created_at", from);
+  if (to) query = query.lte("created_at", to);
+
+  const { data, error } = await query.limit(2000);
+
+  if (error) {
+    console.error("[media-library] media_assets query failed:", error.message);
+    return [];
+  }
+
+  const rows = (data ?? []) as MediaAsset[];
+  let filtered = rows;
+
+  if (filters.favoritesOnly) {
+    filtered = filtered.filter((r) => (r as MediaAsset & { is_favorite?: boolean }).is_favorite === true);
+  }
+
+  const projectMap = await loadProjectMap(
+    supabase,
+    filtered.map((r) => r.project_id)
+  );
+
+  return filtered
+    .map((row) => {
+      const project = projectMap.get(row.project_id);
+      if (!project) return null;
+      return mapMediaRowWithProject(row, project);
+    })
+    .filter((a): a is LibraryAsset => a !== null);
+}
+
+async function fetchTourAssets(filters: LibraryFilters): Promise<LibraryAsset[]> {
+  if (filters.type && filters.type !== "tour") return [];
+  if (filters.source && filters.source !== "kuula") return [];
+
+  const supabase = await createServiceClient();
+  const presetRange = dateRangeFromPreset(filters.datePreset);
+  const from = filters.dateFrom ?? presetRange.from;
+  const to = filters.dateTo ?? presetRange.to;
+
+  let query = supabase.from("tours").select("*").order("created_at", { ascending: false });
+  if (from) query = query.gte("created_at", from);
+  if (to) query = query.lte("created_at", to);
+
+  const { data, error } = await query.limit(500);
+  if (error) {
+    console.error("[media-library] tours query failed:", error.message);
+    return [];
+  }
+
+  let rows = (data ?? []) as Tour[];
+  if (filters.favoritesOnly) {
+    rows = rows.filter((r) => r.is_favorite === true);
+  }
+
+  const projectMap = await loadProjectMap(
+    supabase,
+    rows.map((r) => r.project_id)
+  );
+
+  return rows
+    .map((row) => {
+      const project = projectMap.get(row.project_id);
+      if (!project) return null;
+      return mapTourRowWithProject(row, project);
+    })
+    .filter((a): a is LibraryAsset => a !== null);
 }
 
 export async function queryMediaLibrary(filters: LibraryFilters): Promise<LibraryResult> {
-  const supabase = await createServiceClient();
   const page = Math.max(1, filters.page ?? 1);
   const limit = Math.min(100, filters.limit ?? DEFAULT_LIMIT);
   const includeTours = !filters.type || filters.type === "tour";
   const includeMedia = !filters.type || filters.type !== "tour";
 
-  const presetRange = dateRangeFromPreset(filters.datePreset);
-  const from = filters.dateFrom ?? presetRange.from;
-  const to = filters.dateTo ?? presetRange.to;
+  const [mediaRows, tourRows] = await Promise.all([
+    includeMedia ? fetchMediaAssets(filters) : Promise.resolve([]),
+    includeTours ? fetchTourAssets(filters) : Promise.resolve([]),
+  ]);
 
-  const projectSelect = `
-    id, project_name, service_type, status, property_address, cover_image_id, client_id, property_id,
-    clients(id, name, full_name, company),
-    properties(property_type)
-  `;
-
-  let mediaRows: LibraryAsset[] = [];
-  let tourRows: LibraryAsset[] = [];
-
-  if (includeMedia) {
-    let query = supabase
-      .from("media_assets")
-      .select(`*, projects!inner(${projectSelect})`)
-      .order("created_at", { ascending: false });
-
-    if (filters.type && filters.type !== "tour") {
-      query = query.eq("media_type", filters.type);
-    }
-    if (filters.source && filters.source !== "kuula") {
-      query = query.eq("media_source", filters.source);
-    }
-    if (filters.source === "kuula") {
-      // Kuula tours live in the tours table — skip media_assets when filtering Kuula only
-      mediaRows = [];
-    } else {
-      if (filters.clientId) query = query.eq("client_id", filters.clientId);
-      if (filters.propertyId) query = query.eq("property_id", filters.propertyId);
-      if (filters.favoritesOnly) query = query.eq("is_favorite", true);
-      if (from) query = query.gte("created_at", from);
-      if (to) query = query.lte("created_at", to);
-
-      const { data, error } = await query.limit(2000);
-
-      if (error) {
-        console.error("[media-library] media_assets query failed:", error.message);
-      } else {
-        mediaRows = (data ?? []).map((row) => mapMediaRow(row as Parameters<typeof mapMediaRow>[0]));
-        mediaRows = await attachTagsToAssets(supabase, mediaRows);
-      }
-    }
-  }
-
-  if (includeTours && (!filters.source || filters.source === "kuula")) {
-    let tourQuery = supabase
-      .from("tours")
-      .select(`*, projects!inner(${projectSelect})`)
-      .order("created_at", { ascending: false });
-
-    if (filters.favoritesOnly) tourQuery = tourQuery.eq("is_favorite", true);
-    if (from) tourQuery = tourQuery.gte("created_at", from);
-    if (to) tourQuery = tourQuery.lte("created_at", to);
-
-    const { data: tours, error: tourError } = await tourQuery.limit(500);
-    if (tourError) {
-      console.error("[media-library] tours query failed:", tourError.message);
-    } else {
-      tourRows = (tours ?? []).map((row) => mapTourRow(row as Parameters<typeof mapTourRow>[0]));
-    }
-  }
+  const supabase = await createServiceClient();
 
   // Deduplicate by kind+id (safety)
   const seen = new Set<string>();
@@ -415,6 +442,8 @@ export async function queryMediaLibrary(filters: LibraryFilters): Promise<Librar
     seen.add(key);
     return true;
   });
+
+  combined = await attachTagsToAssets(supabase, combined);
 
   if (filters.service) {
     combined = combined.filter((a) => a.service_type === filters.service);
@@ -450,32 +479,48 @@ export async function queryMediaLibrary(filters: LibraryFilters): Promise<Librar
   };
 }
 
+async function attachTagsToAssets(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  assets: LibraryAsset[]
+): Promise<LibraryAsset[]> {
+  if (!assets.length) return assets;
+  const ids = assets.filter((a) => a.kind !== "tour").map((a) => a.id);
+  if (!ids.length) return assets;
+  const { data: tagRows, error } = await supabase
+    .from("media_asset_tags")
+    .select("media_asset_id, tag")
+    .in("media_asset_id", ids);
+
+  if (error || !tagRows?.length) return assets;
+
+  const tagMap = new Map<string, string[]>();
+  tagRows.forEach((row) => {
+    const list = tagMap.get(row.media_asset_id) ?? [];
+    list.push(row.tag);
+    tagMap.set(row.media_asset_id, list);
+  });
+
+  return assets.map((a) => ({ ...a, tags: tagMap.get(a.id) ?? a.tags }));
+}
+
 export async function getMediaAssetDetail(assetId: string, kind: LibraryAssetKind) {
   const supabase = await createServiceClient();
-  const projectSelect = `
-    id, project_name, service_type, status, property_address, cover_image_id, client_id, property_id,
-    clients(id, name, full_name, company, email),
-    properties(id, property_type, address)
-  `;
 
   if (kind === "tour") {
-    const { data } = await supabase
-      .from("tours")
-      .select(`*, projects!inner(${projectSelect})`)
-      .eq("id", assetId)
-      .maybeSingle();
+    const { data } = await supabase.from("tours").select("*").eq("id", assetId).maybeSingle();
     if (!data) return null;
-    return mapTourRow(data as Parameters<typeof mapTourRow>[0]);
+    const projectMap = await loadProjectMap(supabase, [data.project_id]);
+    const project = projectMap.get(data.project_id);
+    if (!project) return null;
+    return mapTourRowWithProject(data as Tour, project);
   }
 
-  const { data } = await supabase
-    .from("media_assets")
-    .select(`*, projects!inner(${projectSelect})`)
-    .eq("id", assetId)
-    .maybeSingle();
-
+  const { data } = await supabase.from("media_assets").select("*").eq("id", assetId).maybeSingle();
   if (!data) return null;
-  const asset = mapMediaRow(data as Parameters<typeof mapMediaRow>[0]);
+  const projectMap = await loadProjectMap(supabase, [data.project_id]);
+  const project = projectMap.get(data.project_id);
+  if (!project) return null;
+  const asset = mapMediaRowWithProject(data as MediaAsset, project);
   const [withTags] = await attachTagsToAssets(supabase, [asset]);
   return withTags;
 }

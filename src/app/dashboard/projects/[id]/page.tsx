@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { getProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getProjectHeroMedia } from "@/lib/cover";
+import { filterClientMedia, filterClientTours } from "@/lib/client-media";
 import { redirect, notFound } from "next/navigation";
 import { filterClientVisibleActivities } from "@/lib/communications";
 import { getClientVisibleQuotes } from "@/lib/quote-display";
@@ -56,9 +57,11 @@ async function ProjectContent({
 
   const appSettings = await getAppSettings();
   const hero = await getProjectHeroMedia(supabase, project);
-  const photos = media?.filter((m) => m.media_type === "photo") ?? [];
-  const videos = media?.filter((m) => m.media_type === "video") ?? [];
-  const documents = media?.filter((m) => m.media_type === "document") ?? [];
+  const visibleMedia = filterClientMedia(media ?? []);
+  const visibleTours = filterClientTours(tours ?? []);
+  const photos = visibleMedia.filter((m) => m.media_type === "photo");
+  const videos = visibleMedia.filter((m) => m.media_type === "video");
+  const documents = visibleMedia.filter((m) => m.media_type === "document");
 
   return (
     <>
@@ -71,7 +74,7 @@ async function ProjectContent({
         photos={photos}
         videos={videos}
         documents={documents}
-        tours={tours ?? []}
+        tours={visibleTours}
         payments={payments ?? []}
         revisions={revisions ?? []}
         shootProposals={shootProposals ?? []}

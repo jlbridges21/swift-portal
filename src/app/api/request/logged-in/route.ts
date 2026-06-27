@@ -4,7 +4,7 @@ import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins } from "@/lib/notifications";
 import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
-import { defaultProjectTitle } from "@/lib/address";
+import { defaultProjectTitle, resolveAddressFromBody } from "@/lib/address";
 import { linkProjectToProperty } from "@/lib/properties";
 import { touchClientActivity } from "@/lib/clients-data";
 
@@ -15,10 +15,15 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { property_address, service_requested, preferred_date, notes, company, phone } = body;
+  const { service_requested, preferred_date, notes, company, phone } = body;
 
-  if (!property_address || !service_requested) {
-    return NextResponse.json({ error: "Property address and service are required." }, { status: 400 });
+  const { property_address, error: addressError } = resolveAddressFromBody(body);
+  if (addressError) {
+    return NextResponse.json({ error: addressError }, { status: 400 });
+  }
+
+  if (!service_requested) {
+    return NextResponse.json({ error: "Service type is required." }, { status: 400 });
   }
 
   const supabase = await createServiceClient();

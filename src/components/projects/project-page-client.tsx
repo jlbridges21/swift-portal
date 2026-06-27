@@ -112,7 +112,7 @@ export function ProjectPageClient({
   const downloadsUnlocked = isPreview || isAdmin || canDownloadDeliverables(status);
   const hasAnyMedia = photos.length > 0 || videos.length > 0 || tours.length > 0 || documents.length > 0;
   const mediaVisible = isPreview || isAdmin || hasAnyMedia;
-  const pendingPayments = payments.filter((p) => p.status === "pending");
+  const pendingPayments = payments.filter((p) => p.status === "pending" || p.status === "sent");
   const clientStep = getClientNextStep(project, pendingPayments.length > 0, shootProposals);
   const uploadedVideos = videos.filter((v) => v.media_source !== "youtube");
   const youtubeVideos = videos.filter((v) => v.media_source === "youtube");
@@ -209,6 +209,7 @@ export function ProjectPageClient({
               status={project.status}
               hasPendingPayment={pendingPayments.length > 0}
               hasMedia={hasAnyMedia}
+              projectId={project.id}
             />
           </div>
         )}

@@ -39,6 +39,53 @@ export function parseAddress(fullAddress: string): ParsedAddress {
   };
 }
 
+export function buildFullAddress(fields: {
+  street_address: string;
+  city: string;
+  state: string;
+  zip_code: string;
+}): string {
+  const street = fields.street_address.trim();
+  const cityStateZip = [fields.city.trim(), fields.state.trim().toUpperCase(), fields.zip_code.trim()]
+    .filter(Boolean)
+    .join(", ")
+    .replace(/,\s*,/g, ",");
+  return [street, cityStateZip].filter(Boolean).join(", ");
+}
+
+export function validateStructuredAddress(fields: {
+  street_address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+}): string | null {
+  if (!fields.street_address?.trim()) return "Street address is required.";
+  if (!fields.city?.trim()) return "City is required.";
+  if (!fields.state?.trim()) return "State is required.";
+  if (!fields.zip_code?.trim()) return "ZIP code is required.";
+  return null;
+}
+
+export function resolveAddressFromBody(body: Record<string, unknown>): {
+  property_address: string;
+  error?: string;
+} {
+  const street = String(body.street_address ?? "").trim();
+  const city = String(body.city ?? "").trim();
+  const state = String(body.state ?? "").trim();
+  const zip = String(body.zip_code ?? "").trim();
+  const legacy = String(body.property_address ?? "").trim();
+
+  if (street && city && state && zip) {
+    return { property_address: buildFullAddress({ street_address: street, city, state, zip_code: zip }) };
+  }
+
+  if (legacy) return { property_address: legacy };
+
+  const err = validateStructuredAddress({ street_address: street, city, state, zip_code: zip });
+  return { property_address: "", error: err ?? "Complete address is required." };
+}
+
 export function defaultProjectTitle(propertyAddress: string, serviceType: string): string {
   const label = propertyAddress.split(",")[0]?.trim() || propertyAddress.trim();
   return `${label} — ${serviceType}`;

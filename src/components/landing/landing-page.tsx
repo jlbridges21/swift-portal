@@ -99,7 +99,7 @@ export function LandingPage() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#334155]">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0F172A]/90 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0F172A]/90 backdrop-blur-xl safe-area-top safe-area-x">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-3">
             <Image

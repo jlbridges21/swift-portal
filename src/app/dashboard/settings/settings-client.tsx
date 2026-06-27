@@ -11,6 +11,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Bell, Camera, Lock } from "lucide-react";
+import { compressAvatarFile } from "@/lib/image-compress";
 import type { Client, Profile } from "@/lib/types";
 
 interface SettingsClientProps {
@@ -58,18 +59,27 @@ export function SettingsClient({ profile: initialProfile, client: initialClient 
 
   async function uploadAvatar(file: File) {
     setUploading(true);
-    const fd = new FormData();
-    fd.append("file", file);
-    const res = await fetch("/api/profile/avatar", { method: "POST", credentials: "include", body: fd });
-    setUploading(false);
-    if (res.ok) {
-      const { avatar_url } = await res.json();
-      setProfile((p) => ({ ...p, avatar_url }));
-      toast.success("Photo updated");
-      router.refresh();
-    } else {
-      const data = await res.json();
-      toast.error(data.error || "Upload failed");
+    try {
+      let uploadFile = file;
+      if (file.size > 1024 * 1024) {
+        uploadFile = await compressAvatarFile(file);
+      }
+      const fd = new FormData();
+      fd.append("file", uploadFile);
+      const res = await fetch("/api/profile/avatar", { method: "POST", credentials: "include", body: fd });
+      if (res.ok) {
+        const { avatar_url } = await res.json();
+        setProfile((p) => ({ ...p, avatar_url }));
+        toast.success("Photo updated");
+        router.refresh();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Upload failed — try a smaller photo or different format");
+      }
+    } catch {
+      toast.error("Upload failed — please try again");
+    } finally {
+      setUploading(false);
     }
   }
 

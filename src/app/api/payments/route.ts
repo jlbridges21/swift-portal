@@ -5,10 +5,12 @@ import { setProjectStatus } from "@/lib/status-automation";
 import { getAppSettings } from "@/lib/app-settings";
 import { getStripe } from "@/lib/stripe";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveMessageTemplate } from "@/lib/workflow";
+import { logProjectActivity } from "@/lib/activity";
+import { idempotencyKey } from "@/lib/idempotency";
 
 export async function POST(request: Request) {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
     const body = await request.json();
 
     if (!body.project_id || !body.client_id || !body.amount || !body.description) {
@@ -92,7 +94,6 @@ export async function POST(request: Request) {
 
     const amountStr = `$${(body.amount / 100).toFixed(2)}`;
     const payWorkflow = appSettings.workflow.payments;
-
     if (payWorkflow.autoMoveOnPaymentLink) {
       const clientBody = resolveMessageTemplate(
         appSettings.workflow,
@@ -128,9 +129,16 @@ export async function POST(request: Request) {
       );
     }
 
+    await logProjectActivity("invoice_sent", `Payment link created for ${amountStr}`, {
+      projectId: body.project_id,
+      userId: profile.id,
+      idempotencyKey: idempotencyKey("payment", "link", paymentRow.id),
+      metadata: { paymentId: paymentRow.id, amount: body.amount },
+    });
+
     return NextResponse.json(payment);
   } catch (err) {
     console.error("Payment creation error:", err);
-    return NextResponse.json({ error: "Failed to create payment" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to create payment link" }, { status: 500 });
   }
 }

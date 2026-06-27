@@ -26,7 +26,7 @@ import { getAdminNextStep } from "@/lib/journey";
 import { getProjectShootDateTime } from "@/lib/scheduling";
 import {
   Upload, CreditCard, Globe, Trash2, ChevronUp, ChevronDown,
-  ExternalLink, Check, Video, ImageIcon, Eye, Link2, Pencil, Users, Plus, MapPin,
+  ExternalLink, Check, Video, ImageIcon, Eye, EyeOff, Link2, Pencil, Users, Plus, MapPin,
 } from "lucide-react";
 import { UploadProgressList, type UploadProgressItem } from "@/components/admin/upload-progress-list";
 import { defaultProjectName } from "@/lib/utils";
@@ -406,6 +406,42 @@ export function AdminProjectDetail({
     router.refresh();
   }
 
+  async function toggleMediaVisibility(id: string, visible: boolean) {
+    const res = await fetch(`/api/media/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id, visibility: visible ? "client" : "admin" }),
+    });
+    if (res.ok) {
+      const updated = (await res.json()) as MediaAsset;
+      setMedia((prev) => prev.map((m) => (m.id === id ? updated : m)));
+      toast.success(visible ? "Visible to client" : "Hidden from client");
+    } else {
+      toast.error("Failed to update visibility");
+    }
+  }
+
+  async function toggleTourVisibility(id: string, visible: boolean) {
+    const res = await fetch("/api/tours", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id, client_visible: visible }),
+    });
+    if (res.ok) {
+      const updated = (await res.json()) as Tour;
+      setTours((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      toast.success(visible ? "Tour visible to client" : "Tour hidden from client");
+    } else {
+      toast.error("Failed to update tour visibility");
+    }
+  }
+
+  function isClientVisibleMedia(asset: MediaAsset) {
+    return asset.visibility !== "admin";
+  }
+
   async function handleYoutube(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -783,6 +819,7 @@ export function AdminProjectDetail({
               isHero={isHero}
               onSetHero={setHeroMedia}
               onDelete={deleteMedia}
+              onToggleVisibility={toggleMediaVisibility}
               onReorder={(reordered) => setMedia((prev) => {
                 const others = prev.filter((m) => m.media_type !== "photo");
                 return [...others, ...reordered];
@@ -840,11 +877,16 @@ export function AdminProjectDetail({
                   </div>
                 </div>
               ) : (
-                <AssetRow name={v.file_name} badge={isHero(v.id) ? "Hero" : v.media_source === "youtube" ? "YouTube" : "Upload"}
+                <AssetRow name={v.file_name} badge={
+                  !isClientVisibleMedia(v) ? "Hidden" : isHero(v.id) ? "Hero" : v.media_source === "youtube" ? "YouTube" : "Upload"
+                }
                   onUp={() => moveItem("media", v.id, "up", videos)} onDown={() => moveItem("media", v.id, "down", videos)}
                   canUp={i > 0} canDown={i < videos.length - 1}
                   extra={
                     <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" title={isClientVisibleMedia(v) ? "Hide from client" : "Show to client"} onClick={() => toggleMediaVisibility(v.id, !isClientVisibleMedia(v))}>
+                        {isClientVisibleMedia(v) ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => setHeroMedia(v.id)}>Set as Hero</Button>
                       <Button variant="ghost" size="sm" onClick={() => {
                         setEditingMedia(v.id);
@@ -889,11 +931,14 @@ export function AdminProjectDetail({
                   </div>
                 </div>
               ) : (
-                <AssetRow name={t.tour_name}
+                <AssetRow name={t.tour_name} badge={t.client_visible === false ? "Hidden" : undefined}
                   onUp={() => moveItem("tour", t.id, "up", tours)} onDown={() => moveItem("tour", t.id, "down", tours)}
                   canUp={i > 0} canDown={i < tours.length - 1}
                   extra={
                     <>
+                      <Button variant="ghost" size="sm" title={t.client_visible !== false ? "Hide from client" : "Show to client"} onClick={() => toggleTourVisibility(t.id, t.client_visible === false)}>
+                        {t.client_visible !== false ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => {
                         setEditingTour(t.id);
                         setEditTourForm({ tour_name: t.tour_name, kuula_url: t.kuula_url, notes: t.notes || "" });
@@ -977,11 +1022,11 @@ export function AdminProjectDetail({
                 <span className={`text-xs font-medium capitalize ${p.status === "paid" ? "text-emerald-600" : p.status === "cancelled" ? "text-muted" : "text-amber-600"}`}>
                   {p.status}
                 </span>
-                {p.status === "pending" && (
+                {p.status === "pending" || p.status === "sent" ? (
                   <Button variant="ghost" size="sm" disabled={!!markingPaidId} onClick={() => markPaid(p.id)}>
                     {markingPaidId === p.id ? "Marking..." : "Mark Paid"}
                   </Button>
-                )}
+                ) : null}
                 {p.stripe_payment_link_url && (
                   <a href={p.stripe_payment_link_url} target="_blank" rel="noopener noreferrer">
                     <Button variant="outline" size="sm">Open Link</Button>

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { SERVICE_TYPES } from "@/lib/constants";
+import { AddressFields } from "@/components/forms/address-fields";
 
 export default function LoggedInRequestPage() {
   const router = useRouter();
@@ -57,10 +58,7 @@ export default function LoggedInRequestPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="property_address">Property Address *</Label>
-                <Input id="property_address" name="property_address" required />
-              </div>
+              <AddressFields />
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="service_requested">Service *</Label>

@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Loader2, RotateCcw, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ColorField } from "@/components/ui/color-field";
+import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
 import { SWIFT_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { usePortalBrand } from "@/components/brand/brand-provider";
@@ -180,17 +181,21 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
   }, []);
 
   return (
-    <div className="space-y-8">
-      <WorkflowSettingsCard workflow={settings.workflow} onChange={patchWorkflow} />
+    <div className="space-y-4">
+      <SettingsCollapsible
+        title="Workflow Automation"
+        description="Configure business actions — payments, proposals, scheduling, deliverables, and reminders."
+        defaultOpen
+      >
+        <WorkflowSettingsCard workflow={settings.workflow} onChange={patchWorkflow} />
+      </SettingsCollapsible>
 
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Notification Settings</CardTitle>
-          <p className="text-sm text-muted">
-            Toggle delivery channels per event. Portal activity still logs — only notifications are suppressed.
-          </p>
-        </CardHeader>
-        <CardContent className="p-0 sm:px-6 sm:pb-6">
+      <SettingsCollapsible
+        title="Notification Settings"
+        description="Toggle delivery channels per event. Activity still logs when notifications are off."
+      >
+      <Card className="shadow-sm border-0">
+        <CardContent className="p-0 sm:px-0 sm:pb-0">
           <div className="hidden overflow-hidden rounded-xl border border-border md:block">
             <table className="w-full text-sm">
               <thead>
@@ -291,13 +296,14 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
           </div>
         </CardContent>
       </Card>
+      </SettingsCollapsible>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg">Email Settings</CardTitle>
-          <p className="text-sm text-muted">Branding and sender details for client notification emails.</p>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+      <SettingsCollapsible
+        title="Email Settings"
+        description="Branding and sender details for client notification emails."
+      >
+      <Card className="shadow-sm border-0">
+        <CardContent className="grid gap-4 sm:grid-cols-2 pt-0">
           <div className="space-y-2">
             <Label htmlFor="fromName">Default from name</Label>
             <Input id="fromName" value={settings.email.fromName} onChange={(e) => patchEmail({ fromName: e.target.value })} />
@@ -320,18 +326,21 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
           </div>
         </CardContent>
       </Card>
+      </SettingsCollapsible>
 
-      <Card className="shadow-sm">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <CardTitle className="text-lg">Business Settings</CardTitle>
-            <p className="text-sm text-muted">Portal branding used in the header, emails, and customer-facing copy.</p>
-          </div>
+      <SettingsCollapsible
+        title="Business Settings"
+        description="Portal branding used in the header, emails, and customer-facing copy."
+        defaultOpen
+      >
+      <Card className="shadow-sm border-0">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between pb-3 pt-0 px-0">
+          <div />
           <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setRestoreOpen(true)}>
             <RotateCcw className="h-4 w-4" /> Restore Swift Defaults
           </Button>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 pt-0 px-0">
           <div className="rounded-xl border border-border bg-slate-50/60 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Live preview</p>
             <div className="flex items-center gap-3">
@@ -403,13 +412,14 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
           </div>
         </CardContent>
       </Card>
+      </SettingsCollapsible>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg">Estimate &amp; Proposal Settings</CardTitle>
-          <p className="text-sm text-muted">Affects new projects and proposals going forward.</p>
-        </CardHeader>
-        <CardContent className="overflow-hidden rounded-xl border border-border p-0">
+      <SettingsCollapsible
+        title="Proposal Settings"
+        description="Affects new projects and proposals going forward."
+      >
+      <Card className="shadow-sm border-0">
+        <CardContent className="overflow-hidden rounded-xl border border-border p-0 pt-0 px-0">
           <div className="divide-y divide-border">
           <RowToggle
             id="autoPreliminaryEstimate"
@@ -460,6 +470,7 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
           </div>
         </CardContent>
       </Card>
+      </SettingsCollapsible>
 
       {restoreOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

@@ -1,11 +1,11 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import type { AppSettings } from "@/lib/app-settings";
 import {
   MESSAGE_TEMPLATE_DEFINITIONS,
@@ -99,121 +99,36 @@ export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCar
   }
 
   return (
-    <div className="space-y-8">
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg">Workflow Automation</CardTitle>
-          <p className="text-sm text-muted">
-            Configure how each project stage behaves. Swift Portal remains opinionated — these are business toggles, not a generic automation builder.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {WORKFLOW_STAGE_DEFINITIONS.map((stage) => (
-            <div key={stage.key} className="overflow-hidden rounded-xl border border-border">
-              <div className="border-b border-border bg-slate-50/80 px-4 py-3">
-                <p className="font-medium text-primary">{stage.label}</p>
-                <p className="text-xs text-muted mt-0.5">{stage.description}</p>
-              </div>
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-[11px] font-semibold uppercase tracking-wide text-muted">
-                      <th className="px-4 py-2 text-left">Channel / behavior</th>
-                      <th className="w-16 py-2 text-center">On</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(
-                      [
-                        ["inApp", "In-app notification"],
-                        ["email", "Email notification"],
-                        ["push", "Push (admin)"],
-                        ["logActivity", "Project activity log"],
-                        ["autoAdvance", "Auto-advance when conditions met"],
-                        ["requireManualApproval", "Require manual approval before leaving stage"],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <tr key={`${stage.key}-${key}`} className="border-b border-border/60 last:border-0">
-                        <td className="px-4 py-2 text-muted">{label}</td>
-                        <td className="py-2 text-center">
-                          <CompactToggle
-                            id={`${stage.key}-${key}`}
-                            label={`${stage.label} ${label}`}
-                            checked={workflow.stages[stage.key][key]}
-                            onChange={(v) => patchStage(stage.key, { [key]: v })}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="divide-y divide-border md:hidden">
-                {(
-                  [
-                    ["inApp", "In-app notification"],
-                    ["email", "Email notification"],
-                    ["push", "Push (admin)"],
-                    ["logActivity", "Activity log"],
-                    ["autoAdvance", "Auto-advance"],
-                    ["requireManualApproval", "Manual approval required"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <RowToggle
-                    key={`${stage.key}-m-${key}`}
-                    id={`${stage.key}-m-${key}`}
-                    label={label}
-                    checked={workflow.stages[stage.key][key]}
-                    onChange={(v) => patchStage(stage.key, { [key]: v })}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Payment Automation</CardTitle>
-        </CardHeader>
-        <CardContent className="divide-y divide-border overflow-hidden rounded-xl border border-border p-0">
+    <div className="space-y-4">
+      <SettingsCollapsible title="Payments" description="Payment links, delivery unlock, and receipts.">
+        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
           <RowToggle id="pay-link" label="Move to Awaiting Payment when payment link is created" checked={workflow.payments.autoMoveOnPaymentLink} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoMoveOnPaymentLink: v } })} />
           <RowToggle id="pay-stripe" label="Move to Delivered after successful Stripe payment" checked={workflow.payments.autoMoveOnStripePaid} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoMoveOnStripePaid: v } })} />
           <RowToggle id="pay-unlock" label="Unlock downloads after payment" checked={workflow.payments.autoUnlockDownloads} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoUnlockDownloads: v } })} />
           <RowToggle id="pay-receipt" label="Send receipt / completion email after payment" checked={workflow.payments.autoSendReceipt} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoSendReceipt: v } })} />
           <RowToggle id="pay-fail" label="Notify admin when payment fails" checked={workflow.payments.notifyAdminOnFailure} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, notifyAdminOnFailure: v } })} />
-        </CardContent>
-      </Card>
+        </div>
+      </SettingsCollapsible>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Proposal Automation</CardTitle>
-        </CardHeader>
-        <CardContent className="divide-y divide-border overflow-hidden rounded-xl border border-border p-0">
+      <SettingsCollapsible title="Proposals" description="Official proposal versions and expiration behavior.">
+        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
           <RowToggle id="prop-archive" label="Archive previous official proposal versions when sending a new one" checked={workflow.proposals.autoArchivePreviousVersions} onChange={(v) => onChange({ ...workflow, proposals: { ...workflow.proposals, autoArchivePreviousVersions: v } })} />
           <RowToggle id="prop-expire" label="Automatically set proposal expiration dates" checked={workflow.proposals.autoSetExpiration} onChange={(v) => onChange({ ...workflow, proposals: { ...workflow.proposals, autoSetExpiration: v } })} />
-        </CardContent>
-      </Card>
+        </div>
+      </SettingsCollapsible>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Scheduling Automation</CardTitle>
-        </CardHeader>
-        <CardContent className="divide-y divide-border overflow-hidden rounded-xl border border-border p-0">
+      <SettingsCollapsible title="Scheduling" description="Shoot proposals, reschedules, and Google Calendar sync.">
+        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
           <RowToggle id="sched-propose" label="Notify client when shoot time is proposed" checked={workflow.scheduling.notifyClientOnPropose} onChange={(v) => onChange({ ...workflow, scheduling: { ...workflow.scheduling, notifyClientOnPropose: v } })} />
           <RowToggle id="sched-counter" label="Notify admin when client counters a date" checked={workflow.scheduling.notifyAdminOnCounter} onChange={(v) => onChange({ ...workflow, scheduling: { ...workflow.scheduling, notifyAdminOnCounter: v } })} />
           <RowToggle id="sched-gcal" label="Sync Google Calendar after scheduling changes" checked={workflow.scheduling.syncGoogleCalendar} onChange={(v) => onChange({ ...workflow, scheduling: { ...workflow.scheduling, syncGoogleCalendar: v } })} />
           <RowToggle id="sched-resched" label="Notify client after reschedule" checked={workflow.scheduling.notifyClientOnReschedule} onChange={(v) => onChange({ ...workflow, scheduling: { ...workflow.scheduling, notifyClientOnReschedule: v } })} />
           <RowToggle id="sched-log" label="Log scheduling changes to project activity" checked={workflow.scheduling.logSchedulingChanges} onChange={(v) => onChange({ ...workflow, scheduling: { ...workflow.scheduling, logSchedulingChanges: v } })} />
-        </CardContent>
-      </Card>
+        </div>
+      </SettingsCollapsible>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Deliverable Automation</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <SettingsCollapsible title="Deliverables" description="Review flow, client approval, and review reminders.">
+        <div className="space-y-4">
           <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
             <RowToggle id="del-notify" label="Notify client when deliverables are ready" checked={workflow.deliverables.notifyClientWhenReady} onChange={(v) => onChange({ ...workflow, deliverables: { ...workflow.deliverables, notifyClientWhenReady: v } })} />
             <RowToggle id="del-auto-review" label="Automatically move to Review Deliverables on upload (admin can still send manually)" checked={workflow.deliverables.autoMoveToReview} onChange={(v) => onChange({ ...workflow, deliverables: { ...workflow.deliverables, autoMoveToReview: v } })} />
@@ -234,15 +149,11 @@ export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCar
               }
             />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SettingsCollapsible>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Reminder Timing</CardTitle>
-          <p className="text-sm text-muted">Processed by the workflow reminders job (see CRON_SECRET).</p>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+      <SettingsCollapsible title="Reminders" description="Timing for automated follow-ups (requires CRON_SECRET job).">
+        <div className="grid gap-4 sm:grid-cols-2">
           {(
             [
               ["proposal", "Proposal reminder"],
@@ -260,69 +171,131 @@ export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCar
               />
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </SettingsCollapsible>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Default Messages</CardTitle>
-          <p className="text-sm text-muted">
-            Plain-text templates with placeholders: {"{{client_name}}"}, {"{{property_address}}"}, {"{{project_name}}"}, {"{{shoot_date}}"}, {"{{payment_amount}}"}, {"{{portal_link}}"}
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {MESSAGE_TEMPLATE_DEFINITIONS.map((tpl) => (
-            <div key={tpl.key} className="space-y-2">
-              <Label htmlFor={`msg-${tpl.key}`}>{tpl.label}</Label>
-              <Textarea
-                id={`msg-${tpl.key}`}
-                rows={3}
-                value={workflow.messages[tpl.key]}
-                onChange={(e) =>
-                  onChange({
-                    ...workflow,
-                    messages: { ...workflow.messages, [tpl.key]: e.target.value },
-                  })
-                }
-              />
-              <p className="text-[11px] text-muted">{tpl.placeholders}</p>
+      <SettingsCollapsible title="Advanced" description="Stage-by-stage controls, message templates, and business defaults.">
+        <div className="space-y-6">
+          <div className="space-y-4">
+            {WORKFLOW_STAGE_DEFINITIONS.map((stage) => (
+              <div key={stage.key} className="overflow-hidden rounded-xl border border-border">
+                <div className="border-b border-border bg-slate-50/80 px-4 py-3">
+                  <p className="font-medium text-primary">{stage.label}</p>
+                  <p className="text-xs text-muted mt-0.5">{stage.description}</p>
+                </div>
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-[11px] font-semibold uppercase tracking-wide text-muted">
+                        <th className="px-4 py-2 text-left">Channel / behavior</th>
+                        <th className="w-16 py-2 text-center">On</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(
+                        [
+                          ["inApp", "In-app notification"],
+                          ["email", "Email notification"],
+                          ["push", "Push (admin)"],
+                          ["logActivity", "Project activity log"],
+                          ["autoAdvance", "Auto-advance when conditions met"],
+                          ["requireManualApproval", "Require manual approval before leaving stage"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <tr key={`${stage.key}-${key}`} className="border-b border-border/60 last:border-0">
+                          <td className="px-4 py-2 text-muted">{label}</td>
+                          <td className="py-2 text-center">
+                            <CompactToggle
+                              id={`${stage.key}-${key}`}
+                              label={`${stage.label} ${label}`}
+                              checked={workflow.stages[stage.key][key]}
+                              onChange={(v) => patchStage(stage.key, { [key]: v })}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="divide-y divide-border md:hidden">
+                  {(
+                    [
+                      ["inApp", "In-app notification"],
+                      ["email", "Email notification"],
+                      ["push", "Push (admin)"],
+                      ["logActivity", "Activity log"],
+                      ["autoAdvance", "Auto-advance"],
+                      ["requireManualApproval", "Manual approval required"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <RowToggle
+                      key={`${stage.key}-m-${key}`}
+                      id={`${stage.key}-m-${key}`}
+                      label={label}
+                      checked={workflow.stages[stage.key][key]}
+                      onChange={(v) => patchStage(stage.key, { [key]: v })}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-sm font-medium text-primary">Default Messages</p>
+            <p className="text-xs text-muted">
+              Placeholders: {"{{client_name}}"}, {"{{property_address}}"}, {"{{project_name}}"}, {"{{shoot_date}}"}, {"{{payment_amount}}"}, {"{{portal_link}}"}
+            </p>
+            {MESSAGE_TEMPLATE_DEFINITIONS.map((tpl) => (
+              <div key={tpl.key} className="space-y-2">
+                <Label htmlFor={`msg-${tpl.key}`}>{tpl.label}</Label>
+                <Textarea
+                  id={`msg-${tpl.key}`}
+                  rows={3}
+                  value={workflow.messages[tpl.key]}
+                  onChange={(e) =>
+                    onChange({
+                      ...workflow,
+                      messages: { ...workflow.messages, [tpl.key]: e.target.value },
+                    })
+                  }
+                />
+                <p className="text-[11px] text-muted">{tpl.placeholders}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-primary">Business Defaults</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Default turnaround (days)</Label>
+                <Input type="number" min={1} value={workflow.businessDefaults.defaultTurnaroundDays} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, defaultTurnaroundDays: Number(e.target.value) || 1 } })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Default payment due (days)</Label>
+                <Input type="number" min={1} value={workflow.businessDefaults.defaultPaymentDueDays} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, defaultPaymentDueDays: Number(e.target.value) || 1 } })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Default scheduling window (days)</Label>
+                <Input type="number" min={1} value={workflow.businessDefaults.defaultSchedulingWindowDays} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, defaultSchedulingWindowDays: Number(e.target.value) || 1 } })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Timezone</Label>
+                <Input value={workflow.businessDefaults.timezone} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, timezone: e.target.value } })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Business hours start</Label>
+                <Input type="time" value={workflow.businessDefaults.businessHoursStart} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, businessHoursStart: e.target.value } })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Business hours end</Label>
+                <Input type="time" value={workflow.businessDefaults.businessHoursEnd} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, businessHoursEnd: e.target.value } })} />
+              </div>
             </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Business Defaults</CardTitle>
-          <p className="text-sm text-muted">Used for due dates, scheduling windows, and turnaround expectations.</p>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Default turnaround (days)</Label>
-            <Input type="number" min={1} value={workflow.businessDefaults.defaultTurnaroundDays} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, defaultTurnaroundDays: Number(e.target.value) || 1 } })} />
           </div>
-          <div className="space-y-2">
-            <Label>Default payment due (days)</Label>
-            <Input type="number" min={1} value={workflow.businessDefaults.defaultPaymentDueDays} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, defaultPaymentDueDays: Number(e.target.value) || 1 } })} />
-          </div>
-          <div className="space-y-2">
-            <Label>Default scheduling window (days)</Label>
-            <Input type="number" min={1} value={workflow.businessDefaults.defaultSchedulingWindowDays} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, defaultSchedulingWindowDays: Number(e.target.value) || 1 } })} />
-          </div>
-          <div className="space-y-2">
-            <Label>Timezone</Label>
-            <Input value={workflow.businessDefaults.timezone} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, timezone: e.target.value } })} />
-          </div>
-          <div className="space-y-2">
-            <Label>Business hours start</Label>
-            <Input type="time" value={workflow.businessDefaults.businessHoursStart} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, businessHoursStart: e.target.value } })} />
-          </div>
-          <div className="space-y-2">
-            <Label>Business hours end</Label>
-            <Input type="time" value={workflow.businessDefaults.businessHoursEnd} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, businessHoursEnd: e.target.value } })} />
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SettingsCollapsible>
     </div>
   );
 }

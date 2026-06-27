@@ -16,8 +16,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "File must be an image" }, { status: 400 });
   }
 
-  if (file.size > 5 * 1024 * 1024) {
-    return NextResponse.json({ error: "Max 5MB" }, { status: 400 });
+  if (file.size > 50 * 1024 * 1024) {
+    return NextResponse.json({ error: "Image must be under 50MB" }, { status: 400 });
   }
 
   const supabase = await createServiceClient();

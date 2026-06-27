@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronUp, ChevronDown, Trash2, GripVertical } from "lucide-react";
+import { ChevronUp, ChevronDown, Trash2, GripVertical, Eye, EyeOff } from "lucide-react";
 import type { MediaAsset } from "@/lib/types";
 
 interface AdminPhotoGridProps {
@@ -11,6 +11,11 @@ interface AdminPhotoGridProps {
   onSetHero: (id: string) => void;
   onDelete: (id: string) => void;
   onReorder: (photos: MediaAsset[]) => void;
+  onToggleVisibility: (id: string, visible: boolean) => void;
+}
+
+function isClientVisible(asset: MediaAsset) {
+  return asset.visibility !== "admin";
 }
 
 function PhotoThumb({ assetId }: { assetId: string }) {
@@ -38,6 +43,7 @@ export function AdminPhotoGrid({
   onSetHero,
   onDelete,
   onReorder,
+  onToggleVisibility,
 }: AdminPhotoGridProps) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -106,7 +112,19 @@ export function AdminPhotoGrid({
             {isHero(p.id) && (
               <span className="inline-block rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">Hero</span>
             )}
+            {!isClientVisible(p) && (
+              <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">Hidden</span>
+            )}
             <div className="flex flex-wrap gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs px-2"
+                title={isClientVisible(p) ? "Hide from client" : "Show to client"}
+                onClick={() => onToggleVisibility(p.id, !isClientVisible(p))}
+              >
+                {isClientVisible(p) ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </Button>
               <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={() => onSetHero(p.id)}>
                 Hero
               </Button>

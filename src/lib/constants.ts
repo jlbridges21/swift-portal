@@ -97,7 +97,7 @@ export const SERVICE_TYPES = [
 ] as const;
 
 export const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
-export const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/quicktime"];
+export const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/x-m4v", "video/m4v"];
 export const ALLOWED_DOCUMENT_TYPES = [
   "application/pdf",
   "application/zip",

@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { Menu, Plus, Settings, X } from "lucide-react";
+import { Menu, Plus, Settings, X, RefreshCw, Loader2 } from "lucide-react";
 
 interface HeaderProps {
   variant?: "public" | "dashboard";
@@ -65,7 +66,9 @@ function ClientProfileNav({
 }
 
 export function Header({ variant = "public", userRole, userName, userAvatar }: HeaderProps) {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const homeHref =
     variant === "public" ? "/" : userRole === "admin" ? "/admin" : "/dashboard";
 
@@ -76,6 +79,13 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
   ];
 
   const adminMobileLinks = [...adminLinks, { href: "/admin/settings", label: "Settings" }];
+
+  async function handleRefresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    router.refresh();
+    window.setTimeout(() => setRefreshing(false), 600);
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-white/90 backdrop-blur-lg safe-area-top safe-area-x relative">
@@ -117,6 +127,18 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
               <div className="shrink-0">
                 <NotificationBell />
               </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="md:hidden min-h-11 min-w-11 shrink-0"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                aria-label="Refresh page"
+                title="Refresh"
+              >
+                {refreshing ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
+              </Button>
               <Link
                 href="/admin/settings"
                 className="hidden md:inline-flex rounded-md p-2 text-muted transition-colors hover:bg-slate-100 hover:text-foreground"
@@ -145,6 +167,18 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
                   <Plus className="h-4 w-4" /> New Request
                 </Button>
               </Link>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="sm:hidden min-h-11 min-w-11 shrink-0"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                aria-label="Refresh page"
+                title="Refresh"
+              >
+                {refreshing ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
+              </Button>
               <div className="shrink-0">
                 <NotificationBell />
               </div>

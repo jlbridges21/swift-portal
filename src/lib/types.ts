@@ -220,6 +220,7 @@ export interface Tour {
   description?: string | null;
   is_favorite?: boolean;
   download_count?: number;
+  client_visible?: boolean;
   created_at: string;
   updated_at?: string;
 }

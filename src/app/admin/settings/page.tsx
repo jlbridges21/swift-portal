@@ -5,6 +5,7 @@ import { getAppSettings, NOTIFICATION_EVENT_DEFINITIONS } from "@/lib/app-settin
 import { redirect } from "next/navigation";
 import { AdminSettingsClient } from "@/components/admin/admin-settings-client";
 import { GoogleCalendarCard } from "@/components/admin/google-calendar-card";
+import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import { Suspense } from "react";
 
 export default async function AdminSettingsPage() {
@@ -22,11 +23,14 @@ export default async function AdminSettingsPage() {
           title="Admin Settings"
           description="Manage global notification, email, business, and proposal settings for Swift Portal."
         />
-        <div className="mb-8">
+        <SettingsCollapsible
+          title="Google Calendar"
+          description="Connect Google Calendar to sync confirmed shoot dates."
+        >
           <Suspense fallback={null}>
             <GoogleCalendarCard />
           </Suspense>
-        </div>
+        </SettingsCollapsible>
         <AdminSettingsClient
           initialSettings={settings}
           notificationEvents={NOTIFICATION_EVENT_DEFINITIONS}

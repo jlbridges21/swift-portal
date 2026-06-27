@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { SERVICE_TYPES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
+import { AddressFields } from "@/components/forms/address-fields";
 import { CheckCircle, Lock, LogIn } from "lucide-react";
 
 export default function RequestPage() {
@@ -123,10 +124,7 @@ export default function RequestPage() {
 
                 <section className="space-y-4">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Project</h3>
-                  <div className="space-y-2">
-                    <Label htmlFor="property_address">Property Address *</Label>
-                    <Input id="property_address" name="property_address" required placeholder="123 Main St, City, State" />
-                  </div>
+                  <AddressFields />
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="service_requested">Service Requested *</Label>
