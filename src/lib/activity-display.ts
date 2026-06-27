@@ -40,6 +40,7 @@ export const ACTIVITY_CONFIG: Record<string, ActivityConfig> = {
   email_complained: { icon: "⚠️", label: "Email marked as spam" },
   preliminary_estimate_created: { icon: "📄", label: "Preliminary estimate created" },
   official_proposal_sent: { icon: "📄", label: "Official proposal sent" },
+  workflow_automation: { icon: "⚙️", label: "Workflow automation" },
 };
 
 export function getActivityDisplay(type: string, description: string) {

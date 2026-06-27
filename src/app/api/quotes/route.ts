@@ -6,6 +6,7 @@ import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus, setProjectStatusForward } from "@/lib/status-automation";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
+import { portalLink, resolveMessageTemplate } from "@/lib/workflow";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -129,9 +130,30 @@ export async function PATCH(request: Request) {
       return NextResponse.json(quote);
     }
     const service = await createServiceClient();
+    const appSettings = await getAppSettings();
+
+    if (appSettings.workflow.proposals.autoArchivePreviousVersions) {
+      await service
+        .from("project_quotes")
+        .update({ status: "draft", notes: "Archived — superseded by a newer official proposal." })
+        .eq("project_id", quote.project_id)
+        .eq("quote_kind", "official")
+        .neq("id", id)
+        .in("status", ["sent", "draft"]);
+    }
+
+    const expiresAt =
+      appSettings.workflow.proposals.autoSetExpiration
+        ? addProposalExpiration(new Date(), appSettings.proposals.defaultProposalExpirationDays)
+        : quote.expires_at;
+
     const { data: updated } = await service
       .from("project_quotes")
-      .update({ status: "sent", sent_at: new Date().toISOString() })
+      .update({
+        status: "sent",
+        sent_at: new Date().toISOString(),
+        ...(expiresAt ? { expires_at: expiresAt } : {}),
+      })
       .eq("id", id)
       .select()
       .single();
@@ -156,7 +178,15 @@ export async function PATCH(request: Request) {
       type: "quote_sent",
       eventKey: "official_proposal_sent",
       title: "Review Your Official Proposal",
-      body: `Review your official proposal for "${quote.title}".`,
+      body: resolveMessageTemplate(
+        appSettings.workflow,
+        "proposal_ready",
+        {
+          project_name: quote.title,
+          portal_link: portalLink(`/dashboard/projects/${quote.project_id}#quote`),
+        },
+        `Review your official proposal for "${quote.title}".`
+      ),
       link: `/dashboard/projects/${quote.project_id}#quote`,
       projectId: quote.project_id,
     });

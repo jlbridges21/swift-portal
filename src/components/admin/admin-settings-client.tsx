@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Loader2, RotateCcw, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ColorField } from "@/components/ui/color-field";
+import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
 import { SWIFT_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import type {
@@ -174,8 +175,14 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
     setSettings((prev) => ({ ...prev, proposals: { ...prev.proposals, ...patch } }));
   }, []);
 
+  const patchWorkflow = useCallback((workflow: AppSettings["workflow"]) => {
+    setSettings((prev) => ({ ...prev, workflow }));
+  }, []);
+
   return (
     <div className="space-y-8">
+      <WorkflowSettingsCard workflow={settings.workflow} onChange={patchWorkflow} />
+
       <Card className="shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Notification Settings</CardTitle>

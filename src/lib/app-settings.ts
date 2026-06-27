@@ -1,6 +1,13 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { BRAND, LOGO_URL } from "@/lib/brand";
 import { getPortalBrandFromSettings, SWIFT_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
+import {
+  buildDefaultWorkflowSettings,
+  mergeWorkflowSettings,
+  type WorkflowSettings,
+} from "@/lib/workflow-settings";
+
+export type { WorkflowSettings } from "@/lib/workflow-settings";
 
 export type NotificationEventKey =
   | "new_project_request"
@@ -61,6 +68,7 @@ export interface AppSettings {
   email: EmailSettings;
   business: BusinessSettings;
   proposals: ProposalSettings;
+  workflow: WorkflowSettings;
 }
 
 export const NOTIFICATION_EVENT_DEFINITIONS: {
@@ -130,6 +138,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     defaultProposalExpirationDays: 14,
     allowClientProposalChanges: true,
   },
+  workflow: buildDefaultWorkflowSettings(),
 };
 
 function deepMerge<T extends Record<string, unknown>>(base: T, patch: Partial<T>): T {
@@ -166,6 +175,7 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
     email: { ...DEFAULT_APP_SETTINGS.email, ...(stored.email ?? {}) },
     business: { ...DEFAULT_APP_SETTINGS.business, ...(stored.business ?? {}) },
     proposals: { ...DEFAULT_APP_SETTINGS.proposals, ...(stored.proposals ?? {}) },
+    workflow: mergeWorkflowSettings(stored.workflow),
   };
 }
 

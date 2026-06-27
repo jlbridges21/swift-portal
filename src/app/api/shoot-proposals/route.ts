@@ -6,6 +6,8 @@ import { idempotencyKey } from "@/lib/idempotency";
 import { loadShootSyncContext, syncShootToGoogleCalendar } from "@/lib/google-calendar";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
+import { getAppSettings } from "@/lib/app-settings";
+import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveMessageTemplate } from "@/lib/workflow";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -70,22 +72,38 @@ export async function POST(request: Request) {
   }
 
   const dateStr = new Date(body.proposed_at).toLocaleString();
-  await logProjectActivity("shoot_proposed", `Shoot proposed for ${dateStr}`, {
-    projectId: body.project_id,
-    userId: profile.id,
-    metadata: { proposed_by: proposedBy },
-  });
+  const appSettings = await getAppSettings();
+  const scheduling = appSettings.workflow.scheduling;
 
-  if (isAdmin) {
+  if (scheduling.logSchedulingChanges) {
+    await logProjectActivity("shoot_proposed", `Shoot proposed for ${dateStr}`, {
+      projectId: body.project_id,
+      userId: profile.id,
+      metadata: { proposed_by: proposedBy },
+    });
+  }
+
+  if (isAdmin && scheduling.notifyClientOnPropose) {
     await notifyProjectClients({
       type: "shoot_proposed",
       eventKey: "shoot_time_proposed",
       title: "Scheduling Your Shoot",
-      body: `Swift Aerial Media proposed a shoot for ${dateStr}. Please review and confirm in your portal.`,
+      body: resolveMessageTemplate(
+        appSettings.workflow,
+        "scheduling_request",
+        { shoot_date: dateStr, portal_link: portalLink(`/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`) },
+        `Swift Aerial Media proposed a shoot for ${dateStr}. Please review and confirm in your portal.`
+      ),
       link: `/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`,
       projectId: body.project_id,
     });
-  } else {
+  } else if (isAdmin) {
+    await logWorkflowSkipped(
+      body.project_id,
+      "Client scheduling notification skipped — disabled in Scheduling Automation settings.",
+      `workflow:scheduling-propose-skipped:${data.id}`
+    );
+  } else if (scheduling.notifyAdminOnCounter) {
     await notifyAdmins({
       type: "schedule_change_requested",
       eventKey: "shoot_time_proposed",
@@ -94,6 +112,12 @@ export async function POST(request: Request) {
       link: `/admin/projects/${body.project_id}`,
       projectId: body.project_id,
     });
+  } else {
+    await logWorkflowSkipped(
+      body.project_id,
+      "Admin counter notification skipped — disabled in Scheduling Automation settings.",
+      `workflow:scheduling-counter-skipped:${data.id}`
+    );
   }
 
   return NextResponse.json(data);
@@ -186,7 +210,19 @@ export async function PATCH(request: Request) {
     });
 
     const syncCtx = await loadShootSyncContext(id);
-    if (syncCtx) void syncShootToGoogleCalendar(syncCtx);
+    const appSettings = await getAppSettings();
+    if (syncCtx && appSettings.workflow.scheduling.syncGoogleCalendar) {
+      void syncShootToGoogleCalendar(syncCtx);
+      await logWorkflowAudit(proposal.project_id, "Google Calendar updated after shoot confirmation.", {
+        idempotencyKey: idempotencyKey("workflow", "gcal", id, "accept"),
+      });
+    } else if (syncCtx) {
+      await logWorkflowSkipped(
+        proposal.project_id,
+        "Google Calendar sync skipped — disabled in Scheduling Automation settings.",
+        idempotencyKey("workflow", "gcal-skipped", id, "accept")
+      );
+    }
 
     return NextResponse.json({ success: true, status: "confirmed" });
   }
@@ -215,23 +251,46 @@ export async function PATCH(request: Request) {
       .eq("id", shoot.project_id);
 
     const dateStr = new Date(proposed_at).toLocaleString();
-    await logProjectActivity("shoot_rescheduled", `Shoot rescheduled to ${dateStr}`, {
-      projectId: shoot.project_id,
-      userId: profile.id,
-      idempotencyKey: idempotencyKey("shoot", id, "update_date", proposed_at),
-    });
+    const appSettings = await getAppSettings();
+    const scheduling = appSettings.workflow.scheduling;
 
-    await notifyProjectClients({
-      type: "shoot_proposed",
-      eventKey: "shoot_rescheduled",
-      title: "Shoot Scheduled",
-      body: `Your shoot is now scheduled for ${dateStr}.`,
-      link: `/dashboard/projects/${shoot.project_id}#scheduling`,
-      projectId: shoot.project_id,
-    });
+    if (scheduling.logSchedulingChanges) {
+      await logProjectActivity("shoot_rescheduled", `Shoot rescheduled to ${dateStr}`, {
+        projectId: shoot.project_id,
+        userId: profile.id,
+        idempotencyKey: idempotencyKey("shoot", id, "update_date", proposed_at),
+      });
+    }
+
+    if (scheduling.notifyClientOnReschedule) {
+      await notifyProjectClients({
+        type: "shoot_proposed",
+        eventKey: "shoot_rescheduled",
+        title: "Shoot Scheduled",
+        body: resolveMessageTemplate(
+          appSettings.workflow,
+          "shoot_confirmed",
+          { shoot_date: dateStr },
+          `Your shoot is now scheduled for ${dateStr}.`
+        ),
+        link: `/dashboard/projects/${shoot.project_id}#scheduling`,
+        projectId: shoot.project_id,
+      });
+    } else {
+      await logWorkflowSkipped(
+        shoot.project_id,
+        "Client reschedule notification skipped — disabled in Scheduling Automation settings.",
+        idempotencyKey("workflow", "reschedule-skipped", id, proposed_at)
+      );
+    }
 
     const syncCtx = await loadShootSyncContext(id);
-    if (syncCtx) void syncShootToGoogleCalendar({ ...syncCtx, proposedAt: proposed_at });
+    if (syncCtx && scheduling.syncGoogleCalendar) {
+      void syncShootToGoogleCalendar({ ...syncCtx, proposedAt: proposed_at });
+      await logWorkflowAudit(shoot.project_id, "Google Calendar updated after reschedule.", {
+        idempotencyKey: idempotencyKey("workflow", "gcal", id, proposed_at),
+      });
+    }
 
     return NextResponse.json({ success: true, proposed_at });
   }

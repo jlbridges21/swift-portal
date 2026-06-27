@@ -5,6 +5,8 @@ import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins } from "@/lib/notifications";
+import { getAppSettings } from "@/lib/app-settings";
+import { portalLink, resolveMessageTemplate } from "@/lib/workflow";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -168,6 +170,7 @@ export async function PATCH(request: Request) {
   }
 
   const supabase = await createServiceClient();
+  const appSettings = await getAppSettings();
   const { data: project } = await supabase
     .from("projects")
     .select("status")
@@ -184,11 +187,18 @@ export async function PATCH(request: Request) {
     userId: profile.id,
     activityType: "sent_for_review",
     activityDescription: "Deliverables sent for client review",
-    notifyClient: true,
+    notifyClient: appSettings.workflow.deliverables.notifyClientWhenReady,
     clientTitle: "Review Your Deliverables",
-    clientBody: "Preview your photos, videos, and tours. Approve each item when you're satisfied.",
+    clientBody: resolveMessageTemplate(
+      appSettings.workflow,
+      "deliverables_ready",
+      { portal_link: portalLink(`/dashboard/projects/${project_id}#deliverables`) },
+      "Preview your photos, videos, and tours. Approve each item when you're satisfied."
+    ),
     link: `/dashboard/projects/${project_id}#deliverables`,
     idempotencyKey: idempotencyKey("project", project_id, "send_for_review"),
+    manualOverride: true,
+    clientEventKey: "deliverables_ready",
   });
 
   await supabase

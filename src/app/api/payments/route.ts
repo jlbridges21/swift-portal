@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { setProjectStatus } from "@/lib/status-automation";
+import { getAppSettings } from "@/lib/app-settings";
 import { getStripe } from "@/lib/stripe";
+import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveMessageTemplate } from "@/lib/workflow";
 
 export async function POST(request: Request) {
   try {
@@ -14,6 +16,15 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createClient();
+    const appSettings = await getAppSettings();
+
+    const dueDate = body.due_date
+      ? body.due_date
+      : (() => {
+          const d = new Date();
+          d.setDate(d.getDate() + appSettings.workflow.businessDefaults.defaultPaymentDueDays);
+          return d.toISOString().split("T")[0];
+        })();
 
     const { data: project } = await supabase
       .from("projects")
@@ -28,7 +39,7 @@ export async function POST(request: Request) {
         client_id: body.client_id,
         amount: body.amount,
         description: body.description,
-        due_date: body.due_date || null,
+        due_date: dueDate,
         status: "pending",
       })
       .select()
@@ -80,18 +91,42 @@ export async function POST(request: Request) {
     }
 
     const amountStr = `$${(body.amount / 100).toFixed(2)}`;
-    await setProjectStatus({
-      projectId: body.project_id,
-      status: "awaiting_payment",
-      activityType: "invoice_sent",
-      activityDescription: `Invoice sent for ${amountStr}`,
-      skipIfSame: true,
-      notifyClient: true,
-      clientEventKey: "payment_link_sent",
-      clientTitle: "Final Payment",
-      clientBody: `Complete your ${amountStr} payment to unlock your final downloads.`,
-      link: `/dashboard/projects/${body.project_id}#payments`,
-    });
+    const payWorkflow = appSettings.workflow.payments;
+
+    if (payWorkflow.autoMoveOnPaymentLink) {
+      const clientBody = resolveMessageTemplate(
+        appSettings.workflow,
+        "payment_request",
+        {
+          payment_amount: amountStr,
+          portal_link: portalLink(`/dashboard/projects/${body.project_id}#payments`),
+        },
+        `Complete your ${amountStr} payment to unlock your final downloads.`
+      );
+
+      await setProjectStatus({
+        projectId: body.project_id,
+        status: "awaiting_payment",
+        activityType: "invoice_sent",
+        activityDescription: `Invoice sent for ${amountStr}`,
+        skipIfSame: true,
+        notifyClient: true,
+        clientEventKey: "payment_link_sent",
+        clientTitle: "Final Payment",
+        clientBody,
+        link: `/dashboard/projects/${body.project_id}#payments`,
+        idempotencyKey: `payment:link:${paymentRow.id}`,
+      });
+      await logWorkflowAudit(body.project_id, "Workflow automatically moved project to Approved – Awaiting Payment when payment link was created.", {
+        idempotencyKey: `workflow:payment-link:${paymentRow.id}`,
+      });
+    } else {
+      await logWorkflowSkipped(
+        body.project_id,
+        "Automatic move to Awaiting Payment skipped — disabled in Payment Automation settings.",
+        `workflow:payment-link-skipped:${paymentRow.id}`
+      );
+    }
 
     return NextResponse.json(payment);
   } catch (err) {

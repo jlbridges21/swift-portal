@@ -4,7 +4,13 @@ import { getStatusLabel, getStatusOrder, normalizeStatus } from "@/lib/constants
 import type { ProjectStatus } from "@/lib/constants";
 import { clientStatusNotification } from "@/lib/client-messages";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
+import { getAppSettings } from "@/lib/app-settings";
 import type { NotificationEventKey } from "@/lib/app-settings";
+import {
+  canAutoTransition,
+  statusToWorkflowStage,
+} from "@/lib/workflow-settings";
+import { logWorkflowAudit } from "@/lib/workflow";
 
 interface SetStatusOptions {
   projectId: string;
@@ -21,10 +27,16 @@ interface SetStatusOptions {
   clientBody?: string;
   clientEventKey?: NotificationEventKey;
   adminEventKey?: NotificationEventKey;
+  /** Admin manual override — bypasses workflow auto-advance guards */
+  manualOverride?: boolean;
+  /** Skip workflow automation audit log */
+  skipWorkflowAudit?: boolean;
 }
 
 export async function setProjectStatus(options: SetStatusOptions) {
   const supabase = await createServiceClient();
+  const appSettings = await getAppSettings();
+  const workflow = appSettings.workflow;
 
   const { data: existing } = await supabase
     .from("projects")
@@ -33,6 +45,29 @@ export async function setProjectStatus(options: SetStatusOptions) {
     .single();
 
   if (options.skipIfSame && existing?.status === options.status) {
+    return existing;
+  }
+
+  const fromStatus = normalizeStatus(existing?.status ?? "new_request");
+  const toStatus = options.status;
+
+  if (
+    !options.manualOverride &&
+    existing?.status &&
+    fromStatus !== toStatus &&
+    !canAutoTransition(fromStatus, toStatus, workflow, false)
+  ) {
+    await logWorkflowAudit(
+      options.projectId,
+      `Workflow blocked automatic move to "${getStatusLabel(toStatus)}" — manual approval required or auto-advance disabled.`,
+      {
+        userId: options.userId,
+        idempotencyKey: options.idempotencyKey
+          ? `${options.idempotencyKey}:blocked`
+          : `workflow:blocked:${options.projectId}:${toStatus}`,
+        metadata: { from: fromStatus, to: toStatus, blocked: true },
+      }
+    );
     return existing;
   }
 
@@ -46,20 +81,43 @@ export async function setProjectStatus(options: SetStatusOptions) {
   if (error) throw error;
 
   const label = getStatusLabel(options.status);
-  await logProjectActivity(
-    options.activityType || "status_updated",
-    options.activityDescription || `Status updated to ${label}`,
-    {
-      projectId: options.projectId,
-      userId: options.userId ?? null,
-      idempotencyKey:
-        options.idempotencyKey ??
-        `status:${options.projectId}:${options.activityType || options.status}`,
-      metadata: { from: existing?.status, to: options.status },
-    }
-  );
+  const stageKey = statusToWorkflowStage(options.status);
+  const stageSettings = workflow.stages[stageKey];
+  const automated = !options.manualOverride && fromStatus !== toStatus;
 
-  if (options.notifyClient) {
+  if (stageSettings?.logActivity !== false) {
+    await logProjectActivity(
+      options.activityType || "status_updated",
+      options.activityDescription || `Status updated to ${label}`,
+      {
+        projectId: options.projectId,
+        userId: options.userId ?? null,
+        idempotencyKey:
+          options.idempotencyKey ??
+          `status:${options.projectId}:${options.activityType || options.status}`,
+        metadata: { from: existing?.status, to: options.status, automated },
+      }
+    );
+  }
+
+  if (automated && !options.skipWorkflowAudit) {
+    await logWorkflowAudit(
+      options.projectId,
+      `Workflow automatically moved project to ${label}.`,
+      {
+        userId: options.userId,
+        idempotencyKey: `workflow:status:${options.projectId}:${toStatus}`,
+        metadata: { from: fromStatus, to: toStatus, stage: stageKey },
+      }
+    );
+  }
+
+  const allowNotify =
+    stageSettings?.inApp !== false ||
+    stageSettings?.email !== false ||
+    stageSettings?.push !== false;
+
+  if (options.notifyClient && allowNotify) {
     const clientMsg = clientStatusNotification(options.status);
     const clientType = options.status === "awaiting_payment" ? "invoice_available" : "status_changed";
     await notifyProjectClients({
@@ -70,9 +128,18 @@ export async function setProjectStatus(options: SetStatusOptions) {
       link: options.link || `/dashboard/projects/${options.projectId}`,
       projectId: options.projectId,
     });
+  } else if (options.notifyClient && !allowNotify) {
+    await logWorkflowAudit(
+      options.projectId,
+      `Client notification skipped for "${label}" — disabled in Workflow Settings.`,
+      {
+        idempotencyKey: `workflow:notify-skipped:client:${options.projectId}:${toStatus}`,
+        metadata: { skipped: true },
+      }
+    );
   }
 
-  if (options.notifyAdmin) {
+  if (options.notifyAdmin && allowNotify) {
     const deliverablesApproved = options.activityType === "deliverables_approved";
     await notifyAdmins({
       type: "status_changed",
