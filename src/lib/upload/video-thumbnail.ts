@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { buildThumbnailStoragePath } from "@/lib/media-upload";
 import { THUMBNAIL_CAPTURE_TIMEOUT_MS } from "./constants";
+import { UPLOAD_DIAGNOSTIC_MODE } from "./diagnostic";
 import { logUploadStep } from "./logger";
 
 function captureVideoThumbnailBlobInner(file: File, seekSeconds: number): Promise<Blob | null> {
@@ -73,7 +74,11 @@ export async function captureVideoThumbnailBlob(
 ): Promise<Blob | null> {
   const result = await Promise.race([
     captureVideoThumbnailBlobInner(file, seekSeconds),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    UPLOAD_DIAGNOSTIC_MODE
+      ? new Promise<null>(() => {
+          /* diagnostic: no timeout — wait for natural completion */
+        })
+      : new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
   ]);
 
   if (result === null) {

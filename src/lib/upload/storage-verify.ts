@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { UPLOAD_DIAGNOSTIC_MODE } from "./diagnostic";
 import { logUploadStep } from "./logger";
 
 const BASE_ATTEMPTS = 6;
@@ -65,7 +66,10 @@ export async function verifyStorageObject(
   });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    if (Date.now() - startedAt > MAX_VERIFY_DURATION_MS) {
+    if (
+      !UPLOAD_DIAGNOSTIC_MODE &&
+      Date.now() - startedAt > MAX_VERIFY_DURATION_MS
+    ) {
       logUploadStep("warn", {
         step: "verifying_storage_path",
         ...context,
@@ -105,7 +109,10 @@ export async function verifyStorageObject(
       details: { attempt, bucket, maxAttempts, elapsedMs: Date.now() - startedAt },
     });
 
-    if (attempt < maxAttempts && Date.now() - startedAt < MAX_VERIFY_DURATION_MS) {
+    if (
+      attempt < maxAttempts &&
+      (UPLOAD_DIAGNOSTIC_MODE || Date.now() - startedAt < MAX_VERIFY_DURATION_MS)
+    ) {
       const delay = BASE_DELAY_MS * Math.min(attempt, 5);
       await new Promise((r) => setTimeout(r, delay));
     }

@@ -31,7 +31,8 @@ import {
 import { UploadProgressList, type UploadProgressItem } from "@/components/admin/upload-progress-list";
 import { CreateClientModal } from "@/components/admin/create-client-modal";
 import { defaultProjectName } from "@/lib/utils";
-import { uploadMediaFile, retryMediaSave, validateMediaFileBeforeUpload, UploadSaveError } from "@/lib/upload";
+import { uploadMediaFile, retryMediaSave, validateMediaFileBeforeUpload, UploadSaveError, UploadBinaryError } from "@/lib/upload";
+import { userFacingUploadError } from "@/lib/upload/upload-errors";
 import { ALLOWED_VIDEO_MIME_TYPES } from "@/lib/upload/constants";
 import { toast } from "sonner";
 
@@ -241,14 +242,24 @@ export function AdminProjectDetail({
         patchUploadItem(uploadId, { progress: 100, phase: "uploaded", status: "success" });
       } catch (err) {
         if (err instanceof UploadSaveError) {
-          const msg = "Upload complete, save failed. Retry save.";
+          const msg = userFacingUploadError(err.technical);
           errors.push(`${file.name}: ${msg}`);
           patchUploadItem(uploadId, {
             status: "save_failed",
             phase: "failed",
             progress: 95,
-            error: `${err.message}${err.step ? ` (${err.step})` : ""}`,
+            error: msg,
+            technicalDetails: err.technical,
             pendingSave: { ...err.pendingSave, failedStep: err.step },
+          });
+        } else if (err instanceof UploadBinaryError) {
+          const msg = userFacingUploadError(err.technical);
+          errors.push(`${file.name}: ${msg}`);
+          patchUploadItem(uploadId, {
+            status: "error",
+            phase: "failed",
+            error: msg,
+            technicalDetails: err.technical,
           });
         } else {
           const msg = err instanceof Error ? err.message : "Upload failed";

@@ -8,8 +8,11 @@ import {
   retryMediaSave,
   validateMediaFileBeforeUpload,
   UploadSaveError,
+  UploadBinaryError,
   type UploadMediaMetadata,
+  type UploadTechnicalDetails,
 } from "@/lib/upload";
+import { userFacingUploadError } from "@/lib/upload/upload-errors";
 import { resolveUploadTitle } from "@/lib/upload/titles";
 
 function inferMediaType(file: File): "photo" | "video" | null {
@@ -22,6 +25,20 @@ function inferMediaType(file: File): "photo" | "video" | null {
   return null;
 }
 
+export interface UploadRetryContext {
+  file: File;
+  mediaType: "photo" | "video";
+  projectId: string | null;
+  metadata?: UploadMediaMetadata;
+}
+
+function technicalFromError(err: unknown): UploadTechnicalDetails | undefined {
+  if (err instanceof UploadSaveError || err instanceof UploadBinaryError) {
+    return err.technical;
+  }
+  return undefined;
+}
+
 export function useMediaUploadQueue(options?: {
   onUploaded?: (assets: MediaAsset[]) => void;
 }) {
@@ -32,6 +49,34 @@ export function useMediaUploadQueue(options?: {
   }, []);
 
   const isUploading = uploadItems.some((i) => i.status === "uploading");
+
+  const runUpload = useCallback(
+    async (
+      uploadId: string,
+      file: File,
+      mediaType: "photo" | "video",
+      projectId: string | null,
+      metadata?: UploadMediaMetadata
+    ) => {
+      const { asset } = await uploadMediaFile({
+        projectId,
+        file,
+        mediaType,
+        metadata,
+        onProgress: ({ phase, progress, bytesLoaded, bytesTotal }) => {
+          patchUploadItem(uploadId, {
+            phase,
+            progress,
+            bytesLoaded,
+            bytesTotal,
+            status: phase === "failed" ? "error" : "uploading",
+          });
+        },
+      });
+      return asset as unknown as MediaAsset;
+    },
+    [patchUploadItem]
+  );
 
   const processFiles = useCallback(
     async (
@@ -80,6 +125,7 @@ export function useMediaUploadQueue(options?: {
           bytesTotal: file.size,
           mimeType: validation.mimeType,
           startedAt: Date.now(),
+          retryContext: { file, mediaType, projectId, metadata },
         });
       }
 
@@ -92,45 +138,54 @@ export function useMediaUploadQueue(options?: {
 
       for (let i = 0; i < queue.length; i++) {
         const { file, mediaType, uploadId } = queue[i];
-        try {
-          const baseTitle = metadata?.title?.trim() || file.name.replace(/\.[^.]+$/, "");
-          const fileMeta: UploadMediaMetadata = {
-            title: resolveUploadTitle(baseTitle, i, queue.length),
+        const retryContext: UploadRetryContext = {
+          file,
+          mediaType,
+          projectId,
+          metadata: {
+            title: resolveUploadTitle(
+              metadata?.title?.trim() || file.name.replace(/\.[^.]+$/, ""),
+              i,
+              queue.length
+            ),
             description: metadata?.description,
             tags: metadata?.tags,
-          };
-          const { asset } = await uploadMediaFile({
-            projectId,
-            file,
-            mediaType,
-            metadata: fileMeta,
-            onProgress: ({ phase, progress, bytesLoaded, bytesTotal }) => {
-              patchUploadItem(uploadId, {
-                phase,
-                progress,
-                bytesLoaded,
-                bytesTotal,
-                status: phase === "failed" ? "error" : "uploading",
-              });
-            },
-          });
-          uploaded.push(asset as unknown as MediaAsset);
+          },
+        };
+        patchUploadItem(uploadId, { retryContext });
+
+        try {
+          const saved = await runUpload(uploadId, file, mediaType, projectId, retryContext.metadata);
+          uploaded.push(saved);
           patchUploadItem(uploadId, { progress: 100, phase: "uploaded", status: "success" });
         } catch (err) {
+          const technical = technicalFromError(err);
+          const userMsg = technical
+            ? userFacingUploadError(technical)
+            : err instanceof Error
+              ? err.message
+              : "Upload failed";
+
           if (err instanceof UploadSaveError) {
-            const msg = "Upload complete, save failed. Retry save.";
-            errors.push(`${file.name}: ${msg}`);
+            errors.push(`${file.name}: ${userMsg}`);
             patchUploadItem(uploadId, {
               status: "save_failed",
               phase: "failed",
               progress: 95,
-              error: `${err.message}${err.step ? ` (${err.step})` : ""}`,
+              error: userMsg,
+              technicalDetails: technical,
               pendingSave: { ...err.pendingSave, failedStep: err.step },
+              retryContext,
             });
           } else {
-            const msg = err instanceof Error ? err.message : "Upload failed";
-            errors.push(`${file.name}: ${msg}`);
-            patchUploadItem(uploadId, { status: "error", phase: "failed", error: msg });
+            errors.push(`${file.name}: ${userMsg}`);
+            patchUploadItem(uploadId, {
+              status: "error",
+              phase: "failed",
+              error: userMsg,
+              technicalDetails: technical,
+              retryContext,
+            });
           }
         }
       }
@@ -138,12 +193,12 @@ export function useMediaUploadQueue(options?: {
       if (uploaded.length) options?.onUploaded?.(uploaded);
 
       setTimeout(() => {
-        setUploadItems((prev) => prev.filter((item) => item.status === "uploading" || item.status === "save_failed"));
-      }, 10000);
+        setUploadItems((prev) => prev.filter((item) => item.status === "uploading" || item.status === "save_failed" || item.status === "error"));
+      }, 30000);
 
       return { uploaded, errors };
     },
-    [options, patchUploadItem]
+    [options, patchUploadItem, runUpload]
   );
 
   const handleRetrySave = useCallback(
@@ -165,12 +220,14 @@ export function useMediaUploadQueue(options?: {
         options?.onUploaded?.([saved]);
         return saved;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Save failed";
+        const technical = technicalFromError(err);
+        const msg = technical ? userFacingUploadError(technical) : err instanceof Error ? err.message : "Save failed";
         const failedStep = err instanceof UploadSaveError ? err.step : item.pendingSave?.failedStep;
         patchUploadItem(uploadId, {
           status: "save_failed",
           phase: "failed",
           error: msg,
+          technicalDetails: technical,
           pendingSave: item.pendingSave ? { ...item.pendingSave, failedStep } : undefined,
         });
         throw err;
@@ -179,5 +236,57 @@ export function useMediaUploadQueue(options?: {
     [uploadItems, patchUploadItem, options]
   );
 
-  return { uploadItems, processFiles, handleRetrySave, isUploading, setUploadItems };
+  const handleRetryUpload = useCallback(
+    async (uploadId: string) => {
+      const item = uploadItems.find((i) => i.id === uploadId);
+      if (!item?.retryContext) return null;
+
+      const { file, mediaType, projectId, metadata } = item.retryContext;
+      patchUploadItem(uploadId, {
+        status: "uploading",
+        phase: "queued",
+        progress: 0,
+        error: undefined,
+        technicalDetails: undefined,
+        pendingSave: undefined,
+        startedAt: Date.now(),
+      });
+
+      try {
+        const saved = await runUpload(uploadId, file, mediaType, projectId, metadata);
+        patchUploadItem(uploadId, { progress: 100, phase: "uploaded", status: "success" });
+        options?.onUploaded?.([saved]);
+        return saved;
+      } catch (err) {
+        const technical = technicalFromError(err);
+        const userMsg = technical
+          ? userFacingUploadError(technical)
+          : err instanceof Error
+            ? err.message
+            : "Upload failed";
+
+        if (err instanceof UploadSaveError) {
+          patchUploadItem(uploadId, {
+            status: "save_failed",
+            phase: "failed",
+            progress: 95,
+            error: userMsg,
+            technicalDetails: technical,
+            pendingSave: { ...err.pendingSave, failedStep: err.step },
+          });
+        } else {
+          patchUploadItem(uploadId, {
+            status: "error",
+            phase: "failed",
+            error: userMsg,
+            technicalDetails: technical,
+          });
+        }
+        throw err;
+      }
+    },
+    [uploadItems, patchUploadItem, runUpload, options]
+  );
+
+  return { uploadItems, processFiles, handleRetrySave, handleRetryUpload, isUploading, setUploadItems };
 }

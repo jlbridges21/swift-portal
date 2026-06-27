@@ -1,39 +1,43 @@
-export function getUploadErrorMessage(error: unknown, context?: { phase?: string; status?: number; step?: string }): string {
-  if (error instanceof Error && error.name === "UploadSaveError") {
-    return error.message || "Upload complete, save failed. Retry save.";
+import { UploadBinaryError, UploadSaveError, userFacingUploadError } from "./upload-errors";
+
+export function getUploadErrorMessage(
+  error: unknown,
+  context?: { phase?: string; status?: number; step?: string }
+): string {
+  if (error instanceof UploadSaveError || error instanceof UploadBinaryError) {
+    return userFacingUploadError(error.technical);
   }
 
   const raw = error instanceof Error ? error.message : String(error ?? "Unknown error");
-  const lower = raw.toLowerCase();
-  const status = context?.status;
+  const status = context?.status ?? (error as { status?: number }).status;
 
-  if (context?.step === "storage_verify" || lower.includes("not visible yet") || lower.includes("retry save")) {
+  if (context?.step === "storage_verify" || /not visible yet|retry save/i.test(raw)) {
     return raw;
   }
-  if (status === 413 || lower.includes("too large") || lower.includes("exceeds")) {
+  if (status === 413 || /too large|exceeds/i.test(raw)) {
     return "File exceeds maximum size for this media type.";
   }
-  if (lower.includes("unsupported") || lower.includes("mime") || lower.includes("file type")) {
+  if (/unsupported|mime|file type/i.test(raw)) {
     return "Unsupported video format. Use MP4, MOV, or M4V.";
   }
-  if (lower.includes("network") || lower.includes("failed to fetch") || lower.includes("connection")) {
+  if (/network|failed to fetch|connection/i.test(raw)) {
     return "Network interrupted. Check your connection and try again.";
   }
-  if (lower.includes("timeout") || lower.includes("timed out")) {
-    return "Upload timed out. Try again on a stable connection.";
-  }
-  if (context?.step === "database_insert") {
-    return `Could not save media record: ${raw}`;
-  }
-  if (lower.includes("unauthorized") || status === 401 || status === 403) {
+  if (/unauthorized|session expired/i.test(raw) || status === 401 || status === 403) {
     return "Session expired. Refresh the page and sign in again.";
   }
-  if (context?.phase === "finalizing") {
-    return raw || "Upload complete, save failed. Retry save.";
-  }
-  if (status === 400) {
-    return raw.includes(":") ? raw.split(":").slice(1).join(":").trim() : "Upload was rejected. Check file type and size.";
-  }
 
-  return raw.length > 120 ? "Upload failed. Please try again." : raw;
+  return raw.length > 200 ? `${raw.slice(0, 197)}…` : raw;
+}
+
+/** Always log full technical error; return user-facing message. */
+export function normalizeUploadFailure(error: unknown): {
+  userMessage: string;
+  technical?: UploadBinaryError | UploadSaveError;
+} {
+  if (error instanceof UploadBinaryError || error instanceof UploadSaveError) {
+    return { userMessage: userFacingUploadError(error.technical), technical: error };
+  }
+  const raw = error instanceof Error ? error.message : String(error);
+  return { userMessage: getUploadErrorMessage(error), technical: undefined };
 }

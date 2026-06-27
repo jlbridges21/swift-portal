@@ -41,7 +41,7 @@ export function MediaUploadModal({
   const [tags, setTags] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
-  const { uploadItems, processFiles, handleRetrySave, isUploading } = useMediaUploadQueue({
+  const { uploadItems, processFiles, handleRetrySave, handleRetryUpload, isUploading } = useMediaUploadQueue({
     onUploaded: () => {
       onUploaded?.();
     },
@@ -182,7 +182,11 @@ export function MediaUploadModal({
         </div>
 
         {uploadItems.length > 0 && (
-          <UploadProgressList items={uploadItems} onRetrySave={handleRetrySave} />
+          <UploadProgressList
+            items={uploadItems}
+            onRetrySave={handleRetrySave}
+            onRetry={handleRetryUpload}
+          />
         )}
 
         <div className="flex justify-end gap-2 pt-2">
