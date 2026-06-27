@@ -695,10 +695,23 @@ function PaymentGroup({
     <div className="mb-4">
       <h3 className="text-sm font-medium text-muted mb-2">{title} ({payments.length})</h3>
       <div className="rounded-xl border border-border bg-white divide-y divide-border shadow-sm">
-        {payments.map((payment) => (
+        {payments.map((payment) => {
+          const projectName = payment.projects?.project_name;
+          const projectId = payment.project_id;
+          return (
           <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
             <div>
               <p className="font-medium text-primary">{payment.description}</p>
+              {projectId ? (
+                <p className="text-xs text-muted mt-0.5">
+                  Project:{" "}
+                  <Link href={`/admin/projects/${projectId}`} className="text-accent hover:underline">
+                    {projectName || "View project"}
+                  </Link>
+                </p>
+              ) : (
+                <p className="text-xs text-muted/80 mt-0.5">No Project Assigned</p>
+              )}
               <p className="text-xs text-muted">
                 {formatDate(payment.created_at)}
                 {payment.paid_at && ` · Paid ${formatDate(payment.paid_at)}`}
@@ -714,7 +727,8 @@ function PaymentGroup({
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

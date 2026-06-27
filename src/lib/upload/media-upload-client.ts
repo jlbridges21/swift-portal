@@ -1,15 +1,13 @@
 import * as tus from "tus-js-client";
 import { createClient } from "@/lib/supabase/client";
-import {
-  DIRECT_UPLOAD_THRESHOLD_BYTES,
-  MAX_VIDEO_FILE_SIZE_BYTES,
-  UPLOAD_CHUNK_SIZE_BYTES,
-  type UploadPhase,
-} from "./constants";
+import { DIRECT_UPLOAD_THRESHOLD_BYTES, UPLOAD_CHUNK_SIZE_BYTES, type UploadPhase } from "./constants";
 import { getUploadErrorMessage } from "./errors";
 import { logUploadStep } from "./logger";
 import { UploadSaveError, type PendingSavePayload } from "./pending-save";
 import { validateMediaFileBeforeUpload } from "./validation";
+import { uploadVideoThumbnail } from "./video-thumbnail";
+
+export { captureVideoThumbnailBlob, uploadVideoThumbnail, buildThumbnailStoragePath } from "./video-thumbnail";
 
 export interface UploadProgressUpdate {
   phase: UploadPhase;
@@ -17,9 +15,6 @@ export interface UploadProgressUpdate {
   bytesLoaded?: number;
   bytesTotal?: number;
 }
-
-import { uploadVideoThumbnail } from "./video-thumbnail";
-export { captureVideoThumbnailBlob, uploadVideoThumbnail, buildThumbnailStoragePath } from "./video-thumbnail";
 
 export interface UploadMediaMetadata {
   title?: string;
@@ -370,6 +365,7 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
     title: metadata?.title,
     description: metadata?.description,
     tags: metadata?.tags,
+    binaryUploaded: true,
   };
 
   try {
@@ -379,6 +375,8 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
 
     if (useTus) {
       await uploadViaTus(file, sign.bucket, sign.filePath, mimeType, projectId ?? "", report, signal);
+      // Allow Supabase storage to finalize large TUS objects before save verification.
+      await new Promise((r) => setTimeout(r, mediaType === "video" ? 2500 : 500));
     } else if (sign.signedUrl) {
       await uploadViaSignedPut(sign.signedUrl, file, mimeType, report, signal);
     } else {

@@ -4,7 +4,7 @@ import { requireAdminApi } from "@/lib/api-auth";
 import { formatFileSize } from "@/lib/brand";
 import { buildMediaStoragePath } from "@/lib/media-upload";
 import { validateMediaFileBeforeUpload } from "@/lib/upload/validation";
-import { MAX_VIDEO_FILE_SIZE_BYTES } from "@/lib/upload/constants";
+import { DIRECT_UPLOAD_THRESHOLD_BYTES, MAX_VIDEO_FILE_SIZE_BYTES } from "@/lib/upload/constants";
 import { logUploadStep } from "@/lib/upload/logger";
 
 export async function POST(request: Request) {
@@ -52,17 +52,25 @@ export async function POST(request: Request) {
       displayOrder = count ?? 0;
     }
 
-    const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(filePath);
+    const useTus = mediaType === "video" || fileSize > DIRECT_UPLOAD_THRESHOLD_BYTES;
 
-    if (error || !data) {
-      console.error("[upload/sign]", error?.message);
-      return NextResponse.json(
-        { error: "Could not prepare storage upload. Check bucket configuration." },
-        { status: 500 }
-      );
+    // TUS resumable uploads must NOT call createSignedUploadUrl — it can reserve the path
+    // and break large video uploads. Only sign a PUT URL for smaller direct uploads.
+    let signedUrl: string | undefined;
+    let token: string | undefined;
+
+    if (!useTus) {
+      const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(filePath);
+      if (error || !data) {
+        console.error("[upload/sign]", error?.message);
+        return NextResponse.json(
+          { error: "Could not prepare storage upload. Check bucket configuration." },
+          { status: 500 }
+        );
+      }
+      signedUrl = data.signedUrl;
+      token = data.token;
     }
-
-    const resumable = mediaType === "video" || fileSize > MAX_VIDEO_FILE_SIZE_BYTES / 10;
 
     logUploadStep("info", {
       step: "sign_prepared",
@@ -71,17 +79,17 @@ export async function POST(request: Request) {
       fileSize,
       fileType: validation.mimeType,
       filePath,
-      details: { resumable, unassigned: !projectId },
+      details: { resumable: useTus, unassigned: !projectId, bucket },
     });
 
     return NextResponse.json({
-      signedUrl: data.signedUrl,
-      token: data.token,
+      signedUrl,
+      token,
       filePath,
       bucket,
       displayOrder,
       mimeType: validation.mimeType,
-      resumable,
+      resumable: useTus,
       maxSizeLabel: mediaType === "video" ? formatFileSize(MAX_VIDEO_FILE_SIZE_BYTES) : undefined,
     });
   } catch (err) {

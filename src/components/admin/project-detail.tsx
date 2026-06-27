@@ -247,8 +247,8 @@ export function AdminProjectDetail({
             status: "save_failed",
             phase: "failed",
             progress: 95,
-            error: err.message,
-            pendingSave: err.pendingSave,
+            error: `${err.message}${err.step ? ` (${err.step})` : ""}`,
+            pendingSave: { ...err.pendingSave, failedStep: err.step },
           });
         } else {
           const msg = err instanceof Error ? err.message : "Upload failed";
@@ -283,7 +283,11 @@ export function AdminProjectDetail({
 
     patchUploadItem(uploadId, { status: "uploading", phase: "finalizing", progress: 95, error: undefined });
     try {
-      const { asset } = await retryMediaSave(item.pendingSave, ({ phase, progress }) => {
+      const retryPayload = {
+        ...item.pendingSave,
+        skipStorageVerify: item.pendingSave.failedStep === "storage_verify",
+      };
+      const { asset } = await retryMediaSave(retryPayload, ({ phase, progress }) => {
         patchUploadItem(uploadId, { phase, progress, status: "uploading" });
       });
       const saved = asset as unknown as MediaAsset;
@@ -293,11 +297,12 @@ export function AdminProjectDetail({
       router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Save failed";
+      const failedStep = err instanceof UploadSaveError ? err.step : item.pendingSave.failedStep;
       patchUploadItem(uploadId, {
         status: "save_failed",
         phase: "failed",
         error: msg,
-        pendingSave: item.pendingSave,
+        pendingSave: { ...item.pendingSave, failedStep },
       });
       toast.error(msg);
     }

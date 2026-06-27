@@ -191,7 +191,7 @@ export async function getClientCrmProfile(clientId: string): Promise<ClientCrmPr
     supabase.from("properties").select("*").eq("client_id", clientId).order("created_at", { ascending: false }),
     supabase.from("projects").select("*").eq("client_id", clientId).order("updated_at", { ascending: false }),
     supabase.from("project_clients").select("project_id, projects(*)").eq("client_id", clientId),
-    supabase.from("payments").select("*").eq("client_id", clientId).order("created_at", { ascending: false }),
+    supabase.from("payments").select("*, projects(project_name)").eq("client_id", clientId).order("created_at", { ascending: false }),
     supabase.from("client_notes").select("*").eq("client_id", clientId).order("created_at", { ascending: false }),
     supabase
       .from("communications")

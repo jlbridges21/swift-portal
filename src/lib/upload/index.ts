@@ -2,6 +2,7 @@ export * from "./constants";
 export * from "./errors";
 export * from "./validation";
 export * from "./pending-save";
+export * from "./titles";
 export {
   uploadMediaFile,
   retryMediaSave,

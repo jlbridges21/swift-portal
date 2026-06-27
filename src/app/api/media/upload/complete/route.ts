@@ -1,53 +1,11 @@
 import { NextResponse } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireAdminApi } from "@/lib/api-auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
 import { logUploadStep } from "@/lib/upload/logger";
+import { verifyStorageObject } from "@/lib/upload/storage-verify";
 import { setMediaTags } from "@/lib/media-library";
-
-const STORAGE_VERIFY_ATTEMPTS = 6;
-const STORAGE_VERIFY_DELAY_MS = 1500;
-
-async function verifyStorageObject(
-  supabase: SupabaseClient,
-  bucket: string,
-  filePath: string,
-  context: { projectId?: string | null; fileName: string; fileSize?: number; fileType?: string }
-): Promise<{ ok: true } | { ok: false; error: string; details?: unknown }> {
-  for (let attempt = 1; attempt <= STORAGE_VERIFY_ATTEMPTS; attempt++) {
-    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(filePath, 60);
-
-    if (!error && data?.signedUrl) {
-      logUploadStep("info", {
-        step: "storage_verify",
-        ...context,
-        filePath,
-        details: { attempt, bucket },
-      });
-      return { ok: true };
-    }
-
-    logUploadStep("warn", {
-      step: "storage_verify_retry",
-      ...context,
-      filePath,
-      providerMessage: error?.message,
-      details: { attempt, bucket },
-    });
-
-    if (attempt < STORAGE_VERIFY_ATTEMPTS) {
-      await new Promise((r) => setTimeout(r, STORAGE_VERIFY_DELAY_MS * attempt));
-    }
-  }
-
-  return {
-    ok: false,
-    error: "Upload completed but could not be saved — file not found in storage yet. Try saving again.",
-    details: { bucket, filePath, attempts: STORAGE_VERIFY_ATTEMPTS },
-  };
-}
 
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
@@ -66,6 +24,7 @@ export async function POST(request: Request) {
     description,
     tags,
     thumbnailPath,
+    skipStorageVerify,
   } = body;
 
   const logContext = {
@@ -110,18 +69,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, media: existingAsset });
   }
 
-  const verify = await verifyStorageObject(supabase, bucket, filePath, logContext);
-  if (!verify.ok) {
-    logUploadStep("error", {
-      step: "storage_verify",
+  if (!skipStorageVerify) {
+    const verify = await verifyStorageObject(supabase, bucket, filePath, {
       ...logContext,
-      providerMessage: verify.error,
-      details: verify.details,
+      mediaType,
     });
-    return NextResponse.json(
-      { success: false, error: verify.error, step: "storage_verify", details: verify.details },
-      { status: 400 }
-    );
+    if (!verify.ok) {
+      logUploadStep("error", {
+        step: "storage_verify",
+        ...logContext,
+        providerMessage: verify.error,
+        details: verify.details,
+      });
+      return NextResponse.json(
+        { success: false, error: verify.error, step: "storage_verify", details: verify.details },
+        { status: 400 }
+      );
+    }
   }
 
   const { data: asset, error: dbError } = await supabase
@@ -159,56 +123,77 @@ export async function POST(request: Request) {
       step: "database_insert",
       ...logContext,
       providerMessage: dbError.message,
-      details: { code: dbError.code },
+      details: { code: dbError.code, hint: dbError.hint },
     });
     return NextResponse.json(
-      { success: false, error: dbError.message, step: "database_insert", details: { code: dbError.code } },
+      {
+        success: false,
+        error: dbError.message,
+        step: "database_insert",
+        details: { code: dbError.code, hint: dbError.hint },
+      },
       { status: 500 }
     );
   }
 
   if (Array.isArray(tags) && tags.length) {
-    await setMediaTags(asset.id, tags);
+    try {
+      await setMediaTags(asset.id, tags);
+    } catch (tagErr) {
+      logUploadStep("warn", {
+        step: "tags_save",
+        ...logContext,
+        details: { assetId: asset.id, error: String(tagErr) },
+      });
+    }
   }
 
   logUploadStep("info", { step: "database_insert", ...logContext, details: { assetId: asset.id } });
 
-  if (projectId && mediaType === "photo") {
-    const { data: project } = await supabase
-      .from("projects")
-      .select("cover_image_id")
-      .eq("id", projectId)
-      .single();
+  try {
+    if (projectId && mediaType === "photo") {
+      const { data: project } = await supabase
+        .from("projects")
+        .select("cover_image_id")
+        .eq("id", projectId)
+        .single();
 
-    if (!project?.cover_image_id) {
-      await supabase.from("projects").update({ cover_image_id: asset.id }).eq("id", projectId);
+      if (!project?.cover_image_id) {
+        await supabase.from("projects").update({ cover_image_id: asset.id }).eq("id", projectId);
+      }
     }
-  }
 
-  if (projectId) {
-    const activityType =
-      mediaType === "photo" ? "photos_uploaded" : mediaType === "video" ? "videos_uploaded" : "documents_uploaded";
-    const label =
-      mediaType === "photo" ? "Photo uploaded" : mediaType === "video" ? "Video uploaded" : "Document uploaded";
+    if (projectId) {
+      const activityType =
+        mediaType === "photo" ? "photos_uploaded" : mediaType === "video" ? "videos_uploaded" : "documents_uploaded";
+      const label =
+        mediaType === "photo" ? "Photo uploaded" : mediaType === "video" ? "Video uploaded" : "Document uploaded";
 
-    await logProjectActivity(activityType, label, {
-      projectId,
-      metadata: { mediaType, assetId: asset.id },
-    });
-
-    if (mediaType !== "document") {
-      await notifyProjectClients({
-        type: "deliverables_uploaded",
-        eventKey: "deliverables_ready",
-        title: "Media in Production",
-        body:
-          mediaType === "video"
-            ? "A new video has been added to your project."
-            : "New photos have been added to your project.",
-        link: `/dashboard/projects/${projectId}#deliverables`,
+      await logProjectActivity(activityType, label, {
         projectId,
+        metadata: { mediaType, assetId: asset.id },
       });
+
+      if (mediaType !== "document") {
+        await notifyProjectClients({
+          type: "deliverables_uploaded",
+          eventKey: "deliverables_ready",
+          title: "Media in Production",
+          body:
+            mediaType === "video"
+              ? "A new video has been added to your project."
+              : "New photos have been added to your project.",
+          link: `/dashboard/projects/${projectId}#deliverables`,
+          projectId,
+        });
+      }
     }
+  } catch (postErr) {
+    logUploadStep("warn", {
+      step: "post_insert_side_effects",
+      ...logContext,
+      details: { assetId: asset.id, error: String(postErr) },
+    });
   }
 
   return NextResponse.json({ success: true, media: asset });

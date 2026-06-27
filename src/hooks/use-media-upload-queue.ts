@@ -10,6 +10,7 @@ import {
   UploadSaveError,
   type UploadMediaMetadata,
 } from "@/lib/upload";
+import { resolveUploadTitle } from "@/lib/upload/titles";
 
 function inferMediaType(file: File): "photo" | "video" | null {
   const mime = file.type.toLowerCase();
@@ -89,10 +90,12 @@ export function useMediaUploadQueue(options?: {
         .filter((i) => i.status === "error")
         .map((i) => `${i.fileName}: ${i.error}`);
 
-      for (const { file, mediaType, uploadId } of queue) {
+      for (let i = 0; i < queue.length; i++) {
+        const { file, mediaType, uploadId } = queue[i];
         try {
+          const baseTitle = metadata?.title?.trim() || file.name.replace(/\.[^.]+$/, "");
           const fileMeta: UploadMediaMetadata = {
-            title: metadata?.title || file.name.replace(/\.[^.]+$/, ""),
+            title: resolveUploadTitle(baseTitle, i, queue.length),
             description: metadata?.description,
             tags: metadata?.tags,
           };
@@ -121,8 +124,8 @@ export function useMediaUploadQueue(options?: {
               status: "save_failed",
               phase: "failed",
               progress: 95,
-              error: err.message,
-              pendingSave: err.pendingSave,
+              error: `${err.message}${err.step ? ` (${err.step})` : ""}`,
+              pendingSave: { ...err.pendingSave, failedStep: err.step },
             });
           } else {
             const msg = err instanceof Error ? err.message : "Upload failed";
@@ -150,7 +153,11 @@ export function useMediaUploadQueue(options?: {
 
       patchUploadItem(uploadId, { status: "uploading", phase: "finalizing", progress: 95, error: undefined });
       try {
-        const { asset } = await retryMediaSave(item.pendingSave, ({ phase, progress }) => {
+        const retryPayload = {
+          ...item.pendingSave,
+          skipStorageVerify: item.pendingSave.failedStep === "storage_verify",
+        };
+        const { asset } = await retryMediaSave(retryPayload, ({ phase, progress }) => {
           patchUploadItem(uploadId, { phase, progress, status: "uploading" });
         });
         const saved = asset as unknown as MediaAsset;
@@ -159,11 +166,12 @@ export function useMediaUploadQueue(options?: {
         return saved;
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Save failed";
+        const failedStep = err instanceof UploadSaveError ? err.step : item.pendingSave?.failedStep;
         patchUploadItem(uploadId, {
           status: "save_failed",
           phase: "failed",
           error: msg,
-          pendingSave: item.pendingSave,
+          pendingSave: item.pendingSave ? { ...item.pendingSave, failedStep } : undefined,
         });
         throw err;
       }
