@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canDownloadDeliverables } from "@/lib/deliverables";
 import { canAccessProject } from "@/lib/project-access";
+import { isClientVisibleMedia } from "@/lib/client-media";
 import { logMediaEvent, trackMediaDownload } from "@/lib/media-library";
 import { normalizeStatus } from "@/lib/constants";
 
@@ -47,6 +48,10 @@ export async function GET(
 
   const projectStatus = normalizeStatus(project?.status ?? "new_request");
   const isAdmin = profile.role === "admin";
+  if (!isAdmin && !isClientVisibleMedia(asset)) {
+    return NextResponse.json({ error: "This file is not available." }, { status: 404 });
+  }
+
   const downloadsAllowed = isAdmin || canDownloadDeliverables(projectStatus);
 
   if (asset.media_source === "youtube") {
@@ -58,7 +63,7 @@ export async function GET(
 
   if (asFile && !downloadsAllowed) {
     return NextResponse.json(
-      { error: "Downloads unlock after final payment. Preview is available in your portal." },
+      { error: "Downloads unlock after your final payment is complete." },
       { status: 403 }
     );
   }
@@ -69,7 +74,7 @@ export async function GET(
       .download(asset.file_path);
 
     if (downloadError || !fileData) {
-      return NextResponse.json({ error: "Failed to download file" }, { status: 500 });
+      return NextResponse.json({ error: "We couldn't download that file. Please try again or contact support." }, { status: 500 });
     }
 
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;

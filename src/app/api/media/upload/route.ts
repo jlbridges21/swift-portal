@@ -83,7 +83,7 @@ export async function POST(request: Request) {
       .single();
 
     if (dbError) {
-      errors.push(`${file.name}: failed to save record`);
+      errors.push(`${file.name}: Could not save file record — ${dbError.message}`);
       continue;
     }
 
@@ -152,8 +152,11 @@ export async function POST(request: Request) {
   }
 
   if (uploaded.length === 0 && errors.length > 0) {
+    const friendly = errors.some((e) => e.includes("exceeds") || e.includes("size"))
+      ? "One or more files exceed the size limit. Try a smaller file or use direct upload for large videos."
+      : errors.join("; ");
     return NextResponse.json(
-      { error: errors.join("; "), errors, uploaded: [] },
+      { error: friendly, errors, uploaded: [] },
       { status: 400 }
     );
   }

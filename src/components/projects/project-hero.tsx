@@ -4,7 +4,6 @@ import Image from "next/image";
 import type { HeroMedia } from "@/lib/cover";
 import { CoverPlaceholder } from "@/components/projects/cover-placeholder";
 import { StatusBadge } from "@/components/ui/badge";
-import { getClientStatusLabel, normalizeStatus } from "@/lib/constants";
 import type { ReactNode } from "react";
 
 interface ProjectHeroProps {
@@ -106,12 +105,9 @@ export function ProjectHero({
             {subtitle}
           </p>
         )}
-        {isMicrosite && (
+        {isMicrosite && projectName !== propertyAddress && (
           <p className="mt-2 text-sm text-slate-400">
-            {getClientStatusLabel(normalizeStatus(status))}
-            {projectName !== propertyAddress && (
-              <span className="text-slate-500"> · {projectName}</span>
-            )}
+            {projectName}
           </p>
         )}
         {children}

@@ -64,12 +64,12 @@ export function ProjectQuickActions({
       label: "Schedule",
       href: "#scheduling",
       icon: Calendar,
-      show: ["proposal_approved", "scheduled", "quote_sent"].includes(s) || s === "new_request",
+      show: ["proposal_approved", "scheduled"].includes(s),
     },
     {
       id: "review",
       label: "Review",
-      href: "#deliverables",
+      href: s === "ready_for_review" ? "#deliverable-review" : "#photo-gallery",
       icon: Eye,
       show: canPreview && hasMedia,
     },
@@ -121,7 +121,7 @@ export function ProjectQuickActions({
       )}
       {canPreview && !canDownload && hasMedia && (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-2 text-xs text-slate-300">
-          <Images className="h-3.5 w-3.5" /> Preview mode
+          <Images className="h-3.5 w-3.5" /> Downloads unlock after payment
         </span>
       )}
     </nav>

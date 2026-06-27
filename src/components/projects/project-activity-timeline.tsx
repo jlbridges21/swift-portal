@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import type { ActivityLog } from "@/lib/types";
-import { getActivityDisplay } from "@/lib/activity-display";
+import { getActivityDisplay, getClientActivityDisplay } from "@/lib/activity-display";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { History } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,17 +9,25 @@ import { cn } from "@/lib/utils";
 interface ProjectActivityTimelineProps {
   activities: ActivityLog[];
   className?: string;
+  clientMode?: boolean;
   onRevisionClick?: (revisionId: string) => void;
 }
 
 export function ProjectActivityTimeline({
   activities,
   className,
+  clientMode = false,
   onRevisionClick,
 }: ProjectActivityTimelineProps) {
   const sorted = [...activities].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
+
+  function displayFor(log: ActivityLog) {
+    return clientMode
+      ? getClientActivityDisplay(log.activity_type, log.description)
+      : getActivityDisplay(log.activity_type, log.description);
+  }
 
   return (
     <Card className={className} id="activity">
@@ -38,7 +45,7 @@ export function ProjectActivityTimeline({
             <div className="absolute left-[15px] top-2 bottom-2 w-px bg-border" />
             <ul className="space-y-0">
               {sorted.map((log, index) => {
-                const { icon, description } = getActivityDisplay(log.activity_type, log.description);
+                const { icon, description } = displayFor(log);
                 const isLast = index === sorted.length - 1;
                 const revisionId = log.metadata?.revisionId as string | undefined;
                 const isRevision = log.activity_type === "revision_requested" && revisionId && onRevisionClick;

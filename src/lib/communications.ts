@@ -31,6 +31,21 @@ export const COMMUNICATION_ACTIVITY_TYPES = new Set<string>([
   "sent_for_review",
 ]);
 
+/** Activity types hidden from client-facing timelines. */
+export const CLIENT_HIDDEN_ACTIVITY_TYPES = new Set<string>([
+  "account_created",
+  "project_created",
+  "workflow_automation",
+  "status_updated",
+  "preliminary_estimate_created",
+  "photos_uploaded",
+  "videos_uploaded",
+  "documents_uploaded",
+  "media_uploaded",
+  "asset_reviewed",
+  "payment_requested",
+]);
+
 export function isEmailAnalyticsActivity(type: string): boolean {
   return EMAIL_ANALYTICS_ACTIVITY_TYPES.has(type);
 }
@@ -38,7 +53,9 @@ export function isEmailAnalyticsActivity(type: string): boolean {
 export function filterClientVisibleActivities(activities: ActivityLog[]): ActivityLog[] {
   return activities.filter((activity) => {
     if (activity.visibility === "admin") return false;
-    return !isEmailAnalyticsActivity(activity.activity_type);
+    if (isEmailAnalyticsActivity(activity.activity_type)) return false;
+    if (CLIENT_HIDDEN_ACTIVITY_TYPES.has(activity.activity_type)) return false;
+    return true;
   });
 }
 

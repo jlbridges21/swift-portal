@@ -51,6 +51,29 @@ export async function setProjectStatus(options: SetStatusOptions) {
   const fromStatus = normalizeStatus(existing?.status ?? "new_request");
   const toStatus = options.status;
 
+  const currentOrder = getStatusOrder(fromStatus);
+  const targetOrder = getStatusOrder(toStatus);
+
+  if (
+    !options.manualOverride &&
+    existing?.status &&
+    fromStatus !== toStatus &&
+    targetOrder < currentOrder
+  ) {
+    await logWorkflowAudit(
+      options.projectId,
+      `Workflow blocked backward move from "${getStatusLabel(fromStatus)}" to "${getStatusLabel(toStatus)}" — automations only advance projects forward.`,
+      {
+        userId: options.userId,
+        idempotencyKey: options.idempotencyKey
+          ? `${options.idempotencyKey}:backward-blocked`
+          : `workflow:backward:${options.projectId}:${toStatus}`,
+        metadata: { from: fromStatus, to: toStatus, blocked: true, reason: "backward" },
+      }
+    );
+    return existing;
+  }
+
   if (
     !options.manualOverride &&
     existing?.status &&

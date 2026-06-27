@@ -29,8 +29,10 @@ import {
   ExternalLink, Check, Video, ImageIcon, Eye, EyeOff, Link2, Pencil, Users, Plus, MapPin,
 } from "lucide-react";
 import { UploadProgressList, type UploadProgressItem } from "@/components/admin/upload-progress-list";
+import { CreateClientModal } from "@/components/admin/create-client-modal";
 import { defaultProjectName } from "@/lib/utils";
-import { resolveMimeType } from "@/lib/media-upload";
+import { uploadMediaFile, validateMediaFileBeforeUpload } from "@/lib/upload";
+import { ALLOWED_VIDEO_MIME_TYPES } from "@/lib/upload/constants";
 import { toast } from "sonner";
 
 function dedupeMedia<T extends { id: string }>(items: T[]): T[] {
@@ -83,6 +85,7 @@ export function AdminProjectDetail({
   const [editMediaForm, setEditMediaForm] = useState({ file_name: "", youtube_url: "" });
   const [editTourForm, setEditTourForm] = useState({ tour_name: "", kuula_url: "", notes: "" });
   const [addClientId, setAddClientId] = useState("");
+  const [showCreateClient, setShowCreateClient] = useState(false);
   const [projectClients, setProjectClients] = useState(initialProjectClients);
   const [revisions, setRevisions] = useState(initialRevisions);
   const [paymentList, setPaymentList] = useState(payments);
@@ -170,174 +173,116 @@ export function AdminProjectDetail({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  async function parseJsonResponse(res: Response) {
-    const text = await res.text();
-    if (!text) {
-      throw new Error(
-        res.status === 413
-          ? "File too large for server upload. Try again or use a smaller file."
-          : "Upload failed — empty server response. For large videos, direct upload is used automatically."
-      );
-    }
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error("Upload failed — invalid server response.");
-    }
-  }
-
-  async function uploadWithProgress(
-    signedUrl: string,
-    file: File,
-    onProgress: (pct: number) => void
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          onProgress(Math.round((e.loaded / e.total) * 100));
-        }
-      });
-      xhr.addEventListener("load", () => {
-        if (xhr.status >= 200 && xhr.status < 300) resolve();
-        else reject(new Error(`Upload failed (${xhr.status})`));
-      });
-      xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
-      xhr.open("PUT", signedUrl);
-      xhr.setRequestHeader("Content-Type", file.type);
-      xhr.send(file);
-    });
-  }
-
   function patchUploadItem(id: string, patch: Partial<UploadProgressItem>) {
     setUploadItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   }
 
-  async function uploadFileDirect(file: File, mediaType: string, uploadId: string): Promise<MediaAsset> {
-    const signRes = await fetch("/api/media/upload/sign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        projectId: initialProject.id,
-        fileName: file.name,
-        mimeType: resolveMimeType(file),
-        fileSize: file.size,
-        mediaType,
-      }),
-    });
-    const signData = await parseJsonResponse(signRes);
-    if (!signRes.ok) throw new Error(signData.error || "Failed to prepare upload");
-
-    await uploadWithProgress(signData.signedUrl, file, (pct) => {
-      patchUploadItem(uploadId, { progress: pct });
-    });
-
-    const completeRes = await fetch("/api/media/upload/complete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        projectId: initialProject.id,
-        filePath: signData.filePath,
-        fileName: file.name,
-        mimeType: resolveMimeType(file),
-        fileSize: file.size,
-        mediaType,
-        displayOrder: signData.displayOrder,
-      }),
-    });
-    const asset = await parseJsonResponse(completeRes);
-    if (!completeRes.ok) throw new Error(asset.error || "Failed to save upload");
-    return asset as MediaAsset;
-  }
-
-  async function uploadFileViaApi(file: File, mediaType: string, uploadId: string): Promise<MediaAsset[]> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      const formData = new FormData();
-      formData.append("projectId", initialProject.id);
-      formData.append("mediaType", mediaType);
-      formData.append("files", file);
-
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          patchUploadItem(uploadId, { progress: Math.round((e.loaded / e.total) * 100) });
-        }
-      });
-      xhr.addEventListener("load", () => {
-        try {
-          const data = xhr.responseText ? JSON.parse(xhr.responseText) : {};
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve((data.uploaded ?? []) as MediaAsset[]);
-          } else {
-            reject(new Error(data.error || `Upload failed (${xhr.status})`));
-          }
-        } catch {
-          reject(new Error(xhr.responseText || "Invalid server response"));
-        }
-      });
-      xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
-      xhr.open("POST", "/api/media/upload");
-      xhr.withCredentials = true;
-      xhr.send(formData);
-    });
-  }
-
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>, mediaType: string) {
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>, mediaType: "photo" | "video" | "document") {
     const files = e.target.files;
     if (!files?.length) return;
 
     const fileList = Array.from(files);
-    const newItems: UploadProgressItem[] = fileList.map((file) => ({
-      id: `${file.name}-${Date.now()}-${Math.random()}`,
-      fileName: file.name,
-      progress: 0,
-      status: "uploading" as const,
-    }));
-    setUploadItems((prev) => [...prev, ...newItems]);
+    const newItems: UploadProgressItem[] = [];
+    const validFiles: File[] = [];
+
+    for (const file of fileList) {
+      const uploadId = `${file.name}-${Date.now()}-${Math.random()}`;
+      const validation = validateMediaFileBeforeUpload(file, mediaType);
+      if (!validation.ok) {
+        newItems.push({
+          id: uploadId,
+          fileName: file.name,
+          progress: 0,
+          phase: "failed",
+          status: "error",
+          error: validation.error,
+        });
+        continue;
+      }
+      validFiles.push(file);
+      newItems.push({
+        id: uploadId,
+        fileName: file.name,
+        progress: 0,
+        phase: "queued",
+        status: "uploading",
+        bytesTotal: file.size,
+        startedAt: Date.now(),
+      });
+    }
+
+    if (newItems.length) setUploadItems((prev) => [...prev, ...newItems]);
 
     const uploaded: MediaAsset[] = [];
-    const errors: string[] = [];
+    const errors: string[] = newItems.filter((i) => i.status === "error").map((i) => `${i.fileName}: ${i.error}`);
 
-    try {
-      for (let i = 0; i < fileList.length; i++) {
-        const file = fileList[i];
-        const uploadId = newItems[i].id;
-        try {
-          if (mediaType === "video" || file.size > 4 * 1024 * 1024) {
-            const asset = await uploadFileDirect(file, mediaType, uploadId);
-            uploaded.push(asset);
-            patchUploadItem(uploadId, { progress: 100, status: "success" });
-          } else {
-            const assets = await uploadFileViaApi(file, mediaType, uploadId);
-            uploaded.push(...assets);
-            patchUploadItem(uploadId, { progress: 100, status: "success" });
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "failed";
-          errors.push(`${file.name}: ${msg}`);
-          patchUploadItem(uploadId, { status: "error", error: msg });
-        }
+    let validIndex = 0;
+    for (const item of newItems) {
+      if (item.status === "error") continue;
+      const file = validFiles[validIndex++];
+      const uploadId = item.id;
+      try {
+        const { asset } = await uploadMediaFile({
+          projectId: initialProject.id,
+          file,
+          mediaType,
+          onProgress: ({ phase, progress, bytesLoaded, bytesTotal }) => {
+            patchUploadItem(uploadId, {
+              phase,
+              progress,
+              bytesLoaded,
+              bytesTotal,
+              status: phase === "failed" ? "error" : "uploading",
+            });
+          },
+        });
+        uploaded.push(asset as unknown as MediaAsset);
+        patchUploadItem(uploadId, { progress: 100, phase: "uploaded", status: "success" });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Upload failed";
+        errors.push(`${file.name}: ${msg}`);
+        patchUploadItem(uploadId, { status: "error", phase: "failed", error: msg });
       }
+    }
 
-      if (uploaded.length) {
-        setMedia((prev) => dedupeMedia([...prev, ...uploaded]));
-        if (mediaType === "photo") {
-          setPendingNewPhotoIds((prev) => [...prev, ...uploaded.map((u) => u.id)]);
-        }
-        toast.success(`${uploaded.length} file(s) uploaded`);
-        router.refresh();
+    if (uploaded.length) {
+      setMedia((prev) => dedupeMedia([...prev, ...uploaded]));
+      if (mediaType === "photo") {
+        setPendingNewPhotoIds((prev) => [...prev, ...uploaded.map((u) => u.id)]);
       }
-      if (errors.length) toast.warning(errors.join("; "));
-      if (!uploaded.length && errors.length) toast.error(errors[0]);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setTimeout(() => {
-        setUploadItems((prev) => prev.filter((item) => item.status === "uploading"));
-      }, 4000);
-      e.target.value = "";
+      toast.success(`${uploaded.length} file(s) uploaded`);
+      router.refresh();
+    }
+    if (errors.length) {
+      if (!uploaded.length) toast.error(errors[0]);
+      else toast.warning(errors.join("; "));
+    }
+
+    setTimeout(() => {
+      setUploadItems((prev) => prev.filter((item) => item.status === "uploading"));
+    }, 5000);
+    e.target.value = "";
+  }
+
+  async function handleClientCreated(client: Client) {
+    const res = await fetch("/api/project-clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        project_id: initialProject.id,
+        client_id: client.id,
+        is_primary: projectClients.length === 0,
+      }),
+    });
+    if (res.ok) {
+      const pc = await res.json();
+      setProjectClients((prev) => [...prev, { ...pc, clients: client }]);
+      setAddClientId(client.id);
+      toast.success("Client created and linked to project");
+      router.refresh();
+    } else {
+      toast.error("Client created but could not link to project");
     }
   }
 
@@ -580,7 +525,14 @@ export function AdminProjectDetail({
         setShowPaymentForm(false);
         toast.success("Payment link created");
         router.refresh();
-      } else toast.error("Failed to create payment");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(
+          typeof (data as { error?: string }).error === "string"
+            ? (data as { error: string }).error
+            : "Could not create payment link. Check Stripe settings."
+        );
+      }
     } finally {
       setCreatingPayment(false);
     }
@@ -596,14 +548,27 @@ export function AdminProjectDetail({
         credentials: "include",
         body: JSON.stringify({ project_id: initialProject.id }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        const { alreadyPaid, ...updated } = data as Payment & { alreadyPaid?: boolean };
         setPaymentList((prev) =>
-          prev.map((p) => (p.id === paymentId ? { ...p, status: "paid" as const, paid_at: new Date().toISOString() } : p))
+          prev.map((p) => (p.id === paymentId ? (updated as Payment) : p))
         );
-        setForm((f) => ({ ...f, status: "delivered" }));
-        toast.success("Marked as paid — project delivered");
+        toast.success(
+          alreadyPaid
+            ? "Payment was already marked as paid"
+            : "Marked as paid"
+        );
         router.refresh();
+      } else {
+        toast.error(
+          typeof data.error === "string"
+            ? data.error
+            : "Failed to mark payment as paid"
+        );
       }
+    } catch {
+      toast.error("Failed to mark payment as paid — network error");
     } finally {
       setMarkingPaidId(null);
     }
@@ -734,7 +699,15 @@ export function AdminProjectDetail({
             <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
           </div>
           <p className="text-xs text-muted">
-            Primary: {(initialProject.clients as Client).name} · {(initialProject.clients as Client).email}
+            Primary:{" "}
+            <Link
+              href={`/admin/clients/${(initialProject.clients as Client).id}`}
+              className="font-medium text-accent hover:underline"
+            >
+              {(initialProject.clients as Client).name}
+            </Link>
+            {" · "}
+            {(initialProject.clients as Client).email}
           </p>
         </CardContent>
       </Card>
@@ -747,7 +720,12 @@ export function AdminProjectDetail({
           {projectClients.map((pc) => (
             <div key={pc.id} className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
               <div>
-                <span className="font-medium">{(pc.clients as Client)?.name}</span>
+                <Link
+                  href={`/admin/clients/${pc.client_id}`}
+                  className="font-medium text-accent hover:underline"
+                >
+                  {(pc.clients as Client)?.name}
+                </Link>
                 {pc.is_primary && <span className="ml-2 text-xs text-accent">Primary</span>}
                 <p className="text-xs text-muted">{(pc.clients as Client)?.email}</p>
               </div>
@@ -758,8 +736,9 @@ export function AdminProjectDetail({
               )}
             </div>
           ))}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Select
+              className="min-w-[12rem] flex-1"
               value={addClientId}
               onChange={(e) => setAddClientId(e.target.value)}
               placeholder="Add client to project"
@@ -767,8 +746,11 @@ export function AdminProjectDetail({
                 .filter((c) => !projectClients.some((pc) => pc.client_id === c.id))
                 .map((c) => ({ value: c.id, label: c.company ? `${c.name} (${c.company})` : c.name }))}
             />
-            <Button variant="outline" size="sm" onClick={addProjectClient} disabled={!addClientId}>
+            <Button variant="outline" size="sm" className="min-h-11" onClick={addProjectClient} disabled={!addClientId}>
               <Plus className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" className="min-h-11" onClick={() => setShowCreateClient(true)}>
+              <Plus className="h-4 w-4" /> New Client
             </Button>
           </div>
         </CardContent>
@@ -841,7 +823,7 @@ export function AdminProjectDetail({
               <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-medium hover:bg-slate-50">
                 <Upload className="h-4 w-4" /> Upload Video
               </span>
-              <input type="file" multiple accept="video/mp4,video/quicktime" className="hidden" onChange={(e) => handleUpload(e, "video")} disabled={isUploading} />
+              <input type="file" multiple accept={ALLOWED_VIDEO_MIME_TYPES.join(",")} className="hidden" onChange={(e) => handleUpload(e, "video")} disabled={isUploading} />
             </label>
           </div>
         </CardHeader>
@@ -1005,7 +987,9 @@ export function AdminProjectDetail({
               <Input name="amount" type="number" step="0.01" min="0" required placeholder="Amount (USD)" />
               <Input name="description" required placeholder="Description" />
               <Input name="due_date" type="date" />
-              <Button type="submit" variant="accent" size="sm">Create Payment Link</Button>
+              <Button type="submit" variant="accent" size="sm" disabled={creatingPayment}>
+                {creatingPayment ? "Creating…" : "Create Payment Link"}
+              </Button>
             </form>
           )}
           {paymentList.map((p) => (
@@ -1072,8 +1056,14 @@ export function AdminProjectDetail({
         </div>
       </Modal>
 
+      <CreateClientModal
+        open={showCreateClient}
+        onClose={() => setShowCreateClient(false)}
+        onCreated={handleClientCreated}
+      />
+
       {uploadItems.length > 0 && (
-        <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md md:bottom-20">
+        <div className="fixed z-50 mx-auto max-w-md left-4 right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] md:bottom-20">
           <UploadProgressList items={uploadItems} className="shadow-xl bg-white" />
         </div>
       )}

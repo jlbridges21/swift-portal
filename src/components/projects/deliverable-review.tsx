@@ -151,7 +151,7 @@ export function DeliverableReview({
   }
 
   return (
-    <Card className="shadow-sm border-purple-200" id="deliverables">
+    <Card className="shadow-sm border-purple-200" id="deliverable-review">
       <CardHeader>
         <CardTitle className="text-base">Review Deliverables</CardTitle>
         <p className="text-sm text-muted">Approve each item or provide feedback for changes.</p>
@@ -201,7 +201,7 @@ export function DeliverableReview({
                         disabled={!!reviewingKey}
                         onClick={() => submitReview(item.type, item.id, "approved")}
                       >
-                        {reviewingKey === key ? "..." : <Check className="h-3.5 w-3.5" />}
+                        {reviewingKey === key ? "Approving…" : <Check className="h-3.5 w-3.5" />}
                       </Button>
                       <Button
                         variant="outline"

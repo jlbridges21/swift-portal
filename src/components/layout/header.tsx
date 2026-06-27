@@ -24,6 +24,7 @@ const adminLinks = [
   { href: "/admin/media", label: "Media" },
   { href: "/admin/calendar", label: "Calendar" },
   { href: "/admin/clients", label: "Clients" },
+  { href: "/admin/launch-checklist", label: "Launch" },
 ];
 
 function ClientProfileNav({

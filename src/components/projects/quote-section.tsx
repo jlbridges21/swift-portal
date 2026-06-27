@@ -54,6 +54,8 @@ export function QuoteSection({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [requestingChanges, setRequestingChanges] = useState(false);
+  const [showChangeForm, setShowChangeForm] = useState(false);
   const [converting, setConverting] = useState(false);
   const [changeFeedback, setChangeFeedback] = useState("");
   const [form, setForm] = useState(emptyForm);
@@ -284,7 +286,9 @@ export function QuoteSection({
 
   async function quoteAction(id: string, action: string, feedback?: string) {
     if (action === "approve" && approving) return;
+    if (action === "request_changes" && requestingChanges) return;
     if (action === "approve") setApproving(true);
+    if (action === "request_changes") setRequestingChanges(true);
     try {
       const res = await fetch("/api/quotes", {
         method: "PATCH",
@@ -292,21 +296,25 @@ export function QuoteSection({
         credentials: "include",
         body: JSON.stringify({ id, action, feedback }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const updated = await res.json();
+        const updated = data;
         setQuotes((prev) => prev.map((q) => (q.id === id ? updated : q)));
         if (action === "approve") {
           onStatusChange?.("proposal_approved");
           toast.success("Proposal approved!");
         } else {
-          toast.success("Feedback sent");
+          setShowChangeForm(false);
+          setChangeFeedback("");
+          toast.success("Your feedback was sent — we'll send a revised proposal soon.");
         }
         router.refresh();
       } else {
-        toast.error("Action failed");
+        toast.error((data as { error?: string }).error || "Something went wrong. Please try again.");
       }
     } finally {
       setApproving(false);
+      setRequestingChanges(false);
     }
   }
 
@@ -364,24 +372,53 @@ export function QuoteSection({
   }
 
   function renderClientActions(quote: ProjectQuote) {
+    if (quote.status === "changes_requested") {
+      return (
+        <p className="text-sm text-muted">
+          Your change request was submitted. Swift Aerial Media will send a revised proposal soon.
+        </p>
+      );
+    }
     if (quote.status === "sent") {
       return (
-        <>
-          <Button variant="accent" disabled={approving} onClick={() => quoteAction(quote.id, "approve")}>
-            <Check className="h-4 w-4" /> {approving ? "Approving..." : "Approve Proposal"}
-          </Button>
-          {allowClientProposalChanges && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                const fb = changeFeedback || prompt("What changes would you like?");
-                if (fb) quoteAction(quote.id, "request_changes", fb);
-              }}
-            >
-              <MessageSquare className="h-4 w-4" /> Request Changes
+        <div className="flex flex-col gap-3 w-full">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="accent" disabled={approving || requestingChanges} className="min-h-11" onClick={() => quoteAction(quote.id, "approve")}>
+              <Check className="h-4 w-4" /> {approving ? "Approving…" : "Approve Proposal"}
             </Button>
+            {allowClientProposalChanges && !showChangeForm && (
+              <Button variant="outline" disabled={approving || requestingChanges} className="min-h-11" onClick={() => setShowChangeForm(true)}>
+                <MessageSquare className="h-4 w-4" /> Request Changes
+              </Button>
+            )}
+          </div>
+          {showChangeForm && allowClientProposalChanges && (
+            <div className="space-y-2 rounded-lg border border-border bg-white p-3">
+              <Label htmlFor="change-feedback">What would you like changed?</Label>
+              <Textarea
+                id="change-feedback"
+                value={changeFeedback}
+                onChange={(e) => setChangeFeedback(e.target.value)}
+                rows={3}
+                placeholder="Describe the changes you'd like to the proposal…"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="accent"
+                  size="sm"
+                  className="min-h-11"
+                  disabled={!changeFeedback.trim() || requestingChanges}
+                  onClick={() => quoteAction(quote.id, "request_changes", changeFeedback.trim())}
+                >
+                  {requestingChanges ? "Sending…" : "Submit Feedback"}
+                </Button>
+                <Button variant="outline" size="sm" className="min-h-11" onClick={() => { setShowChangeForm(false); setChangeFeedback(""); }}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
           )}
-        </>
+        </div>
       );
     }
     return null;
@@ -445,11 +482,11 @@ export function QuoteSection({
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="accent" disabled={loading || !form.title} onClick={() => submitQuote(true)}>
-            <Send className="h-4 w-4" /> Send to Client
+            <Send className="h-4 w-4" /> {loading ? "Sending…" : "Send to Client"}
           </Button>
           {editingId && (
             <Button variant="outline" disabled={loading || !form.title} onClick={() => submitQuote(false)}>
-              Save Draft
+              {loading ? "Saving…" : "Save Draft"}
             </Button>
           )}
           <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm); }}>

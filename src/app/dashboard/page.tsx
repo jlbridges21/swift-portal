@@ -54,7 +54,7 @@ export default async function ClientDashboard() {
 
   const activeProjects = (projects ?? []).filter((p) => normalizeStatus(p.status) !== "delivered");
   const deliveredProjects = (projects ?? []).filter((p) => normalizeStatus(p.status) === "delivered");
-  const outstandingInvoices = (payments ?? []).filter((p) => p.status === "pending");
+  const outstandingInvoices = (payments ?? []).filter((p) => p.status === "pending" || p.status === "sent");
 
   const featured = activeProjects[0] as Project | undefined;
   const otherActive = activeProjects.slice(1);
@@ -116,7 +116,7 @@ export default async function ClientDashboard() {
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/20 to-transparent md:bg-gradient-to-r" />
                     <div className="absolute top-4 left-4">
-                      <StatusBadge status={featured.status} />
+                      <StatusBadge status={featured.status} audience="client" />
                     </div>
                   </div>
                   <CardContent className="md:col-span-3 p-6 sm:p-8 flex flex-col justify-center">
@@ -182,7 +182,7 @@ export default async function ClientDashboard() {
                           <CoverPlaceholder />
                         )}
                         <div className="absolute top-2 left-2">
-                          <StatusBadge status={project.status} />
+                          <StatusBadge status={project.status} audience="client" />
                         </div>
                       </div>
                       <CardContent className="p-4">
@@ -215,6 +215,7 @@ export default async function ClientDashboard() {
                 <ActivityFeed
                   logs={filterClientVisibleActivities((activities ?? []) as (ActivityLog & { projects?: { id: string; project_name: string } | null })[])}
                   projectLinkPrefix="/dashboard/projects"
+                  clientMode
                 />
               </CardContent>
             </Card>

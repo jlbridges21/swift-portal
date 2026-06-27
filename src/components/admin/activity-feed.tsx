@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import type { ActivityLog } from "@/lib/types";
-import { getActivityDisplay } from "@/lib/activity-display";
+import { getActivityDisplay, getClientActivityDisplay } from "@/lib/activity-display";
 
 interface ActivityFeedProps {
   logs: (ActivityLog & { projects?: { id: string; project_name: string } | null })[];
   projectLinkPrefix?: string;
+  clientMode?: boolean;
 }
 
-export function ActivityFeed({ logs, projectLinkPrefix = "/admin/projects" }: ActivityFeedProps) {
+export function ActivityFeed({ logs, projectLinkPrefix = "/admin/projects", clientMode = false }: ActivityFeedProps) {
   if (!logs.length) {
     return <p className="text-sm text-muted">No recent activity</p>;
   }
@@ -17,7 +18,9 @@ export function ActivityFeed({ logs, projectLinkPrefix = "/admin/projects" }: Ac
   return (
     <div className="w-full min-w-0 space-y-4">
       {logs.map((log) => {
-        const { icon, description } = getActivityDisplay(log.activity_type, log.description);
+        const { icon, description } = clientMode
+          ? getClientActivityDisplay(log.activity_type, log.description)
+          : getActivityDisplay(log.activity_type, log.description);
         return (
           <div key={`activity-${log.id}`} className="flex min-w-0 items-start gap-3 text-sm">
             <span className="mt-0.5 shrink-0 text-base leading-none">{icon}</span>

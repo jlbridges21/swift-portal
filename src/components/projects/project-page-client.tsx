@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusTimeline } from "@/components/projects/status-timeline";
 import { PhotoGallery } from "@/components/projects/photo-gallery";
+import { VideoPlayer } from "@/components/projects/video-player";
+import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
 import { TourCard } from "@/components/projects/tour-card";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
@@ -24,7 +26,7 @@ import { canDownloadDeliverables } from "@/lib/deliverables";
 import type { Project, MediaAsset, Tour, Payment, Revision, ShootProposal, ActivityLog, ProjectQuote, AssetReview } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 import {
-  Download, MessageSquare, CheckCircle,
+  Download, MessageSquare,
   FileText, Clapperboard, Images, Globe, Eye, ArrowLeft, Lock,
 } from "lucide-react";
 import type { HeroMedia } from "@/lib/cover";
@@ -251,7 +253,7 @@ export function ProjectPageClient({
 
         {isClientView && (
           <MicrositeSection
-            id="deliverables"
+            id="photo-gallery"
             title="Photo Gallery"
             icon={Images}
             subtitle={
@@ -264,7 +266,12 @@ export function ProjectPageClient({
           >
             <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
               {photos.length > 0 ? (
-                <PhotoGallery photos={photos} getDownloadUrl={getDownloadUrl} downloadsAllowed={downloadsUnlocked} />
+                <PhotoGallery
+                  photos={photos}
+                  getDownloadUrl={getDownloadUrl}
+                  downloadsAllowed={downloadsUnlocked}
+                  compactInitialCount={10}
+                />
               ) : (
                 <EmptyState
                   icon={Images}
@@ -289,25 +296,13 @@ export function ProjectPageClient({
             }
           >
             {uploadedVideos.length > 0 || youtubeVideos.length > 0 ? (
-              <div className="space-y-5">
-                {youtubeVideos.map((v) => (
-                  <div key={v.id} className="overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-                    <div className="aspect-video bg-black">
-                      <iframe src={v.embed_url || ""} className="h-full w-full" allowFullScreen title={v.file_name} />
-                    </div>
-                    <div className="px-5 py-3 text-sm text-muted border-t border-border/60">{v.file_name}</div>
-                  </div>
-                ))}
-                {uploadedVideos.map((video) => (
-                  <UploadedVideo
-                    key={video.id}
-                    video={video}
-                    onDownload={() => handleDownload(video)}
-                    getDownloadUrl={getDownloadUrl}
-                    downloadsAllowed={downloadsUnlocked}
-                  />
-                ))}
-              </div>
+              <ProjectVideoList
+                youtubeVideos={youtubeVideos}
+                uploadedVideos={uploadedVideos}
+                getDownloadUrl={getDownloadUrl}
+                downloadsAllowed={downloadsUnlocked}
+                onDownload={handleDownload}
+              />
             ) : (
               <EmptyState
                 icon={Clapperboard}
@@ -395,13 +390,18 @@ export function ProjectPageClient({
 
         {!isClientView && mediaVisible && photos.length > 0 && (
           <MicrositeSection
-            id="deliverables"
+            id="photo-gallery"
             title="Photo Gallery"
             icon={Images}
             subtitle={downloadsUnlocked ? "Full-resolution downloads available" : "Tap any photo to view fullscreen — downloads unlock after payment"}
           >
             <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-              <PhotoGallery photos={photos} getDownloadUrl={getDownloadUrl} downloadsAllowed={downloadsUnlocked} />
+              <PhotoGallery
+                photos={photos}
+                getDownloadUrl={getDownloadUrl}
+                downloadsAllowed={downloadsUnlocked}
+                compactInitialCount={10}
+              />
             </div>
           </MicrositeSection>
         )}
@@ -413,23 +413,13 @@ export function ProjectPageClient({
             subtitle={downloadsUnlocked ? undefined : "Stream previews below — download after payment"}
           >
             <div className="space-y-5">
-              {youtubeVideos.map((v) => (
-                <div key={v.id} className="overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-                  <div className="aspect-video bg-black">
-                    <iframe src={v.embed_url || ""} className="h-full w-full" allowFullScreen title={v.file_name} />
-                  </div>
-                  <div className="px-5 py-3 text-sm text-muted border-t border-border/60">{v.file_name}</div>
-                </div>
-              ))}
-              {uploadedVideos.map((video) => (
-                <UploadedVideo
-                  key={video.id}
-                  video={video}
-                  onDownload={() => handleDownload(video)}
-                  getDownloadUrl={getDownloadUrl}
-                  downloadsAllowed={downloadsUnlocked}
-                />
-              ))}
+              <ProjectVideoList
+                youtubeVideos={youtubeVideos}
+                uploadedVideos={uploadedVideos}
+                getDownloadUrl={getDownloadUrl}
+                downloadsAllowed={downloadsUnlocked}
+                onDownload={handleDownload}
+              />
             </div>
           </MicrositeSection>
         )}
@@ -498,19 +488,6 @@ export function ProjectPageClient({
           />
         )}
 
-        {!isPreview && status === "awaiting_payment" && (
-          <Card className="border-orange-200/80 bg-gradient-to-r from-orange-50 to-white shadow-lg rounded-2xl">
-            <CardContent className="p-6 sm:p-8 flex items-center gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-orange-100">
-                <CheckCircle className="h-6 w-6 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-orange-900">Final Payment</p>
-                <p className="text-sm text-orange-800 mt-1">Your deliverables are approved. Complete your final payment below to unlock all downloads.</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         <PaymentsSection payments={payments} isPreview={isPreview} alwaysShow={isClientView} />
 
@@ -544,7 +521,9 @@ export function ProjectPageClient({
                 <form onSubmit={handleRevisionSubmit} className="space-y-3">
                   <Textarea value={revisionText} onChange={(e) => setRevisionText(e.target.value)} required rows={3} placeholder="Describe the changes you need..." />
                   <div className="flex gap-2">
-                    <Button type="submit" variant="accent" size="sm" disabled={submitting}>Submit</Button>
+                    <Button type="submit" variant="accent" size="sm" disabled={submitting}>
+                      {submitting ? "Submitting…" : "Submit"}
+                    </Button>
                     <Button type="button" variant="outline" size="sm" onClick={() => setShowRevisionForm(false)}>Cancel</Button>
                   </div>
                 </form>
@@ -557,7 +536,7 @@ export function ProjectPageClient({
 
         <MicrositeSection title="Project Activity" icon={MessageSquare}>
           <div className="rounded-2xl bg-white p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-            <ProjectActivityTimeline activities={activities} />
+            <ProjectActivityTimeline activities={activities} clientMode={isClientView} />
           </div>
         </MicrositeSection>
       </main>
@@ -565,49 +544,64 @@ export function ProjectPageClient({
   );
 }
 
-function UploadedVideo({
-  video, onDownload, getDownloadUrl, downloadsAllowed,
+function ProjectVideoList({
+  youtubeVideos,
+  uploadedVideos,
+  getDownloadUrl,
+  downloadsAllowed,
+  onDownload,
 }: {
-  video: MediaAsset;
-  onDownload: () => void;
-  getDownloadUrl: (a: MediaAsset, thumb?: boolean) => Promise<string | null>;
+  youtubeVideos: MediaAsset[];
+  uploadedVideos: MediaAsset[];
+  getDownloadUrl: (asset: MediaAsset, thumb?: boolean) => Promise<string | null>;
   downloadsAllowed: boolean;
+  onDownload: (video: MediaAsset) => void;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  type VideoEntry = { kind: "youtube"; video: MediaAsset } | { kind: "uploaded"; video: MediaAsset };
+  const entries: VideoEntry[] = [
+    ...youtubeVideos.map((video) => ({ kind: "youtube" as const, video })),
+    ...uploadedVideos.map((video) => ({ kind: "uploaded" as const, video })),
+  ];
 
-  async function loadVideo() {
-    setLoading(true);
-    const u = await getDownloadUrl(video);
-    setLoading(false);
-    if (u) setUrl(u);
+  if (!entries.length) return null;
+
+  const renderEntry = (entry: VideoEntry) => {
+    if (entry.kind === "youtube") {
+      const v = entry.video;
+      return (
+        <div key={v.id} className="overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+          <div className="aspect-video bg-black">
+            <iframe src={v.embed_url || ""} className="h-full w-full" allowFullScreen title={v.file_name} />
+          </div>
+          <div className="border-t border-border/60 px-5 py-3 text-sm text-muted">{v.file_name}</div>
+        </div>
+      );
+    }
+    return (
+      <VideoPlayer
+        key={entry.video.id}
+        video={entry.video}
+        getDownloadUrl={getDownloadUrl}
+        onDownload={() => onDownload(entry.video)}
+        downloadsAllowed={downloadsAllowed}
+      />
+    );
+  };
+
+  if (entries.length <= 2) {
+    return <div className="space-y-5">{entries.map(renderEntry)}</div>;
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-      {url ? (
-        <video src={url} controls className="w-full aspect-video bg-black" playsInline />
-      ) : (
-        <button
-          onClick={loadVideo}
-          disabled={loading}
-          className="flex w-full aspect-video items-center justify-center bg-slate-900 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
-        >
-          {loading ? "Loading preview…" : "▶ Play Video Preview"}
-        </button>
-      )}
-      <div className="flex items-center justify-between px-5 py-3 border-t border-border/60">
-        <span className="text-sm font-medium text-primary">{video.file_name}</span>
-        {downloadsAllowed ? (
-          <Button variant="outline" size="sm" onClick={onDownload}>
-            <Download className="h-4 w-4" /> Download
-          </Button>
-        ) : (
-          <span className="text-xs text-muted flex items-center gap-1">
-            <Lock className="h-3 w-3" /> Preview only
-          </span>
-        )}
-      </div>
-    </div>
+    <ExpandableMediaList
+      items={entries}
+      initialCount={2}
+      labelSingular="video"
+      labelPlural="videos"
+      listClassName="space-y-5"
+      viewAllLabel={(n) => `View all ${n} videos`}
+      renderItem={(entry) => renderEntry(entry)}
+    />
   );
 }
+

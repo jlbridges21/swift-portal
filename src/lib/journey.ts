@@ -88,7 +88,7 @@ export function getClientNextStep(
         title: getClientStatusLabel("ready_for_review"),
         description: "Preview your photos, videos, and tours. Approve each item when you're satisfied.",
         actionLabel: "Review Deliverables",
-        actionHref: "#deliverables",
+        actionHref: "#deliverable-review",
         variant: "accent",
       };
     case "awaiting_payment":

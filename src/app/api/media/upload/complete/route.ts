@@ -16,6 +16,16 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createServiceClient();
+  const bucket = mediaType === "document" ? "project-documents" : "project-media";
+
+  const { data: stored, error: storageError } = await supabase.storage.from(bucket).download(filePath);
+  if (storageError || !stored) {
+    console.error("[upload/complete] storage verify failed:", storageError?.message, filePath);
+    return NextResponse.json(
+      { error: "Upload completed but could not be saved — file not found in storage." },
+      { status: 400 }
+    );
+  }
 
   const { data: asset, error: dbError } = await supabase
     .from("media_assets")

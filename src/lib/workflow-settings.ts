@@ -1,5 +1,5 @@
 import type { ProjectStatus } from "@/lib/constants";
-import { normalizeStatus } from "@/lib/constants";
+import { getStatusOrder, normalizeStatus } from "@/lib/constants";
 
 /** Workflow stage keys aligned with project status values */
 export type WorkflowStageKey =
@@ -278,9 +278,11 @@ export function canAutoTransitionFrom(
 
 export function canAutoTransition(
   fromStatus: ProjectStatus | string,
-  _toStatus: ProjectStatus | string,
+  toStatus: ProjectStatus | string,
   workflow: WorkflowSettings,
   manualOverride = false
 ): boolean {
+  if (manualOverride) return true;
+  if (getStatusOrder(toStatus) < getStatusOrder(fromStatus)) return false;
   return canAutoTransitionFrom(fromStatus, workflow, manualOverride);
 }

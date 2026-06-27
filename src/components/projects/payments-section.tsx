@@ -61,6 +61,9 @@ export function PaymentsSection({ payments, isPreview, alwaysShow }: PaymentsSec
                         </Button>
                       </a>
                     )}
+                    {!isPreview && !(p.stripe_payment_link_url || p.payment_link_url) && (
+                      <p className="text-sm text-muted">Your payment link is being prepared — check back shortly.</p>
+                    )}
                   </CardContent>
                 </Card>
               ))}

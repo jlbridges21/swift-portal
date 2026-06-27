@@ -26,6 +26,10 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
   const supabase = await createServiceClient();
   const paidAt = new Date().toISOString();
   const amountStr = `$${(payment.amount / 100).toFixed(2)}`;
+  const activityDescription =
+    source === "manual_admin"
+      ? `Payment marked as paid manually: ${amountStr}`
+      : `Payment received: ${amountStr}`;
 
   await supabase
     .from("payments")
@@ -37,26 +41,25 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     })
     .eq("id", payment.id);
 
-  await logProjectActivity("payment_received", `Payment received: ${amountStr}`, {
-    projectId: payment.project_id,
-    idempotencyKey: `payment:${payment.id}:received`,
-    metadata: { paymentId: payment.id, source },
-  });
-
   if (payWorkflow.autoMoveOnStripePaid) {
     await setProjectStatus({
       projectId: payment.project_id,
       status: "delivered",
       activityType: "payment_received",
-      activityDescription: `Payment received: ${amountStr}`,
+      activityDescription,
       notifyClient: false,
       skipIfSame: true,
-      idempotencyKey: `payment:${payment.id}:delivered`,
+      idempotencyKey: `payment:${payment.id}:received`,
     });
     await logWorkflowAudit(payment.project_id, `Workflow automatically moved project to Delivered after payment.`, {
       idempotencyKey: `workflow:payment-delivered:${payment.id}`,
     });
   } else {
+    await logProjectActivity("payment_received", activityDescription, {
+      projectId: payment.project_id,
+      idempotencyKey: `payment:${payment.id}:received`,
+      metadata: { paymentId: payment.id, source },
+    });
     await logWorkflowSkipped(
       payment.project_id,
       "Automatic move to Delivered skipped — disabled in Payment Automation settings.",

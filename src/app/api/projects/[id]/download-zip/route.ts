@@ -22,11 +22,11 @@ export async function GET(
     .eq("id", projectId)
     .single();
 
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!project) return NextResponse.json({ error: "Project not found." }, { status: 404 });
 
   const isAdmin = profile.role === "admin";
   if (!isAdmin && !canDownloadDeliverables(project.status)) {
-    return NextResponse.json({ error: "Downloads unlock after final payment" }, { status: 403 });
+    return NextResponse.json({ error: "Downloads unlock after your final payment is complete." }, { status: 403 });
   }
 
   if (!isAdmin) {
@@ -38,7 +38,7 @@ export async function GET(
       .eq("client_id", client?.id ?? "")
       .maybeSingle();
     if (project.client_id !== client?.id && !junction) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json({ error: "You don't have access to this project." }, { status: 403 });
     }
   }
 
@@ -60,6 +60,7 @@ export async function GET(
 
   const zip = new JSZip();
   const folder = zip.folder("deliverables")!;
+  let addedCount = 0;
 
   for (const asset of downloadable) {
     const bucket = "project-media";
@@ -68,6 +69,14 @@ export async function GET(
     const buffer = Buffer.from(await blob.arrayBuffer());
     const safeName = sanitizeStorageFileName(asset.file_name || `${asset.id}.bin`);
     folder.file(safeName, buffer);
+    addedCount++;
+  }
+
+  if (addedCount === 0) {
+    return NextResponse.json(
+      { error: "No files could be downloaded. Your deliverables may still be processing — try again shortly." },
+      { status: 404 }
+    );
   }
 
   const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });

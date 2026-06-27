@@ -21,7 +21,7 @@ export const ACTIVITY_CONFIG: Record<string, ActivityConfig> = {
   documents_uploaded: { icon: "📄", label: "Documents uploaded" },
   media_uploaded: { icon: "📎", label: "Media uploaded" },
   invoice_sent: { icon: "💳", label: "Invoice sent" },
-  payment_requested: { icon: "💳", label: "Invoice sent" },
+  payment_requested: { icon: "💳", label: "Payment reminder" },
   payment_received: { icon: "💰", label: "Payment received" },
   payment_completed: { icon: "💰", label: "Payment received" },
   revision_requested: { icon: "✏️", label: "Revision requested" },
@@ -47,6 +47,15 @@ export function getActivityDisplay(type: string, description: string) {
   const config = ACTIVITY_CONFIG[type];
   return {
     icon: config?.icon ?? "•",
-    description: description || config?.label || type,
+    description: description || config?.label || type.replace(/_/g, " "),
+  };
+}
+
+/** Client-safe activity labels — never expose raw admin descriptions. */
+export function getClientActivityDisplay(type: string, description: string) {
+  const config = ACTIVITY_CONFIG[type];
+  return {
+    icon: config?.icon ?? "•",
+    description: config?.label ?? description?.replace(/Status updated to .+/i, "Project updated") ?? "Project updated",
   };
 }

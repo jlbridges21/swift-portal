@@ -354,7 +354,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
               <div className="min-w-0">
                 <p className="font-medium">{formatShootDateTime(p.proposed_at)}</p>
                 <p className="text-xs text-muted mt-0.5">
-                  Proposed by {p.proposed_by === "admin" ? "Swift Aerial Media" : "Client"}
+                  Proposed by {p.proposed_by === "admin" ? "Swift Aerial Media" : isAdmin ? "Client" : "You"}
                 </p>
                 {p.message && <p className="text-sm text-muted mt-2">{p.message}</p>}
               </div>

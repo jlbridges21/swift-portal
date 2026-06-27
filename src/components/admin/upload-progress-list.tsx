@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, AlertCircle, Loader2, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import type { UploadPhase } from "@/lib/upload/constants";
+
 export interface UploadProgressItem {
   id: string;
   fileName: string;
   progress: number;
+  phase?: UploadPhase;
   status: "uploading" | "success" | "error" | "cancelled";
   error?: string;
   previewUrl?: string;
@@ -17,6 +20,15 @@ export interface UploadProgressItem {
   bytesTotal?: number;
   startedAt?: number;
 }
+
+const PHASE_LABEL: Record<UploadPhase, string> = {
+  queued: "Queued",
+  validating: "Validating…",
+  uploading: "Uploading…",
+  finalizing: "Finalizing…",
+  uploaded: "Uploaded",
+  failed: "Failed",
+};
 
 interface UploadProgressListProps {
   items: UploadProgressItem[];
@@ -65,7 +77,10 @@ export function UploadProgressList({ items, className, onRetry, onCancel }: Uplo
                 <div className="flex shrink-0 items-center gap-1">
                   {item.status === "uploading" && (
                     <>
-                      <span className="text-xs text-muted">{item.progress}%</span>
+                      <span className="text-xs text-muted">
+                        {item.phase ? PHASE_LABEL[item.phase] : `${item.progress}%`}
+                        {item.phase === "uploading" || item.phase === "finalizing" ? ` ${item.progress}%` : ""}
+                      </span>
                       {eta && <span className="hidden text-xs text-muted sm:inline">{eta}</span>}
                       {onCancel && (
                         <button type="button" onClick={() => onCancel(item.id)} className="rounded p-0.5 hover:bg-slate-200">
