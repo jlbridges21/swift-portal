@@ -560,10 +560,18 @@ function AssetDrawer({
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose} />
-      <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col bg-white shadow-2xl safe-area-x">
+      <aside
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col bg-white shadow-2xl safe-area-x"
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+      >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="truncate font-semibold text-primary">{asset.title}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-slate-100">
+          <h2 className="truncate pr-2 font-semibold text-primary">{asset.title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg hover:bg-slate-100"
+            aria-label="Close"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>

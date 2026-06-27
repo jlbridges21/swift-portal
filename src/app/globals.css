@@ -77,3 +77,8 @@ body {
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
+
+/* Reserve space above iPhone home indicator when admin PWA bottom nav is visible */
+.admin-pwa-content-pad {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}

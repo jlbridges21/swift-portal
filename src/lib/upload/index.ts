@@ -1,4 +1,12 @@
 export * from "./constants";
 export * from "./errors";
 export * from "./validation";
-export { uploadMediaFile, type UploadProgressUpdate } from "./media-upload-client";
+export * from "./pending-save";
+export {
+  uploadMediaFile,
+  retryMediaSave,
+  completeUpload,
+  UploadSaveError,
+  type UploadProgressUpdate,
+  type PendingSavePayload,
+} from "./media-upload-client";

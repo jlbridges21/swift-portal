@@ -1,8 +1,52 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireAdminApi } from "@/lib/api-auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
+import { logUploadStep } from "@/lib/upload/logger";
+
+const STORAGE_VERIFY_ATTEMPTS = 6;
+const STORAGE_VERIFY_DELAY_MS = 1500;
+
+async function verifyStorageObject(
+  supabase: SupabaseClient,
+  bucket: string,
+  filePath: string,
+  context: { projectId: string; fileName: string; fileSize?: number; fileType?: string }
+): Promise<{ ok: true } | { ok: false; error: string; details?: unknown }> {
+  for (let attempt = 1; attempt <= STORAGE_VERIFY_ATTEMPTS; attempt++) {
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(filePath, 60);
+
+    if (!error && data?.signedUrl) {
+      logUploadStep("info", {
+        step: "storage_verify",
+        ...context,
+        filePath,
+        details: { attempt, bucket },
+      });
+      return { ok: true };
+    }
+
+    logUploadStep("warn", {
+      step: "storage_verify_retry",
+      ...context,
+      filePath,
+      providerMessage: error?.message,
+      details: { attempt, bucket },
+    });
+
+    if (attempt < STORAGE_VERIFY_ATTEMPTS) {
+      await new Promise((r) => setTimeout(r, STORAGE_VERIFY_DELAY_MS * attempt));
+    }
+  }
+
+  return {
+    ok: false,
+    error: "Upload completed but could not be saved — file not found in storage yet. Try saving again.",
+    details: { bucket, filePath, attempts: STORAGE_VERIFY_ATTEMPTS },
+  };
+}
 
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
@@ -11,18 +55,59 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { projectId, filePath, fileName, mimeType, fileSize, mediaType, displayOrder } = body;
 
+  const logContext = {
+    projectId,
+    fileName,
+    fileSize,
+    fileType: mimeType,
+    filePath,
+  };
+
   if (!projectId || !filePath || !fileName || !mimeType || !mediaType) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    logUploadStep("error", { step: "validate_request", ...logContext, details: body });
+    return NextResponse.json(
+      { success: false, error: "Missing required fields.", step: "validate_request" },
+      { status: 400 }
+    );
   }
 
   const supabase = await createServiceClient();
   const bucket = mediaType === "document" ? "project-documents" : "project-media";
 
-  const { data: stored, error: storageError } = await supabase.storage.from(bucket).download(filePath);
-  if (storageError || !stored) {
-    console.error("[upload/complete] storage verify failed:", storageError?.message, filePath);
+  // Idempotent: return existing record if this storage path was already saved.
+  const { data: existingAsset, error: existingError } = await supabase
+    .from("media_assets")
+    .select("*")
+    .eq("file_path", filePath)
+    .maybeSingle();
+
+  if (existingError) {
+    logUploadStep("error", {
+      step: "database_lookup",
+      ...logContext,
+      providerMessage: existingError.message,
+    });
     return NextResponse.json(
-      { error: "Upload completed but could not be saved — file not found in storage." },
+      { success: false, error: existingError.message, step: "database_lookup" },
+      { status: 500 }
+    );
+  }
+
+  if (existingAsset) {
+    logUploadStep("info", { step: "database_idempotent_hit", ...logContext, details: { assetId: existingAsset.id } });
+    return NextResponse.json({ success: true, media: existingAsset });
+  }
+
+  const verify = await verifyStorageObject(supabase, bucket, filePath, logContext);
+  if (!verify.ok) {
+    logUploadStep("error", {
+      step: "storage_verify",
+      ...logContext,
+      providerMessage: verify.error,
+      details: verify.details,
+    });
+    return NextResponse.json(
+      { success: false, error: verify.error, step: "storage_verify", details: verify.details },
       { status: 400 }
     );
   }
@@ -33,18 +118,43 @@ export async function POST(request: Request) {
       project_id: projectId,
       file_name: fileName,
       file_path: filePath,
+      storage_path: filePath,
       file_size: fileSize || null,
       mime_type: mimeType,
       media_type: mediaType,
       media_source: "upload",
       display_order: displayOrder ?? 0,
+      title: fileName,
     })
     .select()
     .single();
 
   if (dbError) {
-    return NextResponse.json({ error: dbError.message }, { status: 500 });
+    // Race: another request may have inserted the same path.
+    if (dbError.code === "23505") {
+      const { data: raced } = await supabase
+        .from("media_assets")
+        .select("*")
+        .eq("file_path", filePath)
+        .maybeSingle();
+      if (raced) {
+        return NextResponse.json({ success: true, media: raced });
+      }
+    }
+
+    logUploadStep("error", {
+      step: "database_insert",
+      ...logContext,
+      providerMessage: dbError.message,
+      details: { code: dbError.code },
+    });
+    return NextResponse.json(
+      { success: false, error: dbError.message, step: "database_insert", details: { code: dbError.code } },
+      { status: 500 }
+    );
   }
+
+  logUploadStep("info", { step: "database_insert", ...logContext, details: { assetId: asset.id } });
 
   if (mediaType === "photo") {
     const { data: project } = await supabase
@@ -82,5 +192,5 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json(asset);
+  return NextResponse.json({ success: true, media: asset });
 }

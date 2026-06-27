@@ -3,6 +3,8 @@
 import Link from "next/link";
 import type { ActivityLog } from "@/lib/types";
 import { getActivityDisplay, getClientActivityDisplay } from "@/lib/activity-display";
+import { Button } from "@/components/ui/button";
+import { usePaginatedActivities } from "@/lib/use-paginated-activities";
 
 interface ActivityFeedProps {
   logs: (ActivityLog & { projects?: { id: string; project_name: string } | null })[];
@@ -11,13 +13,15 @@ interface ActivityFeedProps {
 }
 
 export function ActivityFeed({ logs, projectLinkPrefix = "/admin/projects", clientMode = false }: ActivityFeedProps) {
+  const { visible, hasMore, allShown, loadMore } = usePaginatedActivities(logs);
+
   if (!logs.length) {
     return <p className="text-sm text-muted">No recent activity</p>;
   }
 
   return (
     <div className="w-full min-w-0 space-y-4">
-      {logs.map((log) => {
+      {visible.map((log) => {
         const { icon, description } = clientMode
           ? getClientActivityDisplay(log.activity_type, log.description)
           : getActivityDisplay(log.activity_type, log.description);
@@ -46,6 +50,14 @@ export function ActivityFeed({ logs, projectLinkPrefix = "/admin/projects", clie
           </div>
         );
       })}
+      {hasMore && (
+        <Button type="button" variant="outline" className="w-full min-h-11" onClick={loadMore}>
+          Load 10 More
+        </Button>
+      )}
+      {allShown && logs.length > 10 && (
+        <p className="text-center text-xs text-muted">All activities shown</p>
+      )}
     </div>
   );
 }

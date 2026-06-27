@@ -2,15 +2,18 @@ import * as tus from "tus-js-client";
 import { createClient } from "@/lib/supabase/client";
 import {
   DIRECT_UPLOAD_THRESHOLD_BYTES,
+  MAX_VIDEO_FILE_SIZE_BYTES,
   UPLOAD_CHUNK_SIZE_BYTES,
   type UploadPhase,
 } from "./constants";
 import { getUploadErrorMessage } from "./errors";
+import { logUploadStep } from "./logger";
+import { UploadSaveError, type PendingSavePayload } from "./pending-save";
 import { validateMediaFileBeforeUpload } from "./validation";
 
 export interface UploadProgressUpdate {
   phase: UploadPhase;
-  progress: number; // 0-100
+  progress: number;
   bytesLoaded?: number;
   bytesTotal?: number;
 }
@@ -38,12 +41,28 @@ interface SignResponse {
   error?: string;
 }
 
+interface CompleteApiResponse {
+  success?: boolean;
+  media?: Record<string, unknown>;
+  error?: string;
+  step?: string;
+  details?: unknown;
+}
+
 async function fetchSign(
   projectId: string,
   file: File,
   mediaType: string,
   mimeType: string
 ): Promise<SignResponse> {
+  logUploadStep("info", {
+    step: "sign_request",
+    projectId,
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: mimeType,
+  });
+
   const res = await fetch("/api/media/upload/sign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -56,36 +75,94 @@ async function fetchSign(
       mediaType,
     }),
   });
-  const data = (await res.json()) as SignResponse;
+  const data = (await res.json()) as SignResponse & CompleteApiResponse;
   if (!res.ok) {
+    logUploadStep("error", {
+      step: "sign_request",
+      projectId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: mimeType,
+      statusCode: res.status,
+      providerMessage: data.error,
+    });
     throw Object.assign(new Error(data.error || "Failed to prepare upload"), { status: res.status });
   }
+
+  logUploadStep("info", {
+    step: "sign_response",
+    projectId,
+    fileName: file.name,
+    filePath: data.filePath,
+    details: { bucket: data.bucket, resumable: data.resumable },
+  });
+
   return data;
 }
 
-async function completeUpload(payload: {
-  projectId: string;
-  filePath: string;
-  fileName: string;
-  mimeType: string;
-  fileSize: number;
-  mediaType: string;
-  displayOrder: number;
-}): Promise<Record<string, unknown>> {
+export async function completeUpload(payload: PendingSavePayload): Promise<Record<string, unknown>> {
+  logUploadStep("info", {
+    step: "complete_request",
+    projectId: payload.projectId,
+    fileName: payload.fileName,
+    fileSize: payload.fileSize,
+    fileType: payload.mimeType,
+    filePath: payload.filePath,
+  });
+
   const res = await fetch("/api/media/upload/complete", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify(payload),
   });
-  const data = await res.json();
-  if (!res.ok) {
-    throw Object.assign(new Error(data.error || "Failed to save upload"), {
+
+  let data: CompleteApiResponse = {};
+  try {
+    data = (await res.json()) as CompleteApiResponse;
+  } catch {
+    logUploadStep("error", {
+      step: "complete_parse",
+      projectId: payload.projectId,
+      fileName: payload.fileName,
+      filePath: payload.filePath,
+      statusCode: res.status,
+    });
+    throw Object.assign(new Error("Invalid server response while saving upload."), {
       status: res.status,
       phase: "finalizing",
     });
   }
-  return data;
+
+  if (!res.ok || data.success === false) {
+    logUploadStep("error", {
+      step: data.step || "complete_request",
+      projectId: payload.projectId,
+      fileName: payload.fileName,
+      fileSize: payload.fileSize,
+      fileType: payload.mimeType,
+      filePath: payload.filePath,
+      statusCode: res.status,
+      providerMessage: data.error,
+      details: data.details,
+    });
+    throw new UploadSaveError(
+      data.error || "Failed to save upload",
+      payload,
+      { step: data.step, statusCode: res.status }
+    );
+  }
+
+  const media = data.media ?? data;
+  logUploadStep("info", {
+    step: "complete_success",
+    projectId: payload.projectId,
+    fileName: payload.fileName,
+    filePath: payload.filePath,
+    details: { assetId: (media as { id?: string }).id },
+  });
+
+  return media as Record<string, unknown>;
 }
 
 function uploadViaSignedPut(
@@ -113,6 +190,13 @@ function uploadViaSignedPut(
       signal?.removeEventListener("abort", onAbort);
       if (xhr.status >= 200 && xhr.status < 300) resolve();
       else {
+        logUploadStep("error", {
+          step: "storage_put",
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: mimeType,
+          statusCode: xhr.status,
+        });
         reject(
           Object.assign(new Error(`Storage rejected upload (${xhr.status})`), {
             status: xhr.status,
@@ -135,6 +219,7 @@ function uploadViaTus(
   bucket: string,
   filePath: string,
   mimeType: string,
+  projectId: string,
   onProgress: (pct: number, loaded: number, total: number) => void,
   signal?: AbortSignal
 ): Promise<void> {
@@ -166,12 +251,32 @@ function uploadViaTus(
         contentType: mimeType,
         cacheControl: "3600",
       },
-      onError: (error) => reject(error),
+      onError: (error) => {
+        logUploadStep("error", {
+          step: "storage_tus",
+          projectId,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: mimeType,
+          filePath,
+          providerMessage: error.message,
+        });
+        reject(error);
+      },
       onProgress: (bytesUploaded, bytesTotal) => {
         const pct = Math.min(90, Math.round((bytesUploaded / bytesTotal) * 90));
         onProgress(pct, bytesUploaded, bytesTotal);
       },
-      onSuccess: () => resolve(),
+      onSuccess: () => {
+        logUploadStep("info", {
+          step: "storage_tus_complete",
+          projectId,
+          fileName: file.name,
+          filePath,
+          fileSize: file.size,
+        });
+        resolve();
+      },
     });
 
     const onAbort = () => {
@@ -190,6 +295,17 @@ function uploadViaTus(
   });
 }
 
+/** Retry metadata/database save only — does not re-upload the binary. */
+export async function retryMediaSave(
+  pending: PendingSavePayload,
+  onProgress?: (update: UploadProgressUpdate) => void
+): Promise<UploadMediaResult> {
+  onProgress?.({ phase: "finalizing", progress: 95, bytesLoaded: pending.fileSize, bytesTotal: pending.fileSize });
+  const asset = await completeUpload(pending);
+  onProgress?.({ phase: "uploaded", progress: 100, bytesLoaded: pending.fileSize, bytesTotal: pending.fileSize });
+  return { asset };
+}
+
 /** Upload a media file directly to Supabase Storage with validation, progress, and finalize. */
 export async function uploadMediaFile(options: UploadMediaOptions): Promise<UploadMediaResult> {
   const { projectId, file, mediaType, onProgress, signal } = options;
@@ -198,10 +314,28 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
 
   const validation = validateMediaFileBeforeUpload(file, mediaType);
   if (!validation.ok) {
+    logUploadStep("error", {
+      step: "client_validation",
+      projectId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      providerMessage: validation.error,
+    });
     throw new Error(validation.error);
   }
 
   const { mimeType } = validation;
+
+  if (mediaType === "video" && file.size > 100 * 1024 * 1024) {
+    logUploadStep("info", {
+      step: "large_file_warning",
+      projectId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: mimeType,
+    });
+  }
 
   onProgress({ phase: "queued", progress: 2, bytesTotal: file.size });
 
@@ -215,6 +349,15 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
   onProgress({ phase: "uploading", progress: 5, bytesLoaded: 0, bytesTotal: file.size });
 
   const useTus = mediaType === "video" || file.size > DIRECT_UPLOAD_THRESHOLD_BYTES;
+  const pendingSave: PendingSavePayload = {
+    projectId,
+    filePath: sign.filePath,
+    fileName: file.name,
+    mimeType,
+    fileSize: file.size,
+    mediaType,
+    displayOrder: sign.displayOrder,
+  };
 
   try {
     const report = (pct: number, loaded: number, total: number) => {
@@ -222,33 +365,27 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
     };
 
     if (useTus) {
-      await uploadViaTus(file, sign.bucket, sign.filePath, mimeType, report, signal);
+      await uploadViaTus(file, sign.bucket, sign.filePath, mimeType, projectId, report, signal);
     } else if (sign.signedUrl) {
       await uploadViaSignedPut(sign.signedUrl, file, mimeType, report, signal);
     } else {
       throw new Error("No upload URL returned from server.");
     }
   } catch (err) {
+    if (err instanceof UploadSaveError) throw err;
     throw new Error(getUploadErrorMessage(err, { phase: "uploading" }));
   }
 
   onProgress({ phase: "finalizing", progress: 95, bytesLoaded: file.size, bytesTotal: file.size });
 
-  let asset: Record<string, unknown>;
   try {
-    asset = await completeUpload({
-      projectId,
-      filePath: sign.filePath,
-      fileName: file.name,
-      mimeType,
-      fileSize: file.size,
-      mediaType,
-      displayOrder: sign.displayOrder,
-    });
+    const asset = await completeUpload(pendingSave);
+    onProgress({ phase: "uploaded", progress: 100, bytesLoaded: file.size, bytesTotal: file.size });
+    return { asset };
   } catch (err) {
+    if (err instanceof UploadSaveError) throw err;
     throw new Error(getUploadErrorMessage(err, { phase: "finalizing", status: (err as { status?: number }).status }));
   }
-
-  onProgress({ phase: "uploaded", progress: 100, bytesLoaded: file.size, bytesTotal: file.size });
-  return { asset };
 }
+
+export { UploadSaveError, type PendingSavePayload };

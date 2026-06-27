@@ -21,8 +21,8 @@ export function getUploadErrorMessage(error: unknown, context?: { phase?: string
   if (lower.includes("unauthorized") || status === 401 || status === 403) {
     return "Session expired. Refresh the page and sign in again.";
   }
-  if (context?.phase === "finalizing") {
-    return "Upload completed but could not be saved.";
+  if (context?.phase === "finalizing" || (error instanceof Error && error.name === "UploadSaveError")) {
+    return "Upload complete, save failed. Retry save.";
   }
   if (status === 400) {
     return raw.includes(":") ? raw.split(":").slice(1).join(":").trim() : "Upload was rejected. Check file type and size.";

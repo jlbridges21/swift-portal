@@ -5,28 +5,31 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, AlertCircle, Loader2, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-
 import type { UploadPhase } from "@/lib/upload/constants";
+import type { PendingSavePayload } from "@/lib/upload/pending-save";
+import { formatFileSize } from "@/lib/upload/validation";
 
 export interface UploadProgressItem {
   id: string;
   fileName: string;
   progress: number;
   phase?: UploadPhase;
-  status: "uploading" | "success" | "error" | "cancelled";
+  status: "uploading" | "success" | "error" | "cancelled" | "save_failed";
   error?: string;
   previewUrl?: string;
   bytesLoaded?: number;
   bytesTotal?: number;
   startedAt?: number;
+  mimeType?: string;
+  pendingSave?: PendingSavePayload;
 }
 
 const PHASE_LABEL: Record<UploadPhase, string> = {
   queued: "Queued",
-  validating: "Validating…",
-  uploading: "Uploading…",
-  finalizing: "Finalizing…",
-  uploaded: "Uploaded",
+  validating: "Checking file…",
+  uploading: "Uploading",
+  finalizing: "Uploaded, saving...",
+  uploaded: "Complete",
   failed: "Failed",
 };
 
@@ -34,6 +37,7 @@ interface UploadProgressListProps {
   items: UploadProgressItem[];
   className?: string;
   onRetry?: (id: string) => void;
+  onRetrySave?: (id: string) => void;
   onCancel?: (id: string) => void;
 }
 
@@ -48,20 +52,29 @@ function formatEta(item: UploadProgressItem): string | null {
   return `~${Math.ceil(remaining / 60)}m left`;
 }
 
-export function UploadProgressList({ items, className, onRetry, onCancel }: UploadProgressListProps) {
+function statusLabel(item: UploadProgressItem): string {
+  if (item.status === "save_failed") return "Upload complete, save failed. Retry save.";
+  if (item.status === "success") return "Complete";
+  if (item.phase) return PHASE_LABEL[item.phase];
+  return `${item.progress}%`;
+}
+
+export function UploadProgressList({ items, className, onRetry, onRetrySave, onCancel }: UploadProgressListProps) {
   if (!items.length) return null;
 
   return (
     <div className={cn("space-y-2 rounded-lg border border-border bg-slate-50 p-3", className)}>
       {items.map((item) => {
         const eta = formatEta(item);
+        const isLarge = (item.bytesTotal ?? 0) > 100 * 1024 * 1024;
+
         return (
           <div
             key={item.id}
             className={cn(
               "flex gap-3 rounded-lg p-2 transition",
               item.status === "success" && "bg-emerald-50/80",
-              item.status === "error" && "bg-red-50/50"
+              (item.status === "error" || item.status === "save_failed") && "bg-red-50/50"
             )}
           >
             <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-slate-200">
@@ -78,8 +91,8 @@ export function UploadProgressList({ items, className, onRetry, onCancel }: Uplo
                   {item.status === "uploading" && (
                     <>
                       <span className="text-xs text-muted">
-                        {item.phase ? PHASE_LABEL[item.phase] : `${item.progress}%`}
-                        {item.phase === "uploading" || item.phase === "finalizing" ? ` ${item.progress}%` : ""}
+                        {statusLabel(item)}
+                        {(item.phase === "uploading" || item.phase === "finalizing") && ` ${item.progress}%`}
                       </span>
                       {eta && <span className="hidden text-xs text-muted sm:inline">{eta}</span>}
                       {onCancel && (
@@ -100,14 +113,26 @@ export function UploadProgressList({ items, className, onRetry, onCancel }: Uplo
                   {item.status === "error" && !onRetry && (
                     <AlertCircle className="h-4 w-4 text-red-500" />
                   )}
+                  {item.status === "save_failed" && onRetrySave && (
+                    <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => onRetrySave(item.id)}>
+                      <RotateCcw className="h-3.5 w-3.5" /> Retry save
+                    </Button>
+                  )}
                   {item.status === "uploading" && !onCancel && (
                     <Loader2 className="h-4 w-4 animate-spin text-muted" />
                   )}
                 </div>
               </div>
+              {(item.bytesTotal || item.mimeType) && item.status === "uploading" && item.phase === "queued" && (
+                <p className="text-[11px] text-muted">
+                  {item.mimeType && <span>{item.mimeType}</span>}
+                  {item.bytesTotal ? <span> · {formatFileSize(item.bytesTotal)}</span> : null}
+                  {isLarge ? <span className="text-amber-700"> · Large file — keep this screen open</span> : null}
+                </p>
+              )}
               {item.status === "uploading" && <Progress value={item.progress} />}
-              {item.status === "error" && item.error && (
-                <p className="text-xs text-red-600">{item.error}</p>
+              {(item.status === "error" || item.status === "save_failed") && (
+                <p className="text-xs text-red-600">{item.error || statusLabel(item)}</p>
               )}
             </div>
           </div>

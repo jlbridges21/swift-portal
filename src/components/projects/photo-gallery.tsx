@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
-import { X, ChevronLeft, ChevronRight, Download, ZoomIn } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, ZoomIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SafeAreaCloseButton } from "@/components/ui/safe-area-close-button";
 import type { MediaAsset } from "@/lib/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -278,24 +279,27 @@ function PhotoLightbox({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex flex-col bg-black fixed-overlay-safe"
-      style={{ opacity: dismissOpacity }}
+      className="fixed inset-0 z-[200] flex flex-col bg-black"
+      style={{
+        opacity: dismissOpacity,
+        paddingTop: "env(safe-area-inset-top, 0px)",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        paddingLeft: "env(safe-area-inset-left, 0px)",
+        paddingRight: "env(safe-area-inset-right, 0px)",
+      }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <span className="min-w-0 truncate text-sm text-white/80">
+      <SafeAreaCloseButton onClick={onClose} />
+
+      <div
+        className="flex items-center justify-between gap-3 px-4 pb-3"
+        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)" }}
+      >
+        <span className="min-w-0 truncate text-sm text-white/80 pr-14">
           {photo.title || photo.file_name}
         </span>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
-          aria-label="Close"
-        >
-          <X className="h-6 w-6" />
-        </button>
       </div>
 
       <div className="relative flex flex-1 items-center justify-center overflow-hidden px-2 sm:px-12">

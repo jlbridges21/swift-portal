@@ -31,7 +31,7 @@ import {
 import { UploadProgressList, type UploadProgressItem } from "@/components/admin/upload-progress-list";
 import { CreateClientModal } from "@/components/admin/create-client-modal";
 import { defaultProjectName } from "@/lib/utils";
-import { uploadMediaFile, validateMediaFileBeforeUpload } from "@/lib/upload";
+import { uploadMediaFile, retryMediaSave, validateMediaFileBeforeUpload, UploadSaveError } from "@/lib/upload";
 import { ALLOWED_VIDEO_MIME_TYPES } from "@/lib/upload/constants";
 import { toast } from "sonner";
 
@@ -207,6 +207,7 @@ export function AdminProjectDetail({
         phase: "queued",
         status: "uploading",
         bytesTotal: file.size,
+        mimeType: validation.mimeType,
         startedAt: Date.now(),
       });
     }
@@ -239,9 +240,21 @@ export function AdminProjectDetail({
         uploaded.push(asset as unknown as MediaAsset);
         patchUploadItem(uploadId, { progress: 100, phase: "uploaded", status: "success" });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Upload failed";
-        errors.push(`${file.name}: ${msg}`);
-        patchUploadItem(uploadId, { status: "error", phase: "failed", error: msg });
+        if (err instanceof UploadSaveError) {
+          const msg = "Upload complete, save failed. Retry save.";
+          errors.push(`${file.name}: ${msg}`);
+          patchUploadItem(uploadId, {
+            status: "save_failed",
+            phase: "failed",
+            progress: 95,
+            error: err.message,
+            pendingSave: err.pendingSave,
+          });
+        } else {
+          const msg = err instanceof Error ? err.message : "Upload failed";
+          errors.push(`${file.name}: ${msg}`);
+          patchUploadItem(uploadId, { status: "error", phase: "failed", error: msg });
+        }
       }
     }
 
@@ -259,9 +272,35 @@ export function AdminProjectDetail({
     }
 
     setTimeout(() => {
-      setUploadItems((prev) => prev.filter((item) => item.status === "uploading"));
-    }, 5000);
+      setUploadItems((prev) => prev.filter((item) => item.status === "uploading" || item.status === "save_failed"));
+    }, 8000);
     e.target.value = "";
+  }
+
+  async function handleRetrySave(uploadId: string) {
+    const item = uploadItems.find((i) => i.id === uploadId);
+    if (!item?.pendingSave) return;
+
+    patchUploadItem(uploadId, { status: "uploading", phase: "finalizing", progress: 95, error: undefined });
+    try {
+      const { asset } = await retryMediaSave(item.pendingSave, ({ phase, progress }) => {
+        patchUploadItem(uploadId, { phase, progress, status: "uploading" });
+      });
+      const saved = asset as unknown as MediaAsset;
+      setMedia((prev) => dedupeMedia([...prev, saved]));
+      patchUploadItem(uploadId, { progress: 100, phase: "uploaded", status: "success", pendingSave: undefined });
+      toast.success(`${item.fileName} saved`);
+      router.refresh();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Save failed";
+      patchUploadItem(uploadId, {
+        status: "save_failed",
+        phase: "failed",
+        error: msg,
+        pendingSave: item.pendingSave,
+      });
+      toast.error(msg);
+    }
   }
 
   async function handleClientCreated(client: Client) {
@@ -1064,7 +1103,11 @@ export function AdminProjectDetail({
 
       {uploadItems.length > 0 && (
         <div className="fixed z-50 mx-auto max-w-md left-4 right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] md:bottom-20">
-          <UploadProgressList items={uploadItems} className="shadow-xl bg-white" />
+          <UploadProgressList
+            items={uploadItems}
+            className="shadow-xl bg-white"
+            onRetrySave={handleRetrySave}
+          />
         </div>
       )}
 
