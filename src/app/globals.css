@@ -79,6 +79,23 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 
+/* Fixed admin PWA bottom tab bar — portaled to body to avoid iOS transform/overflow bugs */
+.admin-mobile-pwa-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  background: color-mix(in srgb, #ffffff 95%, transparent);
+  box-shadow: 0 -8px 30px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
 /* Reserve space above iPhone home indicator when admin PWA bottom nav is visible */
 .admin-pwa-content-pad {
   padding-bottom: calc(var(--admin-pwa-nav-height) + env(safe-area-inset-bottom, 0px));

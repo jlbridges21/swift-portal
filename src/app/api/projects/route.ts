@@ -6,7 +6,7 @@ import { idempotencyKey } from "@/lib/idempotency";
 import { getStatusLabel, normalizeStatus } from "@/lib/constants";
 import { clientStatusNotification } from "@/lib/client-messages";
 import { notifyProjectClients } from "@/lib/notifications";
-import { defaultProjectTitle } from "@/lib/address";
+import { defaultProjectTitle, formatAutoProjectName, resolveAddressFromBody } from "@/lib/address";
 import { linkProjectToProperty } from "@/lib/properties";
 import { createPreliminaryEstimate, upsertPreliminaryEstimate } from "@/lib/preliminary-estimates";
 import type { NotificationEventKey } from "@/lib/app-settings";
@@ -33,21 +33,38 @@ export async function POST(request: Request) {
     const profile = await requireAdmin();
     const body = await request.json();
 
-    if (!body.client_id || !body.property_address || !body.service_type) {
+    const { property_address, error: addressError } = resolveAddressFromBody(body);
+    if (addressError || !property_address) {
+      return NextResponse.json({ error: addressError || "Missing required fields" }, { status: 400 });
+    }
+
+    if (!body.client_id || !body.service_type) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const projectName =
-      body.project_name || defaultProjectTitle(body.property_address, body.service_type);
-
     const supabase = await createClient();
+
+    const { data: client } = await supabase
+      .from("clients")
+      .select("name, full_name")
+      .eq("id", body.client_id)
+      .single();
+
+    const clientName = client?.full_name || client?.name || "Client";
+    const street =
+      String(body.street_address ?? "").trim() || property_address.split(",")[0]?.trim() || property_address;
+
+    const projectName =
+      (typeof body.project_name === "string" && body.project_name.trim()) ||
+      formatAutoProjectName(clientName, street, body.service_type) ||
+      defaultProjectTitle(property_address, body.service_type);
 
     const { data: project, error } = await supabase
       .from("projects")
       .insert({
         client_id: body.client_id,
         project_name: projectName,
-        property_address: body.property_address,
+        property_address,
         service_type: body.service_type,
         status: body.status || "new_request",
         shoot_date: body.shoot_date || null,
@@ -61,7 +78,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    await linkProjectToProperty(project.id, body.client_id, body.property_address);
+    await linkProjectToProperty(project.id, body.client_id, property_address);
+
+    await supabase.from("project_clients").upsert(
+      { project_id: project.id, client_id: body.client_id, is_primary: true },
+      { onConflict: "project_id,client_id" }
+    );
 
     await createPreliminaryEstimate(project.id, body.service_type, {
       userId: profile.id,

@@ -1,10 +1,5 @@
 import type { Payment, ProjectQuote } from "@/lib/types";
-import {
-  getQuotePackageName,
-  getPaidLineItems,
-  parseQuoteIncludes,
-  getQuoteIntroText,
-} from "@/lib/quote-display";
+import { getQuotePackageName } from "@/lib/quote-display";
 import { formatCurrency } from "@/lib/utils";
 
 export function getPaymentForQuote(payments: Payment[], quoteId: string): Payment | null {
@@ -18,45 +13,34 @@ export function canCreatePaymentFromQuote(quote: ProjectQuote): boolean {
   return quote.status === "approved" || quote.status === "sent";
 }
 
+/** Short Stripe product name (checkout title). */
 export function paymentDescriptionForQuote(
   quote: ProjectQuote,
   projectName?: string,
   serviceType?: string
 ): string {
-  const name = getQuotePackageName(quote);
-  const parts = [projectName, serviceType, name].filter(Boolean);
-  return parts.join(" — ");
+  const service = serviceType?.trim() || getQuotePackageName(quote);
+  const label = projectName?.trim() ? `${projectName.trim()} · ${service}` : service;
+  return label.slice(0, 250);
 }
 
-/** Rich Stripe product description built from the active proposal. */
+/**
+ * Optional Stripe product description — plain text, kept short.
+ * Stripe checkout does not render rich formatting; avoid long blocks.
+ */
 export function paymentProductDescriptionForQuote(
   quote: ProjectQuote,
   options?: { clientName?: string; projectName?: string; serviceType?: string }
-): string {
-  const lines: string[] = [];
+): string | undefined {
+  const service = options?.serviceType?.trim() || getQuotePackageName(quote);
+  const total = formatCurrency(quote.total_cents);
+  const parts = [
+    options?.clientName ? `Client: ${options.clientName}` : null,
+    options?.projectName ? `Project: ${options.projectName}` : null,
+    `Service: ${service}`,
+    `Total: ${total}`,
+  ].filter(Boolean);
 
-  if (options?.clientName) lines.push(`Client: ${options.clientName}`);
-  if (options?.projectName) lines.push(`Project: ${options.projectName}`);
-  if (options?.serviceType) lines.push(`Service: ${options.serviceType}`);
-
-  const intro = getQuoteIntroText(quote.description);
-  if (intro) lines.push(intro);
-
-  const paidItems = getPaidLineItems(quote);
-  if (paidItems.length > 0) {
-    lines.push(
-      paidItems.map((item) => `${item.description}: ${formatCurrency(item.amount_cents)}`).join("\n")
-    );
-  }
-
-  const includes = parseQuoteIncludes(quote.description);
-  if (includes.length) {
-    lines.push(`Includes:\n${includes.map((i) => `• ${i}`).join("\n")}`);
-  }
-
-  if (quote.notes && !/archived|superseded/i.test(quote.notes)) {
-    lines.push(quote.notes);
-  }
-
-  return lines.join("\n\n").slice(0, 500);
+  const text = parts.join(" · ");
+  return text.length > 0 ? text.slice(0, 250) : undefined;
 }

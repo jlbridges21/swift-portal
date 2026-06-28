@@ -58,6 +58,11 @@ export function ProposalPaymentLinkActions({
     if (creating || linkedPayment) return;
     setCreating(true);
     try {
+      const productDescription = paymentProductDescriptionForQuote(quote, {
+        clientName,
+        projectName,
+        serviceType,
+      });
       const res = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -68,11 +73,7 @@ export function ProposalPaymentLinkActions({
           quote_id: quote.id,
           amount: quote.total_cents,
           description: paymentDescriptionForQuote(quote, projectName, serviceType),
-          product_description: paymentProductDescriptionForQuote(quote, {
-            clientName,
-            projectName,
-            serviceType,
-          }),
+          ...(productDescription ? { product_description: productDescription } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));

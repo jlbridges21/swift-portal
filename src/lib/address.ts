@@ -42,15 +42,29 @@ export function parseAddress(fullAddress: string): ParsedAddress {
 export function buildFullAddress(fields: {
   street_address: string;
   city: string;
-  state: string;
+  state?: string;
   zip_code: string;
 }): string {
   const street = fields.street_address.trim();
-  const cityStateZip = [fields.city.trim(), fields.state.trim().toUpperCase(), fields.zip_code.trim()]
-    .filter(Boolean)
-    .join(", ")
-    .replace(/,\s*,/g, ",");
-  return [street, cityStateZip].filter(Boolean).join(", ");
+  const cityZip = [fields.city.trim(), fields.zip_code.trim()].filter(Boolean).join(", ");
+  if (fields.state?.trim()) {
+    const cityStateZip = [fields.city.trim(), fields.state.trim().toUpperCase(), fields.zip_code.trim()]
+      .filter(Boolean)
+      .join(", ");
+    return [street, cityStateZip].filter(Boolean).join(", ");
+  }
+  return [street, cityZip].filter(Boolean).join(", ");
+}
+
+export function validateStreetCityZip(fields: {
+  street_address?: string;
+  city?: string;
+  zip?: string;
+}): string | null {
+  if (!fields.street_address?.trim()) return "Street address is required.";
+  if (!fields.city?.trim()) return "City is required.";
+  if (!fields.zip?.trim()) return "ZIP code is required.";
+  return null;
 }
 
 export function validateStructuredAddress(fields: {
@@ -72,18 +86,36 @@ export function resolveAddressFromBody(body: Record<string, unknown>): {
 } {
   const street = String(body.street_address ?? "").trim();
   const city = String(body.city ?? "").trim();
+  const zip = String(body.zip ?? body.zip_code ?? "").trim();
   const state = String(body.state ?? "").trim();
-  const zip = String(body.zip_code ?? "").trim();
   const legacy = String(body.property_address ?? "").trim();
 
-  if (street && city && state && zip) {
-    return { property_address: buildFullAddress({ street_address: street, city, state, zip_code: zip }) };
+  if (street && city && zip) {
+    return {
+      property_address: buildFullAddress({
+        street_address: street,
+        city,
+        state: state || undefined,
+        zip_code: zip,
+      }),
+    };
   }
 
   if (legacy) return { property_address: legacy };
 
-  const err = validateStructuredAddress({ street_address: street, city, state, zip_code: zip });
-  return { property_address: "", error: err ?? "Complete address is required." };
+  const err =
+    validateStreetCityZip({ street_address: street, city, zip }) ??
+    (street || city || zip ? "Street address, city, and ZIP are required." : "Complete address is required.");
+  return { property_address: "", error: err };
+}
+
+/** Auto project title: "Client Name - Street Address - Service" */
+export function formatAutoProjectName(
+  clientName: string,
+  streetAddress: string,
+  serviceType: string
+): string {
+  return [clientName.trim(), streetAddress.trim(), serviceType.trim()].filter(Boolean).join(" - ");
 }
 
 export function defaultProjectTitle(propertyAddress: string, serviceType: string): string {

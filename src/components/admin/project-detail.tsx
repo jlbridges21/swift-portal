@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -16,9 +16,8 @@ import { AdminPhotoGrid } from "@/components/admin/admin-photo-grid";
 import { RevisionDrawer } from "@/components/admin/revision-drawer";
 import { PROJECT_STATUSES } from "@/lib/constants";
 import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
-import { PricingPaymentWorkflow } from "@/components/admin/pricing-payment-workflow";
-import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
 import { QuoteSection } from "@/components/projects/quote-section";
+import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
 import type { Project, Client, MediaAsset, Tour, Payment, ShootProposal, ActivityLog, Revision, ProjectQuote, AssetReview } from "@/lib/types";
 import { normalizeStatus } from "@/lib/constants";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
@@ -718,63 +717,20 @@ export function AdminProjectDetail({
             <Label>Notes</Label>
             <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
           </div>
-          <p className="text-xs text-muted">
-            Primary:{" "}
-            <Link
-              href={`/admin/clients/${(initialProject.clients as Client).id}`}
-              className="font-medium text-accent hover:underline"
-            >
-              {(initialProject.clients as Client).name}
-            </Link>
-            {" · "}
-            {(initialProject.clients as Client).email}
-          </p>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> Project Clients</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {projectClients.map((pc) => (
-            <div key={pc.id} className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
-              <div>
-                <Link
-                  href={`/admin/clients/${pc.client_id}`}
-                  className="font-medium text-accent hover:underline"
-                >
-                  {(pc.clients as Client)?.name}
-                </Link>
-                {pc.is_primary && <span className="ml-2 text-xs text-accent">Primary</span>}
-                <p className="text-xs text-muted">{(pc.clients as Client)?.email}</p>
-              </div>
-              {!pc.is_primary && (
-                <Button variant="ghost" size="sm" onClick={() => setPrimaryClient(pc.id, pc.client_id)}>
-                  Set Primary
-                </Button>
-              )}
-            </div>
-          ))}
-          <div className="flex flex-wrap gap-2">
-            <Select
-              className="min-w-[12rem] flex-1"
-              value={addClientId}
-              onChange={(e) => setAddClientId(e.target.value)}
-              placeholder="Add client to project"
-              options={allClients
-                .filter((c) => !projectClients.some((pc) => pc.client_id === c.id))
-                .map((c) => ({ value: c.id, label: c.company ? `${c.name} (${c.company})` : c.name }))}
-            />
-            <Button variant="outline" size="sm" className="min-h-11" onClick={addProjectClient} disabled={!addClientId}>
-              <Plus className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" className="min-h-11" onClick={() => setShowCreateClient(true)}>
-              <Plus className="h-4 w-4" /> New Client
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <ProjectClientsCard
+        primaryClient={initialProject.clients as Client}
+        primaryClientId={initialProject.client_id}
+        projectClients={projectClients}
+        allClients={allClients}
+        addClientId={addClientId}
+        onAddClientIdChange={setAddClientId}
+        onAddClient={addProjectClient}
+        onSetPrimary={setPrimaryClient}
+        onCreateClient={() => setShowCreateClient(true)}
+      />
 
       <Suspense fallback={null}>
         <ShootScheduling
@@ -784,12 +740,6 @@ export function AdminProjectDetail({
           onUpdate={() => router.refresh()}
         />
       </Suspense>
-
-      <PricingPaymentWorkflow
-        project={initialProject}
-        quotes={quotes}
-        payments={paymentList}
-      />
 
       <QuoteSection
         projectId={initialProject.id}
@@ -1089,6 +1039,109 @@ export function AdminProjectDetail({
 
       <StickySaveBar onSave={saveProject} saving={saving} />
     </div>
+  );
+}
+
+function ProjectClientsCard({
+  primaryClient,
+  primaryClientId,
+  projectClients,
+  allClients,
+  addClientId,
+  onAddClientIdChange,
+  onAddClient,
+  onSetPrimary,
+  onCreateClient,
+}: {
+  primaryClient: Client;
+  primaryClientId: string;
+  projectClients: { id: string; client_id: string; is_primary: boolean; clients?: Client }[];
+  allClients: Pick<Client, "id" | "name" | "email" | "company">[];
+  addClientId: string;
+  onAddClientIdChange: (id: string) => void;
+  onAddClient: () => void;
+  onSetPrimary: (pcId: string, clientId: string) => void;
+  onCreateClient: () => void;
+}) {
+  const associated = useMemo(() => {
+    const rows = [...projectClients];
+    if (!rows.some((pc) => pc.client_id === primaryClientId)) {
+      rows.unshift({
+        id: "primary-fallback",
+        client_id: primaryClientId,
+        is_primary: true,
+        clients: primaryClient,
+      });
+    }
+    return rows;
+  }, [projectClients, primaryClientId, primaryClient]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="h-5 w-5" /> Project Clients
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {associated.length > 0 ? (
+          <div className="space-y-2">
+            {associated.map((pc) => {
+              const client = pc.clients as Client | undefined;
+              const displayName = client?.full_name || client?.name || "Client";
+              const contact = client?.email || client?.phone;
+              return (
+                <div
+                  key={pc.id}
+                  className="flex items-center gap-2 rounded-xl border border-border bg-white p-3 text-sm shadow-sm"
+                >
+                  <Link
+                    href={`/admin/clients/${pc.client_id}`}
+                    className="min-h-11 min-w-0 flex-1 rounded-lg transition-colors hover:bg-slate-50 active:bg-slate-100 -m-1 p-1"
+                  >
+                    <p className="font-medium text-primary">{displayName}</p>
+                    {contact && <p className="text-xs text-muted truncate">{contact}</p>}
+                  </Link>
+                  {pc.is_primary ? (
+                    <span className="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
+                      Primary
+                    </span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="min-h-11 shrink-0"
+                      onClick={() => onSetPrimary(pc.id, pc.client_id)}
+                    >
+                      Set Primary
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-muted">No clients linked yet.</p>
+        )}
+        <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+          <Select
+            className="min-w-[12rem] flex-1"
+            value={addClientId}
+            onChange={(e) => onAddClientIdChange(e.target.value)}
+            placeholder="Add client to project"
+            options={allClients
+              .filter((c) => !associated.some((pc) => pc.client_id === c.id))
+              .map((c) => ({ value: c.id, label: c.company ? `${c.name} (${c.company})` : c.name }))}
+          />
+          <Button variant="outline" size="sm" className="min-h-11" onClick={onAddClient} disabled={!addClientId}>
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="sm" className="min-h-11" onClick={onCreateClient}>
+            <Plus className="h-4 w-4" /> New Client
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

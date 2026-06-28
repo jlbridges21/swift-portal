@@ -19,8 +19,8 @@ const NAV_ITEMS = [
   { href: "/admin", label: "Home", icon: Home, exact: true },
   { href: "/admin/projects", label: "Projects", icon: FolderKanban },
   { href: "__action__", label: "Add", icon: Plus, isAction: true },
-  { href: "/admin/clients", label: "Clients", icon: Users },
   { href: "/admin/media", label: "Media", icon: ImageIcon },
+  { href: "/admin/clients", label: "Clients", icon: Users },
 ] as const;
 
 function isActive(pathname: string, href: string, exact?: boolean) {
@@ -37,8 +37,7 @@ export function AdminMobilePwaNav() {
     <>
       <nav
         aria-label="Admin mobile navigation"
-        className="fixed inset-x-0 bottom-0 z-[90] border-t border-border/80 bg-white/95 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur-md"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        className="admin-mobile-pwa-nav"
       >
         <div className="mx-auto flex h-[72px] max-w-lg items-center justify-around px-2">
           {NAV_ITEMS.map((item) => {

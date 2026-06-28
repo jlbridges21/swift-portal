@@ -66,6 +66,9 @@ export default function NewProjectPage() {
         <Card>
           <CardHeader>
             <CardTitle>Create Project</CardTitle>
+            <p className="text-sm text-muted">
+              Project name is generated automatically from the client, address, and service.
+            </p>
           </CardHeader>
           <CardContent>
             <form id="new-project-form" onSubmit={handleSubmit} className="space-y-5">
@@ -83,12 +86,18 @@ export default function NewProjectPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="project_name">Project Name *</Label>
-                <Input id="project_name" name="project_name" required placeholder="123 Main St Aerial Shoot" />
+                <Label htmlFor="street_address">Street Address *</Label>
+                <Input id="street_address" name="street_address" required placeholder="123 Main St" />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="property_address">Property Address *</Label>
-                <Input id="property_address" name="property_address" required />
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="city">City *</Label>
+                  <Input id="city" name="city" required placeholder="Annapolis" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="zip">ZIP *</Label>
+                  <Input id="zip" name="zip" required placeholder="21401" inputMode="numeric" />
+                </div>
               </div>
               <div className="grid gap-5 sm:grid-cols-2">
                 <div className="space-y-2">
