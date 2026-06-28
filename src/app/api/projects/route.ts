@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { requireAdmin, logActivity } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
         property_address,
         service_type: body.service_type,
         status: body.status || "new_request",
-        shoot_date: body.shoot_date || null,
+        shoot_date: null,
         delivery_date: body.delivery_date || null,
         notes: body.notes || null,
       })
@@ -89,6 +89,25 @@ export async function POST(request: Request) {
       userId: profile.id,
       skipIfExists: true,
     });
+
+    const proposedShootAt = body.proposed_shoot_at || body.shoot_date;
+    if (proposedShootAt) {
+      const proposedIso = new Date(proposedShootAt).toISOString();
+      const service = await createServiceClient();
+      await service.from("shoot_proposals").insert({
+        project_id: project.id,
+        proposed_by: "client",
+        proposed_at: proposedIso,
+        message: "Preferred shoot time provided when the project was created.",
+        status: "pending",
+        created_by: profile.id,
+      });
+      await logProjectActivity("shoot_proposed", `Preferred shoot time: ${new Date(proposedIso).toLocaleString()}`, {
+        projectId: project.id,
+        userId: profile.id,
+        metadata: { source: "project_create" },
+      });
+    }
 
     await logActivity("project_created", `Project "${project.project_name}" created`, {
       projectId: project.id,

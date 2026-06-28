@@ -24,7 +24,6 @@ import { ShootScheduling } from "@/components/projects/shoot-scheduling";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
 import { NextStepBanner } from "@/components/projects/next-step-banner";
 import { getAdminNextStep } from "@/lib/journey";
-import { getProjectShootDateTime } from "@/lib/scheduling";
 import {
   Upload, CreditCard, Globe, Trash2, ChevronUp, ChevronDown,
   ExternalLink, Check, Video, ImageIcon, Eye, EyeOff, Link2, Pencil, Users, Plus, MapPin,
@@ -115,13 +114,11 @@ export function AdminProjectDetail({
     setTours(initialTours);
   }, [initialTours]);
 
-  const initialShootIso = getProjectShootDateTime(initialProject, shootProposals);
   const [form, setForm] = useState({
     project_name: initialProject.project_name,
     property_address: initialProject.property_address,
     service_type: initialProject.service_type,
     status: initialProject.status,
-    shoot_date: initialShootIso ? initialShootIso.split("T")[0] : initialProject.shoot_date || "",
     delivery_date: initialProject.delivery_date || "",
     notes: initialProject.notes || "",
   });
@@ -149,7 +146,6 @@ export function AdminProjectDetail({
         id: initialProject.id,
         ...form,
         project_name: projectName,
-        shoot_date: form.shoot_date || null,
         delivery_date: form.delivery_date || null,
         notes: form.notes || null,
       }),
@@ -516,6 +512,22 @@ export function AdminProjectDetail({
     }
   }
 
+  async function removeProjectClient(pcId: string) {
+    if (pcId === "primary-fallback") return;
+    if (!confirm("Remove this client from the project?")) return;
+    const res = await fetch(`/api/project-clients?id=${pcId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (res.ok) {
+      setProjectClients((prev) => prev.filter((pc) => pc.id !== pcId));
+      toast.success("Client removed from project");
+      router.refresh();
+    } else {
+      toast.error("Failed to remove client");
+    }
+  }
+
   async function setPrimaryClient(pcId: string, clientId: string) {
     await fetch("/api/project-clients", {
       method: "POST",
@@ -699,14 +711,10 @@ export function AdminProjectDetail({
             <Label>Property Address</Label>
             <Input value={form.property_address} onChange={(e) => setForm({ ...form, property_address: e.target.value })} />
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Service Type</Label>
               <Input value={form.service_type} onChange={(e) => setForm({ ...form, service_type: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Shoot Date</Label>
-              <Input type="date" value={form.shoot_date} onChange={(e) => setForm({ ...form, shoot_date: e.target.value })} />
             </div>
             <div className="space-y-2">
               <Label>Delivery Date</Label>
@@ -729,6 +737,7 @@ export function AdminProjectDetail({
         onAddClientIdChange={setAddClientId}
         onAddClient={addProjectClient}
         onSetPrimary={setPrimaryClient}
+        onRemove={removeProjectClient}
         onCreateClient={() => setShowCreateClient(true)}
       />
 
@@ -748,6 +757,7 @@ export function AdminProjectDetail({
         clientId={initialProject.client_id}
         clientName={initialProject.clients?.full_name || initialProject.clients?.name || "Client"}
         projectName={initialProject.project_name}
+        propertyAddress={initialProject.property_address}
         serviceType={initialProject.service_type}
         payments={paymentList}
         onPaymentCreated={(payment) => setPaymentList((prev) => [payment, ...prev])}
@@ -1051,6 +1061,7 @@ function ProjectClientsCard({
   onAddClientIdChange,
   onAddClient,
   onSetPrimary,
+  onRemove,
   onCreateClient,
 }: {
   primaryClient: Client;
@@ -1061,6 +1072,7 @@ function ProjectClientsCard({
   onAddClientIdChange: (id: string) => void;
   onAddClient: () => void;
   onSetPrimary: (pcId: string, clientId: string) => void;
+  onRemove: (pcId: string) => void;
   onCreateClient: () => void;
 }) {
   const associated = useMemo(() => {
@@ -1107,14 +1119,27 @@ function ProjectClientsCard({
                       Primary
                     </span>
                   ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="min-h-11 shrink-0"
-                      onClick={() => onSetPrimary(pc.id, pc.client_id)}
-                    >
-                      Set Primary
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="min-h-11 shrink-0 px-2 text-xs"
+                        onClick={() => onSetPrimary(pc.id, pc.client_id)}
+                      >
+                        Set Primary
+                      </Button>
+                      {pc.id !== "primary-fallback" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="min-h-11 min-w-11 shrink-0 text-red-500 hover:text-red-700"
+                          onClick={() => onRemove(pc.id)}
+                          aria-label={`Remove ${displayName}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
               );

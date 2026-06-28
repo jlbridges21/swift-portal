@@ -1,6 +1,5 @@
 import type { Payment, ProjectQuote } from "@/lib/types";
-import { getQuotePackageName } from "@/lib/quote-display";
-import { formatCurrency } from "@/lib/utils";
+import { getServicePaymentDescription } from "@/lib/service-templates";
 
 export function getPaymentForQuote(payments: Payment[], quoteId: string): Payment | null {
   return payments.find((p) => p.quote_id === quoteId) ?? null;
@@ -13,34 +12,37 @@ export function canCreatePaymentFromQuote(quote: ProjectQuote): boolean {
   return quote.status === "approved" || quote.status === "sent";
 }
 
-/** Short Stripe product name (checkout title). */
-export function paymentDescriptionForQuote(
-  quote: ProjectQuote,
-  projectName?: string,
-  serviceType?: string
-): string {
-  const service = serviceType?.trim() || getQuotePackageName(quote);
-  const label = projectName?.trim() ? `${projectName.trim()} · ${service}` : service;
-  return label.slice(0, 250);
+function streetFromAddress(propertyAddress: string): string {
+  return propertyAddress.split(",")[0]?.trim() || propertyAddress.trim();
 }
 
-/**
- * Optional Stripe product description — plain text, kept short.
- * Stripe checkout does not render rich formatting; avoid long blocks.
- */
-export function paymentProductDescriptionForQuote(
-  quote: ProjectQuote,
-  options?: { clientName?: string; projectName?: string; serviceType?: string }
-): string | undefined {
-  const service = options?.serviceType?.trim() || getQuotePackageName(quote);
-  const total = formatCurrency(quote.total_cents);
-  const parts = [
-    options?.clientName ? `Client: ${options.clientName}` : null,
-    options?.projectName ? `Project: ${options.projectName}` : null,
-    `Service: ${service}`,
-    `Total: ${total}`,
-  ].filter(Boolean);
+/** Stripe checkout title: "Client Name - Street - Service" */
+export function paymentLinkTitle(
+  clientName: string,
+  propertyAddress: string,
+  serviceType: string
+): string {
+  const street = streetFromAddress(propertyAddress);
+  return [clientName.trim(), street, serviceType.trim()].filter(Boolean).join(" - ").slice(0, 250);
+}
 
-  const text = parts.join(" · ");
-  return text.length > 0 ? text.slice(0, 250) : undefined;
+/** @deprecated Use paymentLinkTitle */
+export function paymentDescriptionForQuote(
+  _quote: ProjectQuote,
+  projectName?: string,
+  serviceType?: string,
+  clientName?: string,
+  propertyAddress?: string
+): string {
+  if (clientName && propertyAddress && serviceType) {
+    return paymentLinkTitle(clientName, propertyAddress, serviceType);
+  }
+  return (projectName?.trim() || serviceType?.trim() || "Project payment").slice(0, 250);
+}
+
+export function defaultPaymentLinkDescription(serviceType?: string): string {
+  if (!serviceType?.trim()) {
+    return "Professional aerial media package for the selected property.";
+  }
+  return getServicePaymentDescription(serviceType);
 }

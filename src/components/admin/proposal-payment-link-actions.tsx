@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import type { Payment, ProjectQuote } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/lib/utils";
 import {
   canCreatePaymentFromQuote,
+  defaultPaymentLinkDescription,
   getPaymentForQuote,
-  paymentDescriptionForQuote,
-  paymentProductDescriptionForQuote,
+  paymentLinkTitle,
 } from "@/lib/payment-quote";
 import { CreditCard, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
@@ -21,6 +23,7 @@ interface ProposalPaymentLinkActionsProps {
   clientId: string;
   projectName: string;
   clientName: string;
+  propertyAddress: string;
   serviceType?: string;
   payments: Payment[];
   onPaymentCreated?: (payment: Payment) => void;
@@ -30,8 +33,8 @@ export function ProposalPaymentLinkActions({
   quote,
   projectId,
   clientId,
-  projectName,
   clientName,
+  propertyAddress,
   serviceType,
   payments,
   onPaymentCreated,
@@ -39,14 +42,23 @@ export function ProposalPaymentLinkActions({
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [linkDescription, setLinkDescription] = useState("");
   const [localPayment, setLocalPayment] = useState<Payment | null>(() =>
     getPaymentForQuote(payments, quote.id)
   );
+
+  const linkTitle = paymentLinkTitle(clientName, propertyAddress, serviceType || "Service");
 
   useEffect(() => {
     const fromProps = getPaymentForQuote(payments, quote.id);
     if (fromProps) setLocalPayment(fromProps);
   }, [payments, quote.id]);
+
+  useEffect(() => {
+    if (showModal) {
+      setLinkDescription(defaultPaymentLinkDescription(serviceType));
+    }
+  }, [showModal, serviceType]);
 
   const linkedPayment = localPayment ?? getPaymentForQuote(payments, quote.id);
   const paymentUrl = linkedPayment?.payment_link_url || linkedPayment?.stripe_payment_link_url;
@@ -58,11 +70,6 @@ export function ProposalPaymentLinkActions({
     if (creating || linkedPayment) return;
     setCreating(true);
     try {
-      const productDescription = paymentProductDescriptionForQuote(quote, {
-        clientName,
-        projectName,
-        serviceType,
-      });
       const res = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -72,8 +79,8 @@ export function ProposalPaymentLinkActions({
           client_id: clientId,
           quote_id: quote.id,
           amount: quote.total_cents,
-          description: paymentDescriptionForQuote(quote, projectName, serviceType),
-          ...(productDescription ? { product_description: productDescription } : {}),
+          description: linkTitle,
+          product_description: linkDescription.trim().slice(0, 250),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -127,39 +134,33 @@ export function ProposalPaymentLinkActions({
 
       <Modal open={showModal} onClose={() => !creating && setShowModal(false)} title="Create Payment Link">
         <div className="space-y-4">
-          <p className="text-sm text-muted">
-            A Stripe payment link will be created using this proposal&apos;s details. You can send or copy the link
-            immediately.
-          </p>
-          <dl className="space-y-3 rounded-xl bg-slate-50 px-4 py-3 text-sm">
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-wide text-muted">Proposal</dt>
-              <dd className="mt-0.5 font-medium text-primary">{quote.title}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-wide text-muted">Client</dt>
-              <dd className="mt-0.5 text-primary">{clientName}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-wide text-muted">Project</dt>
-              <dd className="mt-0.5 text-primary">{projectName}</dd>
-            </div>
-            {serviceType && (
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-muted">Service</dt>
-                <dd className="mt-0.5 text-primary">{serviceType}</dd>
-              </div>
-            )}
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-wide text-muted">Amount</dt>
-              <dd className="mt-0.5 text-lg font-bold text-primary">{formatCurrency(quote.total_cents)}</dd>
-            </div>
-          </dl>
+          <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">Payment title</p>
+            <p className="mt-1 font-medium text-primary break-words">{linkTitle}</p>
+            <p className="mt-3 text-2xl font-bold text-primary">{formatCurrency(quote.total_cents)}</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="payment-link-description">Description</Label>
+            <Textarea
+              id="payment-link-description"
+              value={linkDescription}
+              onChange={(e) => setLinkDescription(e.target.value)}
+              rows={3}
+              className="min-h-[5rem] resize-y"
+              placeholder="What the client is paying for…"
+            />
+            <p className="text-xs text-muted">Shown under the amount in Stripe checkout.</p>
+          </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="outline" className="min-h-11" disabled={creating} onClick={() => setShowModal(false)}>
               Cancel
             </Button>
-            <Button variant="accent" className="min-h-11" disabled={creating} onClick={createPaymentLink}>
+            <Button
+              variant="accent"
+              className="min-h-11"
+              disabled={creating || !linkDescription.trim()}
+              onClick={createPaymentLink}
+            >
               {creating ? "Creating…" : "Create Payment Link"}
             </Button>
           </div>

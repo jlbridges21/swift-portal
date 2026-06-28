@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
-import { Button } from "@/components/ui/button";
 import { StickySaveBar } from "@/components/ui/sticky-save-bar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -92,11 +91,11 @@ export default function NewProjectPage() {
               <div className="grid gap-5 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="city">City *</Label>
-                  <Input id="city" name="city" required placeholder="Annapolis" />
+                  <Input id="city" name="city" required placeholder="Orange Beach" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="zip">ZIP *</Label>
-                  <Input id="zip" name="zip" required placeholder="21401" inputMode="numeric" />
+                  <Input id="zip" name="zip" required placeholder="36561" inputMode="numeric" />
                 </div>
               </div>
               <div className="grid gap-5 sm:grid-cols-2">
@@ -121,12 +120,12 @@ export default function NewProjectPage() {
               </div>
               <div className="grid gap-5 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="shoot_date">Shoot Date</Label>
-                  <Input id="shoot_date" name="shoot_date" type="date" />
+                  <Label htmlFor="proposed_shoot_at">Proposed Shoot Date and Time</Label>
+                  <Input id="proposed_shoot_at" name="proposed_shoot_at" type="datetime-local" className="min-h-11" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="delivery_date">Delivery Date</Label>
-                  <Input id="delivery_date" name="delivery_date" type="date" />
+                  <Input id="delivery_date" name="delivery_date" type="date" className="min-h-11" />
                 </div>
               </div>
               <div className="space-y-2">

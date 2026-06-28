@@ -336,3 +336,33 @@ export function buildPreliminaryEstimatePayload(serviceType: string) {
     quote_kind: "preliminary" as const,
   };
 }
+
+/** Short default copy for Stripe payment link descriptions. */
+export function getServicePaymentDescription(serviceType: string): string {
+  const trimmed = serviceType.trim();
+  const known: Record<string, string> = {
+    "Aerial Photography": "Professional aerial photography package for the selected property.",
+    "Aerial Videography": "Professional aerial videography package for the selected property.",
+    "360 Virtual Tour": "Professional exterior 360° virtual tour for the selected property.",
+    "Exterior 360° Virtual Tour": "Professional exterior 360° virtual tour for the selected property.",
+    "Drone Mapping": "Professional drone mapping package for the selected property.",
+    "Real Estate Media Package": "Complete real estate media package for the selected property.",
+    "Commercial Aerial Media": "Commercial aerial media package for the selected property.",
+    "Event Coverage": "Professional aerial event coverage for the selected property.",
+    "Construction Progress Documentation":
+      "Construction progress documentation package for the selected property.",
+    "Land Listing Package": "Land listing aerial media package for the selected property.",
+    "Roof Inspection": "Aerial roof inspection package for the selected property.",
+    "Property Documentation": "Property documentation package for the selected property.",
+    "Marina & Waterfront Marketing": "Marina and waterfront marketing package for the selected property.",
+    "HOA & Community Marketing": "HOA and community marketing package for the selected property.",
+  };
+  if (known[trimmed]) return known[trimmed];
+
+  const template = getServiceTemplate(trimmed);
+  if (template.description && template.description.length <= 120 && !template.description.includes("\n")) {
+    return template.description;
+  }
+
+  return `Professional ${template.title.toLowerCase()} package for the selected property.`;
+}

@@ -36,6 +36,7 @@ interface QuoteSectionProps {
   clientId?: string;
   clientName?: string;
   projectName?: string;
+  propertyAddress?: string;
   serviceType?: string;
   payments?: Payment[];
   onPaymentCreated?: (payment: Payment) => void;
@@ -58,6 +59,7 @@ export function QuoteSection({
   clientId,
   clientName,
   projectName,
+  propertyAddress,
   serviceType,
   payments = [],
   onPaymentCreated,
@@ -424,13 +426,14 @@ export function QuoteSection({
           <Button variant="outline" size="sm" disabled={loading} onClick={() => duplicateQuote(quote)}>
             <Copy className="h-4 w-4" /> Duplicate & Revise
           </Button>
-          {clientId && clientName && projectName && (
+          {clientId && clientName && propertyAddress && (
             <ProposalPaymentLinkActions
               quote={quote}
               projectId={projectId}
               clientId={clientId}
-              projectName={projectName}
+              projectName={projectName || ""}
               clientName={clientName}
+              propertyAddress={propertyAddress}
               serviceType={serviceType}
               payments={payments}
               onPaymentCreated={onPaymentCreated}
@@ -442,13 +445,14 @@ export function QuoteSection({
 
     return (
       <>
-        {clientId && clientName && projectName && (
+        {clientId && clientName && propertyAddress && (
           <ProposalPaymentLinkActions
             quote={quote}
             projectId={projectId}
             clientId={clientId}
-            projectName={projectName}
+            projectName={projectName || ""}
             clientName={clientName}
+            propertyAddress={propertyAddress}
             serviceType={serviceType}
             payments={payments}
             onPaymentCreated={onPaymentCreated}
