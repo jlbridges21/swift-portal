@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
+import { RemoteImage } from "@/components/ui/remote-image";
+import { isOptimizableImageUrl } from "@/lib/media-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,8 +52,8 @@ function PhotoReviewThumb({ assetId, fileName }: { assetId: string; fileName: st
 
   return (
     <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-black/5">
-      {url ? (
-        <Image src={url} alt={fileName} fill className="object-cover" sizes="64px" />
+      {url && isOptimizableImageUrl(url) ? (
+        <RemoteImage src={url} alt={fileName} fill className="object-cover" sizes="64px" />
       ) : failed ? (
         <div className="flex h-full items-center justify-center">
           <Images className="h-5 w-5 text-muted" />

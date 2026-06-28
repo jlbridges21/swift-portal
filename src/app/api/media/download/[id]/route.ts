@@ -116,6 +116,15 @@ export async function GET(
 
   const forcePreview = preview || (!downloadsAllowed && !isAdmin);
 
+  if (thumb && asset.media_type === "video") {
+    return NextResponse.json({
+      url: null,
+      preview: true,
+      downloadsAllowed,
+      mediaType: "video",
+    });
+  }
+
   if (thumb && asset.thumbnail_url) {
     const { data: thumbData, error: thumbError } = await storageClient.storage
       .from(bucket)
@@ -135,6 +144,15 @@ export async function GET(
         ? { transform: { width: 1200, height: 1200, resize: "contain" as const } }
         : undefined
       : undefined;
+
+  if (thumb && asset.media_type !== "photo") {
+    return NextResponse.json({
+      url: null,
+      preview: true,
+      downloadsAllowed,
+      mediaType: asset.media_type,
+    });
+  }
 
   const { data, error } = await storageClient.storage
     .from(bucket)

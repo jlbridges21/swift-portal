@@ -10,6 +10,7 @@ import type { UploadPhase } from "@/lib/upload/constants";
 import type { PendingSavePayload } from "@/lib/upload/pending-save";
 import type { UploadTechnicalDetails } from "@/lib/upload/upload-errors";
 import { SHOW_UPLOAD_TECHNICAL_DETAILS } from "@/lib/upload/diagnostic";
+import { shouldUseTusUpload } from "@/lib/upload/constants";
 import { formatFileSize } from "@/lib/upload/validation";
 import type { UploadRetryContext } from "@/hooks/use-media-upload-queue";
 
@@ -23,6 +24,8 @@ export interface UploadProgressItem {
   previewUrl?: string;
   bytesLoaded?: number;
   bytesTotal?: number;
+  /** True when resuming a prior incomplete TUS upload for this file. */
+  resuming?: boolean;
   startedAt?: number;
   mimeType?: string;
   pendingSave?: PendingSavePayload;
@@ -64,6 +67,7 @@ function statusLabel(item: UploadProgressItem): string {
   if (item.status === "save_failed") return "Upload complete, save failed. Retry save.";
   if (item.status === "error") return item.error || "Upload failed.";
   if (item.status === "success") return "Complete";
+  if (item.phase === "uploading" && item.resuming) return "Resuming upload…";
   if (item.phase) return PHASE_LABEL[item.phase];
   return `${item.progress}%`;
 }
@@ -161,7 +165,10 @@ export function UploadProgressList({ items, className, onRetry, onRetrySave, onC
                   )}
                   {item.status === "error" && onRetry && item.retryContext && (
                     <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => onRetry(item.id)}>
-                      <RotateCcw className="h-3.5 w-3.5" /> Retry upload
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      {shouldUseTusUpload(item.bytesTotal ?? item.retryContext.file.size)
+                        ? "Retry upload (will resume)"
+                        : "Retry upload"}
                     </Button>
                   )}
                   {item.status === "error" && !onRetry && (
@@ -177,6 +184,13 @@ export function UploadProgressList({ items, className, onRetry, onRetrySave, onC
                   )}
                 </div>
               </div>
+              {item.status === "uploading" && item.phase === "uploading" && item.bytesTotal != null && (
+                <p className="text-[11px] text-muted">
+                  {formatFileSize(item.bytesLoaded ?? 0)} / {formatFileSize(item.bytesTotal)}
+                  {item.resuming ? <span className="text-amber-700"> · Resuming…</span> : null}
+                  {isLarge ? <span className="text-amber-700"> · Keep this screen open</span> : null}
+                </p>
+              )}
               {(item.bytesTotal || item.mimeType) && item.status === "uploading" && item.phase === "queued" && (
                 <p className="text-[11px] text-muted">
                   {item.mimeType && <span>{item.mimeType}</span>}

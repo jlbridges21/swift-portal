@@ -4,7 +4,7 @@ import { requireAdminApi } from "@/lib/api-auth";
 import { formatFileSize } from "@/lib/brand";
 import { buildMediaStoragePath } from "@/lib/media-upload";
 import { validateMediaFileBeforeUpload } from "@/lib/upload/validation";
-import { DIRECT_UPLOAD_THRESHOLD_BYTES, MAX_VIDEO_FILE_SIZE_BYTES } from "@/lib/upload/constants";
+import { MAX_VIDEO_FILE_SIZE_BYTES, shouldUseTusUpload } from "@/lib/upload/constants";
 import { logUploadStep } from "@/lib/upload/logger";
 
 export async function POST(request: Request) {
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       displayOrder = count ?? 0;
     }
 
-    const useTus = mediaType === "video" || fileSize > DIRECT_UPLOAD_THRESHOLD_BYTES;
+    const useTus = shouldUseTusUpload(fileSize);
 
     // TUS resumable uploads must NOT call createSignedUploadUrl — it can reserve the path
     // and break large video uploads. Only sign a PUT URL for smaller direct uploads.

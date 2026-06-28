@@ -18,11 +18,18 @@ import {
 import type { LibraryAsset, LibraryAssetKind } from "@/lib/media-library";
 import {
   Search, Star, ImageIcon, Video, FileText, Globe, Download, ExternalLink,
-  X, Filter, ChevronDown, Trash2, Tag, Copy, Pencil, Loader2, CheckSquare, Square, Upload, Play,
+  X, Filter, ChevronDown, Trash2, Tag, Copy, Pencil, Loader2, CheckSquare, Square, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { MediaUploadModal } from "@/components/admin/media-upload-modal";
+import { PropertyLineToolButton } from "@/components/admin/property-line-tool-button";
+import { VideoMediaPlaceholder } from "@/components/ui/video-media-placeholder";
+import {
+  isVideoLibraryAsset,
+  shouldFetchLibraryThumbnail,
+  libraryKindLabel,
+} from "@/lib/media-preview";
 import { useRouter } from "next/navigation";
 import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
 
@@ -178,13 +185,11 @@ export function MediaLibraryClient({
   }, [hasMore, loading, page, fetchPage]);
 
   async function loadThumb(asset: LibraryAsset) {
-    if (thumbUrls[asset.id] || asset.kind === "tour") return;
-    if (asset.kind === "document") return;
-    if (asset.media_source === "youtube") return;
+    if (thumbUrls[asset.id] || !shouldFetchLibraryThumbnail(asset)) return;
     try {
       const res = await fetch(`/api/media/download/${asset.id}?thumb=1`, { credentials: "include" });
       const data = await res.json();
-      if (data.url) setThumbUrls((p) => ({ ...p, [asset.id]: data.url }));
+      if (data.url && !data.mediaType) setThumbUrls((p) => ({ ...p, [asset.id]: data.url }));
     } catch {
       // ignore
     }
@@ -385,6 +390,7 @@ export function MediaLibraryClient({
             setAssets((prev) => prev.filter((a) => a.id !== drawerAsset.id));
             setDrawerAsset(null);
           }}
+          onPropertyLineSaved={() => fetchPage(1, true)}
         />
       )}
 
@@ -443,20 +449,13 @@ function AssetCard({
         onClick={() => (selectMode ? onSelect() : onOpen())}
       >
         <div className="relative aspect-[4/3] bg-slate-100">
-          {thumbUrl ? (
+          {isVideoLibraryAsset(asset) ? (
+            <VideoMediaPlaceholder fileName={asset.file_name ?? asset.title} label={libraryKindLabel(asset.kind)} />
+          ) : thumbUrl ? (
             <RemoteImage src={thumbUrl} alt={asset.title} fill className="object-cover" sizes="200px" />
-          ) : asset.thumbnail_url ? (
-            <RemoteImage src={asset.thumbnail_url} alt={asset.title} fill className="object-cover" sizes="200px" />
           ) : (
             <div className="flex h-full items-center justify-center">
               <Icon className="h-10 w-10 text-muted" />
-            </div>
-          )}
-          {asset.kind === "video" && (thumbUrl || asset.thumbnail_url) && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow">
-                <Play className="ml-0.5 h-5 w-5 text-slate-900" fill="currentColor" />
-              </div>
             </div>
           )}
           {asset.is_cover && (
@@ -490,15 +489,11 @@ function AssetCard({
 }
 
 function isVideoAsset(asset: LibraryAsset): boolean {
-  if (asset.kind === "video") return true;
-  const mime = asset.mime_type?.toLowerCase() ?? "";
-  if (mime.startsWith("video/")) return true;
-  const ext = asset.file_name?.split(".").pop()?.toLowerCase();
-  return ext === "mp4" || ext === "mov" || ext === "m4v";
+  return isVideoLibraryAsset(asset);
 }
 
 function AssetDrawer({
-  asset, projects, onClose, onUpdate, onFavorite, onDeleted,
+  asset, projects, onClose, onUpdate, onFavorite, onDeleted, onPropertyLineSaved,
 }: {
   asset: LibraryAsset;
   projects: { id: string; project_name: string; property_address: string }[];
@@ -506,6 +501,7 @@ function AssetDrawer({
   onUpdate: (a: LibraryAsset) => void;
   onFavorite: () => void;
   onDeleted: () => void;
+  onPropertyLineSaved?: () => void;
 }) {
   const [detail, setDetail] = useState<{
     events: { id: string; event_type: string; description: string | null; created_at: string }[];
@@ -699,6 +695,17 @@ function AssetDrawer({
                 onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
                 placeholder={`Tags (comma-separated). Suggested: ${DAM_SUGGESTED_TAGS.slice(0, 4).join(", ")}`}
               />
+              {asset.kind === "photo" && asset.media_source !== "youtube" && (
+                <PropertyLineToolButton
+                  mediaId={asset.id}
+                  fileName={asset.file_name ?? asset.title}
+                  title={asset.title}
+                  projectId={asset.project_id}
+                  onSaved={() => {
+                    onPropertyLineSaved?.();
+                  }}
+                />
+              )}
               <Button variant="accent" size="sm" disabled={saving} onClick={saveMetadata}>
                 {saving ? "Saving..." : "Save Metadata"}
               </Button>
@@ -764,57 +771,46 @@ function AssetDrawer({
 }
 
 function MediaDetailVideoPlayer({ asset }: { asset: LibraryAsset }) {
-  const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [playing, setPlaying] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoadError(false);
+  async function startPlayback() {
+    if (playing || loading) return;
     setLoading(true);
-    setStreamUrl(null);
-    setPosterUrl(null);
-
-    async function load() {
-      try {
-        const [thumbRes, streamRes] = await Promise.all([
-          fetch(`/api/media/download/${asset.id}?thumb=1`, { credentials: "include" }),
-          fetch(`/api/media/download/${asset.id}?preview=1`, { credentials: "include" }),
-        ]);
-        if (cancelled) return;
-
-        const thumbData = await thumbRes.json();
-        const streamData = await streamRes.json();
-
-        if (thumbData.url) setPosterUrl(thumbData.url);
-        if (streamRes.ok && streamData.url) {
-          setStreamUrl(streamData.url);
-        } else {
-          setLoadError(true);
-        }
-      } catch {
-        if (!cancelled) setLoadError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
+    setLoadError(false);
+    try {
+      const streamRes = await fetch(`/api/media/download/${asset.id}?preview=1`, { credentials: "include" });
+      const streamData = await streamRes.json();
+      if (!streamRes.ok || !streamData.url) {
+        setLoadError(true);
+        return;
       }
+      setStreamUrl(streamData.url);
+      setPlaying(true);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [asset.id]);
-
-  if (loading) {
+  if (playing && streamUrl) {
     return (
-      <div className="flex h-full items-center justify-center text-muted">
-        <Loader2 className="h-6 w-6 animate-spin" />
-      </div>
+      <video
+        key={streamUrl}
+        src={streamUrl}
+        controls
+        playsInline
+        preload="metadata"
+        className="h-full w-full bg-black object-contain"
+        onError={() => setLoadError(true)}
+      />
     );
   }
 
-  if (loadError || !streamUrl) {
+  if (loadError) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted">
         <Video className="h-8 w-8 opacity-50" />
@@ -824,16 +820,19 @@ function MediaDetailVideoPlayer({ asset }: { asset: LibraryAsset }) {
   }
 
   return (
-    <video
-      key={streamUrl}
-      src={streamUrl}
-      poster={posterUrl ?? undefined}
-      controls
-      playsInline
-      preload="metadata"
-      className="h-full w-full bg-black object-contain"
-      onError={() => setLoadError(true)}
-    />
+    <button
+      type="button"
+      onClick={startPlayback}
+      className="relative flex h-full w-full items-stretch"
+      aria-label={`Play ${asset.title}`}
+    >
+      <VideoMediaPlaceholder fileName={asset.file_name ?? asset.title} className="absolute inset-0" />
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+          <Loader2 className="h-8 w-8 animate-spin text-white" />
+        </div>
+      )}
+    </button>
   );
 }
 

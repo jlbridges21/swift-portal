@@ -24,7 +24,6 @@ export default async function Image() {
           background: SITE_THEME_COLOR,
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={iconSrc} width={200} height={200} alt="" />
         <div
           style={{

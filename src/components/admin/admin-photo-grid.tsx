@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronUp, ChevronDown, Trash2, GripVertical, Eye, EyeOff } from "lucide-react";
 import type { MediaAsset } from "@/lib/types";
+import { AdminPhotoLightbox } from "@/components/admin/admin-photo-lightbox";
 
 interface AdminPhotoGridProps {
   photos: MediaAsset[];
@@ -12,13 +13,14 @@ interface AdminPhotoGridProps {
   onDelete: (id: string) => void;
   onReorder: (photos: MediaAsset[]) => void;
   onToggleVisibility: (id: string, visible: boolean) => void;
+  onPropertyLineSaved?: (asset: Record<string, unknown>) => void;
 }
 
 function isClientVisible(asset: MediaAsset) {
   return asset.visibility !== "admin";
 }
 
-function PhotoThumb({ assetId }: { assetId: string }) {
+function PhotoThumb({ assetId, onOpen }: { assetId: string; onOpen: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     fetch(`/api/media/download/${assetId}?thumb=1`, { credentials: "include" })
@@ -26,14 +28,19 @@ function PhotoThumb({ assetId }: { assetId: string }) {
       .then((d) => setUrl(d.url));
   }, [assetId]);
   return (
-    <div className="relative aspect-square w-full bg-slate-100">
+    <button
+      type="button"
+      onClick={onOpen}
+      className="relative aspect-square w-full bg-slate-100"
+      aria-label="Open photo"
+    >
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={url} alt="" className="h-full w-full object-cover" />
       ) : (
         <div className="h-full w-full animate-pulse bg-slate-200" />
       )}
-    </div>
+    </button>
   );
 }
 
@@ -44,9 +51,11 @@ export function AdminPhotoGrid({
   onDelete,
   onReorder,
   onToggleVisibility,
+  onPropertyLineSaved,
 }: AdminPhotoGridProps) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  const [lightboxPhoto, setLightboxPhoto] = useState<MediaAsset | null>(null);
 
   async function persistOrder(reordered: MediaAsset[]) {
     const items = reordered.map((p, i) => ({
@@ -90,6 +99,7 @@ export function AdminPhotoGrid({
   }
 
   return (
+    <>
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {photos.map((p, i) => (
         <div
@@ -103,7 +113,7 @@ export function AdminPhotoGrid({
             overId === p.id && dragId !== p.id ? "ring-2 ring-accent" : ""
           } ${dragId === p.id ? "opacity-50" : ""}`}
         >
-          <PhotoThumb assetId={p.id} />
+          <PhotoThumb assetId={p.id} onOpen={() => setLightboxPhoto(p)} />
           <div className="p-2 space-y-2">
             <div className="flex items-start gap-1">
               <GripVertical className="h-4 w-4 shrink-0 text-muted mt-0.5 cursor-grab" />
@@ -142,5 +152,14 @@ export function AdminPhotoGrid({
         </div>
       ))}
     </div>
+
+    {lightboxPhoto && (
+      <AdminPhotoLightbox
+        photo={lightboxPhoto}
+        onClose={() => setLightboxPhoto(null)}
+        onSavedPropertyLine={onPropertyLineSaved}
+      />
+    )}
+    </>
   );
 }

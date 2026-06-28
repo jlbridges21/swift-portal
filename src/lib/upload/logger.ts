@@ -50,6 +50,34 @@ export function dumpUploadTimeline() {
   console.groupEnd();
 }
 
+/** Development-only binary upload timing (start, end, duration, Mbps). */
+export function logUploadBinaryTiming(options: {
+  fileName: string;
+  fileSize: number;
+  startedAtMs: number;
+  uploadMethod: "tus" | "signed_put";
+  resumed?: boolean;
+}) {
+  if (process.env.NODE_ENV !== "development") return;
+
+  const endedAtMs = Date.now();
+  const durationSec = (endedAtMs - options.startedAtMs) / 1000;
+  const megabits = (options.fileSize * 8) / 1_000_000;
+  const averageMbps = durationSec > 0 ? megabits / durationSec : 0;
+
+  console.info("[upload:timing]", {
+    fileName: options.fileName,
+    fileSize: options.fileSize,
+    fileSizeLabel: `${(options.fileSize / (1024 * 1024)).toFixed(2)} MB`,
+    uploadStart: new Date(options.startedAtMs).toISOString(),
+    uploadEnd: new Date(endedAtMs).toISOString(),
+    durationSec: Math.round(durationSec * 10) / 10,
+    averageMbps: Math.round(averageMbps * 100) / 100,
+    uploadMethod: options.uploadMethod,
+    resumed: options.resumed ?? false,
+  });
+}
+
 export function logUploadStep(level: "info" | "warn" | "error", context: UploadLogContext) {
   const payload = sanitizeContext(context);
   const msg = `[upload:${payload.step}]`;

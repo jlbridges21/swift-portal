@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { isOptimizableImageUrl } from "@/lib/media-preview";
 
 /** Hostnames allowed for next/image optimization */
 const OPTIMIZED_HOSTS = [
@@ -13,6 +14,7 @@ const OPTIMIZED_HOSTS = [
 ];
 
 function canUseNextImage(src: string): boolean {
+  if (!isOptimizableImageUrl(src)) return false;
   try {
     const host = new URL(src).hostname;
     return OPTIMIZED_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));

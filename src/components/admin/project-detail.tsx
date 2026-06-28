@@ -13,6 +13,7 @@ import { StickySaveBar } from "@/components/ui/sticky-save-bar";
 import { Modal } from "@/components/ui/modal";
 import { StatusBadge } from "@/components/ui/badge";
 import { AdminPhotoGrid } from "@/components/admin/admin-photo-grid";
+import { VideoMediaPlaceholder } from "@/components/ui/video-media-placeholder";
 import { RevisionDrawer } from "@/components/admin/revision-drawer";
 import { PROJECT_STATUSES } from "@/lib/constants";
 import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
@@ -224,12 +225,13 @@ export function AdminProjectDetail({
           projectId: initialProject.id,
           file,
           mediaType,
-          onProgress: ({ phase, progress, bytesLoaded, bytesTotal }) => {
+          onProgress: ({ phase, progress, bytesLoaded, bytesTotal, resuming }) => {
             patchUploadItem(uploadId, {
               phase,
               progress,
               bytesLoaded,
               bytesTotal,
+              resuming,
               status: phase === "failed" ? "error" : "uploading",
             });
           },
@@ -794,6 +796,9 @@ export function AdminProjectDetail({
               onSetHero={setHeroMedia}
               onDelete={deleteMedia}
               onToggleVisibility={toggleMediaVisibility}
+              onPropertyLineSaved={(asset) => {
+                setMedia((prev) => [...prev, asset as unknown as MediaAsset]);
+              }}
               onReorder={(reordered) => setMedia((prev) => {
                 const others = prev.filter((m) => m.media_type !== "photo");
                 return [...others, ...reordered];
@@ -1171,46 +1176,42 @@ function ProjectClientsCard({
 }
 
 function AdminVideoThumb({ asset }: { asset: MediaAsset }) {
-  const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
-
-  useEffect(() => {
-    fetch(`/api/media/download/${asset.id}?thumb=1`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => { if (d.url) setPosterUrl(d.url); });
-  }, [asset.id]);
+  const [loading, setLoading] = useState(false);
 
   async function play() {
-    if (playing) return;
-    const res = await fetch(`/api/media/download/${asset.id}`, { credentials: "include" });
-    const d = await res.json();
-    if (d.url) {
-      setStreamUrl(d.url);
-      setPlaying(true);
+    if (playing || loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/media/download/${asset.id}`, { credentials: "include" });
+      const d = await res.json();
+      if (d.url) {
+        setStreamUrl(d.url);
+        setPlaying(true);
+      }
+    } finally {
+      setLoading(false);
     }
   }
 
   if (playing && streamUrl) {
-    return <video src={streamUrl} className="w-full max-h-40" controls playsInline poster={posterUrl ?? undefined} />;
+    return <video src={streamUrl} className="w-full max-h-40" controls playsInline />;
   }
 
   return (
     <button
       type="button"
       onClick={play}
-      className="relative flex w-full max-h-40 min-h-[5rem] items-center justify-center overflow-hidden rounded-lg bg-slate-900"
+      className="relative flex w-full max-h-40 min-h-[5rem] overflow-hidden rounded-lg"
+      aria-label={`Play ${asset.file_name}`}
     >
-      {posterUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={posterUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-      ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-950" />
+      <VideoMediaPlaceholder fileName={asset.file_name} compact className="min-h-[5rem]" />
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-xs text-white">
+          Loading…
+        </div>
       )}
-      <div className="absolute inset-0 bg-black/25" />
-      <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow">
-        <Video className="ml-0.5 h-5 w-5 text-slate-900" />
-      </div>
     </button>
   );
 }

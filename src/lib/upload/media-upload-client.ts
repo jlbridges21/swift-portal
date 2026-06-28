@@ -1,14 +1,17 @@
 import * as tus from "tus-js-client";
 import { createClient } from "@/lib/supabase/client";
 import {
-  DIRECT_UPLOAD_THRESHOLD_BYTES,
+  TUS_RETRY_DELAYS_MS,
+  TUS_SUCCESS_FALLBACK_MS,
   UPLOAD_CHUNK_SIZE_BYTES,
+  shouldUseTusUpload,
   type UploadPhase,
 } from "./constants";
 import { UPLOAD_DIAGNOSTIC_MODE } from "./diagnostic";
 import { normalizeUploadFailure } from "./errors";
 import {
   dumpUploadTimeline,
+  logUploadBinaryTiming,
   logUploadFailure,
   logUploadStep,
   logUploadTimeline,
@@ -23,15 +26,14 @@ import {
 import type { PendingSavePayload } from "./pending-save";
 import { getTusUploadEndpoint, getTusUploadHeaders } from "./tus-config";
 import { validateMediaFileBeforeUpload } from "./validation";
-import { uploadVideoThumbnail } from "./video-thumbnail";
-
-export { captureVideoThumbnailBlob, uploadVideoThumbnail, buildThumbnailStoragePath } from "./video-thumbnail";
 
 export interface UploadProgressUpdate {
   phase: UploadPhase;
   progress: number;
   bytesLoaded?: number;
   bytesTotal?: number;
+  /** True when a prior incomplete TUS upload is being resumed. */
+  resuming?: boolean;
 }
 
 export interface UploadMediaMetadata {
@@ -87,6 +89,12 @@ function uploadLogContext(
     filePath,
     ...extra,
   };
+}
+
+function binaryUploadProgressPct(bytesLoaded: number, bytesTotal: number): number {
+  if (bytesTotal <= 0) return 5;
+  // Reserve 90% of the bar for binary transfer; post-upload steps use 92–100.
+  return Math.min(90, Math.max(5, Math.round((bytesLoaded / bytesTotal) * 90)));
 }
 
 function binaryError(
@@ -262,7 +270,7 @@ function uploadViaSignedPut(
 
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable) {
-        const pct = Math.min(90, Math.round((e.loaded / e.total) * 90));
+        const pct = binaryUploadProgressPct(e.loaded, e.total);
         onProgress(pct, e.loaded, e.total);
         if (e.loaded >= e.total && !binaryCompleteFired) {
           binaryCompleteFired = true;
@@ -311,10 +319,10 @@ function uploadViaTus(
   filePath: string,
   mimeType: string,
   projectId: string | null,
-  onProgress: (pct: number, loaded: number, total: number) => void,
+  onProgress: (pct: number, loaded: number, total: number, resuming?: boolean) => void,
   onBinaryComplete: () => void,
   signal?: AbortSignal
-): Promise<void> {
+): Promise<{ resumed: boolean }> {
   return new Promise(async (resolve, reject) => {
     const supabase = createClient();
     const { data: sessionData } = await supabase.auth.getSession();
@@ -352,12 +360,22 @@ function uploadViaTus(
     let settled = false;
     let binaryCompleteFired = false;
     let waitLogInterval: ReturnType<typeof setInterval> | null = null;
+    let successFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    let resumed = false;
     const uploadStartedAt = Date.now();
 
-    const finish = (via: "onSuccess" | "onProgress") => {
+    const clearSuccessFallback = () => {
+      if (successFallbackTimer) {
+        clearTimeout(successFallbackTimer);
+        successFallbackTimer = null;
+      }
+    };
+
+    const finish = (via: "onSuccess" | "onProgress" | "success_fallback") => {
       if (settled) return;
       settled = true;
       if (waitLogInterval) clearInterval(waitLogInterval);
+      clearSuccessFallback();
       signal?.removeEventListener("abort", onAbort);
       logUploadTimeline("storage_upload_finished", `tus via=${via}`);
       logUploadStep("info", {
@@ -365,16 +383,17 @@ function uploadViaTus(
         ...uploadLogContext(file, mimeType, projectId, filePath),
         uploadMethod: "tus",
         bucket,
-        details: { via, elapsedMs: Date.now() - uploadStartedAt },
+        details: { via, elapsedMs: Date.now() - uploadStartedAt, resumed },
       });
       if (!binaryCompleteFired) onBinaryComplete();
-      resolve();
+      resolve({ resumed });
     };
 
     const fail = (error: unknown) => {
       if (settled) return;
       settled = true;
       if (waitLogInterval) clearInterval(waitLogInterval);
+      clearSuccessFallback();
       signal?.removeEventListener("abort", onAbort);
       const parsed = parseTusClientError(error);
       logUploadStep("error", {
@@ -400,7 +419,7 @@ function uploadViaTus(
 
     const upload = new tus.Upload(file, {
       endpoint,
-      retryDelays: [0, 1000, 3000, 5000, 10000, 20000],
+      retryDelays: [...TUS_RETRY_DELAYS_MS],
       chunkSize: UPLOAD_CHUNK_SIZE_BYTES,
       headers: tusHeaders,
       uploadDataDuringCreation: true,
@@ -413,16 +432,29 @@ function uploadViaTus(
       },
       onError: fail,
       onProgress: (bytesUploaded, bytesTotal) => {
-        const pct =
-          bytesTotal > 0 && bytesUploaded >= bytesTotal
-            ? 90
-            : Math.min(90, Math.round((bytesUploaded / bytesTotal) * 90));
-        onProgress(pct, bytesUploaded, bytesTotal);
+        const pct = binaryUploadProgressPct(bytesUploaded, bytesTotal);
+        onProgress(pct, bytesUploaded, bytesTotal, resumed);
 
         if (bytesTotal > 0 && bytesUploaded >= bytesTotal && !binaryCompleteFired) {
           binaryCompleteFired = true;
           onBinaryComplete();
           logUploadTimeline("storage_upload_bytes_complete", "awaiting TUS onSuccess");
+
+          successFallbackTimer = setTimeout(() => {
+            logUploadTimeline("tus_success_fallback");
+            logUploadStep("warn", {
+              step: "uploading_binary",
+              ...uploadLogContext(file, mimeType, projectId, filePath),
+              uploadMethod: "tus",
+              bucket,
+              details: {
+                waitingFor: "onSuccess",
+                elapsedMs: Date.now() - uploadStartedAt,
+                fallbackMs: TUS_SUCCESS_FALLBACK_MS,
+              },
+            });
+            finish("success_fallback");
+          }, TUS_SUCCESS_FALLBACK_MS);
 
           if (UPLOAD_DIAGNOSTIC_MODE) {
             waitLogInterval = setInterval(() => {
@@ -461,7 +493,9 @@ function uploadViaTus(
     try {
       const previous = await upload.findPreviousUploads();
       if (previous.length) {
+        resumed = true;
         logUploadTimeline("tus_resume_previous");
+        onProgress(5, 0, file.size, true);
         upload.resumeFromPreviousUpload(previous[0]);
       }
       upload.start();
@@ -524,7 +558,7 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
     }
     throw err;
   });
-  const useTus = mediaType === "video" || file.size > DIRECT_UPLOAD_THRESHOLD_BYTES;
+  const useTus = shouldUseTusUpload(file.size);
   logUploadTimeline("upload_method_selected", useTus ? "tus" : "signed_put");
 
   onProgress({ phase: "uploading", progress: 5, bytesLoaded: 0, bytesTotal: file.size });
@@ -553,13 +587,23 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
     });
   };
 
+  const binaryUploadStartedAt = Date.now();
+  let tusResumed = false;
+
   try {
-    const report = (pct: number, loaded: number, total: number) => {
-      onProgress({ phase: "uploading", progress: pct, bytesLoaded: loaded, bytesTotal: total });
+    const report = (pct: number, loaded: number, total: number, resuming?: boolean) => {
+      if (resuming) tusResumed = true;
+      onProgress({
+        phase: "uploading",
+        progress: pct,
+        bytesLoaded: loaded,
+        bytesTotal: total,
+        resuming: resuming ?? tusResumed,
+      });
     };
 
     if (useTus) {
-      await uploadViaTus(
+      const tusResult = await uploadViaTus(
         file,
         sign.bucket,
         sign.filePath,
@@ -569,6 +613,14 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
         onBinaryComplete,
         signal
       );
+      tusResumed = tusResult.resumed;
+      logUploadBinaryTiming({
+        fileName: file.name,
+        fileSize: file.size,
+        startedAtMs: binaryUploadStartedAt,
+        uploadMethod: "tus",
+        resumed: tusResumed,
+      });
     } else if (sign.signedUrl) {
       await uploadViaSignedPut(
         sign.signedUrl,
@@ -581,6 +633,12 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
         onBinaryComplete,
         signal
       );
+      logUploadBinaryTiming({
+        fileName: file.name,
+        fileSize: file.size,
+        startedAtMs: binaryUploadStartedAt,
+        uploadMethod: "signed_put",
+      });
     } else {
       throw binaryError("No upload URL returned from server.", {
         ...uploadLogContext(file, mimeType, projectId, sign.filePath),
@@ -607,36 +665,6 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
 
   if (!UPLOAD_DIAGNOSTIC_MODE) {
     await new Promise((r) => setTimeout(r, mediaType === "video" ? 800 : 200));
-  }
-
-  if (mediaType === "video") {
-    logUploadTimeline("thumbnail_attempted");
-    onProgress({
-      phase: "generating_thumbnail",
-      progress: 94,
-      bytesLoaded: file.size,
-      bytesTotal: file.size,
-    });
-    try {
-      const thumbnailPath = await uploadVideoThumbnail(sign.bucket, sign.filePath, file, {
-        fileName: file.name,
-        projectId,
-        filePath: sign.filePath,
-      });
-      if (thumbnailPath) {
-        pendingSave.thumbnailPath = thumbnailPath;
-        logUploadTimeline("thumbnail_succeeded");
-      } else {
-        logUploadTimeline("thumbnail_skipped");
-      }
-    } catch (thumbErr) {
-      logUploadTimeline("thumbnail_failed");
-      logUploadStep("warn", {
-        step: "generating_thumbnail",
-        ...uploadLogContext(file, mimeType, projectId, sign.filePath),
-        providerMessage: thumbErr instanceof Error ? thumbErr.message : String(thumbErr),
-      });
-    }
   }
 
   onProgress({ phase: "saving", progress: 96, bytesLoaded: file.size, bytesTotal: file.size });

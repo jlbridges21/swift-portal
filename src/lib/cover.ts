@@ -8,19 +8,27 @@ export type HeroMedia =
   | { type: "youtube"; embedUrl: string; posterUrl: string | null }
   | null;
 
+/** Poster/thumbnail URL for dashboard cards (always an image, never a video file). */
+export async function getProjectHeroPosterUrl(
+  supabase: SupabaseClient,
+  project: Pick<Project, "id" | "cover_image_id" | "cover_image_url">
+): Promise<string | null> {
+  const hero = await getProjectHeroMedia(supabase, project);
+  if (hero?.type === "image") return hero.url;
+  if (hero?.type === "youtube") return hero.posterUrl;
+  if (project.cover_image_url) return project.cover_image_url;
+  return firstProjectPhotoUrl(supabase, project.id);
+}
+
 /** @deprecated Use getProjectHeroMedia — returns image URL only for card thumbnails */
 export async function getProjectCoverUrl(
   supabase: SupabaseClient,
   project: Pick<Project, "id" | "cover_image_id" | "cover_image_url">
 ): Promise<string | null> {
-  const hero = await getProjectHeroMedia(supabase, project);
-  if (!hero) return null;
-  if (hero.type === "image") return hero.url;
-  if (hero.type === "youtube") return hero.posterUrl;
-  return hero.url;
+  return getProjectHeroPosterUrl(supabase, project);
 }
 
-async function signedMediaUrl(
+async function signedPhotoUrl(
   supabase: SupabaseClient,
   filePath: string
 ): Promise<string | null> {
@@ -28,6 +36,30 @@ async function signedMediaUrl(
     .from("project-media")
     .createSignedUrl(filePath, 3600);
   return data?.signedUrl ?? null;
+}
+
+async function firstProjectPhotoUrl(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<string | null> {
+  const { data: firstPhoto } = await supabase
+    .from("media_assets")
+    .select("file_path")
+    .eq("project_id", projectId)
+    .eq("media_type", "photo")
+    .order("display_order")
+    .limit(1)
+    .maybeSingle();
+
+  if (!firstPhoto?.file_path) return null;
+  return signedPhotoUrl(supabase, firstPhoto.file_path);
+}
+
+async function signedMediaUrl(
+  supabase: SupabaseClient,
+  filePath: string
+): Promise<string | null> {
+  return signedPhotoUrl(supabase, filePath);
 }
 
 async function heroFromAsset(
@@ -90,12 +122,4 @@ export async function getProjectHeroMedia(
   }
 
   return null;
-}
-
-/** Poster/thumbnail URL for dashboard cards (always an image) */
-export async function getProjectHeroPosterUrl(
-  supabase: SupabaseClient,
-  project: Pick<Project, "id" | "cover_image_id" | "cover_image_url">
-): Promise<string | null> {
-  return getProjectCoverUrl(supabase, project);
 }

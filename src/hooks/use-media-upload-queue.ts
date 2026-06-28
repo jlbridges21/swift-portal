@@ -63,12 +63,13 @@ export function useMediaUploadQueue(options?: {
         file,
         mediaType,
         metadata,
-        onProgress: ({ phase, progress, bytesLoaded, bytesTotal }) => {
+        onProgress: ({ phase, progress, bytesLoaded, bytesTotal, resuming }) => {
           patchUploadItem(uploadId, {
             phase,
             progress,
             bytesLoaded,
             bytesTotal,
+            resuming,
             status: phase === "failed" ? "error" : "uploading",
           });
         },
@@ -249,6 +250,7 @@ export function useMediaUploadQueue(options?: {
         error: undefined,
         technicalDetails: undefined,
         pendingSave: undefined,
+        resuming: undefined,
         startedAt: Date.now(),
       });
 

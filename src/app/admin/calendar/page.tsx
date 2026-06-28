@@ -57,10 +57,10 @@ export default async function AdminCalendarPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole="admin" />
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-6xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-8">
         <PageHeader
           title="Shoot Calendar"
-          description="Month, week, and agenda views — drag to reschedule or tap to edit"
+          description="Month, week, and agenda views — drag to reschedule on desktop, tap to edit"
         />
 
         {shoots.length === 0 ? (

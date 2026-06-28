@@ -42,7 +42,7 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
     {
       label: "New Requests",
       value: data.counts.newRequests,
-      href: "/admin/new-requests",
+      href: "/admin/projects?status=new_request",
       icon: Inbox,
       color: "text-blue-600 bg-blue-50",
     },
@@ -116,7 +116,7 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
         <DashboardSection
           title="New Requests"
           icon={Inbox}
-          href="/admin/new-requests"
+          href="/admin/projects?status=new_request"
           emptyMessage="No new requests — you're caught up"
           isEmpty={data.newRequests.length === 0}
         >

@@ -6,8 +6,15 @@ export const MAX_DOCUMENT_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
 /** TUS chunk size — Supabase recommends 6MB for resumable uploads. */
 export const UPLOAD_CHUNK_SIZE_BYTES = 6 * 1024 * 1024;
 
-/** Files above this size must use direct-to-storage (never Vercel API route). */
-export const DIRECT_UPLOAD_THRESHOLD_BYTES = 4 * 1024 * 1024;
+/** Files above this size use Supabase TUS resumable uploads. */
+export const DIRECT_UPLOAD_THRESHOLD_BYTES = 6 * 1024 * 1024;
+
+/** Supabase TUS retry schedule (ms). */
+export const TUS_RETRY_DELAYS_MS = [0, 3000, 5000, 10000, 20000] as const;
+
+export function shouldUseTusUpload(fileSize: number): boolean {
+  return fileSize > DIRECT_UPLOAD_THRESHOLD_BYTES;
+}
 
 export const ALLOWED_VIDEO_MIME_TYPES = [
   "video/mp4",

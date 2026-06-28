@@ -136,6 +136,7 @@ export function ProjectPageClient({
   })();
 
   async function getDownloadUrl(asset: MediaAsset, thumb = false): Promise<string | null> {
+    if (thumb && asset.media_type === "video") return null;
     try {
       const preview = !downloadsUnlocked && !thumb;
       const res = await fetch(
