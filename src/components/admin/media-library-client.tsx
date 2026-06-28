@@ -187,10 +187,21 @@ export function MediaLibraryClient({
 
   async function loadThumb(asset: LibraryAsset) {
     if (thumbUrls[asset.id] || !shouldFetchLibraryThumbnail(asset)) return;
+    await refreshThumbForAsset(asset.id);
+  }
+
+  async function refreshThumbForAsset(assetId: string) {
     try {
-      const res = await fetch(`/api/media/download/${asset.id}?thumb=1`, { credentials: "include" });
+      const res = await fetch(`/api/media/download/${assetId}?thumb=1`, {
+        credentials: "include",
+        cache: "no-store",
+      });
       const data = await res.json();
-      if (data.url && !data.mediaType) setThumbUrls((p) => ({ ...p, [asset.id]: data.url }));
+      if (data.url && !data.mediaType) {
+        const separator = String(data.url).includes("?") ? "&" : "?";
+        const bustedUrl = `${data.url}${separator}v=${Date.now()}`;
+        setThumbUrls((prev) => ({ ...prev, [assetId]: bustedUrl }));
+      }
     } catch {
       // ignore
     }
@@ -391,7 +402,10 @@ export function MediaLibraryClient({
             setAssets((prev) => prev.filter((a) => a.id !== drawerAsset.id));
             setDrawerAsset(null);
           }}
-          onPropertyLineSaved={async () => {
+          onPropertyLineSaved={async (savedAsset) => {
+            const savedId =
+              savedAsset && typeof savedAsset.id === "string" ? savedAsset.id : drawerAsset.id;
+
             const detailRes = await fetch(`/api/media/library/${drawerAsset.id}?kind=${drawerAsset.kind}`, {
               credentials: "include",
             });
@@ -403,6 +417,12 @@ export function MediaLibraryClient({
                 setDrawerAsset(updated);
               }
             }
+
+            await refreshThumbForAsset(savedId);
+            if (savedId !== drawerAsset.id) {
+              await refreshThumbForAsset(drawerAsset.id);
+            }
+
             void fetchPage(1, true);
           }}
         />
@@ -515,7 +535,7 @@ function AssetDrawer({
   onUpdate: (a: LibraryAsset) => void;
   onFavorite: () => void;
   onDeleted: () => void;
-  onPropertyLineSaved?: () => void;
+  onPropertyLineSaved?: (asset: Record<string, unknown>) => void;
 }) {
   const [detail, setDetail] = useState<{
     events: { id: string; event_type: string; description: string | null; created_at: string }[];
@@ -726,8 +746,8 @@ function AssetDrawer({
                   fileName={mediaDisplayName(asset)}
                   title={asset.title}
                   projectId={asset.project_id}
-                  onSaved={() => {
-                    onPropertyLineSaved?.();
+                  onSaved={(savedAsset) => {
+                    onPropertyLineSaved?.(savedAsset);
                   }}
                 />
               )}
