@@ -1,63 +1,106 @@
-import type { ProjectQuote, QuoteLineItem } from "@/lib/types";
+import type { ProjectQuote, QuoteLineItem, QuoteStatus } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
+
+export const ARCHIVED_QUOTE_NOTE = "Archived — superseded by a newer official proposal.";
 
 export function isPreliminaryQuote(quote: ProjectQuote): boolean {
   return quote.quote_kind === "preliminary" || quote.title.startsWith("Preliminary Estimate");
 }
 
-export function hasOfficialProposal(quotes: ProjectQuote[]): boolean {
-  return quotes.some((q) => !isPreliminaryQuote(q) && q.status !== "draft");
+export function isArchivedQuote(quote: ProjectQuote): boolean {
+  return /archived.*superseded|superseded by a newer/i.test(quote.notes ?? "");
 }
 
-function getQuoteRecency(quote: ProjectQuote): number {
-  const timestamps = [quote.sent_at, quote.approved_at, quote.created_at].filter(Boolean) as string[];
-  return Math.max(...timestamps.map((t) => new Date(t).getTime()));
+export function getQuoteRecencyTimestamp(quote: ProjectQuote): number {
+  const ts = quote.updated_at || quote.created_at;
+  return new Date(ts).getTime();
 }
 
-/** The single official proposal clients should see — always the newest non-draft official. */
-export function getClientOfficialQuote(quotes: ProjectQuote[]): ProjectQuote | null {
-  const officials = quotes.filter((q) => !isPreliminaryQuote(q) && q.status !== "draft");
-  if (!officials.length) return null;
-  return [...officials].sort((a, b) => getQuoteRecency(b) - getQuoteRecency(a))[0];
+export function sortQuotesByRecency(quotes: ProjectQuote[]): ProjectQuote[] {
+  return [...quotes].sort((a, b) => getQuoteRecencyTimestamp(b) - getQuoteRecencyTimestamp(a));
 }
 
-export function getPreliminaryQuote(quotes: ProjectQuote[]): ProjectQuote | null {
-  return quotes.find((q) => isPreliminaryQuote(q)) ?? null;
+/** Non-archived quotes, newest first. */
+export function getNonArchivedQuotes(quotes: ProjectQuote[]): ProjectQuote[] {
+  return sortQuotesByRecency(quotes.filter((q) => !isArchivedQuote(q)));
 }
 
-/** Admin workflow: prefer actionable quotes, then latest. */
-export function getMainOfficialQuote(quotes: ProjectQuote[], isAdmin: boolean): ProjectQuote | null {
-  const official = quotes.filter((q) => !isPreliminaryQuote(q));
-  const visible = isAdmin ? official : official.filter((q) => q.status !== "draft");
-
-  if (!isAdmin) {
-    return getClientOfficialQuote(quotes);
-  }
-
-  const changesRequested = visible.find((q) => q.status === "changes_requested");
-  if (changesRequested) return changesRequested;
-
-  const draft = visible.find((q) => q.status === "draft");
-  if (draft) return draft;
-
-  return getClientOfficialQuote(quotes);
-}
+const CLIENT_VISIBLE_OFFICIAL_STATUSES: QuoteStatus[] = ["sent", "approved", "changes_requested"];
 
 /**
- * Clients see exactly one proposal:
- * - Newest official proposal when one exists (replaces preliminary entirely)
- * - Otherwise the preliminary estimate
+ * Single active estimate/proposal for a project.
+ * Admin sees the newest non-archived quote (including drafts).
+ * Client sees the newest client-visible official, otherwise the preliminary.
  */
-export function getClientActiveQuote(
-  quotes: ProjectQuote[]
+export function getProjectActiveQuote(
+  quotes: ProjectQuote[],
+  audience: "admin" | "client"
 ): { quote: ProjectQuote; kind: "preliminary" | "official" } | null {
-  const official = getClientOfficialQuote(quotes);
-  if (official) return { quote: official, kind: "official" };
+  const active = getNonArchivedQuotes(quotes);
+  if (!active.length) return null;
 
-  const preliminary = getPreliminaryQuote(quotes);
+  if (audience === "admin") {
+    const latest = active[0];
+    return {
+      quote: latest,
+      kind: isPreliminaryQuote(latest) ? "preliminary" : "official",
+    };
+  }
+
+  const visibleOfficial = active.filter(
+    (q) => !isPreliminaryQuote(q) && CLIENT_VISIBLE_OFFICIAL_STATUSES.includes(q.status)
+  );
+  if (visibleOfficial.length) {
+    return { quote: visibleOfficial[0], kind: "official" };
+  }
+
+  const preliminary = active.find((q) => isPreliminaryQuote(q));
   if (preliminary) return { quote: preliminary, kind: "preliminary" };
 
   return null;
+}
+
+export function hasOfficialProposal(quotes: ProjectQuote[]): boolean {
+  return getNonArchivedQuotes(quotes).some(
+    (q) => !isPreliminaryQuote(q) && q.status !== "draft"
+  );
+}
+
+/** Newest non-archived official quote, or null. */
+export function getLatestOfficialQuote(quotes: ProjectQuote[]): ProjectQuote | null {
+  return getNonArchivedQuotes(quotes).find((q) => !isPreliminaryQuote(q)) ?? null;
+}
+
+/** Newest non-archived preliminary quote, or null. */
+export function getLatestPreliminaryQuote(quotes: ProjectQuote[]): ProjectQuote | null {
+  return getNonArchivedQuotes(quotes).find((q) => isPreliminaryQuote(q)) ?? null;
+}
+
+/** @deprecated Use getProjectActiveQuote or getLatestOfficialQuote */
+export function getClientOfficialQuote(quotes: ProjectQuote[]): ProjectQuote | null {
+  const active = getProjectActiveQuote(quotes, "client");
+  return active?.kind === "official" ? active.quote : getLatestOfficialQuote(quotes);
+}
+
+/** @deprecated Use getLatestPreliminaryQuote */
+export function getPreliminaryQuote(quotes: ProjectQuote[]): ProjectQuote | null {
+  return getLatestPreliminaryQuote(quotes);
+}
+
+/** @deprecated Use getProjectActiveQuote */
+export function getMainOfficialQuote(quotes: ProjectQuote[], isAdmin: boolean): ProjectQuote | null {
+  const active = getProjectActiveQuote(quotes, isAdmin ? "admin" : "client");
+  if (!active || active.kind === "preliminary") {
+    return isAdmin ? getLatestOfficialQuote(quotes) : null;
+  }
+  return active.quote;
+}
+
+/** @deprecated Use getProjectActiveQuote */
+export function getClientActiveQuote(
+  quotes: ProjectQuote[]
+): { quote: ProjectQuote; kind: "preliminary" | "official" } | null {
+  return getProjectActiveQuote(quotes, "client");
 }
 
 /** Server-side filter: clients only receive their single active proposal. */
@@ -65,7 +108,7 @@ export function getClientVisibleQuotes(
   quotes: ProjectQuote[],
   options?: { showPreliminaryToClients?: boolean }
 ): ProjectQuote[] {
-  const active = getClientActiveQuote(quotes);
+  const active = getProjectActiveQuote(quotes, "client");
   if (!active) return [];
   if (options?.showPreliminaryToClients === false && active.kind === "preliminary") {
     return [];

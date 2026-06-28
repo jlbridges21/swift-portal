@@ -7,6 +7,7 @@ import { setProjectStatus, setProjectStatusForward } from "@/lib/status-automati
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { portalLink, resolveMessageTemplate } from "@/lib/workflow";
+import { archivePreviousOfficialQuotes } from "@/lib/quote-archive";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -73,6 +74,8 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  await archivePreviousOfficialQuotes(supabase, project_id, quote.id);
+
   if (willSend) {
     await setProjectStatusForward({
       projectId: project_id,
@@ -132,15 +135,7 @@ export async function PATCH(request: Request) {
     const service = await createServiceClient();
     const appSettings = await getAppSettings();
 
-    if (appSettings.workflow.proposals.autoArchivePreviousVersions) {
-      await service
-        .from("project_quotes")
-        .update({ status: "draft", notes: "Archived — superseded by a newer official proposal." })
-        .eq("project_id", quote.project_id)
-        .eq("quote_kind", "official")
-        .neq("id", id)
-        .in("status", ["sent", "draft"]);
-    }
+    await archivePreviousOfficialQuotes(service, quote.project_id, id);
 
     const expiresAt =
       appSettings.workflow.proposals.autoSetExpiration
@@ -253,6 +248,8 @@ export async function PATCH(request: Request) {
     if (officialError) {
       return NextResponse.json({ error: officialError.message }, { status: 500 });
     }
+
+    await archivePreviousOfficialQuotes(service, quote.project_id, official.id);
 
     if (!requireReview) {
       await setProjectStatusForward({
@@ -425,6 +422,8 @@ export async function PATCH(request: Request) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    await archivePreviousOfficialQuotes(service, quote.project_id, newQuote.id);
 
     await logProjectActivity("quote_revised", `Draft revision created from "${quote.title}"`, {
       projectId: quote.project_id,

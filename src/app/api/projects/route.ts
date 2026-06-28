@@ -8,6 +8,7 @@ import { clientStatusNotification } from "@/lib/client-messages";
 import { notifyProjectClients } from "@/lib/notifications";
 import { defaultProjectTitle } from "@/lib/address";
 import { linkProjectToProperty } from "@/lib/properties";
+import { createPreliminaryEstimate, upsertPreliminaryEstimate } from "@/lib/preliminary-estimates";
 import type { NotificationEventKey } from "@/lib/app-settings";
 
 function clientEventKeyForStatus(status: string): NotificationEventKey | undefined {
@@ -29,7 +30,7 @@ function clientEventKeyForStatus(status: string): NotificationEventKey | undefin
 
 export async function POST(request: Request) {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
     const body = await request.json();
 
     if (!body.client_id || !body.property_address || !body.service_type) {
@@ -61,6 +62,11 @@ export async function POST(request: Request) {
     }
 
     await linkProjectToProperty(project.id, body.client_id, body.property_address);
+
+    await createPreliminaryEstimate(project.id, body.service_type, {
+      userId: profile.id,
+      skipIfExists: true,
+    });
 
     await logActivity("project_created", `Project "${project.project_name}" created`, {
       projectId: project.id,
@@ -145,6 +151,10 @@ export async function PATCH(request: Request) {
           .update({ proposed_at: `${updates.shoot_date}T09:00:00.000Z` })
           .eq("id", confirmed.id);
       }
+    }
+
+    if (updates.service_type && typeof updates.service_type === "string") {
+      await upsertPreliminaryEstimate(id, updates.service_type);
     }
 
     return NextResponse.json(data);

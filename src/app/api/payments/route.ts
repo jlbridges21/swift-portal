@@ -64,12 +64,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: insertError?.message || "Failed to create payment" }, { status: 500 });
     }
 
+    const productDescription =
+      typeof body.product_description === "string" && body.product_description.trim()
+        ? body.product_description.trim().slice(0, 500)
+        : undefined;
+
     const paymentLink = await getStripe().paymentLinks.create({
       line_items: [
         {
           price_data: {
             currency: "usd",
-            product_data: { name: body.description },
+            product_data: {
+              name: (body.description as string).slice(0, 250),
+              ...(productDescription ? { description: productDescription } : {}),
+            },
             unit_amount: body.amount,
           },
           quantity: 1,

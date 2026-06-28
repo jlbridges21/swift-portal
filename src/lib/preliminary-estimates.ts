@@ -4,6 +4,60 @@ import { notifyProjectClients } from "@/lib/notifications";
 import { buildPreliminaryEstimatePayload } from "@/lib/service-templates";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
 
+export async function upsertPreliminaryEstimate(
+  projectId: string,
+  serviceType: string,
+  options?: { userId?: string | null }
+) {
+  const appSettings = await getAppSettings();
+  if (!appSettings.proposals.autoPreliminaryEstimate) {
+    return null;
+  }
+
+  const supabase = await createServiceClient();
+  const payload = buildPreliminaryEstimatePayload(serviceType);
+  const expiresAt = addProposalExpiration(
+    new Date(),
+    appSettings.proposals.defaultEstimateExpirationDays
+  );
+
+  const { data: existing } = await supabase
+    .from("project_quotes")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("quote_kind", "preliminary")
+    .maybeSingle();
+
+  if (existing) {
+    const { data: updated, error } = await supabase
+      .from("project_quotes")
+      .update({
+        title: payload.title,
+        description: payload.description,
+        line_items: payload.line_items,
+        total_cents: payload.total_cents,
+        notes: payload.notes,
+        expires_at: expiresAt,
+        status: "sent",
+        sent_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[preliminary-estimate] failed to update:", error.message);
+      return null;
+    }
+    return updated;
+  }
+
+  return createPreliminaryEstimate(projectId, serviceType, {
+    userId: options?.userId,
+    skipIfExists: false,
+  });
+}
+
 export async function createPreliminaryEstimate(
   projectId: string,
   serviceType: string,

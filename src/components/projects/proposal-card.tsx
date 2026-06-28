@@ -113,7 +113,8 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
             (note) =>
               !/^starting at/i.test(note.trim()) &&
               note.trim() !== "Custom Proposal Required" &&
-              note.trim() !== "Custom Quote"
+              note.trim() !== "Custom Quote" &&
+              !/archived.*superseded|superseded by a newer/i.test(note.trim())
           );
         if (!filteredNotes.length) return null;
         return (

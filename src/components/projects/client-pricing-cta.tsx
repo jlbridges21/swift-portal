@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Payment, Project, ProjectQuote } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getClientActiveQuote, getQuotePriceDisplay } from "@/lib/quote-display";
+import { getProjectActiveQuote, getQuotePriceDisplay } from "@/lib/quote-display";
 import { isOutstandingPayment } from "@/components/projects/payments-section";
 import { formatCurrency } from "@/lib/utils";
 import { CheckCircle2, CreditCard, FileText } from "lucide-react";
@@ -16,7 +16,7 @@ interface ClientPricingCtaProps {
 }
 
 export function ClientPricingCta({ project, quotes, payments }: ClientPricingCtaProps) {
-  const active = getClientActiveQuote(quotes);
+  const active = getProjectActiveQuote(quotes, "client");
   const outstanding = payments.filter((p) => isOutstandingPayment(p.status));
   const allPaid = payments.length > 0 && payments.every((p) => p.status === "paid" || p.status === "cancelled");
   const hasPaid = payments.some((p) => p.status === "paid");

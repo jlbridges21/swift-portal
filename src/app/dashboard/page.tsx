@@ -23,7 +23,7 @@ import {
   ArrowRight, Calendar, CreditCard, MapPin, Sparkles, FileText, CheckCircle2,
 } from "lucide-react";
 import { formatShootDateTime, getProjectShootDateTime } from "@/lib/scheduling";
-import { getClientActiveQuote, getQuotePriceDisplay } from "@/lib/quote-display";
+import { getProjectActiveQuote, getQuotePriceDisplay } from "@/lib/quote-display";
 import type { Project, ShootProposal, ActivityLog, ProjectQuote } from "@/lib/types";
 
 export default async function ClientDashboard() {
@@ -66,7 +66,7 @@ export default async function ClientDashboard() {
 
   const pendingEstimates = activeProjects
     .map((p) => {
-      const active = getClientActiveQuote(quotesByProject.get(p.id) ?? []);
+      const active = getProjectActiveQuote(quotesByProject.get(p.id) ?? [], "client");
       if (!active || active.quote.status !== "sent") return null;
       return { project: p, quote: active.quote };
     })

@@ -12,11 +12,11 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { ProposalCard } from "@/components/projects/proposal-card";
 import type { Payment, ProjectQuote, QuoteLineItem } from "@/lib/types";
 import {
-  getClientActiveQuote,
-  getMainOfficialQuote,
-  getPreliminaryQuote,
+  getProjectActiveQuote,
+  getLatestPreliminaryQuote,
   hasOfficialProposal,
   isPreliminaryQuote,
+  ARCHIVED_QUOTE_NOTE,
 } from "@/lib/quote-display";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -36,6 +36,7 @@ interface QuoteSectionProps {
   clientId?: string;
   clientName?: string;
   projectName?: string;
+  serviceType?: string;
   payments?: Payment[];
   onPaymentCreated?: (payment: Payment) => void;
 }
@@ -57,6 +58,7 @@ export function QuoteSection({
   clientId,
   clientName,
   projectName,
+  serviceType,
   payments = [],
   onPaymentCreated,
 }: QuoteSectionProps) {
@@ -76,31 +78,18 @@ export function QuoteSection({
     setQuotes(initialQuotes);
   }, [initialQuotes]);
 
-  const preliminaryQuote = getPreliminaryQuote(quotes);
-  const mainOfficialQuote = getMainOfficialQuote(quotes, isAdmin);
-  const clientActive = !isAdmin ? getClientActiveQuote(quotes) : null;
-  const adminActiveQuote = isAdmin
-    ? mainOfficialQuote
-      ? { quote: mainOfficialQuote, kind: "official" as const }
-      : preliminaryQuote
-        ? { quote: preliminaryQuote, kind: "preliminary" as const }
-        : null
-    : null;
+  const activeDisplay = getProjectActiveQuote(quotes, isAdmin ? "admin" : "client");
+  const preliminaryQuote = getLatestPreliminaryQuote(quotes);
 
-  const activeDisplay = isAdmin ? adminActiveQuote : clientActive;
+  const changesRequestedQuote =
+    activeDisplay &&
+    !isPreliminaryQuote(activeDisplay.quote) &&
+    activeDisplay.quote.status === "changes_requested"
+      ? activeDisplay.quote
+      : null;
 
-  const changesRequestedQuote = quotes.find(
-    (q) => !isPreliminaryQuote(q) && q.status === "changes_requested"
-  );
-  const draftQuotes = quotes.filter((q) => !isPreliminaryQuote(q) && q.status === "draft");
-  const officialExists = hasOfficialProposal(quotes);
-  const historyQuotes = quotes.filter((q) => {
-    if (activeDisplay?.quote.id === q.id) return false;
-    if (draftQuotes.some((d) => d.id === q.id)) return false;
-    if (officialExists && isPreliminaryQuote(q)) return false;
-    return true;
-  });
-  const editingPreliminary = editingId && preliminaryQuote?.id === editingId;
+  const editingPreliminary =
+    editingId && activeDisplay?.kind === "preliminary" && activeDisplay.quote.id === editingId;
 
   function updateLineItem(index: number, field: keyof QuoteLineItem, value: string | number) {
     setForm((f) => {
@@ -141,7 +130,14 @@ export function QuoteSection({
     setLoading(false);
     if (res.ok) {
       const draft = await res.json();
-      setQuotes((prev) => [draft, ...prev]);
+      setQuotes((prev) => {
+        const archived = prev.map((q) =>
+          !isPreliminaryQuote(q) && q.id !== draft.id
+            ? { ...q, status: "draft" as const, notes: ARCHIVED_QUOTE_NOTE }
+            : q
+        );
+        return [draft, ...archived];
+      });
       openEditForm(draft);
       toast.success("Draft revision created — edit and send when ready");
       router.refresh();
@@ -217,7 +213,14 @@ export function QuoteSection({
     setLoading(false);
     if (res.ok) {
       const quote = await res.json();
-      setQuotes((prev) => [quote, ...prev]);
+      setQuotes((prev) => {
+        const archived = prev.map((q) =>
+          !isPreliminaryQuote(q) && q.id !== quote.id
+            ? { ...q, status: "draft" as const, notes: ARCHIVED_QUOTE_NOTE }
+            : q
+        );
+        return [quote, ...archived];
+      });
       if (send) onStatusChange?.("quote_sent");
       toast.success(send ? "Quote sent to client" : "Quote saved");
       setShowForm(false);
@@ -239,7 +242,14 @@ export function QuoteSection({
     setConverting(false);
     if (res.ok) {
       const official = await res.json();
-      setQuotes((prev) => [official, ...prev]);
+      setQuotes((prev) => {
+        const archived = prev.map((q) =>
+          !isPreliminaryQuote(q) && q.id !== official.id
+            ? { ...q, status: "draft" as const, notes: ARCHIVED_QUOTE_NOTE }
+            : q
+        );
+        return [official, ...archived];
+      });
       onStatusChange?.("quote_sent");
       toast.success("Official estimate created from preliminary quote");
       router.refresh();
@@ -272,7 +282,14 @@ export function QuoteSection({
     setConverting(false);
     if (res.ok) {
       const official = await res.json();
-      setQuotes((prev) => [official, ...prev]);
+      setQuotes((prev) => {
+        const archived = prev.map((q) =>
+          !isPreliminaryQuote(q) && q.id !== official.id
+            ? { ...q, status: "draft" as const, notes: ARCHIVED_QUOTE_NOTE }
+            : q
+        );
+        return [official, ...archived];
+      });
       onStatusChange?.("quote_sent");
       toast.success("Official proposal sent to client");
       setShowForm(false);
@@ -414,6 +431,7 @@ export function QuoteSection({
               clientId={clientId}
               projectName={projectName}
               clientName={clientName}
+              serviceType={serviceType}
               payments={payments}
               onPaymentCreated={onPaymentCreated}
             />
@@ -431,6 +449,7 @@ export function QuoteSection({
             clientId={clientId}
             projectName={projectName}
             clientName={clientName}
+            serviceType={serviceType}
             payments={payments}
             onPaymentCreated={onPaymentCreated}
           />
@@ -580,7 +599,7 @@ export function QuoteSection({
         </h2>
         {isAdmin && !showForm && (
           <Button variant="outline" size="sm" onClick={openCreateForm}>
-            {mainOfficialQuote ? "New Official Proposal" : "Create Official Proposal"}
+            {hasOfficialProposal(quotes) ? "New Official Proposal" : "Create Official Proposal"}
           </Button>
         )}
       </div>
@@ -688,57 +707,6 @@ export function QuoteSection({
           </>
         )}
 
-        {isAdmin && draftQuotes.length > 0 && !showForm && (
-          <Card className="border-dashed shadow-none">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold text-muted">Draft proposals</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {draftQuotes.map((d) => (
-                <div key={`draft-${d.id}`} className="flex items-center justify-between text-sm">
-                  <span>{d.title}</span>
-                  <Button variant="ghost" size="sm" onClick={() => openEditForm(d)}>Edit</Button>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {isAdmin && historyQuotes.length > 0 && (
-          <Card className="border-0 bg-transparent shadow-none">
-            <CardHeader className="px-0">
-              <CardTitle className="text-sm font-semibold text-slate-700">Proposal History</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 px-0">
-              {historyQuotes.map((q) => (
-                <div key={`history-${q.id}`} className="rounded-xl bg-slate-50/80 px-4 py-3 text-sm ring-1 ring-black/[0.04]">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-medium">{q.title}</span>
-                    <div className="flex items-center gap-2">
-                      {q.total_cents > 0 && (
-                        <span className="text-xs font-medium text-muted">{formatCurrency(q.total_cents)}</span>
-                      )}
-                      <Badge variant={q.status === "approved" ? "success" : q.status === "changes_requested" ? "warning" : "default"}>
-                        {isPreliminaryQuote(q) ? "preliminary" : q.status.replace("_", " ")}
-                      </Badge>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted mt-1">
-                    Created {new Date(q.created_at).toLocaleString()}
-                    {q.sent_at && ` · Sent ${new Date(q.sent_at).toLocaleString()}`}
-                    {q.approved_at && ` · Approved ${new Date(q.approved_at).toLocaleString()}`}
-                  </p>
-                  {q.changes_feedback && (
-                    <p className="text-xs text-amber-800 mt-2 bg-amber-50 rounded p-2">
-                      <strong>Client feedback:</strong> {q.changes_feedback}
-                    </p>
-                  )}
-                  {q.notes && <p className="text-xs text-muted mt-1"><strong>Notes:</strong> {q.notes}</p>}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
       </div>
     </section>
   );

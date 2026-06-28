@@ -798,6 +798,7 @@ export function AdminProjectDetail({
         clientId={initialProject.client_id}
         clientName={initialProject.clients?.full_name || initialProject.clients?.name || "Client"}
         projectName={initialProject.project_name}
+        serviceType={initialProject.service_type}
         payments={paymentList}
         onPaymentCreated={(payment) => setPaymentList((prev) => [payment, ...prev])}
         onStatusChange={(status) => setForm((f) => ({ ...f, status: status as Project["status"] }))}

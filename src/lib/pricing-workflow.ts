@@ -1,8 +1,8 @@
 import type { Payment, ProjectQuote } from "@/lib/types";
 import { isOutstandingPayment } from "@/components/projects/payments-section";
 import {
-  getMainOfficialQuote,
-  getPreliminaryQuote,
+  getLatestOfficialQuote,
+  getLatestPreliminaryQuote,
   getQuotePriceDisplay,
   hasOfficialProposal,
   isPreliminaryQuote,
@@ -24,7 +24,7 @@ export function preliminaryStepStatus(quote: ProjectQuote | null): WorkflowStepS
 }
 
 export function officialStepStatus(quotes: ProjectQuote[]): WorkflowStepStatus {
-  const official = getMainOfficialQuote(quotes, true);
+  const official = getLatestOfficialQuote(quotes);
   if (!official) {
     return hasOfficialProposal(quotes) ? "Sent" : "Not Started";
   }
@@ -74,8 +74,8 @@ export function paymentSummaryLabel(payments: Payment[]): string {
 
 export function getWorkflowQuotes(quotes: ProjectQuote[]) {
   return {
-    preliminary: getPreliminaryQuote(quotes),
-    official: getMainOfficialQuote(quotes, true),
+    preliminary: getLatestPreliminaryQuote(quotes),
+    official: getLatestOfficialQuote(quotes),
     officialExists: hasOfficialProposal(quotes),
   };
 }

@@ -10,6 +10,7 @@ import {
   canCreatePaymentFromQuote,
   getPaymentForQuote,
   paymentDescriptionForQuote,
+  paymentProductDescriptionForQuote,
 } from "@/lib/payment-quote";
 import { CreditCard, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ interface ProposalPaymentLinkActionsProps {
   clientId: string;
   projectName: string;
   clientName: string;
+  serviceType?: string;
   payments: Payment[];
   onPaymentCreated?: (payment: Payment) => void;
 }
@@ -30,6 +32,7 @@ export function ProposalPaymentLinkActions({
   clientId,
   projectName,
   clientName,
+  serviceType,
   payments,
   onPaymentCreated,
 }: ProposalPaymentLinkActionsProps) {
@@ -64,7 +67,12 @@ export function ProposalPaymentLinkActions({
           client_id: clientId,
           quote_id: quote.id,
           amount: quote.total_cents,
-          description: paymentDescriptionForQuote(quote, projectName),
+          description: paymentDescriptionForQuote(quote, projectName, serviceType),
+          product_description: paymentProductDescriptionForQuote(quote, {
+            clientName,
+            projectName,
+            serviceType,
+          }),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -135,6 +143,12 @@ export function ProposalPaymentLinkActions({
               <dt className="text-xs font-medium uppercase tracking-wide text-muted">Project</dt>
               <dd className="mt-0.5 text-primary">{projectName}</dd>
             </div>
+            {serviceType && (
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-muted">Service</dt>
+                <dd className="mt-0.5 text-primary">{serviceType}</dd>
+              </div>
+            )}
             <div>
               <dt className="text-xs font-medium uppercase tracking-wide text-muted">Amount</dt>
               <dd className="mt-0.5 text-lg font-bold text-primary">{formatCurrency(quote.total_cents)}</dd>
