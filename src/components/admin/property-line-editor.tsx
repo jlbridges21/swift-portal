@@ -5,17 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Minus, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
+  applyPinchStep,
   clientToNaturalPoint,
   computeFitDisplaySize,
-  computePinchPanZoom,
   findNearestPointIndex,
   naturalToDisplayPoint,
 } from "@/lib/property-line/coordinates";
 import type { ImagePoint } from "@/lib/property-line/types";
 import { savePropertyLineAsNewMedia } from "@/lib/property-line/save";
 
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 8;
+const MIN_ZOOM = 0.05;
+const MAX_ZOOM = 10;
 const TAP_MOVE_THRESHOLD_PX = 12;
 const DEFAULT_LINE_COLOR = "#FF2222";
 const DEFAULT_OVERLAY_OPACITY = 55;
@@ -82,18 +82,20 @@ export function PropertyLineEditor({
   } | null>(null);
 
   const pinchSession = useRef<{
-    startDistance: number;
-    startZoom: number;
-    startPanX: number;
-    startPanY: number;
-    startCenterX: number;
-    startCenterY: number;
+    lastDistance: number;
+    lastCenterX: number;
+    lastCenterY: number;
   } | null>(null);
 
   const activePointers = useRef(new Map<number, { x: number; y: number }>());
   const dragPointIndexRef = useRef<number | null>(null);
   const gestureGuardUntilRef = useRef(0);
   const hadMultiTouchRef = useRef(false);
+  const touchPinchActiveRef = useRef(false);
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+  const savingRef = useRef(false);
+  const layoutRef = useRef({ displayWidth: 0, displayHeight: 0 });
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -207,12 +209,25 @@ export function PropertyLineEditor({
   const displayWidth = fit.width;
   const displayHeight = fit.height;
 
+  useEffect(() => {
+    zoomRef.current = zoom;
+    panRef.current = pan;
+  }, [zoom, pan]);
+
+  useEffect(() => {
+    savingRef.current = saving;
+  }, [saving]);
+
+  useEffect(() => {
+    layoutRef.current = { displayWidth, displayHeight };
+  }, [displayWidth, displayHeight]);
+
   const getTransform = useCallback(() => {
     const rect = viewportRef.current?.getBoundingClientRect();
     return {
-      panX: pan.x,
-      panY: pan.y,
-      zoom,
+      panX: panRef.current.x,
+      panY: panRef.current.y,
+      zoom: zoomRef.current,
       displayWidth,
       displayHeight,
       naturalWidth: naturalSize.w,
@@ -220,7 +235,135 @@ export function PropertyLineEditor({
       viewportCenterX: rect ? rect.left + rect.width / 2 : 0,
       viewportCenterY: rect ? rect.top + rect.height / 2 : 0,
     };
-  }, [pan, zoom, displayWidth, displayHeight, naturalSize]);
+  }, [displayWidth, displayHeight, naturalSize]);
+
+  const applyViewTransform = useCallback((nextZoom: number, panX: number, panY: number) => {
+    zoomRef.current = nextZoom;
+    panRef.current = { x: panX, y: panY };
+    setZoom(nextZoom);
+    setPan({ x: panX, y: panY });
+  }, []);
+
+  const processPinchStep = useCallback(
+    (centerX: number, centerY: number, distance: number) => {
+      const session = pinchSession.current;
+      if (!session) return;
+
+      const rect = viewportRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const { displayWidth: dw, displayHeight: dh } = layoutRef.current;
+      const result = applyPinchStep({
+        prevDistance: session.lastDistance,
+        prevCenterX: session.lastCenterX,
+        prevCenterY: session.lastCenterY,
+        currentDistance: distance,
+        currentCenterX: centerX,
+        currentCenterY: centerY,
+        zoom: zoomRef.current,
+        panX: panRef.current.x,
+        panY: panRef.current.y,
+        displayWidth: dw,
+        displayHeight: dh,
+        viewportCenterX: rect.left + rect.width / 2,
+        viewportCenterY: rect.top + rect.height / 2,
+        minZoom: MIN_ZOOM,
+        maxZoom: MAX_ZOOM,
+      });
+
+      applyViewTransform(result.zoom, result.panX, result.panY);
+      setIsPanning(true);
+      session.lastDistance = distance;
+      session.lastCenterX = centerX;
+      session.lastCenterY = centerY;
+    },
+    [applyViewTransform]
+  );
+
+  const startPinchSessionAt = useCallback((centerX: number, centerY: number, distance: number) => {
+    pinchSession.current = {
+      lastDistance: distance,
+      lastCenterX: centerX,
+      lastCenterY: centerY,
+    };
+    hadMultiTouchRef.current = true;
+    panSession.current = null;
+    dragPointIndexRef.current = null;
+    setDraggingPointIndex(null);
+    setIsDraggingPoint(false);
+  }, []);
+
+  const pinchHandlersRef = useRef({ processPinchStep, startPinchSessionAt });
+
+  useEffect(() => {
+    pinchHandlersRef.current = { processPinchStep, startPinchSessionAt };
+  }, [processPinchStep, startPinchSessionAt]);
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+
+    const touchPairCentroid = (touches: TouchList) => ({
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    });
+
+    const touchPairDistance = (touches: TouchList) =>
+      Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (savingRef.current) return;
+      if (e.touches.length >= 2) {
+        e.preventDefault();
+        const center = touchPairCentroid(e.touches);
+        const dist = touchPairDistance(e.touches);
+        touchPinchActiveRef.current = true;
+        pinchHandlersRef.current.startPinchSessionAt(center.x, center.y, dist);
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (savingRef.current) return;
+      if (e.touches.length >= 2) {
+        e.preventDefault();
+        const center = touchPairCentroid(e.touches);
+        const dist = touchPairDistance(e.touches);
+        if (!pinchSession.current) {
+          touchPinchActiveRef.current = true;
+          pinchHandlersRef.current.startPinchSessionAt(center.x, center.y, dist);
+        }
+        pinchHandlersRef.current.processPinchStep(center.x, center.y, dist);
+      }
+    };
+
+    const endTouchPinch = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        pinchSession.current = null;
+        if (touchPinchActiveRef.current) {
+          touchPinchActiveRef.current = false;
+          gestureGuardUntilRef.current = Date.now() + PINCH_END_GUARD_MS;
+          hadMultiTouchRef.current = false;
+          setIsPanning(false);
+        }
+      }
+      if (e.touches.length === 0) {
+        panSession.current = null;
+        activePointers.current.clear();
+      }
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", endTouchPinch, { passive: false });
+    el.addEventListener("touchcancel", endTouchPinch, { passive: false });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", endTouchPinch);
+      el.removeEventListener("touchcancel", endTouchPinch);
+    };
+  }, []);
 
   const outsideOverlay = `rgba(0, 0, 0, ${overlayOpacity / 100})`;
   const strokeWidth = Math.max(3, displayWidth / 280);
@@ -250,9 +393,13 @@ export function PropertyLineEditor({
 
   const clampZoom = (value: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
 
-  const adjustZoom = useCallback((factor: number) => {
-    setZoom((z) => clampZoom(z * factor));
-  }, []);
+  const adjustZoom = useCallback(
+    (factor: number) => {
+      const nextZoom = clampZoom(zoomRef.current * factor);
+      applyViewTransform(nextZoom, panRef.current.x, panRef.current.y);
+    },
+    [applyViewTransform]
+  );
 
   const handleUndo = () => {
     setSaveError(null);
@@ -304,28 +451,20 @@ export function PropertyLineEditor({
     if (pts.length < 2) return;
 
     const center = pointerCentroid(pts);
-    pinchSession.current = {
-      startDistance: pointerDistance(pts[0], pts[1]),
-      startZoom: zoom,
-      startPanX: pan.x,
-      startPanY: pan.y,
-      startCenterX: center.x,
-      startCenterY: center.y,
-    };
-    hadMultiTouchRef.current = true;
-    panSession.current = null;
-    dragPointIndexRef.current = null;
-    setDraggingPointIndex(null);
-    setIsDraggingPoint(false);
+    startPinchSessionAt(center.x, center.y, pointerDistance(pts[0], pts[1]));
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (saving) return;
+    if (saving || touchPinchActiveRef.current) return;
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
-    if (activePointers.current.size === 2) {
+    if (activePointers.current.size === 2 && e.pointerType !== "touch") {
       beginPinchSession();
+      return;
+    }
+
+    if (e.pointerType === "touch" && activePointers.current.size >= 2) {
       return;
     }
 
@@ -345,14 +484,14 @@ export function PropertyLineEditor({
       pointerType: e.pointerType,
       startX: e.clientX,
       startY: e.clientY,
-      originPanX: pan.x,
-      originPanY: pan.y,
+      originPanX: panRef.current.x,
+      originPanY: panRef.current.y,
       moved: false,
     };
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (saving) return;
+    if (saving || touchPinchActiveRef.current) return;
     if (!activePointers.current.has(e.pointerId)) return;
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -361,39 +500,14 @@ export function PropertyLineEditor({
       return;
     }
 
-    if (activePointers.current.size >= 2) {
+    if (activePointers.current.size >= 2 && e.pointerType !== "touch") {
       if (!pinchSession.current) {
         beginPinchSession();
       }
 
-      const session = pinchSession.current;
-      if (session) {
-        const pts = [...activePointers.current.values()];
-        const center = pointerCentroid(pts);
-        const rect = viewportRef.current?.getBoundingClientRect();
-        const viewportCenterX = rect ? rect.left + rect.width / 2 : 0;
-        const viewportCenterY = rect ? rect.top + rect.height / 2 : 0;
-        const { zoom: newZoom, panX, panY } = computePinchPanZoom({
-          startDistance: session.startDistance,
-          startZoom: session.startZoom,
-          startPanX: session.startPanX,
-          startPanY: session.startPanY,
-          startCenterX: session.startCenterX,
-          startCenterY: session.startCenterY,
-          currentDistance: pointerDistance(pts[0], pts[1]),
-          currentCenterX: center.x,
-          currentCenterY: center.y,
-          displayWidth,
-          displayHeight,
-          viewportCenterX,
-          viewportCenterY,
-          minZoom: MIN_ZOOM,
-          maxZoom: MAX_ZOOM,
-        });
-        setZoom(newZoom);
-        setPan({ x: panX, y: panY });
-        setIsPanning(true);
-      }
+      const pts = [...activePointers.current.values()];
+      const center = pointerCentroid(pts);
+      processPinchStep(center.x, center.y, pointerDistance(pts[0], pts[1]));
       return;
     }
 
@@ -417,6 +531,11 @@ export function PropertyLineEditor({
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (touchPinchActiveRef.current) {
+      activePointers.current.delete(e.pointerId);
+      return;
+    }
+
     const wasMultiTouch = hadMultiTouchRef.current;
     activePointers.current.delete(e.pointerId);
 
@@ -454,7 +573,8 @@ export function PropertyLineEditor({
       const dx = e.clientX - session.startX;
       const dy = e.clientY - session.startY;
       const moved = session.moved || Math.hypot(dx, dy) > TAP_MOVE_THRESHOLD_PX;
-      const gestureBlocked = wasMultiTouch || Date.now() < gestureGuardUntilRef.current;
+      const gestureBlocked =
+        wasMultiTouch || touchPinchActiveRef.current || Date.now() < gestureGuardUntilRef.current;
 
       if (!moved && !finished && !gestureBlocked && activePointers.current.size === 0) {
         addPointAt(e.clientX, e.clientY);
@@ -517,7 +637,7 @@ export function PropertyLineEditor({
 
   return (
     <div
-      className="fixed inset-0 z-[300] flex flex-col bg-slate-950 text-white touch-none"
+      className="fixed inset-0 z-[300] flex flex-col bg-slate-950 text-white"
       style={{
         paddingTop: "env(safe-area-inset-top, 0px)",
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
@@ -543,12 +663,12 @@ export function PropertyLineEditor({
       <div
         ref={viewportRef}
         className={cn(
-          "relative min-h-0 flex-1 overflow-hidden bg-black touch-none",
+          "relative min-h-0 flex-1 overflow-hidden bg-black",
           isPanning || isDraggingPoint
             ? "cursor-grabbing"
             : hoveredPointIndex !== null
               ? "cursor-grab"
-              : zoom > 1
+              : zoom !== 1
                 ? "cursor-grab"
                 : "cursor-crosshair"
         )}
@@ -706,10 +826,12 @@ export function PropertyLineEditor({
           </Button>
         </div>
 
-        {zoom > 1 && (
-          <p className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-black/60 px-2 py-1 text-xs text-white/80">
-            <span className="hidden md:inline">Drag to pan · Scroll to zoom</span>
-            <span className="md:hidden">Pinch to zoom · Two fingers to pan</span>
+        <p className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-black/60 px-2 py-1 text-xs text-white/80 md:hidden">
+          Pinch to zoom · Two fingers to pan
+        </p>
+        {zoom !== 1 && (
+          <p className="pointer-events-none absolute bottom-3 left-3 hidden rounded-md bg-black/60 px-2 py-1 text-xs text-white/80 md:block">
+            Drag to pan · Scroll to zoom
           </p>
         )}
       </div>

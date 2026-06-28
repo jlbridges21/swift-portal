@@ -110,7 +110,55 @@ export function naturalToDisplayPoint(
   };
 }
 
-/** Compute pan/zoom from a two-finger pinch gesture anchored to the pinch midpoint. */
+/** Apply one incremental pinch/pan step from the previous finger sample. */
+export function applyPinchStep(options: {
+  prevDistance: number;
+  prevCenterX: number;
+  prevCenterY: number;
+  currentDistance: number;
+  currentCenterX: number;
+  currentCenterY: number;
+  zoom: number;
+  panX: number;
+  panY: number;
+  displayWidth: number;
+  displayHeight: number;
+  viewportCenterX: number;
+  viewportCenterY: number;
+  minZoom: number;
+  maxZoom: number;
+}): { zoom: number; panX: number; panY: number } {
+  const {
+    prevDistance,
+    prevCenterX,
+    prevCenterY,
+    currentDistance,
+    currentCenterX,
+    currentCenterY,
+    zoom,
+    panX,
+    panY,
+    displayWidth,
+    displayHeight,
+    viewportCenterX,
+    viewportCenterY,
+    minZoom,
+    maxZoom,
+  } = options;
+
+  const scale = prevDistance > 0 ? currentDistance / prevDistance : 1;
+  const nextZoom = Math.min(maxZoom, Math.max(minZoom, zoom * scale));
+
+  const localX = (prevCenterX - viewportCenterX - panX) / zoom + displayWidth / 2;
+  const localY = (prevCenterY - viewportCenterY - panY) / zoom + displayHeight / 2;
+
+  const nextPanX = currentCenterX - viewportCenterX - (localX - displayWidth / 2) * nextZoom;
+  const nextPanY = currentCenterY - viewportCenterY - (localY - displayHeight / 2) * nextZoom;
+
+  return { zoom: nextZoom, panX: nextPanX, panY: nextPanY };
+}
+
+/** @deprecated Use applyPinchStep for incremental gesture updates. */
 export function computePinchPanZoom(options: {
   startDistance: number;
   startZoom: number;
