@@ -1,4 +1,5 @@
-import type { ActivityLog } from "@/lib/types";
+import type { ActivityLog, NotificationType } from "@/lib/types";
+import type { NotificationEventKey } from "@/lib/app-settings";
 
 /** Activity types logged from Resend webhooks — admin only. */
 export const EMAIL_ANALYTICS_ACTIVITY_TYPES = new Set<string>([
@@ -138,4 +139,84 @@ export function formatCommunicationDateTime(iso: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/** Reusable notification payloads for consistent titles, bodies, and links. */
+export interface NotificationEventPayload {
+  type: NotificationType;
+  title: string;
+  body?: string;
+  link?: string;
+  projectId?: string;
+  eventKey?: NotificationEventKey;
+}
+
+export function quoteSentEvent(projectId: string, projectName: string): NotificationEventPayload {
+  return {
+    type: "quote_sent",
+    title: `Estimate ready — ${projectName}`,
+    body: "Your official estimate is ready for review.",
+    link: `/dashboard/projects/${projectId}#quote`,
+    projectId,
+    eventKey: "official_proposal_sent",
+  };
+}
+
+export function quoteApprovedEvent(projectId: string, projectName: string): NotificationEventPayload {
+  return {
+    type: "proposal_approved",
+    title: `Estimate approved — ${projectName}`,
+    body: "The client approved the official estimate.",
+    link: `/admin/projects/${projectId}#quote`,
+    projectId,
+    eventKey: "proposal_approved",
+  };
+}
+
+export function paymentReceivedEvent(
+  projectId: string,
+  projectName: string,
+  amountLabel: string
+): NotificationEventPayload {
+  return {
+    type: "payment_received",
+    title: `Payment received — ${projectName}`,
+    body: `${amountLabel} payment confirmed.`,
+    link: `/admin/projects/${projectId}#payments`,
+    projectId,
+    eventKey: "payment_received",
+  };
+}
+
+export function paymentRequestedEvent(projectId: string, projectName: string): NotificationEventPayload {
+  return {
+    type: "invoice_available",
+    title: `Invoice ready — ${projectName}`,
+    body: "Your payment link is ready.",
+    link: `/dashboard/projects/${projectId}#payments`,
+    projectId,
+    eventKey: "payment_link_sent",
+  };
+}
+
+export function mediaUploadedEvent(projectId: string, projectName: string, mediaLabel: string): NotificationEventPayload {
+  return {
+    type: "deliverables_uploaded",
+    title: `New media — ${projectName}`,
+    body: `${mediaLabel} have been added to your project.`,
+    link: `/dashboard/projects/${projectId}#photo-gallery`,
+    projectId,
+    eventKey: "deliverables_ready",
+  };
+}
+
+export function shootConfirmedEvent(projectId: string, projectName: string, shootLabel: string): NotificationEventPayload {
+  return {
+    type: "shoot_proposed",
+    title: `Shoot confirmed — ${projectName}`,
+    body: shootLabel,
+    link: `/dashboard/projects/${projectId}#scheduling`,
+    projectId,
+    eventKey: "shoot_time_confirmed",
+  };
 }

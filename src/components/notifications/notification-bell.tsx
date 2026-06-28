@@ -1,11 +1,21 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Bell } from "lucide-react";
+import {
+  Bell,
+  CreditCard,
+  FileText,
+  Calendar,
+  Camera,
+  MessageSquare,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, formatRelativeTime } from "@/lib/utils";
 import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
+import type { LucideIcon } from "lucide-react";
 
 interface NotificationItem {
   id: string;
@@ -20,6 +30,35 @@ interface NotificationItem {
 
 const PWA_NAV_HEIGHT = 72;
 
+const NOTIFICATION_ICONS: Record<string, LucideIcon> = {
+  quote_sent: FileText,
+  proposal_submitted: FileText,
+  proposal_approved: CheckCircle,
+  proposal_changes: AlertCircle,
+  invoice_available: CreditCard,
+  payment_received: CreditCard,
+  payment_confirmed: CreditCard,
+  shoot_proposed: Calendar,
+  schedule_change_requested: Calendar,
+  deliverables_uploaded: Camera,
+  revision_requested: MessageSquare,
+  status_changed: Bell,
+};
+
+function getNotificationIcon(type: string): LucideIcon {
+  return NOTIFICATION_ICONS[type] ?? Bell;
+}
+
+function groupLabel(iso: string): string {
+  const date = new Date(iso);
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) return "Today";
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+}
+
 export function NotificationBell() {
   const router = useRouter();
   const isPwaMobile = useIsStandalonePwaMobile();
@@ -32,6 +71,16 @@ export function NotificationBell() {
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read_at).length;
+
+  const grouped = useMemo(() => {
+    const groups = new Map<string, NotificationItem[]>();
+    for (const n of notifications) {
+      const label = groupLabel(n.created_at);
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label)!.push(n);
+    }
+    return Array.from(groups.entries());
+  }, [notifications]);
 
   async function fetchNotifications() {
     setLoading(true);
@@ -183,30 +232,59 @@ export function NotificationBell() {
             style={
               useFixedPanel
                 ? undefined
-                : { maxHeight: "min(20rem, calc(100dvh - 8rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)))" }
+                : {
+                    maxHeight:
+                      "min(20rem, calc(100dvh - 8rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)))",
+                  }
             }
           >
             {loading && notifications.length === 0 ? (
-              <p className="text-sm text-muted text-center py-8">Loading...</p>
+              <p className="text-sm text-muted text-center py-8">Loading…</p>
             ) : notifications.length === 0 ? (
-              <p className="text-sm text-muted text-center py-8">No notifications yet</p>
+              <div className="py-10 text-center">
+                <Bell className="mx-auto h-8 w-8 text-muted/50" />
+                <p className="mt-3 text-sm text-muted">You&apos;re all caught up</p>
+              </div>
             ) : (
-              notifications.map((n) => (
-                <button
-                  key={`notif-${n.id}`}
-                  type="button"
-                  onClick={() => handleNotificationClick(n)}
-                  className={cn(
-                    "w-full text-left px-4 py-3 border-b border-border last:border-0 hover:bg-slate-50 transition-colors",
-                    !n.read_at && "bg-sky-50/50"
-                  )}
-                >
-                  <p className="text-sm font-medium text-foreground">{n.title}</p>
-                  {n.body && <p className="text-xs text-muted mt-0.5 line-clamp-2">{n.body}</p>}
-                  <p className="text-[10px] text-muted mt-1">
-                    {new Date(n.created_at).toLocaleString()}
+              grouped.map(([label, items]) => (
+                <div key={label}>
+                  <p className="sticky top-0 z-10 bg-slate-50/95 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted backdrop-blur-sm">
+                    {label}
                   </p>
-                </button>
+                  {items.map((n) => {
+                    const Icon = getNotificationIcon(n.type);
+                    return (
+                      <button
+                        key={`notif-${n.id}`}
+                        type="button"
+                        onClick={() => handleNotificationClick(n)}
+                        className={cn(
+                          "flex w-full gap-3 text-left px-4 py-3 border-b border-border last:border-0 hover:bg-slate-50 transition-colors min-h-11",
+                          !n.read_at && "bg-sky-50/60"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+                            !n.read_at ? "bg-accent/10 text-accent" : "bg-slate-100 text-muted"
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-foreground leading-snug">{n.title}</p>
+                          {n.body && (
+                            <p className="text-xs text-muted mt-0.5 line-clamp-2">{n.body}</p>
+                          )}
+                          <p className="text-[10px] text-muted mt-1">{formatRelativeTime(n.created_at)}</p>
+                        </div>
+                        {!n.read_at && (
+                          <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               ))
             )}
           </div>

@@ -8,6 +8,7 @@ import { isOutstandingPayment } from "@/components/projects/payments-section";
 import { useMarkPaymentPaid } from "@/lib/use-mark-payment-paid";
 import { cn } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface AdminPaymentActionsProps {
   payment: Payment & { projects?: { project_name?: string } | null };
@@ -74,11 +75,24 @@ export function AdminPaymentActions({
           </Button>
         )}
         {link && payment.status !== "paid" && (
-          <a href={link} target="_blank" rel="noopener noreferrer">
-            <Button variant="outline" size="sm" className="min-h-11">
-              Open Payment Link
+          <>
+            <a href={link} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" size="sm" className="min-h-11">
+                Open Payment Link
+              </Button>
+            </a>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="min-h-11"
+              onClick={() => {
+                navigator.clipboard.writeText(link);
+                toast.success("Payment link copied");
+              }}
+            >
+              Copy Link
             </Button>
-          </a>
+          </>
         )}
         {showDelete && onDeleted && (
           <Button variant="ghost" size="sm" className="text-red-500" onClick={() => onDeleted(payment.id)} aria-label="Delete payment">

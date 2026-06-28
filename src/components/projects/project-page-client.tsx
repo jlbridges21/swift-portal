@@ -122,6 +122,19 @@ export function ProjectPageClient({
   const hasMedia = photos.length > 0 || videos.length > 0 || tours.length > 0 || documents.length > 0;
   const isClientView = !isPreview && !isAdmin;
 
+  const paymentStatus = (() => {
+    if (!isClientView && !isPreview) return undefined;
+    const outstanding = pendingPayments.length;
+    const allPaid = payments.length > 0 && payments.every((p) => p.status === "paid" || p.status === "cancelled");
+    if (outstanding > 0) {
+      return { label: "Payment due", variant: "warning" as const };
+    }
+    if (allPaid && payments.length > 0) {
+      return { label: "Paid in full", variant: "success" as const };
+    }
+    return undefined;
+  })();
+
   async function getDownloadUrl(asset: MediaAsset, thumb = false): Promise<string | null> {
     try {
       const preview = !downloadsUnlocked && !thumb;
@@ -205,6 +218,7 @@ export function ProjectPageClient({
         status={project.status}
         audience={isAdmin ? "admin" : "client"}
         microsite={isClientView || isPreview}
+        paymentStatus={paymentStatus}
       >
         {(isClientView || isPreview) && (
           <ProjectQuickActions

@@ -5,6 +5,7 @@ import type { ActivityLog } from "@/lib/types";
 import { getActivityDisplay, getClientActivityDisplay } from "@/lib/activity-display";
 import { Button } from "@/components/ui/button";
 import { usePaginatedActivities } from "@/lib/use-paginated-activities";
+import { formatRelativeTime } from "@/lib/utils";
 
 interface ActivityFeedProps {
   logs: (ActivityLog & { projects?: { id: string; project_name: string } | null })[];
@@ -26,8 +27,10 @@ export function ActivityFeed({ logs, projectLinkPrefix = "/admin/projects", clie
           ? getClientActivityDisplay(log.activity_type, log.description)
           : getActivityDisplay(log.activity_type, log.description);
         return (
-          <div key={`activity-${log.id}`} className="flex min-w-0 items-start gap-3 text-sm">
-            <span className="mt-0.5 shrink-0 text-base leading-none">{icon}</span>
+          <div key={`activity-${log.id}`} className="flex min-w-0 items-start gap-3 text-sm rounded-lg p-2 -mx-2 hover:bg-slate-50/80 transition-colors">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base leading-none">
+              {icon}
+            </span>
             <div className="min-w-0 flex-1 overflow-hidden">
               <p className="break-words whitespace-normal leading-snug text-foreground">
                 {description}
@@ -44,7 +47,7 @@ export function ActivityFeed({ logs, projectLinkPrefix = "/admin/projects", clie
                 )}
               </p>
               <p className="mt-0.5 text-xs text-muted break-words whitespace-normal">
-                {new Date(log.created_at).toLocaleString()}
+                {formatRelativeTime(log.created_at)}
               </p>
             </div>
           </div>

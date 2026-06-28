@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { ProposalCard } from "@/components/projects/proposal-card";
-import type { ProjectQuote, QuoteLineItem } from "@/lib/types";
+import type { Payment, ProjectQuote, QuoteLineItem } from "@/lib/types";
 import {
   getClientActiveQuote,
   getMainOfficialQuote,
@@ -24,6 +24,7 @@ import {
   Copy, Pencil, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ProposalPaymentLinkActions } from "@/components/admin/proposal-payment-link-actions";
 
 interface QuoteSectionProps {
   projectId: string;
@@ -31,6 +32,12 @@ interface QuoteSectionProps {
   isAdmin: boolean;
   allowClientProposalChanges?: boolean;
   onStatusChange?: (status: string) => void;
+  /** Admin-only: for one-click payment link from proposal */
+  clientId?: string;
+  clientName?: string;
+  projectName?: string;
+  payments?: Payment[];
+  onPaymentCreated?: (payment: Payment) => void;
 }
 
 const emptyForm = {
@@ -47,6 +54,11 @@ export function QuoteSection({
   isAdmin,
   allowClientProposalChanges = true,
   onStatusChange,
+  clientId,
+  clientName,
+  projectName,
+  payments = [],
+  onPaymentCreated,
 }: QuoteSectionProps) {
   const router = useRouter();
   const [quotes, setQuotes] = useState(initialQuotes);
@@ -391,13 +403,40 @@ export function QuoteSection({
 
     if (quote.status !== "approved") {
       return (
-        <Button variant="outline" size="sm" disabled={loading} onClick={() => duplicateQuote(quote)}>
-          <Copy className="h-4 w-4" /> Duplicate & Revise
-        </Button>
+        <>
+          <Button variant="outline" size="sm" disabled={loading} onClick={() => duplicateQuote(quote)}>
+            <Copy className="h-4 w-4" /> Duplicate & Revise
+          </Button>
+          {clientId && clientName && projectName && (
+            <ProposalPaymentLinkActions
+              quote={quote}
+              projectId={projectId}
+              clientId={clientId}
+              projectName={projectName}
+              clientName={clientName}
+              payments={payments}
+              onPaymentCreated={onPaymentCreated}
+            />
+          )}
+        </>
       );
     }
 
-    return null;
+    return (
+      <>
+        {clientId && clientName && projectName && (
+          <ProposalPaymentLinkActions
+            quote={quote}
+            projectId={projectId}
+            clientId={clientId}
+            projectName={projectName}
+            clientName={clientName}
+            payments={payments}
+            onPaymentCreated={onPaymentCreated}
+          />
+        )}
+      </>
+    );
   }
 
   function renderClientActions(quote: ProjectQuote) {

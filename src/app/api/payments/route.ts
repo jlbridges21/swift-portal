@@ -28,6 +28,18 @@ export async function POST(request: Request) {
           return d.toISOString().split("T")[0];
         })();
 
+    if (body.quote_id) {
+      const { data: existingForQuote } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("quote_id", body.quote_id)
+        .maybeSingle();
+
+      if (existingForQuote) {
+        return NextResponse.json(existingForQuote);
+      }
+    }
+
     const { data: project } = await supabase
       .from("projects")
       .select("project_name")
@@ -39,6 +51,7 @@ export async function POST(request: Request) {
       .insert({
         project_id: body.project_id,
         client_id: body.client_id,
+        quote_id: body.quote_id || null,
         amount: body.amount,
         description: body.description,
         due_date: dueDate,
@@ -67,6 +80,7 @@ export async function POST(request: Request) {
         payment_id: paymentRow.id,
         client_id: body.client_id,
         project_name: project?.project_name || "",
+        ...(body.quote_id ? { quote_id: body.quote_id } : {}),
       },
       after_completion: {
         type: "redirect",

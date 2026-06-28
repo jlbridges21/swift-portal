@@ -5,16 +5,22 @@ import Image from "next/image";
 import { ChevronLeft, ChevronRight, Download, ZoomIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SafeAreaCloseButton } from "@/components/ui/safe-area-close-button";
+import { MediaThumbnailSkeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { MediaAsset } from "@/lib/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
+import { Images } from "lucide-react";
+
+/** Consistent responsive grid for photo galleries */
+export const PHOTO_GRID_CLASS =
+  "grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 sm:gap-4";
 
 interface PhotoGalleryProps {
   photos: MediaAsset[];
   getDownloadUrl: (asset: MediaAsset, thumb?: boolean) => Promise<string | null>;
   downloadsAllowed?: boolean;
-  /** When set, only show this many photos until expanded (default: show all). */
   compactInitialCount?: number;
 }
 
@@ -28,14 +34,22 @@ export function PhotoGallery({
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   const [fullUrls, setFullUrls] = useState<Record<string, string>>({});
   const [loadErrors, setLoadErrors] = useState<Record<string, boolean>>({});
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
   async function loadThumb(asset: MediaAsset) {
-    if (thumbUrls[asset.id] || loadErrors[asset.id]) return;
+    if (thumbUrls[asset.id] || loadErrors[asset.id] || loadingIds.has(asset.id)) return;
+    setLoadingIds((prev) => new Set(prev).add(asset.id));
     try {
       const url = await getDownloadUrl(asset, true);
       if (url) setThumbUrls((prev) => ({ ...prev, [asset.id]: url }));
     } catch {
       setLoadErrors((prev) => ({ ...prev, [asset.id]: true }));
+    } finally {
+      setLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(asset.id);
+        return next;
+      });
     }
   }
 
@@ -55,28 +69,29 @@ export function PhotoGallery({
 
   if (photos.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border bg-slate-50 py-16 text-center">
-        <p className="text-sm text-muted">Photos will appear here once your shoot is complete.</p>
-      </div>
+      <EmptyState
+        icon={Images}
+        title="No photos yet"
+        description="Your photo gallery will appear here once your shoot is complete."
+      />
     );
   }
 
-  const grid = (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 sm:gap-3">
-      {photos.map((photo, index) => (
-        <PhotoThumbnail
-          key={`gallery-${photo.project_id}-${photo.id}-${index}`}
-          photo={photo}
-          thumbUrl={thumbUrls[photo.id]}
-          failed={loadErrors[photo.id]}
-          onLoadThumb={() => loadThumb(photo)}
-          onClick={async () => {
-            const url = await loadFull(photo);
-            if (url) setLightboxIndex(index);
-          }}
-        />
-      ))}
-    </div>
+  const renderThumbnail = (photo: MediaAsset, index: number, className?: string) => (
+    <PhotoThumbnail
+      key={`gallery-${photo.project_id}-${photo.id}-${index}`}
+      photo={photo}
+      thumbUrl={thumbUrls[photo.id]}
+      failed={loadErrors[photo.id]}
+      loading={loadingIds.has(photo.id) && !thumbUrls[photo.id]}
+      onLoadThumb={() => loadThumb(photo)}
+      onClick={async () => {
+        const url = await loadFull(photo);
+        if (url) setLightboxIndex(index);
+      }}
+      downloadsAllowed={downloadsAllowed}
+      className={className}
+    />
   );
 
   return (
@@ -87,25 +102,14 @@ export function PhotoGallery({
           initialCount={compactInitialCount}
           labelSingular="photo"
           labelPlural="photos"
-          listClassName="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 sm:gap-3"
+          listClassName={PHOTO_GRID_CLASS}
           viewAllLabel={(n) => `View all ${n} photos`}
-          renderItem={(photo, index) => (
-            <PhotoThumbnail
-              key={`compact-${photo.id}`}
-              photo={photo}
-              thumbUrl={thumbUrls[photo.id]}
-              failed={loadErrors[photo.id]}
-              onLoadThumb={() => loadThumb(photo)}
-              onClick={async () => {
-                const url = await loadFull(photo);
-                if (url) setLightboxIndex(index);
-              }}
-              className="w-full"
-            />
-          )}
+          renderItem={(photo, index) => renderThumbnail(photo, index, "w-full")}
         />
       ) : (
-        grid
+        <div className={PHOTO_GRID_CLASS}>
+          {photos.map((photo, index) => renderThumbnail(photo, index))}
+        </div>
       )}
 
       {lightboxIndex !== null && (
@@ -126,25 +130,54 @@ export function PhotoGallery({
 }
 
 function PhotoThumbnail({
-  photo, thumbUrl, failed, onLoadThumb, onClick, className,
+  photo,
+  thumbUrl,
+  failed,
+  loading,
+  onLoadThumb,
+  onClick,
+  downloadsAllowed,
+  className,
 }: {
   photo: MediaAsset;
   thumbUrl?: string;
   failed?: boolean;
+  loading?: boolean;
   onLoadThumb: () => void;
   onClick: () => void;
+  downloadsAllowed?: boolean;
   className?: string;
 }) {
+  const ref = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) onLoadThumb();
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [onLoadThumb]);
+
   return (
     <button
+      ref={ref}
       type="button"
       onMouseEnter={onLoadThumb}
       onFocus={onLoadThumb}
-      onClick={() => { onLoadThumb(); onClick(); }}
+      onClick={() => {
+        onLoadThumb();
+        onClick();
+      }}
       className={cn(
-        "group relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100 shadow-sm ring-1 ring-black/5 transition-all hover:shadow-lg hover:ring-accent/30",
+        "group relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100 shadow-sm ring-1 ring-black/5 transition-all hover:shadow-lg hover:ring-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
         className
       )}
+      aria-label={`View ${photo.title || photo.file_name}`}
     >
       {thumbUrl ? (
         <>
@@ -152,29 +185,40 @@ function PhotoThumbnail({
             src={thumbUrl}
             alt={photo.alt_text || photo.title || photo.file_name}
             fill
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-            sizes="(max-width: 640px) 50vw, 25vw"
+            className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+            sizes="(max-width: 640px) 50vw, 33vw"
             loading="lazy"
           />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/20 group-hover:opacity-100">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/25 group-hover:opacity-100 group-focus-visible:bg-black/25 group-focus-visible:opacity-100">
             <ZoomIn className="h-8 w-8 text-white drop-shadow-lg" />
           </div>
+          {downloadsAllowed && (
+            <div className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <Download className="h-3.5 w-3.5" aria-hidden />
+            </div>
+          )}
         </>
       ) : failed ? (
         <div className="flex h-full items-center justify-center px-2 text-center text-xs text-muted">
           Preview unavailable
         </div>
-      ) : (
-        <div className="flex h-full items-center justify-center text-xs text-muted animate-pulse">
-          Loading…
-        </div>
-      )}
+      ) : loading || !thumbUrl ? (
+        <MediaThumbnailSkeleton className="h-full w-full rounded-xl" />
+      ) : null}
     </button>
   );
 }
 
 function PhotoLightbox({
-  photos, currentIndex, thumbUrls, fullUrls, loadFull, loadThumb, onClose, onNavigate, downloadsAllowed = true,
+  photos,
+  currentIndex,
+  thumbUrls,
+  fullUrls,
+  loadFull,
+  loadThumb,
+  onClose,
+  onNavigate,
+  downloadsAllowed = true,
 }: {
   photos: MediaAsset[];
   currentIndex: number;
@@ -216,7 +260,9 @@ function PhotoLightbox({
       setUrl(fullUrls[p.id]);
     } else {
       setUrl(undefined);
-      loadFull(p).then((u) => { if (u) setUrl(u); });
+      loadFull(p).then((u) => {
+        if (u) setUrl(u);
+      });
     }
   }, [currentIndex, photos, fullUrls, loadFull]);
 
@@ -330,7 +376,9 @@ function PhotoLightbox({
           {url ? (
             <Image src={url} alt={photo.alt_text || photo.file_name} fill className="object-contain" sizes="100vw" priority />
           ) : (
-            <div className="flex h-full items-center justify-center text-white/60">Loading…</div>
+            <div className="flex h-full items-center justify-center">
+              <MediaThumbnailSkeleton className="h-48 w-64 rounded-xl bg-white/10" />
+            </div>
           )}
         </div>
       </div>
@@ -356,7 +404,9 @@ function PhotoLightbox({
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-4 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
-        <span className="text-sm text-white/70">{currentIndex + 1} / {photos.length}</span>
+        <span className="text-sm text-white/70">
+          {currentIndex + 1} / {photos.length}
+        </span>
         {!downloadsAllowed && <span className="text-xs text-white/50">Preview only</span>}
         {downloadsAllowed && url && (
           <Button

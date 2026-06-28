@@ -20,10 +20,11 @@ import { normalizeStatus } from "@/lib/constants";
 import { redirect } from "next/navigation";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
-  ArrowRight, Calendar, CreditCard, MapPin, Sparkles,
+  ArrowRight, Calendar, CreditCard, MapPin, Sparkles, FileText, CheckCircle2,
 } from "lucide-react";
 import { formatShootDateTime, getProjectShootDateTime } from "@/lib/scheduling";
-import type { Project, ShootProposal, ActivityLog } from "@/lib/types";
+import { getClientActiveQuote, getQuotePriceDisplay } from "@/lib/quote-display";
+import type { Project, ShootProposal, ActivityLog, ProjectQuote } from "@/lib/types";
 
 export default async function ClientDashboard() {
   const profile = await getProfile();
@@ -35,7 +36,7 @@ export default async function ClientDashboard() {
   const brand = getPortalBrandFromSettings(appSettings);
   const firstName = profile.full_name?.split(" ")[0] || "there";
 
-  const [{ data: projects }, { data: payments }, { data: activities }, { data: shootProposals }] = await Promise.all([
+  const [{ data: projects }, { data: payments }, { data: activities }, { data: shootProposals }, { data: allQuotes }] = await Promise.all([
     supabase.from("projects").select("*").order("updated_at", { ascending: false }),
     supabase.from("payments").select("*, projects(project_name)").order("created_at", { ascending: false }),
     supabase
@@ -44,6 +45,7 @@ export default async function ClientDashboard() {
       .order("created_at", { ascending: false })
       .limit(15),
     supabase.from("shoot_proposals").select("*").in("status", ["confirmed", "pending"]),
+    supabase.from("project_quotes").select("*").in("status", ["sent", "approved"]).order("updated_at", { ascending: false }),
   ]);
 
   const proposalsByProject = new Map<string, ShootProposal[]>();
@@ -55,6 +57,20 @@ export default async function ClientDashboard() {
   const activeProjects = (projects ?? []).filter((p) => normalizeStatus(p.status) !== "delivered");
   const deliveredProjects = (projects ?? []).filter((p) => normalizeStatus(p.status) === "delivered");
   const outstandingInvoices = (payments ?? []).filter((p) => p.status === "pending" || p.status === "sent");
+
+  const quotesByProject = new Map<string, ProjectQuote[]>();
+  (allQuotes ?? []).forEach((q) => {
+    if (!quotesByProject.has(q.project_id)) quotesByProject.set(q.project_id, []);
+    quotesByProject.get(q.project_id)!.push(q as ProjectQuote);
+  });
+
+  const pendingEstimates = activeProjects
+    .map((p) => {
+      const active = getClientActiveQuote(quotesByProject.get(p.id) ?? []);
+      if (!active || active.quote.status !== "sent") return null;
+      return { project: p, quote: active.quote };
+    })
+    .filter(Boolean) as { project: Project; quote: ProjectQuote }[];
 
   const featured = activeProjects[0] as Project | undefined;
   const otherActive = activeProjects.slice(1);
@@ -208,26 +224,63 @@ export default async function ClientDashboard() {
         )}
 
         <div className="grid gap-10 lg:grid-cols-3">
-          <section className="lg:col-span-2">
-            <h2 className="text-lg font-semibold text-primary mb-4">Recent Activity</h2>
-            <Card className="shadow-sm">
-              <CardContent className="p-6">
-                <ActivityFeed
-                  logs={filterClientVisibleActivities((activities ?? []) as (ActivityLog & { projects?: { id: string; project_name: string } | null })[])}
-                  projectLinkPrefix="/dashboard/projects"
-                  clientMode
-                />
-              </CardContent>
-            </Card>
+          <section className="lg:col-span-2 space-y-10">
+            {pendingEstimates.length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-accent" />
+                  Estimates Awaiting Approval
+                </h2>
+                <div className="space-y-3">
+                  {pendingEstimates.map(({ project, quote }) => {
+                    const price = getQuotePriceDisplay(quote);
+                    return (
+                      <Link key={`estimate-${quote.id}`} href={`/dashboard/projects/${project.id}#quote`}>
+                        <Card className="border-amber-200/80 shadow-sm hover:shadow-md transition-shadow">
+                          <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                              <p className="font-medium text-primary">{project.project_name}</p>
+                              <p className="text-sm text-muted mt-0.5">{quote.title}</p>
+                              {price.showPrice && (
+                                <p className="text-lg font-bold text-primary mt-1">{formatCurrency(price.priceCents)}</p>
+                              )}
+                            </div>
+                            <Button variant="accent" size="sm" className="min-h-11 shrink-0 w-full sm:w-auto">
+                              Review Estimate <ArrowRight className="h-4 w-4" />
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <h2 className="text-lg font-semibold text-primary mb-4">Recent Activity</h2>
+              <Card className="shadow-sm border-0 ring-1 ring-black/5">
+                <CardContent className="p-6">
+                  <ActivityFeed
+                    logs={filterClientVisibleActivities((activities ?? []) as (ActivityLog & { projects?: { id: string; project_name: string } | null })[])}
+                    projectLinkPrefix="/dashboard/projects"
+                    clientMode
+                  />
+                </CardContent>
+              </Card>
+            </div>
           </section>
 
           <div className="space-y-8">
             {outstandingInvoices.length > 0 && (
               <section>
-                <h2 className="text-lg font-semibold text-primary mb-4">Outstanding Payments</h2>
+                <h2 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-orange-600" />
+                  Outstanding Payments
+                </h2>
                 <div className="space-y-3">
                   {outstandingInvoices.map((payment) => (
-                    <Card key={`payment-${payment.id}`} className="border-orange-200 shadow-sm">
+                    <Card key={`payment-${payment.id}`} className="border-orange-200/80 shadow-sm">
                       <CardContent className="p-4">
                         <p className="text-xl font-bold text-primary">{formatCurrency(payment.amount)}</p>
                         <p className="text-sm text-muted mt-1">{payment.description}</p>
@@ -238,13 +291,27 @@ export default async function ClientDashboard() {
                         )}
                         {payment.stripe_payment_link_url && (
                           <a href={payment.stripe_payment_link_url} target="_blank" rel="noopener noreferrer" className="mt-3 block">
-                            <Button variant="accent" size="sm" className="w-full">Pay Now</Button>
+                            <Button variant="accent" size="sm" className="w-full min-h-11">Pay Now</Button>
                           </a>
                         )}
                       </CardContent>
                     </Card>
                   ))}
                 </div>
+              </section>
+            )}
+
+            {outstandingInvoices.length === 0 && payments?.some((p) => p.status === "paid") && (
+              <section>
+                <Card className="border-emerald-200/80 bg-emerald-50/50 shadow-sm">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <CheckCircle2 className="h-8 w-8 text-emerald-600 shrink-0" />
+                    <div>
+                      <p className="font-medium text-emerald-900">All caught up</p>
+                      <p className="text-sm text-emerald-700/80">No outstanding payments</p>
+                    </div>
+                  </CardContent>
+                </Card>
               </section>
             )}
 

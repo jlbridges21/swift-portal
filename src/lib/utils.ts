@@ -42,3 +42,26 @@ export function getPublicUrl(
 export function getSignedUrlPath(bucket: string, projectId: string, fileName: string): string {
   return `${projectId}/${fileName}`;
 }
+
+/** Human-friendly relative time, e.g. "2h ago", "Yesterday", "Mar 4". */
+export function formatRelativeTime(iso: string | Date): string {
+  const date = typeof iso === "string" ? new Date(iso) : iso;
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHr / 24);
+
+  if (diffSec < 60) return "Just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDay === 1) return "Yesterday";
+  if (diffDay < 7) return `${diffDay}d ago`;
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
+  }).format(date);
+}

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Play } from "lucide-react";
+import { Play, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MediaThumbnailSkeleton } from "@/components/ui/skeleton";
 import type { MediaAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -77,16 +78,21 @@ export function VideoPlayer({
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [posterLoading, setPosterLoading] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setPosterLoading(true);
       const url = await getDownloadUrl(video);
       if (!url || cancelled) return;
       setStreamUrl(url);
       const poster = await captureVideoPoster(url);
-      if (!cancelled && poster) setPosterUrl(poster);
+      if (!cancelled) {
+        if (poster) setPosterUrl(poster);
+        setPosterLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
@@ -126,30 +132,33 @@ export function VideoPlayer({
             type="button"
             onClick={startPlayback}
             disabled={loading}
-            className="group relative flex h-full w-full items-center justify-center"
+            className="group relative flex h-full w-full items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             aria-label={`Play ${video.file_name}`}
           >
-            {posterUrl ? (
+            {posterLoading && !posterUrl ? (
+              <MediaThumbnailSkeleton className="absolute inset-0 h-full w-full rounded-none" />
+            ) : posterUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={posterUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-950" />
             )}
-            <div className="absolute inset-0 bg-black/25 transition group-hover:bg-black/35" />
-            <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-white/95 shadow-lg transition group-hover:scale-105">
+            <div className="absolute inset-0 bg-black/20 transition group-hover:bg-black/35" />
+            <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-white/95 shadow-xl ring-4 ring-white/20 transition group-hover:scale-105">
               {loading ? (
                 <span className="text-xs font-medium text-slate-600">Loading…</span>
               ) : (
-                <Play className="ml-1 h-7 w-7 text-slate-900" fill="currentColor" />
+                <Play className="ml-1 h-8 w-8 text-slate-900" fill="currentColor" />
               )}
             </div>
           </button>
         )}
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-3">
-        <p className="truncate text-sm text-muted">{video.file_name}</p>
+        <p className="truncate text-sm font-medium text-primary">{video.title || video.file_name}</p>
         {downloadsAllowed && onDownload && (
-          <Button variant="outline" size="sm" className="min-h-11 shrink-0" onClick={onDownload}>
+          <Button variant="outline" size="sm" className="min-h-11 shrink-0 gap-1.5" onClick={onDownload}>
+            <Download className="h-3.5 w-3.5" />
             Download
           </Button>
         )}

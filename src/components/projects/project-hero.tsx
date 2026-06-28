@@ -5,6 +5,8 @@ import type { HeroMedia } from "@/lib/cover";
 import { CoverPlaceholder } from "@/components/projects/cover-placeholder";
 import { StatusBadge } from "@/components/ui/badge";
 import type { ReactNode } from "react";
+import { MapPin, CreditCard } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface ProjectHeroProps {
   hero: HeroMedia;
@@ -16,6 +18,8 @@ interface ProjectHeroProps {
   compact?: boolean;
   audience?: "admin" | "client";
   microsite?: boolean;
+  /** Optional payment status label shown beside project status */
+  paymentStatus?: { label: string; variant: "default" | "success" | "warning" | "danger" };
 }
 
 export function ProjectHero({
@@ -28,10 +32,11 @@ export function ProjectHero({
   compact,
   audience = "client",
   microsite = false,
+  paymentStatus,
 }: ProjectHeroProps) {
   const isMicrosite = microsite && audience === "client";
-  const padding = compact ? "py-12" : isMicrosite ? "py-20 sm:py-28" : "py-16";
-  const minHeight = isMicrosite ? "min-h-[420px] sm:min-h-[520px]" : "min-h-[200px]";
+  const padding = compact ? "py-12 sm:py-14" : isMicrosite ? "py-20 sm:py-28" : "py-16 sm:py-20";
+  const minHeight = isMicrosite ? "min-h-[420px] sm:min-h-[520px]" : "min-h-[240px] sm:min-h-[280px]";
 
   const title = isMicrosite ? propertyAddress : projectName;
   const subtitle = isMicrosite ? serviceType : propertyAddress;
@@ -86,12 +91,20 @@ export function ProjectHero({
             Swift Aerial Media
           </p>
         )}
-        <StatusBadge status={status} audience={audience} className="mb-4" />
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <StatusBadge status={status} audience={audience} />
+          {paymentStatus && (
+            <Badge variant={paymentStatus.variant}>
+              <CreditCard className="mr-1 inline h-3 w-3" />
+              {paymentStatus.label}
+            </Badge>
+          )}
+        </div>
         <h1
           className={`font-bold tracking-tight text-white break-words ${
             isMicrosite
-              ? "text-3xl sm:text-4xl lg:text-5xl leading-tight max-w-4xl"
-              : "text-3xl sm:text-4xl"
+              ? "text-3xl sm:text-4xl lg:text-[2.75rem] leading-tight max-w-4xl"
+              : "text-3xl sm:text-4xl lg:text-5xl leading-tight"
           }`}
         >
           {title}
@@ -100,11 +113,12 @@ export function ProjectHero({
           <p
             className={`mt-3 break-words ${
               isMicrosite
-                ? "text-lg sm:text-xl text-slate-300 font-medium max-w-3xl"
-                : "flex items-center gap-2 text-slate-300"
+                ? "text-lg sm:text-xl text-slate-300 font-medium max-w-3xl leading-relaxed"
+                : "flex items-start gap-2 text-base sm:text-lg text-slate-300 leading-relaxed max-w-3xl"
             }`}
           >
-            {subtitle}
+            {!isMicrosite && <MapPin className="mt-1 h-4 w-4 shrink-0 opacity-80" />}
+            <span>{subtitle}</span>
           </p>
         )}
         {isMicrosite && projectName !== propertyAddress && (
