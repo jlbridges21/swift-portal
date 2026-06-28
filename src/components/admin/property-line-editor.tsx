@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   clientToNaturalPoint,
   computeFitDisplaySize,
+  findNearestPointIndex,
   naturalToDisplayPoint,
 } from "@/lib/property-line/coordinates";
 import type { ImagePoint } from "@/lib/property-line/types";
@@ -15,9 +16,19 @@ import { savePropertyLineAsNewMedia } from "@/lib/property-line/save";
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 8;
 const TAP_MOVE_THRESHOLD_PX = 12;
-const PROPERTY_LINE_COLOR = "#FF2222";
-const OUTSIDE_OVERLAY = "rgba(0, 0, 0, 0.55)";
+const DEFAULT_LINE_COLOR = "#FF2222";
+const DEFAULT_OVERLAY_OPACITY = 55;
+const POINT_HIT_RADIUS_PX = 22;
 const IMAGE_LOAD_TIMEOUT_MS = 10_000;
+
+const LINE_COLOR_PRESETS = [
+  { label: "Red", value: "#FF2222" },
+  { label: "Blue", value: "#2266FF" },
+  { label: "Yellow", value: "#FFCC00" },
+  { label: "White", value: "#FFFFFF" },
+  { label: "Black", value: "#111111" },
+  { label: "Green", value: "#22AA44" },
+] as const;
 
 export interface PropertyLineEditorProps {
   imageUrl: string;
@@ -46,6 +57,11 @@ export function PropertyLineEditor({
 
   const [points, setPoints] = useState<ImagePoint[]>([]);
   const [finished, setFinished] = useState(false);
+  const [lineColor, setLineColor] = useState(DEFAULT_LINE_COLOR);
+  const [overlayOpacity, setOverlayOpacity] = useState(DEFAULT_OVERLAY_OPACITY);
+  const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
+  const [draggingPointIndex, setDraggingPointIndex] = useState<number | null>(null);
+  const [isDraggingPoint, setIsDraggingPoint] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -72,6 +88,7 @@ export function PropertyLineEditor({
   } | null>(null);
 
   const activePointers = useRef(new Map<number, { x: number; y: number }>());
+  const dragPointIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -200,6 +217,10 @@ export function PropertyLineEditor({
     };
   }, [pan, zoom, displayWidth, displayHeight, naturalSize]);
 
+  const outsideOverlay = `rgba(0, 0, 0, ${overlayOpacity / 100})`;
+  const strokeWidth = Math.max(3, displayWidth / 280);
+  const pointRadius = Math.max(8, displayWidth / 100);
+
   const displayPoints = useMemo(
     () =>
       points.map((p) =>
@@ -248,13 +269,22 @@ export function PropertyLineEditor({
 
   const addPointAt = (clientX: number, clientY: number) => {
     if (finished) return;
-    const transform = getTransform();
-    const natural = clientToNaturalPoint(clientX, clientY, transform);
+    const natural = clientToNaturalPoint(clientX, clientY, getTransform());
     if (!natural) return;
     setPoints((prev) => [...prev, natural]);
     setSaveError(null);
     setStatusMessage(null);
   };
+
+  const movePointAt = (index: number, clientX: number, clientY: number) => {
+    const natural = clientToNaturalPoint(clientX, clientY, getTransform());
+    if (!natural) return;
+    setPoints((prev) => prev.map((p, i) => (i === index ? natural : p)));
+    setSaveError(null);
+  };
+
+  const hitTestPoint = (clientX: number, clientY: number) =>
+    findNearestPointIndex(clientX, clientY, getTransform(), points, POINT_HIT_RADIUS_PX);
 
   const pointerDistance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
     Math.hypot(a.x - b.x, a.y - b.y);
@@ -279,6 +309,17 @@ export function PropertyLineEditor({
       return;
     }
 
+    if (finished && points.length > 0) {
+      const pointIndex = hitTestPoint(e.clientX, e.clientY);
+      if (pointIndex !== null) {
+        dragPointIndexRef.current = pointIndex;
+        setDraggingPointIndex(pointIndex);
+        setIsDraggingPoint(true);
+        panSession.current = null;
+        return;
+      }
+    }
+
     panSession.current = {
       pointerId: e.pointerId,
       startX: e.clientX,
@@ -293,6 +334,11 @@ export function PropertyLineEditor({
     if (saving) return;
     if (!activePointers.current.has(e.pointerId)) return;
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (dragPointIndexRef.current !== null) {
+      movePointAt(dragPointIndexRef.current, e.clientX, e.clientY);
+      return;
+    }
 
     if (activePointers.current.size >= 2 && pinchSession.current) {
       const pts = [...activePointers.current.values()];
@@ -312,12 +358,29 @@ export function PropertyLineEditor({
       session.moved = true;
       setIsPanning(true);
       setPan({ x: session.originPanX + dx, y: session.originPanY + dy });
+      return;
+    }
+
+    if (finished && dragPointIndexRef.current === null && !session.moved) {
+      setHoveredPointIndex(hitTestPoint(e.clientX, e.clientY));
     }
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
     activePointers.current.delete(e.pointerId);
     pinchSession.current = activePointers.current.size >= 2 ? pinchSession.current : null;
+
+    if (dragPointIndexRef.current !== null) {
+      dragPointIndexRef.current = null;
+      setDraggingPointIndex(null);
+      setIsDraggingPoint(false);
+      panSession.current = null;
+      if (activePointers.current.size === 0) {
+        setIsPanning(false);
+        pinchSession.current = null;
+      }
+      return;
+    }
 
     const session = panSession.current;
     if (session?.pointerId === e.pointerId) {
@@ -335,6 +398,12 @@ export function PropertyLineEditor({
     if (activePointers.current.size === 0) {
       setIsPanning(false);
       pinchSession.current = null;
+    }
+  };
+
+  const onPointerLeave = () => {
+    if (!isDraggingPoint) {
+      setHoveredPointIndex(null);
     }
   };
 
@@ -356,6 +425,8 @@ export function PropertyLineEditor({
         projectId,
         sourceFileName: fileName,
         sourceTitle: title,
+        lineColor,
+        overlayAlpha: overlayOpacity / 100,
         onProgress: setStatusMessage,
       });
       onSaved?.(asset);
@@ -401,12 +472,19 @@ export function PropertyLineEditor({
         ref={viewportRef}
         className={cn(
           "relative min-h-0 flex-1 overflow-hidden bg-black",
-          isPanning ? "cursor-grabbing" : zoom > 1 ? "cursor-grab" : "cursor-crosshair"
+          isPanning || isDraggingPoint
+            ? "cursor-grabbing"
+            : hoveredPointIndex !== null
+              ? "cursor-grab"
+              : zoom > 1
+                ? "cursor-grab"
+                : "cursor-crosshair"
         )}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onPointerLeave={onPointerLeave}
         onWheel={onWheel}
       >
         {!imageLoaded && !loadError && (
@@ -480,7 +558,7 @@ export function PropertyLineEditor({
                     <rect
                       width="100%"
                       height="100%"
-                      fill={OUTSIDE_OVERLAY}
+                      fill={outsideOverlay}
                       mask="url(#property-line-outside-mask)"
                     />
                   </>
@@ -490,8 +568,8 @@ export function PropertyLineEditor({
                   <polyline
                     points={finished ? polygonPoints : polylinePoints}
                     fill="none"
-                    stroke={PROPERTY_LINE_COLOR}
-                    strokeWidth={Math.max(3, displayWidth / 280)}
+                    stroke={lineColor}
+                    strokeWidth={strokeWidth}
                     strokeLinejoin="round"
                     strokeLinecap="round"
                   />
@@ -501,8 +579,8 @@ export function PropertyLineEditor({
                   <polygon
                     points={polygonPoints}
                     fill="none"
-                    stroke={PROPERTY_LINE_COLOR}
-                    strokeWidth={Math.max(3, displayWidth / 280)}
+                    stroke={lineColor}
+                    strokeWidth={strokeWidth}
                     strokeLinejoin="round"
                   />
                 )}
@@ -512,10 +590,10 @@ export function PropertyLineEditor({
                     key={`pt-${i}`}
                     cx={p.x}
                     cy={p.y}
-                    r={Math.max(5, displayWidth / 120)}
-                    fill={PROPERTY_LINE_COLOR}
-                    stroke="#ffffff"
-                    strokeWidth={1.5}
+                    r={pointRadius}
+                    fill={lineColor}
+                    stroke={hoveredPointIndex === i || draggingPointIndex === i ? "#ffffff" : "#ffffffcc"}
+                    strokeWidth={hoveredPointIndex === i || draggingPointIndex === i ? 2.5 : 1.5}
                   />
                 ))}
             </svg>
@@ -569,6 +647,65 @@ export function PropertyLineEditor({
           </p>
         )}
 
+        <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-3">
+          <div>
+            <p className="mb-2 text-xs font-medium text-white/70">Line Color</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {LINE_COLOR_PRESETS.map((preset) => (
+                <button
+                  key={preset.value}
+                  type="button"
+                  title={preset.label}
+                  aria-label={`${preset.label} line color`}
+                  disabled={saving}
+                  onClick={() => setLineColor(preset.value)}
+                  className={cn(
+                    "h-9 w-9 shrink-0 rounded-full border-2 transition touch-manipulation",
+                    lineColor === preset.value ? "border-white scale-110" : "border-white/20 hover:border-white/50"
+                  )}
+                  style={{ backgroundColor: preset.value }}
+                />
+              ))}
+              <label className="relative flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-white/20 hover:border-white/50 touch-manipulation">
+                <span className="sr-only">Custom color</span>
+                <input
+                  type="color"
+                  value={lineColor}
+                  disabled={saving}
+                  onChange={(e) => setLineColor(e.target.value)}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                />
+                <span
+                  className="h-full w-full rounded-full"
+                  style={{
+                    background: `conic-gradient(red, yellow, lime, aqua, blue, magenta, red)`,
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <label htmlFor="property-line-dim" className="text-xs font-medium text-white/70">
+                Background Dim
+              </label>
+              <span className="text-xs tabular-nums text-white/50">{overlayOpacity}%</span>
+            </div>
+            <input
+              id="property-line-dim"
+              type="range"
+              min={0}
+              max={85}
+              step={1}
+              value={overlayOpacity}
+              disabled={saving}
+              onChange={(e) => setOverlayOpacity(Number(e.target.value))}
+              className="h-2 w-full cursor-pointer accent-blue-500"
+            />
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Button
             type="button"
@@ -617,8 +754,8 @@ export function PropertyLineEditor({
 
         <p className="text-center text-[11px] text-white/50">
           {finished
-            ? "Original photo is preserved. Saving creates a new image in the same project."
-            : "Tap to place points around the property. Use pinch or +/- to zoom for accuracy."}
+            ? "Drag points to adjust the outline. Original photo is preserved when saving."
+            : "Tap to place points around the property. Clicks outside the image snap to the nearest edge."}
         </p>
       </footer>
     </div>

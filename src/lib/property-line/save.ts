@@ -9,16 +9,19 @@ export interface SavePropertyLineOptions {
   projectId: string | null;
   sourceFileName: string;
   sourceTitle: string;
+  lineColor?: string;
+  overlayAlpha?: number;
   onProgress?: (message: string) => void;
 }
 
 export async function savePropertyLineAsNewMedia(
   options: SavePropertyLineOptions
 ): Promise<Record<string, unknown>> {
-  const { imageUrl, points, projectId, sourceFileName, sourceTitle, onProgress } = options;
+  const { imageUrl, points, projectId, sourceFileName, sourceTitle, lineColor, overlayAlpha, onProgress } =
+    options;
 
   onProgress?.("Rendering edited image…");
-  const blob = await renderPropertyLineImage(imageUrl, points);
+  const blob = await renderPropertyLineImage(imageUrl, points, { lineColor, overlayAlpha });
 
   const fileName = buildPropertyLineFileName(sourceFileName);
   const file = new File([blob], fileName, { type: "image/jpeg" });

@@ -3,6 +3,9 @@ import type { ImagePoint } from "./types";
 function loadImageElement(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    if (!url.startsWith("blob:")) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("Could not load image for export."));
     img.src = url;
@@ -28,7 +31,7 @@ function drawClosedPath(ctx: CanvasRenderingContext2D, points: ImagePoint[]) {
 export async function renderPropertyLineImage(
   imageUrl: string,
   points: ImagePoint[],
-  options?: { overlayAlpha?: number }
+  options?: { overlayAlpha?: number; lineColor?: string }
 ): Promise<Blob> {
   if (points.length < 3) {
     throw new Error("Add at least three points before saving.");
@@ -50,6 +53,7 @@ export async function renderPropertyLineImage(
   }
 
   const overlayAlpha = options?.overlayAlpha ?? 0.55;
+  const lineColor = options?.lineColor ?? "#FF2222";
   const lineWidth = strokeWidthForImage(w);
 
   ctx.drawImage(img, 0, 0, w, h);
@@ -66,7 +70,7 @@ export async function renderPropertyLineImage(
   ctx.restore();
 
   ctx.save();
-  ctx.strokeStyle = "#FF2222";
+  ctx.strokeStyle = lineColor;
   ctx.lineWidth = lineWidth;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
