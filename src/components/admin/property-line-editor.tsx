@@ -12,7 +12,8 @@ import {
   naturalToDisplayPoint,
 } from "@/lib/property-line/coordinates";
 import type { ImagePoint } from "@/lib/property-line/types";
-import { savePropertyLineAsNewMedia } from "@/lib/property-line/save";
+import type { PropertyLineAnnotation } from "@/lib/property-line/annotation";
+import { savePropertyLineMedia } from "@/lib/property-line/save";
 
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 10;
@@ -37,6 +38,9 @@ export interface PropertyLineEditorProps {
   fileName: string;
   title: string;
   projectId: string | null;
+  baseMediaId: string;
+  editMediaId?: string | null;
+  initialAnnotation?: PropertyLineAnnotation | null;
   onClose: () => void;
   onSaved?: (asset: Record<string, unknown>) => void;
 }
@@ -46,6 +50,9 @@ export function PropertyLineEditor({
   fileName,
   title,
   projectId,
+  baseMediaId,
+  editMediaId = null,
+  initialAnnotation = null,
   onClose,
   onSaved,
 }: PropertyLineEditorProps) {
@@ -57,10 +64,12 @@ export function PropertyLineEditor({
   const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 });
   const [viewportSize, setViewportSize] = useState({ w: 0, h: 0 });
 
-  const [points, setPoints] = useState<ImagePoint[]>([]);
-  const [finished, setFinished] = useState(false);
-  const [lineColor, setLineColor] = useState(DEFAULT_LINE_COLOR);
-  const [overlayOpacity, setOverlayOpacity] = useState(DEFAULT_OVERLAY_OPACITY);
+  const [points, setPoints] = useState<ImagePoint[]>(initialAnnotation?.points ?? []);
+  const [finished, setFinished] = useState((initialAnnotation?.points?.length ?? 0) >= 3);
+  const [lineColor, setLineColor] = useState(initialAnnotation?.lineColor ?? DEFAULT_LINE_COLOR);
+  const [overlayOpacity, setOverlayOpacity] = useState(
+    Math.round((initialAnnotation?.overlayAlpha ?? DEFAULT_OVERLAY_OPACITY / 100) * 100)
+  );
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
   const [draggingPointIndex, setDraggingPointIndex] = useState<number | null>(null);
   const [isDraggingPoint, setIsDraggingPoint] = useState(false);
@@ -611,8 +620,10 @@ export function PropertyLineEditor({
     setSaveError(null);
     setStatusMessage("Preparing image…");
     try {
-      const asset = await savePropertyLineAsNewMedia({
+      const asset = await savePropertyLineMedia({
         imageUrl,
+        baseMediaId,
+        editMediaId,
         points,
         projectId,
         sourceFileName: fileName,

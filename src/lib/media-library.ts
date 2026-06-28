@@ -598,6 +598,15 @@ export async function getRelatedAssets(asset: LibraryAsset, limit = 6): Promise<
   return result.assets.filter((a) => a.id !== asset.id).slice(0, limit);
 }
 
+export async function getMediaTags(assetId: string): Promise<string[]> {
+  const supabase = await createServiceClient();
+  const { data } = await supabase
+    .from("media_asset_tags")
+    .select("tag")
+    .eq("media_asset_id", assetId);
+  return (data ?? []).map((row) => row.tag);
+}
+
 export async function setMediaTags(assetId: string, tags: string[]) {
   const supabase = await createServiceClient();
   const normalized = [...new Set(tags.map((t) => t.trim().toLowerCase()).filter(Boolean))];

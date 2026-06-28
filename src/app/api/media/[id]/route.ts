@@ -42,6 +42,22 @@ export async function PATCH(request: Request) {
 
   const supabase = await createServiceClient();
 
+  if ("project_id" in updates) {
+    const projectId = updates.project_id as string | null;
+    if (projectId) {
+      const { data: project } = await supabase
+        .from("projects")
+        .select("client_id, property_id")
+        .eq("id", projectId)
+        .single();
+      updates.client_id = project?.client_id ?? null;
+      updates.property_id = project?.property_id ?? null;
+    } else {
+      updates.client_id = null;
+      updates.property_id = null;
+    }
+  }
+
   if (updates.youtube_url) {
     const embedUrl = getYouTubeEmbedUrl(updates.youtube_url as string);
     if (!embedUrl) {

@@ -4,7 +4,17 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, PenLine } from "lucide-react";
 import { PropertyLineEditor } from "@/components/admin/property-line-editor";
+import type { PropertyLineAnnotation } from "@/lib/property-line/annotation";
 import { toast } from "sonner";
+
+interface PropertyLineContext {
+  baseMediaId: string;
+  editMediaId: string | null;
+  annotation: PropertyLineAnnotation | null;
+  title: string;
+  fileName: string;
+  projectId: string | null;
+}
 
 export interface PropertyLineToolButtonProps {
   mediaId: string;
@@ -27,6 +37,7 @@ export function PropertyLineToolButton({
   const [fullUrl, setFullUrl] = useState<string | null>(null);
   const [loadingUrl, setLoadingUrl] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [context, setContext] = useState<PropertyLineContext | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -36,28 +47,40 @@ export function PropertyLineToolButton({
     setLoadingUrl(true);
     setUrlError(null);
     setFullUrl(null);
+    setContext(null);
 
-    fetch(`/api/media/download/${mediaId}?file=1`, { credentials: "include" })
-      .then(async (r) => {
-        if (!r.ok) {
-          const data = await r.json().catch(() => ({}));
+    async function load() {
+      try {
+        const ctxRes = await fetch(`/api/media/${mediaId}/property-line`, { credentials: "include" });
+        if (!ctxRes.ok) {
+          const data = await ctxRes.json().catch(() => ({}));
+          throw new Error((data as { error?: string }).error || "Could not load property line data.");
+        }
+        const ctx = (await ctxRes.json()) as PropertyLineContext;
+        if (cancelled) return;
+        setContext(ctx);
+
+        const imageRes = await fetch(`/api/media/download/${ctx.baseMediaId}?file=1`, {
+          credentials: "include",
+        });
+        if (!imageRes.ok) {
+          const data = await imageRes.json().catch(() => ({}));
           throw new Error((data as { error?: string }).error || "Could not load full-resolution image.");
         }
-        return r.blob();
-      })
-      .then((blob) => {
+        const blob = await imageRes.blob();
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
         setFullUrl(objectUrl);
-      })
-      .catch((err) => {
+      } catch (err) {
         if (!cancelled) {
-          setUrlError(err instanceof Error ? err.message : "Could not load full-resolution image.");
+          setUrlError(err instanceof Error ? err.message : "Could not load property line editor.");
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoadingUrl(false);
-      });
+      }
+    }
+
+    void load();
 
     return () => {
       cancelled = true;
@@ -70,7 +93,7 @@ export function PropertyLineToolButton({
   }
 
   function handleSaved(asset: Record<string, unknown>) {
-    toast.success("Property line image saved");
+    toast.success(context?.editMediaId ? "Property line updated" : "Property line image saved");
     onSaved?.(asset);
   }
 
@@ -109,12 +132,15 @@ export function PropertyLineToolButton({
             </div>
           )}
 
-          {fullUrl && !loadingUrl && (
+          {fullUrl && context && !loadingUrl && (
             <PropertyLineEditor
               imageUrl={fullUrl}
-              fileName={fileName}
-              title={title}
-              projectId={projectId}
+              fileName={context.fileName || fileName}
+              title={context.title || title}
+              projectId={context.projectId ?? projectId}
+              baseMediaId={context.baseMediaId}
+              editMediaId={context.editMediaId}
+              initialAnnotation={context.annotation}
               onClose={() => setOpen(false)}
               onSaved={handleSaved}
             />

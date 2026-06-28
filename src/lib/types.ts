@@ -204,6 +204,8 @@ export interface MediaAsset {
   download_count?: number;
   last_downloaded_at?: string | null;
   version?: number;
+  property_line_base_media_id?: string | null;
+  property_line_data?: Record<string, unknown> | null;
   created_at: string;
   updated_at?: string;
 }

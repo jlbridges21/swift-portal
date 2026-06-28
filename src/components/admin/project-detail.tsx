@@ -14,6 +14,7 @@ import { Modal } from "@/components/ui/modal";
 import { StatusBadge } from "@/components/ui/badge";
 import { AdminPhotoGrid } from "@/components/admin/admin-photo-grid";
 import { VideoMediaPlaceholder } from "@/components/ui/video-media-placeholder";
+import { mediaDisplayName } from "@/lib/media-display-name";
 import { RevisionDrawer } from "@/components/admin/revision-drawer";
 import { PROJECT_STATUSES } from "@/lib/constants";
 import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
@@ -797,7 +798,16 @@ export function AdminProjectDetail({
               onDelete={deleteMedia}
               onToggleVisibility={toggleMediaVisibility}
               onPropertyLineSaved={(asset) => {
-                setMedia((prev) => [...prev, asset as unknown as MediaAsset]);
+                const saved = asset as unknown as MediaAsset;
+                setMedia((prev) => {
+                  const idx = prev.findIndex((m) => m.id === saved.id);
+                  if (idx >= 0) {
+                    const next = [...prev];
+                    next[idx] = { ...next[idx], ...saved };
+                    return next;
+                  }
+                  return [...prev, saved];
+                });
               }}
               onReorder={(reordered) => setMedia((prev) => {
                 const others = prev.filter((m) => m.media_type !== "photo");
@@ -1204,9 +1214,9 @@ function AdminVideoThumb({ asset }: { asset: MediaAsset }) {
       type="button"
       onClick={play}
       className="relative flex w-full max-h-40 min-h-[5rem] overflow-hidden rounded-lg"
-      aria-label={`Play ${asset.file_name}`}
+      aria-label={`Play ${mediaDisplayName(asset)}`}
     >
-      <VideoMediaPlaceholder fileName={asset.file_name} compact className="min-h-[5rem]" />
+      <VideoMediaPlaceholder fileName={mediaDisplayName(asset)} compact className="min-h-[5rem]" />
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-xs text-white">
           Loading…

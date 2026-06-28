@@ -32,6 +32,7 @@ import {
 } from "@/lib/media-preview";
 import { useRouter } from "next/navigation";
 import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
+import { mediaDisplayName } from "@/lib/media-display-name";
 
 interface FilterOptions {
   clients: { id: string; name: string; full_name: string | null; company: string | null }[];
@@ -390,7 +391,20 @@ export function MediaLibraryClient({
             setAssets((prev) => prev.filter((a) => a.id !== drawerAsset.id));
             setDrawerAsset(null);
           }}
-          onPropertyLineSaved={() => fetchPage(1, true)}
+          onPropertyLineSaved={async () => {
+            const detailRes = await fetch(`/api/media/library/${drawerAsset.id}?kind=${drawerAsset.kind}`, {
+              credentials: "include",
+            });
+            if (detailRes.ok) {
+              const detailData = await detailRes.json();
+              if (detailData.asset) {
+                const updated = detailData.asset as LibraryAsset;
+                setAssets((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+                setDrawerAsset(updated);
+              }
+            }
+            void fetchPage(1, true);
+          }}
         />
       )}
 
@@ -450,7 +464,7 @@ function AssetCard({
       >
         <div className="relative aspect-[4/3] bg-slate-100">
           {isVideoLibraryAsset(asset) ? (
-            <VideoMediaPlaceholder fileName={asset.file_name ?? asset.title} label={libraryKindLabel(asset.kind)} />
+            <VideoMediaPlaceholder fileName={mediaDisplayName(asset)} label={libraryKindLabel(asset.kind)} />
           ) : thumbUrl ? (
             <RemoteImage src={thumbUrl} alt={asset.title} fill className="object-cover" sizes="200px" />
           ) : (
@@ -559,16 +573,27 @@ function AssetDrawer({
         credentials: "include",
         body: JSON.stringify({ action: "set_tags", ids: [asset.id], tags }),
       });
-      onUpdate({
-        ...asset,
-        ...form,
-        tags,
-        title: form.title,
-        project_id: form.project_id || null,
-        project_name: form.project_id
-          ? projects.find((p) => p.id === form.project_id)?.project_name ?? asset.project_name
-          : "Unassigned",
+
+      const detailRes = await fetch(`/api/media/library/${asset.id}?kind=${asset.kind}`, {
+        credentials: "include",
       });
+      const detailData = detailRes.ok ? await detailRes.json() : null;
+      const refreshed = detailData?.asset as LibraryAsset | undefined;
+
+      onUpdate(
+        refreshed
+          ? { ...refreshed, tags }
+          : {
+              ...asset,
+              ...form,
+              tags,
+              title: form.title,
+              project_id: form.project_id || null,
+              project_name: form.project_id
+                ? projects.find((p) => p.id === form.project_id)?.project_name ?? asset.project_name
+                : "Unassigned",
+            }
+      );
       setEditing(false);
       toast.success("Saved");
     } catch {
@@ -698,7 +723,7 @@ function AssetDrawer({
               {asset.kind === "photo" && asset.media_source !== "youtube" && (
                 <PropertyLineToolButton
                   mediaId={asset.id}
-                  fileName={asset.file_name ?? asset.title}
+                  fileName={mediaDisplayName(asset)}
                   title={asset.title}
                   projectId={asset.project_id}
                   onSaved={() => {
@@ -826,7 +851,7 @@ function MediaDetailVideoPlayer({ asset }: { asset: LibraryAsset }) {
       className="relative flex h-full w-full items-stretch"
       aria-label={`Play ${asset.title}`}
     >
-      <VideoMediaPlaceholder fileName={asset.file_name ?? asset.title} className="absolute inset-0" />
+      <VideoMediaPlaceholder fileName={mediaDisplayName(asset)} className="absolute inset-0" />
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
           <Loader2 className="h-8 w-8 animate-spin text-white" />

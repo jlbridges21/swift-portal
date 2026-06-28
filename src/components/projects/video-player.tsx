@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Play, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VideoMediaPlaceholder } from "@/components/ui/video-media-placeholder";
+import { mediaDisplayName } from "@/lib/media-display-name";
 import type { MediaAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -57,10 +58,10 @@ export function VideoPlayer({
             onClick={startPlayback}
             disabled={loading}
             className="group relative flex h-full w-full items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-            aria-label={`Play ${video.file_name}`}
+            aria-label={`Play ${mediaDisplayName(video)}`}
           >
             <VideoMediaPlaceholder
-              fileName={video.file_name}
+              fileName={mediaDisplayName(video)}
               compact={compact}
               className="absolute inset-0"
             />
@@ -76,7 +77,7 @@ export function VideoPlayer({
         )}
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-3">
-        <p className="truncate text-sm font-medium text-primary">{video.title || video.file_name}</p>
+        <p className="truncate text-sm font-medium text-primary">{mediaDisplayName(video)}</p>
         {downloadsAllowed && onDownload && (
           <Button variant="outline" size="sm" className="min-h-11 shrink-0 gap-1.5" onClick={onDownload}>
             <Download className="h-3.5 w-3.5" />
