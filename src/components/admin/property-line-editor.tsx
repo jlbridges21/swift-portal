@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   clientToNaturalPoint,
   computeFitDisplaySize,
+  computePinchPanZoom,
   findNearestPointIndex,
   naturalToDisplayPoint,
 } from "@/lib/property-line/coordinates";
@@ -20,6 +21,7 @@ const DEFAULT_LINE_COLOR = "#FF2222";
 const DEFAULT_OVERLAY_OPACITY = 55;
 const POINT_HIT_RADIUS_PX = 22;
 const IMAGE_LOAD_TIMEOUT_MS = 10_000;
+const PINCH_END_GUARD_MS = 350;
 
 const LINE_COLOR_PRESETS = [
   { label: "Red", value: "#FF2222" },
@@ -71,6 +73,7 @@ export function PropertyLineEditor({
 
   const panSession = useRef<{
     pointerId: number;
+    pointerType: string;
     startX: number;
     startY: number;
     originPanX: number;
@@ -83,12 +86,14 @@ export function PropertyLineEditor({
     startZoom: number;
     startPanX: number;
     startPanY: number;
-    centerX: number;
-    centerY: number;
+    startCenterX: number;
+    startCenterY: number;
   } | null>(null);
 
   const activePointers = useRef(new Map<number, { x: number; y: number }>());
   const dragPointIndexRef = useRef<number | null>(null);
+  const gestureGuardUntilRef = useRef(0);
+  const hadMultiTouchRef = useRef(false);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -235,10 +240,10 @@ export function PropertyLineEditor({
   );
 
   const polylinePoints = displayPoints.map((p) => `${p.x},${p.y}`).join(" ");
-  const polygonPoints =
-    finished && displayPoints.length >= 3
-      ? displayPoints.map((p) => `${p.x},${p.y}`).join(" ")
-      : polylinePoints;
+  const hasClosedPolygon = displayPoints.length >= 3;
+  const closedPolygonPoints = hasClosedPolygon
+    ? displayPoints.map((p) => `${p.x},${p.y}`).join(" ")
+    : polylinePoints;
 
   const canFinish = points.length >= 3 && !finished;
   const canSave = finished && points.length >= 3;
@@ -289,27 +294,42 @@ export function PropertyLineEditor({
   const pointerDistance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
     Math.hypot(a.x - b.x, a.y - b.y);
 
+  const pointerCentroid = (pts: { x: number; y: number }[]) => ({
+    x: (pts[0].x + pts[1].x) / 2,
+    y: (pts[0].y + pts[1].y) / 2,
+  });
+
+  const beginPinchSession = () => {
+    const pts = [...activePointers.current.values()];
+    if (pts.length < 2) return;
+
+    const center = pointerCentroid(pts);
+    pinchSession.current = {
+      startDistance: pointerDistance(pts[0], pts[1]),
+      startZoom: zoom,
+      startPanX: pan.x,
+      startPanY: pan.y,
+      startCenterX: center.x,
+      startCenterY: center.y,
+    };
+    hadMultiTouchRef.current = true;
+    panSession.current = null;
+    dragPointIndexRef.current = null;
+    setDraggingPointIndex(null);
+    setIsDraggingPoint(false);
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (saving) return;
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
     if (activePointers.current.size === 2) {
-      const pts = [...activePointers.current.values()];
-      const rect = viewportRef.current?.getBoundingClientRect();
-      pinchSession.current = {
-        startDistance: pointerDistance(pts[0], pts[1]),
-        startZoom: zoom,
-        startPanX: pan.x,
-        startPanY: pan.y,
-        centerX: rect ? rect.left + rect.width / 2 : 0,
-        centerY: rect ? rect.top + rect.height / 2 : 0,
-      };
-      panSession.current = null;
+      beginPinchSession();
       return;
     }
 
-    if (finished && points.length > 0) {
+    if (finished && points.length > 0 && activePointers.current.size === 1) {
       const pointIndex = hitTestPoint(e.clientX, e.clientY);
       if (pointIndex !== null) {
         dragPointIndexRef.current = pointIndex;
@@ -322,6 +342,7 @@ export function PropertyLineEditor({
 
     panSession.current = {
       pointerId: e.pointerId,
+      pointerType: e.pointerType,
       startX: e.clientX,
       startY: e.clientY,
       originPanX: pan.x,
@@ -335,17 +356,44 @@ export function PropertyLineEditor({
     if (!activePointers.current.has(e.pointerId)) return;
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    if (dragPointIndexRef.current !== null) {
+    if (dragPointIndexRef.current !== null && activePointers.current.size === 1) {
       movePointAt(dragPointIndexRef.current, e.clientX, e.clientY);
       return;
     }
 
-    if (activePointers.current.size >= 2 && pinchSession.current) {
-      const pts = [...activePointers.current.values()];
-      const dist = pointerDistance(pts[0], pts[1]);
-      const ratio = dist / pinchSession.current.startDistance;
-      setZoom(clampZoom(pinchSession.current.startZoom * ratio));
-      setIsPanning(true);
+    if (activePointers.current.size >= 2) {
+      if (!pinchSession.current) {
+        beginPinchSession();
+      }
+
+      const session = pinchSession.current;
+      if (session) {
+        const pts = [...activePointers.current.values()];
+        const center = pointerCentroid(pts);
+        const rect = viewportRef.current?.getBoundingClientRect();
+        const viewportCenterX = rect ? rect.left + rect.width / 2 : 0;
+        const viewportCenterY = rect ? rect.top + rect.height / 2 : 0;
+        const { zoom: newZoom, panX, panY } = computePinchPanZoom({
+          startDistance: session.startDistance,
+          startZoom: session.startZoom,
+          startPanX: session.startPanX,
+          startPanY: session.startPanY,
+          startCenterX: session.startCenterX,
+          startCenterY: session.startCenterY,
+          currentDistance: pointerDistance(pts[0], pts[1]),
+          currentCenterX: center.x,
+          currentCenterY: center.y,
+          displayWidth,
+          displayHeight,
+          viewportCenterX,
+          viewportCenterY,
+          minZoom: MIN_ZOOM,
+          maxZoom: MAX_ZOOM,
+        });
+        setZoom(newZoom);
+        setPan({ x: panX, y: panY });
+        setIsPanning(true);
+      }
       return;
     }
 
@@ -356,8 +404,10 @@ export function PropertyLineEditor({
     const dy = e.clientY - session.startY;
     if (Math.hypot(dx, dy) > TAP_MOVE_THRESHOLD_PX) {
       session.moved = true;
-      setIsPanning(true);
-      setPan({ x: session.originPanX + dx, y: session.originPanY + dy });
+      if (session.pointerType === "mouse") {
+        setIsPanning(true);
+        setPan({ x: session.originPanX + dx, y: session.originPanY + dy });
+      }
       return;
     }
 
@@ -367,8 +417,22 @@ export function PropertyLineEditor({
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    const wasMultiTouch = hadMultiTouchRef.current;
     activePointers.current.delete(e.pointerId);
-    pinchSession.current = activePointers.current.size >= 2 ? pinchSession.current : null;
+
+    if (activePointers.current.size === 1 && wasMultiTouch) {
+      pinchSession.current = null;
+      panSession.current = null;
+      dragPointIndexRef.current = null;
+      setDraggingPointIndex(null);
+      setIsDraggingPoint(false);
+    }
+
+    if (activePointers.current.size >= 2) {
+      beginPinchSession();
+    } else {
+      pinchSession.current = null;
+    }
 
     if (dragPointIndexRef.current !== null) {
       dragPointIndexRef.current = null;
@@ -377,7 +441,10 @@ export function PropertyLineEditor({
       panSession.current = null;
       if (activePointers.current.size === 0) {
         setIsPanning(false);
-        pinchSession.current = null;
+        if (wasMultiTouch) {
+          gestureGuardUntilRef.current = Date.now() + PINCH_END_GUARD_MS;
+          hadMultiTouchRef.current = false;
+        }
       }
       return;
     }
@@ -387,8 +454,9 @@ export function PropertyLineEditor({
       const dx = e.clientX - session.startX;
       const dy = e.clientY - session.startY;
       const moved = session.moved || Math.hypot(dx, dy) > TAP_MOVE_THRESHOLD_PX;
+      const gestureBlocked = wasMultiTouch || Date.now() < gestureGuardUntilRef.current;
 
-      if (!moved && !finished) {
+      if (!moved && !finished && !gestureBlocked && activePointers.current.size === 0) {
         addPointAt(e.clientX, e.clientY);
       }
 
@@ -398,6 +466,10 @@ export function PropertyLineEditor({
     if (activePointers.current.size === 0) {
       setIsPanning(false);
       pinchSession.current = null;
+      if (wasMultiTouch) {
+        gestureGuardUntilRef.current = Date.now() + PINCH_END_GUARD_MS;
+        hadMultiTouchRef.current = false;
+      }
     }
   };
 
@@ -471,7 +543,7 @@ export function PropertyLineEditor({
       <div
         ref={viewportRef}
         className={cn(
-          "relative min-h-0 flex-1 overflow-hidden bg-black",
+          "relative min-h-0 flex-1 overflow-hidden bg-black touch-none",
           isPanning || isDraggingPoint
             ? "cursor-grabbing"
             : hoveredPointIndex !== null
@@ -480,6 +552,7 @@ export function PropertyLineEditor({
                 ? "cursor-grab"
                 : "cursor-crosshair"
         )}
+        style={{ touchAction: "none" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -547,12 +620,12 @@ export function PropertyLineEditor({
                 viewBox={`0 0 ${displayWidth} ${displayHeight}`}
                 preserveAspectRatio="none"
               >
-                {finished && displayPoints.length >= 3 && (
+                {hasClosedPolygon && (
                   <>
                     <defs>
                       <mask id="property-line-outside-mask">
                         <rect width="100%" height="100%" fill="white" />
-                        <polygon points={polygonPoints} fill="black" />
+                        <polygon points={closedPolygonPoints} fill="black" />
                       </mask>
                     </defs>
                     <rect
@@ -566,7 +639,7 @@ export function PropertyLineEditor({
 
                 {displayPoints.length >= 2 && (
                   <polyline
-                    points={finished ? polygonPoints : polylinePoints}
+                    points={hasClosedPolygon ? closedPolygonPoints : polylinePoints}
                     fill="none"
                     stroke={lineColor}
                     strokeWidth={strokeWidth}
@@ -575,9 +648,9 @@ export function PropertyLineEditor({
                   />
                 )}
 
-                {finished && displayPoints.length >= 3 && (
+                {hasClosedPolygon && (
                   <polygon
-                    points={polygonPoints}
+                    points={closedPolygonPoints}
                     fill="none"
                     stroke={lineColor}
                     strokeWidth={strokeWidth}
@@ -600,7 +673,7 @@ export function PropertyLineEditor({
           </div>
         )}
 
-        <div className="pointer-events-none absolute right-3 top-3 flex flex-col gap-2">
+        <div className="pointer-events-none absolute right-3 top-3 hidden flex-col gap-2 md:flex">
           <Button
             type="button"
             variant="outline"
@@ -635,7 +708,8 @@ export function PropertyLineEditor({
 
         {zoom > 1 && (
           <p className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-black/60 px-2 py-1 text-xs text-white/80">
-            Drag to pan · Pinch or scroll to zoom
+            <span className="hidden md:inline">Drag to pan · Scroll to zoom</span>
+            <span className="md:hidden">Pinch to zoom · Two fingers to pan</span>
           </p>
         )}
       </div>

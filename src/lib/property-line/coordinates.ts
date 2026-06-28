@@ -110,6 +110,54 @@ export function naturalToDisplayPoint(
   };
 }
 
+/** Compute pan/zoom from a two-finger pinch gesture anchored to the pinch midpoint. */
+export function computePinchPanZoom(options: {
+  startDistance: number;
+  startZoom: number;
+  startPanX: number;
+  startPanY: number;
+  startCenterX: number;
+  startCenterY: number;
+  currentDistance: number;
+  currentCenterX: number;
+  currentCenterY: number;
+  displayWidth: number;
+  displayHeight: number;
+  viewportCenterX: number;
+  viewportCenterY: number;
+  minZoom: number;
+  maxZoom: number;
+}): { zoom: number; panX: number; panY: number } {
+  const {
+    startDistance,
+    startZoom,
+    startPanX,
+    startPanY,
+    startCenterX,
+    startCenterY,
+    currentDistance,
+    currentCenterX,
+    currentCenterY,
+    displayWidth,
+    displayHeight,
+    viewportCenterX,
+    viewportCenterY,
+    minZoom,
+    maxZoom,
+  } = options;
+
+  const ratio = startDistance > 0 ? currentDistance / startDistance : 1;
+  const zoom = Math.min(maxZoom, Math.max(minZoom, startZoom * ratio));
+
+  const startLocalX = (startCenterX - viewportCenterX - startPanX) / startZoom + displayWidth / 2;
+  const startLocalY = (startCenterY - viewportCenterY - startPanY) / startZoom + displayHeight / 2;
+
+  const panX = currentCenterX - viewportCenterX - (startLocalX - displayWidth / 2) * zoom;
+  const panY = currentCenterY - viewportCenterY - (startLocalY - displayHeight / 2) * zoom;
+
+  return { zoom, panX, panY };
+}
+
 export function computeFitDisplaySize(
   naturalWidth: number,
   naturalHeight: number,
