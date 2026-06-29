@@ -102,15 +102,19 @@ export default function RequestPage() {
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Contact</h3>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Full Name *</Label>
-                      <Input id="name" name="name" required placeholder="John Smith" />
+                      <Label htmlFor="first_name">First Name *</Label>
+                      <Input id="first_name" name="first_name" required placeholder="John" autoComplete="given-name" />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email *</Label>
-                      <Input id="email" name="email" type="email" required placeholder="john@example.com" />
+                      <Label htmlFor="last_name">Last Name *</Label>
+                      <Input id="last_name" name="last_name" required placeholder="Smith" autoComplete="family-name" />
                     </div>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email *</Label>
+                      <Input id="email" name="email" type="email" required placeholder="john@example.com" autoComplete="email" />
+                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone</Label>
                       <Input id="phone" name="phone" type="tel" placeholder="(555) 123-4567" />

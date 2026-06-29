@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins } from "@/lib/notifications";
@@ -7,6 +7,9 @@ import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
 import { defaultProjectTitle, resolveAddressFromBody } from "@/lib/address";
 import { linkProjectToProperty } from "@/lib/properties";
 import { touchClientActivity } from "@/lib/clients-data";
+import { resolvePersonName } from "@/lib/person-name";
+import { buildPortalLeadPayload } from "@/lib/ghl/build-portal-lead-payload";
+import { syncNewProjectLeadToGhl } from "@/lib/ghl/sync-portal-lead";
 
 export async function POST(request: Request) {
   const profile = await getProfile();
@@ -29,7 +32,17 @@ export async function POST(request: Request) {
   const supabase = await createServiceClient();
   const clientId = profile.client_id;
 
-  const { data: client } = await supabase.from("clients").select("name, email").eq("id", clientId).single();
+  const { data: client } = await supabase
+    .from("clients")
+    .select("name, first_name, last_name, email, phone, company")
+    .eq("id", clientId)
+    .single();
+
+  const person = resolvePersonName({
+    first_name: client?.first_name,
+    last_name: client?.last_name,
+    name: client?.name || profile.full_name,
+  });
 
   const projectName = defaultProjectTitle(property_address, service_requested);
 
@@ -43,6 +56,7 @@ export async function POST(request: Request) {
       status: "new_request",
       notes: notes || null,
       shoot_date: preferred_date || null,
+      ghl_sync_status: "pending",
     })
     .select()
     .single();
@@ -60,10 +74,12 @@ export async function POST(request: Request) {
   );
 
   await supabase.from("leads").insert({
-    name: client?.name || profile.full_name || "Client",
+    name: person.fullName,
+    first_name: person.firstName || null,
+    last_name: person.lastName || null,
     email: client?.email || profile.email,
-    phone: phone || null,
-    company: company || null,
+    phone: phone || client?.phone || null,
+    company: company || client?.company || null,
     property_address,
     service_requested,
     preferred_date: preferred_date || null,
@@ -78,11 +94,11 @@ export async function POST(request: Request) {
     metadata: { client_id: clientId },
   });
 
-    await notifyAdmins({
-      type: "proposal_submitted",
-      eventKey: "new_project_request",
+  await notifyAdmins({
+    type: "proposal_submitted",
+    eventKey: "new_project_request",
     title: "New Project Request",
-    body: `${client?.name || profile.full_name} requested ${service_requested} at ${property_address}. A preliminary estimate was generated automatically.`,
+    body: `${person.fullName} requested ${service_requested} at ${property_address}. A preliminary estimate was generated automatically.`,
     link: `/admin/projects/${project.id}`,
     projectId: project.id,
   });
@@ -91,6 +107,28 @@ export async function POST(request: Request) {
     userId: profile.id,
     skipIfExists: true,
   });
+
+  const ghlPayload = buildPortalLeadPayload({
+    clientId,
+    projectId: project.id,
+    firstName: person.firstName,
+    lastName: person.lastName,
+    email: client?.email || profile.email || "",
+    phone: phone || client?.phone,
+    company: company || client?.company,
+    serviceRequested: service_requested,
+    propertyAddress: property_address,
+    streetAddress: String(body.street_address ?? "").trim() || null,
+    city: String(body.city ?? "").trim() || null,
+    state: String(body.state ?? "").trim() || null,
+    postalCode: String(body.zip_code ?? body.zip ?? "").trim() || null,
+    projectNotes: notes,
+    referralSource: body.referral_source,
+    preferredDate: preferred_date,
+    propertyType: body.property_type,
+  });
+
+  await syncNewProjectLeadToGhl(project.id, ghlPayload);
 
   return NextResponse.json({ success: true, projectId: project.id });
 }

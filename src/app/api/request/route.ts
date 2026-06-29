@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins } from "@/lib/notifications";
 import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
 import { defaultProjectTitle, resolveAddressFromBody } from "@/lib/address";
 import { linkProjectToProperty } from "@/lib/properties";
 import { touchClientActivity } from "@/lib/clients-data";
+import { resolvePersonName } from "@/lib/person-name";
+import { buildPortalLeadPayload } from "@/lib/ghl/build-portal-lead-payload";
+import { syncNewProjectLeadToGhl } from "@/lib/ghl/sync-portal-lead";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
 
     const {
-      name,
       email,
       phone,
       company,
@@ -23,12 +24,18 @@ export async function POST(request: Request) {
       confirm_password,
     } = body;
 
+    const person = resolvePersonName({
+      first_name: body.first_name,
+      last_name: body.last_name,
+      name: body.name,
+    });
+
     const { property_address, error: addressError } = resolveAddressFromBody(body);
     if (addressError) {
       return NextResponse.json({ error: addressError }, { status: 400 });
     }
 
-    if (!name || !email || !service_requested || !password) {
+    if (!person.firstName || !person.lastName || !email || !service_requested || !password) {
       return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
     }
 
@@ -46,7 +53,7 @@ export async function POST(request: Request) {
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: name, role: "client" },
+      user_metadata: { full_name: person.fullName, role: "client" },
     });
 
     if (authError) {
@@ -73,7 +80,10 @@ export async function POST(request: Request) {
     const { data: client, error: clientError } = await supabase
       .from("clients")
       .insert({
-        name,
+        name: person.fullName,
+        first_name: person.firstName,
+        last_name: person.lastName,
+        full_name: person.fullName,
         email,
         phone: body.phone || null,
         company: body.company || null,
@@ -91,7 +101,7 @@ export async function POST(request: Request) {
 
     await supabase
       .from("profiles")
-      .update({ client_id: client.id, full_name: name, role: "client" })
+      .update({ client_id: client.id, full_name: person.fullName, role: "client" })
       .eq("id", userId);
 
     const projectName = defaultProjectTitle(property_address, service_requested);
@@ -106,6 +116,7 @@ export async function POST(request: Request) {
         status: "new_request",
         notes: notes || null,
         shoot_date: preferred_date || null,
+        ghl_sync_status: "pending",
       })
       .select()
       .single();
@@ -120,7 +131,9 @@ export async function POST(request: Request) {
     const { data: lead } = await supabase
       .from("leads")
       .insert({
-        name,
+        name: person.fullName,
+        first_name: person.firstName,
+        last_name: person.lastName,
         email,
         phone: phone || null,
         company: company || null,
@@ -145,7 +158,7 @@ export async function POST(request: Request) {
       },
       {
         activity_type: "account_created",
-        description: `Client account created for ${name}`,
+        description: `Client account created for ${person.fullName}`,
         project_id: project.id,
         user_id: userId,
         metadata: { client_id: client.id },
@@ -163,7 +176,7 @@ export async function POST(request: Request) {
       type: "proposal_submitted",
       eventKey: "new_project_request",
       title: "New Project Request",
-      body: `${name} submitted a request for ${service_requested} at ${property_address}. A preliminary estimate was generated automatically.`,
+      body: `${person.fullName} submitted a request for ${service_requested} at ${property_address}. A preliminary estimate was generated automatically.`,
       link: `/admin/projects/${project.id}`,
       projectId: project.id,
     });
@@ -172,6 +185,28 @@ export async function POST(request: Request) {
       userId,
       skipIfExists: true,
     });
+
+    const ghlPayload = buildPortalLeadPayload({
+      clientId: client.id,
+      projectId: project.id,
+      firstName: person.firstName,
+      lastName: person.lastName,
+      email,
+      phone,
+      company,
+      serviceRequested: service_requested,
+      propertyAddress: property_address,
+      streetAddress: String(body.street_address ?? "").trim() || null,
+      city: String(body.city ?? "").trim() || null,
+      state: String(body.state ?? "").trim() || null,
+      postalCode: String(body.zip_code ?? body.zip ?? "").trim() || null,
+      projectNotes: notes,
+      referralSource: body.referral_source,
+      preferredDate: preferred_date,
+      propertyType: body.property_type,
+    });
+
+    await syncNewProjectLeadToGhl(project.id, ghlPayload);
 
     return NextResponse.json({
       success: true,

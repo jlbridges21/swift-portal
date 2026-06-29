@@ -105,6 +105,8 @@ export interface Profile {
 export interface Client {
   id: string;
   name: string;
+  first_name?: string | null;
+  last_name?: string | null;
   full_name?: string | null;
   email: string;
   phone: string | null;
@@ -138,6 +140,8 @@ export interface Property {
 export interface Lead {
   id: string;
   name: string;
+  first_name?: string | null;
+  last_name?: string | null;
   email: string;
   phone: string | null;
   company: string | null;
@@ -165,6 +169,10 @@ export interface Project {
   cover_image_id: string | null;
   deliverables_approved_at: string | null;
   deliverables_approved_by: string | null;
+  ghl_sync_status?: "pending" | "success" | "failed" | null;
+  ghl_last_sync_attempt_at?: string | null;
+  ghl_webhook_status_code?: number | null;
+  ghl_webhook_response_body?: string | null;
   created_at: string;
   updated_at: string;
   clients?: Client;
