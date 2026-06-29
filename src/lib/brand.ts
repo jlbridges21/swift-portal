@@ -1,5 +1,5 @@
 export const LOGO_URL =
-  "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a347eb5671890ccaad77c04.png";
+  "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a42cba90c7afddf1484c118.png";
 
 export const BRAND = {
   name: "Swift Aerial Media",
