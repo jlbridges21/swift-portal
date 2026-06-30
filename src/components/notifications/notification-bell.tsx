@@ -84,11 +84,18 @@ export function NotificationBell() {
 
   async function fetchNotifications() {
     setLoading(true);
-    const res = await fetch("/api/notifications", { credentials: "include" });
-    if (res.ok) {
-      setNotifications(await res.json());
+    try {
+      const res = await fetch("/api/notifications", { credentials: "include" });
+      if (res.ok) {
+        setNotifications(await res.json());
+      } else {
+        console.error("[notifications] fetch failed", res.status);
+      }
+    } catch (err) {
+      console.error("[notifications] fetch error", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   useEffect(() => {
