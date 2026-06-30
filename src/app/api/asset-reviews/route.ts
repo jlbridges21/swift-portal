@@ -6,7 +6,7 @@ import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
-import { portalLink, resolveMessageTemplate } from "@/lib/workflow";
+import { portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -189,9 +189,10 @@ export async function PATCH(request: Request) {
     activityDescription: "Deliverables sent for client review",
     notifyClient: appSettings.workflow.deliverables.notifyClientWhenReady,
     clientTitle: "Review Your Deliverables",
-    clientBody: resolveMessageTemplate(
+    clientBody: await resolveProjectMessageTemplate(
       appSettings.workflow,
       "deliverables_ready",
+      project_id,
       { portal_link: portalLink(`/dashboard/projects/${project_id}#deliverables`) },
       "Preview your photos, videos, and tours. Approve each item when you're satisfied."
     ),

@@ -6,11 +6,11 @@ import {
   handleCheckoutExpired,
   handlePaymentFailed,
   handlePaymentSuccess,
-  resolvePaymentFromCharge,
   resolvePaymentFromCheckoutSession,
   resolvePaymentFromPaymentIntent,
 } from "@/lib/stripe-payments";
 import { sanitizeMetadataForLog } from "@/lib/stripe-metadata";
+import { isStripeEventProcessed, markStripeEventProcessed } from "@/lib/stripe-webhook-events";
 import Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -101,6 +101,13 @@ export async function POST(request: Request) {
 
   logWebhook("event received", { eventType: event.type, eventId: event.id });
 
+  if (await isStripeEventProcessed(event.id)) {
+    logWebhook("duplicate event skipped", { eventType: event.type, eventId: event.id });
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
+  let recordEvent = false;
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -132,6 +139,7 @@ export async function POST(request: Request) {
           receiptUrl,
           metadata: session.metadata,
         });
+        recordEvent = true;
         break;
       }
 
@@ -141,31 +149,46 @@ export async function POST(request: Request) {
         if (payment && payment.status === "pending") {
           await handleCheckoutExpired(payment);
         }
+        recordEvent = true;
         break;
       }
 
       case "payment_intent.succeeded": {
         const intent = event.data.object as Stripe.PaymentIntent;
         const payment = await resolvePaymentFromPaymentIntent(intent);
+        if (!payment) {
+          logWebhook("payment_intent skipped — no matching payment", {
+            eventType: event.type,
+            paymentIntentId: intent.id,
+            metadata: sanitizeMetadataForLog(intent.metadata),
+          });
+          break;
+        }
+
+        if (payment.stripe_checkout_session_id) {
+          logWebhook("payment_intent skipped — handled by checkout.session.completed", {
+            eventType: event.type,
+            paymentId: payment.id,
+            checkoutSessionId: payment.stripe_checkout_session_id,
+          });
+          recordEvent = true;
+          break;
+        }
+
         await processPaymentSuccess(event.type, payment, {
           paymentIntentId: intent.id,
           metadata: intent.metadata,
         });
+        recordEvent = true;
         break;
       }
 
       case "charge.succeeded": {
-        const charge = event.data.object as Stripe.Charge;
-        const paymentIntentId =
-          typeof charge.payment_intent === "string"
-            ? charge.payment_intent
-            : charge.payment_intent?.id;
-        const payment = await resolvePaymentFromCharge(charge);
-        await processPaymentSuccess(event.type, payment, {
-          paymentIntentId,
-          receiptUrl: charge.receipt_url ?? null,
-          metadata: charge.metadata,
+        logWebhook("charge.succeeded ignored — checkout.session.completed is authoritative", {
+          eventType: event.type,
+          chargeId: (event.data.object as Stripe.Charge).id,
         });
+        recordEvent = true;
         break;
       }
 
@@ -178,6 +201,7 @@ export async function POST(request: Request) {
             intent.last_payment_error?.message || "Payment failed"
           );
         }
+        recordEvent = true;
         break;
       }
 
@@ -190,6 +214,7 @@ export async function POST(request: Request) {
           receiptUrl: invoice.hosted_invoice_url ?? invoice.invoice_pdf ?? null,
           metadata: invoice.metadata,
         });
+        recordEvent = true;
         break;
       }
 
@@ -201,6 +226,7 @@ export async function POST(request: Request) {
         if (payment) {
           await handlePaymentFailed(payment, "Invoice payment failed");
         }
+        recordEvent = true;
         break;
       }
 
@@ -211,6 +237,10 @@ export async function POST(request: Request) {
   } catch (err) {
     console.error(`[stripe-webhook] Handler error for ${event.type}:`, err);
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 });
+  }
+
+  if (recordEvent) {
+    await markStripeEventProcessed(event.id, event.type);
   }
 
   return NextResponse.json({ received: true });

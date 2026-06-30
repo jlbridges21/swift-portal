@@ -3,7 +3,7 @@ import { logProjectActivity } from "@/lib/activity";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
-import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveMessageTemplate } from "@/lib/workflow";
+import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { getStripe } from "@/lib/stripe";
 import { parsePaymentIdFromMetadata } from "@/lib/stripe-metadata";
 import { isPaymentComplete } from "@/lib/payment-status";
@@ -44,7 +44,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
       ? `Payment marked as paid manually: ${amountStr}`
       : `Payment received: ${amountStr}`;
 
-  const { error: updateError } = await supabase
+  const { data: updated, error: updateError } = await supabase
     .from("payments")
     .update({
       status: "paid",
@@ -53,10 +53,17 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
       stripe_payment_intent_id: paymentIntentId ?? payment.stripe_payment_intent_id,
       stripe_receipt_url: receiptUrl ?? payment.stripe_receipt_url,
     })
-    .eq("id", payment.id);
+    .eq("id", payment.id)
+    .in("status", ["pending", "sent"])
+    .select()
+    .single();
 
-  if (updateError) {
+  if (updateError && updateError.code !== "PGRST116") {
     throw new Error(`Failed to update payment ${payment.id}: ${updateError.message}`);
+  }
+
+  if (!updated) {
+    return { alreadyPaid: true, paymentId: payment.id, updated: false };
   }
 
   if (payment.stripe_payment_link_id) {
@@ -102,9 +109,10 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     });
   }
 
-  const clientBody = resolveMessageTemplate(
+  const clientBody = await resolveProjectMessageTemplate(
     appSettings.workflow,
     "payment_received",
+    payment.project_id,
     {
       payment_amount: amountStr,
       portal_link: portalLink(`/dashboard/projects/${payment.project_id}#payments`),
@@ -112,22 +120,32 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     "Payment confirmed — all deliverables are now available to download. Thank you for choosing Swift Aerial Media!"
   );
 
-  const completedBody = resolveMessageTemplate(
+  const completedBody = await resolveProjectMessageTemplate(
     appSettings.workflow,
     "project_completed",
+    payment.project_id,
     {
       portal_link: portalLink(`/dashboard/projects/${payment.project_id}`),
     },
     clientBody
   );
 
+  const { data: project } = await supabase
+    .from("projects")
+    .select("project_name")
+    .eq("id", payment.project_id)
+    .maybeSingle();
+
+  const projectLabel = project?.project_name || payment.description;
+
   await notifyAdmins({
     type: "payment_received",
     eventKey: "payment_received",
     title: "Payment Received",
-    body: `${amountStr} received for ${payment.description}. Downloads are unlocked.`,
+    body: `${amountStr} received for ${projectLabel}. Downloads are unlocked.`,
     link: `/admin/projects/${payment.project_id}#payments`,
     projectId: payment.project_id,
+    paymentId: payment.id,
   });
 
   if (payWorkflow.autoSendReceipt) {

@@ -16,6 +16,7 @@ interface NotifyOptions {
   body?: string;
   link?: string;
   projectId?: string;
+  paymentId?: string;
   notifyAdmins?: boolean;
   notifyClients?: boolean;
   clientId?: string;
@@ -156,6 +157,28 @@ async function getProjectClientRecipients(projectId: string): Promise<Notificati
   return recipients;
 }
 
+async function hasDuplicatePaymentNotification(
+  userId: string,
+  paymentId: string
+): Promise<boolean> {
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("type", "payment_received")
+    .eq("payment_id", paymentId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[notifications] payment dedup check failed:", error.message);
+    return false;
+  }
+
+  return !!data;
+}
+
 export async function notifyUsers(options: NotifyOptions) {
   const supabase = await createServiceClient();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -197,6 +220,17 @@ export async function notifyUsers(options: NotifyOptions) {
   for (const user of unique.values()) {
     if (!user.id || user.id.includes("@")) continue;
 
+    if (options.paymentId && options.type === "payment_received") {
+      const duplicate = await hasDuplicatePaymentNotification(user.id, options.paymentId);
+      if (duplicate) {
+        console.info("[notifications] skipped duplicate payment_received", {
+          userId: user.id,
+          paymentId: options.paymentId,
+        });
+        continue;
+      }
+    }
+
     const shouldCreateInApp =
       allowInApp && (user.role === "admin" || user.in_app_notifications_enabled !== false);
 
@@ -212,6 +246,7 @@ export async function notifyUsers(options: NotifyOptions) {
           body: options.body ?? null,
           link: options.link ?? null,
           project_id: options.projectId ?? null,
+          payment_id: options.paymentId ?? null,
         })
         .select("id")
         .single();

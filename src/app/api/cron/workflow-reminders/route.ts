@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getAppSettings, type NotificationEventKey } from "@/lib/app-settings";
 import { reminderTimingToMs } from "@/lib/workflow-settings";
-import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveMessageTemplate } from "@/lib/workflow";
+import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { notifyProjectClients } from "@/lib/notifications";
 import { idempotencyKey } from "@/lib/idempotency";
 
@@ -53,36 +53,40 @@ export async function GET(request: Request) {
 
       if (type === "proposal") {
         title = "Proposal reminder";
-        body = resolveMessageTemplate(
+        body = await resolveProjectMessageTemplate(
           appSettings.workflow,
           "proposal_ready",
+          row.id,
           { project_name: row.project_name, portal_link: portalLink(`${link}#quote`) },
           `Your proposal for ${row.project_name} is waiting for review.`
         );
         eventKey = "official_proposal_sent";
       } else if (type === "scheduling") {
         title = "Scheduling reminder";
-        body = resolveMessageTemplate(
+        body = await resolveProjectMessageTemplate(
           appSettings.workflow,
           "scheduling_request",
+          row.id,
           { portal_link: portalLink(`${link}?scheduling=pending#scheduling`) },
           "Please confirm or suggest a shoot time in your portal."
         );
         eventKey = "shoot_time_proposed";
       } else if (type === "review") {
         title = "Review reminder";
-        body = resolveMessageTemplate(
+        body = await resolveProjectMessageTemplate(
           appSettings.workflow,
           "deliverables_ready",
+          row.id,
           { project_name: row.project_name, portal_link: portalLink(`${link}#deliverables`) },
           `Your deliverables for ${row.project_name} are ready for review.`
         );
         eventKey = "deliverables_ready";
       } else {
         title = "Payment reminder";
-        body = resolveMessageTemplate(
+        body = await resolveProjectMessageTemplate(
           appSettings.workflow,
           "payment_request",
+          row.id,
           { portal_link: portalLink(`${link}#payments`) },
           "Your final payment is ready. Complete it to unlock downloads."
         );

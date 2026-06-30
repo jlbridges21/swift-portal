@@ -341,6 +341,7 @@ export interface Notification {
   body: string | null;
   link: string | null;
   project_id: string | null;
+  payment_id?: string | null;
   read_at: string | null;
   created_at: string;
 }

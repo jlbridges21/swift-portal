@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { setProjectStatus } from "@/lib/status-automation";
 import { getAppSettings } from "@/lib/app-settings";
 import { getStripe } from "@/lib/stripe";
-import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveMessageTemplate } from "@/lib/workflow";
+import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { logProjectActivity } from "@/lib/activity";
 import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
 import { idempotencyKey } from "@/lib/idempotency";
@@ -125,9 +125,10 @@ export async function POST(request: Request) {
     const amountStr = `$${(body.amount / 100).toFixed(2)}`;
     const payWorkflow = appSettings.workflow.payments;
     if (payWorkflow.autoMoveOnPaymentLink) {
-      const clientBody = resolveMessageTemplate(
+      const clientBody = await resolveProjectMessageTemplate(
         appSettings.workflow,
         "payment_request",
+        body.project_id,
         {
           payment_amount: amountStr,
           portal_link: portalLink(`/dashboard/projects/${body.project_id}#payments`),

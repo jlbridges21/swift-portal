@@ -7,7 +7,7 @@ import { loadShootSyncContext, syncShootToGoogleCalendar } from "@/lib/google-ca
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
-import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveMessageTemplate } from "@/lib/workflow";
+import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -88,9 +88,10 @@ export async function POST(request: Request) {
       type: "shoot_proposed",
       eventKey: "shoot_time_proposed",
       title: "Scheduling Your Shoot",
-      body: resolveMessageTemplate(
+      body: await resolveProjectMessageTemplate(
         appSettings.workflow,
         "scheduling_request",
+        body.project_id,
         { shoot_date: dateStr, portal_link: portalLink(`/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`) },
         `Swift Aerial Media proposed a shoot for ${dateStr}. Please review and confirm in your portal.`
       ),
@@ -267,9 +268,10 @@ export async function PATCH(request: Request) {
         type: "shoot_proposed",
         eventKey: "shoot_rescheduled",
         title: "Shoot Scheduled",
-        body: resolveMessageTemplate(
+        body: await resolveProjectMessageTemplate(
           appSettings.workflow,
           "shoot_confirmed",
+          shoot.project_id,
           { shoot_date: dateStr },
           `Your shoot is now scheduled for ${dateStr}.`
         ),

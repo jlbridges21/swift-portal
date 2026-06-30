@@ -6,7 +6,7 @@ import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus, setProjectStatusForward } from "@/lib/status-automation";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
-import { portalLink, resolveMessageTemplate } from "@/lib/workflow";
+import { portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { archivePreviousOfficialQuotes } from "@/lib/quote-archive";
 
 export async function GET(request: Request) {
@@ -173,9 +173,10 @@ export async function PATCH(request: Request) {
       type: "quote_sent",
       eventKey: "official_proposal_sent",
       title: "Review Your Official Proposal",
-      body: resolveMessageTemplate(
+      body: await resolveProjectMessageTemplate(
         appSettings.workflow,
         "proposal_ready",
+        quote.project_id,
         {
           project_name: quote.title,
           portal_link: portalLink(`/dashboard/projects/${quote.project_id}#quote`),

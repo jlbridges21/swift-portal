@@ -1,15 +1,13 @@
 import { getAppSettings } from "@/lib/app-settings";
 import { logProjectActivity } from "@/lib/activity";
-import { mergeWorkflowSettings, type MessageTemplateKey, type WorkflowSettings } from "@/lib/workflow-settings";
+import type { MessageTemplateKey, WorkflowSettings } from "@/lib/workflow-settings";
+import {
+  renderWorkflowTemplate,
+  buildProjectMessageVariables,
+  type WorkflowMessageVariables,
+} from "@/lib/message-templates";
 
-export interface TemplateContext {
-  client_name?: string;
-  property_address?: string;
-  project_name?: string;
-  shoot_date?: string;
-  payment_amount?: string;
-  portal_link?: string;
-}
+export type TemplateContext = Partial<WorkflowMessageVariables>;
 
 export async function getWorkflowSettings(): Promise<WorkflowSettings> {
   const settings = await getAppSettings();
@@ -17,10 +15,7 @@ export async function getWorkflowSettings(): Promise<WorkflowSettings> {
 }
 
 export function interpolateTemplate(template: string, context: TemplateContext): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
-    const value = context[key as keyof TemplateContext];
-    return value ?? "";
-  });
+  return renderWorkflowTemplate(template, context);
 }
 
 export function resolveMessageTemplate(
@@ -31,8 +26,25 @@ export function resolveMessageTemplate(
 ): string {
   const template = workflow.messages[key]?.trim();
   if (!template) return fallback;
-  const text = interpolateTemplate(template, context);
+  const text = renderWorkflowTemplate(template, context, { workflowKey: key });
   return text || fallback;
+}
+
+export async function resolveProjectMessageTemplate(
+  workflow: WorkflowSettings,
+  key: MessageTemplateKey,
+  projectId: string,
+  partial: TemplateContext = {},
+  fallback: string
+): Promise<string> {
+  const variables = await buildProjectMessageVariables(projectId, partial);
+  const merged: TemplateContext = {
+    ...variables,
+    ...Object.fromEntries(
+      Object.entries(partial).filter(([, v]) => typeof v === "string" && v.trim())
+    ),
+  };
+  return resolveMessageTemplate(workflow, key, merged, fallback);
 }
 
 export async function logWorkflowAudit(
@@ -75,4 +87,4 @@ export function portalLink(path: string): string {
   return path.startsWith("http") ? path : `${base}${path}`;
 }
 
-export { mergeWorkflowSettings };
+export { mergeWorkflowSettings } from "@/lib/workflow-settings";
