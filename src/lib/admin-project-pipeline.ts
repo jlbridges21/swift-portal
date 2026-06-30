@@ -1,7 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { normalizeStatus, type ProjectStatus } from "@/lib/constants";
-import { isPreliminaryQuote } from "@/lib/quote-display";
-import type { ProjectQuote } from "@/lib/types";
+import {
+  buildProjectAdminContext,
+  isActiveProject,
+  isAwaitingPayment,
+  isQuoteWaitingForApproval,
+  isUpcomingShoot,
+  type ProjectAdminContext,
+} from "@/lib/admin-project-status";
+import type { Payment, ProjectQuote } from "@/lib/types";
 
 export type PipelineStageParam =
   | "new_request"
@@ -82,75 +89,73 @@ function addDays(date: Date, days: number): Date {
   return d;
 }
 
+/** @deprecated Use isActiveProject from admin-project-status */
 export function isVisibleActiveProject(project: {
   deleted_at?: string | null;
   clients?: ClientRef;
 }): boolean {
-  if (project.deleted_at) return false;
-  if (project.clients?.deleted_at) return false;
-  return true;
+  return isActiveProject(project);
+}
+
+function buildAdminContextMap(
+  projectIds: string[],
+  quotes: ProjectQuote[],
+  payments: Pick<Payment, "project_id" | "status">[]
+): Map<string, ProjectAdminContext> {
+  const map = new Map<string, ProjectAdminContext>();
+  for (const id of projectIds) {
+    map.set(id, buildProjectAdminContext(id, quotes, payments));
+  }
+  return map;
 }
 
 function countByStage(
   projects: PipelineProjectRow[],
-  quoteProjectIds: Set<string>,
+  adminContext: Map<string, ProjectAdminContext>,
   upcomingProjectIds: Set<string>
 ): Record<PipelineStageParam, number> {
-  const active = projects.filter(isVisibleActiveProject);
+  const active = projects.filter(isActiveProject);
 
   return {
     new_request: active.filter((p) => p.status === "new_request").length,
-    quote: active.filter((p) => quoteProjectIds.has(p.id)).length,
-    upcoming_shoot: active.filter((p) => upcomingProjectIds.has(p.id)).length,
+    quote: active.filter((p) => {
+      const ctx = adminContext.get(p.id);
+      return ctx ? isQuoteWaitingForApproval(p, ctx) : false;
+    }).length,
+    upcoming_shoot: active.filter((p) => isUpcomingShoot(p, upcomingProjectIds)).length,
     editing: active.filter((p) => p.status === "shoot_complete_editing").length,
     in_review: active.filter((p) => p.status === "ready_for_review").length,
-    awaiting_payment: active.filter((p) => p.status === "awaiting_payment").length,
+    awaiting_payment: active.filter((p) => isAwaitingPayment(p)).length,
   };
 }
 
 export function filterProjectsForStage(
   projects: PipelineProjectRow[],
   stage: PipelineStageParam,
-  quoteProjectIds: Set<string>,
+  adminContext: Map<string, ProjectAdminContext>,
   upcomingProjectIds: Set<string>
 ): PipelineProjectRow[] {
-  const active = projects.filter(isVisibleActiveProject);
+  const active = projects.filter(isActiveProject);
 
   switch (stage) {
     case "new_request":
       return active.filter((p) => p.status === "new_request");
     case "quote":
-      return active.filter((p) => quoteProjectIds.has(p.id));
+      return active.filter((p) => {
+        const ctx = adminContext.get(p.id);
+        return ctx ? isQuoteWaitingForApproval(p, ctx) : false;
+      });
     case "upcoming_shoot":
-      return active.filter((p) => upcomingProjectIds.has(p.id));
+      return active.filter((p) => isUpcomingShoot(p, upcomingProjectIds));
     case "editing":
       return active.filter((p) => p.status === "shoot_complete_editing");
     case "in_review":
       return active.filter((p) => p.status === "ready_for_review");
     case "awaiting_payment":
-      return active.filter((p) => p.status === "awaiting_payment");
+      return active.filter((p) => isAwaitingPayment(p));
     default:
       return active;
   }
-}
-
-async function loadQuoteProjectIds(
-  supabase: Awaited<ReturnType<typeof createClient>>
-): Promise<Set<string>> {
-  const { data: quoteRows } = await supabase
-    .from("project_quotes")
-    .select("project_id, title, quote_kind, status, projects(deleted_at, clients(deleted_at))")
-    .in("status", ["draft", "sent", "changes_requested"]);
-
-  const ids = new Set<string>();
-  for (const row of quoteRows ?? []) {
-    const quote = row as { project_id: string; title?: string; quote_kind?: string };
-    if (isPreliminaryQuote(quote as ProjectQuote)) continue;
-    const project = row.projects as unknown as { deleted_at?: string | null; clients?: ClientRef } | null;
-    if (project?.deleted_at || project?.clients?.deleted_at) continue;
-    ids.add(row.project_id);
-  }
-  return ids;
 }
 
 async function loadUpcomingProjectIds(
@@ -182,7 +187,7 @@ async function loadUpcomingProjectIds(
       deleted_at?: string | null;
       clients?: ClientRef;
     };
-    if (!isVisibleActiveProject(project)) continue;
+    if (!isActiveProject(project)) continue;
     if (!p.shoot_date) continue;
     const shootDay = new Date(`${p.shoot_date}T12:00:00`);
     if (shootDay >= today && shootDay <= twoWeeksOut) {
@@ -192,7 +197,7 @@ async function loadUpcomingProjectIds(
 
   for (const sp of shootProposals ?? []) {
     const project = sp.projects as unknown as { id?: string; deleted_at?: string | null; clients?: ClientRef } | null;
-    if (!project?.id || !isVisibleActiveProject(project)) continue;
+    if (!project?.id || !isActiveProject(project)) continue;
     ids.add(project.id);
   }
 
@@ -225,9 +230,11 @@ function enrichProjects(
 export interface PipelineContext {
   activeProjects: PipelineProjectRow[];
   hiddenCount: number;
-  quoteProjectIds: Set<string>;
+  adminContext: Map<string, ProjectAdminContext>;
   upcomingProjectIds: Set<string>;
   stageCounts: Record<PipelineStageParam, number>;
+  quotes: ProjectQuote[];
+  payments: Pick<Payment, "project_id" | "status">[];
 }
 
 export async function buildPipelineContext(): Promise<PipelineContext> {
@@ -236,9 +243,10 @@ export async function buildPipelineContext(): Promise<PipelineContext> {
   const [
     { data: allProjects },
     { count: hiddenCount },
-    quoteProjectIds,
+    { data: quoteRows },
+    { data: allPayments },
     upcomingProjectIds,
-    { data: payments },
+    { data: pendingPayments },
     { data: activities },
     { data: confirmedShoots },
   ] = await Promise.all([
@@ -250,7 +258,8 @@ export async function buildPipelineContext(): Promise<PipelineContext> {
       .from("projects")
       .select("id", { count: "exact", head: true })
       .not("deleted_at", "is", null),
-    loadQuoteProjectIds(supabase),
+    supabase.from("project_quotes").select("*"),
+    supabase.from("payments").select("project_id, status"),
     loadUpcomingProjectIds(supabase),
     supabase.from("payments").select("project_id, status").in("status", ["pending", "sent"]),
     supabase
@@ -261,7 +270,10 @@ export async function buildPipelineContext(): Promise<PipelineContext> {
     supabase.from("shoot_proposals").select("project_id, proposed_at").eq("status", "confirmed"),
   ]);
 
-  const pendingSet = new Set((payments ?? []).map((p) => p.project_id));
+  const quotes = (quoteRows ?? []) as ProjectQuote[];
+  const payments = (allPayments ?? []) as Pick<Payment, "project_id" | "status">[];
+
+  const pendingSet = new Set((pendingPayments ?? []).map((p) => p.project_id));
   const latestActivity = new Map<string, string>();
   activities?.forEach((a) => {
     if (a.project_id && !latestActivity.has(a.project_id)) {
@@ -271,18 +283,26 @@ export async function buildPipelineContext(): Promise<PipelineContext> {
   const confirmedShootMap = new Map(confirmedShoots?.map((s) => [s.project_id, s.proposed_at]));
 
   const activeProjects = enrichProjects(
-    (allProjects ?? []).filter(isVisibleActiveProject),
+    (allProjects ?? []).filter(isActiveProject),
     pendingSet,
     latestActivity,
     confirmedShootMap
   );
 
+  const adminContext = buildAdminContextMap(
+    activeProjects.map((p) => p.id),
+    quotes,
+    payments
+  );
+
   return {
     activeProjects,
     hiddenCount: hiddenCount ?? 0,
-    quoteProjectIds,
+    adminContext,
     upcomingProjectIds,
-    stageCounts: countByStage(activeProjects, quoteProjectIds, upcomingProjectIds),
+    stageCounts: countByStage(activeProjects, adminContext, upcomingProjectIds),
+    quotes,
+    payments,
   };
 }
 
@@ -339,7 +359,7 @@ export async function loadPipelinePageProjects(options: {
     projects = filterProjectsForStage(
       ctx.activeProjects,
       options.stage,
-      ctx.quoteProjectIds,
+      ctx.adminContext,
       ctx.upcomingProjectIds
     );
   }

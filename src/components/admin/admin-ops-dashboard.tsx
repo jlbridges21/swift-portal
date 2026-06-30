@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, formatRelativeTime } from "@/lib/utils";
 import { formatShootDateTime } from "@/lib/scheduling";
 import {
-  getQuoteAttentionLabel,
   type AdminDashboardData,
   type AdminDashboardProjectRow,
   type AdminPaymentRow,
@@ -49,7 +48,7 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
     },
     {
       label: "Quotes",
-      value: data.counts.quoteAttention,
+      value: data.counts.quotesWaiting,
       href: pipelineStageHref("quote"),
       icon: FileText,
       color: "text-violet-600 bg-violet-50",
@@ -129,12 +128,12 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
         <DashboardSection
           title="Quotes Needing Attention"
           icon={Send}
-          href={pipelineStageHref("quote")}
+          href="/admin/projects"
           emptyMessage="All quotes are up to date"
           isEmpty={data.quoteAttention.length === 0}
         >
-          {data.quoteAttention.map((q) => (
-            <QuoteRow key={q.id} quote={q} />
+          {data.quoteAttention.map((item) => (
+            <QuoteAttentionRow key={item.id} item={item} />
           ))}
         </DashboardSection>
 
@@ -289,19 +288,18 @@ function ProjectRow({
   );
 }
 
-function QuoteRow({ quote }: { quote: AdminQuoteAttentionRow }) {
-  const project = quote.projects;
+function QuoteAttentionRow({ item }: { item: AdminQuoteAttentionRow }) {
   return (
-    <Link href={project ? `/admin/projects/${project.id}#quote` : "/admin/projects"} className="block min-w-0">
+    <Link href={`/admin/projects/${item.project_id}#quote`} className="block min-w-0">
       <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border p-3 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-primary break-words">{quote.title}</p>
+          <p className="text-sm font-medium text-primary break-words">{item.project_name}</p>
           <p className="mt-0.5 text-xs text-muted break-words">
-            {project?.project_name ?? "Unknown project"} · {formatRelativeTime(quote.updated_at)}
+            {item.client_name ?? "Unknown client"} · {formatRelativeTime(item.updated_at)}
           </p>
         </div>
         <span className="shrink-0 self-start rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700 sm:self-center">
-          {getQuoteAttentionLabel(quote.status)}
+          {item.attentionLabel}
         </span>
       </div>
     </Link>

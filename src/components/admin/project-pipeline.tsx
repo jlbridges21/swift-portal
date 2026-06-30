@@ -140,39 +140,47 @@ export function ProjectPipeline({
                 key={col.value}
                 data-stage={col.value}
                 className={`flex shrink-0 flex-col rounded-xl border bg-slate-50/80 transition-all ${
-                  isCollapsed ? "w-14" : "w-64"
+                  isCollapsed ? "w-[4.5rem]" : "w-64"
                 } ${isOver ? "border-accent bg-accent/5" : "border-border"}`}
                 onDragOver={(e) => handleDragOver(e, col.value)}
                 onDragLeave={() => setOverColumn(null)}
                 onDrop={(e) => handleDrop(e, col.value)}
               >
-                <div className="flex items-center justify-between border-b border-border px-2 py-2.5 gap-1">
-                  <button
-                    type="button"
-                    onClick={() => toggleCollapsed(col.value)}
-                    className="flex min-h-8 min-w-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-white hover:text-primary"
-                    aria-label={isCollapsed ? `Expand ${col.label}` : `Collapse ${col.label}`}
-                  >
-                    {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-                  </button>
-                  {!isCollapsed ? (
-                    <h3 className="min-w-0 flex-1 text-xs font-semibold text-primary leading-tight truncate">
-                      {col.label}
-                    </h3>
-                  ) : (
-                    <span
-                      className="flex-1 text-[10px] font-semibold text-primary [writing-mode:vertical-rl] rotate-180 truncate max-h-24"
-                      title={col.label}
+                {isCollapsed ? (
+                  <div className="flex flex-col items-center gap-2 px-1 py-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleCollapsed(col.value)}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-white hover:text-primary"
+                      aria-label={`Expand ${col.label}`}
                     >
-                      {col.label}
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                    <span
+                      className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-muted shadow-sm"
+                      title={`${col.label}: ${items.length}`}
+                    >
+                      {items.length}
                     </span>
-                  )}
-                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-muted shadow-sm shrink-0">
-                    {items.length}
-                  </span>
-                </div>
-
-                {!isCollapsed ? (
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between border-b border-border px-2 py-2.5 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleCollapsed(col.value)}
+                        className="flex min-h-8 min-w-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-white hover:text-primary"
+                        aria-label={`Collapse ${col.label}`}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <h3 className="min-w-0 flex-1 text-xs font-semibold text-primary leading-tight truncate">
+                        {col.label}
+                      </h3>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-muted shadow-sm shrink-0">
+                        {items.length}
+                      </span>
+                    </div>
                   <div className="flex flex-1 flex-col gap-2 p-2 min-h-[100px]">
                     {items.map((project) => (
                       <div
@@ -242,7 +250,8 @@ export function ProjectPipeline({
                       </div>
                     )}
                   </div>
-                ) : null}
+                  </>
+                )}
               </div>
             );
           })}

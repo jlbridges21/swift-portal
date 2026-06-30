@@ -1,11 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
-import { isPreliminaryQuote } from "@/lib/quote-display";
+import {
+  getQuoteAttentionLabelFromReason,
+  getQuoteAttentionReason,
+  needsQuoteAttention,
+} from "@/lib/admin-project-status";
 import {
   buildPipelineContext,
   filterProjectsForStage,
   type PipelineStageParam,
 } from "@/lib/admin-project-pipeline";
-import type { Payment, ProjectQuote } from "@/lib/types";
+import type { Payment } from "@/lib/types";
 
 export interface AdminDashboardProjectRow {
   id: string;
@@ -20,11 +24,13 @@ export interface AdminDashboardProjectRow {
 
 export interface AdminQuoteAttentionRow {
   id: string;
-  title: string;
-  status: string;
   project_id: string;
+  project_name: string;
+  client_name: string | null;
+  status: string;
   updated_at: string;
-  projects: { id: string; project_name: string; clients: { name: string } | null } | null;
+  attentionReason: "needs_quote_sent" | "needs_payment_link";
+  attentionLabel: string;
 }
 
 export interface AdminPaymentRow extends Omit<Payment, "projects"> {
@@ -42,7 +48,8 @@ export interface AdminDashboardData {
   expiredPayments: AdminPaymentRow[];
   counts: {
     newRequests: number;
-    quoteAttention: number;
+    quotesWaiting: number;
+    quotesNeedingAttention: number;
     upcomingShoots: number;
     editingQueue: number;
     readyForDelivery: number;
@@ -102,18 +109,10 @@ function activePaymentRows(rows: AdminPaymentRow[] | null): AdminPaymentRow[] {
 export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
   const supabase = await createClient();
   const ctx = await buildPipelineContext();
-  const today = startOfToday();
-  const twoWeeksOut = addDays(today, 14);
-  const sevenDaysAgo = addDays(today, -7);
+  const sevenDaysAgo = addDays(startOfToday(), -7);
 
-  const [{ data: quoteRows }, { data: outstandingPayments }, { data: recentlyPaid }, { data: expiredPayments }] =
+  const [{ data: outstandingPayments }, { data: recentlyPaid }, { data: expiredPayments }] =
     await Promise.all([
-      supabase
-        .from("project_quotes")
-        .select("*, projects(id, project_name, deleted_at, clients(name, deleted_at))")
-        .in("status", ["draft", "sent", "changes_requested"])
-        .order("updated_at", { ascending: false })
-        .limit(12),
       supabase
         .from("payments")
         .select("*, projects(id, project_name, deleted_at, clients(name))")
@@ -135,44 +134,38 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
         .limit(6),
     ]);
 
-  const officialQuoteAttention = (quoteRows ?? []).filter((q) => {
-    if (isPreliminaryQuote(q as ProjectQuote)) return false;
-    const project = q.projects as { deleted_at?: string | null; clients?: { deleted_at?: string | null } | null };
-    return !project?.deleted_at && !project?.clients?.deleted_at;
-  }) as AdminQuoteAttentionRow[];
-
   const newRequests = filterProjectsForStage(
     ctx.activeProjects,
     "new_request",
-    ctx.quoteProjectIds,
+    ctx.adminContext,
     ctx.upcomingProjectIds
   ).map(toDashboardRow);
 
   const editingQueue = filterProjectsForStage(
     ctx.activeProjects,
     "editing",
-    ctx.quoteProjectIds,
+    ctx.adminContext,
     ctx.upcomingProjectIds
   ).map(toDashboardRow);
 
   const readyForReview = filterProjectsForStage(
     ctx.activeProjects,
     "in_review",
-    ctx.quoteProjectIds,
+    ctx.adminContext,
     ctx.upcomingProjectIds
   ).map(toDashboardRow);
 
   const awaitingPaymentProjects = filterProjectsForStage(
     ctx.activeProjects,
     "awaiting_payment",
-    ctx.quoteProjectIds,
+    ctx.adminContext,
     ctx.upcomingProjectIds
   ).map(toDashboardRow);
 
   const upcomingShoots = filterProjectsForStage(
     ctx.activeProjects,
     "upcoming_shoot",
-    ctx.quoteProjectIds,
+    ctx.adminContext,
     ctx.upcomingProjectIds
   )
     .map((p) => ({
@@ -186,6 +179,31 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
 
   const readyForDelivery = [...readyForReview, ...awaitingPaymentProjects].slice(0, 8);
 
+  const allQuoteAttention: AdminQuoteAttentionRow[] = [];
+
+  for (const project of ctx.activeProjects) {
+    const adminCtx = ctx.adminContext.get(project.id);
+    if (!adminCtx || !needsQuoteAttention(project, adminCtx)) continue;
+
+    const reason = getQuoteAttentionReason(project, adminCtx);
+    if (!reason) continue;
+
+    allQuoteAttention.push({
+      id: project.id,
+      project_id: project.id,
+      project_name: project.project_name,
+      client_name: project.clients?.name ?? null,
+      status: project.status,
+      updated_at: project.updated_at,
+      attentionReason: reason,
+      attentionLabel: getQuoteAttentionLabelFromReason(reason),
+    });
+  }
+
+  allQuoteAttention.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+  const quoteAttention = allQuoteAttention.slice(0, 12);
+
   const outstanding = activePaymentRows(outstandingPayments as AdminPaymentRow[] | null);
   const paid = activePaymentRows(recentlyPaid as AdminPaymentRow[] | null);
   const expired = activePaymentRows(expiredPayments as AdminPaymentRow[] | null);
@@ -194,7 +212,7 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
 
   return {
     newRequests: newRequests.slice(0, 8),
-    quoteAttention: officialQuoteAttention,
+    quoteAttention,
     upcomingShoots,
     editingQueue: editingQueue.slice(0, 8),
     readyForDelivery,
@@ -203,7 +221,8 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
     expiredPayments: expired,
     counts: {
       newRequests: stageCounts.new_request,
-      quoteAttention: stageCounts.quote,
+      quotesWaiting: stageCounts.quote,
+      quotesNeedingAttention: allQuoteAttention.length,
       upcomingShoots: stageCounts.upcoming_shoot,
       editingQueue: stageCounts.editing,
       readyForDelivery: stageCounts.in_review + stageCounts.awaiting_payment,
@@ -226,6 +245,10 @@ export function getQuoteAttentionLabel(status: string): string {
       return "Waiting for approval";
     case "changes_requested":
       return "Changes requested";
+    case "needs_quote_sent":
+      return "Finish & send quote";
+    case "needs_payment_link":
+      return "Send payment link";
     default:
       return status.replace(/_/g, " ");
   }
