@@ -34,7 +34,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
     supabase.from("payments").select("*").eq("project_id", id).order("created_at", { ascending: false }),
     supabase.from("shoot_proposals").select("*").eq("project_id", id).order("proposed_at", { ascending: true }),
     supabase.from("project_clients").select("*, clients(id, name, email, company, phone, full_name)").eq("project_id", id),
-    supabase.from("clients").select("id, name, email, company, phone, full_name").order("name"),
+    supabase.from("clients").select("id, name, email, company, phone, full_name").is("deleted_at", null).order("name"),
     supabase.from("activity_logs").select("*").eq("project_id", id).order("created_at", { ascending: false }),
     supabase.from("revisions").select("*").eq("project_id", id).order("created_at", { ascending: false }),
     supabase.from("project_quotes").select("*").eq("project_id", id).order("created_at", { ascending: false }),

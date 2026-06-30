@@ -118,6 +118,8 @@ export interface Client {
   last_activity_at?: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
 }
 
 export interface Property {
@@ -173,6 +175,8 @@ export interface Project {
   ghl_last_sync_attempt_at?: string | null;
   ghl_webhook_status_code?: number | null;
   ghl_webhook_response_body?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
   created_at: string;
   updated_at: string;
   clients?: Client;

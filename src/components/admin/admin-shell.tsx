@@ -14,6 +14,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    if (!showPwaNav) {
+      document.body.removeAttribute("data-admin-pwa-nav");
+      return;
+    }
+    document.body.setAttribute("data-admin-pwa-nav", "");
+    return () => document.body.removeAttribute("data-admin-pwa-nav");
+  }, [showPwaNav]);
+
   return (
     <>
       <div className={cn(showPwaNav && "admin-pwa-content-pad")}>{children}</div>

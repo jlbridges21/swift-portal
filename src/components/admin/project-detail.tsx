@@ -37,6 +37,7 @@ import { uploadMediaFile, retryMediaSave, validateMediaFileBeforeUpload, UploadS
 import { userFacingUploadError } from "@/lib/upload/upload-errors";
 import { ALLOWED_VIDEO_MIME_TYPES } from "@/lib/upload/constants";
 import { toast } from "sonner";
+import { useAsyncAction } from "@/lib/use-async-action";
 
 function dedupeMedia<T extends { id: string }>(items: T[]): T[] {
   const seen = new Set<string>();
@@ -99,6 +100,26 @@ export function AdminProjectDetail({
   const [sendingForReview, setSendingForReview] = useState(false);
   const [markingShootComplete, setMarkingShootComplete] = useState(false);
   const [creatingPayment, setCreatingPayment] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const { run: hideProject, pending: hidingProject } = useAsyncAction(async () => {
+    const res = await fetch(`/api/projects/${initialProject.id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to hide project");
+    toast.success("Project hidden from dashboard");
+    router.push("/admin/projects");
+    router.refresh();
+  }, { loadingLabel: "Hiding..." });
+
+  const { run: restoreProject, pending: restoringProject } = useAsyncAction(async () => {
+    const res = await fetch(`/api/projects/${initialProject.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "restore" }),
+    });
+    if (!res.ok) throw new Error("Failed to restore project");
+    toast.success("Project restored");
+    router.refresh();
+  }, { loadingLabel: "Restoring..." });
 
   useEffect(() => {
     setPaymentList(payments);
@@ -675,6 +696,15 @@ export function AdminProjectDetail({
             <Link href={portalUrl} target="_blank">
               <Button variant="outline" size="sm"><Eye className="h-4 w-4" /> Client Page</Button>
             </Link>
+            {initialProject.deleted_at ? (
+              <Button variant="outline" size="sm" disabled={restoringProject} onClick={() => restoreProject()}>
+                Restore
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" className="text-red-600" onClick={() => setShowDeleteConfirm(true)}>
+                <Trash2 className="h-4 w-4" /> Hide
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -1032,18 +1062,34 @@ export function AdminProjectDetail({
         onUpdate={(updated) => setRevisions((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))}
       />
 
-      <Modal open={showShootCompleteModal} onClose={() => markShootComplete(false)} title="Shoot Complete?">
-        <p className="text-sm text-muted mb-6">
+      <Modal open={showShootCompleteModal} onClose={() => markShootComplete(false)} title="Shoot Complete?"
+        footer={
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button variant="accent" className="min-h-11 flex-1" onClick={() => markShootComplete(true)}>
+              Yes, mark shoot complete
+            </Button>
+            <Button variant="outline" className="min-h-11 flex-1" onClick={() => markShootComplete(false)}>
+              No, keep current status
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-muted">
           You uploaded new photos to this project. Is this project&apos;s shoot complete?
         </p>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="accent" onClick={() => markShootComplete(true)}>
-            Yes, mark shoot complete
+      </Modal>
+
+      <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Hide this project?"
+        footer={
+          <Button variant="accent" className="w-full min-h-11 bg-red-600 hover:bg-red-700" disabled={hidingProject} onClick={() => hideProject()}>
+            {hidingProject ? "Hiding..." : "Hide from dashboard"}
           </Button>
-          <Button variant="outline" onClick={() => markShootComplete(false)}>
-            No, keep current status
-          </Button>
-        </div>
+        }
+      >
+        <p className="text-sm text-muted">
+          This will hide <strong>{displayName}</strong> from project lists and dashboard views.
+          Media, payments, and history are not permanently deleted and can be restored later.
+        </p>
       </Modal>
 
       <CreateClientModal

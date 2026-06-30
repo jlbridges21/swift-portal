@@ -61,6 +61,24 @@ function addDays(date: Date, days: number): Date {
   return d;
 }
 
+function activeProjectRows<T extends { deleted_at?: string | null }>(rows: T[] | null): T[] {
+  return (rows ?? []).filter((row) => !row.deleted_at);
+}
+
+function activePaymentRows(rows: AdminPaymentRow[] | null): AdminPaymentRow[] {
+  return (rows ?? []).filter((row) => {
+    const project = row.projects as { deleted_at?: string | null } | null;
+    return !project?.deleted_at;
+  });
+}
+
+function activeQuoteRows(rows: AdminQuoteAttentionRow[] | null): AdminQuoteAttentionRow[] {
+  return (rows ?? []).filter((row) => {
+    const project = row.projects as { deleted_at?: string | null } | null;
+    return !project?.deleted_at;
+  });
+}
+
 export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
   const supabase = await createClient();
   const today = startOfToday();
@@ -86,24 +104,26 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
     supabase
       .from("projects")
       .select("*, clients(name, company)")
+      .is("deleted_at", null)
       .eq("status", "new_request")
       .order("created_at", { ascending: false })
       .limit(8),
     supabase
       .from("project_quotes")
-      .select("*, projects(id, project_name, clients(name))")
+      .select("*, projects(id, project_name, deleted_at, clients(name))")
       .in("status", ["draft", "sent", "changes_requested"])
       .order("updated_at", { ascending: false })
       .limit(12),
     supabase
       .from("projects")
       .select("*, clients(name, company)")
+      .is("deleted_at", null)
       .eq("status", "scheduled")
       .order("shoot_date", { ascending: true })
       .limit(20),
     supabase
       .from("shoot_proposals")
-      .select("*, projects(id, project_name, property_address, status, shoot_date, created_at, updated_at, clients(name, company))")
+      .select("*, projects(id, project_name, property_address, status, shoot_date, created_at, updated_at, deleted_at, clients(name, company))")
       .eq("status", "confirmed")
       .gte("proposed_at", today.toISOString())
       .lte("proposed_at", twoWeeksOut.toISOString())
@@ -112,51 +132,54 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
     supabase
       .from("projects")
       .select("*, clients(name, company)")
+      .is("deleted_at", null)
       .eq("status", "shoot_complete_editing")
       .order("updated_at", { ascending: false })
       .limit(8),
     supabase
       .from("projects")
       .select("*, clients(name, company)")
+      .is("deleted_at", null)
       .eq("status", "ready_for_review")
       .order("updated_at", { ascending: false })
       .limit(8),
     supabase
       .from("projects")
       .select("*, clients(name, company)")
+      .is("deleted_at", null)
       .eq("status", "awaiting_payment")
       .order("updated_at", { ascending: false })
       .limit(8),
     supabase
       .from("payments")
-      .select("*, projects(id, project_name, clients(name))")
+      .select("*, projects(id, project_name, deleted_at, clients(name))")
       .in("status", ["pending", "sent"])
       .order("created_at", { ascending: false })
       .limit(8),
     supabase
       .from("payments")
-      .select("*, projects(id, project_name, clients(name))")
+      .select("*, projects(id, project_name, deleted_at, clients(name))")
       .eq("status", "paid")
       .gte("updated_at", sevenDaysAgo.toISOString())
       .order("updated_at", { ascending: false })
       .limit(6),
     supabase
       .from("payments")
-      .select("*, projects(id, project_name, clients(name))")
+      .select("*, projects(id, project_name, deleted_at, clients(name))")
       .eq("status", "expired")
       .order("updated_at", { ascending: false })
       .limit(6),
-    supabase.from("projects").select("*", { count: "exact", head: true }).eq("status", "ready_for_review"),
-    supabase.from("projects").select("*", { count: "exact", head: true }).eq("status", "awaiting_payment"),
-    supabase.from("projects").select("*", { count: "exact", head: true }).eq("status", "new_request"),
-    supabase.from("projects").select("*", { count: "exact", head: true }).eq("status", "shoot_complete_editing"),
+    supabase.from("projects").select("*", { count: "exact", head: true }).is("deleted_at", null).eq("status", "ready_for_review"),
+    supabase.from("projects").select("*", { count: "exact", head: true }).is("deleted_at", null).eq("status", "awaiting_payment"),
+    supabase.from("projects").select("*", { count: "exact", head: true }).is("deleted_at", null).eq("status", "new_request"),
+    supabase.from("projects").select("*", { count: "exact", head: true }).is("deleted_at", null).eq("status", "shoot_complete_editing"),
   ]);
 
-  const officialQuoteAttention = (quoteRows ?? []).filter(
-    (q) => !isPreliminaryQuote(q as ProjectQuote)
-  ) as AdminQuoteAttentionRow[];
+  const officialQuoteAttention = activeQuoteRows(
+    (quoteRows ?? []).filter((q) => !isPreliminaryQuote(q as ProjectQuote)) as AdminQuoteAttentionRow[]
+  );
 
-  const upcomingFromProjects = (scheduledProjects ?? [])
+  const upcomingFromProjects = activeProjectRows(scheduledProjects ?? [])
     .filter((p) => {
       if (!p.shoot_date) return false;
       const shootDay = new Date(`${p.shoot_date}T12:00:00`);
@@ -168,7 +191,7 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
     }));
 
   const upcomingFromProposals = (shootProposals ?? [])
-    .filter((sp) => sp.projects && sp.proposed_at)
+    .filter((sp) => sp.projects && sp.proposed_at && !(sp.projects as { deleted_at?: string | null }).deleted_at)
     .map((sp) => {
       const project = sp.projects as Project & { clients: { name: string; company: string | null } | null };
       return {
@@ -196,29 +219,28 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
     .slice(0, 8);
 
   const readyForDelivery = [
-    ...(readyForReview ?? []),
-    ...(awaitingPaymentProjects ?? []),
-  ]
-    .slice(0, 8) as AdminDashboardProjectRow[];
+    ...activeProjectRows(readyForReview ?? []),
+    ...activeProjectRows(awaitingPaymentProjects ?? []),
+  ].slice(0, 8) as AdminDashboardProjectRow[];
 
   return {
-    newRequests: (newRequests ?? []) as AdminDashboardProjectRow[],
+    newRequests: activeProjectRows(newRequests ?? []) as AdminDashboardProjectRow[],
     quoteAttention: officialQuoteAttention,
     upcomingShoots,
-    editingQueue: (editingQueue ?? []) as AdminDashboardProjectRow[],
+    editingQueue: activeProjectRows(editingQueue ?? []) as AdminDashboardProjectRow[],
     readyForDelivery,
-    outstandingPayments: (outstandingPayments ?? []) as AdminPaymentRow[],
-    recentlyPaid: (recentlyPaid ?? []) as AdminPaymentRow[],
-    expiredPayments: (expiredPayments ?? []) as AdminPaymentRow[],
+    outstandingPayments: activePaymentRows(outstandingPayments as AdminPaymentRow[] | null),
+    recentlyPaid: activePaymentRows(recentlyPaid as AdminPaymentRow[] | null),
+    expiredPayments: activePaymentRows(expiredPayments as AdminPaymentRow[] | null),
     counts: {
       newRequests: newRequestCount ?? newRequests?.length ?? 0,
       quoteAttention: officialQuoteAttention.length,
       upcomingShoots: upcomingShoots.length,
       editingQueue: editingCount ?? editingQueue?.length ?? 0,
       readyForDelivery: (readyForReview?.length ?? 0) + (awaitingPaymentProjects?.length ?? 0),
-      outstandingPayments: outstandingPayments?.length ?? 0,
-      recentlyPaid: recentlyPaid?.length ?? 0,
-      expiredPayments: expiredPayments?.length ?? 0,
+      outstandingPayments: activePaymentRows(outstandingPayments as AdminPaymentRow[] | null).length,
+      recentlyPaid: activePaymentRows(recentlyPaid as AdminPaymentRow[] | null).length,
+      expiredPayments: activePaymentRows(expiredPayments as AdminPaymentRow[] | null).length,
       inReview: inReviewCount ?? 0,
       awaitingPayment: awaitingPaymentCount ?? 0,
     },

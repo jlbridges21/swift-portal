@@ -8,14 +8,28 @@ import { Plus } from "lucide-react";
 import { ProjectPipeline } from "@/components/admin/project-pipeline";
 import { normalizeStatus } from "@/lib/constants";
 
-export default async function AdminProjectsPage() {
+interface PageProps {
+  searchParams: Promise<{ view?: string }>;
+}
+
+export default async function AdminProjectsPage({ searchParams }: PageProps) {
   const profile = await getProfile();
   if (!profile || profile.role !== "admin") redirect("/dashboard");
 
+  const { view } = await searchParams;
+  const showDeleted = view === "deleted";
+
   const supabase = await createClient();
 
+  let projectsQuery = supabase.from("projects").select("*, clients(name, company)").order("updated_at", { ascending: false });
+  if (showDeleted) {
+    projectsQuery = projectsQuery.not("deleted_at", "is", null);
+  } else {
+    projectsQuery = projectsQuery.is("deleted_at", null);
+  }
+
   const [{ data: projects }, { data: payments }, { data: activities }, { data: confirmedShoots }] = await Promise.all([
-    supabase.from("projects").select("*, clients(name, company)").order("updated_at", { ascending: false }),
+    projectsQuery,
     supabase.from("payments").select("project_id, status").eq("status", "pending"),
     supabase.from("activity_logs").select("project_id, description, created_at").order("created_at", { ascending: false }).limit(100),
     supabase.from("shoot_proposals").select("project_id, proposed_at").eq("status", "confirmed"),
@@ -44,15 +58,28 @@ export default async function AdminProjectsPage() {
       <Header variant="dashboard" userRole="admin" />
       <main className="mx-auto max-w-[100vw] px-4 py-8 sm:px-6 lg:px-8">
         <PageHeader
-          title="Project Pipeline"
-          description="Drag projects between stages — Swift Aerial Media workflow board."
+          title={showDeleted ? "Hidden Projects" : "Project Pipeline"}
+          description={
+            showDeleted
+              ? `${enriched.length} hidden project${enriched.length === 1 ? "" : "s"}`
+              : "Drag projects between stages — Swift Aerial Media workflow board."
+          }
         >
-          <Link href="/admin/projects/new">
-            <Button variant="accent" size="sm">
-              <Plus className="h-4 w-4" />
-              New Project
-            </Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={showDeleted ? "/admin/projects" : "/admin/projects?view=deleted"}>
+              <Button variant="outline" size="sm">
+                {showDeleted ? "Active projects" : "Hidden projects"}
+              </Button>
+            </Link>
+            {!showDeleted && (
+              <Link href="/admin/projects/new">
+                <Button variant="accent" size="sm">
+                  <Plus className="h-4 w-4" />
+                  New Project
+                </Button>
+              </Link>
+            )}
+          </div>
         </PageHeader>
 
         <ProjectPipeline projects={enriched} />

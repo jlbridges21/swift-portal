@@ -16,7 +16,7 @@ export default async function AdminClientDetailPage({ params }: PageProps) {
   if (!profile || profile.role !== "admin") redirect("/dashboard");
 
   const { id } = await params;
-  const data = await getClientCrmProfile(id);
+  const data = await getClientCrmProfile(id, { includeDeleted: true });
   if (!data) notFound();
 
   return (

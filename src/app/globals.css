@@ -101,7 +101,36 @@ body {
   padding-bottom: calc(var(--admin-pwa-nav-height) + env(safe-area-inset-bottom, 0px));
 }
 
+/* Modal scroll regions — clear admin PWA bottom nav on iPhone */
+.modal-scroll-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-scroll-body-pad {
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+}
+
+.modal-footer-pad {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
 /* Fixed drawers/modals that scroll above the admin PWA bottom nav */
 .admin-pwa-fixed-bottom-pad {
   padding-bottom: calc(var(--admin-pwa-nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);
+}
+
+@media (max-width: 767px) {
+  body[data-admin-pwa-nav] .modal-scroll-body-pad {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body[data-admin-pwa-nav] .modal-footer-pad {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body[data-admin-pwa-nav] .admin-pwa-fixed-bottom-pad {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
 }

@@ -97,12 +97,19 @@ export async function touchClientLogin(clientId: string, existingLastLogin: stri
   }
 }
 
-export async function getClientListRows(): Promise<ClientListRow[]> {
+export async function getClientListRows(options?: { includeDeleted?: boolean }): Promise<ClientListRow[]> {
   const supabase = await createClient();
   const service = await createServiceClient();
 
+  let clientsQuery = supabase.from("clients").select("*").order("created_at", { ascending: false });
+  if (options?.includeDeleted) {
+    clientsQuery = clientsQuery.not("deleted_at", "is", null);
+  } else {
+    clientsQuery = clientsQuery.is("deleted_at", null);
+  }
+
   const [{ data: clients }, { data: statsRows }, { data: payments }] = await Promise.all([
-    supabase.from("clients").select("*").order("created_at", { ascending: false }),
+    clientsQuery,
     supabase.from("client_stats").select("*"),
     supabase.from("payments").select("client_id, amount, status"),
   ]);
@@ -170,7 +177,10 @@ export async function getClientListRows(): Promise<ClientListRow[]> {
   });
 }
 
-export async function getClientCrmProfile(clientId: string): Promise<ClientCrmProfile | null> {
+export async function getClientCrmProfile(
+  clientId: string,
+  options?: { includeDeleted?: boolean }
+): Promise<ClientCrmProfile | null> {
   const supabase = await createClient();
   const service = await createServiceClient();
 
@@ -209,6 +219,7 @@ export async function getClientCrmProfile(clientId: string): Promise<ClientCrmPr
   ]);
 
   if (!client) return null;
+  if (client.deleted_at && !options?.includeDeleted) return null;
 
   const projectMap = new Map<string, Project>();
   (projectsByClient ?? []).forEach((p) => projectMap.set(p.id, p as Project));
@@ -217,9 +228,9 @@ export async function getClientCrmProfile(clientId: string): Promise<ClientCrmPr
     if (project?.id) projectMap.set(project.id, project);
   });
 
-  const projects = Array.from(projectMap.values()).sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-  );
+  const projects = Array.from(projectMap.values())
+    .filter((p) => options?.includeDeleted || !p.deleted_at)
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
   const stats: ClientFinancialStats = statsRow && !statsError
     ? {

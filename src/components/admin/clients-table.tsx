@@ -30,6 +30,7 @@ import type { ClientListRow } from "@/lib/clients-crm";
 
 interface ClientsTableProps {
   clients: ClientListRow[];
+  showDeleted?: boolean;
 }
 
 type SortKey =
@@ -48,7 +49,7 @@ type FilterKey =
   | "new"
   | "stale";
 
-export function ClientsTable({ clients }: ClientsTableProps) {
+export function ClientsTable({ clients, showDeleted = false }: ClientsTableProps) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -123,16 +124,36 @@ export function ClientsTable({ clients }: ClientsTableProps) {
 
   if (!clients.length) {
     return (
-      <EmptyState icon={Users} title="No clients yet" description="Create your first client to start managing projects.">
-        <Link href="/admin/clients/new">
-          <Button variant="accent">New Client</Button>
-        </Link>
+      <EmptyState
+        icon={Users}
+        title={showDeleted ? "No hidden clients" : "No clients yet"}
+        description={
+          showDeleted
+            ? "Deleted clients will appear here and can be restored."
+            : "Create your first client to start managing projects."
+        }
+      >
+        {!showDeleted && (
+          <Link href="/admin/clients/new">
+            <Button variant="accent">New Client</Button>
+          </Link>
+        )}
       </EmptyState>
     );
   }
 
   return (
     <>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted">
+          {showDeleted ? "Hidden clients (soft deleted)" : "Active clients"}
+        </p>
+        <Link href={showDeleted ? "/admin/clients" : "/admin/clients?view=deleted"}>
+          <Button variant="outline" size="sm">
+            {showDeleted ? "Back to active clients" : "View hidden clients"}
+          </Button>
+        </Link>
+      </div>
       <div className="mb-4 space-y-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="relative flex-1 max-w-md">
@@ -297,6 +318,7 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
   const [data, setData] = useState(initialData);
   const [notes, setNotes] = useState<ClientNote[]>(initialData.notes);
   const [showEdit, setShowEdit] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [editingNote, setEditingNote] = useState<ClientNote | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -343,6 +365,26 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
     toast.success("Client updated");
     router.refresh();
   }, { loadingLabel: "Saving..." });
+
+  const { run: hideClient, pending: hidingClient } = useAsyncAction(async () => {
+    const res = await fetch(`/api/clients/${client.id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to hide client");
+    toast.success("Client hidden from dashboard");
+    router.push("/admin/clients");
+    router.refresh();
+  }, { loadingLabel: "Hiding..." });
+
+  const { run: restoreClient, pending: restoringClient } = useAsyncAction(async () => {
+    const res = await fetch(`/api/clients/${client.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "restore" }),
+    });
+    if (!res.ok) throw new Error("Failed to restore client");
+    toast.success("Client restored");
+    router.push(`/admin/clients/${client.id}`);
+    router.refresh();
+  }, { loadingLabel: "Restoring..." });
 
   const { run: saveNote, pending: savingNote } = useAsyncAction(async () => {
     if (!noteText.trim()) return;
@@ -440,6 +482,15 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
           </Button>
           <Button variant="outline" size="sm" onClick={copyPortalLink}><Copy className="h-4 w-4" />Portal Link</Button>
           <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}><Pencil className="h-4 w-4" />Edit</Button>
+          {client.deleted_at ? (
+            <Button variant="outline" size="sm" disabled={restoringClient} onClick={() => restoreClient()}>
+              Restore Client
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={() => setShowDeleteConfirm(true)}>
+              <Trash2 className="h-4 w-4" />Hide
+            </Button>
+          )}
         </div>
       </div>
 
@@ -604,7 +655,13 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
       </section>
 
       {/* Edit client modal */}
-      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="Edit Client">
+      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="Edit Client"
+        footer={
+          <Button variant="accent" className="w-full min-h-11" disabled={savingClient} onClick={() => saveClient()}>
+            {savingClient ? "Saving..." : "Save Changes"}
+          </Button>
+        }
+      >
         <div className="space-y-4">
           <div>
             <Label>Name</Label>
@@ -633,29 +690,43 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
               ]}
             />
           </div>
-          <Button variant="accent" className="w-full" disabled={savingClient} onClick={() => saveClient()}>
-            {savingClient ? "Saving..." : "Save Changes"}
-          </Button>
         </div>
       </Modal>
 
-      {/* Note modal */}
       <Modal
         open={showNoteForm}
         onClose={() => { setShowNoteForm(false); setEditingNote(null); setNoteText(""); }}
         title={editingNote ? "Edit Note" : "Add Note"}
-      >
-        <div className="space-y-4">
-          <Textarea
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
-            placeholder="Internal note — not visible to client..."
-            rows={4}
-          />
-          <Button variant="accent" className="w-full" disabled={savingNote || !noteText.trim()} onClick={() => saveNote()}>
+        footer={
+          <Button
+            variant="accent"
+            className="w-full min-h-11"
+            disabled={savingNote || !noteText.trim()}
+            onClick={() => saveNote()}
+          >
             {savingNote ? "Saving..." : editingNote ? "Update Note" : "Add Note"}
           </Button>
-        </div>
+        }
+      >
+        <Textarea
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          placeholder="Internal note — not visible to client..."
+          rows={4}
+        />
+      </Modal>
+
+      <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Hide this client?"
+        footer={
+          <Button variant="accent" className="w-full min-h-11 bg-red-600 hover:bg-red-700" disabled={hidingClient} onClick={() => hideClient()}>
+            {hidingClient ? "Hiding..." : "Hide from dashboard"}
+          </Button>
+        }
+      >
+        <p className="text-sm text-muted">
+          This will hide <strong>{displayName}</strong> and their projects from your admin dashboard and lists.
+          Nothing is permanently erased — payment history, media, and notes remain in the database and can be restored later from Hidden Clients.
+        </p>
       </Modal>
     </div>
   );

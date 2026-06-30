@@ -172,7 +172,7 @@ export async function PATCH(request: Request) {
     await notifyProjectClients({
       type: "quote_sent",
       eventKey: "official_proposal_sent",
-      title: "Review Your Official Proposal",
+      title: "Review Your Proposal",
       body: await resolveProjectMessageTemplate(
         appSettings.workflow,
         "proposal_ready",
@@ -181,7 +181,7 @@ export async function PATCH(request: Request) {
           project_name: quote.title,
           portal_link: portalLink(`/dashboard/projects/${quote.project_id}#quote`),
         },
-        `Review your official proposal for "${quote.title}".`
+        `Review your proposal for "${quote.title}".`
       ),
       link: `/dashboard/projects/${quote.project_id}#quote`,
       projectId: quote.project_id,
