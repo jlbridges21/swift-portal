@@ -6,6 +6,7 @@ import { getAppSettings } from "@/lib/app-settings";
 import { getStripe } from "@/lib/stripe";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveMessageTemplate } from "@/lib/workflow";
 import { logProjectActivity } from "@/lib/activity";
+import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
 import { idempotencyKey } from "@/lib/idempotency";
 
 export async function POST(request: Request) {
@@ -69,6 +70,12 @@ export async function POST(request: Request) {
         ? body.product_description.trim().slice(0, 500)
         : undefined;
 
+    const stripeMetadata = buildStripePaymentMetadata({
+      paymentId: paymentRow.id,
+      projectId: body.project_id,
+      clientId: body.client_id,
+    });
+
     const paymentLink = await getStripe().paymentLinks.create({
       line_items: [
         {
@@ -84,11 +91,12 @@ export async function POST(request: Request) {
         },
       ],
       metadata: {
-        project_id: body.project_id,
-        payment_id: paymentRow.id,
-        client_id: body.client_id,
+        ...stripeMetadata,
         project_name: project?.project_name || "",
         ...(body.quote_id ? { quote_id: body.quote_id } : {}),
+      },
+      payment_intent_data: {
+        metadata: stripeMetadata,
       },
       after_completion: {
         type: "redirect",

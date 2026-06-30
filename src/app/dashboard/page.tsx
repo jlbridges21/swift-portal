@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { formatShootDateTime, getProjectShootDateTime } from "@/lib/scheduling";
 import { getProjectActiveQuote, getQuotePriceDisplay } from "@/lib/quote-display";
+import { paymentCheckoutPath } from "@/lib/payment-status";
 import type { Project, ShootProposal, ActivityLog, ProjectQuote } from "@/lib/types";
 
 export default async function ClientDashboard() {
@@ -289,11 +290,9 @@ export default async function ClientDashboard() {
                             {(payment.projects as { project_name: string }).project_name}
                           </p>
                         )}
-                        {payment.stripe_payment_link_url && (
-                          <a href={payment.stripe_payment_link_url} target="_blank" rel="noopener noreferrer" className="mt-3 block">
-                            <Button variant="accent" size="sm" className="w-full min-h-11">Pay Now</Button>
-                          </a>
-                        )}
+                        <a href={paymentCheckoutPath(payment.id)} className="mt-3 block">
+                          <Button variant="accent" size="sm" className="w-full min-h-11">Pay Now</Button>
+                        </a>
                       </CardContent>
                     </Card>
                   ))}

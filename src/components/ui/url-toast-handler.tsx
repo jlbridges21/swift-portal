@@ -20,7 +20,17 @@ export function UrlToastHandler() {
 
     if (payment === "success") {
       toast.success("Payment received — thank you!");
-      router.replace("/dashboard");
+      router.replace(`${pathname}#payments`);
+    }
+
+    if (payment === "already_completed") {
+      toast.info("This payment has already been completed.");
+      router.replace(`${pathname}#payments`);
+    }
+
+    if (payment === "cancelled") {
+      toast.message("Payment cancelled — you can try again when ready.");
+      router.replace(`${pathname}#payments`);
     }
   }, [searchParams, router, pathname]);
 

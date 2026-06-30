@@ -288,7 +288,7 @@ export function ProjectPageClient({
                   photos={photos}
                   getDownloadUrl={getDownloadUrl}
                   downloadsAllowed={downloadsUnlocked}
-                  compactInitialCount={10}
+                  compactInitialCount={12}
                 />
               ) : (
                 <EmptyState
@@ -418,7 +418,7 @@ export function ProjectPageClient({
                 photos={photos}
                 getDownloadUrl={getDownloadUrl}
                 downloadsAllowed={downloadsUnlocked}
-                compactInitialCount={10}
+                compactInitialCount={12}
               />
             </div>
           </MicrositeSection>

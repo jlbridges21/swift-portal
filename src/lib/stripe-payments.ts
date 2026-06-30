@@ -4,23 +4,36 @@ import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveMessageTemplate } from "@/lib/workflow";
+import { getStripe } from "@/lib/stripe";
+import { parsePaymentIdFromMetadata } from "@/lib/stripe-metadata";
+import { isPaymentComplete } from "@/lib/payment-status";
 import type { Payment } from "@/lib/types";
+import type Stripe from "stripe";
 
 interface PaymentSuccessOptions {
   payment: Payment;
   checkoutSessionId?: string;
+  paymentIntentId?: string;
   receiptUrl?: string | null;
   source: string;
 }
 
+export interface PaymentLookupOptions {
+  metadata?: Stripe.Metadata | null;
+  paymentLinkId?: string;
+  paymentIntentId?: string;
+  checkoutSessionId?: string;
+  clientReferenceId?: string;
+}
+
 /** Idempotent payment success — safe to call from multiple webhook events. */
 export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
-  const { payment, checkoutSessionId, receiptUrl, source } = options;
+  const { payment, checkoutSessionId, paymentIntentId, receiptUrl, source } = options;
   const appSettings = await getAppSettings();
   const { payments: payWorkflow } = appSettings.workflow;
 
-  if (payment.status === "paid") {
-    return { alreadyPaid: true };
+  if (isPaymentComplete(payment.status)) {
+    return { alreadyPaid: true, paymentId: payment.id, updated: false };
   }
 
   const supabase = await createServiceClient();
@@ -31,15 +44,31 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
       ? `Payment marked as paid manually: ${amountStr}`
       : `Payment received: ${amountStr}`;
 
-  await supabase
+  const { error: updateError } = await supabase
     .from("payments")
     .update({
       status: "paid",
       paid_at: paidAt,
       stripe_checkout_session_id: checkoutSessionId ?? payment.stripe_checkout_session_id,
+      stripe_payment_intent_id: paymentIntentId ?? payment.stripe_payment_intent_id,
       stripe_receipt_url: receiptUrl ?? payment.stripe_receipt_url,
     })
     .eq("id", payment.id);
+
+  if (updateError) {
+    throw new Error(`Failed to update payment ${payment.id}: ${updateError.message}`);
+  }
+
+  if (payment.stripe_payment_link_id) {
+    try {
+      await getStripe().paymentLinks.update(payment.stripe_payment_link_id, { active: false });
+    } catch (err) {
+      console.error(
+        `[stripe-webhook] Failed to deactivate payment link for payment ${payment.id}:`,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
 
   if (payWorkflow.autoMoveOnStripePaid) {
     await setProjectStatus({
@@ -112,30 +141,135 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     });
   }
 
-  return { alreadyPaid: false };
+  return { alreadyPaid: false, paymentId: payment.id, updated: true };
 }
 
-export async function findPaymentFromSession(metadata: {
-  payment_id?: string;
-  payment_link?: string;
-}): Promise<Payment | null> {
+export async function findPaymentFromStripe(
+  options: PaymentLookupOptions
+): Promise<Payment | null> {
   const supabase = await createServiceClient();
 
-  if (metadata.payment_id) {
-    const { data } = await supabase.from("payments").select("*").eq("id", metadata.payment_id).single();
+  const paymentId =
+    parsePaymentIdFromMetadata(options.metadata) ||
+    (options.clientReferenceId && /^[0-9a-f-]{36}$/i.test(options.clientReferenceId)
+      ? options.clientReferenceId
+      : undefined);
+
+  if (paymentId) {
+    const { data } = await supabase.from("payments").select("*").eq("id", paymentId).maybeSingle();
     if (data) return data as Payment;
   }
 
-  if (metadata.payment_link) {
+  if (options.paymentIntentId) {
     const { data } = await supabase
       .from("payments")
       .select("*")
-      .eq("stripe_payment_link_id", metadata.payment_link)
-      .single();
+      .eq("stripe_payment_intent_id", options.paymentIntentId)
+      .maybeSingle();
+    if (data) return data as Payment;
+  }
+
+  if (options.checkoutSessionId) {
+    const { data } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("stripe_checkout_session_id", options.checkoutSessionId)
+      .maybeSingle();
+    if (data) return data as Payment;
+  }
+
+  if (options.paymentLinkId) {
+    const { data } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("stripe_payment_link_id", options.paymentLinkId)
+      .maybeSingle();
     if (data) return data as Payment;
   }
 
   return null;
+}
+
+/** @deprecated Use findPaymentFromStripe */
+export async function findPaymentFromSession(metadata: {
+  payment_id?: string;
+  payment_link?: string;
+}): Promise<Payment | null> {
+  return findPaymentFromStripe({
+    metadata: metadata.payment_id ? { payment_id: metadata.payment_id } : undefined,
+    paymentLinkId: metadata.payment_link,
+  });
+}
+
+export async function resolvePaymentFromCheckoutSession(
+  session: Stripe.Checkout.Session
+): Promise<Payment | null> {
+  const paymentLinkId =
+    typeof session.payment_link === "string"
+      ? session.payment_link
+      : session.payment_link?.id;
+
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id;
+
+  let metadata = session.metadata ?? {};
+
+  if (!parsePaymentIdFromMetadata(metadata) && paymentIntentId) {
+    try {
+      const intent = await getStripe().paymentIntents.retrieve(paymentIntentId);
+      metadata = { ...metadata, ...intent.metadata };
+    } catch (err) {
+      console.error(
+        "[stripe-webhook] Failed to retrieve payment intent for session lookup:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  return findPaymentFromStripe({
+    metadata,
+    paymentLinkId,
+    paymentIntentId,
+    checkoutSessionId: session.id,
+    clientReferenceId: session.client_reference_id ?? undefined,
+  });
+}
+
+export async function resolvePaymentFromCharge(charge: Stripe.Charge): Promise<Payment | null> {
+  const paymentIntentId =
+    typeof charge.payment_intent === "string"
+      ? charge.payment_intent
+      : charge.payment_intent?.id;
+
+  let metadata = charge.metadata ?? {};
+
+  if (!parsePaymentIdFromMetadata(metadata) && paymentIntentId) {
+    try {
+      const intent = await getStripe().paymentIntents.retrieve(paymentIntentId);
+      metadata = { ...metadata, ...intent.metadata };
+    } catch (err) {
+      console.error(
+        "[stripe-webhook] Failed to retrieve payment intent for charge lookup:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  return findPaymentFromStripe({
+    metadata,
+    paymentIntentId,
+  });
+}
+
+export async function resolvePaymentFromPaymentIntent(
+  intent: Stripe.PaymentIntent
+): Promise<Payment | null> {
+  return findPaymentFromStripe({
+    metadata: intent.metadata,
+    paymentIntentId: intent.id,
+  });
 }
 
 export async function handlePaymentFailed(payment: Payment, reason: string) {

@@ -5,8 +5,9 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, Download, ExternalLink, Receipt } from "lucide-react";
+import { CreditCard, Download, Receipt } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { paymentCheckoutPath } from "@/lib/payment-status";
 
 /** Payment awaiting client action (link sent but not yet paid). */
 export function isOutstandingPayment(status: string): boolean {
@@ -54,15 +55,12 @@ export function PaymentsSection({ payments, isPreview, alwaysShow }: PaymentsSec
                         <p className="text-xs text-muted mt-1">Due {formatDate(p.due_date)}</p>
                       )}
                     </div>
-                    {(p.stripe_payment_link_url || p.payment_link_url) && !isPreview && (
-                      <a href={p.stripe_payment_link_url || p.payment_link_url || "#"} target="_blank" rel="noopener noreferrer">
+                    {!isPreview && (
+                      <a href={paymentCheckoutPath(p.id)}>
                         <Button variant="accent" className="w-full min-h-11 sm:w-auto">
-                          Pay Now <ExternalLink className="h-4 w-4" />
+                          Pay Now
                         </Button>
                       </a>
-                    )}
-                    {!isPreview && !(p.stripe_payment_link_url || p.payment_link_url) && (
-                      <p className="text-sm text-muted">Your payment link is being prepared — check back shortly.</p>
                     )}
                   </CardContent>
                 </Card>
