@@ -172,7 +172,7 @@ export async function PATCH(request: Request) {
     await notifyProjectClients({
       type: "quote_sent",
       eventKey: "official_proposal_sent",
-      title: "Review Your Proposal",
+      title: "Review Proposal",
       body: await resolveProjectMessageTemplate(
         appSettings.workflow,
         "proposal_ready",

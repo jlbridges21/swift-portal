@@ -11,7 +11,7 @@ export function clientStatusNotification(status: string): { title: string; body:
       body: "Swift Aerial Media is reviewing your project details. We'll be in touch shortly.",
     },
     quote_sent: {
-      title: "Review Your Proposal",
+      title: "Review Proposal",
       body: "We've prepared a proposal for your project. Review and approve it in your portal to move forward.",
     },
     proposal_approved: {

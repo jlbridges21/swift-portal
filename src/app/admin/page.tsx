@@ -20,7 +20,12 @@ export default async function AdminDashboard() {
   const supabase = await createClient();
 
   const [{ data: recentProjects }, { data: recentActivity }, dashboardData] = await Promise.all([
-    supabase.from("projects").select("*, clients(name, company)").order("created_at", { ascending: false }).limit(8),
+    supabase
+      .from("projects")
+      .select("*, clients(name, company, deleted_at)")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(8),
     supabase.from("activity_logs").select("*, projects(id, project_name)").order("created_at", { ascending: false }).limit(12),
     fetchAdminDashboardData(),
   ]);
@@ -55,22 +60,29 @@ export default async function AdminDashboard() {
                 </Link>
               </CardHeader>
               <CardContent className="min-w-0 space-y-3">
-                {recentProjects?.map((project) => (
-                  <Link key={project.id} href={`/admin/projects/${project.id}`} className="block min-w-0">
-                    <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border p-4 transition-colors hover:bg-slate-50 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                      <div className="min-w-0 flex-1 overflow-hidden">
-                        <p className="font-medium text-primary break-words whitespace-normal">{project.project_name}</p>
-                        <p className="mt-0.5 text-xs text-muted break-words whitespace-normal">
-                          {(project.clients as { name: string })?.name} · {formatDate(project.created_at)}
-                        </p>
+                {(() => {
+                  const visibleRecent = (recentProjects ?? []).filter(
+                    (project) =>
+                      !project.deleted_at &&
+                      !(project.clients as { deleted_at?: string | null } | null)?.deleted_at
+                  );
+                  if (!visibleRecent.length) {
+                    return <p className="py-6 text-center text-sm text-muted">No projects yet</p>;
+                  }
+                  return visibleRecent.map((project) => (
+                    <Link key={project.id} href={`/admin/projects/${project.id}`} className="block min-w-0">
+                      <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border p-4 transition-colors hover:bg-slate-50 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                        <div className="min-w-0 flex-1 overflow-hidden">
+                          <p className="font-medium text-primary break-words whitespace-normal">{project.project_name}</p>
+                          <p className="mt-0.5 text-xs text-muted break-words whitespace-normal">
+                            {(project.clients as { name: string })?.name} · {formatDate(project.created_at)}
+                          </p>
+                        </div>
+                        <StatusBadge status={project.status} className="max-w-full shrink-0 self-start whitespace-normal sm:text-right" />
                       </div>
-                      <StatusBadge status={project.status} className="max-w-full shrink-0 self-start whitespace-normal sm:text-right" />
-                    </div>
-                  </Link>
-                ))}
-                {(!recentProjects || recentProjects.length === 0) && (
-                  <p className="py-6 text-center text-sm text-muted">No projects yet</p>
-                )}
+                    </Link>
+                  ));
+                })()}
               </CardContent>
             </Card>
           </div>

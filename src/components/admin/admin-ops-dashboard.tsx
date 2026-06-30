@@ -11,6 +11,7 @@ import {
   type AdminPaymentRow,
   type AdminQuoteAttentionRow,
 } from "@/lib/admin-dashboard";
+import { pipelineStageHref } from "@/lib/admin-project-pipeline";
 import {
   ArrowRight,
   Calendar,
@@ -42,42 +43,42 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
     {
       label: "New Requests",
       value: data.counts.newRequests,
-      href: "/admin/projects?status=new_request",
+      href: pipelineStageHref("new_request"),
       icon: Inbox,
       color: "text-blue-600 bg-blue-50",
     },
     {
       label: "Quotes",
       value: data.counts.quoteAttention,
-      href: "/admin/projects?status=quote_sent",
+      href: pipelineStageHref("quote"),
       icon: FileText,
       color: "text-violet-600 bg-violet-50",
     },
     {
       label: "Upcoming Shoots",
       value: data.counts.upcomingShoots,
-      href: "/admin/calendar",
+      href: pipelineStageHref("upcoming_shoot"),
       icon: Calendar,
       color: "text-sky-600 bg-sky-50",
     },
     {
       label: "Editing",
       value: data.counts.editingQueue,
-      href: "/admin/projects?status=shoot_complete_editing",
+      href: pipelineStageHref("editing"),
       icon: Pencil,
       color: "text-indigo-600 bg-indigo-50",
     },
     {
       label: "In Review",
       value: data.counts.inReview,
-      href: "/admin/projects?status=ready_for_review",
+      href: pipelineStageHref("in_review"),
       icon: Camera,
       color: "text-purple-600 bg-purple-50",
     },
     {
       label: "Awaiting Payment",
       value: data.counts.awaitingPayment,
-      href: "/admin/projects?status=awaiting_payment",
+      href: pipelineStageHref("awaiting_payment"),
       icon: CreditCard,
       color: "text-orange-600 bg-orange-50",
     },
@@ -116,7 +117,7 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
         <DashboardSection
           title="New Requests"
           icon={Inbox}
-          href="/admin/projects?status=new_request"
+          href={pipelineStageHref("new_request")}
           emptyMessage="No new requests — you're caught up"
           isEmpty={data.newRequests.length === 0}
         >
@@ -128,7 +129,7 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
         <DashboardSection
           title="Quotes Needing Attention"
           icon={Send}
-          href="/admin/projects?status=quote_sent"
+          href={pipelineStageHref("quote")}
           emptyMessage="All quotes are up to date"
           isEmpty={data.quoteAttention.length === 0}
         >
@@ -140,7 +141,7 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
         <DashboardSection
           title="Upcoming Shoots"
           icon={Calendar}
-          href="/admin/calendar"
+          href={pipelineStageHref("upcoming_shoot")}
           emptyMessage="No shoots scheduled in the next two weeks"
           isEmpty={data.upcomingShoots.length === 0}
         >
@@ -162,7 +163,7 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
         <DashboardSection
           title="Editing Queue"
           icon={Pencil}
-          href="/admin/projects?status=shoot_complete_editing"
+          href={pipelineStageHref("editing")}
           emptyMessage="Editing queue is clear"
           isEmpty={data.editingQueue.length === 0}
         >
@@ -174,7 +175,7 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
         <DashboardSection
           title="Ready for Delivery"
           icon={Truck}
-          href="/admin/projects?status=ready_for_review"
+          href={pipelineStageHref("in_review")}
           emptyMessage="Nothing waiting for delivery"
           isEmpty={data.readyForDelivery.length === 0}
         >
@@ -186,7 +187,7 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
         <DashboardSection
           title="Payment Status"
           icon={CreditCard}
-          href="/admin/projects?status=awaiting_payment"
+          href={pipelineStageHref("awaiting_payment")}
           emptyMessage="No outstanding payments"
           isEmpty={
             data.outstandingPayments.length === 0 &&

@@ -2,56 +2,47 @@ import Link from "next/link";
 import { Header, PageHeader } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { getProfile } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { ProjectPipeline } from "@/components/admin/project-pipeline";
-import { normalizeStatus } from "@/lib/constants";
+import {
+  loadPipelinePageProjects,
+  parsePipelineStageParam,
+  PIPELINE_STAGE_CONFIG,
+  type PipelineStageParam,
+} from "@/lib/admin-project-pipeline";
 
 interface PageProps {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; stage?: string; status?: string }>;
 }
+
+const LEGACY_STATUS_TO_STAGE: Record<string, PipelineStageParam> = {
+  new_request: "new_request",
+  quote_sent: "quote",
+  shoot_complete_editing: "editing",
+  ready_for_review: "in_review",
+  awaiting_payment: "awaiting_payment",
+};
 
 export default async function AdminProjectsPage({ searchParams }: PageProps) {
   const profile = await getProfile();
   if (!profile || profile.role !== "admin") redirect("/dashboard");
 
-  const { view } = await searchParams;
+  const { view, stage: stageParam, status: legacyStatus } = await searchParams;
   const showDeleted = view === "deleted";
+  const stage =
+    showDeleted
+      ? null
+      : parsePipelineStageParam(stageParam) ??
+        (legacyStatus ? LEGACY_STATUS_TO_STAGE[legacyStatus] ?? null : null);
 
-  const supabase = await createClient();
-
-  let projectsQuery = supabase.from("projects").select("*, clients(name, company)").order("updated_at", { ascending: false });
-  if (showDeleted) {
-    projectsQuery = projectsQuery.not("deleted_at", "is", null);
-  } else {
-    projectsQuery = projectsQuery.is("deleted_at", null);
-  }
-
-  const [{ data: projects }, { data: payments }, { data: activities }, { data: confirmedShoots }] = await Promise.all([
-    projectsQuery,
-    supabase.from("payments").select("project_id, status").eq("status", "pending"),
-    supabase.from("activity_logs").select("project_id, description, created_at").order("created_at", { ascending: false }).limit(100),
-    supabase.from("shoot_proposals").select("project_id, proposed_at").eq("status", "confirmed"),
-  ]);
-
-  const confirmedShootMap = new Map(confirmedShoots?.map((s) => [s.project_id, s.proposed_at]));
-
-  const pendingSet = new Set(payments?.map((p) => p.project_id));
-  const latestActivity = new Map<string, string>();
-  activities?.forEach((a) => {
-    if (a.project_id && !latestActivity.has(a.project_id)) {
-      latestActivity.set(a.project_id, a.description);
-    }
+  const { projects, activeCount, hiddenCount, stageCounts } = await loadPipelinePageProjects({
+    showDeleted,
+    stage,
   });
 
-  const enriched = (projects ?? []).map((p) => ({
-    ...p,
-    status: normalizeStatus(p.status),
-    pendingPayment: pendingSet.has(p.id),
-    recentActivity: latestActivity.get(p.id),
-    confirmedShootAt: confirmedShootMap.get(p.id) ?? null,
-  }));
+  const stageConfig = stage ? PIPELINE_STAGE_CONFIG[stage] : null;
+  const filteredCount = stage ? stageCounts[stage] : null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -61,14 +52,14 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
           title={showDeleted ? "Hidden Projects" : "Project Pipeline"}
           description={
             showDeleted
-              ? `${enriched.length} hidden project${enriched.length === 1 ? "" : "s"}`
-              : "Drag projects between stages — Swift Aerial Media workflow board."
+              ? `${hiddenCount} hidden project${hiddenCount === 1 ? "" : "s"}`
+              : `${activeCount} active project${activeCount === 1 ? "" : "s"}`
           }
         >
           <div className="flex flex-wrap gap-2">
             <Link href={showDeleted ? "/admin/projects" : "/admin/projects?view=deleted"}>
               <Button variant="outline" size="sm">
-                {showDeleted ? "Active projects" : "Hidden projects"}
+                {showDeleted ? `Active projects (${activeCount})` : `Hidden projects (${hiddenCount})`}
               </Button>
             </Link>
             {!showDeleted && (
@@ -82,7 +73,13 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
           </div>
         </PageHeader>
 
-        <ProjectPipeline projects={enriched} />
+        <ProjectPipeline
+          projects={projects}
+          stage={stage}
+          stageLabel={stageConfig?.label}
+          scrollToStatus={stageConfig?.scrollToStatus}
+          filteredCount={filteredCount}
+        />
       </main>
     </div>
   );
