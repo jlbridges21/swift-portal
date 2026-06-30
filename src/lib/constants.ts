@@ -1,6 +1,6 @@
 export const PROJECT_STATUSES = [
   { value: "new_request", label: "New Request", clientLabel: "Request Received", order: 0 },
-  { value: "quote_sent", label: "Quote Sent", clientLabel: "Review Your Proposal", order: 1 },
+  { value: "quote_sent", label: "Quote Sent", clientLabel: "Review Proposal", order: 1 },
   { value: "proposal_approved", label: "Proposal Approved – Awaiting Schedule", clientLabel: "Scheduling Your Shoot", order: 2 },
   { value: "scheduled", label: "Scheduled", clientLabel: "Shoot Scheduled", order: 3 },
   { value: "shoot_complete_editing", label: "Shoot Complete", clientLabel: "Media in Production", order: 4 },
