@@ -12,12 +12,21 @@ const STAGE_LABELS: Record<DownloadStage, string> = {
   preparing: "Preparing files",
   compressing: "Compressing media",
   starting: "Starting download",
-  done: "Download starting…",
+  done: "Download starting...",
   error: "Download failed",
 };
 
 const HELP_MESSAGE =
   "Preparing your download. Large photo and video galleries may take a minute. Please keep this page open.";
+
+const ZIP_FAIL_FALLBACK =
+  "We couldn't prepare the full ZIP. You can still download files individually below.";
+
+interface ZipErrorBody {
+  error?: string;
+  message?: string;
+  details?: string;
+}
 
 interface ProjectZipDownloadProps {
   projectId: string;
@@ -32,13 +41,19 @@ export function ProjectZipDownload({
   buttonClassName,
   variant = "hero",
 }: ProjectZipDownloadProps) {
+  const [mounted, setMounted] = useState(false);
   const [active, setActive] = useState(false);
   const [stage, setStage] = useState<DownloadStage>("preparing");
   const [progress, setProgress] = useState<number | null>(null);
   const [indeterminate, setIndeterminate] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const stageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const clearTimers = useCallback(() => {
     if (stageTimerRef.current) clearInterval(stageTimerRef.current);
@@ -59,12 +74,12 @@ export function ProjectZipDownload({
     setStage("preparing");
     setProgress(null);
     setIndeterminate(true);
+    setErrorMessage(null);
 
     let tick = 0;
     stageTimerRef.current = setInterval(() => {
       tick++;
-      if (tick === 2) setStage("compressing");
-      if (tick >= 4) setStage("compressing");
+      if (tick >= 2) setStage("compressing");
     }, 6000);
 
     let pulse = 12;
@@ -75,7 +90,7 @@ export function ProjectZipDownload({
   }
 
   async function handleDownload() {
-    if (active) return;
+    if (!mounted || active) return;
 
     setActive(true);
     startStageAnimation();
@@ -91,32 +106,36 @@ export function ProjectZipDownload({
 
       clearTimers();
 
+      const contentType = res.headers.get("Content-Type") ?? "";
+
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        const data = (await res.json().catch(() => ({}))) as ZipErrorBody;
         console.error("[project-zip-client] download failed", {
           projectId,
           status: res.status,
           error: data.error,
+          message: data.message,
+          details: data.details,
         });
-        throw new Error(
-          data.error ||
-            "Download failed. Please try again, or download files individually."
-        );
+        const userMessage = data.message || ZIP_FAIL_FALLBACK;
+        setErrorMessage(userMessage);
+        throw new Error(userMessage);
       }
 
-      const contentType = res.headers.get("Content-Type") ?? "";
       if (!contentType.includes("zip") && !contentType.includes("octet-stream")) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error || "Unexpected response from download server.");
+        const data = (await res.json().catch(() => ({}))) as ZipErrorBody;
+        const userMessage = data.message || "Unexpected response from download server.";
+        setErrorMessage(userMessage);
+        throw new Error(userMessage);
       }
 
       setStage("starting");
       const contentLength = res.headers.get("Content-Length");
-      const hasLength = contentLength && Number.parseInt(contentLength, 10) > 0;
+      const total = contentLength ? Number.parseInt(contentLength, 10) : 0;
+      const hasLength = total > 0;
 
       if (hasLength && res.body) {
         setIndeterminate(false);
-        const total = Number.parseInt(contentLength!, 10);
         const reader = res.body.getReader();
         const chunks: Uint8Array[] = [];
         let received = 0;
@@ -133,7 +152,7 @@ export function ProjectZipDownload({
         triggerBrowserDownload(blob, parseFilename(res));
         setProgress(100);
         setStage("done");
-        toast.success("Download starting…");
+        toast.success("Download starting...");
       } else {
         setIndeterminate(true);
         setProgress(85);
@@ -141,7 +160,7 @@ export function ProjectZipDownload({
         triggerBrowserDownload(blob, parseFilename(res));
         setProgress(100);
         setStage("done");
-        toast.success("Download starting…");
+        toast.success("Download starting...");
       }
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -150,18 +169,18 @@ export function ProjectZipDownload({
       setIndeterminate(false);
       setProgress(0);
       const message =
-        err instanceof Error
-          ? err.message
-          : "Download failed. Please try again, or download files individually.";
+        err instanceof Error ? err.message : ZIP_FAIL_FALLBACK;
+      if (!errorMessage) setErrorMessage(message);
       console.error("[project-zip-client]", message, err);
-      toast.error(message);
+      toast.error(errorMessage ?? `${message} ${ZIP_FAIL_FALLBACK}`);
     } finally {
       setTimeout(() => {
         setActive(false);
         setProgress(null);
         setIndeterminate(true);
         setStage("preparing");
-      }, 1800);
+        setErrorMessage(null);
+      }, 3000);
       abortRef.current = null;
     }
   }
@@ -173,7 +192,7 @@ export function ProjectZipDownload({
       <button
         type="button"
         onClick={handleDownload}
-        disabled={active}
+        disabled={!mounted || active}
         aria-busy={active}
         className={cn(
           isHero
@@ -187,7 +206,7 @@ export function ProjectZipDownload({
         ) : (
           <Download className={cn("h-4 w-4", isHero && "opacity-80 group-hover:opacity-100")} />
         )}
-        {active ? "Preparing download…" : "Download All"}
+        {active ? "Preparing download..." : "Download All"}
       </button>
 
       {active && (
@@ -227,6 +246,11 @@ export function ProjectZipDownload({
               <Progress value={progress ?? 0} className={isHero ? "bg-white/20" : undefined} />
             )}
           </div>
+          {stage === "error" && errorMessage && (
+            <p className={cn("text-xs", isHero ? "text-red-200" : "text-red-600")}>
+              {errorMessage} {ZIP_FAIL_FALLBACK}
+            </p>
+          )}
         </div>
       )}
     </div>

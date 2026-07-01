@@ -1,14 +1,15 @@
-import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import {
   authorizeProjectZipDownload,
-  buildProjectZipStream,
+  buildProjectZipBuffer,
   buildZipFilename,
   contentDispositionAttachment,
   pickDownloadableAssets,
+  zipErrorResponse,
   zipLog,
+  ZipDownloadError,
 } from "@/lib/project-zip-download";
 
 export const runtime = "nodejs";
@@ -23,29 +24,47 @@ export async function GET(
   const logCtx = { projectId };
 
   try {
-    const profile = await getProfile();
+    zipLog("start", logCtx, { phase: "request_received" });
+
+    let profile;
+    try {
+      profile = await getProfile();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      zipLog("error", logCtx, { phase: "get_profile", message });
+      return zipErrorResponse("ZIP_DOWNLOAD_FAILED", "Authentication failed.", message, 401);
+    }
+
     if (!profile) {
       zipLog("auth", logCtx, { result: "unauthorized" });
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return zipErrorResponse("ZIP_DOWNLOAD_FAILED", "Unauthorized.", "no profile", 401);
     }
 
     const ctx = { ...logCtx, userId: profile.id, role: profile.role };
-    zipLog("start", ctx, { email: profile.email });
+    zipLog("auth", ctx, { email: profile.email });
 
-    const supabase = await createServiceClient();
+    let supabase;
+    try {
+      supabase = await createServiceClient();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      zipLog("error", ctx, { phase: "create_service_client", message });
+      return zipErrorResponse(
+        "ZIP_DOWNLOAD_FAILED",
+        "Storage service unavailable.",
+        message,
+        500
+      );
+    }
+
     const auth = await authorizeProjectZipDownload(profile, projectId, supabase);
-
     if (!auth.ok) {
-      zipLog("access", ctx, { result: "denied", status: auth.status, reason: auth.error });
-      return NextResponse.json({ error: auth.error }, { status: auth.status });
+      zipLog("access", ctx, { result: "denied", status: auth.status, details: auth.details });
+      return zipErrorResponse("ZIP_DOWNLOAD_FAILED", auth.error, auth.details, auth.status);
     }
 
     const { project, isAdmin } = auth;
-    zipLog("project", ctx, {
-      found: true,
-      status: project.status,
-      isAdmin,
-    });
+    zipLog("project", ctx, { found: true, status: project.status, isAdmin });
 
     const { data: media, error: mediaError } = await supabase
       .from("media_assets")
@@ -56,7 +75,12 @@ export async function GET(
 
     if (mediaError) {
       zipLog("error", ctx, { phase: "media_query", message: mediaError.message });
-      return NextResponse.json({ error: "Could not load project media." }, { status: 500 });
+      return zipErrorResponse(
+        "ZIP_DOWNLOAD_FAILED",
+        "Could not load project media.",
+        mediaError.message,
+        500
+      );
     }
 
     zipLog("media_query", ctx, { totalAssets: media?.length ?? 0 });
@@ -64,59 +88,58 @@ export async function GET(
     const downloadable = pickDownloadableAssets(media ?? [], isAdmin);
     zipLog("media_filter", ctx, {
       downloadableCount: downloadable.length,
-      assetIds: downloadable.map((a) => a.id),
+      paths: downloadable.map((a) => ({ id: a.id, path: a.file_path, name: a.file_name })),
     });
 
     if (!downloadable.length) {
-      return NextResponse.json({ error: "No downloadable files for this project." }, { status: 404 });
+      return zipErrorResponse(
+        "ZIP_DOWNLOAD_FAILED",
+        "No downloadable files for this project.",
+        "no media with valid storage paths",
+        404
+      );
     }
 
-    const { stream, fileCount, totalBytes, skipped } = await buildProjectZipStream(
-      supabase,
-      downloadable,
-      ctx
-    );
+    let zipResult;
+    try {
+      zipResult = await buildProjectZipBuffer(supabase, downloadable, ctx);
+    } catch (err) {
+      if (err instanceof ZipDownloadError) {
+        zipLog("error", ctx, {
+          phase: "zip_build",
+          code: err.code,
+          message: err.message,
+          details: err.details,
+        });
+        return zipErrorResponse(err.code, err.message, err.details, err.status);
+      }
+      throw err;
+    }
 
     const filename = buildZipFilename(project.project_name, project.property_address);
 
-    const webStream = Readable.toWeb(stream) as ReadableStream<Uint8Array>;
-
-    return new NextResponse(webStream, {
+    return new NextResponse(new Uint8Array(zipResult.buffer), {
       headers: {
         "Content-Type": "application/zip",
         "Content-Disposition": contentDispositionAttachment(filename),
+        "Content-Length": String(zipResult.buffer.length),
         "Cache-Control": "no-store",
-        "X-Zip-File-Count": String(fileCount),
-        "X-Zip-Bytes-Estimate": String(totalBytes),
-        "X-Zip-Skipped-Count": String(skipped.length),
+        "X-Zip-File-Count": String(zipResult.fileCount),
+        "X-Zip-Bytes": String(zipResult.buffer.length),
+        "X-Zip-Skipped-Count": String(zipResult.skipped.length),
       },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-
-    if (message === "NO_FILES_ADDED") {
-      zipLog("error", logCtx, {
-        phase: "zip_build",
-        message: "no files could be fetched from storage",
-      });
-      return NextResponse.json(
-        {
-          error:
-            "No files could be downloaded. Your deliverables may still be processing — try again shortly, or download files individually.",
-        },
-        { status: 404 }
-      );
-    }
-
-    zipLog("error", logCtx, { phase: "unhandled", message });
+    const stack = err instanceof Error ? err.stack : undefined;
+    zipLog("error", logCtx, { phase: "unhandled", message, stack });
     console.error("[project-zip] unhandled error", err);
 
-    return NextResponse.json(
-      {
-        error:
-          "We couldn't prepare your ZIP download. Please try again, or download files individually from the gallery.",
-      },
-      { status: 500 }
+    return zipErrorResponse(
+      "ZIP_DOWNLOAD_FAILED",
+      "We couldn't prepare your ZIP download. Please try again, or download files individually from the gallery.",
+      message,
+      500
     );
   }
 }
