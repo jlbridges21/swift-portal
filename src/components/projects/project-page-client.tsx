@@ -232,9 +232,7 @@ export function ProjectPageClient({
       </ProjectHero>
 
       <main className="mobile-container py-12 pb-16 space-y-16">
-        {!isPreview && (
-          <NextStepBanner step={clientStep} />
-        )}
+        <NextStepBanner step={clientStep} />
 
         <Card className="border-0 shadow-lg shadow-slate-200/50 rounded-2xl overflow-hidden">
           <CardHeader className="bg-white border-b border-border/60 pb-4">
@@ -245,18 +243,17 @@ export function ProjectPageClient({
           </CardContent>
         </Card>
 
-        {!isPreview && isClientView && (
+        {(isClientView || isPreview) && (
           <ClientPricingCta project={project} quotes={quotes} payments={payments} />
         )}
 
-        {!isPreview && (
-          <QuoteSection
-            projectId={project.id}
-            quotes={quotes}
-            isAdmin={!!isAdmin}
-            allowClientProposalChanges={allowClientProposalChanges}
-          />
-        )}
+        <QuoteSection
+          projectId={project.id}
+          quotes={quotes}
+          isAdmin={!!isAdmin}
+          previewMode={isPreview}
+          allowClientProposalChanges={allowClientProposalChanges}
+        />
 
         {!isPreview && (
           <Suspense fallback={null}>

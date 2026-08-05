@@ -30,6 +30,8 @@ interface QuoteSectionProps {
   projectId: string;
   quotes: ProjectQuote[];
   isAdmin: boolean;
+  /** Admin viewing the client page: show the client's view, read-only. */
+  previewMode?: boolean;
   allowClientProposalChanges?: boolean;
   onStatusChange?: (status: string) => void;
   /** Admin-only: for one-click payment link from proposal */
@@ -54,6 +56,7 @@ export function QuoteSection({
   projectId,
   quotes: initialQuotes,
   isAdmin,
+  previewMode = false,
   allowClientProposalChanges = true,
   onStatusChange,
   clientId,
@@ -80,7 +83,8 @@ export function QuoteSection({
     setQuotes(initialQuotes);
   }, [initialQuotes]);
 
-  const activeDisplay = getProjectActiveQuote(quotes, isAdmin ? "admin" : "client");
+  const asAdmin = isAdmin && !previewMode;
+  const activeDisplay = getProjectActiveQuote(quotes, asAdmin ? "admin" : "client");
   const preliminaryQuote = getLatestPreliminaryQuote(quotes);
 
   const changesRequestedQuote =
@@ -489,15 +493,30 @@ export function QuoteSection({
       return (
         <div className="flex flex-col gap-3 w-full">
           <div className="flex flex-wrap gap-2">
-            <Button variant="accent" disabled={approving || requestingChanges} className="min-h-11" onClick={() => quoteAction(quote.id, "approve")}>
+            <Button
+              variant="accent"
+              disabled={previewMode || approving || requestingChanges}
+              className="min-h-11"
+              onClick={() => quoteAction(quote.id, "approve")}
+            >
               <Check className="h-4 w-4" /> {approving ? "Approving…" : "Approve Proposal"}
             </Button>
             {allowClientProposalChanges && !showChangeForm && (
-              <Button variant="outline" disabled={approving || requestingChanges} className="min-h-11" onClick={() => setShowChangeForm(true)}>
+              <Button
+                variant="outline"
+                disabled={previewMode || approving || requestingChanges}
+                className="min-h-11"
+                onClick={() => setShowChangeForm(true)}
+              >
                 <MessageSquare className="h-4 w-4" /> Request Changes
               </Button>
             )}
           </div>
+          {previewMode && (
+            <p className="text-xs text-muted">
+              The client sees these buttons enabled. They are disabled in admin preview.
+            </p>
+          )}
           {showChangeForm && allowClientProposalChanges && (
             <div className="space-y-2 rounded-lg border border-border bg-white p-3">
               <Label htmlFor="change-feedback">What would you like changed?</Label>
@@ -603,7 +622,7 @@ export function QuoteSection({
     );
   }
 
-  const sectionTitle = isAdmin
+  const sectionTitle = asAdmin
     ? "Estimates & Proposals"
     : activeDisplay?.kind === "official"
       ? "Official Proposal"
@@ -616,7 +635,7 @@ export function QuoteSection({
           <FileText className="h-5 w-5 text-accent" />
           {sectionTitle}
         </h2>
-        {isAdmin && !showForm && (
+        {asAdmin && !showForm && (
           <Button variant="outline" size="sm" onClick={openCreateForm}>
             {hasOfficialProposal(quotes) ? "New Official Proposal" : "Create Official Proposal"}
           </Button>
@@ -624,7 +643,7 @@ export function QuoteSection({
       </div>
 
       <div className="space-y-6">
-        {isAdmin && changesRequestedQuote && !showForm && (
+        {asAdmin && changesRequestedQuote && !showForm && (
           <Card className="border-amber-200/80 bg-amber-50/50 shadow-none">
             <CardContent className="space-y-3 p-5">
               <div className="flex items-start gap-2">
@@ -648,9 +667,9 @@ export function QuoteSection({
           <ProposalCard
             quote={activeDisplay.quote}
             kind={activeDisplay.kind}
-            isAdmin={isAdmin}
+            isAdmin={asAdmin}
             actions={
-              isAdmin
+              asAdmin
                 ? renderAdminActions(activeDisplay.quote)
                 : activeDisplay.kind === "official"
                   ? renderClientActions(activeDisplay.quote)
@@ -664,7 +683,7 @@ export function QuoteSection({
           <Card className="border-0 bg-slate-50/50 shadow-none ring-1 ring-black/[0.04]">
             <CardContent className="py-12 text-center">
               <p className="text-sm text-muted">
-                {isAdmin
+                {asAdmin
                   ? "A preliminary estimate is generated automatically when a client requests a project."
                   : "Your preliminary estimate will appear here shortly after your request is submitted."}
               </p>
