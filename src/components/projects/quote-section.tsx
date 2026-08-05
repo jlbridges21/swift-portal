@@ -90,8 +90,8 @@ export function QuoteSection({
       ? activeDisplay.quote
       : null;
 
-  const editingPreliminary =
-    editingId && activeDisplay?.kind === "preliminary" && activeDisplay.quote.id === editingId;
+  const editingQuote = editingId ? quotes.find((q) => q.id === editingId) ?? null : null;
+  const editingPreliminary = !!editingQuote && isPreliminaryQuote(editingQuote);
 
   function updateLineItem(index: number, field: keyof QuoteLineItem, value: string | number) {
     setForm((f) => {
@@ -223,8 +223,15 @@ export function QuoteSection({
         );
         return [quote, ...archived];
       });
-      if (send) onStatusChange?.("quote_sent");
-      toast.success(send ? "Quote sent to client" : "Quote saved");
+      const wasSent = quote.status === "sent";
+      if (wasSent) onStatusChange?.("quote_sent");
+      toast.success(
+        wasSent
+          ? "Quote sent to client"
+          : send
+            ? "Draft saved — admin review is required before sending"
+            : "Quote saved"
+      );
       setShowForm(false);
       setForm(emptyForm);
       router.refresh();
@@ -252,8 +259,12 @@ export function QuoteSection({
         );
         return [official, ...archived];
       });
-      onStatusChange?.("quote_sent");
-      toast.success("Official estimate created from preliminary quote");
+      if (official.status === "sent") {
+        onStatusChange?.("quote_sent");
+        toast.success("Official proposal sent to client");
+      } else {
+        toast.success("Official proposal drafted — review and send when ready");
+      }
       router.refresh();
     } else {
       const data = await res.json().catch(() => ({}));
@@ -292,8 +303,12 @@ export function QuoteSection({
         );
         return [official, ...archived];
       });
-      onStatusChange?.("quote_sent");
-      toast.success("Official proposal sent to client");
+      if (official.status === "sent") {
+        onStatusChange?.("quote_sent");
+        toast.success("Official proposal sent to client");
+      } else {
+        toast.success("Official proposal drafted — review and send when ready");
+      }
       setShowForm(false);
       setEditingId(null);
       router.refresh();

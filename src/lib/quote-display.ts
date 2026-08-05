@@ -7,7 +7,7 @@ export function isPreliminaryQuote(quote: ProjectQuote): boolean {
   return quote.quote_kind === "preliminary" || quote.title.startsWith("Preliminary Estimate");
 }
 
-export function isArchivedQuote(quote: ProjectQuote): boolean {
+export function isArchivedQuote(quote: Pick<ProjectQuote, "notes">): boolean {
   return /archived.*superseded|superseded by a newer/i.test(quote.notes ?? "");
 }
 
@@ -27,10 +27,37 @@ export function getNonArchivedQuotes(quotes: ProjectQuote[]): ProjectQuote[] {
 
 const CLIENT_VISIBLE_OFFICIAL_STATUSES: QuoteStatus[] = ["sent", "approved", "changes_requested"];
 
+/** An official proposal that has actually been shared with the client. */
+export function isSharedOfficialQuote(quote: ProjectQuote): boolean {
+  return !isPreliminaryQuote(quote) && CLIENT_VISIBLE_OFFICIAL_STATUSES.includes(quote.status);
+}
+
+/** Officials rank on when they were shared, not on incidental row edits. */
+function getOfficialRecencyTimestamp(quote: ProjectQuote): number {
+  const ts = quote.sent_at || quote.updated_at || quote.created_at;
+  return new Date(ts).getTime();
+}
+
+/**
+ * Non-archived officials, shared-with-client first, then newest.
+ * Ranking never falls back to `updated_at` alone so that editing the
+ * preliminary estimate cannot bury the official proposal.
+ */
+export function getNonArchivedOfficialQuotes(quotes: ProjectQuote[]): ProjectQuote[] {
+  return getNonArchivedQuotes(quotes)
+    .filter((q) => !isPreliminaryQuote(q))
+    .sort((a, b) => {
+      const shared = Number(isSharedOfficialQuote(b)) - Number(isSharedOfficialQuote(a));
+      if (shared !== 0) return shared;
+      return getOfficialRecencyTimestamp(b) - getOfficialRecencyTimestamp(a);
+    });
+}
+
 /**
  * Single active estimate/proposal for a project.
- * Admin sees the newest non-archived quote (including drafts).
- * Client sees the newest client-visible official, otherwise the preliminary.
+ * Admin sees the official proposal whenever one exists (including drafts),
+ * falling back to the preliminary estimate only when there is no official.
+ * Client sees the latest official shared with them, otherwise the preliminary.
  */
 export function getProjectActiveQuote(
   quotes: ProjectQuote[],
@@ -39,25 +66,18 @@ export function getProjectActiveQuote(
   const active = getNonArchivedQuotes(quotes);
   if (!active.length) return null;
 
+  const officials = getNonArchivedOfficialQuotes(active);
+  const preliminary = active.find((q) => isPreliminaryQuote(q)) ?? null;
+
   if (audience === "admin") {
-    const latest = active[0];
-    return {
-      quote: latest,
-      kind: isPreliminaryQuote(latest) ? "preliminary" : "official",
-    };
+    if (officials.length) return { quote: officials[0], kind: "official" };
+    return preliminary ? { quote: preliminary, kind: "preliminary" } : null;
   }
 
-  const visibleOfficial = active.filter(
-    (q) => !isPreliminaryQuote(q) && CLIENT_VISIBLE_OFFICIAL_STATUSES.includes(q.status)
-  );
-  if (visibleOfficial.length) {
-    return { quote: visibleOfficial[0], kind: "official" };
-  }
+  const shared = officials.filter(isSharedOfficialQuote);
+  if (shared.length) return { quote: shared[0], kind: "official" };
 
-  const preliminary = active.find((q) => isPreliminaryQuote(q));
-  if (preliminary) return { quote: preliminary, kind: "preliminary" };
-
-  return null;
+  return preliminary ? { quote: preliminary, kind: "preliminary" } : null;
 }
 
 export function hasOfficialProposal(quotes: ProjectQuote[]): boolean {
@@ -66,9 +86,9 @@ export function hasOfficialProposal(quotes: ProjectQuote[]): boolean {
   );
 }
 
-/** Newest non-archived official quote, or null. */
+/** Newest non-archived official quote, preferring one already shared with the client. */
 export function getLatestOfficialQuote(quotes: ProjectQuote[]): ProjectQuote | null {
-  return getNonArchivedQuotes(quotes).find((q) => !isPreliminaryQuote(q)) ?? null;
+  return getNonArchivedOfficialQuotes(quotes)[0] ?? null;
 }
 
 /** Newest non-archived preliminary quote, or null. */
