@@ -7,6 +7,7 @@ import type { NotificationEventKey } from "@/lib/app-settings";
 import { resolveNotificationEventKey } from "@/lib/notification-settings";
 import type { NotificationType } from "@/lib/types";
 import { getStatusOrder } from "@/lib/constants";
+import { ensureClientPortalLink } from "@/lib/client-portal-link";
 
 export type { NotificationType };
 
@@ -84,6 +85,36 @@ async function getAdminRecipients(): Promise<NotificationRecipient[]> {
     email_notifications_enabled: profile.email_notifications_enabled !== false,
     in_app_notifications_enabled: profile.in_app_notifications_enabled !== false,
   }));
+}
+
+async function getSingleClientRecipient(clientId: string): Promise<NotificationRecipient | null> {
+  const supabase = await createServiceClient();
+  await ensureClientPortalLink(clientId);
+
+  const { data: client } = await supabase
+    .from("clients")
+    .select("id, user_id, email, name")
+    .eq("id", clientId)
+    .maybeSingle();
+
+  if (!client?.user_id) {
+    console.warn("[notifications] client has no portal user:", clientId);
+    return null;
+  }
+
+  const profiles = await loadProfiles([client.user_id]);
+  const profile = profiles[0];
+  const email = (profile?.email || client.email || "").trim();
+
+  return {
+    id: client.user_id,
+    email,
+    full_name: profile?.full_name ?? client.name ?? null,
+    role: "client",
+    client_id: client.id,
+    email_notifications_enabled: profile?.email_notifications_enabled !== false,
+    in_app_notifications_enabled: profile?.in_app_notifications_enabled !== false,
+  };
 }
 
 async function getProjectClientRecipients(projectId: string): Promise<NotificationRecipient[]> {
@@ -202,7 +233,10 @@ export async function notifyUsers(options: NotifyOptions) {
     recipients.push(...(await getAdminRecipients()));
   }
 
-  if (options.notifyClients && options.projectId) {
+  if (options.clientId) {
+    const single = await getSingleClientRecipient(options.clientId);
+    if (single) recipients.push(single);
+  } else if (options.notifyClients && options.projectId) {
     recipients.push(...(await getProjectClientRecipients(options.projectId)));
   }
 
@@ -346,4 +380,18 @@ export async function notifyProjectClients(
   options: Omit<NotifyOptions, "notifyAdmins" | "notifyClients"> & { projectId: string }
 ) {
   return notifyUsers({ ...options, notifyAdmins: false, notifyClients: true });
+}
+
+/** Notify a single client by CRM client_id (not all project clients). */
+export async function notifyClient(
+  options: Omit<NotifyOptions, "notifyAdmins" | "notifyClients" | "clientId"> & {
+    clientId: string;
+  }
+) {
+  return notifyUsers({
+    ...options,
+    clientId: options.clientId,
+    notifyAdmins: false,
+    notifyClients: false,
+  });
 }

@@ -76,6 +76,8 @@ export async function POST(request: Request) {
             in_app_notifications_enabled: true,
           })
           .eq("id", authUser.user.id);
+
+        return NextResponse.json({ ...client, user_id: authUser.user.id });
       }
     }
 

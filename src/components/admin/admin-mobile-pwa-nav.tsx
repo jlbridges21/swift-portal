@@ -8,7 +8,7 @@ import {
   FolderKanban,
   Plus,
   Users,
-  ImageIcon,
+  MessageSquare,
   FolderPlus,
   UserPlus,
   ImagePlus,
@@ -19,7 +19,7 @@ const NAV_ITEMS = [
   { href: "/admin", label: "Home", icon: Home, exact: true },
   { href: "/admin/projects", label: "Projects", icon: FolderKanban },
   { href: "__action__", label: "Add", icon: Plus, isAction: true },
-  { href: "/admin/media", label: "Media", icon: ImageIcon },
+  { href: "/admin/messages", label: "Messages", icon: MessageSquare },
   { href: "/admin/clients", label: "Clients", icon: Users },
 ] as const;
 

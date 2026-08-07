@@ -1,6 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 import { touchClientLogin } from "@/lib/clients-crm";
+import { ensureClientPortalLink } from "@/lib/client-portal-link";
 
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient();
@@ -10,13 +11,49 @@ export async function getProfile(): Promise<Profile | null> {
 
   if (!user) return null;
 
-  const { data: profile } = await supabase
+  let { data: profile } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single();
 
-  if (profile?.role === "client" && profile.client_id) {
+  if (!profile) return null;
+
+  // Auto-link CRM client ↔ portal profile so multi-client project RLS works
+  if (profile.role === "client" && !profile.client_id) {
+    const service = await createServiceClient();
+    const { data: byUser } = await service
+      .from("clients")
+      .select("id")
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    let clientId = byUser?.id ?? null;
+    if (!clientId && user.email) {
+      const { data: byEmail } = await service
+        .from("clients")
+        .select("id")
+        .ilike("email", user.email)
+        .is("deleted_at", null)
+        .maybeSingle();
+      clientId = byEmail?.id ?? null;
+      if (clientId) {
+        await service.from("clients").update({ user_id: user.id }).eq("id", clientId);
+      }
+    }
+
+    if (clientId) {
+      await service
+        .from("profiles")
+        .update({ client_id: clientId, role: "client" })
+        .eq("id", user.id);
+      profile = { ...profile, client_id: clientId };
+      void ensureClientPortalLink(clientId);
+    }
+  }
+
+  if (profile.role === "client" && profile.client_id) {
     const { data: client } = await supabase
       .from("clients")
       .select("last_login_at")

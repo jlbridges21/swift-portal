@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canAccessProject } from "@/lib/project-access";
+import { requireAdminApi } from "@/lib/api-auth";
 import {
+  buildClientCrmTimeline,
   getClientMessages,
+  listAdminConversations,
   markClientMessagesRead,
 } from "@/lib/client-messaging";
 import { notifyAdmins, notifyClient } from "@/lib/notifications";
@@ -12,35 +14,43 @@ import { getAppSettings } from "@/lib/app-settings";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import type { ClientMessage } from "@/lib/types";
 
-interface RouteParams {
-  params: Promise<{ id: string }>;
-}
-
-/**
- * Legacy project-scoped messages route.
- * Now proxies to per-client `client_messages` so multi-client projects
- * never share a thread. Clients only see their own conversation.
- */
-export async function GET(_request: Request, { params }: RouteParams) {
+/** Admin inbox list, or client gets their own thread via ?mine=1 */
+export async function GET(request: Request) {
   const profile = await getProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id: projectId } = await params;
-  const hasAccess = await canAccessProject(profile, projectId);
-  if (!hasAccess) {
-    return NextResponse.json({ error: "Project not found or access denied" }, { status: 404 });
-  }
+  const { searchParams } = new URL(request.url);
+  const clientId = searchParams.get("client_id");
+  const timeline = searchParams.get("timeline") === "1";
+  const unreadOnly = searchParams.get("unread_count") === "1";
 
   if (profile.role === "admin") {
-    return NextResponse.json(
-      {
-        error: "Use /api/messages?client_id=… for admin messaging",
-        redirect: "/admin/messages",
-      },
-      { status: 410 }
-    );
+    if (unreadOnly) {
+      const list = await listAdminConversations(profile.id);
+      const count = list.reduce((s, c) => s + c.unread_count, 0);
+      return NextResponse.json({ count });
+    }
+
+    if (clientId) {
+      if (timeline) {
+        const items = await buildClientCrmTimeline(clientId, profile.id);
+        return NextResponse.json(items);
+      }
+      if (searchParams.get("stub") === "1") {
+        const { getOrCreateConversationStub } = await import("@/lib/client-messaging");
+        const stub = await getOrCreateConversationStub(clientId);
+        if (!stub) return NextResponse.json({ error: "Client not found" }, { status: 404 });
+        return NextResponse.json(stub);
+      }
+      const messages = await getClientMessages(clientId, profile.id);
+      return NextResponse.json(messages);
+    }
+
+    const conversations = await listAdminConversations(profile.id);
+    return NextResponse.json(conversations);
   }
 
+  // Client: only their own conversation
   if (!profile.client_id) {
     return NextResponse.json({ error: "No client profile linked" }, { status: 403 });
   }
@@ -49,35 +59,27 @@ export async function GET(_request: Request, { params }: RouteParams) {
   return NextResponse.json(messages);
 }
 
-export async function POST(request: Request, { params }: RouteParams) {
+export async function POST(request: Request) {
   const profile = await getProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id: projectId } = await params;
-  const hasAccess = await canAccessProject(profile, projectId);
-  if (!hasAccess) {
-    return NextResponse.json({ error: "Project not found or access denied" }, { status: 404 });
-  }
-
   const body = await request.json().catch(() => ({}));
   const text = typeof body.body === "string" ? body.body.trim() : "";
+  const projectId = typeof body.project_id === "string" ? body.project_id : null;
+
   if (!text) {
     return NextResponse.json({ error: "Message body is required" }, { status: 400 });
   }
   if (text.length > 5000) {
-    return NextResponse.json({ error: "Message is too long (max 5000 characters)" }, { status: 400 });
+    return NextResponse.json({ error: "Message is too long" }, { status: 400 });
   }
 
   const isAdmin = profile.role === "admin";
-  let clientId: string | null =
-    typeof body.client_id === "string" ? body.client_id : null;
+  let clientId = typeof body.client_id === "string" ? body.client_id : null;
 
   if (isAdmin) {
     if (!clientId) {
-      return NextResponse.json(
-        { error: "client_id required — use /admin/messages to message a specific client" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "client_id required" }, { status: 400 });
     }
   } else {
     if (!profile.client_id) {
@@ -98,6 +100,25 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
+  if (projectId) {
+    // Optional: ensure project is related to this client
+    const { data: access } = await supabase
+      .from("project_clients")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("client_id", clientId!)
+      .maybeSingle();
+    const { data: primary } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("id", projectId)
+      .eq("client_id", clientId!)
+      .maybeSingle();
+    if (!access && !primary && !isAdmin) {
+      return NextResponse.json({ error: "Project access denied" }, { status: 403 });
+    }
+  }
+
   const { data: message, error } = await supabase
     .from("client_messages")
     .insert({
@@ -111,7 +132,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     .single();
 
   if (error || !message) {
-    console.error("[messages] insert failed", error?.message);
+    console.error("[client-messages] insert failed", error?.message);
     return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
   }
 
@@ -128,6 +149,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   if (isAdmin) {
     await ensureClientPortalLink(clientId!);
+
     await notifyClient({
       clientId: clientId!,
       type: "project_message",
@@ -135,9 +157,10 @@ export async function POST(request: Request, { params }: RouteParams) {
       title: "You have a new message",
       body: preview,
       link: `/dashboard/messages`,
-      projectId,
+      projectId: projectId ?? undefined,
       sendEmail: false,
     });
+
     if (client.email) {
       const appSettings = await getAppSettings();
       void sendBrandedEmail({
@@ -148,7 +171,7 @@ export async function POST(request: Request, { params }: RouteParams) {
         ctaLabel: "Open Conversation",
         ctaUrl: `${appUrl}/dashboard/messages`,
         emailType: "project_message",
-        analytics: { projectId, emailType: "project_message" },
+        analytics: { projectId: projectId ?? undefined, emailType: "project_message" },
       });
     }
   } else {
@@ -158,7 +181,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       title: `Message from ${client.name}`,
       body: preview,
       link: `/admin/messages?client=${clientId}`,
-      projectId,
+      projectId: projectId ?? undefined,
     });
   }
 
@@ -172,30 +195,27 @@ export async function POST(request: Request, { params }: RouteParams) {
   return NextResponse.json(result);
 }
 
-export async function PATCH(request: Request, { params }: RouteParams) {
+export async function PATCH(request: Request) {
   const profile = await getProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id: projectId } = await params;
-  const hasAccess = await canAccessProject(profile, projectId);
-  if (!hasAccess) {
-    return NextResponse.json({ error: "Project not found or access denied" }, { status: 404 });
-  }
+  const body = await request.json().catch(() => ({}));
+  let clientId = typeof body.client_id === "string" ? body.client_id : null;
 
-  if (profile.role === "admin") {
-    const body = await request.json().catch(() => ({}));
-    const clientId = typeof body.client_id === "string" ? body.client_id : null;
+  if (profile.role === "client") {
+    clientId = profile.client_id;
+  } else {
+    const auth = await requireAdminApi();
+    if (!auth.ok) return auth.response;
     if (!clientId) {
       return NextResponse.json({ error: "client_id required" }, { status: 400 });
     }
-    const marked = await markClientMessagesRead(clientId, profile.id);
-    return NextResponse.json({ success: true, marked });
   }
 
-  if (!profile.client_id) {
-    return NextResponse.json({ error: "No client profile linked" }, { status: 403 });
+  if (!clientId) {
+    return NextResponse.json({ error: "No client" }, { status: 400 });
   }
 
-  const marked = await markClientMessagesRead(profile.client_id, profile.id);
+  const marked = await markClientMessagesRead(clientId, profile.id);
   return NextResponse.json({ success: true, marked });
 }

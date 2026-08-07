@@ -20,6 +20,7 @@ interface HeaderProps {
 const adminLinks = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/projects", label: "Projects" },
+  { href: "/admin/messages", label: "Messages" },
   { href: "/admin/media", label: "Media" },
   { href: "/admin/calendar", label: "Calendar" },
   { href: "/admin/clients", label: "Clients" },
@@ -68,16 +69,36 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [messagesUnread, setMessagesUnread] = useState(0);
   const homeHref =
     variant === "public" ? "/" : userRole === "admin" ? "/admin" : "/dashboard";
 
   const clientMobileLinks = [
     { href: "/dashboard", label: "My Projects" },
+    { href: "/dashboard/messages", label: "Messages" },
     { href: "/dashboard/request", label: "Request New Project" },
     { href: "/dashboard/settings", label: "Settings" },
   ];
 
   const adminMobileLinks = [...adminLinks, { href: "/admin/settings", label: "Settings" }];
+
+  useEffect(() => {
+    if (variant !== "dashboard" || userRole !== "admin") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/messages?unread_count=1", { credentials: "include" });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled) setMessagesUnread(Number(data.count) || 0);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [variant, userRole]);
 
   async function handleRefresh() {
     if (refreshing) return;
@@ -101,9 +122,14 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
               <Link
                 key={link.href}
                 href={link.href}
-                className="rounded-md px-2.5 py-1.5 text-sm text-muted transition-colors hover:bg-slate-100 hover:text-foreground xl:px-3"
+                className="relative rounded-md px-2.5 py-1.5 text-sm text-muted transition-colors hover:bg-slate-100 hover:text-foreground xl:px-3"
               >
                 {link.label}
+                {link.href === "/admin/messages" && messagesUnread > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white">
+                    {messagesUnread > 9 ? "9+" : messagesUnread}
+                  </span>
+                )}
               </Link>
             ))}
           </nav>

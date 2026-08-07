@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireAdminApi } from "@/lib/api-auth";
+import { ensureClientPortalLink } from "@/lib/client-portal-link";
 
 export async function GET(request: Request) {
   const auth = await requireAdminApi();
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("project_clients")
-    .select("*, clients(id, name, email, company)")
+    .select("*, clients(id, name, email, company, user_id)")
     .order("is_primary", { ascending: false });
 
   if (projectId) {
@@ -34,13 +35,21 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
 
   const body = await request.json();
-  const { project_id, client_id, is_primary } = body;
+  const { project_id, client_id, is_primary, password } = body;
 
   if (!project_id || !client_id) {
     return NextResponse.json({ error: "project_id and client_id required" }, { status: 400 });
   }
 
   const supabase = await createServiceClient();
+
+  // Link existing portal account by email / user_id before assigning
+  let portal = await ensureClientPortalLink(client_id);
+
+  if (!portal.hasPortal && typeof password === "string" && password.length >= 8) {
+    const { enableClientPortalAccess } = await import("@/lib/client-portal-link");
+    portal = await enableClientPortalAccess(client_id, password);
+  }
 
   const { count: existingCount } = await supabase
     .from("project_clients")
@@ -67,14 +76,19 @@ export async function POST(request: Request) {
       { project_id, client_id, is_primary: makePrimary },
       { onConflict: "project_id,client_id" }
     )
-    .select()
+    .select("*, clients(id, name, email, company, user_id)")
     .single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json({
+    ...data,
+    portal_linked: portal.linked,
+    portal_has_access: portal.hasPortal,
+    portal_message: portal.message,
+  });
 }
 
 export async function DELETE(request: Request) {

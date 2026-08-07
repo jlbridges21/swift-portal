@@ -24,7 +24,6 @@ import type { Project, Client, MediaAsset, Tour, Payment, ShootProposal, Activit
 import { normalizeStatus } from "@/lib/constants";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
-import { ProjectMessages } from "@/components/projects/project-messages";
 import { NextStepBanner } from "@/components/projects/next-step-banner";
 import { getAdminNextStep } from "@/lib/journey";
 import {
@@ -33,7 +32,7 @@ import {
 } from "lucide-react";
 import { UploadProgressList, type UploadProgressItem } from "@/components/admin/upload-progress-list";
 import { CreateClientModal } from "@/components/admin/create-client-modal";
-import { defaultProjectName } from "@/lib/utils";
+import { cn, defaultProjectName } from "@/lib/utils";
 import { uploadMediaFile, retryMediaSave, validateMediaFileBeforeUpload, UploadSaveError, UploadBinaryError } from "@/lib/upload";
 import { userFacingUploadError } from "@/lib/upload/upload-errors";
 import { ALLOWED_VIDEO_MIME_TYPES } from "@/lib/upload/constants";
@@ -351,11 +350,18 @@ export function AdminProjectDetail({
         is_primary: projectClients.length === 0,
       }),
     });
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      const pc = await res.json();
-      setProjectClients((prev) => [...prev, { ...pc, clients: client }]);
+      setProjectClients((prev) => [...prev, { ...data, clients: { ...client, user_id: client.user_id ?? data.clients?.user_id } }]);
       setAddClientId(client.id);
-      toast.success("Client created and linked to project");
+      if (data.portal_has_access) {
+        toast.success("Client created and linked — portal access ready");
+      } else {
+        toast.warning(
+          data.portal_message ||
+            "Client linked, but they need portal access enabled to see this project."
+        );
+      }
       router.refresh();
     } else {
       toast.error("Client created but could not link to project");
@@ -530,11 +536,45 @@ export function AdminProjectDetail({
         is_primary: projectClients.length === 0,
       }),
     });
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      toast.success("Client added to project");
+      if (data.portal_has_access) {
+        toast.success("Client added — portal access linked");
+      } else {
+        toast.warning(
+          data.portal_message ||
+            "Client added, but they have no portal login yet. Enable portal access so they can see this project."
+        );
+      }
       setAddClientId("");
       router.refresh();
+    } else {
+      toast.error((data as { error?: string }).error || "Failed to add client");
     }
+  }
+
+  async function enablePortalForClient(clientId: string) {
+    const password = window.prompt(
+      "Set a portal password for this client (min 8 characters). They can change it after logging in."
+    );
+    if (!password) return;
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    const res = await fetch(`/api/clients/${clientId}/portal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error((data as { error?: string }).error || "Failed to enable portal");
+      return;
+    }
+    toast.success(data.message || "Portal access enabled");
+    router.refresh();
   }
 
   async function removeProjectClient(pcId: string) {
@@ -773,6 +813,7 @@ export function AdminProjectDetail({
         onSetPrimary={setPrimaryClient}
         onRemove={removeProjectClient}
         onCreateClient={() => setShowCreateClient(true)}
+        onEnablePortal={enablePortalForClient}
       />
 
       <Suspense fallback={null}>
@@ -1049,7 +1090,13 @@ export function AdminProjectDetail({
         </CardContent>
       </Card>
 
-      <ProjectMessages projectId={initialProject.id} isAdmin />
+      <div className="rounded-xl border border-border bg-slate-50/80 px-4 py-3 text-sm text-muted">
+        Client messaging lives in the{" "}
+        <Link href="/admin/messages" className="font-medium text-accent hover:underline">
+          Messages
+        </Link>{" "}
+        inbox (organized by client). Open a client conversation there to reply.
+      </div>
 
       <ProjectActivityTimeline
         activities={activities}
@@ -1127,10 +1174,16 @@ function ProjectClientsCard({
   onSetPrimary,
   onRemove,
   onCreateClient,
+  onEnablePortal,
 }: {
   primaryClient: Client;
   primaryClientId: string;
-  projectClients: { id: string; client_id: string; is_primary: boolean; clients?: Client }[];
+  projectClients: {
+    id: string;
+    client_id: string;
+    is_primary: boolean;
+    clients?: Client & { user_id?: string | null };
+  }[];
   allClients: Pick<Client, "id" | "name" | "email" | "company">[];
   addClientId: string;
   onAddClientIdChange: (id: string) => void;
@@ -1138,6 +1191,7 @@ function ProjectClientsCard({
   onSetPrimary: (pcId: string, clientId: string) => void;
   onRemove: (pcId: string) => void;
   onCreateClient: () => void;
+  onEnablePortal: (clientId: string) => void;
 }) {
   const associated = useMemo(() => {
     const rows = [...projectClients];
@@ -1160,12 +1214,17 @@ function ProjectClientsCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        <p className="text-xs text-muted">
+          Every assigned client with portal access can see this project in their login. Clients without a portal login
+          will not see it until you enable access.
+        </p>
         {associated.length > 0 ? (
           <div className="space-y-2">
             {associated.map((pc) => {
-              const client = pc.clients as Client | undefined;
+              const client = pc.clients as (Client & { user_id?: string | null }) | undefined;
               const displayName = client?.full_name || client?.name || "Client";
               const contact = client?.email || client?.phone;
+              const hasPortal = !!(client?.user_id);
               return (
                 <div
                   key={pc.id}
@@ -1177,7 +1236,20 @@ function ProjectClientsCard({
                   >
                     <p className="font-medium text-primary">{displayName}</p>
                     {contact && <p className="text-xs text-muted truncate">{contact}</p>}
+                    <p className={cn("mt-0.5 text-[11px] font-medium", hasPortal ? "text-emerald-700" : "text-amber-700")}>
+                      {hasPortal ? "Portal access linked" : "No portal login — project hidden from them"}
+                    </p>
                   </Link>
+                  {!hasPortal && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="min-h-11 shrink-0 text-xs"
+                      onClick={() => onEnablePortal(pc.client_id)}
+                    >
+                      Enable Portal
+                    </Button>
+                  )}
                   {pc.is_primary ? (
                     <span className="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
                       Primary

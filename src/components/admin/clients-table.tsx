@@ -474,8 +474,11 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href={`/admin/messages?client=${client.id}`}>
+            <Button variant="accent" size="sm"><MessageSquare className="h-4 w-4" />Message</Button>
+          </Link>
           <Link href={`/admin/projects/new?client=${client.id}`}>
-            <Button variant="accent" size="sm"><Plus className="h-4 w-4" />New Project</Button>
+            <Button variant="outline" size="sm"><Plus className="h-4 w-4" />New Project</Button>
           </Link>
           <Button variant="outline" size="sm" onClick={() => { setShowNoteForm(true); setEditingNote(null); setNoteText(""); }}>
             <MessageSquare className="h-4 w-4" />Add Note

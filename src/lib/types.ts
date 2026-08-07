@@ -353,7 +353,8 @@ export interface Notification {
 
 export interface ProjectMessage {
   id: string;
-  project_id: string;
+  client_id: string;
+  project_id?: string | null;
   sender_user_id: string;
   sender_role: "admin" | "client";
   body: string;
@@ -361,6 +362,8 @@ export interface ProjectMessage {
   sender_name?: string | null;
   is_unread?: boolean;
 }
+
+export type ClientMessage = ProjectMessage;
 
 export interface ActivityLog {
   id: string;
@@ -413,6 +416,7 @@ export interface Database {
       revisions: TableDef<Revision>;
       activity_logs: TableDef<ActivityLog>;
       project_messages: TableDef<ProjectMessage>;
+      client_messages: TableDef<ClientMessage>;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
