@@ -7,6 +7,7 @@ import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
 import { portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
+import { canAccessProject } from "@/lib/project-access";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -70,6 +71,11 @@ export async function POST(request: Request) {
 
   if (!["approved", "rejected"].includes(status)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
+
+  const hasAccess = await canAccessProject(profile, project_id);
+  if (!hasAccess) {
+    return NextResponse.json({ error: "Project not found or access denied" }, { status: 404 });
   }
 
   const supabase = await createServiceClient();

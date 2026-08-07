@@ -12,7 +12,8 @@ export type NotificationType =
   | "status_changed"
   | "deliverables_uploaded"
   | "invoice_available"
-  | "payment_confirmed";
+  | "payment_confirmed"
+  | "project_message";
 
 export type ProjectStatus =
   | "new_request"
@@ -350,6 +351,17 @@ export interface Notification {
   created_at: string;
 }
 
+export interface ProjectMessage {
+  id: string;
+  project_id: string;
+  sender_user_id: string;
+  sender_role: "admin" | "client";
+  body: string;
+  created_at: string;
+  sender_name?: string | null;
+  is_unread?: boolean;
+}
+
 export interface ActivityLog {
   id: string;
   activity_type: ActivityType;
@@ -400,6 +412,7 @@ export interface Database {
       payments: TableDef<Payment>;
       revisions: TableDef<Revision>;
       activity_logs: TableDef<ActivityLog>;
+      project_messages: TableDef<ProjectMessage>;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

@@ -24,6 +24,7 @@ import type { Project, Client, MediaAsset, Tour, Payment, ShootProposal, Activit
 import { normalizeStatus } from "@/lib/constants";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
+import { ProjectMessages } from "@/components/projects/project-messages";
 import { NextStepBanner } from "@/components/projects/next-step-banner";
 import { getAdminNextStep } from "@/lib/journey";
 import {
@@ -1047,6 +1048,8 @@ export function AdminProjectDetail({
           )}
         </CardContent>
       </Card>
+
+      <ProjectMessages projectId={initialProject.id} isAdmin />
 
       <ProjectActivityTimeline
         activities={activities}

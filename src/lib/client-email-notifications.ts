@@ -4,12 +4,38 @@ import { getAppSettings } from "@/lib/app-settings";
 import type { PremiumEmailContent } from "@/lib/email-templates";
 import { getStatusOrder } from "@/lib/constants";
 import type { NotificationType } from "@/lib/types";
+import type { MessageTemplateKey } from "@/lib/workflow-settings";
+import { renderWorkflowTemplate } from "@/lib/message-templates";
 
 /** Payment-related emails always send even if the client opted out of marketing-style emails. */
 const CRITICAL_CLIENT_EMAIL_TYPES = new Set<NotificationType>([
   "invoice_available",
   "payment_confirmed",
 ]);
+
+function eventTypeToMessageKey(
+  eventType: NotificationType,
+  title: string,
+  message: string
+): MessageTemplateKey | null {
+  if (eventType === "quote_sent") return "proposal_ready";
+  if (eventType === "shoot_proposed" || eventType === "schedule_change_requested") return "scheduling_request";
+  if (eventType === "deliverables_uploaded") return "deliverables_ready";
+  if (eventType === "invoice_available") return "payment_request";
+  if (eventType === "payment_confirmed") return "payment_received";
+  if (eventType === "project_message") return null;
+
+  if (eventType === "status_changed") {
+    const lower = `${title} ${message}`.toLowerCase();
+    if (lower.includes("shoot scheduled") || lower.includes("shoot confirmed")) return "shoot_confirmed";
+    if (lower.includes("complete") || lower.includes("delivered")) return "project_completed";
+    if (lower.includes("deliverable") || lower.includes("review")) return "deliverables_ready";
+    if (lower.includes("payment")) return "payment_request";
+    if (lower.includes("preliminary") || lower.includes("request")) return "new_request_confirmation";
+  }
+
+  return null;
+}
 
 export interface ClientEmailNotificationOptions {
   userId: string;
@@ -23,6 +49,8 @@ export interface ClientEmailNotificationOptions {
   projectName?: string;
   projectStatus?: string;
   notificationId?: string | null;
+  /** Optional subject override from editable workflow email templates. */
+  subject?: string;
 }
 
 export interface ClientEmailNotificationResult {
@@ -71,7 +99,8 @@ export function getClientEmailPresentation(
   message: string,
   url?: string,
   projectStatus?: string,
-  brand?: { businessName: string; portalName: string }
+  brand?: { businessName: string; portalName: string },
+  subjectOverride?: string
 ): PremiumEmailContent {
   const businessName = brand?.businessName ?? "Swift Aerial Media";
   const portalName = brand?.portalName ?? "Swift Portal";
@@ -178,7 +207,8 @@ export function getClientEmailPresentation(
   };
 
   const preset = presets[template];
-  return { template, ...preset, ctaUrl };
+  const subject = subjectOverride?.trim() || preset.subject;
+  return { template, ...preset, subject, ctaUrl };
 }
 
 export async function getClientNotificationPreferences(userId: string) {
@@ -241,13 +271,30 @@ export async function sendClientEmailNotification(
     portalName: appSettings.business.portalName,
   };
 
+  let subjectOverride = options.subject?.trim() || undefined;
+  if (!subjectOverride) {
+    const messageKey = eventTypeToMessageKey(options.eventType, options.title, options.message);
+    const customSubject = messageKey
+      ? appSettings.workflow.messages[messageKey]?.subject?.trim()
+      : "";
+    if (customSubject) {
+      subjectOverride = renderWorkflowTemplate(customSubject, {
+        client_name: "",
+        project_name: options.projectName ?? "",
+        property_address: "",
+        portal_link: options.url ?? "",
+      });
+    }
+  }
+
   const presentation = getClientEmailPresentation(
     options.eventType,
     options.title,
     options.message,
     options.url,
     options.projectStatus,
-    brandNames
+    brandNames,
+    subjectOverride
   );
 
   try {

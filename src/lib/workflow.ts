@@ -24,10 +24,42 @@ export function resolveMessageTemplate(
   context: TemplateContext,
   fallback: string
 ): string {
-  const template = workflow.messages[key]?.trim();
+  const template = workflow.messages[key]?.body?.trim();
   if (!template) return fallback;
   const text = renderWorkflowTemplate(template, context, { workflowKey: key });
   return text || fallback;
+}
+
+export function resolveMessageSubject(
+  workflow: WorkflowSettings,
+  key: MessageTemplateKey,
+  context: TemplateContext,
+  fallback: string
+): string {
+  const template = workflow.messages[key]?.subject?.trim();
+  if (!template) return fallback;
+  const text = renderWorkflowTemplate(template, context, { workflowKey: key });
+  return text || fallback;
+}
+
+export async function resolveProjectEmailTemplate(
+  workflow: WorkflowSettings,
+  key: MessageTemplateKey,
+  projectId: string,
+  partial: TemplateContext = {},
+  fallbacks: { subject: string; body: string }
+): Promise<{ subject: string; body: string }> {
+  const variables = await buildProjectMessageVariables(projectId, partial);
+  const merged: TemplateContext = {
+    ...variables,
+    ...Object.fromEntries(
+      Object.entries(partial).filter(([, v]) => typeof v === "string" && v.trim())
+    ),
+  };
+  return {
+    subject: resolveMessageSubject(workflow, key, merged, fallbacks.subject),
+    body: resolveMessageTemplate(workflow, key, merged, fallbacks.body),
+  };
 }
 
 export async function resolveProjectMessageTemplate(

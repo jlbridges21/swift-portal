@@ -90,6 +90,14 @@ export type MessageTemplateKey =
   | "payment_received"
   | "project_completed";
 
+export interface MessageTemplateContent {
+  subject: string;
+  body: string;
+}
+
+/** Stored shape may still be a plain string (legacy body-only). */
+export type StoredMessageTemplate = string | MessageTemplateContent;
+
 export const MESSAGE_TEMPLATE_DEFINITIONS: {
   key: MessageTemplateKey;
   label: string;
@@ -104,6 +112,37 @@ export const MESSAGE_TEMPLATE_DEFINITIONS: {
   { key: "payment_received", label: "Payment received", placeholders: "{{client_name}}, {{payment_amount}}, {{portal_link}}" },
   { key: "project_completed", label: "Project completed", placeholders: "{{client_name}}, {{project_name}}, {{portal_link}}" },
 ];
+
+export function normalizeMessageTemplate(
+  value: StoredMessageTemplate | undefined | null,
+  fallback: MessageTemplateContent
+): MessageTemplateContent {
+  if (!value) return { ...fallback };
+  if (typeof value === "string") {
+    return {
+      subject: fallback.subject,
+      body: value.trim() || fallback.body,
+    };
+  }
+  return {
+    subject: value.subject?.trim() || fallback.subject,
+    body: value.body?.trim() || fallback.body,
+  };
+}
+
+export function getMessageTemplateBody(
+  messages: Record<MessageTemplateKey, MessageTemplateContent>,
+  key: MessageTemplateKey
+): string {
+  return messages[key]?.body ?? "";
+}
+
+export function getMessageTemplateSubject(
+  messages: Record<MessageTemplateKey, MessageTemplateContent>,
+  key: MessageTemplateKey
+): string {
+  return messages[key]?.subject ?? "";
+}
 
 export interface BusinessDefaultsSettings {
   defaultTurnaroundDays: number;
@@ -121,7 +160,7 @@ export interface WorkflowSettings {
   scheduling: SchedulingAutomationSettings;
   deliverables: DeliverableAutomationSettings;
   reminders: ReminderSettings;
-  messages: Record<MessageTemplateKey, string>;
+  messages: Record<MessageTemplateKey, MessageTemplateContent>;
   businessDefaults: BusinessDefaultsSettings;
 }
 
@@ -181,22 +220,38 @@ export function buildDefaultWorkflowSettings(): WorkflowSettings {
       payment: "7d",
     },
     messages: {
-      new_request_confirmation:
-        "Hi {{client_name}}, we received your request for {{property_address}}. We'll review the details and follow up shortly. View your portal: {{portal_link}}",
-      proposal_ready:
-        "Hi {{client_name}}, your official proposal for {{project_name}} is ready to review. {{portal_link}}",
-      scheduling_request:
-        "Hi {{client_name}}, please review the proposed shoot time on {{shoot_date}}. {{portal_link}}",
-      shoot_confirmed:
-        "Hi {{client_name}}, your shoot at {{property_address}} is confirmed for {{shoot_date}}.",
-      deliverables_ready:
-        "Hi {{client_name}}, your deliverables for {{project_name}} are ready for review. {{portal_link}}",
-      payment_request:
-        "Hi {{client_name}}, your final payment of {{payment_amount}} is ready. Complete payment here: {{portal_link}}",
-      payment_received:
-        "Thank you, {{client_name}}! We received your payment of {{payment_amount}}. Your downloads are now unlocked. {{portal_link}}",
-      project_completed:
-        "Hi {{client_name}}, {{project_name}} is complete. Thank you for choosing Swift Aerial Media! {{portal_link}}",
+      new_request_confirmation: {
+        subject: "We received your project request",
+        body: "Hi {{client_name}}, we received your request for {{property_address}}. We'll review the details and follow up shortly. View your portal: {{portal_link}}",
+      },
+      proposal_ready: {
+        subject: "Your Swift Aerial Media proposal is ready",
+        body: "Hi {{client_name}}, your official proposal for {{project_name}} is ready to review. {{portal_link}}",
+      },
+      scheduling_request: {
+        subject: "Your shoot time is ready to review",
+        body: "Hi {{client_name}}, please review the proposed shoot time on {{shoot_date}}. {{portal_link}}",
+      },
+      shoot_confirmed: {
+        subject: "Your shoot is confirmed",
+        body: "Hi {{client_name}}, your shoot at {{property_address}} is confirmed for {{shoot_date}}.",
+      },
+      deliverables_ready: {
+        subject: "Your deliverables are ready to review",
+        body: "Hi {{client_name}}, your deliverables for {{project_name}} are ready for review. {{portal_link}}",
+      },
+      payment_request: {
+        subject: "Your payment link is ready",
+        body: "Hi {{client_name}}, your final payment of {{payment_amount}} is ready. Complete payment here: {{portal_link}}",
+      },
+      payment_received: {
+        subject: "Payment received — thank you",
+        body: "Thank you, {{client_name}}! We received your payment of {{payment_amount}}. Your downloads are now unlocked. {{portal_link}}",
+      },
+      project_completed: {
+        subject: "Your project is complete",
+        body: "Hi {{client_name}}, {{project_name}} is complete. Thank you for choosing Swift Aerial Media! {{portal_link}}",
+      },
     },
     businessDefaults: {
       defaultTurnaroundDays: 5,
@@ -209,7 +264,11 @@ export function buildDefaultWorkflowSettings(): WorkflowSettings {
   };
 }
 
-export function mergeWorkflowSettings(stored: Partial<WorkflowSettings> | undefined): WorkflowSettings {
+export function mergeWorkflowSettings(
+  stored: (Partial<Omit<WorkflowSettings, "messages">> & {
+    messages?: Partial<Record<MessageTemplateKey, StoredMessageTemplate>>;
+  }) | undefined
+): WorkflowSettings {
   const defaults = buildDefaultWorkflowSettings();
   if (!stored) return defaults;
 
@@ -223,7 +282,10 @@ export function mergeWorkflowSettings(stored: Partial<WorkflowSettings> | undefi
   const messages = { ...defaults.messages };
   if (stored.messages) {
     for (const def of MESSAGE_TEMPLATE_DEFINITIONS) {
-      if (stored.messages[def.key]) messages[def.key] = stored.messages[def.key];
+      messages[def.key] = normalizeMessageTemplate(
+        stored.messages[def.key],
+        defaults.messages[def.key]
+      );
     }
   }
 

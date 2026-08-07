@@ -42,7 +42,14 @@ export async function POST(request: Request) {
 
   const supabase = await createServiceClient();
 
-  if (is_primary) {
+  const { count: existingCount } = await supabase
+    .from("project_clients")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", project_id);
+
+  const makePrimary = Boolean(is_primary) || (existingCount ?? 0) === 0;
+
+  if (makePrimary) {
     await supabase
       .from("project_clients")
       .update({ is_primary: false })
@@ -57,7 +64,7 @@ export async function POST(request: Request) {
   const { data, error } = await supabase
     .from("project_clients")
     .upsert(
-      { project_id, client_id, is_primary: is_primary ?? false },
+      { project_id, client_id, is_primary: makePrimary },
       { onConflict: "project_id,client_id" }
     )
     .select()
@@ -82,6 +89,35 @@ export async function DELETE(request: Request) {
   }
 
   const supabase = await createServiceClient();
+  const { data: row } = await supabase
+    .from("project_clients")
+    .select("id, project_id, client_id, is_primary")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!row) {
+    return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+  }
+
+  if (row.is_primary) {
+    const { count } = await supabase
+      .from("project_clients")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", row.project_id);
+
+    if ((count ?? 0) <= 1) {
+      return NextResponse.json(
+        { error: "Cannot remove the only client on a project. Assign another client first." },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Set another client as primary before removing the primary client." },
+      { status: 400 }
+    );
+  }
+
   const { error } = await supabase.from("project_clients").delete().eq("id", id);
 
   if (error) {

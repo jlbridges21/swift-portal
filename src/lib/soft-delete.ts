@@ -6,10 +6,10 @@ export async function softDeleteClient(clientId: string, adminUserId: string): P
 
   const { data: junction } = await supabase
     .from("project_clients")
-    .select("project_id")
+    .select("project_id, is_primary")
     .eq("client_id", clientId);
 
-  const projectIds = new Set<string>(junction?.map((row) => row.project_id) ?? []);
+  const candidateIds = new Set<string>(junction?.map((row) => row.project_id) ?? []);
 
   const { data: ownedProjects } = await supabase
     .from("projects")
@@ -17,7 +17,47 @@ export async function softDeleteClient(clientId: string, adminUserId: string): P
     .eq("client_id", clientId)
     .is("deleted_at", null);
 
-  ownedProjects?.forEach((p) => projectIds.add(p.id));
+  ownedProjects?.forEach((p) => candidateIds.add(p.id));
+
+  const projectIdsToDelete: string[] = [];
+
+  for (const projectId of candidateIds) {
+    const { data: allAssignees } = await supabase
+      .from("project_clients")
+      .select("id, client_id, is_primary")
+      .eq("project_id", projectId);
+
+    const others = (allAssignees ?? []).filter((a) => a.client_id !== clientId);
+
+    if (others.length === 0) {
+      // Sole assignee — soft-delete the project with the client
+      projectIdsToDelete.push(projectId);
+      continue;
+    }
+
+    // Shared project — remove this client and keep the project for others
+    await supabase
+      .from("project_clients")
+      .delete()
+      .eq("project_id", projectId)
+      .eq("client_id", clientId);
+
+    const wasPrimary =
+      (allAssignees ?? []).some((a) => a.client_id === clientId && a.is_primary) ||
+      ownedProjects?.some((p) => p.id === projectId);
+
+    if (wasPrimary) {
+      const nextPrimary = others[0];
+      await supabase
+        .from("project_clients")
+        .update({ is_primary: true })
+        .eq("id", nextPrimary.id);
+      await supabase
+        .from("projects")
+        .update({ client_id: nextPrimary.client_id })
+        .eq("id", projectId);
+    }
+  }
 
   const { error: clientError } = await supabase
     .from("clients")
@@ -29,11 +69,11 @@ export async function softDeleteClient(clientId: string, adminUserId: string): P
     throw new Error(clientError.message);
   }
 
-  if (projectIds.size) {
+  if (projectIdsToDelete.length) {
     const { error: projectError } = await supabase
       .from("projects")
       .update({ deleted_at: now, deleted_by: adminUserId })
-      .in("id", Array.from(projectIds))
+      .in("id", projectIdsToDelete)
       .is("deleted_at", null);
 
     if (projectError) {
@@ -47,11 +87,11 @@ export async function softDeleteClient(clientId: string, adminUserId: string): P
     .eq("client_id", clientId)
     .is("deleted_at", null);
 
-  if (projectIds.size) {
+  if (projectIdsToDelete.length) {
     await supabase
       .from("leads")
       .update({ deleted_at: now, deleted_by: adminUserId })
-      .in("project_id", Array.from(projectIds))
+      .in("project_id", projectIdsToDelete)
       .is("deleted_at", null);
   }
 }

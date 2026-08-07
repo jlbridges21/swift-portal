@@ -4,6 +4,7 @@ import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
 import { notifyAdmins } from "@/lib/notifications";
+import { canAccessProject } from "@/lib/project-access";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -26,10 +27,6 @@ export async function GET(request: Request) {
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
 
-  if (profile.role === "client" && profile.client_id) {
-    query = query.eq("client_id", profile.client_id);
-  }
-
   const { data, error } = await query;
 
   if (error) {
@@ -49,6 +46,11 @@ export async function POST(request: Request) {
 
   if (!body.project_id || !body.description) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  const hasAccess = await canAccessProject(profile, body.project_id);
+  if (!hasAccess) {
+    return NextResponse.json({ error: "Project not found or access denied" }, { status: 404 });
   }
 
   const supabase = await createClient();

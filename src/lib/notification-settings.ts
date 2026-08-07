@@ -43,6 +43,8 @@ export function resolveNotificationEventKey(ctx: NotifyContext): NotificationEve
       case "status_changed":
         if (combined.includes("revision")) return "revision_requested";
         return null;
+      case "project_message":
+        return "project_message";
       default:
         return null;
     }
@@ -72,6 +74,8 @@ export function resolveNotificationEventKey(ctx: NotifyContext): NotificationEve
         return "payment_link_sent";
       case "payment_confirmed":
         return "project_delivered";
+      case "project_message":
+        return "project_message";
       default:
         return null;
     }

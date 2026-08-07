@@ -17,6 +17,7 @@ import { ShootScheduling } from "@/components/projects/shoot-scheduling";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
 import { NextStepBanner } from "@/components/projects/next-step-banner";
 import { PaymentsSection } from "@/components/projects/payments-section";
+import { ProjectMessages } from "@/components/projects/project-messages";
 import { getClientNextStep } from "@/lib/journey";
 import { QuoteSection } from "@/components/projects/quote-section";
 import { DeliverableReview } from "@/components/projects/deliverable-review";
@@ -505,6 +506,12 @@ export function ProjectPageClient({
 
 
         <PaymentsSection payments={payments} isPreview={isPreview} alwaysShow={isClientView} />
+
+        <ProjectMessages
+          projectId={project.id}
+          isAdmin={!!isAdmin}
+          previewMode={!!isPreview}
+        />
 
         {!isPreview && status !== "ready_for_review" && status !== "awaiting_payment" && (
           <Card className="border-0 shadow-lg rounded-2xl">

@@ -43,6 +43,7 @@ const NOTIFICATION_ICONS: Record<string, LucideIcon> = {
   deliverables_uploaded: Camera,
   revision_requested: MessageSquare,
   status_changed: Bell,
+  project_message: MessageSquare,
 };
 
 function getNotificationIcon(type: string): LucideIcon {

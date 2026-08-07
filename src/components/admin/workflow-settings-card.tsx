@@ -11,6 +11,7 @@ import {
   MESSAGE_TEMPLATE_DEFINITIONS,
   REMINDER_TIMING_OPTIONS,
   WORKFLOW_STAGE_DEFINITIONS,
+  buildDefaultWorkflowSettings,
   type ReminderTiming,
   type StageAutomationSettings,
   type WorkflowStageKey,
@@ -242,27 +243,79 @@ export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCar
           </div>
 
           <div className="space-y-4">
-            <p className="text-sm font-medium text-primary">Default Messages</p>
+            <p className="text-sm font-medium text-primary">Workflow Emails</p>
             <p className="text-xs text-muted">
+              Customize the subject and body for each automated client email. Leave as default or use Reset to Default.
               Placeholders: {"{{client_name}}"}, {"{{property_address}}"}, {"{{project_name}}"}, {"{{shoot_date}}"}, {"{{payment_amount}}"}, {"{{portal_link}}"}
             </p>
-            {MESSAGE_TEMPLATE_DEFINITIONS.map((tpl) => (
-              <div key={tpl.key} className="space-y-2">
-                <Label htmlFor={`msg-${tpl.key}`}>{tpl.label}</Label>
-                <Textarea
-                  id={`msg-${tpl.key}`}
-                  rows={3}
-                  value={workflow.messages[tpl.key]}
-                  onChange={(e) =>
-                    onChange({
-                      ...workflow,
-                      messages: { ...workflow.messages, [tpl.key]: e.target.value },
-                    })
-                  }
-                />
-                <p className="text-[11px] text-muted">{tpl.placeholders}</p>
-              </div>
-            ))}
+            {MESSAGE_TEMPLATE_DEFINITIONS.map((tpl) => {
+              const defaults = buildDefaultWorkflowSettings().messages[tpl.key];
+              const current = workflow.messages[tpl.key];
+              const isCustom =
+                current.subject !== defaults.subject || current.body !== defaults.body;
+              return (
+                <div key={tpl.key} className="space-y-2 rounded-lg border border-border p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Label htmlFor={`msg-subject-${tpl.key}`}>{tpl.label}</Label>
+                    {isCustom && (
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-accent hover:underline"
+                        onClick={() =>
+                          onChange({
+                            ...workflow,
+                            messages: {
+                              ...workflow.messages,
+                              [tpl.key]: { ...defaults },
+                            },
+                          })
+                        }
+                      >
+                        Reset to Default
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`msg-subject-${tpl.key}`} className="text-xs text-muted">
+                      Subject
+                    </Label>
+                    <Input
+                      id={`msg-subject-${tpl.key}`}
+                      value={current.subject}
+                      onChange={(e) =>
+                        onChange({
+                          ...workflow,
+                          messages: {
+                            ...workflow.messages,
+                            [tpl.key]: { ...current, subject: e.target.value },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`msg-body-${tpl.key}`} className="text-xs text-muted">
+                      Email body
+                    </Label>
+                    <Textarea
+                      id={`msg-body-${tpl.key}`}
+                      rows={3}
+                      value={current.body}
+                      onChange={(e) =>
+                        onChange({
+                          ...workflow,
+                          messages: {
+                            ...workflow.messages,
+                            [tpl.key]: { ...current, body: e.target.value },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted">{tpl.placeholders}</p>
+                </div>
+              );
+            })}
           </div>
 
           <div className="space-y-2">
