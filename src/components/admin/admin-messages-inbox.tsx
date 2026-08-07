@@ -7,15 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { ConversationListItem, CrmTimelineItem } from "@/lib/messaging-types";
-import {
-  ArrowLeft,
-  Loader2,
-  Mail,
-  MessageSquare,
-  Send,
-  Activity,
-} from "lucide-react";
+import { ArrowLeft, Loader2, MessageSquare, Send } from "lucide-react";
 import { toast } from "sonner";
+
+function formatTimelineStamp(iso: string): string {
+  const date = new Date(iso);
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 export function AdminMessagesInbox() {
   const router = useRouter();
@@ -228,14 +231,14 @@ export function AdminMessagesInbox() {
               )}
             </div>
 
-            <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50/80 px-3 py-4 sm:px-5">
+            <div className="flex-1 space-y-2 overflow-y-auto bg-[#F2F4F7] px-3 py-4 sm:px-5">
               {loadingThread ? (
                 <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading timeline…
                 </div>
               ) : timeline.length === 0 ? (
                 <p className="py-12 text-center text-sm text-muted">
-                  No activity yet. Send the first message below.
+                  No messages yet. Send the first message below.
                 </p>
               ) : (
                 timeline.map((item) => (
@@ -283,21 +286,30 @@ function TimelineRow({ item }: { item: CrmTimelineItem }) {
   if (item.kind === "message") {
     const mine = item.sender_role === "admin";
     return (
-      <div className={cn("flex", mine ? "justify-end" : "justify-start")}>
+      <div className={cn("flex py-1", mine ? "justify-end" : "justify-start")}>
         <div
           className={cn(
-            "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm",
-            mine ? "rounded-br-md bg-accent text-white" : "rounded-bl-md bg-white text-slate-900 ring-1 ring-black/5",
-            item.is_unread && !mine && "ring-2 ring-accent/40"
+            "max-w-[min(92%,28rem)] px-4 py-2.5 text-[15px] leading-relaxed shadow-sm",
+            mine
+              ? "rounded-[20px] rounded-br-md bg-accent text-white"
+              : "rounded-[20px] rounded-bl-md bg-white text-slate-900 ring-1 ring-black/[0.06]",
+            item.is_unread && !mine && "ring-2 ring-accent/35"
           )}
         >
-          <div className="mb-1 flex items-center gap-2 text-[11px] opacity-80">
-            <span className="font-medium">{mine ? "You" : "Client"}</span>
-            <span>{formatRelativeTime(item.created_at)}</span>
+          <div
+            className={cn(
+              "mb-1 flex items-center gap-2 text-[11px] font-medium",
+              mine ? "text-white/75" : "text-slate-500"
+            )}
+          >
+            <span>{mine ? "You" : "Client"}</span>
+            <span className={mine ? "text-white/55" : "text-slate-400"}>
+              {formatRelativeTime(item.created_at)}
+            </span>
           </div>
-          <p className="whitespace-pre-wrap break-words leading-relaxed">{item.body}</p>
+          <p className="whitespace-pre-wrap break-words">{item.body}</p>
           {item.project_name && (
-            <p className={cn("mt-1 text-[11px]", mine ? "text-white/70" : "text-muted")}>
+            <p className={cn("mt-1.5 text-[11px]", mine ? "text-white/60" : "text-slate-400")}>
               Re: {item.project_name}
             </p>
           )}
@@ -306,24 +318,21 @@ function TimelineRow({ item }: { item: CrmTimelineItem }) {
     );
   }
 
-  const Icon = item.kind === "email" ? Mail : Activity;
   return (
-    <div className="mx-auto flex max-w-xl gap-3 rounded-xl border border-border/80 bg-white px-3 py-2.5 text-sm shadow-sm">
-      <div
-        className={cn(
-          "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-          item.kind === "email" ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-600"
+    <div className="flex justify-center py-1.5">
+      <div className="flex max-w-full flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 px-2 text-center text-[12px] leading-snug text-slate-500">
+        <span className="shrink-0 text-[13px] leading-none" aria-hidden>
+          {item.icon || "•"}
+        </span>
+        <span className="font-medium text-slate-600">{item.title}</span>
+        <span className="text-slate-400">·</span>
+        <span className="text-slate-400">{formatTimelineStamp(item.created_at)}</span>
+        {item.project_name && (
+          <>
+            <span className="text-slate-300">·</span>
+            <span className="truncate text-slate-400">{item.project_name}</span>
+          </>
         )}
-      >
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="font-medium text-primary capitalize">{item.title}</p>
-          <span className="text-[11px] text-muted">{formatRelativeTime(item.created_at)}</span>
-        </div>
-        {item.body && <p className="mt-0.5 text-slate-600 whitespace-pre-wrap break-words">{item.body}</p>}
-        {item.project_name && <p className="mt-1 text-[11px] text-muted">Project: {item.project_name}</p>}
       </div>
     </div>
   );

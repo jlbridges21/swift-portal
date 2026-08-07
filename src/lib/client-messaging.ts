@@ -1,8 +1,47 @@
 import { createServiceClient } from "@/lib/supabase/server";
-import type { ClientMessage } from "@/lib/types";
+import { filterClientVisibleActivities } from "@/lib/communications";
+import { getClientActivityDisplay } from "@/lib/activity-display";
+import type { ActivityLog, ClientMessage } from "@/lib/types";
 import type { ConversationListItem, CrmTimelineItem } from "@/lib/messaging-types";
 
 export type { ConversationListItem, CrmTimelineItem } from "@/lib/messaging-types";
+
+/** Collapse near-duplicate milestone logs (same type + project within a short window). */
+function dedupeMeaningfulActivities(activities: ActivityLog[]): ActivityLog[] {
+  const sorted = [...activities].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
+  const normalizeType = (type: string) => {
+    if (type === "payment_completed") return "payment_received";
+    if (type === "lead_created") return "proposal_submitted";
+    if (type === "official_proposal_sent") return "quote_sent";
+    return type;
+  };
+
+  const kept: ActivityLog[] = [];
+  for (const activity of sorted) {
+    const type = normalizeType(activity.activity_type);
+    const projectId = activity.project_id ?? null;
+    const at = new Date(activity.created_at).getTime();
+
+    const isDup = kept.some((existing) => {
+      if (normalizeType(existing.activity_type) !== type) return false;
+      if ((existing.project_id ?? null) !== projectId) return false;
+      const delta = Math.abs(new Date(existing.created_at).getTime() - at);
+      // Payments / proposals often double-logged; other types only collapse true duplicates.
+      const windowMs =
+        type === "payment_received" || type === "proposal_submitted" || type === "quote_sent"
+          ? 24 * 60 * 60 * 1000
+          : 2 * 60 * 1000;
+      return delta <= windowMs;
+    });
+
+    if (!isDup) kept.push(activity);
+  }
+
+  return kept;
+}
 
 export async function listAdminConversations(
   adminUserId: string
@@ -174,34 +213,8 @@ export async function buildClientCrmTimeline(
     });
   }
 
-  const { data: communications } = await supabase
-    .from("communications")
-    .select("id, title, message, comm_type, status, created_at, project_id")
-    .eq("client_id", clientId)
-    .order("created_at", { ascending: false })
-    .limit(80);
-
-  for (const c of communications ?? []) {
-    const isEmail = c.comm_type === "email" || c.comm_type?.includes("email");
-    items.push({
-      id: `comm-${c.id}`,
-      kind: isEmail ? "email" : "activity",
-      created_at: c.created_at,
-      title: c.title || (isEmail ? "Email sent" : "Communication"),
-      body: c.message,
-      meta: c.status,
-      project_id: c.project_id,
-    });
-  }
-
-  const { data: activities } = await supabase
-    .from("activity_logs")
-    .select("id, activity_type, description, title, project_id, created_at")
-    .eq("client_id", clientId)
-    .order("created_at", { ascending: false })
-    .limit(80);
-
-  // Also include project activities for this client's projects
+  // Meaningful milestones only — same filter as client Recent Activity.
+  // Do not include communications / email transport logs.
   const { data: junction } = await supabase
     .from("project_clients")
     .select("project_id")
@@ -214,35 +227,45 @@ export async function buildClientCrmTimeline(
     ])
   );
 
-  let projectActivities: {
-    id: string;
-    activity_type: string;
-    description: string;
-    title: string | null;
-    project_id: string | null;
-    created_at: string;
-  }[] = [];
+  const activitySelect =
+    "id, activity_type, description, title, project_id, client_id, visibility, user_id, lead_id, property_id, metadata, created_at";
 
+  const { data: clientActivities } = await supabase
+    .from("activity_logs")
+    .select(activitySelect)
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: false })
+    .limit(120);
+
+  let projectActivities: ActivityLog[] = [];
   if (projectIds.length) {
     const { data } = await supabase
       .from("activity_logs")
-      .select("id, activity_type, description, title, project_id, created_at")
+      .select(activitySelect)
       .in("project_id", projectIds)
       .order("created_at", { ascending: false })
-      .limit(100);
-    projectActivities = data ?? [];
+      .limit(150);
+    projectActivities = (data ?? []) as ActivityLog[];
   }
 
-  const seenActivity = new Set<string>();
-  for (const a of [...(activities ?? []), ...projectActivities]) {
-    if (seenActivity.has(a.id)) continue;
-    seenActivity.add(a.id);
+  const byId = new Map<string, ActivityLog>();
+  for (const a of [...((clientActivities ?? []) as ActivityLog[]), ...projectActivities]) {
+    byId.set(a.id, a);
+  }
+
+  const meaningful = dedupeMeaningfulActivities(
+    filterClientVisibleActivities(Array.from(byId.values()))
+  );
+
+  for (const a of meaningful) {
+    const display = getClientActivityDisplay(a.activity_type, a.description);
     items.push({
       id: `act-${a.id}`,
       kind: "activity",
       created_at: a.created_at,
-      title: a.title || a.activity_type.replace(/_/g, " "),
-      body: a.description,
+      title: display.description,
+      body: null,
+      icon: display.icon,
       project_id: a.project_id,
     });
   }

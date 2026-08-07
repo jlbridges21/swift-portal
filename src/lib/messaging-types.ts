@@ -13,10 +13,12 @@ export interface ConversationListItem {
 
 export interface CrmTimelineItem {
   id: string;
-  kind: "message" | "email" | "activity";
+  kind: "message" | "activity";
   created_at: string;
   title: string;
   body: string | null;
+  /** Small icon/emoji for compact activity rows */
+  icon?: string | null;
   meta?: string | null;
   sender_role?: "admin" | "client";
   is_unread?: boolean;
