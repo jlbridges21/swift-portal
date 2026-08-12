@@ -6,20 +6,21 @@ import {
   useMemo,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type TouchEvent as ReactTouchEvent,
 } from "react";
 import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
-  type DragOverEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -38,10 +39,15 @@ import { cn } from "@/lib/utils";
 import type { MediaAsset, MediaFolder } from "@/lib/types";
 import { AdminPhotoLightbox } from "@/components/admin/admin-photo-lightbox";
 import {
+  ArrowDownToLine,
+  ArrowUpToLine,
+  Check,
   Eye,
   EyeOff,
   FolderInput,
   FolderPlus,
+  GripVertical,
+  Move,
   Pencil,
   Trash2,
   X,
@@ -103,6 +109,18 @@ function applySlotReorder(
   );
 }
 
+function useCoarsePointer() {
+  const [coarse, setCoarse] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse)");
+    const update = () => setCoarse(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return coarse;
+}
+
 function PhotoThumb({ assetId, selected }: { assetId: string; selected: boolean }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -135,57 +153,226 @@ function PhotoThumb({ assetId, selected }: { assetId: string; selected: boolean 
   );
 }
 
+function InsertionGap({ onInsert, label }: { onInsert: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onInsert}
+      aria-label={label}
+      className="flex min-h-[2.75rem] w-full items-center justify-center rounded-lg border-2 border-dashed border-accent/50 bg-accent/5 px-2 text-xs font-medium text-accent active:bg-accent/15 sm:aspect-square sm:min-h-0"
+    >
+      Move here
+    </button>
+  );
+}
+
 function SortablePhotoCard({
   photo,
   index,
   selected,
   isHeroPhoto,
-  onSelectClick,
+  coarsePointer,
+  selectMode,
+  placementMode,
+  showHandle,
+  onActivate,
   onOpen,
   onSetHero,
   onToggleVisibility,
   onDelete,
   onRename,
+  onLongPressSelect,
+  onToggleSelect,
+  onPaintSelectEnter,
+  onPaintSelectMove,
+  onPaintSelectEnd,
 }: {
   photo: MediaAsset;
   index: number;
   selected: boolean;
   isHeroPhoto: boolean;
-  onSelectClick: (e: React.MouseEvent, id: string, index: number) => void;
+  coarsePointer: boolean;
+  selectMode: boolean;
+  placementMode: boolean;
+  showHandle: boolean;
+  onActivate: (e: ReactMouseEvent, id: string, index: number) => void;
   onOpen: () => void;
   onSetHero: () => void;
   onToggleVisibility: () => void;
   onDelete: () => void;
   onRename: () => void;
+  onLongPressSelect: (id: string, index: number) => void;
+  onToggleSelect: (id: string, index: number) => void;
+  onPaintSelectEnter: (id: string, index: number) => void;
+  onPaintSelectMove: (clientX: number, clientY: number) => void;
+  onPaintSelectEnd: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: photo.id,
+    disabled: placementMode,
   });
+
+  const longPressTimer = useRef<number | null>(null);
+  const longPressMoved = useRef(false);
+  const paintStarted = useRef(false);
+  const paintMoved = useRef(false);
+  const skipNextClick = useRef(false);
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    touchAction: "none" as const,
+    // Outside select mode: allow vertical scroll through the tile.
+    // In select mode: none so paint-select isn't stolen by the browser.
+    // Drag handle always uses touch-action: none separately.
+    touchAction: (selectMode || placementMode ? "none" : "pan-y") as "none" | "pan-y",
     userSelect: "none" as const,
   };
+
+  // Split activators: mouse on whole tile, touch only on handle
+  const mouseListeners = listeners
+    ? { onMouseDown: listeners.onMouseDown as React.MouseEventHandler | undefined }
+    : {};
+  const touchListeners = listeners
+    ? { onTouchStart: listeners.onTouchStart as React.TouchEventHandler | undefined }
+    : {};
+  const keyListeners = listeners
+    ? { onKeyDown: listeners.onKeyDown as React.KeyboardEventHandler | undefined }
+    : {};
+
+  function clearLongPress() {
+    if (longPressTimer.current != null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+
+  function onTouchStartTile(e: ReactTouchEvent) {
+    if (!coarsePointer || placementMode) return;
+    // Don't compete with the drag handle
+    if ((e.target as HTMLElement).closest("[data-drag-handle]")) return;
+
+    longPressMoved.current = false;
+    paintStarted.current = false;
+    paintMoved.current = false;
+    const t = e.touches[0];
+    touchStartPos.current = t ? { x: t.clientX, y: t.clientY } : null;
+
+    if (selectMode) {
+      paintStarted.current = true;
+      skipNextClick.current = true;
+      // Defer toggle until touchend if this is a tap; paint-move will select a run
+      return;
+    }
+
+    clearLongPress();
+    longPressTimer.current = window.setTimeout(() => {
+      if (!longPressMoved.current) {
+        skipNextClick.current = true;
+        onLongPressSelect(photo.id, index);
+      }
+    }, 450);
+  }
+
+  function onTouchMoveTile(e: ReactTouchEvent) {
+    if (!coarsePointer) return;
+    const t = e.touches[0];
+    if (!t || !touchStartPos.current) return;
+
+    const dist = Math.hypot(
+      t.clientX - touchStartPos.current.x,
+      t.clientY - touchStartPos.current.y
+    );
+    if (dist <= 8) return;
+
+    if (!longPressMoved.current) {
+      longPressMoved.current = true;
+      skipNextClick.current = true; // scrolling — don't open via synthetic click
+    }
+    clearLongPress();
+
+    if (!paintStarted.current) return;
+
+    if (!paintMoved.current) {
+      paintMoved.current = true;
+      onPaintSelectEnter(photo.id, index);
+    }
+    onPaintSelectMove(t.clientX, t.clientY);
+  }
+
+  function onTouchEndTile() {
+    clearLongPress();
+    if (paintStarted.current) {
+      if (!paintMoved.current) {
+        onToggleSelect(photo.id, index);
+      }
+      paintStarted.current = false;
+      paintMoved.current = false;
+      onPaintSelectEnd();
+    }
+  }
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       data-photo-id={photo.id}
+      data-photo-index={index}
       {...attributes}
-      {...listeners}
-      onClick={(e) => onSelectClick(e, photo.id, index)}
+      {...(placementMode || (coarsePointer && selectMode) ? {} : mouseListeners)}
+      {...keyListeners}
+      onClick={(e) => {
+        if (placementMode) return;
+        if (skipNextClick.current) {
+          skipNextClick.current = false;
+          return;
+        }
+        onActivate(e, photo.id, index);
+      }}
+      onTouchStart={onTouchStartTile}
+      onTouchMove={onTouchMoveTile}
+      onTouchEnd={onTouchEndTile}
+      onTouchCancel={onTouchEndTile}
       className={cn(
-        "group relative cursor-grab overflow-hidden rounded-lg border bg-white transition-shadow active:cursor-grabbing",
-        "touch-none select-none",
+        "group relative overflow-hidden rounded-lg border bg-white transition-shadow select-none",
+        !coarsePointer && !placementMode && "cursor-grab active:cursor-grabbing",
         selected
           ? "border-accent ring-2 ring-accent shadow-md"
           : "border-border hover:border-slate-300",
-        isDragging && "opacity-40"
+        isDragging && "opacity-40",
+        placementMode && selected && "scale-[0.97] opacity-30",
+        placementMode && !selected && "opacity-80"
       )}
     >
+      {coarsePointer && selectMode && (
+        <div
+          className={cn(
+            "absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border-2 shadow",
+            selected
+              ? "border-accent bg-accent text-white"
+              : "border-white bg-black/30 text-transparent"
+          )}
+          aria-hidden
+        >
+          <Check className="h-4 w-4" />
+        </div>
+      )}
+
+      {showHandle && !placementMode && (
+        <button
+          type="button"
+          data-drag-handle
+          aria-label="Drag to reorder"
+          className="absolute right-1 top-1 z-10 flex h-11 w-11 items-center justify-center rounded-lg bg-black/45 text-white"
+          style={{ touchAction: "none" }}
+          {...touchListeners}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="h-5 w-5" />
+        </button>
+      )}
+
       <PhotoThumb assetId={photo.id} selected={selected} />
       <div className="space-y-2 p-2">
         <p className="line-clamp-2 text-xs text-foreground">{mediaDisplayName(photo)}</p>
@@ -201,39 +388,58 @@ function SortablePhotoCard({
             </span>
           )}
         </div>
-        <div
-          className="flex flex-wrap gap-1"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            title="Open fullscreen"
-            onClick={onOpen}
+        {!selectMode && !placementMode && (
+          <div
+            className="flex flex-wrap gap-1"
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
-            <ZoomIn className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            title={isClientVisible(photo) ? "Hide from client" : "Show to client"}
-            onClick={onToggleVisibility}
-          >
-            {isClientVisible(photo) ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          </Button>
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onSetHero}>
-            Hero
-          </Button>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onRename} title="Rename">
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={onDelete}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              title="Open fullscreen"
+              onClick={onOpen}
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              title={isClientVisible(photo) ? "Hide from client" : "Show to client"}
+              onClick={onToggleVisibility}
+            >
+              {isClientVisible(photo) ? (
+                <EyeOff className="h-3.5 w-3.5" />
+              ) : (
+                <Eye className="h-3.5 w-3.5" />
+              )}
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onSetHero}>
+              Hero
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={onRename}
+              title="Rename"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-red-500"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -252,24 +458,31 @@ export function AdminPhotoGrid({
   onPropertyLineSaved,
   onRefresh,
 }: AdminPhotoGridProps) {
+  const coarsePointer = useCoarsePointer();
   const [folderFilter, setFolderFilter] = useState<FolderFilter>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
   const [lightboxPhoto, setLightboxPhoto] = useState<MediaAsset | null>(null);
   const [activeDragIds, setActiveDragIds] = useState<string[]>([]);
-  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(
+    null
+  );
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [moveFolderId, setMoveFolderId] = useState("");
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [placementMode, setPlacementMode] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const marqueeStart = useRef<{ x: number; y: number; additive: boolean } | null>(null);
   const selectionBeforeMarquee = useRef<Set<string>>(new Set());
   const photosRef = useRef(photos);
   const justDraggedRef = useRef(false);
+  const paintSelectActive = useRef(false);
+  const undoSnapshotRef = useRef<MediaAsset[] | null>(null);
 
   useEffect(() => {
     photosRef.current = photos;
@@ -298,19 +511,27 @@ export function AdminPhotoGrid({
     return map;
   }, [allProjectPhotos]);
 
+  // Mount all sensors always — hybrid devices need both mouse and touch paths
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
     setAnchorIndex(null);
+    setSelectMode(false);
+    setPlacementMode(false);
   }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
+        if (placementMode) {
+          setPlacementMode(false);
+          return;
+        }
         clearSelection();
         return;
       }
@@ -319,18 +540,108 @@ export function AdminPhotoGrid({
         if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
         e.preventDefault();
         setSelectedIds(new Set(visibleIds));
+        if (coarsePointer) setSelectMode(true);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [clearSelection, visibleIds]);
+  }, [clearSelection, visibleIds, placementMode, coarsePointer]);
 
-  function handleSelectClick(e: React.MouseEvent, id: string, index: number) {
+  async function persistFullOrder(
+    orderedPhotos: MediaAsset[],
+    opts?: { undoable?: boolean }
+  ): Promise<boolean> {
+    const previous = photosRef.current;
+    if (opts?.undoable) undoSnapshotRef.current = previous;
+
+    const withOrder = orderedPhotos.map((p, i) => ({ ...p, display_order: i }));
+    const others = previous.filter((m) => m.media_type !== "photo");
+    onPhotosChange([...others, ...withOrder]);
+
+    const res = await fetch("/api/media/reorder", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        project_id: projectId,
+        ordered_ids: withOrder.map((p) => p.id),
+      }),
+    });
+
+    if (!res.ok) {
+      onPhotosChange(previous);
+      const data = await res.json().catch(() => ({}));
+      toast.error((data as { error?: string }).error || "Failed to save order");
+      return false;
+    }
+
+    if (opts?.undoable) {
+      toast.success("Photos moved", {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            const snap = undoSnapshotRef.current;
+            if (!snap) return;
+            void persistFullOrder(
+              sortByDisplayOrder(snap.filter((p) => p.media_type === "photo")),
+              { undoable: false }
+            );
+          },
+        },
+      });
+    }
+
+    onRefresh?.();
+    return true;
+  }
+
+  async function moveSelectionToInsertIndex(insertIndex: number) {
+    if (!selectedIds.size) return;
+    const previousVisible = [...visiblePhotos];
+    const selectedOrdered = previousVisible.filter((p) => selectedIds.has(p.id));
+    const remaining = previousVisible.filter((p) => !selectedIds.has(p.id));
+    const clamped = Math.max(0, Math.min(insertIndex, remaining.length));
+    const nextVisible = [
+      ...remaining.slice(0, clamped),
+      ...selectedOrdered,
+      ...remaining.slice(clamped),
+    ];
+    const merged = applySlotReorder(allProjectPhotos, previousVisible, nextVisible);
+    const ok = await persistFullOrder(merged, { undoable: true });
+    if (ok) {
+      setPlacementMode(false);
+      if (coarsePointer) {
+        setSelectMode(false);
+        setSelectedIds(new Set());
+        setAnchorIndex(null);
+      }
+    }
+  }
+
+  function handleActivate(e: ReactMouseEvent, id: string, index: number) {
     if (justDraggedRef.current) {
       justDraggedRef.current = false;
       return;
     }
+    if (placementMode) return;
 
+    // Coarse pointer: tap opens photo unless Select mode is on
+    if (coarsePointer) {
+      if (selectMode) {
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        });
+        setAnchorIndex(index);
+        return;
+      }
+      setLightboxPhoto(visiblePhotos[index] ?? null);
+      return;
+    }
+
+    // Desktop — Cmd/Shift/click selection (unchanged)
     if (e.metaKey || e.ctrlKey) {
       e.preventDefault();
       setSelectedIds((prev) => {
@@ -346,12 +657,55 @@ export function AdminPhotoGrid({
       e.preventDefault();
       const from = Math.min(anchorIndex, index);
       const to = Math.max(anchorIndex, index);
-      const range = visiblePhotos.slice(from, to + 1).map((p) => p.id);
-      setSelectedIds(new Set(range));
+      setSelectedIds(new Set(visiblePhotos.slice(from, to + 1).map((p) => p.id)));
       return;
     }
     setSelectedIds(new Set([id]));
     setAnchorIndex(index);
+  }
+
+  function onLongPressSelect(id: string, index: number) {
+    setSelectMode(true);
+    setSelectedIds(new Set([id]));
+    setAnchorIndex(index);
+  }
+
+  function onToggleSelect(id: string, index: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setAnchorIndex(index);
+  }
+
+  function onPaintSelectEnter(id: string, index: number) {
+    paintSelectActive.current = true;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    setAnchorIndex(index);
+  }
+
+  function onPaintSelectMove(clientX: number, clientY: number) {
+    if (!paintSelectActive.current) return;
+    const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    const tile = el?.closest?.("[data-photo-id]") as HTMLElement | null;
+    const id = tile?.dataset.photoId;
+    if (!id) return;
+    setSelectedIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }
+
+  function onPaintSelectEnd() {
+    paintSelectActive.current = false;
   }
 
   function rectsIntersect(
@@ -361,11 +715,13 @@ export function AdminPhotoGrid({
     return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
   }
 
-  /** Marquee only from empty grid background — never from a photo tile. */
-  function onGridPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+  /** Marquee — mouse only. Never binds to touch. */
+  function onGridMouseDown(e: ReactMouseEvent<HTMLDivElement>) {
     if (e.button !== 0) return;
+    if (placementMode) return;
+    if (coarsePointer && selectMode) return;
+
     const target = e.target as HTMLElement;
-    // Tiles own the gesture for dnd-kit / selection — do not capture
     if (target.closest("[data-photo-id]")) return;
     if (target.closest("button") || target.closest("a") || target.closest("input")) return;
 
@@ -380,10 +736,7 @@ export function AdminPhotoGrid({
     selectionBeforeMarquee.current = additive ? new Set(selectedIds) : new Set();
     if (!additive) setSelectedIds(new Set());
 
-    const pointerId = e.pointerId;
-    container.setPointerCapture(pointerId);
-
-    function onMove(ev: PointerEvent) {
+    function onMove(ev: MouseEvent) {
       if (!marqueeStart.current || !scrollRef.current) return;
       const c = scrollRef.current;
       const b = c.getBoundingClientRect();
@@ -419,48 +772,16 @@ export function AdminPhotoGrid({
     function onUp() {
       marqueeStart.current = null;
       setMarquee(null);
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      try {
-        container?.releasePointerCapture(pointerId);
-      } catch {
-        /* ignore */
-      }
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
     }
 
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  }
-
-  async function persistFullOrder(orderedPhotos: MediaAsset[]) {
-    const previous = photosRef.current;
-    const withOrder = orderedPhotos.map((p, i) => ({ ...p, display_order: i }));
-    const others = previous.filter((m) => m.media_type !== "photo");
-    onPhotosChange([...others, ...withOrder]);
-
-    const res = await fetch("/api/media/reorder", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        project_id: projectId,
-        ordered_ids: withOrder.map((p) => p.id),
-      }),
-    });
-
-    if (!res.ok) {
-      onPhotosChange(previous);
-      const data = await res.json().catch(() => ({}));
-      toast.error((data as { error?: string }).error || "Failed to save order");
-      return false;
-    }
-    onRefresh?.();
-    return true;
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   }
 
   function handleDragStart(event: DragStartEvent) {
     const id = String(event.active.id);
-    console.info("[dnd] onDragStart", { id, folderFilter, visibleCount: visibleIds.length });
     justDraggedRef.current = true;
     const selected = selectedIds.has(id) ? Array.from(selectedIds) : [id];
     const ordered = visibleIds.filter((vid) => selected.includes(vid));
@@ -468,23 +789,10 @@ export function AdminPhotoGrid({
     if (!selectedIds.has(id)) setSelectedIds(new Set([id]));
   }
 
-  function handleDragOver(event: DragOverEvent) {
-    console.info("[dnd] onDragOver", {
-      active: String(event.active.id),
-      over: event.over ? String(event.over.id) : null,
-    });
-  }
-
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     const dragging = activeDragIds;
-    console.info("[dnd] onDragEnd", {
-      active: String(active.id),
-      over: over ? String(over.id) : null,
-      draggingCount: dragging.length,
-    });
     setActiveDragIds([]);
-    // Clear justDragged on next tick so the synthetic click is ignored
     window.setTimeout(() => {
       justDraggedRef.current = false;
     }, 0);
@@ -566,7 +874,9 @@ export function AdminPhotoGrid({
       return;
     }
     onFoldersChange(folders.filter((f) => f.id !== folder.id));
-    onPhotosChange(photos.map((p) => (p.folder_id === folder.id ? { ...p, folder_id: null } : p)));
+    onPhotosChange(
+      photos.map((p) => (p.folder_id === folder.id ? { ...p, folder_id: null } : p))
+    );
     if (folderFilter === folder.id) setFolderFilter("all");
     toast.success("Folder deleted — photos moved to Unfiled");
     onRefresh?.();
@@ -594,7 +904,6 @@ export function AdminPhotoGrid({
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
     const previous = photos;
-    // folder_id only — display_order unchanged
     onPhotosChange(
       photos.map((p) => (ids.includes(p.id) ? { ...p, folder_id: targetFolderId } : p))
     );
@@ -647,15 +956,101 @@ export function AdminPhotoGrid({
     onRefresh?.();
   }
 
+  const selectionCount = selectedIds.size;
+  const showSelectionChrome = selectionCount > 0 || (coarsePointer && selectMode);
+  const remainingCount = visiblePhotos.length - selectionCount;
+
+  const selectionActions = (
+    <>
+      <span className="text-sm font-medium text-primary">
+        {selectionCount} selected
+      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        {selectionCount > 0 && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => void moveSelectionToInsertIndex(0)}
+            >
+              <ArrowUpToLine className="h-3.5 w-3.5" /> Top
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => void moveSelectionToInsertIndex(remainingCount)}
+            >
+              <ArrowDownToLine className="h-3.5 w-3.5" /> Bottom
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => setPlacementMode(true)}
+            >
+              <Move className="h-3.5 w-3.5" /> Move
+            </Button>
+            <Select
+              className="min-w-[10rem]"
+              value={moveFolderId}
+              onChange={(e) => setMoveFolderId(e.target.value)}
+              placeholder="Move to folder…"
+              options={[
+                { value: "__unfiled__", label: "Remove from folder (Unfiled)" },
+                ...folders.map((f) => ({ value: f.id, label: f.name })),
+              ]}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8"
+              disabled={!moveFolderId}
+              onClick={() => {
+                const target = moveFolderId === "__unfiled__" ? null : moveFolderId;
+                void moveSelectedToFolder(target);
+                setMoveFolderId("");
+              }}
+            >
+              <FolderInput className="h-3.5 w-3.5" /> Folder
+            </Button>
+          </>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8"
+          onClick={() => {
+            setSelectedIds(new Set(visibleIds));
+            if (coarsePointer) setSelectMode(true);
+          }}
+        >
+          Select all
+        </Button>
+        <Button type="button" variant="ghost" size="sm" className="h-8" onClick={clearSelection}>
+          <X className="h-3.5 w-3.5" /> {coarsePointer ? "Done" : "Clear"}
+        </Button>
+      </div>
+    </>
+  );
+
   return (
-    <div className="space-y-3">
+    <div className={cn("space-y-3", coarsePointer && showSelectionChrome && "pb-28")}>
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => setFolderFilter("all")}
           className={cn(
             "rounded-full px-3 py-1.5 text-xs font-medium transition",
-            folderFilter === "all" ? "bg-accent text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            folderFilter === "all"
+              ? "bg-accent text-white"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
           )}
         >
           All photos ({allProjectPhotos.length})
@@ -665,7 +1060,9 @@ export function AdminPhotoGrid({
           onClick={() => setFolderFilter("unfiled")}
           className={cn(
             "rounded-full px-3 py-1.5 text-xs font-medium transition",
-            folderFilter === "unfiled" ? "bg-accent text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            folderFilter === "unfiled"
+              ? "bg-accent text-white"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
           )}
         >
           Unfiled ({folderCounts.get("null") ?? 0})
@@ -714,43 +1111,50 @@ export function AdminPhotoGrid({
         <Button variant="outline" size="sm" className="h-8" onClick={() => setNewFolderOpen(true)}>
           <FolderPlus className="h-3.5 w-3.5" /> New folder
         </Button>
+
+        {coarsePointer && !placementMode && (
+          <Button
+            type="button"
+            variant={selectMode ? "accent" : "outline"}
+            size="sm"
+            className="h-8"
+            onClick={() => {
+              if (selectMode) clearSelection();
+              else setSelectMode(true);
+            }}
+          >
+            {selectMode ? "Selecting…" : "Select"}
+          </Button>
+        )}
       </div>
 
       <p className="text-xs text-muted">
-        Drag photos to reorder. Cmd/Ctrl-click or marquee to multi-select, then drag the group.
+        {coarsePointer
+          ? "Tap Select (or long-press a photo) to multi-select. Use Move, Top, or Bottom to reorder. Press-and-hold the grip to drag one photo."
+          : "Drag photos to reorder. Cmd/Ctrl-click or marquee to multi-select, then drag the group. Use Move for placement."}
       </p>
 
-      {selectedIds.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2">
-          <span className="text-sm font-medium text-primary">{selectedIds.size} selected</span>
-          <Button variant="ghost" size="sm" className="h-8" onClick={clearSelection}>
-            <X className="h-3.5 w-3.5" /> Clear
+      {placementMode && (
+        <div className="sticky top-2 z-30 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2">
+          <p className="text-sm font-medium text-primary">
+            Tap where to move {selectionCount} photo{selectionCount === 1 ? "" : "s"}
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            onClick={() => setPlacementMode(false)}
+          >
+            Cancel
           </Button>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              className="min-w-[10rem]"
-              value={moveFolderId}
-              onChange={(e) => setMoveFolderId(e.target.value)}
-              placeholder="Move to folder…"
-              options={[
-                { value: "__unfiled__", label: "Remove from folder (Unfiled)" },
-                ...folders.map((f) => ({ value: f.id, label: f.name })),
-              ]}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8"
-              disabled={!moveFolderId}
-              onClick={() => {
-                const target = moveFolderId === "__unfiled__" ? null : moveFolderId;
-                void moveSelectedToFolder(target);
-                setMoveFolderId("");
-              }}
-            >
-              <FolderInput className="h-3.5 w-3.5" /> Move
-            </Button>
-          </div>
+        </div>
+      )}
+
+      {/* Desktop selection bar (top) */}
+      {!coarsePointer && showSelectionChrome && !placementMode && (
+        <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2">
+          {selectionActions}
         </div>
       )}
 
@@ -760,41 +1164,80 @@ export function AdminPhotoGrid({
         <div
           ref={scrollRef}
           className="relative max-h-[70vh] overflow-auto rounded-lg"
-          onPointerDown={onGridPointerDown}
+          onMouseDown={onGridMouseDown}
         >
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
             onDragEnd={(e) => void handleDragEnd(e)}
+            onDragCancel={() => {
+              setActiveDragIds([]);
+              window.setTimeout(() => {
+                justDraggedRef.current = false;
+              }, 0);
+            }}
             autoScroll={{ threshold: { x: 0.15, y: 0.15 }, acceleration: 12 }}
           >
             <SortableContext items={visibleIds} strategy={rectSortingStrategy}>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {visiblePhotos.map((p, i) => (
-                  <SortablePhotoCard
-                    key={p.id}
-                    photo={p}
-                    index={i}
-                    selected={selectedIds.has(p.id)}
-                    isHeroPhoto={isHero(p.id)}
-                    onSelectClick={handleSelectClick}
-                    onOpen={() => setLightboxPhoto(p)}
-                    onSetHero={() => onSetHero(p.id)}
-                    onToggleVisibility={() => onToggleVisibility(p.id, !isClientVisible(p))}
-                    onDelete={() => onDelete(p.id)}
-                    onRename={() => {
-                      setRenameId(p.id);
-                      setRenameValue(mediaDisplayName(p));
-                    }}
+                {placementMode && (
+                  <InsertionGap
+                    onInsert={() => void moveSelectionToInsertIndex(0)}
+                    label="Move here (start)"
                   />
+                )}
+                {visiblePhotos.map((p, i) => (
+                  <div key={p.id} className="contents">
+                    <SortablePhotoCard
+                      photo={p}
+                      index={i}
+                      selected={selectedIds.has(p.id)}
+                      isHeroPhoto={isHero(p.id)}
+                      coarsePointer={coarsePointer}
+                      selectMode={Boolean(coarsePointer && selectMode)}
+                      placementMode={placementMode}
+                      showHandle
+                      onActivate={handleActivate}
+                      onOpen={() => {
+                        if (placementMode) return;
+                        if (coarsePointer && selectMode) return;
+                        setLightboxPhoto(p);
+                      }}
+                      onSetHero={() => onSetHero(p.id)}
+                      onToggleVisibility={() =>
+                        onToggleVisibility(p.id, !isClientVisible(p))
+                      }
+                      onDelete={() => onDelete(p.id)}
+                      onRename={() => {
+                        setRenameId(p.id);
+                        setRenameValue(mediaDisplayName(p));
+                      }}
+                      onLongPressSelect={onLongPressSelect}
+                      onToggleSelect={onToggleSelect}
+                      onPaintSelectEnter={onPaintSelectEnter}
+                      onPaintSelectMove={onPaintSelectMove}
+                      onPaintSelectEnd={onPaintSelectEnd}
+                    />
+                    {placementMode && (
+                      <InsertionGap
+                        onInsert={() =>
+                          void moveSelectionToInsertIndex(
+                            visiblePhotos
+                              .slice(0, i + 1)
+                              .filter((photo) => !selectedIds.has(photo.id)).length
+                          )
+                        }
+                        label="Move here"
+                      />
+                    )}
+                  </div>
                 ))}
               </div>
             </SortableContext>
             <DragOverlay dropAnimation={null}>
               {activeDragIds.length > 0 ? (
-                <div className="relative h-28 w-28 touch-none select-none">
+                <div className="relative h-28 w-28 select-none">
                   <div className="absolute inset-0 rotate-[-4deg] rounded-lg bg-slate-200 shadow" />
                   <div className="absolute inset-0 rotate-[3deg] rounded-lg bg-slate-100 shadow" />
                   <div className="absolute inset-0 flex items-center justify-center rounded-lg border-2 border-accent bg-white text-sm font-semibold text-primary shadow-lg">
@@ -811,6 +1254,16 @@ export function AdminPhotoGrid({
               style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }}
             />
           )}
+        </div>
+      )}
+
+      {/* Mobile selection bar (bottom, thumb-reachable) */}
+      {coarsePointer && showSelectionChrome && !placementMode && (
+        <div
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-accent/30 bg-accent/5 px-3 py-3 backdrop-blur"
+          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        >
+          <div className="mx-auto flex max-w-3xl flex-col gap-2">{selectionActions}</div>
         </div>
       )}
 
