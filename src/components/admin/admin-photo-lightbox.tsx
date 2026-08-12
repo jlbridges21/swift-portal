@@ -10,6 +10,7 @@ import type { MediaAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Download, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { downloadFileName, mediaDisplayName } from "@/lib/media-display-name";
 
 interface AdminPhotoLightboxProps {
   photo: MediaAsset;
@@ -72,7 +73,7 @@ export function AdminPhotoLightbox({ photo, onClose, onSavedPropertyLine }: Admi
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)" }}
       >
         <span className="min-w-0 truncate text-sm text-white/80 pr-14">
-          {photo.title || photo.file_name}
+          {mediaDisplayName(photo)}
         </span>
         <div className="flex shrink-0 gap-2">
           <Button
@@ -91,7 +92,7 @@ export function AdminPhotoLightbox({ photo, onClose, onSavedPropertyLine }: Admi
               onClick={() => {
                 const a = document.createElement("a");
                 a.href = `/api/media/download/${photo.id}?file=1`;
-                a.download = photo.file_name;
+                a.download = downloadFileName(photo);
                 a.click();
               }}
             >
@@ -105,7 +106,7 @@ export function AdminPhotoLightbox({ photo, onClose, onSavedPropertyLine }: Admi
         {url ? (
           <Image
             src={url}
-            alt={photo.alt_text || photo.file_name}
+            alt={photo.alt_text || mediaDisplayName(photo)}
             fill
             className="object-contain"
             sizes="100vw"
@@ -133,7 +134,7 @@ export function AdminPhotoLightbox({ photo, onClose, onSavedPropertyLine }: Admi
           <PropertyLineToolButton
             mediaId={photo.id}
             fileName={photo.file_name}
-            title={photo.title || photo.file_name}
+            title={mediaDisplayName(photo)}
             projectId={photo.project_id}
             onSaved={(asset) => {
               toast.success("Property line image saved to project");

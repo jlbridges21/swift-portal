@@ -20,7 +20,7 @@ import { PROJECT_STATUSES } from "@/lib/constants";
 import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
 import { QuoteSection } from "@/components/projects/quote-section";
 import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
-import type { Project, Client, MediaAsset, Tour, Payment, ShootProposal, ActivityLog, Revision, ProjectQuote, AssetReview } from "@/lib/types";
+import type { Project, Client, MediaAsset, Tour, Payment, ShootProposal, ActivityLog, Revision, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
 import { normalizeStatus } from "@/lib/constants";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
@@ -60,6 +60,7 @@ interface AdminProjectDetailProps {
   revisions: Revision[];
   quotes: ProjectQuote[];
   assetReviews: AssetReview[];
+  mediaFolders: MediaFolder[];
   portalUrl: string;
 }
 
@@ -75,6 +76,7 @@ export function AdminProjectDetail({
   revisions: initialRevisions,
   quotes,
   assetReviews,
+  mediaFolders: initialFolders,
   portalUrl,
 }: AdminProjectDetailProps) {
   const router = useRouter();
@@ -86,7 +88,7 @@ export function AdminProjectDetail({
   const [showYoutubeForm, setShowYoutubeForm] = useState(false);
   const [editingMedia, setEditingMedia] = useState<string | null>(null);
   const [editingTour, setEditingTour] = useState<string | null>(null);
-  const [editMediaForm, setEditMediaForm] = useState({ file_name: "", youtube_url: "" });
+  const [editMediaForm, setEditMediaForm] = useState({ title: "", youtube_url: "" });
   const [editTourForm, setEditTourForm] = useState({ tour_name: "", kuula_url: "", notes: "" });
   const [addClientId, setAddClientId] = useState("");
   const [showCreateClient, setShowCreateClient] = useState(false);
@@ -101,6 +103,9 @@ export function AdminProjectDetail({
   const [markingShootComplete, setMarkingShootComplete] = useState(false);
   const [creatingPayment, setCreatingPayment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [folders, setFolders] = useState(initialFolders);
+  const [tourPendingDelete, setTourPendingDelete] = useState<Tour | null>(null);
+  const [deletingTour, setDeletingTour] = useState(false);
 
   const { run: hideProject, pending: hidingProject } = useAsyncAction(async () => {
     const res = await fetch(`/api/projects/${initialProject.id}`, { method: "DELETE" });
@@ -137,6 +142,10 @@ export function AdminProjectDetail({
     setTours(initialTours);
   }, [initialTours]);
 
+  useEffect(() => {
+    setFolders(initialFolders);
+  }, [initialFolders]);
+
   const [form, setForm] = useState({
     project_name: initialProject.project_name,
     property_address: initialProject.property_address,
@@ -150,7 +159,14 @@ export function AdminProjectDetail({
   const [tours, setTours] = useState(initialTours);
 
   const photos = dedupeMedia(
-    media.filter((m) => m.media_type === "photo").sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+    media.filter((m) => m.media_type === "photo").sort((a, b) => {
+      if ((a.folder_id ?? "") !== (b.folder_id ?? "")) {
+        if (!a.folder_id && b.folder_id) return -1;
+        if (a.folder_id && !b.folder_id) return 1;
+        return (a.folder_id ?? "").localeCompare(b.folder_id ?? "");
+      }
+      return (a.display_order ?? 0) - (b.display_order ?? 0);
+    })
   );
   const videos = media.filter((m) => m.media_type === "video").sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
   const documents = media.filter((m) => m.media_type === "document").sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
@@ -499,14 +515,46 @@ export function AdminProjectDetail({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ id, ...editMediaForm }),
+      body: JSON.stringify({ id, title: editMediaForm.title, youtube_url: editMediaForm.youtube_url || undefined }),
     });
     if (res.ok) {
       const updated = await res.json();
       setMedia((prev) => prev.map((m) => (m.id === id ? updated : m)));
       setEditingMedia(null);
       toast.success("Video updated");
+      router.refresh();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error((data as { error?: string }).error || "Failed to update");
     }
+  }
+
+  async function confirmDeleteTour() {
+    if (!tourPendingDelete) return;
+    setDeletingTour(true);
+    const deleted = tourPendingDelete;
+    setTours((prev) => prev.filter((t) => t.id !== deleted.id));
+    try {
+      const res = await fetch(
+        `/api/tours?id=${deleted.id}&project_id=${initialProject.id}`,
+        { method: "DELETE", credentials: "include" }
+      );
+      if (!res.ok) {
+        setTours((prev) => sortTours([...prev, deleted]));
+        const data = await res.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || "Failed to delete tour");
+        return;
+      }
+      toast.success("Tour deleted");
+      setTourPendingDelete(null);
+      router.refresh();
+    } finally {
+      setDeletingTour(false);
+    }
+  }
+
+  function sortTours(list: Tour[]) {
+    return [...list].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
   }
 
   async function saveTourEdit(id: string) {
@@ -864,11 +912,20 @@ export function AdminProjectDetail({
             <p className="text-sm text-muted py-4 text-center">No photos yet</p>
           ) : (
             <AdminPhotoGrid
+              projectId={initialProject.id}
               photos={photos}
+              folders={folders}
               isHero={isHero}
               onSetHero={setHeroMedia}
               onDelete={deleteMedia}
               onToggleVisibility={toggleMediaVisibility}
+              onFoldersChange={setFolders}
+              onPhotosChange={(nextPhotos) => {
+                setMedia((prev) => {
+                  const others = prev.filter((m) => m.media_type !== "photo");
+                  return [...others, ...nextPhotos];
+                });
+              }}
               onPropertyLineSaved={(asset) => {
                 const saved = asset as unknown as MediaAsset;
                 setMedia((prev) => {
@@ -881,10 +938,7 @@ export function AdminProjectDetail({
                   return [...prev, saved];
                 });
               }}
-              onReorder={(reordered) => setMedia((prev) => {
-                const others = prev.filter((m) => m.media_type !== "photo");
-                return [...others, ...reordered];
-              })}
+              onRefresh={() => router.refresh()}
             />
           )}
         </CardContent>
@@ -922,13 +976,13 @@ export function AdminProjectDetail({
             <div key={v.id} className="mb-3 rounded-lg border border-border overflow-hidden">
               {v.media_source === "youtube" && v.embed_url && (
                 <div className="aspect-video bg-black">
-                  <iframe src={v.embed_url} className="h-full w-full" title={v.file_name} allowFullScreen />
+                  <iframe src={v.embed_url} className="h-full w-full" title={mediaDisplayName(v)} allowFullScreen />
                 </div>
               )}
               {v.media_source !== "youtube" && <AdminVideoThumb asset={v} />}
               {editingMedia === v.id ? (
                 <div className="space-y-2 p-3 border-t border-border">
-                  <Input value={editMediaForm.file_name} onChange={(e) => setEditMediaForm({ ...editMediaForm, file_name: e.target.value })} placeholder="Title" />
+                  <Input value={editMediaForm.title} onChange={(e) => setEditMediaForm({ ...editMediaForm, title: e.target.value })} placeholder="Title" maxLength={120} />
                   {v.media_source === "youtube" && (
                     <Input value={editMediaForm.youtube_url} onChange={(e) => setEditMediaForm({ ...editMediaForm, youtube_url: e.target.value })} placeholder="YouTube URL" />
                   )}
@@ -938,7 +992,7 @@ export function AdminProjectDetail({
                   </div>
                 </div>
               ) : (
-                <AssetRow name={v.file_name} badge={
+                <AssetRow name={mediaDisplayName(v)} badge={
                   !isClientVisibleMedia(v) ? "Hidden" : isHero(v.id) ? "Hero" : v.media_source === "youtube" ? "YouTube" : "Upload"
                 }
                   onUp={() => moveItem("media", v.id, "up", videos)} onDown={() => moveItem("media", v.id, "down", videos)}
@@ -951,7 +1005,7 @@ export function AdminProjectDetail({
                       <Button variant="ghost" size="sm" onClick={() => setHeroMedia(v.id)}>Set as Hero</Button>
                       <Button variant="ghost" size="sm" onClick={() => {
                         setEditingMedia(v.id);
-                        setEditMediaForm({ file_name: v.file_name, youtube_url: v.youtube_url || "" });
+                        setEditMediaForm({ title: mediaDisplayName(v), youtube_url: v.youtube_url || "" });
                       }}><Pencil className="h-4 w-4" /></Button>
                     </div>
                   }
@@ -1007,6 +1061,7 @@ export function AdminProjectDetail({
                       <a href={t.kuula_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4 text-accent" /></a>
                     </>
                   }
+                  onDelete={() => setTourPendingDelete(t)}
                 />
               )}
             </div>
@@ -1027,7 +1082,7 @@ export function AdminProjectDetail({
         </CardHeader>
         <CardContent>
           {documents.map((d, i) => (
-            <AssetRow key={d.id} name={d.file_name}
+            <AssetRow key={d.id} name={mediaDisplayName(d)}
               onUp={() => moveItem("media", d.id, "up", documents)} onDown={() => moveItem("media", d.id, "down", documents)}
               canUp={i > 0} canDown={i < documents.length - 1}
               onDelete={() => deleteMedia(d.id)} />
@@ -1139,6 +1194,28 @@ export function AdminProjectDetail({
         <p className="text-sm text-muted">
           This will hide <strong>{displayName}</strong> from project lists and dashboard views.
           Media, payments, and history are not permanently deleted and can be restored later.
+        </p>
+      </Modal>
+
+      <Modal
+        open={!!tourPendingDelete}
+        onClose={() => !deletingTour && setTourPendingDelete(null)}
+        title="Delete 360 tour?"
+        footer={
+          <Button
+            variant="accent"
+            className="w-full min-h-11 bg-red-600 hover:bg-red-700"
+            disabled={deletingTour}
+            onClick={() => void confirmDeleteTour()}
+          >
+            {deletingTour ? "Deleting…" : "Delete permanently"}
+          </Button>
+        }
+      >
+        <p className="text-sm text-muted">
+          This permanently deletes{" "}
+          <strong>{tourPendingDelete?.tour_name}</strong>. The tour will disappear from the
+          client project page immediately. This cannot be undone.
         </p>
       </Modal>
 

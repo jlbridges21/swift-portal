@@ -12,6 +12,7 @@ import type { MediaAsset, Tour, AssetReview } from "@/lib/types";
 import { Check, X, MessageSquare, Images, Clapperboard, Globe, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { mediaDisplayName } from "@/lib/media-display-name";
 
 interface DeliverableReviewProps {
   projectId: string;
@@ -84,14 +85,14 @@ export function DeliverableReview({
     ...photos.map((p) => ({
       type: "photo" as const,
       id: p.id,
-      name: p.file_name,
+      name: mediaDisplayName(p),
       icon: Images,
       asset: p,
     })),
     ...videos.map((v) => ({
       type: "video" as const,
       id: v.id,
-      name: v.file_name,
+      name: mediaDisplayName(v),
       icon: Clapperboard,
       asset: null as MediaAsset | null,
     })),
@@ -105,7 +106,7 @@ export function DeliverableReview({
     ...documents.map((d) => ({
       type: "document" as const,
       id: d.id,
-      name: d.file_name,
+      name: mediaDisplayName(d),
       icon: FileText,
       asset: d,
     })),

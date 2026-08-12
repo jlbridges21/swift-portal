@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import { downloadFileName } from "@/lib/media-display-name";
 import { createServiceClient } from "@/lib/supabase/server";
 import { logMediaEvent, setMediaTags } from "@/lib/media-library";
 
@@ -107,7 +108,7 @@ export async function PATCH(request: Request) {
         const bucket = asset.media_type === "document" ? "project-documents" : "project-media";
         const { data } = await supabase.storage.from(bucket).createSignedUrl(asset.file_path, 3600);
         if (data?.signedUrl) {
-          urls.push({ id, url: data.signedUrl, file_name: asset.file_name });
+          urls.push({ id, url: data.signedUrl, file_name: downloadFileName(asset) });
         }
       }
       return NextResponse.json({ urls });

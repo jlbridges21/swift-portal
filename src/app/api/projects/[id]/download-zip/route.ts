@@ -71,7 +71,8 @@ export async function GET(
       .select("*")
       .eq("project_id", projectId)
       .in("media_type", ["photo", "video"])
-      .order("display_order");
+      .order("folder_id", { ascending: true, nullsFirst: true })
+      .order("display_order", { ascending: true });
 
     if (mediaError) {
       zipLog("error", ctx, { phase: "media_query", message: mediaError.message });

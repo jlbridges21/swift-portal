@@ -1,9 +1,10 @@
 import type { MediaAsset } from "@/lib/types";
+import { downloadFileName } from "@/lib/media-display-name";
 
 export async function downloadMediaAsset(asset: MediaAsset) {
   const a = window.document.createElement("a");
   a.href = `/api/media/download/${asset.id}?file=1`;
-  a.download = asset.file_name;
+  a.download = downloadFileName(asset);
   window.document.body.appendChild(a);
   a.click();
   a.remove();

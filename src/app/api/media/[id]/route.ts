@@ -3,13 +3,13 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { requireAdminApi } from "@/lib/api-auth";
 import { getYouTubeEmbedUrl } from "@/lib/youtube";
 import { logMediaEvent } from "@/lib/media-library";
+import { normalizeMediaTitle } from "@/lib/media-display-name";
 
 const ALLOWED_PATCH_FIELDS = [
   "title",
   "description",
   "alt_text",
   "notes",
-  "file_name",
   "youtube_url",
   "visibility",
   "downloadable",
@@ -22,6 +22,7 @@ const ALLOWED_PATCH_FIELDS = [
   "is_favorite",
   "thumbnail_url",
   "project_id",
+  "folder_id",
 ] as const;
 
 export async function PATCH(request: Request) {
@@ -40,6 +41,14 @@ export async function PATCH(request: Request) {
     if (key in rawUpdates) updates[key] = rawUpdates[key];
   }
 
+  if ("title" in updates) {
+    const normalized = normalizeMediaTitle(updates.title);
+    if (!normalized.ok) {
+      return NextResponse.json({ error: normalized.error }, { status: 400 });
+    }
+    updates.title = normalized.title;
+  }
+
   const supabase = await createServiceClient();
 
   if ("project_id" in updates) {
@@ -55,6 +64,28 @@ export async function PATCH(request: Request) {
     } else {
       updates.client_id = null;
       updates.property_id = null;
+      updates.folder_id = null;
+    }
+  }
+
+  if ("folder_id" in updates && updates.folder_id !== null) {
+    const folderId = updates.folder_id as string;
+    const { data: existing } = await supabase
+      .from("media_assets")
+      .select("project_id")
+      .eq("id", id)
+      .maybeSingle();
+    const projectId = (updates.project_id as string | null | undefined) ?? existing?.project_id;
+    if (!projectId) {
+      return NextResponse.json({ error: "Cannot assign folder without a project" }, { status: 400 });
+    }
+    const { data: folder } = await supabase
+      .from("media_folders")
+      .select("id, project_id")
+      .eq("id", folderId)
+      .maybeSingle();
+    if (!folder || folder.project_id !== projectId) {
+      return NextResponse.json({ error: "Folder does not belong to this project" }, { status: 400 });
     }
   }
 

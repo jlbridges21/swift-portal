@@ -47,7 +47,9 @@ async function firstProjectPhotoUrl(
     .select("file_path")
     .eq("project_id", projectId)
     .eq("media_type", "photo")
-    .order("display_order")
+    .order("folder_id", { ascending: true, nullsFirst: true })
+    .order("display_order", { ascending: true })
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 
@@ -113,7 +115,9 @@ export async function getProjectHeroMedia(
     .select("file_path, media_type, media_source, embed_url, youtube_url, mime_type")
     .eq("project_id", project.id)
     .eq("media_type", "photo")
-    .order("display_order")
+    .order("folder_id", { ascending: true, nullsFirst: true })
+    .order("display_order", { ascending: true })
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 

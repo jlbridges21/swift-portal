@@ -189,6 +189,7 @@ export interface MediaAsset {
   project_id: string | null;
   property_id?: string | null;
   client_id?: string | null;
+  folder_id?: string | null;
   file_name: string;
   file_path: string;
   file_url?: string | null;
@@ -221,6 +222,17 @@ export interface MediaAsset {
   property_line_data?: Record<string, unknown> | null;
   created_at: string;
   updated_at?: string;
+}
+
+export interface MediaFolder {
+  id: string;
+  project_id: string;
+  name: string;
+  display_order: number;
+  created_at: string;
+  /** Populated by API when listing */
+  photo_count?: number;
+  cover_media_id?: string | null;
 }
 
 export interface Tour {
@@ -411,6 +423,7 @@ export interface Database {
       leads: TableDef<Lead>;
       projects: TableDef<Project>;
       media_assets: TableDef<MediaAsset>;
+      media_folders: TableDef<MediaFolder>;
       tours: TableDef<Tour>;
       payments: TableDef<Payment>;
       revisions: TableDef<Revision>;

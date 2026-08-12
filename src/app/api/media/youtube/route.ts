@@ -29,11 +29,14 @@ export async function POST(request: Request) {
     .limit(1)
     .maybeSingle();
 
+  const title = (typeof body.title === "string" && body.title.trim()) || "YouTube Video";
+
   const { data, error } = await supabase
     .from("media_assets")
     .insert({
       project_id: body.project_id,
-      file_name: body.title || "YouTube Video",
+      file_name: `${title}.youtube`,
+      title,
       file_path: "",
       mime_type: "video/youtube",
       media_type: "video",

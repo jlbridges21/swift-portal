@@ -8,6 +8,7 @@ import { SafeAreaCloseButton } from "@/components/ui/safe-area-close-button";
 import { MediaThumbnailSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { MediaAsset } from "@/lib/types";
+import { downloadFileName, mediaDisplayName } from "@/lib/media-display-name";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
@@ -62,7 +63,7 @@ export function PhotoGallery({
         return url;
       }
     } catch {
-      toast.error(`Couldn't load ${asset.file_name}`);
+      toast.error(`Couldn't load ${mediaDisplayName(asset)}`);
     }
     return null;
   }
@@ -177,13 +178,13 @@ function PhotoThumbnail({
         "group relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100 shadow-sm ring-1 ring-black/5 transition-all hover:shadow-lg hover:ring-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
         className
       )}
-      aria-label={`View ${photo.title || photo.file_name}`}
+      aria-label={`View ${mediaDisplayName(photo)}`}
     >
       {thumbUrl ? (
         <>
           <Image
             src={thumbUrl}
-            alt={photo.alt_text || photo.title || photo.file_name}
+            alt={photo.alt_text || mediaDisplayName(photo)}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
             sizes="(max-width: 640px) 50vw, 33vw"
@@ -344,7 +345,7 @@ function PhotoLightbox({
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)" }}
       >
         <span className="min-w-0 truncate text-sm text-white/80 pr-14">
-          {photo.title || photo.file_name}
+          {mediaDisplayName(photo)}
         </span>
       </div>
 
@@ -374,7 +375,7 @@ function PhotoLightbox({
           style={{ transform: `translateY(${dragY}px) scale(${scale})` }}
         >
           {url ? (
-            <Image src={url} alt={photo.alt_text || photo.file_name} fill className="object-contain" sizes="100vw" priority />
+            <Image src={url} alt={photo.alt_text || mediaDisplayName(photo)} fill className="object-contain" sizes="100vw" priority />
           ) : (
             <div className="flex h-full items-center justify-center">
               <MediaThumbnailSkeleton className="h-48 w-64 rounded-xl bg-white/10" />
@@ -416,7 +417,7 @@ function PhotoLightbox({
             onClick={() => {
               const a = document.createElement("a");
               a.href = `/api/media/download/${photo.id}?file=1`;
-              a.download = photo.file_name;
+              a.download = downloadFileName(photo);
               a.click();
             }}
           >

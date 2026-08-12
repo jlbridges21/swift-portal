@@ -6,6 +6,7 @@ import { canAccessProject } from "@/lib/project-access";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { logMediaEvent, trackMediaDownload } from "@/lib/media-library";
 import { normalizeStatus } from "@/lib/constants";
+import { downloadFileName, mediaDisplayName } from "@/lib/media-display-name";
 
 export async function GET(
   request: Request,
@@ -98,17 +99,18 @@ export async function GET(
       projectId: asset.project_id,
       userId: profile.id,
       eventType: "downloaded",
-      description: `Downloaded ${asset.file_name}`,
+      description: `Downloaded ${mediaDisplayName(asset)}`,
       metadata: { by: profile.email },
     });
 
     const disposition = inline ? "inline" : "attachment";
     const mimeType = asset.mime_type || "application/octet-stream";
+    const filename = downloadFileName(asset);
 
     return new NextResponse(fileData, {
       headers: {
         "Content-Type": mimeType,
-        "Content-Disposition": `${disposition}; filename="${encodeURIComponent(asset.file_name)}"`,
+        "Content-Disposition": `${disposition}; filename="${encodeURIComponent(filename)}"`,
         "Cache-Control": "private, max-age=3600",
       },
     });

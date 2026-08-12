@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusTimeline } from "@/components/projects/status-timeline";
-import { PhotoGallery } from "@/components/projects/photo-gallery";
+import { ClientPhotoFolders } from "@/components/projects/client-photo-folders";
 import { VideoPlayer } from "@/components/projects/video-player";
 import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
 import { TourCard } from "@/components/projects/tour-card";
@@ -24,8 +24,9 @@ import { DeliverableReview } from "@/components/projects/deliverable-review";
 import { EmptyState } from "@/components/ui/empty-state";
 import { normalizeStatus } from "@/lib/constants";
 import { canDownloadDeliverables } from "@/lib/deliverables";
-import type { Project, MediaAsset, Tour, Payment, Revision, ShootProposal, ActivityLog, ProjectQuote, AssetReview } from "@/lib/types";
+import type { Project, MediaAsset, Tour, Payment, Revision, ShootProposal, ActivityLog, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
+import { mediaDisplayName } from "@/lib/media-display-name";
 import {
   Download, MessageSquare,
   FileText, Clapperboard, Images, Globe, Eye, ArrowLeft, Lock,
@@ -51,6 +52,7 @@ interface ProjectPageClientProps {
   activities: ActivityLog[];
   quotes: ProjectQuote[];
   assetReviews: AssetReview[];
+  mediaFolders?: MediaFolder[];
   isPreview?: boolean;
   isAdmin?: boolean;
   allowClientProposalChanges?: boolean;
@@ -102,6 +104,7 @@ export function ProjectPageClient({
   activities,
   quotes,
   assetReviews,
+  mediaFolders = [],
   isPreview,
   isAdmin,
   allowClientProposalChanges = true,
@@ -282,8 +285,9 @@ export function ProjectPageClient({
           >
             <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
               {photos.length > 0 ? (
-                <PhotoGallery
+                <ClientPhotoFolders
                   photos={photos}
+                  folders={mediaFolders}
                   getDownloadUrl={getDownloadUrl}
                   downloadsAllowed={downloadsUnlocked}
                   compactInitialCount={12}
@@ -370,7 +374,7 @@ export function ProjectPageClient({
                     className="flex flex-col gap-3 rounded-xl bg-white p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-primary">{doc.file_name}</p>
+                      <p className="truncate font-medium text-primary">{mediaDisplayName(doc)}</p>
                       {!downloadsUnlocked && !isPreview && (
                         <p className="text-xs text-muted mt-1 flex items-center gap-1">
                           <Lock className="h-3 w-3" /> Download locked
@@ -412,8 +416,9 @@ export function ProjectPageClient({
             subtitle={downloadsUnlocked ? "Full-resolution downloads available" : "Tap any photo to view fullscreen — downloads unlock after payment"}
           >
             <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-              <PhotoGallery
+              <ClientPhotoFolders
                 photos={photos}
+                folders={mediaFolders}
                 getDownloadUrl={getDownloadUrl}
                 downloadsAllowed={downloadsUnlocked}
                 compactInitialCount={12}
@@ -466,7 +471,7 @@ export function ProjectPageClient({
                   className="flex flex-col gap-3 rounded-xl bg-white p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-primary">{doc.file_name}</p>
+                    <p className="truncate font-medium text-primary">{mediaDisplayName(doc)}</p>
                     {!downloadsUnlocked && !isPreview && (
                       <p className="text-xs text-muted mt-1 flex items-center gap-1">
                         <Lock className="h-3 w-3" /> Download locked
@@ -591,9 +596,9 @@ function ProjectVideoList({
       return (
         <div key={v.id} className="overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
           <div className="aspect-video bg-black">
-            <iframe src={v.embed_url || ""} className="h-full w-full" allowFullScreen title={v.file_name} />
+            <iframe src={v.embed_url || ""} className="h-full w-full" allowFullScreen title={mediaDisplayName(v)} />
           </div>
-          <div className="border-t border-border/60 px-5 py-3 text-sm text-muted">{v.file_name}</div>
+          <div className="border-t border-border/60 px-5 py-3 text-sm text-muted">{mediaDisplayName(v)}</div>
         </div>
       );
     }

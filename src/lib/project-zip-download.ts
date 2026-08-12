@@ -5,6 +5,7 @@ import { filterClientMedia, isClientVisibleMedia } from "@/lib/client-media";
 import { canDownloadDeliverables } from "@/lib/deliverables";
 import { sanitizeStorageFileName } from "@/lib/media-upload";
 import { canAccessProject } from "@/lib/project-access";
+import { downloadFileName } from "@/lib/media-display-name";
 import type { MediaAsset, Profile } from "@/lib/types";
 
 const BUCKET = "project-media";
@@ -63,6 +64,7 @@ export interface DownloadableAsset {
   file_name: string;
   media_type: string;
   display_order: number | null;
+  folder_id?: string | null;
 }
 
 export interface SkippedZipFile {
@@ -86,13 +88,24 @@ export function pickDownloadableAssets(
       const path = normalizeStoragePath(a.file_path ?? "");
       return !!path;
     })
-    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+    .sort((a, b) => {
+      const fa = a.folder_id ?? "";
+      const fb = b.folder_id ?? "";
+      if (fa !== fb) {
+        // Unfiled (null) first, then by folder id
+        if (!a.folder_id && b.folder_id) return -1;
+        if (a.folder_id && !b.folder_id) return 1;
+        return fa.localeCompare(fb);
+      }
+      return (a.display_order ?? 0) - (b.display_order ?? 0);
+    })
     .map((a) => ({
       id: a.id,
       file_path: normalizeStoragePath(a.file_path),
-      file_name: a.file_name || `${a.id}.bin`,
+      file_name: downloadFileName(a),
       media_type: a.media_type,
       display_order: a.display_order,
+      folder_id: a.folder_id ?? null,
     }));
 }
 

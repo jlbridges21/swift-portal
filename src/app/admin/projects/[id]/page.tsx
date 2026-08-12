@@ -27,9 +27,15 @@ export default async function AdminProjectPage({ params }: PageProps) {
     { data: revisions },
     { data: quotes },
     { data: assetReviews },
+    { data: mediaFolders },
   ] = await Promise.all([
     supabase.from("projects").select("*, clients(*), properties(*)").eq("id", id).single(),
-    supabase.from("media_assets").select("*").eq("project_id", id).order("display_order"),
+    supabase
+      .from("media_assets")
+      .select("*")
+      .eq("project_id", id)
+      .order("folder_id", { ascending: true, nullsFirst: true })
+      .order("display_order", { ascending: true }),
     supabase.from("tours").select("*").eq("project_id", id).order("display_order"),
     supabase.from("payments").select("*").eq("project_id", id).order("created_at", { ascending: false }),
     supabase.from("shoot_proposals").select("*").eq("project_id", id).order("proposed_at", { ascending: true }),
@@ -39,6 +45,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
     supabase.from("revisions").select("*").eq("project_id", id).order("created_at", { ascending: false }),
     supabase.from("project_quotes").select("*").eq("project_id", id).order("created_at", { ascending: false }),
     supabase.from("asset_reviews").select("*").eq("project_id", id),
+    supabase.from("media_folders").select("*").eq("project_id", id).order("display_order", { ascending: true }),
   ]);
 
   if (!project) notFound();
@@ -62,6 +69,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
           revisions={revisions ?? []}
           quotes={quotes ?? []}
           assetReviews={assetReviews ?? []}
+          mediaFolders={mediaFolders ?? []}
           portalUrl={portalUrl}
         />
       </main>
