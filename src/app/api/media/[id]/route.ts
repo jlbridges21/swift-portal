@@ -139,7 +139,14 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (asset.file_path) {
+  // YouTube / external / kuula rows use sentinel file_path values — not Storage objects
+  const hasStorageObject =
+    Boolean(asset.file_path) &&
+    asset.media_source !== "youtube" &&
+    asset.media_source !== "kuula" &&
+    asset.media_source !== "external";
+
+  if (hasStorageObject) {
     const bucket = asset.media_type === "document" ? "project-documents" : "project-media";
     await supabase.storage.from(bucket).remove([asset.file_path]);
   }

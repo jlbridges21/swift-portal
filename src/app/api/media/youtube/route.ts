@@ -1,7 +1,8 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireAdminApi } from "@/lib/api-auth";
-import { getYouTubeEmbedUrl } from "@/lib/youtube";
+import { extractYouTubeId, getYouTubeEmbedUrl } from "@/lib/youtube";
 
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
@@ -14,7 +15,8 @@ export async function POST(request: Request) {
   }
 
   const embedUrl = getYouTubeEmbedUrl(body.youtube_url);
-  if (!embedUrl) {
+  const videoId = extractYouTubeId(body.youtube_url);
+  if (!embedUrl || !videoId) {
     return NextResponse.json({ error: "Invalid YouTube URL" }, { status: 400 });
   }
 
@@ -30,6 +32,8 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   const title = (typeof body.title === "string" && body.title.trim()) || "YouTube Video";
+  // file_path is globally unique — YouTube rows aren't in Storage, but still need a unique sentinel
+  const filePath = `youtube/${videoId}/${randomUUID()}`;
 
   const { data, error } = await supabase
     .from("media_assets")
@@ -37,7 +41,7 @@ export async function POST(request: Request) {
       project_id: body.project_id,
       file_name: `${title}.youtube`,
       title,
-      file_path: "",
+      file_path: filePath,
       mime_type: "video/youtube",
       media_type: "video",
       media_source: "youtube",

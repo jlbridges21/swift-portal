@@ -28,7 +28,12 @@ export async function PATCH(request: Request) {
     if (action === "delete") {
       for (const id of ids) {
         const { data: asset } = await supabase.from("media_assets").select("*").eq("id", id).maybeSingle();
-        if (asset?.file_path) {
+        const hasStorageObject =
+          Boolean(asset?.file_path) &&
+          asset?.media_source !== "youtube" &&
+          asset?.media_source !== "kuula" &&
+          asset?.media_source !== "external";
+        if (hasStorageObject && asset?.file_path) {
           const bucket = asset.media_type === "document" ? "project-documents" : "project-media";
           await supabase.storage.from(bucket).remove([asset.file_path]);
         }
