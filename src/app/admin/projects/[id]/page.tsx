@@ -34,7 +34,6 @@ export default async function AdminProjectPage({ params }: PageProps) {
       .from("media_assets")
       .select("*")
       .eq("project_id", id)
-      .order("folder_id", { ascending: true, nullsFirst: true })
       .order("display_order", { ascending: true }),
     supabase.from("tours").select("*").eq("project_id", id).order("display_order"),
     supabase.from("payments").select("*").eq("project_id", id).order("created_at", { ascending: false }),

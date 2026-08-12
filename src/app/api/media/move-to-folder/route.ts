@@ -4,7 +4,7 @@ import { requireAdminApi } from "@/lib/api-auth";
 
 /**
  * Move selected photos into a folder (or unfiled when folder_id is null).
- * Assigns display_order at the end of the destination folder.
+ * Only updates folder_id — project-wide display_order is untouched.
  */
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
@@ -80,34 +80,15 @@ export async function POST(request: Request) {
     }
   }
 
-  let maxOrderQuery = supabase
+  const { error } = await supabase
     .from("media_assets")
-    .select("display_order")
+    .update({ folder_id: folderId })
+    .in("id", photoIds as string[])
     .eq("project_id", projectId)
-    .eq("media_type", "photo")
-    .order("display_order", { ascending: false })
-    .limit(1);
+    .eq("media_type", "photo");
 
-  if (folderId === null) {
-    maxOrderQuery = maxOrderQuery.is("folder_id", null);
-  } else {
-    maxOrderQuery = maxOrderQuery.eq("folder_id", folderId);
-  }
-
-  const { data: maxRow } = await maxOrderQuery.maybeSingle();
-  let nextOrder = (maxRow?.display_order ?? -1) + 1;
-
-  // Preserve relative selection order from photo_ids
-  for (const id of photoIds as string[]) {
-    const { error } = await supabase
-      .from("media_assets")
-      .update({ folder_id: folderId, display_order: nextOrder++ })
-      .eq("id", id)
-      .eq("project_id", projectId);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   return NextResponse.json({ success: true, moved: photoIds.length, folder_id: folderId });

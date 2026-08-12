@@ -4,9 +4,9 @@ import { requireAdminApi } from "@/lib/api-auth";
 
 /**
  * Media reorder:
- * - Photos (preferred): { project_id, folder_id: string|null, ordered_ids: string[] }
- *   → single RPC reorder_media_assets
- * - Tours / legacy video-doc arrows: { items: [{ id, display_order, type }] }
+ * - Photos: { project_id, ordered_ids: string[] } → reorder_media_assets RPC
+ *   ordered_ids must be the full project photo list in display order.
+ * - Tours / video-doc arrows: { items: [{ id, display_order, type }] }
  */
 export async function PATCH(request: Request) {
   const auth = await requireAdminApi();
@@ -17,19 +17,10 @@ export async function PATCH(request: Request) {
 
   const orderedIds = Array.isArray(body.ordered_ids) ? (body.ordered_ids as unknown[]) : null;
   const projectId = typeof body.project_id === "string" ? body.project_id : null;
-  const folderId =
-    body.folder_id === null || body.folder_id === undefined
-      ? null
-      : typeof body.folder_id === "string"
-        ? body.folder_id
-        : undefined;
 
   if (orderedIds) {
     if (!projectId) {
       return NextResponse.json({ error: "project_id is required" }, { status: 400 });
-    }
-    if (folderId === undefined) {
-      return NextResponse.json({ error: "folder_id must be a string or null" }, { status: 400 });
     }
     if (!orderedIds.every((id) => typeof id === "string")) {
       return NextResponse.json({ error: "ordered_ids must be string UUIDs" }, { status: 400 });
@@ -38,9 +29,44 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: true });
     }
 
+    // Reject if any ID is missing / wrong project / not a photo (RPC also checks)
+    const { data: rows, error: lookupError } = await supabase
+      .from("media_assets")
+      .select("id, project_id, media_type")
+      .in("id", orderedIds as string[]);
+
+    if (lookupError) {
+      return NextResponse.json({ error: lookupError.message }, { status: 500 });
+    }
+    if (!rows || rows.length !== orderedIds.length) {
+      return NextResponse.json(
+        { error: "One or more photo IDs were not found" },
+        { status: 400 }
+      );
+    }
+    for (const row of rows) {
+      if (row.project_id !== projectId) {
+        return NextResponse.json(
+          { error: "One or more photos do not belong to this project" },
+          { status: 400 }
+        );
+      }
+      if (row.project_id == null) {
+        return NextResponse.json(
+          { error: "Cannot reorder unassigned library assets" },
+          { status: 400 }
+        );
+      }
+      if (row.media_type !== "photo") {
+        return NextResponse.json(
+          { error: "ordered_ids must contain only photos" },
+          { status: 400 }
+        );
+      }
+    }
+
     const { error } = await supabase.rpc("reorder_media_assets", {
       p_project_id: projectId,
-      p_folder_id: folderId,
       p_ordered_ids: orderedIds,
     });
 

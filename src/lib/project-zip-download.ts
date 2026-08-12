@@ -88,17 +88,7 @@ export function pickDownloadableAssets(
       const path = normalizeStoragePath(a.file_path ?? "");
       return !!path;
     })
-    .sort((a, b) => {
-      const fa = a.folder_id ?? "";
-      const fb = b.folder_id ?? "";
-      if (fa !== fb) {
-        // Unfiled (null) first, then by folder id
-        if (!a.folder_id && b.folder_id) return -1;
-        if (a.folder_id && !b.folder_id) return 1;
-        return fa.localeCompare(fb);
-      }
-      return (a.display_order ?? 0) - (b.display_order ?? 0);
-    })
+    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
     .map((a) => ({
       id: a.id,
       file_path: normalizeStoragePath(a.file_path),

@@ -54,13 +54,7 @@ export function ClientPhotoFolders({
   }, [photos]);
 
   const unfiled = useMemo(() => photosByFolder.get("null") ?? [], [photosByFolder]);
-  const allSorted = useMemo(() => {
-    const parts: MediaAsset[] = [...unfiled];
-    for (const f of sortedFolders) {
-      parts.push(...(photosByFolder.get(f.id) ?? []));
-    }
-    return parts;
-  }, [unfiled, sortedFolders, photosByFolder]);
+  const allSorted = useMemo(() => sortInFolder(photos), [photos]);
 
   useEffect(() => {
     if (!folders.length) setView("all");

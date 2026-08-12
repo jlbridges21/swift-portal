@@ -159,14 +159,9 @@ export function AdminProjectDetail({
   const [tours, setTours] = useState(initialTours);
 
   const photos = dedupeMedia(
-    media.filter((m) => m.media_type === "photo").sort((a, b) => {
-      if ((a.folder_id ?? "") !== (b.folder_id ?? "")) {
-        if (!a.folder_id && b.folder_id) return -1;
-        if (a.folder_id && !b.folder_id) return 1;
-        return (a.folder_id ?? "").localeCompare(b.folder_id ?? "");
-      }
-      return (a.display_order ?? 0) - (b.display_order ?? 0);
-    })
+    media
+      .filter((m) => m.media_type === "photo")
+      .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
   );
   const videos = media.filter((m) => m.media_type === "video").sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
   const documents = media.filter((m) => m.media_type === "document").sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));

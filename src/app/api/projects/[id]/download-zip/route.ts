@@ -71,7 +71,6 @@ export async function GET(
       .select("*")
       .eq("project_id", projectId)
       .in("media_type", ["photo", "video"])
-      .order("folder_id", { ascending: true, nullsFirst: true })
       .order("display_order", { ascending: true });
 
     if (mediaError) {

@@ -19,6 +19,7 @@ import {
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
+  type DragOverEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -41,10 +42,10 @@ import {
   EyeOff,
   FolderInput,
   FolderPlus,
-  GripVertical,
   Pencil,
   Trash2,
   X,
+  ZoomIn,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -68,30 +69,41 @@ function isClientVisible(asset: MediaAsset) {
   return asset.visibility !== "admin";
 }
 
-function sortPhotos(list: MediaAsset[]) {
+/** Project-wide photo order — folders are a filter, not a sort key. */
+function sortByDisplayOrder(list: MediaAsset[]) {
   return [...list].sort((a, b) => {
-    const fa = a.folder_id ?? "";
-    const fb = b.folder_id ?? "";
-    if (fa !== fb) {
-      if (!a.folder_id && b.folder_id) return -1;
-      if (a.folder_id && !b.folder_id) return 1;
-      return fa.localeCompare(fb);
-    }
     const order = (a.display_order ?? 0) - (b.display_order ?? 0);
     if (order !== 0) return order;
     return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
   });
 }
 
-function PhotoThumb({
-  assetId,
-  selected,
-  onOpen,
-}: {
-  assetId: string;
-  selected: boolean;
-  onOpen: () => void;
-}) {
+/**
+ * Reorder a visible subset into the same display_order slots it occupied.
+ * Non-visible photos keep their display_order unchanged.
+ */
+function applySlotReorder(
+  allPhotos: MediaAsset[],
+  previousVisible: MediaAsset[],
+  nextVisibleOrdered: MediaAsset[]
+): MediaAsset[] {
+  const slots = previousVisible
+    .map((p) => p.display_order ?? 0)
+    .sort((a, b) => a - b);
+
+  const newOrderById = new Map<string, number>();
+  nextVisibleOrdered.forEach((p, i) => {
+    newOrderById.set(p.id, slots[i] ?? i);
+  });
+
+  return sortByDisplayOrder(
+    allPhotos.map((p) =>
+      newOrderById.has(p.id) ? { ...p, display_order: newOrderById.get(p.id)! } : p
+    )
+  );
+}
+
+function PhotoThumb({ assetId, selected }: { assetId: string; selected: boolean }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -106,23 +118,20 @@ function PhotoThumb({
   }, [assetId]);
 
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen();
-      }}
-      className="relative aspect-square w-full bg-slate-100"
-      aria-label="Open photo"
-    >
+    <div className="relative aspect-square w-full bg-slate-100">
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" className="h-full w-full object-cover" draggable={false} />
+        <img
+          src={url}
+          alt=""
+          className="pointer-events-none h-full w-full object-cover"
+          draggable={false}
+        />
       ) : (
         <div className="h-full w-full animate-pulse bg-slate-200" />
       )}
       {selected && <div className="absolute inset-0 bg-slate-900/45" />}
-    </button>
+    </div>
   );
 }
 
@@ -156,6 +165,8 @@ function SortablePhotoCard({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    touchAction: "none" as const,
+    userSelect: "none" as const,
   };
 
   return (
@@ -163,30 +174,21 @@ function SortablePhotoCard({
       ref={setNodeRef}
       style={style}
       data-photo-id={photo.id}
+      {...attributes}
+      {...listeners}
       onClick={(e) => onSelectClick(e, photo.id, index)}
       className={cn(
-        "group relative overflow-hidden rounded-lg border bg-white transition-shadow",
+        "group relative cursor-grab overflow-hidden rounded-lg border bg-white transition-shadow active:cursor-grabbing",
+        "touch-none select-none",
         selected
           ? "border-accent ring-2 ring-accent shadow-md"
           : "border-border hover:border-slate-300",
         isDragging && "opacity-40"
       )}
     >
-      <PhotoThumb assetId={photo.id} selected={selected} onOpen={onOpen} />
+      <PhotoThumb assetId={photo.id} selected={selected} />
       <div className="space-y-2 p-2">
-        <div className="flex items-start gap-1">
-          <button
-            type="button"
-            className="mt-0.5 cursor-grab touch-none text-muted active:cursor-grabbing"
-            aria-label="Drag to reorder"
-            {...attributes}
-            {...listeners}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
-          <p className="line-clamp-2 flex-1 text-xs text-foreground">{mediaDisplayName(photo)}</p>
-        </div>
+        <p className="line-clamp-2 text-xs text-foreground">{mediaDisplayName(photo)}</p>
         <div className="flex flex-wrap gap-1">
           {isHeroPhoto && (
             <span className="inline-block rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
@@ -199,7 +201,20 @@ function SortablePhotoCard({
             </span>
           )}
         </div>
-        <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="flex flex-wrap gap-1"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            title="Open fullscreen"
+            onClick={onOpen}
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -254,35 +269,37 @@ export function AdminPhotoGrid({
   const marqueeStart = useRef<{ x: number; y: number; additive: boolean } | null>(null);
   const selectionBeforeMarquee = useRef<Set<string>>(new Set());
   const photosRef = useRef(photos);
+  const justDraggedRef = useRef(false);
 
   useEffect(() => {
     photosRef.current = photos;
   }, [photos]);
 
+  const allProjectPhotos = useMemo(
+    () => sortByDisplayOrder(photos.filter((p) => p.media_type === "photo")),
+    [photos]
+  );
+
   const visiblePhotos = useMemo(() => {
-    let list = photos.filter((p) => p.media_type === "photo");
+    let list = allProjectPhotos;
     if (folderFilter === "unfiled") list = list.filter((p) => !p.folder_id);
     else if (folderFilter !== "all") list = list.filter((p) => p.folder_id === folderFilter);
-    return sortPhotos(list);
-  }, [photos, folderFilter]);
+    return list;
+  }, [allProjectPhotos, folderFilter]);
 
   const visibleIds = useMemo(() => visiblePhotos.map((p) => p.id), [visiblePhotos]);
 
   const folderCounts = useMemo(() => {
     const map = new Map<string | "null", number>();
-    for (const p of photos) {
-      if (p.media_type !== "photo") continue;
+    for (const p of allProjectPhotos) {
       const key = (p.folder_id ?? "null") as string | "null";
       map.set(key, (map.get(key) ?? 0) + 1);
     }
     return map;
-  }, [photos]);
-
-  const currentFolderId =
-    folderFilter === "all" || folderFilter === "unfiled" ? null : folderFilter;
+  }, [allProjectPhotos]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -309,8 +326,13 @@ export function AdminPhotoGrid({
   }, [clearSelection, visibleIds]);
 
   function handleSelectClick(e: React.MouseEvent, id: string, index: number) {
-    e.preventDefault();
+    if (justDraggedRef.current) {
+      justDraggedRef.current = false;
+      return;
+    }
+
     if (e.metaKey || e.ctrlKey) {
+      e.preventDefault();
       setSelectedIds((prev) => {
         const next = new Set(prev);
         if (next.has(id)) next.delete(id);
@@ -321,6 +343,7 @@ export function AdminPhotoGrid({
       return;
     }
     if (e.shiftKey && anchorIndex != null) {
+      e.preventDefault();
       const from = Math.min(anchorIndex, index);
       const to = Math.max(anchorIndex, index);
       const range = visiblePhotos.slice(from, to + 1).map((p) => p.id);
@@ -338,12 +361,13 @@ export function AdminPhotoGrid({
     return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
   }
 
+  /** Marquee only from empty grid background — never from a photo tile. */
   function onGridPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
-    if (target.closest("[data-photo-id]") || target.closest("button") || target.closest("a")) {
-      return;
-    }
+    // Tiles own the gesture for dnd-kit / selection — do not capture
+    if (target.closest("[data-photo-id]")) return;
+    if (target.closest("button") || target.closest("a") || target.closest("input")) return;
 
     const container = scrollRef.current;
     if (!container) return;
@@ -367,7 +391,7 @@ export function AdminPhotoGrid({
       const curY = ev.clientY - b.top + c.scrollTop;
       const dx = curX - marqueeStart.current.x;
       const dy = curY - marqueeStart.current.y;
-      if (Math.hypot(dx, dy) < 4 && !marquee) return;
+      if (Math.hypot(dx, dy) < 4) return;
 
       const x = Math.min(marqueeStart.current.x, curX);
       const y = Math.min(marqueeStart.current.y, curY);
@@ -408,11 +432,11 @@ export function AdminPhotoGrid({
     window.addEventListener("pointerup", onUp);
   }
 
-  async function persistOrder(ordered: MediaAsset[], folderId: string | null) {
+  async function persistFullOrder(orderedPhotos: MediaAsset[]) {
     const previous = photosRef.current;
-    const withOrder = ordered.map((p, i) => ({ ...p, display_order: i, folder_id: folderId }));
-    const others = previous.filter((m) => !ordered.some((p) => p.id === m.id));
-    onPhotosChange(sortPhotos([...others, ...withOrder]));
+    const withOrder = orderedPhotos.map((p, i) => ({ ...p, display_order: i }));
+    const others = previous.filter((m) => m.media_type !== "photo");
+    onPhotosChange([...others, ...withOrder]);
 
     const res = await fetch("/api/media/reorder", {
       method: "PATCH",
@@ -420,8 +444,7 @@ export function AdminPhotoGrid({
       credentials: "include",
       body: JSON.stringify({
         project_id: projectId,
-        folder_id: folderId,
-        ordered_ids: ordered.map((p) => p.id),
+        ordered_ids: withOrder.map((p) => p.id),
       }),
     });
 
@@ -437,47 +460,63 @@ export function AdminPhotoGrid({
 
   function handleDragStart(event: DragStartEvent) {
     const id = String(event.active.id);
+    console.info("[dnd] onDragStart", { id, folderFilter, visibleCount: visibleIds.length });
+    justDraggedRef.current = true;
     const selected = selectedIds.has(id) ? Array.from(selectedIds) : [id];
     const ordered = visibleIds.filter((vid) => selected.includes(vid));
     setActiveDragIds(ordered);
     if (!selectedIds.has(id)) setSelectedIds(new Set([id]));
   }
 
+  function handleDragOver(event: DragOverEvent) {
+    console.info("[dnd] onDragOver", {
+      active: String(event.active.id),
+      over: event.over ? String(event.over.id) : null,
+    });
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     const dragging = activeDragIds;
+    console.info("[dnd] onDragEnd", {
+      active: String(active.id),
+      over: over ? String(over.id) : null,
+      draggingCount: dragging.length,
+    });
     setActiveDragIds([]);
+    // Clear justDragged on next tick so the synthetic click is ignored
+    window.setTimeout(() => {
+      justDraggedRef.current = false;
+    }, 0);
+
     if (!over || dragging.length === 0) return;
-    if (folderFilter === "all") {
-      toast.message("Switch to a folder or Unfiled to reorder photos");
-      return;
+    if (String(active.id) === String(over.id) && dragging.length === 1) return;
+
+    const previousVisible = [...visiblePhotos];
+    let nextVisible = [...previousVisible];
+
+    if (dragging.length === 1) {
+      const oldIndex = nextVisible.findIndex((p) => p.id === active.id);
+      const newIndex = nextVisible.findIndex((p) => p.id === over.id);
+      if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return;
+      nextVisible = arrayMove(nextVisible, oldIndex, newIndex);
+    } else {
+      const overId = String(over.id);
+      const fromIndexes = dragging
+        .map((id) => nextVisible.findIndex((p) => p.id === id))
+        .filter((i) => i >= 0)
+        .sort((a, b) => a - b);
+      if (!fromIndexes.length) return;
+
+      const moving = fromIndexes.map((i) => nextVisible[i]);
+      const remaining = nextVisible.filter((p) => !dragging.includes(p.id));
+      let toIndex = remaining.findIndex((p) => p.id === overId);
+      if (toIndex < 0) toIndex = remaining.length;
+      nextVisible = [...remaining.slice(0, toIndex), ...moving, ...remaining.slice(toIndex)];
     }
 
-    const current = [...visiblePhotos];
-
-    if (dragging.length === 1 && active.id !== over.id) {
-      const oldIndex = current.findIndex((p) => p.id === active.id);
-      const newIndex = current.findIndex((p) => p.id === over.id);
-      if (oldIndex >= 0 && newIndex >= 0) {
-        await persistOrder(arrayMove(current, oldIndex, newIndex), currentFolderId);
-        return;
-      }
-    }
-
-    const overId = String(over.id);
-    const fromIndexes = dragging
-      .map((id) => current.findIndex((p) => p.id === id))
-      .filter((i) => i >= 0)
-      .sort((a, b) => a - b);
-    if (!fromIndexes.length) return;
-
-    const moving = fromIndexes.map((i) => current[i]);
-    const remaining = current.filter((p) => !dragging.includes(p.id));
-    let toIndex = remaining.findIndex((p) => p.id === overId);
-    if (toIndex < 0) toIndex = remaining.length;
-
-    const next = [...remaining.slice(0, toIndex), ...moving, ...remaining.slice(toIndex)];
-    await persistOrder(next, currentFolderId);
+    const merged = applySlotReorder(allProjectPhotos, previousVisible, nextVisible);
+    await persistFullOrder(merged);
   }
 
   async function createFolder() {
@@ -555,6 +594,7 @@ export function AdminPhotoGrid({
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
     const previous = photos;
+    // folder_id only — display_order unchanged
     onPhotosChange(
       photos.map((p) => (ids.includes(p.id) ? { ...p, folder_id: targetFolderId } : p))
     );
@@ -607,9 +647,6 @@ export function AdminPhotoGrid({
     onRefresh?.();
   }
 
-  const canReorder = folderFilter !== "all";
-  const photoCount = photos.filter((p) => p.media_type === "photo").length;
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -621,7 +658,7 @@ export function AdminPhotoGrid({
             folderFilter === "all" ? "bg-accent text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
           )}
         >
-          All photos ({photoCount})
+          All photos ({allProjectPhotos.length})
         </button>
         <button
           type="button"
@@ -679,11 +716,9 @@ export function AdminPhotoGrid({
         </Button>
       </div>
 
-      {!canReorder && visiblePhotos.length > 1 && (
-        <p className="text-xs text-muted">
-          Open Unfiled or a folder to drag-reorder. Selection and Move to folder work in All photos.
-        </p>
-      )}
+      <p className="text-xs text-muted">
+        Drag photos to reorder. Cmd/Ctrl-click or marquee to multi-select, then drag the group.
+      </p>
 
       {selectedIds.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2">
@@ -731,10 +766,11 @@ export function AdminPhotoGrid({
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
             onDragEnd={(e) => void handleDragEnd(e)}
-            autoScroll
+            autoScroll={{ threshold: { x: 0.15, y: 0.15 }, acceleration: 12 }}
           >
-            <SortableContext items={visibleIds} strategy={rectSortingStrategy} disabled={!canReorder}>
+            <SortableContext items={visibleIds} strategy={rectSortingStrategy}>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {visiblePhotos.map((p, i) => (
                   <SortablePhotoCard
@@ -756,9 +792,9 @@ export function AdminPhotoGrid({
                 ))}
               </div>
             </SortableContext>
-            <DragOverlay>
+            <DragOverlay dropAnimation={null}>
               {activeDragIds.length > 0 ? (
-                <div className="relative h-28 w-28">
+                <div className="relative h-28 w-28 touch-none select-none">
                   <div className="absolute inset-0 rotate-[-4deg] rounded-lg bg-slate-200 shadow" />
                   <div className="absolute inset-0 rotate-[3deg] rounded-lg bg-slate-100 shadow" />
                   <div className="absolute inset-0 flex items-center justify-center rounded-lg border-2 border-accent bg-white text-sm font-semibold text-primary shadow-lg">
