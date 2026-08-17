@@ -96,11 +96,15 @@ export async function POST(request: Request) {
 
   const supabase = await createServiceClient();
   const bucket = validated.mediaType === "document" ? "project-documents" : "project-media";
+  // file_path is unique per business after v30 (idx_media_assets_business_file_path)
+  const businessId =
+    auth.profile.business_id ?? "00000000-0000-0000-0000-000000000001";
 
   const { data: existingAsset, error: existingError } = await supabase
     .from("media_assets")
     .select("*")
     .eq("file_path", validated.filePath)
+    .eq("business_id", businessId)
     .maybeSingle();
 
   if (existingError) {
@@ -168,6 +172,7 @@ export async function POST(request: Request) {
         .from("media_assets")
         .select("*")
         .eq("file_path", validated.filePath)
+        .eq("business_id", businessId)
         .maybeSingle();
       if (raced) {
         return NextResponse.json({ success: true, media: raced });
