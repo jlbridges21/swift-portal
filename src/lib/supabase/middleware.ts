@@ -49,7 +49,12 @@ export async function updateSession(request: NextRequest) {
       .single();
 
     const url = request.nextUrl.clone();
-    url.pathname = profile?.role === "admin" ? "/admin" : "/dashboard";
+    url.pathname =
+      profile?.role === "super_admin"
+        ? "/platform"
+        : profile?.role === "admin"
+          ? "/admin"
+          : "/dashboard";
     return NextResponse.redirect(url);
   }
 
@@ -60,9 +65,23 @@ export async function updateSession(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (profile?.role !== "admin") {
+    if (profile?.role !== "admin" && profile?.role !== "super_admin") {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+  }
+
+  if (user && path.startsWith("/platform")) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.role !== "super_admin") {
+      const url = request.nextUrl.clone();
+      url.pathname = profile?.role === "admin" ? "/admin" : "/dashboard";
       return NextResponse.redirect(url);
     }
   }

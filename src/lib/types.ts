@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "client";
+export type UserRole = "admin" | "client" | "super_admin";
 
 export type NotificationType =
   | "proposal_submitted"

@@ -34,6 +34,7 @@ export async function getProfile(): Promise<Profile | null> {
       const { data: byEmail } = await service
         .from("clients")
         .select("id")
+        // TODO(tenant): business-scope this lookup — see prompt 7
         .ilike("email", user.email)
         .is("deleted_at", null)
         .maybeSingle();
@@ -75,7 +76,15 @@ export async function requireAuth(): Promise<Profile> {
 
 export async function requireAdmin(): Promise<Profile> {
   const profile = await requireAuth();
-  if (profile.role !== "admin") {
+  if (profile.role !== "admin" && profile.role !== "super_admin") {
+    throw new Error("Forbidden");
+  }
+  return profile;
+}
+
+export async function requireSuperAdmin(): Promise<Profile> {
+  const profile = await requireAuth();
+  if (profile.role !== "super_admin") {
     throw new Error("Forbidden");
   }
   return profile;

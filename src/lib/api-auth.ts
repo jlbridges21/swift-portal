@@ -59,7 +59,7 @@ export async function requireAdminApi(): Promise<AdminResult> {
     };
   }
 
-  if (profile.role !== "admin") {
+  if (profile.role !== "admin" && profile.role !== "super_admin") {
     return {
       ok: false,
       response: NextResponse.json({ error: "Admin access required." }, { status: 403 }),
@@ -67,6 +67,20 @@ export async function requireAdminApi(): Promise<AdminResult> {
   }
 
   return { ok: true, profile: profile as Profile, supabase };
+}
+
+export async function requireSuperAdminApi(): Promise<AdminResult> {
+  const result = await requireAdminApi();
+  if (!result.ok) return result;
+
+  if (result.profile.role !== "super_admin") {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Super admin access required." }, { status: 403 }),
+    };
+  }
+
+  return result;
 }
 
 export function adminFetchInit(): RequestInit {
