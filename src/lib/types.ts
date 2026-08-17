@@ -90,6 +90,7 @@ export type ActivityType =
 
 export interface Profile {
   id: string;
+  business_id?: string | null;
   email: string;
   full_name: string | null;
   avatar_url: string | null;
@@ -105,6 +106,7 @@ export interface Profile {
 
 export interface Client {
   id: string;
+  business_id?: string | null;
   name: string;
   first_name?: string | null;
   last_name?: string | null;
@@ -125,6 +127,7 @@ export interface Client {
 
 export interface Property {
   id: string;
+  business_id?: string | null;
   client_id: string | null;
   address: string;
   normalized_address: string;
@@ -142,6 +145,7 @@ export interface Property {
 
 export interface Lead {
   id: string;
+  business_id?: string | null;
   name: string;
   first_name?: string | null;
   last_name?: string | null;
@@ -159,6 +163,7 @@ export interface Lead {
 
 export interface Project {
   id: string;
+  business_id?: string | null;
   client_id: string;
   property_id?: string | null;
   property_address: string;
@@ -186,6 +191,7 @@ export interface Project {
 
 export interface MediaAsset {
   id: string;
+  business_id?: string | null;
   project_id: string | null;
   property_id?: string | null;
   client_id?: string | null;
@@ -226,6 +232,7 @@ export interface MediaAsset {
 
 export interface MediaFolder {
   id: string;
+  business_id?: string | null;
   project_id: string;
   name: string;
   display_order: number;
@@ -237,6 +244,7 @@ export interface MediaFolder {
 
 export interface Tour {
   id: string;
+  business_id?: string | null;
   project_id: string;
   tour_name: string;
   thumbnail_url: string | null;
@@ -254,6 +262,7 @@ export interface Tour {
 
 export interface Payment {
   id: string;
+  business_id?: string | null;
   project_id: string;
   client_id: string;
   quote_id?: string | null;
@@ -276,6 +285,7 @@ export interface Payment {
 
 export interface ProjectClient {
   id: string;
+  business_id?: string | null;
   project_id: string;
   client_id: string;
   is_primary: boolean;
@@ -287,6 +297,7 @@ export type ShootProposalStatus = "pending" | "accepted" | "countered" | "confir
 
 export interface ShootProposal {
   id: string;
+  business_id?: string | null;
   project_id: string;
   proposed_by: "admin" | "client";
   proposed_at: string;
@@ -299,6 +310,7 @@ export interface ShootProposal {
 
 export interface Revision {
   id: string;
+  business_id?: string | null;
   project_id: string;
   client_id: string;
   description: string;
@@ -318,6 +330,7 @@ export type QuoteKind = "preliminary" | "official";
 
 export interface ProjectQuote {
   id: string;
+  business_id?: string | null;
   project_id: string;
   title: string;
   description: string | null;
@@ -339,6 +352,7 @@ export type AssetReviewStatus = "pending" | "approved" | "rejected";
 
 export interface AssetReview {
   id: string;
+  business_id?: string | null;
   project_id: string;
   asset_type: "photo" | "video" | "tour" | "document";
   asset_id: string;
@@ -352,6 +366,7 @@ export interface AssetReview {
 
 export interface Notification {
   id: string;
+  business_id?: string | null;
   user_id: string;
   type: string;
   title: string;
@@ -365,6 +380,7 @@ export interface Notification {
 
 export interface ProjectMessage {
   id: string;
+  business_id?: string | null;
   client_id: string;
   project_id?: string | null;
   sender_user_id: string;
@@ -379,6 +395,7 @@ export type ClientMessage = ProjectMessage;
 
 export interface ActivityLog {
   id: string;
+  business_id?: string | null;
   activity_type: ActivityType;
   description: string;
   title?: string | null;
@@ -394,6 +411,7 @@ export interface ActivityLog {
 
 export interface Communication {
   id: string;
+  business_id?: string | null;
   project_id: string | null;
   client_id: string | null;
   user_id: string | null;
