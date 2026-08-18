@@ -2,7 +2,8 @@ import { Header, PageHeader } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { getProfile } from "@/lib/auth";
 import { getProjectHeroPosterUrl } from "@/lib/cover";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { requireTenantContext } from "@/lib/tenant";
 import { redirect } from "next/navigation";
 import { ShootCalendar, type CalendarShoot } from "@/components/admin/shoot-calendar";
 
@@ -10,9 +11,10 @@ export default async function AdminCalendarPage() {
   const profile = await getProfile();
   if (!profile || profile.role !== "admin") redirect("/dashboard");
 
-  const supabase = await createServiceClient();
+  const tenant = await requireTenantContext();
+  const db = await createTenantServiceClient(tenant.businessId);
 
-  const { data: confirmed } = await supabase
+  const { data: confirmed } = await db
     .from("shoot_proposals")
     .select(
       "id, project_id, proposed_at, projects(project_name, property_address, service_type, status, cover_image_id, cover_image_url, clients(name))"
@@ -33,11 +35,15 @@ export default async function AdminCalendarPage() {
       } | null;
 
       const cover_url = project
-        ? await getProjectHeroPosterUrl(supabase, {
-            id: item.project_id,
-            cover_image_id: project.cover_image_id,
-            cover_image_url: project.cover_image_url,
-          })
+        ? await getProjectHeroPosterUrl(
+            db.raw,
+            {
+              id: item.project_id,
+              cover_image_id: project.cover_image_id,
+              cover_image_url: project.cover_image_url,
+            },
+            tenant.businessId
+          )
         : null;
 
       return {

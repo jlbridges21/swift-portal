@@ -21,6 +21,7 @@ export interface PortalLeadPayloadInput {
   referralSource?: string | null;
   preferredDate?: string | null;
   propertyType?: string | null;
+  source?: string | null;
 }
 
 function formatEstimatedValue(serviceRequested: string): string {
@@ -56,7 +57,7 @@ export function buildPortalLeadPayload(input: PortalLeadPayloadInput): GhlPortal
     projectNotes: input.projectNotes?.trim() || "",
     portalClientUrl: urls.portalClientUrl,
     portalProjectUrl: urls.portalProjectUrl,
-    source: "Swift Portal",
+    source: input.source?.trim() || "Swift Portal",
     tags: ["Swift Portal Lead", "Instant Quote"],
     referralSource: input.referralSource?.trim() || undefined,
     preferredDate: input.preferredDate || undefined,

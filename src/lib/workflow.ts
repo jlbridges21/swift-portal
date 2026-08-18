@@ -1,5 +1,5 @@
 import { getAppSettings } from "@/lib/app-settings";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { createServiceClient } from "@/lib/supabase/server";
 import { logProjectActivity } from "@/lib/activity";
 import type { MessageTemplateKey, WorkflowSettings } from "@/lib/workflow-settings";
 import {
@@ -10,10 +10,8 @@ import {
 
 export type TemplateContext = Partial<WorkflowMessageVariables>;
 
-export async function getWorkflowSettings(): Promise<WorkflowSettings> {
-  const settings = await getAppSettings(
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass businessId into getWorkflowSettings
-  );
+export async function getWorkflowSettings(businessId: string): Promise<WorkflowSettings> {
+  const settings = await getAppSettings(businessId);
   return settings.workflow;
 }
 
@@ -82,6 +80,16 @@ export async function resolveProjectMessageTemplate(
   return resolveMessageTemplate(workflow, key, merged, fallback);
 }
 
+async function resolveProjectBusinessId(projectId: string): Promise<string | null> {
+  const supabase = await createServiceClient();
+  const { data } = await supabase
+    .from("projects")
+    .select("business_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  return data?.business_id ?? null;
+}
+
 export async function logWorkflowAudit(
   projectId: string,
   description: string,
@@ -92,14 +100,20 @@ export async function logWorkflowAudit(
     skipped?: boolean;
   }
 ) {
-  const workflow = await getWorkflowSettings();
+  const businessId = await resolveProjectBusinessId(projectId);
+  if (!businessId) {
+    console.error("[workflow] skipped audit — project missing business_id", { projectId });
+    return null;
+  }
+
+  const workflow = await getWorkflowSettings(businessId);
   const stageKey = options?.metadata?.stage as string | undefined;
   if (stageKey && workflow.stages[stageKey as keyof typeof workflow.stages]?.logActivity === false) {
     return null;
   }
 
   return logProjectActivity("workflow_automation", description, {
-    businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id into logWorkflowAudit
+    businessId,
     projectId,
     userId: options?.userId ?? null,
     idempotencyKey: options?.idempotencyKey,

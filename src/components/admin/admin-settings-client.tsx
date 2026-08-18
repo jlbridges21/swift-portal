@@ -172,6 +172,13 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
     setSettings((prev) => ({ ...prev, business: { ...prev.business, ...patch } }));
   }, []);
 
+  const patchIntegrations = useCallback((patch: Partial<AppSettings["integrations"]>) => {
+    setSettings((prev) => ({
+      ...prev,
+      integrations: { ...prev.integrations, ...patch },
+    }));
+  }, []);
+
   const patchProposals = useCallback((patch: Partial<AppSettings["proposals"]>) => {
     setSettings((prev) => ({ ...prev, proposals: { ...prev.proposals, ...patch } }));
   }, []);
@@ -409,6 +416,27 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
             fallback="#3B82F6"
             onChange={(v) => patchBusiness({ brandAccentColor: v })}
           />
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="ghlWebhookUrl">GoHighLevel webhook URL</Label>
+            <Input
+              id="ghlWebhookUrl"
+              value={settings.integrations?.ghlWebhookUrl ?? ""}
+              onChange={(e) => patchIntegrations({ ghlWebhookUrl: e.target.value })}
+              placeholder="https://…"
+            />
+            <p className="text-xs text-muted">
+              Leave blank to skip GHL sync for this business. Swift uses the platform env var until a URL is saved.
+            </p>
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="ghlLeadSource">GHL lead source</Label>
+            <Input
+              id="ghlLeadSource"
+              value={settings.integrations?.ghlLeadSource ?? ""}
+              onChange={(e) => patchIntegrations({ ghlLeadSource: e.target.value })}
+              placeholder="Swift Portal"
+            />
+          </div>
           </div>
         </CardContent>
       </Card>

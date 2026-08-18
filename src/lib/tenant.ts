@@ -158,3 +158,51 @@ export async function requireBusinessAdmin(): Promise<TenantContext> {
   }
   return tenant;
 }
+
+export type PublicSignupBusinessResult =
+  | { ok: true; businessId: string }
+  | { ok: false; status: 400; error: string };
+
+/**
+ * Resolve the business for unauthenticated public intake (`/api/request`, `/api/leads`).
+ * Optional `business_id` / `business_slug` must refer to an active, non-deleted business.
+ * When both are absent, Swift is used so the existing public form keeps working.
+ */
+export async function resolvePublicSignupBusinessId(body: {
+  business_id?: unknown;
+  business_slug?: unknown;
+}): Promise<PublicSignupBusinessResult> {
+  const rawId = typeof body.business_id === "string" ? body.business_id.trim() : "";
+  const rawSlug = typeof body.business_slug === "string" ? body.business_slug.trim() : "";
+
+  if (!rawId && !rawSlug) {
+    // TODO(tenant): resolve business from host — prompt 18
+    return { ok: true, businessId: LEGACY_DEFAULT_BUSINESS_ID };
+  }
+
+  if (rawId && !isUuid(rawId)) {
+    return { ok: false, status: 400, error: "Invalid or inactive business." };
+  }
+
+  const supabase = await createServiceClient();
+  let query = supabase
+    .from("businesses")
+    .select("id, slug, status")
+    .is("deleted_at", null);
+
+  if (rawId) {
+    query = query.eq("id", rawId);
+  } else {
+    query = query.eq("slug", rawSlug);
+  }
+
+  const { data } = await query.maybeSingle();
+  if (!data || data.status !== "active") {
+    return { ok: false, status: 400, error: "Invalid or inactive business." };
+  }
+  if (rawId && rawSlug && data.slug !== rawSlug) {
+    return { ok: false, status: 400, error: "Invalid or inactive business." };
+  }
+
+  return { ok: true, businessId: data.id };
+}

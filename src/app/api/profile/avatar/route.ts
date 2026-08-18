@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 const AVATAR_BUCKET = "avatars";
 
 export async function POST(request: Request) {
   const profile = await getProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
 
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
@@ -20,13 +24,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Image must be under 50MB" }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(tenant.businessId);
   const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
   const safeExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
   const path = `${profile.id}/avatar.${safeExt}`;
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const { error: uploadError } = await supabase.storage
+  const { error: uploadError } = await db.raw.storage
     .from(AVATAR_BUCKET)
     .upload(path, buffer, { upsert: true, contentType: file.type });
 
@@ -42,7 +46,7 @@ export async function POST(request: Request) {
 
   const avatarUrl = `${supabaseUrl}/storage/v1/object/public/${AVATAR_BUCKET}/${path}?v=${Date.now()}`;
 
-  const { error: profileError } = await supabase
+  const { error: profileError } = await db.raw
     .from("profiles")
     .update({ avatar_url: avatarUrl })
     .eq("id", profile.id);

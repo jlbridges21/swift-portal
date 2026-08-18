@@ -8,24 +8,32 @@ export type HeroMedia =
   | { type: "youtube"; embedUrl: string; posterUrl: string | null }
   | null;
 
-/** Poster/thumbnail URL for dashboard cards (always an image, never a video file). */
+/**
+ * Poster/thumbnail URL for dashboard cards (always an image, never a video file).
+ *
+ * `businessId` is required: media lookups are filtered by it even when `supabase`
+ * is a service-role client (admin calendar). Chosen over an "RLS-bound client
+ * only" contract because one caller injects service role for signed URLs.
+ */
 export async function getProjectHeroPosterUrl(
   supabase: SupabaseClient,
-  project: Pick<Project, "id" | "cover_image_id" | "cover_image_url">
+  project: Pick<Project, "id" | "cover_image_id" | "cover_image_url">,
+  businessId: string
 ): Promise<string | null> {
-  const hero = await getProjectHeroMedia(supabase, project);
+  const hero = await getProjectHeroMedia(supabase, project, businessId);
   if (hero?.type === "image") return hero.url;
   if (hero?.type === "youtube") return hero.posterUrl;
   if (project.cover_image_url) return project.cover_image_url;
-  return firstProjectPhotoUrl(supabase, project.id);
+  return firstProjectPhotoUrl(supabase, project.id, businessId);
 }
 
 /** @deprecated Use getProjectHeroMedia — returns image URL only for card thumbnails */
 export async function getProjectCoverUrl(
   supabase: SupabaseClient,
-  project: Pick<Project, "id" | "cover_image_id" | "cover_image_url">
+  project: Pick<Project, "id" | "cover_image_id" | "cover_image_url">,
+  businessId: string
 ): Promise<string | null> {
-  return getProjectHeroPosterUrl(supabase, project);
+  return getProjectHeroPosterUrl(supabase, project, businessId);
 }
 
 async function signedPhotoUrl(
@@ -40,11 +48,13 @@ async function signedPhotoUrl(
 
 async function firstProjectPhotoUrl(
   supabase: SupabaseClient,
-  projectId: string
+  projectId: string,
+  businessId: string
 ): Promise<string | null> {
   const { data: firstPhoto } = await supabase
     .from("media_assets")
     .select("file_path")
+    .eq("business_id", businessId)
     .eq("project_id", projectId)
     .eq("media_type", "photo")
     .order("display_order", { ascending: true })
@@ -90,12 +100,14 @@ async function heroFromAsset(
 
 export async function getProjectHeroMedia(
   supabase: SupabaseClient,
-  project: Pick<Project, "id" | "cover_image_id" | "cover_image_url">
+  project: Pick<Project, "id" | "cover_image_id" | "cover_image_url">,
+  businessId: string
 ): Promise<HeroMedia> {
   if (project.cover_image_id) {
     const { data: asset } = await supabase
       .from("media_assets")
       .select("file_path, media_type, media_source, embed_url, youtube_url, mime_type")
+      .eq("business_id", businessId)
       .eq("id", project.cover_image_id)
       .single();
 
@@ -112,6 +124,7 @@ export async function getProjectHeroMedia(
   const { data: firstPhoto } = await supabase
     .from("media_assets")
     .select("file_path, media_type, media_source, embed_url, youtube_url, mime_type")
+    .eq("business_id", businessId)
     .eq("project_id", project.id)
     .eq("media_type", "photo")
     .order("display_order", { ascending: true })

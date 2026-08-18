@@ -40,8 +40,8 @@ Status key: **done** = converted this batch; **pending** = still raw service rol
 | `src/lib/communications.ts` | N/A — filters/types only; no queries. |
 | `src/lib/notification-settings.ts` | N/A — event-key mapping only; no queries. |
 | `src/lib/client-messages.ts` | N/A — client-facing copy only; no queries. |
-| `src/lib/status-automation.ts` | pending — **12b** |
-| `src/lib/workflow.ts` | pending — **12b** |
+| `src/lib/status-automation.ts` | **done** (prompt 12b). Loads `projects.business_id` then `getAppSettings` + tenant-scoped update. No LEGACY. |
+| `src/lib/workflow.ts` | **done** (prompt 12b). `getWorkflowSettings(businessId)`; `logWorkflowAudit` resolves from `project.business_id`. |
 | `src/lib/stripe-payments.ts` | **done** (prompt 12). Global Stripe-ID lookups stay on `createServiceClient()` (webhook has no tenant). After resolution, `checkPaymentBusinessAttribution` derives business from `payment.business_id`, cross-checks metadata when present, and refuses the write on mismatch/missing. Status writes and settings use the tenant wrapper / `getAppSettings(payment.business_id)`. |
 | `src/lib/stripe-webhook-events.ts` | **done** (prompt 12). `processed_stripe_events` is platform-scoped — stays `.raw` / unscoped service client. Idempotency unchanged. |
 | `src/lib/stripe-metadata.ts` | N/A — metadata helpers. `buildStripePaymentMetadata` now requires `businessId` (`businessId` + `business_id` keys). `sanitizeMetadataForLog` allowlists those keys (UUIDs, not secrets). |
@@ -49,8 +49,8 @@ Status key: **done** = converted this batch; **pending** = still raw service rol
 | `src/lib/payment-quote.ts` | N/A — no queries. |
 | `src/lib/payment-status.ts` | N/A — status helpers only. |
 | `src/lib/deliverables.ts` | N/A — `canDownloadDeliverables` is status-only. Callers already tenant-scope the project. |
-| `src/lib/google-calendar.ts` | pending — **12b** |
-| `src/lib/ghl/sync-portal-lead.ts` | pending — **12b** |
+| `src/lib/google-calendar.ts` | **done** (prompt 12b). Reads/writes `google_calendar_connections_v2` (v34). All helpers take `businessId`. OAuth state is HMAC-signed with `business_id`. |
+| `src/lib/ghl/sync-portal-lead.ts` | **done** (prompt 12b). Webhook URL from per-business settings; Swift falls back to `GHL_PORTAL_LEAD_WEBHOOK_URL`. Empty URL skips sync silently. |
 | `src/lib/preliminary-estimates.ts` | **done** (prompt 12). Resolves `project.business_id` (optional `options.businessId`); logs and returns null if missing — no LEGACY. Inserts via tenant wrapper. |
 | `src/lib/quote-archive.ts` | **done** (prompt 12). Signature is `(businessId, projectId, keepQuoteId)`. |
 | `src/lib/communication-records.ts` | **done** (prompt 11). `businessId` required; tenant `insert` stamps `communications.business_id`. |
@@ -61,15 +61,15 @@ Status key: **done** = converted this batch; **pending** = still raw service rol
 | `src/lib/media-library.ts` | **done** (prompt 10). `businessId` required on every export. Unassigned `media_assets` (`project_id` NULL) stay visible to their own business and invisible to others. Filter options (clients, properties, projects, services, tags) are all tenant-scoped. |
 | `src/lib/media-upload.ts` | N/A — no service-role queries. `// TODO(tenant): prefix storage paths — prompt 13` left on `buildMediaStoragePath`. |
 | `src/lib/project-zip-download.ts` | **done** (prompt 10). `authorizeProjectZipDownload` takes tenant-scoped `.from()`; `buildProjectZipBuffer` still needs `.storage` and is called with `db.raw`. |
-| `src/app/admin/calendar/page.tsx` | pending — **12b** |
+| `src/app/admin/calendar/page.tsx` | **done** (prompt 12b). `requireTenantContext()` + tenant-scoped shoot query. Cover URLs pass explicit `businessId`. |
 | `src/app/admin/media/page.tsx` | **done** (prompt 10) — `requireTenantContext()` then library helpers |
 | `src/app/api/admin/email/route.ts` | **done** (prompt 11). Fail-closed tenant before prefs lookup. Clients via tenant `from()`; profiles via `.raw` + `business_id`. Test send passes `tenant.businessId`. |
 | `src/app/api/admin/push/route.ts` | **done** (prompt 11). Fail-closed tenant. Profiles via `.raw`. Test push / subscribe pass `businessId`. |
 | `src/app/api/notifications/route.ts` | **done** (prompt 11). Stays cookie `createClient()` + RLS (`user_id = auth.uid()`). Optional extra `.eq("business_id")` when `profile.business_id` is set. No status-code change (GET still `[]` / 401). |
 | `src/app/api/asset-reviews/route.ts` | **done** (prompt 10 + 12). GET stays cookie `createClient()` + RLS, with extra `.eq("business_id")` when `profile.business_id` is set. POST/PATCH and `checkAllApproved` use the tenant wrapper. `notifyAdmins` receives `businessId`. |
-| `src/app/api/cron/workflow-reminders/route.ts` | pending — **12b** |
-| `src/app/api/leads/route.ts` | pending — **12b** |
-| `src/app/api/leads/[id]/route.ts` | pending — **12b** |
+| `src/app/api/cron/workflow-reminders/route.ts` | **done** (prompt 12b). Iterates active businesses; one failure does not abort others. Per-business summary in the response. |
+| `src/app/api/leads/route.ts` | **done** (prompt 12b). Public POST uses `resolvePublicSignupBusinessId`; tenant insert stamps `leads.business_id` (v32 active-business INSERT check). |
+| `src/app/api/leads/[id]/route.ts` | **done** (prompt 12b). Fail-closed tenant wrapper on GET/PATCH. |
 | `src/app/api/media/[id]/route.ts` | **done** (prompt 10) |
 | `src/app/api/media/[id]/property-line/route.ts` | **done** (prompt 10). Storage via `.raw`. |
 | `src/app/api/media/bulk/route.ts` | **done** (prompt 10). `download_urls` verifies `asset.business_id === tenant.businessId` before minting. |
@@ -96,11 +96,11 @@ Status key: **done** = converted this batch; **pending** = still raw service rol
 | `src/app/api/approvals/route.ts` | **done** (prompt 12). Fail-closed tenant. Project update extra `.eq("business_id")`. Activity + `notifyAdmins` use `businessId`. |
 | `src/app/api/revisions/route.ts` | **done** (prompt 12). GET cookie RLS + extra `business_id`. POST/PATCH fail-closed tenant wrapper (insert stamps `revisions.business_id`). |
 | `src/app/api/quotes/route.ts` | **done** (prompt 12). GET cookie RLS + extra `business_id`. POST/PATCH fail-closed tenant wrapper. `archivePreviousOfficialQuotes(businessId, …)`. |
-| `src/app/api/profile/route.ts` | pending |
-| `src/app/api/profile/avatar/route.ts` | pending |
-| `src/app/api/request/route.ts` | pending — **12b** |
-| `src/app/api/request/logged-in/route.ts` | pending — **12b** |
-| `src/app/api/shoot-proposals/route.ts` | pending — **12b** |
+| `src/app/api/profile/route.ts` | **done** (prompt 12b). Cookie RLS GET + extra `business_id` on clients. PATCH: profiles via `.raw`, clients via tenant wrapper. Fail-closed. |
+| `src/app/api/profile/avatar/route.ts` | **done** (prompt 12b). Fail-closed. Storage + profiles via `.raw`. Path prefix is prompt 13. |
+| `src/app/api/request/route.ts` | **done** (prompt 12b). Public signup stamps `business_id` on auth metadata, profile, client, project, lead, activity. Cross-business email rejected. |
+| `src/app/api/request/logged-in/route.ts` | **done** (prompt 12b). Authenticated user's business only; never reads a business id from the body. |
+| `src/app/api/shoot-proposals/route.ts` | **done** (prompt 12b). Tenant wrapper on writes. Activity + `notify*` receive `businessId`. |
 | `src/app/api/tours/route.ts` | **done** (prompt 10). Storage delete via `.raw`. |
 
 ## Signed URLs (prompt 10 — bearer capabilities)
@@ -131,6 +131,20 @@ Money paths stamp and filter `business_id` on `project_quotes`, `payments`, `rev
 
 **Stripe webhook:** lookups by `stripe_payment_intent_id` / `stripe_checkout_session_id` / `stripe_payment_link_id` remain **global** (no tenant on the webhook). After a row is found, business comes from `payment.business_id`. Metadata `businessId`/`business_id`, when present, must match; mismatch logs both ids and writes nothing. Missing metadata (legacy events) is allowed — the payment row wins. `getAppSettings` uses the payment’s business. The platform Stripe account is still shared (Connect is prompt 14).
 
-Do **not** convert the request flow, shoot proposals, scheduling, cron, Google Calendar, or GoHighLevel until prompt **12b**. `status-automation.ts` and `workflow.ts` still contain Category C LEGACY for those callers.
+Do **not** convert storage path prefix (prompt 13) or Stripe Connect (prompt 14) in this batch.
 
 Isolation harness after prompt 12: **66** assertions (was 65). A Swift admin cannot read or update Tenant B `payments` / `project_quotes`.
+
+## Request flow, scheduling, cron, Google Calendar, GHL (prompt 12b)
+
+Public `/request` resolves an optional `business_id`/`business_slug` (active + not deleted) or Swift until host resolution (prompt 18). `user_metadata.business_id` closes the signup gap. Logged-in `/request` uses the session tenant only.
+
+Cron iterates `businesses WHERE status='active' AND deleted_at IS NULL` and loads each business's reminder settings. `status-automation` / `workflow` load the **project's** business.
+
+`google_calendar_connections_v2` (v34) is keyed by `business_id`. The OAuth connect `state` is HMAC-SHA256 over `{businessId}.{ts}.{nonce}` using `GOOGLE_CLIENT_SECRET`; the callback rejects unsigned or tampered state. Old singleton table is left in place.
+
+GHL webhook URL lives in `AppSettings.integrations`. Swift still uses `GHL_PORTAL_LEAD_WEBHOOK_URL` when the settings field is empty. Other businesses skip sync when unset. Payload `source` is a string from settings.
+
+`cover.ts` requires an explicit `businessId` on every media lookup (chosen over an RLS-only contract because admin calendar uses service role for signed URLs).
+
+Isolation harness after prompt 12b: **68** assertions (was 66). A Tenant B `shoot_proposals` row and `google_calendar_connections_v2` row are invisible to a Swift admin.

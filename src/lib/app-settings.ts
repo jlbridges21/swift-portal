@@ -64,12 +64,20 @@ export interface ProposalSettings {
   allowClientProposalChanges: boolean;
 }
 
+export interface IntegrationSettings {
+  /** Per-business GoHighLevel inbound webhook. Empty = skip sync (Swift falls back to env). */
+  ghlWebhookUrl: string;
+  /** Value posted as the GHL `source` field. */
+  ghlLeadSource: string;
+}
+
 export interface AppSettings {
   notifications: Record<NotificationEventKey, NotificationChannelSettings>;
   email: EmailSettings;
   business: BusinessSettings;
   proposals: ProposalSettings;
   workflow: WorkflowSettings;
+  integrations: IntegrationSettings;
 }
 
 export const NOTIFICATION_EVENT_DEFINITIONS: {
@@ -141,6 +149,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     allowClientProposalChanges: true,
   },
   workflow: buildDefaultWorkflowSettings(),
+  integrations: {
+    ghlWebhookUrl: "",
+    ghlLeadSource: "Swift Portal",
+  },
 };
 
 function deepMerge<T extends Record<string, unknown>>(base: T, patch: Partial<T>): T {
@@ -178,6 +190,10 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
     business: { ...DEFAULT_APP_SETTINGS.business, ...(stored.business ?? {}) },
     proposals: { ...DEFAULT_APP_SETTINGS.proposals, ...(stored.proposals ?? {}) },
     workflow: mergeWorkflowSettings(stored.workflow),
+    integrations: {
+      ...DEFAULT_APP_SETTINGS.integrations,
+      ...(stored.integrations ?? {}),
+    },
   };
 }
 

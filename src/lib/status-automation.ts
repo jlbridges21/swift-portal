@@ -1,11 +1,11 @@
 import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { logProjectActivity } from "@/lib/activity";
 import { getStatusLabel, getStatusOrder, normalizeStatus } from "@/lib/constants";
 import type { ProjectStatus } from "@/lib/constants";
 import { clientStatusNotification } from "@/lib/client-messages";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import type { NotificationEventKey } from "@/lib/app-settings";
 import {
   canAutoTransition,
@@ -35,23 +35,31 @@ interface SetStatusOptions {
 }
 
 export async function setProjectStatus(options: SetStatusOptions) {
-  const supabase = await createServiceClient();
-  const appSettings = await getAppSettings(
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass project.business_id from setProjectStatus callers
-  );
-  const workflow = appSettings.workflow;
+  const raw = await createServiceClient();
 
-  const { data: existing } = await supabase
+  const { data: existing } = await raw
     .from("projects")
-    .select("status")
+    .select("status, business_id")
     .eq("id", options.projectId)
     .single();
 
-  if (options.skipIfSame && existing?.status === options.status) {
+  if (!existing?.business_id) {
+    console.error("[status-automation] project missing business_id", {
+      projectId: options.projectId,
+    });
     return existing;
   }
 
-  const fromStatus = normalizeStatus(existing?.status ?? "new_request");
+  const businessId = existing.business_id as string;
+  const db = await createTenantServiceClient(businessId);
+  const appSettings = await getAppSettings(businessId);
+  const workflow = appSettings.workflow;
+
+  if (options.skipIfSame && existing.status === options.status) {
+    return existing;
+  }
+
+  const fromStatus = normalizeStatus(existing.status ?? "new_request");
   const toStatus = options.status;
 
   const currentOrder = getStatusOrder(fromStatus);
@@ -59,7 +67,7 @@ export async function setProjectStatus(options: SetStatusOptions) {
 
   if (
     !options.manualOverride &&
-    existing?.status &&
+    existing.status &&
     fromStatus !== toStatus &&
     targetOrder < currentOrder
   ) {
@@ -79,7 +87,7 @@ export async function setProjectStatus(options: SetStatusOptions) {
 
   if (
     !options.manualOverride &&
-    existing?.status &&
+    existing.status &&
     fromStatus !== toStatus &&
     !canAutoTransition(fromStatus, toStatus, workflow, false)
   ) {
@@ -97,7 +105,7 @@ export async function setProjectStatus(options: SetStatusOptions) {
     return existing;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("projects")
     .update({ status: options.status })
     .eq("id", options.projectId)
@@ -116,13 +124,13 @@ export async function setProjectStatus(options: SetStatusOptions) {
       options.activityType || "status_updated",
       options.activityDescription || `Status updated to ${label}`,
       {
-        businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
+        businessId,
         projectId: options.projectId,
         userId: options.userId ?? null,
         idempotencyKey:
           options.idempotencyKey ??
           `status:${options.projectId}:${options.activityType || options.status}`,
-        metadata: { from: existing?.status, to: options.status, automated },
+        metadata: { from: existing.status, to: options.status, automated },
       }
     );
   }
@@ -154,6 +162,7 @@ export async function setProjectStatus(options: SetStatusOptions) {
       body: options.clientBody ?? clientMsg.body,
       link: options.link || `/dashboard/projects/${options.projectId}`,
       projectId: options.projectId,
+      businessId,
     });
   } else if (options.notifyClient && !allowNotify) {
     await logWorkflowAudit(
@@ -177,6 +186,7 @@ export async function setProjectStatus(options: SetStatusOptions) {
         : `Project moved to "${label}".`,
       link: `/admin/projects/${options.projectId}`,
       projectId: options.projectId,
+      businessId,
     });
   }
 
@@ -187,11 +197,11 @@ export async function setProjectStatus(options: SetStatusOptions) {
 export async function setProjectStatusForward(
   options: SetStatusOptions
 ): Promise<{ status: string } | null> {
-  const supabase = await createServiceClient();
+  const raw = await createServiceClient();
 
-  const { data: existing } = await supabase
+  const { data: existing } = await raw
     .from("projects")
-    .select("status")
+    .select("status, business_id")
     .eq("id", options.projectId)
     .single();
 

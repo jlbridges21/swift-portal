@@ -7,11 +7,16 @@ import {
   saveGoogleCalendarConnection,
   listGoogleCalendars,
   setGoogleCalendarId,
+  verifyGoogleOAuthState,
 } from "@/lib/google-calendar";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   try {
     const profile = await requireAdmin();
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
+
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
     const state = searchParams.get("state");
@@ -29,10 +34,24 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${appUrl}/admin/settings?gcal=invalid`);
     }
 
+    const verified = verifyGoogleOAuthState(state);
+    if (!verified.ok) {
+      console.warn("[google-calendar] OAuth state rejected", { reason: verified.reason });
+      return NextResponse.redirect(`${appUrl}/admin/settings?gcal=invalid`);
+    }
+    if (verified.businessId !== tenant.businessId) {
+      console.warn("[google-calendar] OAuth state business mismatch", {
+        signed: verified.businessId,
+        tenant: tenant.businessId,
+      });
+      return NextResponse.redirect(`${appUrl}/admin/settings?gcal=invalid`);
+    }
+
     const tokens = await exchangeGoogleCode(code);
     const email = await getGoogleUserEmail(tokens.access_token);
 
     await saveGoogleCalendarConnection({
+      businessId: verified.businessId,
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token ?? "",
       expiresIn: tokens.expires_in,
@@ -40,10 +59,10 @@ export async function GET(request: Request) {
       userId: profile.id,
     });
 
-    const calendars = await listGoogleCalendars();
+    const calendars = await listGoogleCalendars(verified.businessId);
     const primary = calendars.find((c) => c.primary) ?? calendars[0];
     if (primary) {
-      await setGoogleCalendarId(primary.id, primary.summary);
+      await setGoogleCalendarId(verified.businessId, primary.id, primary.summary);
     }
 
     const response = NextResponse.redirect(`${appUrl}/admin/settings?gcal=connected`);

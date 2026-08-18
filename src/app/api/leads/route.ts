@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { resolvePublicSignupBusinessId } from "@/lib/tenant";
 
 export async function POST(request: Request) {
   try {
@@ -12,9 +13,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = await createServiceClient();
+    const resolved = await resolvePublicSignupBusinessId(body);
+    if (!resolved.ok) {
+      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+    }
+    const businessId = resolved.businessId;
+    const db = await createTenantServiceClient(businessId);
 
-    const { data: lead, error } = await supabase
+    const { data: lead, error } = await db
       .from("leads")
       .insert({
         name: body.name,
@@ -34,7 +40,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    await supabase.from("activity_logs").insert({
+    await db.from("activity_logs").insert({
       activity_type: "lead_created",
       description: `New lead from ${body.name} for ${body.service_requested}`,
       lead_id: lead.id,

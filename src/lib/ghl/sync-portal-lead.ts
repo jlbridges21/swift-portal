@@ -1,4 +1,6 @@
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { getAppSettings } from "@/lib/app-settings";
+import { LEGACY_DEFAULT_BUSINESS_ID as SWIFT_AERIAL_MEDIA_ID } from "@/lib/tenant";
 import type { GhlPortalLeadPayload, GhlSyncAttemptResult, GhlSyncStatus } from "./types";
 
 const MAX_RESPONSE_BODY_LENGTH = 4000;
@@ -21,18 +23,28 @@ export function buildPortalUrls(options: { clientId: string; projectId: string }
   };
 }
 
+function resolveGhlWebhookUrl(businessId: string, webhookFromSettings: string): string {
+  const fromSettings = webhookFromSettings.trim();
+  if (fromSettings) return fromSettings;
+  if (businessId === SWIFT_AERIAL_MEDIA_ID) {
+    return process.env.GHL_PORTAL_LEAD_WEBHOOK_URL?.trim() ?? "";
+  }
+  return "";
+}
+
 export async function syncPortalLeadToGhl(
-  payload: GhlPortalLeadPayload
+  payload: GhlPortalLeadPayload,
+  businessId: string
 ): Promise<GhlSyncAttemptResult> {
-  const webhookUrl = process.env.GHL_PORTAL_LEAD_WEBHOOK_URL?.trim();
+  const settings = await getAppSettings(businessId);
+  const webhookUrl = resolveGhlWebhookUrl(businessId, settings.integrations.ghlWebhookUrl);
 
   if (!webhookUrl) {
-    console.warn("[ghl] webhook sync failed: GHL_PORTAL_LEAD_WEBHOOK_URL is not configured");
     return {
-      ok: false,
+      ok: true,
+      skipped: true,
       statusCode: null,
-      responseBody: "GHL_PORTAL_LEAD_WEBHOOK_URL is not configured",
-      error: "missing_webhook_url",
+      responseBody: null,
     };
   }
 
@@ -86,12 +98,13 @@ export async function syncPortalLeadToGhl(
 
 export async function updateProjectGhlSyncStatus(
   projectId: string,
-  result: GhlSyncAttemptResult
+  result: GhlSyncAttemptResult,
+  businessId: string
 ): Promise<void> {
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
   const status: GhlSyncStatus = result.ok ? "success" : "failed";
 
-  const { error } = await supabase
+  const { error } = await db
     .from("projects")
     .update({
       ghl_sync_status: status,
@@ -112,9 +125,11 @@ export async function updateProjectGhlSyncStatus(
 /** Post lead to GHL and persist sync status on the project. Never throws. */
 export async function syncNewProjectLeadToGhl(
   projectId: string,
-  payload: GhlPortalLeadPayload
+  payload: GhlPortalLeadPayload,
+  businessId: string
 ): Promise<GhlSyncAttemptResult> {
-  const result = await syncPortalLeadToGhl(payload);
-  await updateProjectGhlSyncStatus(projectId, result);
+  const result = await syncPortalLeadToGhl(payload, businessId);
+  if (result.skipped) return result;
+  await updateProjectGhlSyncStatus(projectId, result, businessId);
   return result;
 }

@@ -1,11 +1,14 @@
-import { createServiceClient } from "@/lib/supabase/server";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+const GCAL_TABLE = "google_calendar_connections_v2";
 
 export interface GoogleCalendarConnection {
-  id: number;
+  business_id: string;
   connected_email: string | null;
   access_token: string;
   refresh_token: string;
@@ -30,6 +33,51 @@ function getGoogleConfig() {
 
 export function isGoogleCalendarConfigured(): boolean {
   return Boolean(getGoogleConfig());
+}
+
+function oauthStateSecret(): string {
+  const secret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!secret) {
+    throw new Error("GOOGLE_CLIENT_SECRET is required to sign OAuth state");
+  }
+  return secret;
+}
+
+/** HMAC-SHA256 state: `{businessId}.{timestamp}.{nonce}.{sig}` */
+export function signGoogleOAuthState(businessId: string): string {
+  const nonce = randomBytes(16).toString("hex");
+  const ts = Date.now().toString();
+  const payload = `${businessId}.${ts}.${nonce}`;
+  const sig = createHmac("sha256", oauthStateSecret()).update(payload).digest("hex");
+  return `${payload}.${sig}`;
+}
+
+export function verifyGoogleOAuthState(
+  state: string
+): { ok: true; businessId: string } | { ok: false; reason: string } {
+  if (!state || typeof state !== "string") return { ok: false, reason: "missing" };
+  const parts = state.split(".");
+  if (parts.length !== 4) return { ok: false, reason: "malformed" };
+  const [businessId, ts, nonce, sig] = parts;
+  if (!businessId || !ts || !nonce || !sig) return { ok: false, reason: "malformed" };
+
+  const payload = `${businessId}.${ts}.${nonce}`;
+  const expected = createHmac("sha256", oauthStateSecret()).update(payload).digest("hex");
+  try {
+    const a = Buffer.from(sig, "hex");
+    const b = Buffer.from(expected, "hex");
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      return { ok: false, reason: "bad_signature" };
+    }
+  } catch {
+    return { ok: false, reason: "bad_signature" };
+  }
+
+  const age = Date.now() - Number(ts);
+  if (!Number.isFinite(age) || age < 0 || age > OAUTH_STATE_TTL_MS) {
+    return { ok: false, reason: "expired" };
+  }
+  return { ok: true, businessId };
 }
 
 export function getGoogleOAuthUrl(state: string): string | null {
@@ -98,63 +146,69 @@ async function refreshGoogleAccessToken(refreshToken: string) {
   return res.json() as Promise<{ access_token: string; expires_in: number }>;
 }
 
-export async function getGoogleCalendarConnection(): Promise<GoogleCalendarConnection | null> {
-  const supabase = await createServiceClient();
-  const { data } = await supabase.from("google_calendar_connections").select("*").eq("id", 1).maybeSingle();
+export async function getGoogleCalendarConnection(
+  businessId: string
+): Promise<GoogleCalendarConnection | null> {
+  const db = await createTenantServiceClient(businessId);
+  const { data } = await db.from(GCAL_TABLE).select("*").maybeSingle();
   return (data as GoogleCalendarConnection | null) ?? null;
 }
 
 export async function saveGoogleCalendarConnection(options: {
+  businessId: string;
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
   email?: string | null;
   userId?: string | null;
 }) {
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(options.businessId);
   const expiresAt = new Date(Date.now() + options.expiresIn * 1000).toISOString();
 
-  const { data: existing } = await supabase
-    .from("google_calendar_connections")
-    .select("refresh_token")
-    .eq("id", 1)
-    .maybeSingle();
+  const { data: existing } = await db.from(GCAL_TABLE).select("refresh_token").maybeSingle();
 
-  await supabase.from("google_calendar_connections").upsert({
-    id: 1,
-    connected_email: options.email ?? null,
-    access_token: options.accessToken,
-    refresh_token: options.refreshToken || existing?.refresh_token,
-    token_expires_at: expiresAt,
-    connected_by: options.userId ?? null,
-    connected_at: new Date().toISOString(),
-  });
+  await db.from(GCAL_TABLE).upsert(
+    {
+      connected_email: options.email ?? null,
+      access_token: options.accessToken,
+      refresh_token: options.refreshToken || existing?.refresh_token,
+      token_expires_at: expiresAt,
+      connected_by: options.userId ?? null,
+      connected_at: new Date().toISOString(),
+    },
+    { onConflict: "business_id" }
+  );
 }
 
-export async function disconnectGoogleCalendar() {
-  const supabase = await createServiceClient();
-  await supabase.from("google_calendar_connections").delete().eq("id", 1);
+export async function disconnectGoogleCalendar(businessId: string) {
+  const db = await createTenantServiceClient(businessId);
+  await db.from(GCAL_TABLE).delete();
 }
 
-export async function setGoogleCalendarId(calendarId: string, calendarSummary: string) {
-  const supabase = await createServiceClient();
-  await supabase
-    .from("google_calendar_connections")
-    .update({ calendar_id: calendarId, calendar_summary: calendarSummary })
-    .eq("id", 1);
+export async function setGoogleCalendarId(
+  businessId: string,
+  calendarId: string,
+  calendarSummary: string
+) {
+  const db = await createTenantServiceClient(businessId);
+  await db
+    .from(GCAL_TABLE)
+    .update({ calendar_id: calendarId, calendar_summary: calendarSummary });
 }
 
-async function getValidAccessToken(conn: GoogleCalendarConnection): Promise<string> {
+async function getValidAccessToken(
+  conn: GoogleCalendarConnection,
+  businessId: string
+): Promise<string> {
   const expires = new Date(conn.token_expires_at).getTime();
   if (Date.now() < expires - 60_000) return conn.access_token;
 
   const refreshed = await refreshGoogleAccessToken(conn.refresh_token);
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
   const expiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
-  await supabase
-    .from("google_calendar_connections")
-    .update({ access_token: refreshed.access_token, token_expires_at: expiresAt })
-    .eq("id", 1);
+  await db
+    .from(GCAL_TABLE)
+    .update({ access_token: refreshed.access_token, token_expires_at: expiresAt });
 
   return refreshed.access_token;
 }
@@ -165,11 +219,11 @@ export interface GoogleCalendarListItem {
   primary: boolean;
 }
 
-export async function listGoogleCalendars(): Promise<GoogleCalendarListItem[]> {
-  const conn = await getGoogleCalendarConnection();
+export async function listGoogleCalendars(businessId: string): Promise<GoogleCalendarListItem[]> {
+  const conn = await getGoogleCalendarConnection(businessId);
   if (!conn) return [];
 
-  const token = await getValidAccessToken(conn);
+  const token = await getValidAccessToken(conn, businessId);
   const res = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList", {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -232,12 +286,15 @@ function buildEventBody(ctx: ShootSyncContext, appUrl: string) {
 }
 
 /** Mirror a confirmed shoot to Google Calendar (create or update). Swift Portal is source of truth. */
-export async function syncShootToGoogleCalendar(ctx: ShootSyncContext): Promise<string | null> {
+export async function syncShootToGoogleCalendar(
+  ctx: ShootSyncContext,
+  businessId: string
+): Promise<string | null> {
   try {
-    const conn = await getGoogleCalendarConnection();
+    const conn = await getGoogleCalendarConnection(businessId);
     if (!conn?.calendar_id) return null;
 
-    const token = await getValidAccessToken(conn);
+    const token = await getValidAccessToken(conn, businessId);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const body = buildEventBody(ctx, appUrl);
     const calendarId = encodeURIComponent(conn.calendar_id);
@@ -275,8 +332,8 @@ export async function syncShootToGoogleCalendar(ctx: ShootSyncContext): Promise<
     }
 
     const event = await res.json();
-    const supabase = await createServiceClient();
-    await supabase
+    const db = await createTenantServiceClient(businessId);
+    await db
       .from("shoot_proposals")
       .update({ google_calendar_event_id: event.id })
       .eq("id", ctx.proposalId);
@@ -288,9 +345,12 @@ export async function syncShootToGoogleCalendar(ctx: ShootSyncContext): Promise<
   }
 }
 
-export async function loadShootSyncContext(proposalId: string): Promise<ShootSyncContext | null> {
-  const supabase = await createServiceClient();
-  const { data } = await supabase
+export async function loadShootSyncContext(
+  proposalId: string,
+  businessId: string
+): Promise<ShootSyncContext | null> {
+  const db = await createTenantServiceClient(businessId);
+  const { data } = await db
     .from("shoot_proposals")
     .select(`
       id, project_id, proposed_at, message, google_calendar_event_id,

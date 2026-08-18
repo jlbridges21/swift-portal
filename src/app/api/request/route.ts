@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { notifyAdmins } from "@/lib/notifications";
 import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
 import { defaultProjectTitle, resolveAddressFromBody } from "@/lib/address";
@@ -8,7 +9,8 @@ import { touchClientActivity } from "@/lib/clients-data";
 import { resolvePersonName } from "@/lib/person-name";
 import { buildPortalLeadPayload } from "@/lib/ghl/build-portal-lead-payload";
 import { syncNewProjectLeadToGhl } from "@/lib/ghl/sync-portal-lead";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getAppSettings } from "@/lib/app-settings";
+import { resolvePublicSignupBusinessId } from "@/lib/tenant";
 
 export async function POST(request: Request) {
   try {
@@ -48,13 +50,52 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
     }
 
-    const supabase = await createServiceClient();
+    const resolved = await resolvePublicSignupBusinessId(body);
+    if (!resolved.ok) {
+      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+    }
+    const businessId = resolved.businessId;
 
-    const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+    const raw = await createServiceClient();
+    const db = await createTenantServiceClient(businessId);
+
+    const { data: existingClients } = await raw
+      .from("clients")
+      .select("id, business_id, email")
+      .ilike("email", email)
+      .is("deleted_at", null);
+
+    const otherBusiness = (existingClients ?? []).find(
+      (c) => c.business_id && c.business_id !== businessId
+    );
+    if (otherBusiness) {
+      return NextResponse.json(
+        {
+          error: "email_other_business",
+          message:
+            "This email is already associated with another business. One person cannot be a client of two businesses.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const sameBusiness = (existingClients ?? []).find((c) => c.business_id === businessId);
+    if (sameBusiness) {
+      return NextResponse.json(
+        {
+          error: "account_exists",
+          message:
+            "An account already exists with this email. Please log in to request a new shoot from your portal.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const { data: authUser, error: authError } = await raw.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: person.fullName, role: "client" },
+      user_metadata: { full_name: person.fullName, role: "client", business_id: businessId },
     });
 
     if (authError) {
@@ -78,7 +119,7 @@ export async function POST(request: Request) {
 
     const userId = authUser.user.id;
 
-    const { data: client, error: clientError } = await supabase
+    const { data: client, error: clientError } = await db
       .from("clients")
       .insert({
         name: person.fullName,
@@ -96,18 +137,23 @@ export async function POST(request: Request) {
       .single();
 
     if (clientError) {
-      await supabase.auth.admin.deleteUser(userId);
+      await raw.auth.admin.deleteUser(userId);
       return NextResponse.json({ error: clientError.message }, { status: 500 });
     }
 
-    await supabase
+    await raw
       .from("profiles")
-      .update({ client_id: client.id, full_name: person.fullName, role: "client" })
+      .update({
+        client_id: client.id,
+        full_name: person.fullName,
+        role: "client",
+        business_id: businessId,
+      })
       .eq("id", userId);
 
     const projectName = defaultProjectTitle(property_address, service_requested);
 
-    const { data: project, error: projectError } = await supabase
+    const { data: project, error: projectError } = await db
       .from("projects")
       .insert({
         client_id: client.id,
@@ -126,18 +172,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: projectError.message }, { status: 500 });
     }
 
-    await linkProjectToProperty(
-      project.id,
-      client.id,
-      property_address,
-      LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): prompt 12 — stamp public /request with a real business_id
-    );
-    await touchClientActivity(
-      client.id,
-      LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): prompt 12 — stamp public /request with a real business_id
-    );
+    await linkProjectToProperty(project.id, client.id, property_address, businessId);
+    await touchClientActivity(client.id, businessId);
 
-    const { data: lead } = await supabase
+    const { data: lead } = await db
       .from("leads")
       .insert({
         name: person.fullName,
@@ -156,7 +194,7 @@ export async function POST(request: Request) {
       .select()
       .single();
 
-    await supabase.from("activity_logs").insert([
+    await db.from("activity_logs").insert([
       {
         activity_type: "proposal_submitted",
         description: `Proposal submitted for ${service_requested}`,
@@ -188,13 +226,16 @@ export async function POST(request: Request) {
       body: `${person.fullName} submitted a request for ${service_requested} at ${property_address}. A preliminary estimate was generated automatically.`,
       link: `/admin/projects/${project.id}`,
       projectId: project.id,
+      businessId,
     });
 
     await createPreliminaryEstimate(project.id, service_requested, {
       userId,
       skipIfExists: true,
+      businessId,
     });
 
+    const appSettings = await getAppSettings(businessId);
     const ghlPayload = buildPortalLeadPayload({
       clientId: client.id,
       projectId: project.id,
@@ -213,9 +254,10 @@ export async function POST(request: Request) {
       referralSource: body.referral_source,
       preferredDate: preferred_date,
       propertyType: body.property_type,
+      source: appSettings.integrations.ghlLeadSource,
     });
 
-    await syncNewProjectLeadToGhl(project.id, ghlPayload);
+    await syncNewProjectLeadToGhl(project.id, ghlPayload, businessId);
 
     return NextResponse.json({
       success: true,

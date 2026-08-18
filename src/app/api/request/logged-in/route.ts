@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins } from "@/lib/notifications";
@@ -10,6 +10,7 @@ import { touchClientActivity } from "@/lib/clients-data";
 import { resolvePersonName } from "@/lib/person-name";
 import { buildPortalLeadPayload } from "@/lib/ghl/build-portal-lead-payload";
 import { syncNewProjectLeadToGhl } from "@/lib/ghl/sync-portal-lead";
+import { getAppSettings } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function POST(request: Request) {
@@ -34,24 +35,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Service type is required." }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
   const clientId = profile.client_id;
 
-  const { data: client } = await supabase
+  const { data: client } = await db
     .from("clients")
     .select("name, first_name, last_name, email, phone, company")
     .eq("id", clientId)
     .single();
 
+  if (!client) {
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
+  }
+
   const person = resolvePersonName({
-    first_name: client?.first_name,
-    last_name: client?.last_name,
-    name: client?.name || profile.full_name,
+    first_name: client.first_name,
+    last_name: client.last_name,
+    name: client.name || profile.full_name,
   });
 
   const projectName = defaultProjectTitle(property_address, service_requested);
 
-  const { data: project, error: projectError } = await supabase
+  const { data: project, error: projectError } = await db
     .from("projects")
     .insert({
       client_id: clientId,
@@ -70,29 +75,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: projectError.message }, { status: 500 });
   }
 
-  await linkProjectToProperty(
-    project.id,
-    clientId,
-    property_address,
-    businessId
-  );
-  await touchClientActivity(
-    clientId,
-    businessId
-  );
+  await linkProjectToProperty(project.id, clientId, property_address, businessId);
+  await touchClientActivity(clientId, businessId);
 
-  await supabase.from("project_clients").upsert(
+  await db.from("project_clients").upsert(
     { project_id: project.id, client_id: clientId, is_primary: true },
     { onConflict: "project_id,client_id" }
   );
 
-  await supabase.from("leads").insert({
+  await db.from("leads").insert({
     name: person.fullName,
     first_name: person.firstName || null,
     last_name: person.lastName || null,
-    email: client?.email || profile.email,
-    phone: phone || client?.phone || null,
-    company: company || client?.company || null,
+    email: client.email || profile.email,
+    phone: phone || client.phone || null,
+    company: company || client.company || null,
     property_address,
     service_requested,
     preferred_date: preferred_date || null,
@@ -115,21 +112,24 @@ export async function POST(request: Request) {
     body: `${person.fullName} requested ${service_requested} at ${property_address}. A preliminary estimate was generated automatically.`,
     link: `/admin/projects/${project.id}`,
     projectId: project.id,
+    businessId,
   });
 
   await createPreliminaryEstimate(project.id, service_requested, {
     userId: profile.id,
     skipIfExists: true,
+    businessId,
   });
 
+  const appSettings = await getAppSettings(businessId);
   const ghlPayload = buildPortalLeadPayload({
     clientId,
     projectId: project.id,
     firstName: person.firstName,
     lastName: person.lastName,
-    email: client?.email || profile.email || "",
-    phone: phone || client?.phone,
-    company: company || client?.company,
+    email: client.email || profile.email || "",
+    phone: phone || client.phone,
+    company: company || client.company,
     serviceRequested: service_requested,
     propertyAddress: property_address,
     streetAddress: String(body.street_address ?? "").trim() || null,
@@ -140,9 +140,10 @@ export async function POST(request: Request) {
     referralSource: body.referral_source,
     preferredDate: preferred_date,
     propertyType: body.property_type,
+    source: appSettings.integrations.ghlLeadSource,
   });
 
-  await syncNewProjectLeadToGhl(project.id, ghlPayload);
+  await syncNewProjectLeadToGhl(project.id, ghlPayload, businessId);
 
   return NextResponse.json({ success: true, projectId: project.id });
 }

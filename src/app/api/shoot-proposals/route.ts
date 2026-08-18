@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
@@ -7,7 +8,8 @@ import { loadShootSyncContext, syncShootToGoogleCalendar } from "@/lib/google-ca
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
-import { getTenantContext, missingTenantResponse, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { canAccessProject } from "@/lib/project-access";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 
 export async function GET(request: Request) {
@@ -16,11 +18,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+
   const { searchParams } = new URL(request.url);
   const projectId = searchParams.get("project_id");
 
   const supabase = await createClient();
-  let query = supabase.from("shoot_proposals").select("*").order("proposed_at", { ascending: true });
+  let query = supabase
+    .from("shoot_proposals")
+    .select("*")
+    .eq("business_id", tenant.businessId)
+    .order("proposed_at", { ascending: true });
 
   if (projectId) {
     query = query.eq("project_id", projectId);
@@ -57,9 +66,13 @@ export async function POST(request: Request) {
   if (!tenant) return missingTenantResponse(profile.role);
   const businessId = tenant.businessId;
 
-  const supabase = isAdmin ? await createServiceClient() : await createClient();
+  if (!isAdmin && !(await canAccessProject(profile, body.project_id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
-  const { data, error } = await supabase
+  const db = await createTenantServiceClient(businessId);
+
+  const { data, error } = await db
     .from("shoot_proposals")
     .insert({
       project_id: body.project_id,
@@ -103,6 +116,7 @@ export async function POST(request: Request) {
       ),
       link: `/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`,
       projectId: body.project_id,
+      businessId,
     });
   } else if (isAdmin) {
     await logWorkflowSkipped(
@@ -118,6 +132,7 @@ export async function POST(request: Request) {
       body: `A client proposed a new shoot date: ${dateStr}`,
       link: `/admin/projects/${body.project_id}`,
       projectId: body.project_id,
+      businessId,
     });
   } else {
     await logWorkflowSkipped(
@@ -156,14 +171,17 @@ export async function PATCH(request: Request) {
   }
 
   const isAdmin = profile.role === "admin";
-  const supabase = isAdmin ? await createServiceClient() : await createClient();
-  const serviceClient = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
 
   const { data: proposal } = id
-    ? await supabase.from("shoot_proposals").select("*").eq("id", id).single()
+    ? await db.from("shoot_proposals").select("*").eq("id", id).single()
     : { data: null };
 
   if (action !== "reschedule" && !proposal) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (!isAdmin && proposal && !(await canAccessProject(profile, proposal.project_id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -174,12 +192,12 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: true, status: "confirmed", alreadyConfirmed: true });
     }
 
-    await serviceClient
+    await db
       .from("shoot_proposals")
       .update({ status: "confirmed" })
       .eq("id", id);
 
-    await serviceClient
+    await db
       .from("shoot_proposals")
       .update({ status: "declined" })
       .eq("project_id", proposal.project_id)
@@ -204,7 +222,7 @@ export async function PATCH(request: Request) {
       idempotencyKey: idempotencyKey("shoot", id, "accept"),
     });
 
-    await serviceClient
+    await db
       .from("projects")
       .update({ shoot_date: proposal.proposed_at.split("T")[0] })
       .eq("id", proposal.project_id);
@@ -218,12 +236,13 @@ export async function PATCH(request: Request) {
         : `Shoot confirmed for ${dateStr}.`,
       link: `/admin/projects/${proposal.project_id}`,
       projectId: proposal.project_id,
+      businessId,
     });
 
-    const syncCtx = await loadShootSyncContext(id);
+    const syncCtx = await loadShootSyncContext(id, businessId);
     const appSettings = await getAppSettings(businessId);
     if (syncCtx && appSettings.workflow.scheduling.syncGoogleCalendar) {
-      void syncShootToGoogleCalendar(syncCtx);
+      void syncShootToGoogleCalendar(syncCtx, businessId);
       await logWorkflowAudit(proposal.project_id, "Google Calendar updated after shoot confirmation.", {
         idempotencyKey: idempotencyKey("workflow", "gcal", id, "accept"),
       });
@@ -243,7 +262,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "id and proposed_at required" }, { status: 400 });
     }
 
-    const { data: shoot } = await serviceClient
+    const { data: shoot } = await db
       .from("shoot_proposals")
       .select("project_id")
       .eq("id", id)
@@ -251,12 +270,12 @@ export async function PATCH(request: Request) {
 
     if (!shoot) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    await serviceClient
+    await db
       .from("shoot_proposals")
       .update({ proposed_at })
       .eq("id", id);
 
-    await serviceClient
+    await db
       .from("projects")
       .update({ shoot_date: proposed_at.split("T")[0] })
       .eq("id", shoot.project_id);
@@ -288,6 +307,7 @@ export async function PATCH(request: Request) {
         ),
         link: `/dashboard/projects/${shoot.project_id}#scheduling`,
         projectId: shoot.project_id,
+        businessId,
       });
     } else {
       await logWorkflowSkipped(
@@ -297,9 +317,9 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const syncCtx = await loadShootSyncContext(id);
+    const syncCtx = await loadShootSyncContext(id, businessId);
     if (syncCtx && scheduling.syncGoogleCalendar) {
-      void syncShootToGoogleCalendar({ ...syncCtx, proposedAt: proposed_at });
+      void syncShootToGoogleCalendar({ ...syncCtx, proposedAt: proposed_at }, businessId);
       await logWorkflowAudit(shoot.project_id, "Google Calendar updated after reschedule.", {
         idempotencyKey: idempotencyKey("workflow", "gcal", id, proposed_at),
       });
@@ -318,7 +338,7 @@ export async function PATCH(request: Request) {
 
     const projectId = body.project_id || proposal!.project_id;
 
-    const { data: confirmedProposal } = await serviceClient
+    const { data: confirmedProposal } = await db
       .from("shoot_proposals")
       .select("*")
       .eq("project_id", projectId)
@@ -326,13 +346,13 @@ export async function PATCH(request: Request) {
       .maybeSingle();
 
     if (confirmedProposal) {
-      await serviceClient
+      await db
         .from("shoot_proposals")
         .update({ status: "superseded" })
         .eq("id", confirmedProposal.id);
     }
 
-    const { data: newProposal } = await serviceClient
+    const { data: newProposal } = await db
       .from("shoot_proposals")
       .insert({
         project_id: projectId,
@@ -347,7 +367,7 @@ export async function PATCH(request: Request) {
 
     const dateStr = new Date(proposed_at).toLocaleString();
     await logProjectActivity("shoot_proposed", `New shoot date proposed: ${dateStr}`, {
-      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
+      businessId,
       projectId,
       userId: profile.id,
       metadata: { proposed_by: "admin", rescheduled: true },
@@ -367,6 +387,7 @@ export async function PATCH(request: Request) {
       body: `Please confirm the new shoot date: ${dateStr}.`,
       link: `/dashboard/projects/${projectId}?scheduling=pending#scheduling`,
       projectId,
+      businessId,
     });
 
     return NextResponse.json(newProposal);
@@ -377,9 +398,9 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "proposed_at required for counter" }, { status: 400 });
     }
 
-    await supabase.from("shoot_proposals").update({ status: "countered" }).eq("id", id);
+    await db.from("shoot_proposals").update({ status: "countered" }).eq("id", id);
 
-    const { data: counter } = await supabase
+    const { data: counter } = await db
       .from("shoot_proposals")
       .insert({
         project_id: proposal.project_id,
@@ -394,7 +415,7 @@ export async function PATCH(request: Request) {
 
     const dateStr = new Date(proposed_at).toLocaleString();
     await logProjectActivity("shoot_proposed", `Alternative shoot date proposed: ${dateStr}`, {
-      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
+      businessId,
       projectId: proposal.project_id,
       userId: profile.id,
     });
@@ -407,6 +428,7 @@ export async function PATCH(request: Request) {
         body: `Swift Aerial Media proposed ${dateStr}. Please review.`,
         link: `/dashboard/projects/${proposal.project_id}?scheduling=pending#scheduling`,
         projectId: proposal.project_id,
+        businessId,
       });
     } else {
       await notifyAdmins({
@@ -416,6 +438,7 @@ export async function PATCH(request: Request) {
         body: `Client proposed an alternative date: ${dateStr}`,
         link: `/admin/projects/${proposal.project_id}`,
         projectId: proposal.project_id,
+        businessId,
       });
     }
 
@@ -429,7 +452,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: true, alreadyDeclined: true });
     }
 
-    await supabase.from("shoot_proposals").update({ status: "declined" }).eq("id", id);
+    await db.from("shoot_proposals").update({ status: "declined" }).eq("id", id);
 
     const dateStr = new Date(proposal.proposed_at).toLocaleString();
     const withdrawn = isAdmin && proposal.proposed_by === "admin";
@@ -440,7 +463,7 @@ export async function PATCH(request: Request) {
         ? `Shoot proposal withdrawn (${dateStr})`
         : `${isAdmin ? "Swift Aerial Media declined" : "Client declined"} shoot time ${dateStr}`,
       {
-        businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
+        businessId,
         projectId: proposal.project_id,
         userId: profile.id,
         idempotencyKey: idempotencyKey("shoot", id, withdrawn ? "withdrawn" : "decline"),
@@ -456,6 +479,7 @@ export async function PATCH(request: Request) {
         body: `The proposed shoot time (${dateStr}) was withdrawn. We'll follow up with a new option soon.`,
         link: `/dashboard/projects/${proposal.project_id}?scheduling=pending#scheduling`,
         projectId: proposal.project_id,
+        businessId,
       });
     } else if (isAdmin && proposal.proposed_by === "client") {
       await notifyProjectClients({
@@ -465,6 +489,7 @@ export async function PATCH(request: Request) {
         body: `Your suggested shoot time (${dateStr}) was declined. You can suggest another time in your portal.`,
         link: `/dashboard/projects/${proposal.project_id}?scheduling=pending#scheduling`,
         projectId: proposal.project_id,
+        businessId,
       });
     } else if (!isAdmin && proposal.proposed_by === "admin") {
       await notifyAdmins({
@@ -474,6 +499,7 @@ export async function PATCH(request: Request) {
         body: `The client declined the proposed shoot time: ${dateStr}`,
         link: `/admin/projects/${proposal.project_id}#scheduling`,
         projectId: proposal.project_id,
+        businessId,
       });
     }
 

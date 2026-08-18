@@ -7,12 +7,16 @@ import {
   listGoogleCalendars,
   setGoogleCalendarId,
 } from "@/lib/google-calendar";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET() {
   try {
-    await requireAdmin();
-    const conn = await getGoogleCalendarConnection();
-    const calendars = conn ? await listGoogleCalendars() : [];
+    const profile = await requireAdmin();
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
+
+    const conn = await getGoogleCalendarConnection(tenant.businessId);
+    const calendars = conn ? await listGoogleCalendars(tenant.businessId) : [];
 
     return NextResponse.json({
       configured: isGoogleCalendarConfigured(),
@@ -29,14 +33,21 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
+
     const body = await request.json();
 
     if (!body.calendar_id) {
       return NextResponse.json({ error: "calendar_id required" }, { status: 400 });
     }
 
-    await setGoogleCalendarId(body.calendar_id, body.calendar_summary ?? body.calendar_id);
+    await setGoogleCalendarId(
+      tenant.businessId,
+      body.calendar_id,
+      body.calendar_summary ?? body.calendar_id
+    );
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -45,8 +56,11 @@ export async function PATCH(request: Request) {
 
 export async function DELETE() {
   try {
-    await requireAdmin();
-    await disconnectGoogleCalendar();
+    const profile = await requireAdmin();
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
+
+    await disconnectGoogleCalendar(tenant.businessId);
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

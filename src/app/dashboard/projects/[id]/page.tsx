@@ -64,7 +64,7 @@ async function ProjectContent({
 
   const tenant = await requireTenantContext();
   const appSettings = await getAppSettings(tenant.businessId);
-  const hero = await getProjectHeroMedia(supabase, project);
+  const hero = await getProjectHeroMedia(supabase, project, tenant.businessId);
   const visibleMedia = filterClientMedia(media ?? []);
   const visibleTours = filterClientTours(tours ?? []);
   const photos = visibleMedia.filter((m) => m.media_type === "photo");

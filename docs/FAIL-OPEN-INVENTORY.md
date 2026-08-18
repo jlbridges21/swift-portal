@@ -50,7 +50,7 @@ Any `INSERT` that **omits** `business_id` becomes Swift’s row.
 - unassigned `media_assets` (`project_id` nullable)
 - parentless `activity_logs`, `communications`, `notifications`
 
-**Removal gate:** after prompt **12b**, once every write path (including public `/request`, scheduling, and cron) sets `business_id` explicitly. Then `DROP DEFAULT` on those 25 columns. Do **not** drop the DEFAULT after this money batch.
+**Removal gate:** after prompt **12b**, once every write path (including public `/request`, scheduling, and cron) sets `business_id` explicitly. Then `DROP DEFAULT` on those 25 columns. Do **not** drop the DEFAULT in this prompt — it is the only remaining open inventory item.
 
 ---
 
@@ -96,51 +96,36 @@ Both remaining `?? LEGACY_DEFAULT_BUSINESS_ID` sites were misclassified as unres
 
 ---
 
-## 4. CATEGORY C — honest placeholders (unconditional `LEGACY_DEFAULT_BUSINESS_ID`)
+## 4. CATEGORY C — honest placeholders (cleared in prompt 12b)
 
-No `??` fallback. Cron, webhooks, public signup, and library helpers reachable from those
-paths. Each still needs a real source (usually `project.business_id` / `payment.business_id` /
-`client.business_id`).
+The ten Category C sites from cron, public `/request`, `status-automation.ts`, `workflow.ts`, and `shoot-proposals` are gone. Each of those paths now stamps or loads a real `business_id`.
 
-Find with:
+Find remaining identifiers with:
 
 ```bash
 grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "export const" | grep -v "import "
 ```
 
-| File | Resolving prompt |
-|---|---|
-| `src/app/api/cron/workflow-reminders/route.ts` | **12b** — iterate active businesses / `project.business_id` |
-| `src/app/api/request/route.ts` (2 sites) | **12b** — public `/request` stamps a real `business_id` |
-| `src/lib/status-automation.ts` (2 sites) | **12b** |
-| `src/lib/workflow.ts` (2 sites) | **12b** |
-| `src/app/api/shoot-proposals/route.ts` activity logs (3 sites) | **12b** |
+After prompt 12b that grep reports **2** lines, neither of which is a missing-context placeholder:
 
-Prompt 12 removed Category C from `stripe-payments.ts`, `preliminary-estimates.ts`, `quotes/route.ts`, `approvals/route.ts`, and `revisions/route.ts`. Prompt 11 removed Category C from `email.ts`, `notifications.ts`, `client-email-notifications.ts`, `email-analytics.ts`, and both message routes. `src/lib/onesignal-push.ts` compares the send-time `businessId` to `LEGACY_DEFAULT_BUSINESS_ID` so **untagged** subscriptions still match Swift admin push; that is send-filter policy, not a missing-context placeholder.
+| File | Why it is not Category C |
+|---|---|
+| `src/lib/onesignal-push.ts` | Send-filter policy: untagged subscriptions still match **Swift** admin push. |
+| `src/lib/tenant.ts` `resolvePublicSignupBusinessId` | Public `/request` and `/api/leads` POST, when no `business_id`/`business_slug` is sent. Swift until **prompt 18** host resolution (`// TODO(tenant): resolve business from host — prompt 18`). |
+
+GHL's Swift env-var fallback aliases the constant on import (`SWIFT_AERIAL_MEDIA_ID`) so it does not appear in this grep. Tenant B with an empty webhook URL skips sync; only Swift inherits `GHL_PORTAL_LEAD_WEBHOOK_URL`.
 
 (`src/lib/tenant.ts` export of the constant is not a call site.)
 
 ---
 
-## 5. SIGNUP — `handle_new_user()` NULL `profiles.business_id` (still open)
+## 5. SIGNUP — `handle_new_user()` `profiles.business_id` (closed in prompt 12b)
 
-`src/app/api/request/route.ts` (`auth.admin.createUser`) passes
+`src/app/api/request/route.ts` now passes `business_id` in `auth.admin.createUser` `user_metadata` and stamps `profiles.business_id` on the follow-up update. `handle_new_user()` (v31b) writes the same id when present.
 
-```ts
-user_metadata: { full_name, role: "client" }
-```
+Optional `business_id` / `business_slug` on the public body must refer to an active, non-deleted business (400 otherwise). Absent both, Swift is used so the existing form is unchanged.
 
-and does **not** pass `business_id`. `handle_new_user()` (v31b) therefore leaves
-`profiles.business_id` NULL.
-
-Currently masked by `current_business_id()` falling back to `clients.business_id` for
-`user_id = auth.uid()` (non-deleted). Public `/request` still uses unconditional LEGACY for
-property/activity stamps (Category C, prompt **12b**).
-
-Admin-created portal users (`clients/route.ts` POST, `enableClientPortalAccess`) now pass
-`business_id` in `user_metadata`.
-
-**Removal gate:** prompt **12b** (public `/request` must stamp a real business on signup).
+One person cannot be a client of two businesses: if the email already exists as a client of a **different** business, the route returns 409 `email_other_business` rather than creating a second client.
 
 ---
 
@@ -159,12 +144,12 @@ grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "expo
 grep -n "user_metadata" src/app/api/request/route.ts
 ```
 
-| Check | After prompt 12 | Before 2nd business |
+| Check | After prompt 12b | Before 2nd business |
 |---|---|---|
 | `?? LEGACY_DEFAULT_BUSINESS_ID` on authenticated paths | **0** | **0** |
 | `?? LEGACY_DEFAULT_BUSINESS_ID` in `getProfile()` (Category D) | **0** | **0** |
-| Unconditional `LEGACY_DEFAULT_BUSINESS_ID` call sites | listed in §4 (cron, `/request`, status-automation, workflow, shoot-proposals) | **0** |
-| `/api/request` `user_metadata` includes `business_id` | no (prompt 12b) | **yes** |
-| v30 `business_id` DEFAULT still on 25 tables | yes (prompt 12b) | **dropped** |
+| Category C missing-context placeholders | **0** (OneSignal + public-form Swift default until prompt 18 are not placeholders) | **0** placeholders |
+| `/api/request` `user_metadata` includes `business_id` | **yes** | **yes** |
+| v30 `business_id` DEFAULT still on 25 tables | **yes** (only remaining open inventory item) | **dropped** |
 
 Do not create a second production tenant until every row in the last column is satisfied.

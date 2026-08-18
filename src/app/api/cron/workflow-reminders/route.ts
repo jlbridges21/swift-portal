@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getAppSettings, type NotificationEventKey } from "@/lib/app-settings";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { reminderTimingToMs } from "@/lib/workflow-settings";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { notifyProjectClients } from "@/lib/notifications";
 import { idempotencyKey } from "@/lib/idempotency";
+
+type ReminderType = "proposal" | "scheduling" | "review" | "payment";
+type ReminderRow = { id: string; project_name: string; client_id: string | null; anchor: string };
+type ReminderResult = { type: string; projectId: string; action: string };
+type BusinessSummary = {
+  businessId: string;
+  ok: boolean;
+  processed: number;
+  error?: string;
+};
 
 /**
  * Workflow reminder processor — call via cron with Authorization: Bearer CRON_SECRET
@@ -18,18 +28,49 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const appSettings = await getAppSettings(
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): prompt 12 — resolve per project.business_id in cron batches
-  );
+  const raw = await createServiceClient();
+  const { data: businesses, error: businessesError } = await raw
+    .from("businesses")
+    .select("id")
+    .eq("status", "active")
+    .is("deleted_at", null);
+
+  if (businessesError) {
+    console.error("[cron/workflow-reminders] failed to list businesses:", businessesError.message);
+    return NextResponse.json({ error: "Failed to list businesses" }, { status: 500 });
+  }
+
+  const results: ReminderResult[] = [];
+  const summaries: BusinessSummary[] = [];
+
+  for (const business of businesses ?? []) {
+    try {
+      const processed = await sweepBusiness(business.id, results);
+      summaries.push({ businessId: business.id, ok: true, processed });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[cron/workflow-reminders] business sweep failed", {
+        businessId: business.id,
+        error: message,
+      });
+      summaries.push({ businessId: business.id, ok: false, processed: 0, error: message });
+    }
+  }
+
+  return NextResponse.json({ processed: results.length, results, businesses: summaries });
+}
+
+async function sweepBusiness(businessId: string, results: ReminderResult[]): Promise<number> {
+  const appSettings = await getAppSettings(businessId);
   const { reminders } = appSettings.workflow;
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
   const now = Date.now();
-  const results: { type: string; projectId: string; action: string }[] = [];
+  const before = results.length;
 
   async function processReminder(
-    type: "proposal" | "scheduling" | "review" | "payment",
+    type: ReminderType,
     timing: typeof reminders.proposal,
-    query: () => Promise<{ id: string; project_name: string; client_id: string | null; anchor: string }[]>
+    query: () => Promise<ReminderRow[]>
   ) {
     const ms = reminderTimingToMs(timing);
     if (!ms) return;
@@ -40,7 +81,7 @@ export async function GET(request: Request) {
       if (Number.isNaN(anchorTime) || now - anchorTime < ms) continue;
 
       const key = idempotencyKey("reminder", type, row.id, timing);
-      const existing = await supabase
+      const existing = await db
         .from("activity_logs")
         .select("id")
         .eq("project_id", row.id)
@@ -114,6 +155,7 @@ export async function GET(request: Request) {
         body,
         link,
         projectId: row.id,
+        businessId,
       });
 
       await logWorkflowAudit(row.id, `Reminder email automatically sent: ${title}.`, {
@@ -125,7 +167,7 @@ export async function GET(request: Request) {
   }
 
   await processReminder("proposal", reminders.proposal, async () => {
-    const { data } = await supabase
+    const { data } = await db
       .from("projects")
       .select("id, project_name, client_id, updated_at")
       .eq("status", "quote_sent");
@@ -133,7 +175,7 @@ export async function GET(request: Request) {
   });
 
   await processReminder("scheduling", reminders.scheduling, async () => {
-    const { data } = await supabase
+    const { data } = await db
       .from("projects")
       .select("id, project_name, client_id, updated_at")
       .eq("status", "proposal_approved");
@@ -141,7 +183,7 @@ export async function GET(request: Request) {
   });
 
   await processReminder("review", reminders.review, async () => {
-    const { data } = await supabase
+    const { data } = await db
       .from("projects")
       .select("id, project_name, client_id, updated_at")
       .eq("status", "ready_for_review");
@@ -149,12 +191,12 @@ export async function GET(request: Request) {
   });
 
   await processReminder("payment", reminders.payment, async () => {
-    const { data } = await supabase
+    const { data } = await db
       .from("projects")
       .select("id, project_name, client_id, updated_at")
       .eq("status", "awaiting_payment");
     return (data ?? []).map((p) => ({ ...p, anchor: p.updated_at }));
   });
 
-  return NextResponse.json({ processed: results.length, results });
+  return results.length - before;
 }

@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { getGoogleOAuthUrl, isGoogleCalendarConfigured } from "@/lib/google-calendar";
-import { randomBytes } from "crypto";
+import { getGoogleOAuthUrl, isGoogleCalendarConfigured, signGoogleOAuthState } from "@/lib/google-calendar";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET() {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
+
     if (!isGoogleCalendarConfigured()) {
       return NextResponse.json(
         { error: "Google Calendar is not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET." },
@@ -13,7 +16,7 @@ export async function GET() {
       );
     }
 
-    const state = randomBytes(16).toString("hex");
+    const state = signGoogleOAuthState(tenant.businessId);
     const url = getGoogleOAuthUrl(state);
     if (!url) return NextResponse.json({ error: "Failed to build OAuth URL" }, { status: 500 });
 

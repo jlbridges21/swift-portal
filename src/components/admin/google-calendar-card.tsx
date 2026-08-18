@@ -44,6 +44,7 @@ export function GoogleCalendarCard() {
     const gcal = searchParams.get("gcal");
     if (gcal === "connected") toast.success("Google Calendar connected");
     if (gcal === "error") toast.error("Google Calendar connection failed");
+    if (gcal === "invalid") toast.error("Google Calendar connection was rejected");
   }, [searchParams]);
 
   async function saveCalendar() {

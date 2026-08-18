@@ -79,7 +79,9 @@ export default async function ClientDashboard() {
   const otherActive = activeProjects.slice(1);
 
   const coverUrls = await Promise.all(
-    [...activeProjects, ...deliveredProjects].map((p) => getProjectHeroPosterUrl(supabase, p))
+    [...activeProjects, ...deliveredProjects].map((p) =>
+      getProjectHeroPosterUrl(supabase, p, tenant.businessId)
+    )
   );
   const coverMap = new Map(
     [...activeProjects, ...deliveredProjects].map((p, i) => [p.id, coverUrls[i]])

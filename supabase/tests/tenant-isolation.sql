@@ -1,5 +1,5 @@
 -- Swift Portal — tenant isolation harness (RLS read + write)
--- Run in Supabase SQL Editor after v29–v33. See docs/TENANT-TESTING.md.
+-- Run in Supabase SQL Editor after v29–v34. See docs/TENANT-TESTING.md.
 --
 -- ⚠️ v30 DEFAULT: every INSERT below sets business_id EXPLICITLY.
 --    Omitting business_id attaches rows to Swift production (…000001).
@@ -180,6 +180,7 @@ BEGIN
   DELETE FROM media_folders WHERE business_id = v_business;
   DELETE FROM project_clients WHERE business_id = v_business;
   DELETE FROM leads WHERE business_id = v_business;
+  DELETE FROM google_calendar_connections_v2 WHERE business_id = v_business;
   DELETE FROM projects WHERE business_id = v_business;
   DELETE FROM properties WHERE business_id = v_business;
   DELETE FROM clients WHERE business_id = v_business;
@@ -252,6 +253,13 @@ BEGIN
   INSERT INTO shoot_proposals (id, business_id, project_id, proposed_by, proposed_at, status)
   VALUES (v_shoot, v_business, v_project, 'admin', now(), 'pending');
 
+  INSERT INTO google_calendar_connections_v2 (
+    business_id, access_token, refresh_token, token_expires_at, connected_email
+  ) VALUES (
+    v_business, 'tenant-b-test-token', 'tenant-b-test-refresh', now() + interval '1 hour',
+    'tenant-b@example.test'
+  );
+
   INSERT INTO client_messages (id, business_id, client_id, project_id, sender_user_id, sender_role, body)
   VALUES (v_message, v_business, v_client, v_project, v_tenant_b_admin_user_id, 'admin', 'Tenant B test message');
 
@@ -314,6 +322,13 @@ BEGIN
   PERFORM _tenant_test_assert_read_hidden('tours', v_tour);
   PERFORM _tenant_test_assert_read_hidden('revisions', v_revision);
   PERFORM _tenant_test_assert_read_hidden('shoot_proposals', v_shoot);
+
+  -- Prompt 12b: Tenant B google_calendar_connections_v2 is invisible to Swift admin
+  SELECT count(*) INTO v_n FROM google_calendar_connections_v2 WHERE business_id = v_business;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'READ LEAK: google_calendar_connections_v2 Tenant B row visible (% rows)', v_n;
+  END IF;
+  PERFORM _tenant_test_bump();
   PERFORM _tenant_test_assert_read_hidden('client_messages', v_message);
   PERFORM _tenant_test_assert_read_hidden('project_messages', v_proj_msg);
   PERFORM _tenant_test_assert_read_hidden('notifications', v_notif);
@@ -445,6 +460,7 @@ BEGIN
   PERFORM _tenant_test_assert_swift_hidden('tours', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('revisions', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('shoot_proposals', v_swift_bid);
+  PERFORM _tenant_test_assert_swift_hidden('google_calendar_connections_v2', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('client_messages', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('project_messages', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('notifications', v_swift_bid);
@@ -532,6 +548,7 @@ BEGIN
   DELETE FROM media_folders WHERE business_id = v_teardown_business_id;
   DELETE FROM project_clients WHERE business_id = v_teardown_business_id;
   DELETE FROM leads WHERE business_id = v_teardown_business_id;
+  DELETE FROM google_calendar_connections_v2 WHERE business_id = v_teardown_business_id;
   DELETE FROM projects WHERE business_id = v_teardown_business_id;
   DELETE FROM properties WHERE business_id = v_teardown_business_id;
   DELETE FROM clients WHERE business_id = v_teardown_business_id;

@@ -15,7 +15,7 @@ export interface GhlPortalLeadPayload {
   projectNotes: string;
   portalClientUrl: string;
   portalProjectUrl: string;
-  source: "Swift Portal";
+  source: string;
   tags: string[];
   referralSource?: string;
   preferredDate?: string;
@@ -28,4 +28,5 @@ export interface GhlSyncAttemptResult {
   statusCode: number | null;
   responseBody: string | null;
   error?: string;
+  skipped?: boolean;
 }
