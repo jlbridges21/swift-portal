@@ -24,7 +24,7 @@ Re-run the grep commands at the bottom after **every** tenant prompt.
 | **(A)** Authenticated API route | **32** | Fail-closed HTTP 400 via `missingTenantResponse(role)` |
 | **(B)** Authenticated page or layout | **7** | `requireTenantContext()` throws; surfaces in `src/app/error.tsx` |
 | **(C)** Context-free library helper | **1** | Unconditional `LEGACY_DEFAULT_BUSINESS_ID` + TODO |
-| **(D)** Bootstrap (`getProfile`) | **2** | Left as `??` — identity resolution cannot depend on tenant context |
+| **(D)** Bootstrap (`getProfile`) | **2** | **Fixed in prompt 10 Step 0** — no remaining `?? LEGACY` sites |
 
 ---
 
@@ -85,27 +85,14 @@ Back to dashboard) — not a blank page. Middleware already redirects unauthenti
 
 ---
 
-## 3. CATEGORY D — `src/lib/auth.ts` `getProfile()` (2 remaining `??` sites)
+## 3. CATEGORY D — `src/lib/auth.ts` `getProfile()` (fixed in prompt 10 Step 0)
 
-These two are the **only** remaining `?? LEGACY_DEFAULT_BUSINESS_ID` hits. They stay because
-`getProfile()` **is** identity bootstrap: `getTenantContext()` calls `getProfile()`, so
-`getProfile()` cannot call `getTenantContext()`.
+Both remaining `?? LEGACY_DEFAULT_BUSINESS_ID` sites were misclassified as unresolvable bootstrap cases. They did **not** need tenant context (no recursion into `getTenantContext()`).
 
-Prompt 7 Part C already scopes the auto-link lookups:
+- **`ensureClientPortalLink`:** the client lookup already selected `id, business_id`. The matched row's `business_id` is now captured on every path (`user_id` match, email match with profile business, and the unscoped single-match branch) and passed through. If it is missing, the portal-link call is skipped. `clients.business_id` is NOT NULL as of v30.
+- **`touchClientLogin`:** if the `clients` row is missing or has no `business_id`, the call is skipped entirely. Guessing Swift's id would have attached a login timestamp to the wrong tenant.
 
-- When `profiles.business_id` is set, both `clients.user_id` and `clients.email` matches are
-  filtered to that business.
-- When it is not, a match across more than one business **aborts** rather than attaching.
-
-The LEGACY argument is only used if **both** `profile.business_id` and the matched client’s
-`business_id` are null. That does not occur for current traffic (non-super_admin profiles were
-backfilled in v31b; 0 NULLs verified in prompt 4). It cannot leak Swift’s data onto a Tenant B
-user because a multi-business email match refuses to attach.
-
-| File:line | Why it stays |
-|---|---|
-| `src/lib/auth.ts` `ensureClientPortalLink` | Cannot recurse into tenant context; pass matched `clients.business_id` once auto-link always has it |
-| `src/lib/auth.ts` `touchClientLogin` | Same; prefers `client.business_id` then `profile.business_id` |
+`grep -rn "?? LEGACY_DEFAULT_BUSINESS_ID" src/` is **0**.
 
 ---
 
@@ -139,10 +126,6 @@ grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "expo
 | `src/app/api/approvals/route.ts` | **12** |
 | `src/app/api/revisions/route.ts` (2 sites) | **12** |
 | `src/lib/email-analytics.ts` | **16** |
-| `src/app/api/asset-reviews/route.ts` activity log | **10** — media batch |
-| `src/app/api/tours/route.ts` | **10** |
-| `src/app/api/media/upload/route.ts` | **10** |
-| `src/app/api/media/upload/complete/route.ts` | **10** |
 
 (`src/lib/tenant.ts` export of the constant is not a call site.)
 
@@ -175,7 +158,7 @@ Admin-created portal users (`clients/route.ts` POST, `enableClientPortalAccess`)
 Re-verify after every subsequent prompt:
 
 ```bash
-# Fail-open application sites (must be 0 except Category D in auth.ts)
+# Fail-open application sites (must be 0)
 grep -rn "?? LEGACY_DEFAULT_BUSINESS_ID" src/
 
 # Honest placeholders (must be 0, or each must resolve a real business_id)
@@ -185,10 +168,10 @@ grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "expo
 grep -n "user_metadata" src/app/api/request/route.ts
 ```
 
-| Check | After prompt 9b | Before 2nd business |
+| Check | After prompt 10 | Before 2nd business |
 |---|---|---|
 | `?? LEGACY_DEFAULT_BUSINESS_ID` on authenticated paths | **0** | **0** |
-| `?? LEGACY_DEFAULT_BUSINESS_ID` in `getProfile()` (Category D) | **2** | **0** (or rewritten without LEGACY) |
+| `?? LEGACY_DEFAULT_BUSINESS_ID` in `getProfile()` (Category D) | **0** | **0** |
 | Unconditional `LEGACY_DEFAULT_BUSINESS_ID` call sites | listed in §4 | **0** |
 | `/api/request` `user_metadata` includes `business_id` | no (prompt 12) | **yes** |
 | v30 `business_id` DEFAULT still on 25 tables | yes (prompt 12) | **dropped** |

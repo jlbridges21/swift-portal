@@ -118,6 +118,7 @@ DECLARE
   v_event      uuid := '00000000-0000-0000-0000-0000000000c6';
   v_tag        uuid := '00000000-0000-0000-0000-0000000000c7';
   v_proj_msg   uuid := '00000000-0000-0000-0000-0000000000c8';
+  v_media_unassigned uuid := '00000000-0000-0000-0000-0000000000c9';
 
   v_assertions int;
   v_n          bigint;
@@ -231,6 +232,13 @@ BEGIN
     (v_media2, v_business, v_project, v_client, v_property, NULL,
       'tenant-b-photo-2.jpg', 'tenant-b/test/photo-2.jpg', 'image/jpeg', 'photo', 1);
 
+  -- Unassigned library asset (project_id NULL) — still Tenant B via business_id
+  INSERT INTO media_assets (id, business_id, project_id, client_id, property_id, folder_id,
+    file_name, file_path, mime_type, media_type, display_order)
+  VALUES
+    (v_media_unassigned, v_business, NULL, NULL, NULL, NULL,
+      'tenant-b-unassigned.jpg', 'tenant-b/test/unassigned.jpg', 'image/jpeg', 'photo', 0);
+
   INSERT INTO media_asset_tags (id, business_id, media_asset_id, tag)
   VALUES (v_tag, v_business, v_media1, 'tenant-b-test');
 
@@ -294,6 +302,7 @@ BEGIN
   PERFORM _tenant_test_assert_read_hidden('project_quotes', v_quote);
   PERFORM _tenant_test_assert_read_hidden('media_assets', v_media1);
   PERFORM _tenant_test_assert_read_hidden('media_assets', v_media2);
+  PERFORM _tenant_test_assert_read_hidden('media_assets', v_media_unassigned);
   PERFORM _tenant_test_assert_read_hidden('media_folders', v_folder);
   PERFORM _tenant_test_assert_read_hidden('media_asset_tags', v_tag);
   PERFORM _tenant_test_assert_read_hidden('tours', v_tour);

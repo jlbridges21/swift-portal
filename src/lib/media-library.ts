@@ -1,4 +1,4 @@
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supabase/tenant-service";
 import type { MediaAsset, Tour } from "@/lib/types";
 
 export type LibraryAssetKind = "photo" | "video" | "document" | "tour";
@@ -86,6 +86,7 @@ export interface MediaDownloadRecord {
 const DEFAULT_LIMIT = 48;
 
 export async function logMediaEvent(options: {
+  businessId: string;
   mediaAssetId: string;
   projectId?: string | null;
   userId?: string | null;
@@ -94,8 +95,8 @@ export async function logMediaEvent(options: {
   metadata?: Record<string, unknown>;
 }) {
   try {
-    const supabase = await createServiceClient();
-    await supabase.from("media_asset_events").insert({
+    const db = await createTenantServiceClient(options.businessId);
+    await db.from("media_asset_events").insert({
       media_asset_id: options.mediaAssetId,
       project_id: options.projectId ?? null,
       user_id: options.userId ?? null,
@@ -109,25 +110,26 @@ export async function logMediaEvent(options: {
 }
 
 export async function trackMediaDownload(options: {
+  businessId: string;
   mediaAssetId: string;
   userId?: string | null;
   email?: string | null;
   ipAddress?: string | null;
 }) {
   try {
-    const supabase = await createServiceClient();
-    await supabase.from("media_downloads").insert({
+    const db = await createTenantServiceClient(options.businessId);
+    await db.from("media_downloads").insert({
       media_asset_id: options.mediaAssetId,
       user_id: options.userId ?? null,
       downloaded_by_email: options.email ?? null,
       ip_address: options.ipAddress ?? null,
     });
-    const { data } = await supabase
+    const { data } = await db
       .from("media_assets")
       .select("download_count")
       .eq("id", options.mediaAssetId)
       .single();
-    await supabase
+    await db
       .from("media_assets")
       .update({
         download_count: (data?.download_count ?? 0) + 1,
@@ -209,7 +211,7 @@ function unwrapRelation<T>(value: T | T[] | null | undefined): T | null {
 }
 
 async function loadProjectMap(
-  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  db: TenantServiceClient,
   projectIds: string[]
 ): Promise<Map<string, ProjectRow>> {
   const map = new Map<string, ProjectRow>();
@@ -219,7 +221,7 @@ async function loadProjectMap(
   const chunkSize = 100;
   for (let i = 0; i < unique.length; i += chunkSize) {
     const chunk = unique.slice(i, i + chunkSize);
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("projects")
       .select(
         "id, project_name, service_type, status, property_address, cover_image_id, client_id, property_id, clients(id, name, full_name, company), properties(property_type)"
@@ -371,8 +373,8 @@ function mapTourRowWithProject(row: Tour, project: ProjectRow): LibraryAsset {
   };
 }
 
-async function fetchMediaAssets(filters: LibraryFilters): Promise<LibraryAsset[]> {
-  const supabase = await createServiceClient();
+async function fetchMediaAssets(businessId: string, filters: LibraryFilters): Promise<LibraryAsset[]> {
+  const db = await createTenantServiceClient(businessId);
   const presetRange = dateRangeFromPreset(filters.datePreset);
   const from = filters.dateFrom ?? presetRange.from;
   const to = filters.dateTo ?? presetRange.to;
@@ -381,7 +383,7 @@ async function fetchMediaAssets(filters: LibraryFilters): Promise<LibraryAsset[]
     return [];
   }
 
-  let query = supabase.from("media_assets").select("*").order("created_at", { ascending: false });
+  let query = db.from("media_assets").select("*").order("created_at", { ascending: false });
 
   if (filters.type && filters.type !== "tour") {
     if (filters.type === "video") {
@@ -413,7 +415,7 @@ async function fetchMediaAssets(filters: LibraryFilters): Promise<LibraryAsset[]
   }
 
   const projectMap = await loadProjectMap(
-    supabase,
+    db,
     filtered.map((r) => r.project_id).filter((id): id is string => !!id)
   );
 
@@ -426,16 +428,16 @@ async function fetchMediaAssets(filters: LibraryFilters): Promise<LibraryAsset[]
     });
 }
 
-async function fetchTourAssets(filters: LibraryFilters): Promise<LibraryAsset[]> {
+async function fetchTourAssets(businessId: string, filters: LibraryFilters): Promise<LibraryAsset[]> {
   if (filters.type && filters.type !== "tour") return [];
   if (filters.source && filters.source !== "kuula") return [];
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
   const presetRange = dateRangeFromPreset(filters.datePreset);
   const from = filters.dateFrom ?? presetRange.from;
   const to = filters.dateTo ?? presetRange.to;
 
-  let query = supabase.from("tours").select("*").order("created_at", { ascending: false });
+  let query = db.from("tours").select("*").order("created_at", { ascending: false });
   if (from) query = query.gte("created_at", from);
   if (to) query = query.lte("created_at", to);
 
@@ -451,7 +453,7 @@ async function fetchTourAssets(filters: LibraryFilters): Promise<LibraryAsset[]>
   }
 
   const projectMap = await loadProjectMap(
-    supabase,
+    db,
     rows.map((r) => r.project_id)
   );
 
@@ -464,18 +466,21 @@ async function fetchTourAssets(filters: LibraryFilters): Promise<LibraryAsset[]>
     .filter((a): a is LibraryAsset => a !== null);
 }
 
-export async function queryMediaLibrary(filters: LibraryFilters): Promise<LibraryResult> {
+export async function queryMediaLibrary(
+  businessId: string,
+  filters: LibraryFilters
+): Promise<LibraryResult> {
   const page = Math.max(1, filters.page ?? 1);
   const limit = Math.min(100, filters.limit ?? DEFAULT_LIMIT);
   const includeTours = !filters.type || filters.type === "tour";
   const includeMedia = !filters.type || filters.type !== "tour";
 
   const [mediaRows, tourRows] = await Promise.all([
-    includeMedia ? fetchMediaAssets(filters) : Promise.resolve([]),
-    includeTours ? fetchTourAssets(filters) : Promise.resolve([]),
+    includeMedia ? fetchMediaAssets(businessId, filters) : Promise.resolve([]),
+    includeTours ? fetchTourAssets(businessId, filters) : Promise.resolve([]),
   ]);
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
 
   // Deduplicate by kind+id (safety)
   const seen = new Set<string>();
@@ -486,7 +491,7 @@ export async function queryMediaLibrary(filters: LibraryFilters): Promise<Librar
     return true;
   });
 
-  combined = await attachTagsToAssets(supabase, combined);
+  combined = await attachTagsToAssets(db, combined);
 
   if (filters.service) {
     combined = combined.filter((a) => a.service_type === filters.service);
@@ -523,13 +528,13 @@ export async function queryMediaLibrary(filters: LibraryFilters): Promise<Librar
 }
 
 async function attachTagsToAssets(
-  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  db: TenantServiceClient,
   assets: LibraryAsset[]
 ): Promise<LibraryAsset[]> {
   if (!assets.length) return assets;
   const ids = assets.filter((a) => a.kind !== "tour").map((a) => a.id);
   if (!ids.length) return assets;
-  const { data: tagRows, error } = await supabase
+  const { data: tagRows, error } = await db
     .from("media_asset_tags")
     .select("media_asset_id, tag")
     .in("media_asset_id", ids);
@@ -546,31 +551,50 @@ async function attachTagsToAssets(
   return assets.map((a) => ({ ...a, tags: tagMap.get(a.id) ?? a.tags }));
 }
 
-export async function getMediaAssetDetail(assetId: string, kind: LibraryAssetKind) {
-  const supabase = await createServiceClient();
+export async function getMediaAssetDetail(
+  businessId: string,
+  assetId: string,
+  kind: LibraryAssetKind
+) {
+  const db = await createTenantServiceClient(businessId);
 
   if (kind === "tour") {
-    const { data } = await supabase.from("tours").select("*").eq("id", assetId).maybeSingle();
+    const { data } = await db.from("tours").select("*").eq("id", assetId).maybeSingle();
     if (!data) return null;
-    const projectMap = await loadProjectMap(supabase, [data.project_id]);
+    const projectMap = await loadProjectMap(db, [data.project_id]);
     const project = projectMap.get(data.project_id);
     if (!project) return null;
     return mapTourRowWithProject(data as Tour, project);
   }
 
-  const { data } = await supabase.from("media_assets").select("*").eq("id", assetId).maybeSingle();
+  const { data } = await db.from("media_assets").select("*").eq("id", assetId).maybeSingle();
   if (!data) return null;
-  const projectMap = await loadProjectMap(supabase, [data.project_id]);
+
+  // Unassigned library rows (project_id NULL) are business-scoped, not project-scoped.
+  if (!data.project_id) {
+    const asset = mapUnassignedMediaRow(data as MediaAsset);
+    const [withTags] = await attachTagsToAssets(db, [asset]);
+    return withTags;
+  }
+
+  const projectMap = await loadProjectMap(db, [data.project_id]);
   const project = projectMap.get(data.project_id);
-  if (!project) return null;
+  if (!project) {
+    const asset = mapUnassignedMediaRow(data as MediaAsset);
+    const [withTags] = await attachTagsToAssets(db, [asset]);
+    return withTags;
+  }
   const asset = mapMediaRowWithProject(data as MediaAsset, project);
-  const [withTags] = await attachTagsToAssets(supabase, [asset]);
+  const [withTags] = await attachTagsToAssets(db, [asset]);
   return withTags;
 }
 
-export async function getMediaAssetEvents(assetId: string): Promise<MediaAssetEvent[]> {
-  const supabase = await createServiceClient();
-  const { data } = await supabase
+export async function getMediaAssetEvents(
+  businessId: string,
+  assetId: string
+): Promise<MediaAssetEvent[]> {
+  const db = await createTenantServiceClient(businessId);
+  const { data } = await db
     .from("media_asset_events")
     .select("id, event_type, description, created_at, metadata")
     .eq("media_asset_id", assetId)
@@ -579,9 +603,12 @@ export async function getMediaAssetEvents(assetId: string): Promise<MediaAssetEv
   return (data ?? []) as MediaAssetEvent[];
 }
 
-export async function getMediaDownloadHistory(assetId: string): Promise<MediaDownloadRecord[]> {
-  const supabase = await createServiceClient();
-  const { data } = await supabase
+export async function getMediaDownloadHistory(
+  businessId: string,
+  assetId: string
+): Promise<MediaDownloadRecord[]> {
+  const db = await createTenantServiceClient(businessId);
+  const { data } = await db
     .from("media_downloads")
     .select("id, downloaded_by_email, created_at")
     .eq("media_asset_id", assetId)
@@ -590,48 +617,68 @@ export async function getMediaDownloadHistory(assetId: string): Promise<MediaDow
   return (data ?? []) as MediaDownloadRecord[];
 }
 
-export async function getRelatedAssets(asset: LibraryAsset, limit = 6): Promise<LibraryAsset[]> {
-  const result = await queryMediaLibrary({
+export async function getRelatedAssets(
+  businessId: string,
+  asset: LibraryAsset,
+  limit = 6
+): Promise<LibraryAsset[]> {
+  const result = await queryMediaLibrary(businessId, {
     propertyId: asset.property_id ?? undefined,
     limit: limit + 1,
   });
   return result.assets.filter((a) => a.id !== asset.id).slice(0, limit);
 }
 
-export async function getMediaTags(assetId: string): Promise<string[]> {
-  const supabase = await createServiceClient();
-  const { data } = await supabase
+export async function getMediaTags(businessId: string, assetId: string): Promise<string[]> {
+  const db = await createTenantServiceClient(businessId);
+  const { data } = await db
     .from("media_asset_tags")
     .select("tag")
     .eq("media_asset_id", assetId);
   return (data ?? []).map((row) => row.tag);
 }
 
-export async function setMediaTags(assetId: string, tags: string[]) {
-  const supabase = await createServiceClient();
+export async function setMediaTags(businessId: string, assetId: string, tags: string[]) {
+  const db = await createTenantServiceClient(businessId);
   const normalized = [...new Set(tags.map((t) => t.trim().toLowerCase()).filter(Boolean))];
-  await supabase.from("media_asset_tags").delete().eq("media_asset_id", assetId);
+  await db.from("media_asset_tags").delete().eq("media_asset_id", assetId);
   if (normalized.length) {
-    await supabase.from("media_asset_tags").insert(
+    await db.from("media_asset_tags").insert(
       normalized.map((tag) => ({ media_asset_id: assetId, tag }))
     );
   }
 }
 
-export async function getLibraryFilterOptions() {
-  const supabase = await createServiceClient();
-  const [{ data: clients }, { data: properties }, { data: projects }] = await Promise.all([
-    supabase.from("clients").select("id, name, full_name, company").order("name"),
-    supabase.from("properties").select("id, address, nickname").order("address").limit(200),
-    supabase
+export async function getLibraryFilterOptions(businessId: string) {
+  const db = await createTenantServiceClient(businessId);
+  const [
+    { data: clients },
+    { data: properties },
+    { data: projects },
+    { data: serviceRows },
+    { data: tagRows },
+  ] = await Promise.all([
+    db.from("clients").select("id, name, full_name, company").order("name"),
+    db.from("properties").select("id, address, nickname").order("address").limit(200),
+    db
       .from("projects")
       .select("id, project_name, property_address")
       .order("updated_at", { ascending: false })
       .limit(500),
+    db.from("projects").select("service_type"),
+    db.from("media_asset_tags").select("tag"),
   ]);
+
+  const services = [
+    ...new Set((serviceRows ?? []).map((row) => row.service_type).filter(Boolean)),
+  ].sort();
+  const tags = [...new Set((tagRows ?? []).map((row) => row.tag).filter(Boolean))].sort();
+
   return {
     clients: clients ?? [],
     properties: properties ?? [],
     projects: projects ?? [],
+    services,
+    tags,
   };
 }

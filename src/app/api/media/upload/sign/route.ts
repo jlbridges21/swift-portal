@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { formatFileSize } from "@/lib/brand";
 import { buildMediaStoragePath } from "@/lib/media-upload";
 import { validateMediaFileBeforeUpload } from "@/lib/upload/validation";
 import { MAX_VIDEO_FILE_SIZE_BYTES, shouldUseTusUpload } from "@/lib/upload/constants";
 import { logUploadStep } from "@/lib/upload/logger";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
+
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
 
   try {
     const body = await request.json();
@@ -28,14 +32,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const supabase = await createServiceClient();
+    const db = await createTenantServiceClient(tenant.businessId);
+
+    // Signed URLs are bearer capabilities: verify the project belongs to this
+    // business before minting. Unassigned library uploads have no project —
+    // tenant context is the ownership check.
+    if (projectId) {
+      const { data: project } = await db
+        .from("projects")
+        .select("id")
+        .eq("id", projectId)
+        .maybeSingle();
+      if (!project) {
+        return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      }
+    }
+
     const bucket = mediaType === "document" ? "project-documents" : "project-media";
     const storageProjectId = projectId || null;
     const filePath = buildMediaStoragePath(storageProjectId, fileName);
 
     let displayOrder = 0;
     if (projectId) {
-      const { data: existing } = await supabase
+      const { data: existing } = await db
         .from("media_assets")
         .select("display_order")
         .eq("project_id", projectId)
@@ -45,7 +64,7 @@ export async function POST(request: Request) {
         .maybeSingle();
       displayOrder = (existing?.display_order ?? -1) + 1;
     } else {
-      const { count } = await supabase
+      const { count } = await db
         .from("media_assets")
         .select("id", { count: "exact", head: true })
         .is("project_id", null);
@@ -60,7 +79,7 @@ export async function POST(request: Request) {
     let token: string | undefined;
 
     if (!useTus) {
-      const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(filePath);
+      const { data, error } = await db.raw.storage.from(bucket).createSignedUploadUrl(filePath);
       if (error || !data) {
         console.error("[upload/sign]", error?.message);
         return NextResponse.json(

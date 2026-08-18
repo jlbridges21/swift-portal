@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 function storagePathFromPublicUrl(url: string): { bucket: string; path: string } | null {
   try {
@@ -24,15 +24,18 @@ export async function POST(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
+
   const body = await request.json();
 
   if (!body.project_id || !body.tour_name || !body.kuula_url) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(tenant.businessId);
 
-  const { data: maxOrder } = await supabase
+  const { data: maxOrder } = await db
     .from("tours")
     .select("display_order")
     .eq("project_id", body.project_id)
@@ -40,7 +43,7 @@ export async function POST(request: Request) {
     .limit(1)
     .maybeSingle();
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("tours")
     .insert({
       project_id: body.project_id,
@@ -59,7 +62,7 @@ export async function POST(request: Request) {
   }
 
   await logProjectActivity("tour_added", `360° tour added: ${body.tour_name}`, {
-    businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
+    businessId: tenant.businessId,
     projectId: body.project_id,
     metadata: { tourId: data.id },
   });
@@ -80,6 +83,9 @@ export async function PATCH(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
+
   const body = await request.json();
   const { id, ...updates } = body;
 
@@ -87,8 +93,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Tour id required" }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
-  const { data, error } = await supabase.from("tours").update(updates).eq("id", id).select().single();
+  const db = await createTenantServiceClient(tenant.businessId);
+  const { data, error } = await db.from("tours").update(updates).eq("id", id).select().single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -101,6 +107,9 @@ export async function DELETE(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   const projectId = searchParams.get("project_id");
@@ -109,9 +118,9 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "id and project_id are required" }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(tenant.businessId);
 
-  const { data: tour, error: lookupError } = await supabase
+  const { data: tour, error: lookupError } = await db
     .from("tours")
     .select("id, project_id, tour_name, thumbnail_url")
     .eq("id", id)
@@ -128,11 +137,11 @@ export async function DELETE(request: Request) {
   if (tour.thumbnail_url) {
     const storageRef = storagePathFromPublicUrl(tour.thumbnail_url);
     if (storageRef && (storageRef.bucket === "project-media" || storageRef.bucket === "project-documents")) {
-      await supabase.storage.from(storageRef.bucket).remove([storageRef.path]);
+      await db.raw.storage.from(storageRef.bucket).remove([storageRef.path]);
     }
   }
 
-  const { error } = await supabase.from("tours").delete().eq("id", id).eq("project_id", projectId);
+  const { error } = await db.from("tours").delete().eq("id", id).eq("project_id", projectId);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

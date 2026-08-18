@@ -1,20 +1,22 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
-import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
+import { FILE_SIZE_LIMITS } from "@/lib/brand";
 import {
   buildMediaStoragePath,
   validateMediaFile,
 } from "@/lib/media-upload";
-import { logActivity } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { logMediaEvent } from "@/lib/media-library";
 import { notifyProjectClients } from "@/lib/notifications";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
+
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
 
   const formData = await request.formData();
   const projectId = formData.get("projectId") as string;
@@ -25,7 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing project or files" }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(tenant.businessId);
   const uploaded: unknown[] = [];
   const errors: string[] = [];
 
@@ -36,7 +38,7 @@ export async function POST(request: Request) {
         ? FILE_SIZE_LIMITS.video
         : FILE_SIZE_LIMITS.document;
 
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from("media_assets")
     .select("display_order")
     .eq("project_id", projectId)
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
     const bucket = mediaType === "document" ? "project-documents" : "project-media";
     const filePath = buildMediaStoragePath(projectId, file.name);
 
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await db.raw.storage
       .from(bucket)
       .upload(filePath, file, { contentType: validation.mimeType, upsert: false });
 
@@ -66,7 +68,7 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const { data: asset, error: dbError } = await supabase
+    const { data: asset, error: dbError } = await db
       .from("media_assets")
       .insert({
         project_id: projectId,
@@ -88,14 +90,14 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const { data: projectRow } = await supabase
+    const { data: projectRow } = await db
       .from("projects")
       .select("client_id, property_id, cover_image_id")
       .eq("id", projectId)
       .single();
 
     if (projectRow?.client_id || projectRow?.property_id) {
-      await supabase
+      await db
         .from("media_assets")
         .update({
           client_id: projectRow.client_id,
@@ -108,7 +110,7 @@ export async function POST(request: Request) {
 
     if (mediaType === "photo") {
       if (!projectRow?.cover_image_id) {
-        await supabase.from("projects").update({ cover_image_id: asset.id }).eq("id", projectId);
+        await db.from("projects").update({ cover_image_id: asset.id }).eq("id", projectId);
       }
     }
   }
@@ -116,6 +118,7 @@ export async function POST(request: Request) {
   if (uploaded.length > 0) {
     for (const item of uploaded as { id: string }[]) {
       await logMediaEvent({
+        businessId: tenant.businessId,
         mediaAssetId: item.id,
         projectId,
         userId: auth.profile.id,
@@ -138,7 +141,7 @@ export async function POST(request: Request) {
           : `${count} document${count > 1 ? "s" : ""} uploaded`;
 
     await logProjectActivity(activityType, label, {
-      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
+      businessId: tenant.businessId,
       projectId,
       metadata: { count, mediaType },
     });

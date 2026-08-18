@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { buildMediaStoragePath } from "@/lib/media-upload";
 import { logMediaEvent, setMediaTags, getMediaTags } from "@/lib/media-library";
@@ -9,13 +9,14 @@ import {
   type PropertyLineAnnotation,
 } from "@/lib/property-line/annotation";
 import { buildPropertyLineFileName } from "@/lib/property-line/filename";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 async function syncProjectRelations(
-  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  db: TenantServiceClient,
   projectId: string | null
 ) {
   if (!projectId) return { client_id: null, property_id: null };
-  const { data: project } = await supabase
+  const { data: project } = await db
     .from("projects")
     .select("client_id, property_id")
     .eq("id", projectId)
@@ -33,10 +34,13 @@ export async function GET(
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
-  const { id } = await params;
-  const supabase = await createServiceClient();
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
 
-  const { data: asset, error } = await supabase
+  const { id } = await params;
+  const db = await createTenantServiceClient(tenant.businessId);
+
+  const { data: asset, error } = await db
     .from("media_assets")
     .select("id, title, file_name, project_id, property_line_base_media_id, property_line_data")
     .eq("id", id)
@@ -46,7 +50,7 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const tags = await getMediaTags(asset.id);
+  const tags = await getMediaTags(tenant.businessId, asset.id);
   const annotation = parsePropertyLineAnnotation(asset.property_line_data);
 
   if (annotation && asset.property_line_base_media_id) {
@@ -61,7 +65,7 @@ export async function GET(
     });
   }
 
-  const { data: derived } = await supabase
+  const { data: derived } = await db
     .from("media_assets")
     .select("id, title, file_name, project_id, property_line_data")
     .eq("property_line_base_media_id", id)
@@ -79,7 +83,7 @@ export async function GET(
         title: derived.title || derived.file_name,
         fileName: derived.file_name,
         projectId: derived.project_id ?? asset.project_id,
-        tags: await getMediaTags(derived.id),
+        tags: await getMediaTags(tenant.businessId, derived.id),
       });
     }
   }
@@ -101,6 +105,9 @@ export async function PUT(
 ) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
+
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
 
   const { id: _routeMediaId } = await params;
   const formData = await request.formData();
@@ -134,12 +141,12 @@ export async function PUT(
     return NextResponse.json({ error: "Base media id is required." }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(tenant.businessId);
   const projectId = projectIdRaw && String(projectIdRaw) !== "" ? String(projectIdRaw) : null;
-  const relations = await syncProjectRelations(supabase, projectId);
+  const relations = await syncProjectRelations(db, projectId);
 
   if (!editMediaId) {
-    const { data: existingDerived } = await supabase
+    const { data: existingDerived } = await db
       .from("media_assets")
       .select("id")
       .eq("property_line_base_media_id", baseMediaId)
@@ -155,7 +162,7 @@ export async function PUT(
   const bucket = "project-media";
 
   if (editMediaId) {
-    const { data: existing, error: fetchError } = await supabase
+    const { data: existing, error: fetchError } = await db
       .from("media_assets")
       .select("*")
       .eq("id", editMediaId)
@@ -165,7 +172,7 @@ export async function PUT(
       return NextResponse.json({ error: "Property line asset not found." }, { status: 404 });
     }
 
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await db.raw.storage
       .from(bucket)
       .upload(existing.file_path, buffer, {
         upsert: true,
@@ -176,7 +183,7 @@ export async function PUT(
       return NextResponse.json({ error: uploadError.message }, { status: 500 });
     }
 
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: updateError } = await db
       .from("media_assets")
       .update({
         property_line_base_media_id: baseMediaId,
@@ -196,8 +203,9 @@ export async function PUT(
       return NextResponse.json({ error: updateError?.message || "Update failed." }, { status: 500 });
     }
 
-    await setMediaTags(editMediaId, ["property-line"]);
+    await setMediaTags(tenant.businessId, editMediaId, ["property-line"]);
     await logMediaEvent({
+      businessId: tenant.businessId,
       mediaAssetId: editMediaId,
       projectId: updated.project_id,
       userId: auth.profile?.id,
@@ -208,7 +216,7 @@ export async function PUT(
     return NextResponse.json({ media: updated, updated: true });
   }
 
-  const { data: baseAsset } = await supabase
+  const { data: baseAsset } = await db
     .from("media_assets")
     .select("project_id, client_id, property_id")
     .eq("id", baseMediaId)
@@ -216,14 +224,14 @@ export async function PUT(
 
   const resolvedProjectId = projectId ?? baseAsset?.project_id ?? null;
   const resolvedRelations = resolvedProjectId
-    ? await syncProjectRelations(supabase, resolvedProjectId)
+    ? await syncProjectRelations(db, resolvedProjectId)
     : relations;
 
   const fileName = buildPropertyLineFileName(sourceFileName);
   const filePath = buildMediaStoragePath(resolvedProjectId, fileName);
   const displayTitle = `${stripPropertyLineTitleSuffix(sourceTitle || sourceFileName)} (Property Line)`;
 
-  const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, buffer, {
+  const { error: uploadError } = await db.raw.storage.from(bucket).upload(filePath, buffer, {
     upsert: false,
     contentType: "image/jpeg",
   });
@@ -232,7 +240,7 @@ export async function PUT(
     return NextResponse.json({ error: uploadError.message }, { status: 500 });
   }
 
-  const { data: created, error: insertError } = await supabase
+  const { data: created, error: insertError } = await db
     .from("media_assets")
     .insert({
       project_id: resolvedProjectId,
@@ -256,8 +264,9 @@ export async function PUT(
     return NextResponse.json({ error: insertError?.message || "Create failed." }, { status: 500 });
   }
 
-  await setMediaTags(created.id, ["property-line"]);
+  await setMediaTags(tenant.businessId, created.id, ["property-line"]);
   await logMediaEvent({
+    businessId: tenant.businessId,
     mediaAssetId: created.id,
     projectId: created.project_id,
     userId: auth.profile?.id,
@@ -267,13 +276,13 @@ export async function PUT(
   });
 
   if (resolvedProjectId) {
-    const { data: project } = await supabase
+    const { data: project } = await db
       .from("projects")
       .select("cover_image_id")
       .eq("id", resolvedProjectId)
       .single();
     if (!project?.cover_image_id) {
-      await supabase.from("projects").update({ cover_image_id: created.id }).eq("id", resolvedProjectId);
+      await db.from("projects").update({ cover_image_id: created.id }).eq("id", resolvedProjectId);
     }
   }
 

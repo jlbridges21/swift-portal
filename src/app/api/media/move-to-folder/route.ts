@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 /**
  * Move selected photos into a folder (or unfiled when folder_id is null).
@@ -9,6 +10,9 @@ import { requireAdminApi } from "@/lib/api-auth";
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
+
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
 
   const body = await request.json().catch(() => ({}));
   const projectId = typeof body.project_id === "string" ? body.project_id : null;
@@ -30,10 +34,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "photo_ids must be a non-empty string array" }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(tenant.businessId);
 
   if (folderId) {
-    const { data: folder } = await supabase
+    const { data: folder } = await db
       .from("media_folders")
       .select("id, project_id")
       .eq("id", folderId)
@@ -43,7 +47,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const { data: assets, error: assetsError } = await supabase
+  const { data: assets, error: assetsError } = await db
     .from("media_assets")
     .select("id, project_id, media_type, folder_id")
     .in("id", photoIds as string[]);
@@ -80,7 +84,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const { error } = await supabase
+  const { error } = await db
     .from("media_assets")
     .update({ folder_id: folderId })
     .in("id", photoIds as string[])

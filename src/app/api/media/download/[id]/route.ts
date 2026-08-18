@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { canDownloadDeliverables } from "@/lib/deliverables";
 import { canAccessProject } from "@/lib/project-access";
@@ -7,6 +8,7 @@ import { isClientVisibleMedia } from "@/lib/client-media";
 import { logMediaEvent, trackMediaDownload } from "@/lib/media-library";
 import { normalizeStatus } from "@/lib/constants";
 import { downloadFileName, mediaDisplayName } from "@/lib/media-display-name";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET(
   request: Request,
@@ -17,6 +19,9 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+
   const { id } = await params;
   const { searchParams } = new URL(request.url);
   const thumb = searchParams.get("thumb") === "1";
@@ -24,15 +29,23 @@ export async function GET(
   const inline = searchParams.get("inline") === "1";
   const preview = searchParams.get("preview") === "1";
 
-  const supabase = await createClient();
+  const db = await createTenantServiceClient(tenant.businessId);
+  const cookieClient = await createClient();
 
-  const { data: asset, error: assetError } = await supabase
+  const { data: asset, error: assetError } = await db
     .from("media_assets")
     .select("*")
     .eq("id", id)
     .maybeSingle();
 
   if (assetError || !asset) {
+    return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
+  }
+
+  // Signed URLs are bearer capabilities: refuse before minting if the row's
+  // business does not match the caller (tenant client already filters; this is
+  // the explicit ownership check).
+  if (asset.business_id !== tenant.businessId) {
     return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
   }
 
@@ -51,7 +64,7 @@ export async function GET(
 
   let projectStatus = "new_request";
   if (asset.project_id) {
-    const { data: project } = await supabase
+    const { data: project } = await db
       .from("projects")
       .select("status")
       .eq("id", asset.project_id)
@@ -69,7 +82,7 @@ export async function GET(
   }
 
   const bucket = asset.media_type === "document" ? "project-documents" : "project-media";
-  const storageClient = isAdmin ? await createServiceClient() : supabase;
+  const storageClient = isAdmin ? db.raw : cookieClient;
 
   if (asFile && !downloadsAllowed) {
     return NextResponse.json(
@@ -89,12 +102,14 @@ export async function GET(
 
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
     void trackMediaDownload({
+      businessId: tenant.businessId,
       mediaAssetId: id,
       userId: profile.id,
       email: profile.email,
       ipAddress: ip,
     });
     void logMediaEvent({
+      businessId: tenant.businessId,
       mediaAssetId: id,
       projectId: asset.project_id,
       userId: profile.id,

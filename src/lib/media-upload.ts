@@ -40,6 +40,7 @@ export function sanitizeStorageFileName(fileName: string): string {
 
 export function buildMediaStoragePath(projectId: string | null | undefined, fileName: string): string {
   const safeName = sanitizeStorageFileName(fileName);
+  // TODO(tenant): prefix storage paths — prompt 13
   const prefix = projectId ? projectId : "library/unassigned";
   return `${prefix}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeName}`;
 }

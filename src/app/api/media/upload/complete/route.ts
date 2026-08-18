@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { logUploadStep } from "@/lib/upload/logger";
 import { verifyStorageObject } from "@/lib/upload/storage-verify";
 import { setMediaTags } from "@/lib/media-library";
@@ -12,6 +12,9 @@ export async function POST(request: Request) {
   try {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
+
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
 
   let body: Record<string, unknown>;
   try {
@@ -95,17 +98,14 @@ export async function POST(request: Request) {
     filePath: validated.filePath,
   };
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(tenant.businessId);
   const bucket = validated.mediaType === "document" ? "project-documents" : "project-media";
-  // file_path is unique per business after v30 (idx_media_assets_business_file_path)
-  const businessId =
-    auth.profile.business_id ?? "00000000-0000-0000-0000-000000000001";
-
-  const { data: existingAsset, error: existingError } = await supabase
+  // file_path is unique per business after v30 (idx_media_assets_business_file_path).
+  // Tenant from() already eq(business_id); keep .eq("file_path") for that composite index.
+  const { data: existingAsset, error: existingError } = await db
     .from("media_assets")
     .select("*")
     .eq("file_path", validated.filePath)
-    .eq("business_id", businessId)
     .maybeSingle();
 
   if (existingError) {
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
   }
 
   if (!validated.skipStorageVerify) {
-    const verify = await verifyStorageObject(supabase, bucket, validated.filePath, {
+    const verify = await verifyStorageObject(db.raw, bucket, validated.filePath, {
       ...logContextValidated,
       mediaType: validated.mediaType,
     });
@@ -148,7 +148,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const { data: asset, error: dbError } = await supabase
+  const { data: asset, error: dbError } = await db
     .from("media_assets")
     .insert({
       project_id: validated.projectId,
@@ -169,11 +169,10 @@ export async function POST(request: Request) {
 
   if (dbError) {
     if (dbError.code === "23505") {
-      const { data: raced } = await supabase
+      const { data: raced } = await db
         .from("media_assets")
         .select("*")
         .eq("file_path", validated.filePath)
-        .eq("business_id", businessId)
         .maybeSingle();
       if (raced) {
         return NextResponse.json({ success: true, media: raced });
@@ -199,7 +198,7 @@ export async function POST(request: Request) {
 
   if (Array.isArray(validated.tags) && validated.tags.length) {
     try {
-      await setMediaTags(asset.id, validated.tags);
+      await setMediaTags(tenant.businessId, asset.id, validated.tags);
     } catch (tagErr) {
       logUploadStep("warn", {
         step: "tags_save",
@@ -213,14 +212,14 @@ export async function POST(request: Request) {
 
   try {
     if (validated.projectId && validated.mediaType === "photo") {
-      const { data: project } = await supabase
+      const { data: project } = await db
         .from("projects")
         .select("cover_image_id")
         .eq("id", validated.projectId)
         .single();
 
       if (!project?.cover_image_id) {
-        await supabase.from("projects").update({ cover_image_id: asset.id }).eq("id", validated.projectId);
+        await db.from("projects").update({ cover_image_id: asset.id }).eq("id", validated.projectId);
       }
     }
 
@@ -239,7 +238,7 @@ export async function POST(request: Request) {
             : "Document uploaded";
 
       await logProjectActivity(activityType, label, {
-        businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
+        businessId: tenant.businessId,
         projectId: validated.projectId,
         metadata: { mediaType: validated.mediaType, assetId: asset.id },
       });

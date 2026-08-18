@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { getProfile } from "@/lib/auth";
 import { canAccessProject } from "@/lib/project-access";
 import type { MediaFolder } from "@/lib/types";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 /** List folders for a project (admin or client with access). */
 export async function GET(request: Request) {
   const profile = await getProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
 
   const { searchParams } = new URL(request.url);
   const projectId = searchParams.get("project_id");
@@ -21,8 +25,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const supabase = await createServiceClient();
-  const { data: folders, error } = await supabase
+  const db = await createTenantServiceClient(tenant.businessId);
+  const { data: folders, error } = await db
     .from("media_folders")
     .select("*")
     .eq("project_id", projectId)
@@ -32,7 +36,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const { data: photos } = await supabase
+  const { data: photos } = await db
     .from("media_assets")
     .select("id, folder_id, display_order")
     .eq("project_id", projectId)
@@ -64,6 +68,9 @@ export async function POST(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
+
   const body = await request.json().catch(() => ({}));
   const projectId = typeof body.project_id === "string" ? body.project_id : null;
   const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -75,14 +82,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Folder name is too long" }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(tenant.businessId);
 
-  const { data: project } = await supabase.from("projects").select("id").eq("id", projectId).maybeSingle();
+  const { data: project } = await db.from("projects").select("id").eq("id", projectId).maybeSingle();
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const { data: maxOrder } = await supabase
+  const { data: maxOrder } = await db
     .from("media_folders")
     .select("display_order")
     .eq("project_id", projectId)
@@ -90,7 +97,7 @@ export async function POST(request: Request) {
     .limit(1)
     .maybeSingle();
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("media_folders")
     .insert({
       project_id: projectId,
@@ -111,6 +118,9 @@ export async function PATCH(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
+
   const body = await request.json().catch(() => ({}));
   const id = typeof body.id === "string" ? body.id : null;
   const projectId = typeof body.project_id === "string" ? body.project_id : null;
@@ -119,8 +129,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "id and project_id are required" }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
-  const { data: folder } = await supabase
+  const db = await createTenantServiceClient(tenant.businessId);
+  const { data: folder } = await db
     .from("media_folders")
     .select("id, project_id")
     .eq("id", id)
@@ -145,7 +155,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "No updates" }, { status: 400 });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("media_folders")
     .update(updates)
     .eq("id", id)
@@ -164,6 +174,9 @@ export async function DELETE(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   const projectId = searchParams.get("project_id");
@@ -172,8 +185,8 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "id and project_id are required" }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
-  const { data: folder } = await supabase
+  const db = await createTenantServiceClient(tenant.businessId);
+  const { data: folder } = await db
     .from("media_folders")
     .select("id, project_id, name")
     .eq("id", id)
@@ -184,7 +197,7 @@ export async function DELETE(request: Request) {
   }
 
   // Photos stay; folder_id is ON DELETE SET NULL
-  const { error } = await supabase
+  const { error } = await db
     .from("media_folders")
     .delete()
     .eq("id", id)

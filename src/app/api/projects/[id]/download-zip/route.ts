@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import {
   authorizeProjectZipDownload,
@@ -11,6 +11,7 @@ import {
   zipLog,
   ZipDownloadError,
 } from "@/lib/project-zip-download";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,12 +41,15 @@ export async function GET(
       return zipErrorResponse("ZIP_DOWNLOAD_FAILED", "Unauthorized.", "no profile", 401);
     }
 
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
+
     const ctx = { ...logCtx, userId: profile.id, role: profile.role };
     zipLog("auth", ctx, { email: profile.email });
 
-    let supabase;
+    let db;
     try {
-      supabase = await createServiceClient();
+      db = await createTenantServiceClient(tenant.businessId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       zipLog("error", ctx, { phase: "create_service_client", message });
@@ -57,7 +61,7 @@ export async function GET(
       );
     }
 
-    const auth = await authorizeProjectZipDownload(profile, projectId, supabase);
+    const auth = await authorizeProjectZipDownload(profile, projectId, db);
     if (!auth.ok) {
       zipLog("access", ctx, { result: "denied", status: auth.status, details: auth.details });
       return zipErrorResponse("ZIP_DOWNLOAD_FAILED", auth.error, auth.details, auth.status);
@@ -66,7 +70,7 @@ export async function GET(
     const { project, isAdmin } = auth;
     zipLog("project", ctx, { found: true, status: project.status, isAdmin });
 
-    const { data: media, error: mediaError } = await supabase
+    const { data: media, error: mediaError } = await db
       .from("media_assets")
       .select("*")
       .eq("project_id", projectId)
@@ -100,9 +104,11 @@ export async function GET(
       );
     }
 
+    // Signed URLs / storage downloads are bearer capabilities: only mint after
+    // the tenant-scoped project + media lookups above succeeded.
     let zipResult;
     try {
-      zipResult = await buildProjectZipBuffer(supabase, downloadable, ctx);
+      zipResult = await buildProjectZipBuffer(db.raw, downloadable, ctx);
     } catch (err) {
       if (err instanceof ZipDownloadError) {
         zipLog("error", ctx, {

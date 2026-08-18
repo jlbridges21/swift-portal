@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
-import { getTenantContext, missingTenantResponse, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { canAccessProject } from "@/lib/project-access";
 
@@ -27,13 +28,13 @@ export async function GET(request: Request) {
   return NextResponse.json(data);
 }
 
-async function checkAllApproved(projectId: string) {
-  const supabase = await createServiceClient();
+async function checkAllApproved(businessId: string, projectId: string) {
+  const db = await createTenantServiceClient(businessId);
 
   const [{ data: media }, { data: tours }, { data: reviews }] = await Promise.all([
-    supabase.from("media_assets").select("id, media_type").eq("project_id", projectId),
-    supabase.from("tours").select("id").eq("project_id", projectId),
-    supabase.from("asset_reviews").select("*").eq("project_id", projectId),
+    db.from("media_assets").select("id, media_type").eq("project_id", projectId),
+    db.from("tours").select("id").eq("project_id", projectId),
+    db.from("asset_reviews").select("*").eq("project_id", projectId),
   ]);
 
   const assets: { type: string; id: string }[] = [];
@@ -47,21 +48,14 @@ async function checkAllApproved(projectId: string) {
   return assets.every((a) => reviewMap.get(`${a.type}:${a.id}`) === "approved");
 }
 
-async function hasRejectedOrPending(projectId: string) {
-  const supabase = await createServiceClient();
-  const { data: reviews } = await supabase
-    .from("asset_reviews")
-    .select("status")
-    .eq("project_id", projectId);
-
-  return reviews?.some((r) => r.status === "rejected" || r.status === "pending") ?? false;
-}
-
 export async function POST(request: Request) {
   const profile = await getProfile();
   if (!profile || !profile.client_id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
 
   const body = await request.json();
   const { project_id, asset_type, asset_id, status, feedback } = body;
@@ -79,9 +73,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Project not found or access denied" }, { status: 404 });
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(tenant.businessId);
 
-  const { data: review, error } = await supabase
+  const { data: review, error } = await db
     .from("asset_reviews")
     .upsert(
       {
@@ -102,7 +96,7 @@ export async function POST(request: Request) {
 
   const actionLabel = status === "approved" ? "approved" : "flagged for changes";
   await logProjectActivity("asset_reviewed", `Deliverable ${actionLabel}`, {
-    businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
+    businessId: tenant.businessId,
     projectId: project_id,
     userId: profile.id,
     idempotencyKey: idempotencyKey("asset_review", project_id, asset_type, asset_id, status),
@@ -127,9 +121,9 @@ export async function POST(request: Request) {
       projectId: project_id,
     });
   } else {
-    const allApproved = await checkAllApproved(project_id);
+    const allApproved = await checkAllApproved(tenant.businessId, project_id);
     if (allApproved) {
-      const { data: project } = await supabase
+      const { data: project } = await db
         .from("projects")
         .select("deliverables_approved_at")
         .eq("id", project_id)
@@ -150,7 +144,7 @@ export async function POST(request: Request) {
           idempotencyKey: idempotencyKey("project", project_id, "deliverables_approved"),
         });
 
-        await supabase
+        await db
           .from("projects")
           .update({
             deliverables_approved_at: new Date().toISOString(),
@@ -180,9 +174,9 @@ export async function PATCH(request: Request) {
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(profile.role);
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(tenant.businessId);
   const appSettings = await getAppSettings(tenant.businessId);
-  const { data: project } = await supabase
+  const { data: project } = await db
     .from("projects")
     .select("status")
     .eq("id", project_id)
@@ -213,7 +207,7 @@ export async function PATCH(request: Request) {
     clientEventKey: "deliverables_ready",
   });
 
-  await supabase
+  await db
     .from("projects")
     .update({ deliverables_approved_at: null, deliverables_approved_by: null })
     .eq("id", project_id);

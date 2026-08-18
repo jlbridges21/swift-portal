@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { getYouTubeEmbedUrl } from "@/lib/youtube";
 import { logMediaEvent } from "@/lib/media-library";
 import { normalizeMediaTitle } from "@/lib/media-display-name";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 const ALLOWED_PATCH_FIELDS = [
   "title",
@@ -29,6 +30,9 @@ export async function PATCH(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
+
   const body = await request.json();
   const { id, ...rawUpdates } = body;
 
@@ -49,12 +53,12 @@ export async function PATCH(request: Request) {
     updates.title = normalized.title;
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(tenant.businessId);
 
   if ("project_id" in updates) {
     const projectId = updates.project_id as string | null;
     if (projectId) {
-      const { data: project } = await supabase
+      const { data: project } = await db
         .from("projects")
         .select("client_id, property_id")
         .eq("id", projectId)
@@ -70,7 +74,7 @@ export async function PATCH(request: Request) {
 
   if ("folder_id" in updates && updates.folder_id !== null) {
     const folderId = updates.folder_id as string;
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from("media_assets")
       .select("project_id")
       .eq("id", id)
@@ -79,7 +83,7 @@ export async function PATCH(request: Request) {
     if (!projectId) {
       return NextResponse.json({ error: "Cannot assign folder without a project" }, { status: 400 });
     }
-    const { data: folder } = await supabase
+    const { data: folder } = await db
       .from("media_folders")
       .select("id, project_id")
       .eq("id", folderId)
@@ -97,9 +101,9 @@ export async function PATCH(request: Request) {
     updates.embed_url = embedUrl;
   }
 
-  const { data: existing } = await supabase.from("media_assets").select("project_id, title").eq("id", id).single();
+  const { data: existing } = await db.from("media_assets").select("project_id, title").eq("id", id).single();
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("media_assets")
     .update(updates)
     .eq("id", id)
@@ -112,6 +116,7 @@ export async function PATCH(request: Request) {
 
   if (updates.title && updates.title !== existing?.title) {
     await logMediaEvent({
+      businessId: tenant.businessId,
       mediaAssetId: id,
       projectId: existing?.project_id,
       userId: auth.profile?.id,
@@ -130,10 +135,13 @@ export async function DELETE(
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
-  const { id } = await params;
-  const supabase = await createServiceClient();
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
 
-  const { data: asset } = await supabase.from("media_assets").select("*").eq("id", id).single();
+  const { id } = await params;
+  const db = await createTenantServiceClient(tenant.businessId);
+
+  const { data: asset } = await db.from("media_assets").select("*").eq("id", id).single();
 
   if (!asset) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -148,10 +156,10 @@ export async function DELETE(
 
   if (hasStorageObject) {
     const bucket = asset.media_type === "document" ? "project-documents" : "project-media";
-    await supabase.storage.from(bucket).remove([asset.file_path]);
+    await db.raw.storage.from(bucket).remove([asset.file_path]);
   }
 
-  await supabase.from("media_assets").delete().eq("id", id);
+  await db.from("media_assets").delete().eq("id", id);
 
   return NextResponse.json({ success: true });
 }

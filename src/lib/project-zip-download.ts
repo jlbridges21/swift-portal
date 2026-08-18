@@ -422,7 +422,7 @@ export function contentDispositionAttachment(filename: string): string {
 export async function authorizeProjectZipDownload(
   profile: Profile,
   projectId: string,
-  supabase: SupabaseClient
+  supabase: { from: SupabaseClient["from"] }
 ): Promise<
   | {
       ok: true;

@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { getLibraryFilterOptions, queryMediaLibrary } from "@/lib/media-library";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
     const { searchParams } = new URL(request.url);
 
-    const result = await queryMediaLibrary({
+    const result = await queryMediaLibrary(tenant.businessId, {
       q: searchParams.get("q") ?? undefined,
       type: searchParams.get("type") ?? undefined,
       service: searchParams.get("service") ?? undefined,
@@ -25,7 +28,7 @@ export async function GET(request: Request) {
     });
 
     if (searchParams.get("options") === "1") {
-      const options = await getLibraryFilterOptions();
+      const options = await getLibraryFilterOptions(tenant.businessId);
       return NextResponse.json({ ...result, filterOptions: options });
     }
 

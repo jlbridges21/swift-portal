@@ -3,6 +3,7 @@ import { getProfile } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { MediaLibraryClient } from "@/components/admin/media-library-client";
 import { getLibraryFilterOptions, queryMediaLibrary } from "@/lib/media-library";
+import { requireTenantContext } from "@/lib/tenant";
 
 interface PageProps {
   searchParams: Promise<{ upload?: string }>;
@@ -12,11 +13,12 @@ export default async function AdminMediaPage({ searchParams }: PageProps) {
   const profile = await getProfile();
   if (!profile || profile.role !== "admin") redirect("/dashboard");
 
+  const tenant = await requireTenantContext();
   const sp = await searchParams;
 
   const [result, filterOptions] = await Promise.all([
-    queryMediaLibrary({ page: 1, limit: 48 }),
-    getLibraryFilterOptions(),
+    queryMediaLibrary(tenant.businessId, { page: 1, limit: 48 }),
+    getLibraryFilterOptions(tenant.businessId),
   ]);
 
   return (

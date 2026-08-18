@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 /**
  * Media reorder:
@@ -12,8 +13,11 @@ export async function PATCH(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
+
   const body = await request.json().catch(() => ({}));
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(tenant.businessId);
 
   const orderedIds = Array.isArray(body.ordered_ids) ? (body.ordered_ids as unknown[]) : null;
   const projectId = typeof body.project_id === "string" ? body.project_id : null;
@@ -29,8 +33,9 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: true });
     }
 
-    // Reject if any ID is missing / wrong project / not a photo (RPC also checks)
-    const { data: rows, error: lookupError } = await supabase
+    // Tenant-scoped lookup: Tenant B ids are not found. RPC still runs as
+    // service_role (v32 short-circuits JWT business check for service_role).
+    const { data: rows, error: lookupError } = await db
       .from("media_assets")
       .select("id, project_id, media_type")
       .in("id", orderedIds as string[]);
@@ -65,7 +70,7 @@ export async function PATCH(request: Request) {
       }
     }
 
-    const { error } = await supabase.rpc("reorder_media_assets", {
+    const { error } = await db.raw.rpc("reorder_media_assets", {
       p_project_id: projectId,
       p_ordered_ids: orderedIds,
     });
@@ -91,7 +96,7 @@ export async function PATCH(request: Request) {
     }
 
     const table = item.type === "tour" ? "tours" : "media_assets";
-    const { data: row, error: lookupError } = await supabase
+    const { data: row, error: lookupError } = await db
       .from(table)
       .select("id, project_id")
       .eq("id", item.id)
@@ -115,7 +120,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const { error } = await supabase
+    const { error } = await db
       .from(table)
       .update({ display_order: item.display_order })
       .eq("id", item.id);

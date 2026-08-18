@@ -2,7 +2,6 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 import { touchClientLogin } from "@/lib/clients-crm";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient();
@@ -24,13 +23,10 @@ export async function getProfile(): Promise<Profile | null> {
   // Supabase Auth is a single global user pool (one auth user per email). The
   // product rule is one person = one business — never attach by email across tenants.
   //
-  // Category D (prompt 9b): getProfile() is the identity bootstrap and cannot
-  // call getTenantContext() (that would recurse). Lookups are already
-  // business-scoped when profiles.business_id is set (prompt 7 Part C). When it
-  // is not, a multi-business match aborts rather than attaching. The LEGACY
-  // fallback below only runs if both profile.business_id and the matched
-  // client's business_id are null — which does not occur for current traffic
-  // (non-super_admin profiles were backfilled in v31b).
+  // Identity bootstrap: cannot call getTenantContext() (that would recurse).
+  // Lookups are business-scoped when profiles.business_id is set (prompt 7 Part C).
+  // When it is not, a multi-business match aborts rather than attaching.
+  // Portal-link uses the matched client's business_id (NOT NULL since v30).
   if (profile.role === "client" && !profile.client_id) {
     const service = await createServiceClient();
     const businessId = profile.business_id ?? null;
@@ -50,16 +46,18 @@ export async function getProfile(): Promise<Profile | null> {
       return profile as Profile;
     }
     let clientId = byUserRows?.[0]?.id ?? null;
+    let matchedBusinessId = byUserRows?.[0]?.business_id ?? businessId;
     if (!clientId && user.email) {
       if (businessId) {
         const { data: byEmail } = await service
           .from("clients")
-          .select("id")
+          .select("id, business_id")
           .ilike("email", user.email)
           .eq("business_id", businessId)
           .is("deleted_at", null)
           .maybeSingle();
         clientId = byEmail?.id ?? null;
+        matchedBusinessId = byEmail?.business_id ?? businessId;
       } else {
         const { data: matches } = await service
           .from("clients")
@@ -79,6 +77,7 @@ export async function getProfile(): Promise<Profile | null> {
         }
         if (matches?.length === 1) {
           clientId = matches[0].id;
+          matchedBusinessId = matches[0].business_id;
         }
       }
       if (clientId) {
@@ -92,10 +91,9 @@ export async function getProfile(): Promise<Profile | null> {
         .update({ client_id: clientId, role: "client" })
         .eq("id", user.id);
       profile = { ...profile, client_id: clientId };
-      void ensureClientPortalLink(
-        clientId,
-        businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass the matched client's business_id
-      );
+      if (matchedBusinessId) {
+        void ensureClientPortalLink(clientId, matchedBusinessId);
+      }
     }
   }
 
@@ -105,11 +103,14 @@ export async function getProfile(): Promise<Profile | null> {
       .select("last_login_at, business_id")
       .eq("id", profile.client_id)
       .maybeSingle();
-    void touchClientLogin(
-      profile.client_id,
-      client?.business_id ?? profile.business_id ?? LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): require a resolved business_id
-      client?.last_login_at ?? null
-    );
+    // Missing/invisible client row: do not guess a business.
+    if (client?.business_id) {
+      void touchClientLogin(
+        profile.client_id,
+        client.business_id,
+        client.last_login_at ?? null
+      );
+    }
   }
 
   return profile as Profile | null;
