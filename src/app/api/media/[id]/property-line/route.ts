@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
-import { buildMediaStoragePath } from "@/lib/media-upload";
+import { buildStoragePath } from "@/lib/media-upload";
 import { logMediaEvent, setMediaTags, getMediaTags } from "@/lib/media-library";
 import {
   parsePropertyLineAnnotation,
@@ -228,7 +228,11 @@ export async function PUT(
     : relations;
 
   const fileName = buildPropertyLineFileName(sourceFileName);
-  const filePath = buildMediaStoragePath(resolvedProjectId, fileName);
+  const filePath = buildStoragePath({
+    businessId: tenant.businessId,
+    projectId: resolvedProjectId,
+    fileName,
+  });
   const displayTitle = `${stripPropertyLineTitleSuffix(sourceTitle || sourceFileName)} (Property Line)`;
 
   const { error: uploadError } = await db.raw.storage.from(bucket).upload(filePath, buffer, {

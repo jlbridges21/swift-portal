@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   const title = (typeof body.title === "string" && body.title.trim()) || "YouTube Video";
-  // file_path is globally unique — YouTube rows aren't in Storage, but still need a unique sentinel
+  // DB uniqueness sentinel only — not a Storage object (no upload; do not use buildStoragePath)
   const filePath = `youtube/${videoId}/${randomUUID()}`;
 
   const { data, error } = await db

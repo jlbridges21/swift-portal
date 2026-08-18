@@ -7,6 +7,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { logUploadStep } from "@/lib/upload/logger";
 import { verifyStorageObject } from "@/lib/upload/storage-verify";
 import { setMediaTags } from "@/lib/media-library";
+import { isTenantPrefixedStoragePath } from "@/lib/media-upload";
 
 export async function POST(request: Request) {
   try {
@@ -71,6 +72,28 @@ export async function POST(request: Request) {
     logUploadStep("error", { step: "validate_request", ...logContext, details: body });
     return NextResponse.json(
       { success: false, error: "Missing required fields.", step: "validate_request" },
+      { status: 400 }
+    );
+  }
+
+  if (!isTenantPrefixedStoragePath(filePath, tenant.businessId)) {
+    logUploadStep("error", {
+      step: "validate_request",
+      ...logContext,
+      providerMessage: "filePath is not prefixed with this business",
+    });
+    return NextResponse.json(
+      { success: false, error: "Invalid storage path.", step: "validate_request" },
+      { status: 400 }
+    );
+  }
+  if (
+    typeof thumbnailPath === "string" &&
+    thumbnailPath &&
+    !isTenantPrefixedStoragePath(thumbnailPath, tenant.businessId)
+  ) {
+    return NextResponse.json(
+      { success: false, error: "Invalid thumbnail path.", step: "validate_request" },
       { status: 400 }
     );
   }

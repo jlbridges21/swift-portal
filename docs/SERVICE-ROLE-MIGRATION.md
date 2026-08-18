@@ -59,7 +59,7 @@ Status key: **done** = converted this batch; **pending** = still raw service rol
 | `src/lib/client-email-notifications.ts` | **done** (prompt 11). `businessId` required; settings and branded send use it. |
 | `src/lib/client-messaging.ts` | **done** (prompt 11). Every export takes `businessId`. `listAdminConversations` is tenant-scoped (was an unfiltered `limit(500)` inbox leak). |
 | `src/lib/media-library.ts` | **done** (prompt 10). `businessId` required on every export. Unassigned `media_assets` (`project_id` NULL) stay visible to their own business and invisible to others. Filter options (clients, properties, projects, services, tags) are all tenant-scoped. |
-| `src/lib/media-upload.ts` | N/A — no service-role queries. `// TODO(tenant): prefix storage paths — prompt 13` left on `buildMediaStoragePath`. |
+| `src/lib/media-upload.ts` | **done** (v36). `buildStoragePath({ businessId, projectId, fileName })` prefixes NEW objects. Legacy keys untouched. |
 | `src/lib/project-zip-download.ts` | **done** (prompt 10). `authorizeProjectZipDownload` takes tenant-scoped `.from()`; `buildProjectZipBuffer` still needs `.storage` and is called with `db.raw`. |
 | `src/app/admin/calendar/page.tsx` | **done** (prompt 12b). `requireTenantContext()` + tenant-scoped shoot query. Cover URLs pass explicit `businessId`. |
 | `src/app/admin/media/page.tsx` | **done** (prompt 10) — `requireTenantContext()` then library helpers |
@@ -153,6 +153,12 @@ Isolation harness after prompt 12b: **68** assertions (was 66). A Tenant B `shoo
 
 Every application INSERT against the 25 v30 tables stamps `business_id` (explicit column or tenant-wrapper `injectBusinessId`). `migration-v35-drop-transitional-defaults.sql` drops the Swift DEFAULT and leaves `NOT NULL`. Omitting `business_id` now fails at insert time.
 
-`profiles` was never given a DEFAULT. Isolation harness still **68** assertions (fixture INSERTs already set `business_id` explicitly).
+`profiles` was never given a DEFAULT. Isolation harness after v35: **68** assertions (fixture INSERTs already set `business_id` explicitly).
 
-Do **not** convert storage path prefix or Stripe Connect in this batch.
+## Storage path prefix (v36)
+
+NEW uploads use `{business_id}/{project_id}/…` or `{business_id}/library/…` via `buildStoragePath`. Legacy `{project_id}/…` and `library/unassigned/…` objects are never moved; `file_path` is not rewritten. Storage RLS on `project-media` / `project-documents` accepts both shapes. Avatars unchanged.
+
+Isolation harness after v36: **70** assertions (was 68). A Swift admin still sees own-business storage objects and cannot SELECT a Tenant B `{business}/library/` object.
+
+Do **not** convert Stripe Connect or branding in this batch.

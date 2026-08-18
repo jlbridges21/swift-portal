@@ -1,8 +1,8 @@
 -- Swift Portal — tenant isolation harness (RLS read + write)
--- Run in Supabase SQL Editor after v29–v35. See docs/TENANT-TESTING.md.
+-- Run in Supabase SQL Editor after v29–v36. See docs/TENANT-TESTING.md.
 --
 -- v35: business_id has no DEFAULT. Every INSERT below sets it EXPLICITLY.
---      Omitting business_id now fails NOT NULL (it used to attach to Swift).
+-- v36: storage object keys — Tenant B prefix must be invisible to a Swift admin.
 --
 -- Prerequisite auth users (Dashboard → Authentication → Add user, auto-confirm):
 --   tenant-b-admin@example.test
@@ -120,6 +120,7 @@ DECLARE
   v_proj_msg   uuid := '00000000-0000-0000-0000-0000000000c8';
   v_media_unassigned uuid := '00000000-0000-0000-0000-0000000000c9';
   v_notif_admin uuid := '00000000-0000-0000-0000-0000000000ca';
+  v_storage_name text;
 
   v_assertions int;
   v_n          bigint;
@@ -181,6 +182,17 @@ BEGIN
   DELETE FROM project_clients WHERE business_id = v_business;
   DELETE FROM leads WHERE business_id = v_business;
   DELETE FROM google_calendar_connections_v2 WHERE business_id = v_business;
+  -- storage.objects has protect_objects_delete ("Use the Storage API instead").
+  -- SQL Editor / MCP cannot set session_replication_role. Best-effort SQL
+  -- DELETE; if it fails, remove via:
+  --   DELETE /storage/v1/object/project-media/{business_id}/library/tenant-b-isolation.bin
+  BEGIN
+    DELETE FROM storage.objects
+      WHERE bucket_id IN ('project-media', 'project-documents')
+        AND name LIKE v_business::text || '/%';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'storage.objects SQL DELETE skipped (%). Use Storage API.', SQLERRM;
+  END;
   DELETE FROM projects WHERE business_id = v_business;
   DELETE FROM properties WHERE business_id = v_business;
   DELETE FROM clients WHERE business_id = v_business;
@@ -304,6 +316,15 @@ BEGIN
   INSERT INTO media_asset_events (id, business_id, media_asset_id, project_id, event_type)
   VALUES (v_event, v_business, v_media1, v_project, 'uploaded');
 
+  -- v36: Tenant B object under its own business prefix (not a real media_assets row)
+  v_storage_name := v_business::text || '/library/tenant-b-isolation.bin';
+  INSERT INTO storage.objects (bucket_id, name)
+  SELECT 'project-media', v_storage_name
+  WHERE NOT EXISTS (
+    SELECT 1 FROM storage.objects
+    WHERE bucket_id = 'project-media' AND name = v_storage_name
+  );
+
   RAISE NOTICE 'Setup: Tenant B fixtures created (business_id = %)', v_business;
 
   -- 4. READ isolation — Swift admin
@@ -362,6 +383,22 @@ BEGIN
 
   SELECT count(*) INTO v_n FROM client_stats WHERE client_id = v_client;
   IF v_n > 0 THEN RAISE EXCEPTION 'READ LEAK: client_stats Tenant B client (% rows)', v_n; END IF;
+  PERFORM _tenant_test_bump();
+
+  -- v36: Swift admin still sees own-business storage objects (legacy {project}/… must keep working)
+  SELECT count(*) INTO v_n FROM storage.objects
+    WHERE bucket_id IN ('project-media', 'project-documents');
+  IF v_n = 0 THEN
+    RAISE EXCEPTION 'STORAGE POLICY TOO TIGHT: Swift admin sees 0 media objects';
+  END IF;
+  PERFORM _tenant_test_bump();
+
+  -- v36: Tenant B storage object under {business}/library/ is invisible to Swift admin
+  SELECT count(*) INTO v_n FROM storage.objects
+    WHERE bucket_id = 'project-media' AND name = v_storage_name;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'STORAGE LEAK: Tenant B object visible to Swift admin (% rows)', v_n;
+  END IF;
   PERFORM _tenant_test_bump();
 
   -- 5. WRITE isolation — Swift admin
@@ -549,6 +586,15 @@ BEGIN
   DELETE FROM project_clients WHERE business_id = v_teardown_business_id;
   DELETE FROM leads WHERE business_id = v_teardown_business_id;
   DELETE FROM google_calendar_connections_v2 WHERE business_id = v_teardown_business_id;
+  -- protect_objects_delete blocks SQL DELETE. Wrap so CRM teardown still runs.
+  -- Then Storage API: DELETE /storage/v1/object/project-media/{id}/library/tenant-b-isolation.bin
+  BEGIN
+    DELETE FROM storage.objects
+      WHERE bucket_id IN ('project-media', 'project-documents')
+        AND name LIKE v_teardown_business_id::text || '/%';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'storage.objects SQL DELETE skipped (%). Use Storage API.', SQLERRM;
+  END;
   DELETE FROM projects WHERE business_id = v_teardown_business_id;
   DELETE FROM properties WHERE business_id = v_teardown_business_id;
   DELETE FROM clients WHERE business_id = v_teardown_business_id;

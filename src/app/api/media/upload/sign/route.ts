@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { formatFileSize } from "@/lib/brand";
-import { buildMediaStoragePath } from "@/lib/media-upload";
+import { buildStoragePath } from "@/lib/media-upload";
 import { validateMediaFileBeforeUpload } from "@/lib/upload/validation";
 import { MAX_VIDEO_FILE_SIZE_BYTES, shouldUseTusUpload } from "@/lib/upload/constants";
 import { logUploadStep } from "@/lib/upload/logger";
@@ -49,8 +49,11 @@ export async function POST(request: Request) {
     }
 
     const bucket = mediaType === "document" ? "project-documents" : "project-media";
-    const storageProjectId = projectId || null;
-    const filePath = buildMediaStoragePath(storageProjectId, fileName);
+    const filePath = buildStoragePath({
+      businessId: tenant.businessId,
+      projectId: projectId || null,
+      fileName,
+    });
 
     let displayOrder = 0;
     if (projectId) {

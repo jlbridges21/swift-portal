@@ -39,10 +39,6 @@ export function getPublicUrl(
   return `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`;
 }
 
-export function getSignedUrlPath(bucket: string, projectId: string, fileName: string): string {
-  return `${projectId}/${fileName}`;
-}
-
 /** Human-friendly relative time, e.g. "2h ago", "Yesterday", "Mar 4". */
 export function formatRelativeTime(iso: string | Date): string {
   const date = typeof iso === "string" ? new Date(iso) : iso;

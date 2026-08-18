@@ -4,7 +4,7 @@ Repeatable SQL harness proving **cross-tenant READ isolation** via RLS (v32) and
 
 ## Prerequisites
 
-- Migrations **v29–v35** applied on PostgreSQL 16.
+- Migrations **v29–v36** applied on PostgreSQL 16.
 - Supabase project with RLS enabled (production or staging).
 - Two auth users created in **Supabase Dashboard → Authentication → Add user** (email + password, auto-confirm):
   - `tenant-b-admin@example.test`
@@ -48,7 +48,7 @@ Do **not** run teardown on a shared environment until tests pass.
 ## Known gaps (not covered)
 
 - **Service role** (`createServiceClient()`): bypasses RLS entirely. Fifty-four application files use it; this script does **not** test those paths. v30 triggers still apply to service-role writes, but reads and RLS-only guards are invisible here.
-- **Storage** policies: unchanged in v32; not exercised.
+- **Storage** policies (v36): both legacy `{project}/…` and `{business}/{project}/…` / `{business}/library/…` shapes. Harness inserts a Tenant B object under the new prefix and asserts a Swift admin cannot SELECT it. Legacy objects are never moved.
 - **super_admin** impersonation GUC: not exercised (no platform console yet).
 - **Anon/public** lead capture: `/request` uses service role; only the authenticated `leads` INSERT policy shape is indirectly relevant if you add anon-key tests later.
 
@@ -56,11 +56,11 @@ Do **not** run teardown on a shared environment until tests pass.
 
 **Must pass** after any change to:
 
-- RLS policies (v32+ migrations)
+- RLS policies (v32+ migrations) and storage.objects policies (v36)
 - `enforce_same_business` / NOT NULL / tenant indexes (v30)
 - `current_business_id`, `get_user_client_id`, `client_has_project_access`, `handle_new_user` (v31b)
 - `client_stats` view or `reorder_media_assets` RPC
-- Application code that alters auth, profiles, or tenant write paths
+- Application code that alters auth, profiles, tenant write paths, or storage object keys
 
 ## Proving the harness works (sanity check)
 
@@ -82,3 +82,5 @@ A harness that cannot fail is not a harness.
 ## Teardown safety
 
 Teardown aborts unless `v_teardown_business_id = '00000000-0000-0000-0000-0000000000ff'`. Every `DELETE` filters on that UUID or on IDs created for Tenant B. Swift production data (`…0001`) is never targeted.
+
+The v36 storage probe is a catalog row at `{tenant-b}/library/tenant-b-isolation.bin`. `storage.objects` has `protect_objects_delete`, so SQL `DELETE` is blocked. After the CRM teardown block, remove it with the Storage API (`DELETE /storage/v1/object/project-media/{tenant-b}/library/tenant-b-isolation.bin` using the service role). Confirm `count(*) FROM storage.objects WHERE name LIKE '00000000-0000-0000-0000-0000000000ff/%'` is 0.

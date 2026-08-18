@@ -38,11 +38,36 @@ export function sanitizeStorageFileName(fileName: string): string {
   return ext ? `${base}.${ext}` : base;
 }
 
-export function buildMediaStoragePath(projectId: string | null | undefined, fileName: string): string {
-  const safeName = sanitizeStorageFileName(fileName);
-  // TODO(tenant): prefix storage paths — prompt 13
-  const prefix = projectId ? projectId : "library/unassigned";
-  return `${prefix}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeName}`;
+/**
+ * Object key for NEW uploads. Two shapes coexist in storage forever:
+ *   NEW     {businessId}/{projectId}/{file}     project-attached
+ *           {businessId}/library/{file}         unassigned library
+ *   LEGACY  {projectId}/{file}                  pre-v36 project media
+ *           library/unassigned/{file}           pre-v36 library (do not write again)
+ *
+ * Do not move, rename, or rewrite existing file_path / storage_path values.
+ * `buildThumbnailStoragePath` derives a sibling key from an already-chosen path.
+ */
+export function buildStoragePath(options: {
+  businessId: string;
+  projectId?: string | null;
+  fileName: string;
+}): string {
+  const businessId = options.businessId?.trim();
+  if (!businessId) {
+    throw new Error("buildStoragePath requires businessId");
+  }
+  const safeName = sanitizeStorageFileName(options.fileName);
+  const unique = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeName}`;
+  if (options.projectId) {
+    return `${businessId}/${options.projectId}/${unique}`;
+  }
+  return `${businessId}/library/${unique}`;
+}
+
+/** True when `filePath` is a v36+ object key for this business (never `library/unassigned/`). */
+export function isTenantPrefixedStoragePath(filePath: string, businessId: string): boolean {
+  return Boolean(businessId) && filePath.startsWith(`${businessId}/`);
 }
 
 export function buildThumbnailStoragePath(videoFilePath: string): string {

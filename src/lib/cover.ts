@@ -40,6 +40,8 @@ async function signedPhotoUrl(
   supabase: SupabaseClient,
   filePath: string
 ): Promise<string | null> {
+  // file_path is the absolute object key — legacy `{project}/…` or
+  // `{business}/{project}/…` / `{business}/library/…`. Do not rewrite it.
   const { data } = await supabase.storage
     .from("project-media")
     .createSignedUrl(filePath, 3600);
