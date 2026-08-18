@@ -32,26 +32,33 @@ Status key: **done** = converted this batch; **pending** = still raw service rol
 | `src/lib/auth.ts` | pending |
 | `src/lib/tenant.ts` | pending |
 | `src/lib/app-settings.ts` | pending |
-| `src/lib/notifications.ts` | pending |
-| `src/lib/onesignal-push.ts` | pending |
+| `src/lib/notifications.ts` | **done** (prompt 11). Admin recipients are `role = 'admin' AND business_id = <id>` — `super_admin` is excluded. `notify*` resolve `businessId` from the arg, else `projects.business_id` / `clients.business_id`; if unresolvable they log and return (no LEGACY). Profiles via `.raw`. |
+| `src/lib/onesignal-push.ts` | **done** (prompt 11). One OneSignal app. Every admin send includes a `business_id` tag filter. Untagged subscriptions are treated as Swift on **send filters only**. Push-enabled admin ids are scoped `role = admin` AND `business_id`. Profiles via `.raw`. |
+| `src/lib/onesignal-client.ts` | **done** (prompt 11). `enableAdminPushNotifications(userId, businessId)` tags `business_id` at registration (backfill on next Enable). |
+| `src/lib/email.ts` | **done** (prompt 11). `businessId` required on `sendBrandedEmail` / `sendTestEmail`. Category C `emailBusinessId()` placeholder removed. Shared Resend API key; per-business from-name, reply-to, logo, colors, footer from `getAppSettings(businessId)`. Platform verified sender. `// TODO(tenant): per-business sending domain — prompt 16`. Sends a `business_id` Resend tag. |
+| `src/lib/email-templates.ts` | N/A — HTML builder; branding is passed in from `sendBrandedEmail`. |
+| `src/lib/communications.ts` | N/A — filters/types only; no queries. |
+| `src/lib/notification-settings.ts` | N/A — event-key mapping only; no queries. |
+| `src/lib/client-messages.ts` | N/A — client-facing copy only; no queries. |
 | `src/lib/status-automation.ts` | pending |
 | `src/lib/stripe-payments.ts` | pending |
 | `src/lib/stripe-webhook-events.ts` | pending |
 | `src/lib/google-calendar.ts` | pending |
 | `src/lib/ghl/sync-portal-lead.ts` | pending |
 | `src/lib/preliminary-estimates.ts` | pending |
-| `src/lib/communication-records.ts` | pending |
-| `src/lib/email-analytics.ts` | pending |
-| `src/lib/message-templates.ts` | pending |
-| `src/lib/client-email-notifications.ts` | pending |
-| `src/lib/client-messaging.ts` | pending |
+| `src/lib/communication-records.ts` | **done** (prompt 11). `businessId` required; tenant `insert` stamps `communications.business_id`. |
+| `src/lib/email-analytics.ts` | **done** (prompt 11). `recordEmailEvent` / `getProjectEmailEvents` require `businessId`. Activity + communications use that id (no LEGACY). |
+| `src/lib/message-templates.ts` | **done** (prompt 11). `buildProjectMessageVariables` reads `project.business_id` then tenant-scopes the client lookup. Callers (workflow, prompt 12) unchanged. |
+| `src/lib/client-email-notifications.ts` | **done** (prompt 11). `businessId` required; settings and branded send use it. |
+| `src/lib/client-messaging.ts` | **done** (prompt 11). Every export takes `businessId`. `listAdminConversations` is tenant-scoped (was an unfiltered `limit(500)` inbox leak). |
 | `src/lib/media-library.ts` | **done** (prompt 10). `businessId` required on every export. Unassigned `media_assets` (`project_id` NULL) stay visible to their own business and invisible to others. Filter options (clients, properties, projects, services, tags) are all tenant-scoped. |
 | `src/lib/media-upload.ts` | N/A — no service-role queries. `// TODO(tenant): prefix storage paths — prompt 13` left on `buildMediaStoragePath`. |
 | `src/lib/project-zip-download.ts` | **done** (prompt 10). `authorizeProjectZipDownload` takes tenant-scoped `.from()`; `buildProjectZipBuffer` still needs `.storage` and is called with `db.raw`. |
 | `src/app/admin/calendar/page.tsx` | pending |
 | `src/app/admin/media/page.tsx` | **done** (prompt 10) — `requireTenantContext()` then library helpers |
-| `src/app/api/admin/email/route.ts` | pending |
-| `src/app/api/admin/push/route.ts` | pending |
+| `src/app/api/admin/email/route.ts` | **done** (prompt 11). Fail-closed tenant before prefs lookup. Clients via tenant `from()`; profiles via `.raw` + `business_id`. Test send passes `tenant.businessId`. |
+| `src/app/api/admin/push/route.ts` | **done** (prompt 11). Fail-closed tenant. Profiles via `.raw`. Test push / subscribe pass `businessId`. |
+| `src/app/api/notifications/route.ts` | **done** (prompt 11). Stays cookie `createClient()` + RLS (`user_id = auth.uid()`). Optional extra `.eq("business_id")` when `profile.business_id` is set. No status-code change (GET still `[]` / 401). |
 | `src/app/api/asset-reviews/route.ts` | **done** (prompt 10). GET stays cookie `createClient()` + RLS. POST/PATCH and `checkAllApproved` use the tenant wrapper. |
 | `src/app/api/cron/workflow-reminders/route.ts` | pending |
 | `src/app/api/leads/route.ts` | pending |
@@ -69,8 +76,10 @@ Status key: **done** = converted this batch; **pending** = still raw service rol
 | `src/app/api/media/upload/sign/route.ts` | **done** (prompt 10). Project must exist in the caller's business before `createSignedUploadUrl`; unassigned uploads rely on tenant context. |
 | `src/app/api/media/youtube/route.ts` | **done** (prompt 10) |
 | `src/app/api/media-folders/route.ts` | **done** (prompt 10). GET still allows admin or client with `canAccessProject`; folder/photo queries are tenant-scoped. |
-| `src/app/api/messages/route.ts` | pending |
-| `src/app/api/projects/[id]/messages/route.ts` | pending |
+| `src/app/api/messages/route.ts` | **done** (prompt 11). Fail-closed tenant on GET/POST/PATCH. Inbox, inserts, and `ensureClientPortalLink` are tenant-scoped. |
+| `src/app/api/projects/[id]/messages/route.ts` | **done** (prompt 11). Proxies to `client_messages` (do not consolidate with `project_messages`). Tenant wrapper on insert/read. Admin GET remains 410. |
+| `src/app/api/projects/[id]/email-events/route.ts` | **done** (prompt 11). Fail-closed tenant; `getProjectEmailEvents(id, businessId)`. |
+| `src/app/api/resend/webhook/route.ts` | **done** (prompt 11). No auth (excluded from the proxy matcher). Resolves `business_id` from the send tag, cross-checks `projects.business_id` when `project_id` is present, writes nothing on mismatch/missing tag. Test emails (no project) use the tag alone. |
 | `src/app/api/projects/[id]/download-zip/route.ts` | **done** (prompt 10). Project + media via tenant `from()`; ZIP bytes via `db.raw.storage`. |
 | `src/app/api/payments/[id]/route.ts` | pending |
 | `src/app/api/profile/route.ts` | pending |
@@ -90,4 +99,17 @@ Each of the four minting paths verifies the caller's business **before** a URL o
 3. **`bulk` `download_urls`** — each id is loaded through the tenant client; missing or other-business rows are skipped; `db.raw.storage.createSignedUrl` only after `asset.business_id === tenant.businessId`.
 4. **`project-zip-download`** — fail-closed tenant. `authorizeProjectZipDownload` and the media query use tenant `from()`. Storage downloads / signed-URL fallbacks in `buildProjectZipBuffer` use `db.raw` only after that project+media set is already tenant-scoped.
 
-Do **not** start notification, email, payment, quote, scheduling, or messaging files until the next dedicated prompt.
+## Notifications, messaging, email (prompt 11)
+
+Two confirmed cross-tenant leaks, both fixed:
+
+1. **`getAdminRecipients`** queried every `role = 'admin'` profile. It is now `role = 'admin' AND business_id = <businessId>`. `super_admin` does not receive business notifications.
+2. **`listAdminConversations`** selected `client_messages` with no filter. It now uses the tenant client (automatic `business_id`).
+
+**OneSignal:** one app. Subscriptions are tagged `business_id` at Enable (backfill on next login/Enable). Untagged existing devices are treated as Swift on **send filters only** (`business_id = Swift OR business_id not_exists`, still requiring `swift_portal_role = admin`). Other businesses never match untagged devices.
+
+**`project_messages`:** no application read/write in `src/`. Isolation SQL already covers the table. Do not consolidate with `client_messages`.
+
+Isolation harness: **65** assertions (was 63). A Tenant B project notification produces zero rows for the Swift admin profile; a Tenant B `client_messages` row is invisible to the Swift admin inbox-shaped query.
+
+Do **not** start payment, quote, scheduling, request-flow, or cron-sweep files until the next dedicated prompt.

@@ -1,8 +1,10 @@
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 const ONESIGNAL_API_URL = "https://api.onesignal.com/notifications?c=push";
 
 export interface AdminPushNotificationOptions {
+  businessId: string;
   title: string;
   message: string;
   url?: string;
@@ -58,12 +60,35 @@ function formatOneSignalErrors(errors: OneSignalApiResponse["errors"]): string {
     .join("; ");
 }
 
-async function getPushEnabledAdminIds(): Promise<string[]> {
-  const supabase = await createServiceClient();
-  const { data, error } = await supabase
+/**
+ * Tag filters on every admin send so a shared OneSignal app cannot fan out
+ * across businesses. Untagged subscriptions (created before prompt 11) are
+ * treated as Swift on send only — they are re-tagged on next Enable.
+ */
+function adminPushFilters(businessId: string): Record<string, unknown>[] {
+  const roleAdmin = { field: "tag", key: "swift_portal_role", relation: "=", value: "admin" };
+  const thisBusiness = { field: "tag", key: "business_id", relation: "=", value: businessId };
+
+  if (businessId === LEGACY_DEFAULT_BUSINESS_ID) {
+    return [
+      roleAdmin,
+      thisBusiness,
+      { operator: "OR" },
+      { field: "tag", key: "swift_portal_role", relation: "=", value: "admin" },
+      { field: "tag", key: "business_id", relation: "not_exists" },
+    ];
+  }
+
+  return [roleAdmin, thisBusiness];
+}
+
+async function getPushEnabledAdminIds(businessId: string): Promise<string[]> {
+  const db = await createTenantServiceClient(businessId);
+  const { data, error } = await db.raw
     .from("profiles")
     .select("id")
     .eq("role", "admin")
+    .eq("business_id", businessId)
     .eq("push_notifications_enabled", true);
 
   if (error) {
@@ -126,8 +151,9 @@ export async function sendAdminPushNotification(
   const targetUrl = resolveAdminPushUrl(options);
   const title = trimForLockScreen(options.title, 65);
   const message = trimForLockScreen(options.message || options.title);
+  const filters = adminPushFilters(options.businessId);
 
-  const adminIds = await getPushEnabledAdminIds();
+  const adminIds = await getPushEnabledAdminIds(options.businessId);
   const payload: Record<string, unknown> = {
     target_channel: "push",
     headings: { en: title },
@@ -138,22 +164,21 @@ export async function sendAdminPushNotification(
       eventType: options.eventType ?? null,
       url: targetUrl,
     },
+    filters,
   };
 
   if (adminIds.length > 0) {
     payload.include_aliases = { external_id: adminIds };
-  } else {
-    // Fallback when profile flags are not synced yet but device has the admin tag.
-    payload.filters = [
-      { field: "tag", key: "swift_portal_role", relation: "=", value: "admin" },
-    ];
   }
 
   return callOneSignal(payload, `admin_event:${options.eventType ?? "unknown"}`);
 }
 
 /** Send a test push to the current admin device. */
-export async function sendAdminTestPush(userId: string): Promise<PushSendResult> {
+export async function sendAdminTestPush(
+  userId: string,
+  businessId: string
+): Promise<PushSendResult> {
   const { appId } = getOneSignalConfig();
   if (!appId) {
     return { sent: false, reason: "not_configured" };
@@ -164,19 +189,21 @@ export async function sendAdminTestPush(userId: string): Promise<PushSendResult>
     ""
   );
 
-  const supabase = await createServiceClient();
-  const { data: profile } = await supabase
+  const db = await createTenantServiceClient(businessId);
+  const { data: profile } = await db.raw
     .from("profiles")
     .select("onesignal_subscription_id")
     .eq("id", userId)
     .single();
 
+  const filters = adminPushFilters(businessId);
   const basePayload = {
     target_channel: "push",
     headings: { en: "Swift Portal Test" },
     contents: { en: "Push notifications are working." },
     url: `${appUrl}/admin`,
     data: { url: `${appUrl}/admin`, eventType: "test" },
+    filters,
   };
 
   if (profile?.onesignal_subscription_id) {
@@ -203,13 +230,18 @@ export async function sendAdminTestPush(userId: string): Promise<PushSendResult>
   );
 }
 
-export async function markAdminPushEnabled(userId: string, subscriptionId: string | null) {
-  const supabase = await createServiceClient();
-  await supabase
+export async function markAdminPushEnabled(
+  userId: string,
+  subscriptionId: string | null,
+  businessId: string
+) {
+  const db = await createTenantServiceClient(businessId);
+  await db.raw
     .from("profiles")
     .update({
       push_notifications_enabled: true,
       onesignal_subscription_id: subscriptionId,
     })
-    .eq("id", userId);
+    .eq("id", userId)
+    .eq("business_id", businessId);
 }

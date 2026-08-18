@@ -1,4 +1,4 @@
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { filterClientVisibleActivities } from "@/lib/communications";
 import { getClientActivityDisplay } from "@/lib/activity-display";
 import type { ActivityLog, ClientMessage } from "@/lib/types";
@@ -44,11 +44,12 @@ function dedupeMeaningfulActivities(activities: ActivityLog[]): ActivityLog[] {
 }
 
 export async function listAdminConversations(
+  businessId: string,
   adminUserId: string
 ): Promise<ConversationListItem[]> {
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
 
-  const { data: messages } = await supabase
+  const { data: messages } = await db
     .from("client_messages")
     .select("id, client_id, body, created_at, sender_role, sender_user_id")
     .order("created_at", { ascending: false })
@@ -57,7 +58,7 @@ export async function listAdminConversations(
   if (!messages?.length) return [];
 
   const clientIds = Array.from(new Set(messages.map((m) => m.client_id)));
-  const { data: clients } = await supabase
+  const { data: clients } = await db
     .from("clients")
     .select("id, name, email, company")
     .in("id", clientIds)
@@ -66,7 +67,7 @@ export async function listAdminConversations(
   const clientMap = new Map((clients ?? []).map((c) => [c.id, c]));
 
   const messageIds = messages.map((m) => m.id);
-  const { data: reads } = await supabase
+  const { data: reads } = await db
     .from("client_message_reads")
     .select("message_id")
     .eq("user_id", adminUserId)
@@ -106,10 +107,11 @@ export async function listAdminConversations(
 
 /** Ensure a conversation list entry exists for a client (e.g. deep-link before first message). */
 export async function getOrCreateConversationStub(
+  businessId: string,
   clientId: string
 ): Promise<ConversationListItem | null> {
-  const supabase = await createServiceClient();
-  const { data: client } = await supabase
+  const db = await createTenantServiceClient(businessId);
+  const { data: client } = await db
     .from("clients")
     .select("id, name, email, company")
     .eq("id", clientId)
@@ -131,12 +133,13 @@ export async function getOrCreateConversationStub(
 }
 
 export async function getClientMessages(
+  businessId: string,
   clientId: string,
   viewerUserId: string
 ): Promise<ClientMessage[]> {
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
 
-  const { data: messages } = await supabase
+  const { data: messages } = await db
     .from("client_messages")
     .select("id, client_id, project_id, sender_user_id, sender_role, body, created_at")
     .eq("client_id", clientId)
@@ -144,7 +147,7 @@ export async function getClientMessages(
 
   const senderIds = Array.from(new Set((messages ?? []).map((m) => m.sender_user_id)));
   const { data: profiles } = senderIds.length
-    ? await supabase.from("profiles").select("id, full_name, email").in("id", senderIds)
+    ? await db.raw.from("profiles").select("id, full_name, email").in("id", senderIds)
     : { data: [] as { id: string; full_name: string | null; email: string | null }[] };
 
   const nameById = new Map(
@@ -153,7 +156,7 @@ export async function getClientMessages(
 
   const messageIds = (messages ?? []).map((m) => m.id);
   const { data: reads } = messageIds.length
-    ? await supabase
+    ? await db
         .from("client_message_reads")
         .select("message_id")
         .eq("user_id", viewerUserId)
@@ -169,9 +172,13 @@ export async function getClientMessages(
   }));
 }
 
-export async function markClientMessagesRead(clientId: string, userId: string): Promise<number> {
-  const supabase = await createServiceClient();
-  const { data: messages } = await supabase
+export async function markClientMessagesRead(
+  businessId: string,
+  clientId: string,
+  userId: string
+): Promise<number> {
+  const db = await createTenantServiceClient(businessId);
+  const { data: messages } = await db
     .from("client_messages")
     .select("id, sender_user_id")
     .eq("client_id", clientId);
@@ -186,20 +193,21 @@ export async function markClientMessagesRead(clientId: string, userId: string): 
 
   if (!toMark.length) return 0;
 
-  await supabase.from("client_message_reads").upsert(toMark, {
+  await db.from("client_message_reads").upsert(toMark, {
     onConflict: "message_id,user_id",
   });
   return toMark.length;
 }
 
 export async function buildClientCrmTimeline(
+  businessId: string,
   clientId: string,
   viewerUserId: string
 ): Promise<CrmTimelineItem[]> {
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
   const items: CrmTimelineItem[] = [];
 
-  const messages = await getClientMessages(clientId, viewerUserId);
+  const messages = await getClientMessages(businessId, clientId, viewerUserId);
   for (const m of messages) {
     items.push({
       id: `msg-${m.id}`,
@@ -215,11 +223,11 @@ export async function buildClientCrmTimeline(
 
   // Meaningful milestones only — same filter as client Recent Activity.
   // Do not include communications / email transport logs.
-  const { data: junction } = await supabase
+  const { data: junction } = await db
     .from("project_clients")
     .select("project_id")
     .eq("client_id", clientId);
-  const { data: owned } = await supabase.from("projects").select("id").eq("client_id", clientId);
+  const { data: owned } = await db.from("projects").select("id").eq("client_id", clientId);
   const projectIds = Array.from(
     new Set([
       ...(junction ?? []).map((j) => j.project_id),
@@ -230,7 +238,7 @@ export async function buildClientCrmTimeline(
   const activitySelect =
     "id, activity_type, description, title, project_id, client_id, visibility, user_id, lead_id, property_id, metadata, created_at";
 
-  const { data: clientActivities } = await supabase
+  const { data: clientActivities } = await db
     .from("activity_logs")
     .select(activitySelect)
     .eq("client_id", clientId)
@@ -239,7 +247,7 @@ export async function buildClientCrmTimeline(
 
   let projectActivities: ActivityLog[] = [];
   if (projectIds.length) {
-    const { data } = await supabase
+    const { data } = await db
       .from("activity_logs")
       .select(activitySelect)
       .in("project_id", projectIds)
@@ -271,7 +279,7 @@ export async function buildClientCrmTimeline(
   }
 
   if (projectIds.length) {
-    const { data: projects } = await supabase
+    const { data: projects } = await db
       .from("projects")
       .select("id, project_name")
       .in("id", projectIds);
@@ -286,7 +294,10 @@ export async function buildClientCrmTimeline(
   );
 }
 
-export async function countAdminUnreadMessages(adminUserId: string): Promise<number> {
-  const conversations = await listAdminConversations(adminUserId);
+export async function countAdminUnreadMessages(
+  businessId: string,
+  adminUserId: string
+): Promise<number> {
+  const conversations = await listAdminConversations(businessId, adminUserId);
   return conversations.reduce((sum, c) => sum + c.unread_count, 0);
 }

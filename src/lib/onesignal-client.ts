@@ -99,10 +99,11 @@ export async function initOneSignal(): Promise<OneSignalNamespace> {
   return initPromise;
 }
 
-export async function enableAdminPushNotifications(userId: string) {
+export async function enableAdminPushNotifications(userId: string, businessId: string) {
   const OneSignal = await initOneSignal();
   await OneSignal.login(userId);
   await OneSignal.User.addTag("swift_portal_role", "admin");
+  await OneSignal.User.addTag("business_id", businessId);
   await OneSignal.User.PushSubscription.optIn();
 
   return {

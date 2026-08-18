@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { createServiceClient } from "@/lib/supabase/server";
 import { mapResendWebhookType, recordEmailEvent } from "@/lib/email-analytics";
 import { getClientEmailPresentation } from "@/lib/client-email-notifications";
 import type { NotificationType } from "@/lib/types";
@@ -12,10 +13,32 @@ interface ResendWebhookPayload {
     created_at?: string;
     to?: string[];
     subject?: string;
-    tags?: Record<string, string>;
+    tags?: Record<string, string> | { name: string; value: string }[];
     click?: { link?: string };
     bounce?: { message?: string };
   };
+}
+
+function normalizeResendTags(tags: unknown): Record<string, string> {
+  if (!tags) return {};
+  if (Array.isArray(tags)) {
+    const out: Record<string, string> = {};
+    for (const tag of tags) {
+      if (!tag || typeof tag !== "object") continue;
+      const name = "name" in tag ? String((tag as { name?: unknown }).name ?? "") : "";
+      const value = "value" in tag ? String((tag as { value?: unknown }).value ?? "") : "";
+      if (name) out[name] = value;
+    }
+    return out;
+  }
+  if (typeof tags === "object") {
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(tags as Record<string, unknown>)) {
+      if (value != null) out[key] = String(value);
+    }
+    return out;
+  }
+  return {};
 }
 
 export async function POST(request: Request) {
@@ -54,7 +77,8 @@ export async function POST(request: Request) {
     }
 
     const data = payload.data;
-    const tags = data?.tags ?? {};
+    const tags = normalizeResendTags(data?.tags);
+    const taggedBusinessId = tags.business_id?.trim() || null;
     const projectId = tags.project_id ?? null;
     const notificationId = tags.notification_id ?? null;
     const emailType = tags.email_type ?? "general";
@@ -80,7 +104,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true, skipped: "sent_recorded_on_dispatch" });
     }
 
+    if (!taggedBusinessId) {
+      console.warn("[resend-webhook] missing business_id tag — writing nothing", {
+        emailId: data?.email_id,
+        type: payload.type,
+      });
+      return NextResponse.json({ received: true, skipped: "missing_business_id" });
+    }
+
+    if (projectId) {
+      const supabase = await createServiceClient();
+      const { data: project } = await supabase
+        .from("projects")
+        .select("business_id")
+        .eq("id", projectId)
+        .maybeSingle();
+
+      if (!project?.business_id) {
+        console.warn("[resend-webhook] project not found — writing nothing", {
+          projectId,
+          taggedBusinessId,
+          emailId: data?.email_id,
+        });
+        return NextResponse.json({ received: true, skipped: "unknown_project" });
+      }
+
+      if (project.business_id !== taggedBusinessId) {
+        console.warn("[resend-webhook] business_id tag does not match project — writing nothing", {
+          projectId,
+          taggedBusinessId,
+          projectBusinessId: project.business_id,
+          emailId: data?.email_id,
+        });
+        return NextResponse.json({ received: true, skipped: "business_mismatch" });
+      }
+    }
+
     await recordEmailEvent({
+      businessId: taggedBusinessId,
       resendEmailId: data?.email_id,
       projectId,
       notificationId,

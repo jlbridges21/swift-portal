@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getEmailConfigStatus, getLastEmailSendResult, sendTestEmail } from "@/lib/email";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
@@ -10,11 +10,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+  const businessId = tenant.businessId;
+  const db = await createTenantServiceClient(businessId);
+
   const { searchParams } = new URL(request.url);
   const clientUserId = searchParams.get("client_user_id");
   const clientEmail = searchParams.get("client_email");
 
-  const supabase = await createServiceClient();
   let clientPrefs: {
     found: boolean;
     email: string | null;
@@ -29,10 +33,11 @@ export async function GET(request: Request) {
   };
 
   if (clientUserId) {
-    const { data, error } = await supabase
+    const { data, error } = await db.raw
       .from("profiles")
       .select("email, role, email_notifications_enabled, in_app_notifications_enabled")
       .eq("id", clientUserId)
+      .eq("business_id", businessId)
       .single();
 
     if (!error && data) {
@@ -46,17 +51,18 @@ export async function GET(request: Request) {
       clientPrefs.note = error?.message ?? "Client profile not found";
     }
   } else if (clientEmail) {
-    const { data: client } = await supabase
+    const { data: client } = await db
       .from("clients")
       .select("id, email, user_id, name")
       .eq("email", clientEmail)
       .maybeSingle();
 
     if (client?.user_id) {
-      const { data, error } = await supabase
+      const { data, error } = await db.raw
         .from("profiles")
         .select("email, role, email_notifications_enabled, in_app_notifications_enabled")
         .eq("id", client.user_id)
+        .eq("business_id", businessId)
         .single();
 
       if (!error && data) {
@@ -88,9 +94,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const tenant = await getTenantContext();
-  if (!tenant) return missingTenantResponse(profile.role);
-  const lastSend = getLastEmailSendResult(tenant.businessId);
+  const lastSend = getLastEmailSendResult(businessId);
 
   return NextResponse.json({
     config: getEmailConfigStatus(),
@@ -116,6 +120,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+
   const body = await request.json();
   const action = body.action as string;
 
@@ -125,7 +132,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "A test email address is required" }, { status: 400 });
     }
 
-    const result = await sendTestEmail(to);
+    const result = await sendTestEmail(to, tenant.businessId);
 
     if (!result.sent) {
       return NextResponse.json(

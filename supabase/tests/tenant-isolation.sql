@@ -119,6 +119,7 @@ DECLARE
   v_tag        uuid := '00000000-0000-0000-0000-0000000000c7';
   v_proj_msg   uuid := '00000000-0000-0000-0000-0000000000c8';
   v_media_unassigned uuid := '00000000-0000-0000-0000-0000000000c9';
+  v_notif_admin uuid := '00000000-0000-0000-0000-0000000000ca';
 
   v_assertions int;
   v_n          bigint;
@@ -263,6 +264,11 @@ BEGIN
   INSERT INTO notifications (id, business_id, user_id, type, title, project_id)
   VALUES (v_notif, v_business, v_tenant_b_client_user_id, 'status_changed', 'Tenant B notification', v_project);
 
+  -- Prompt 11: Tenant B project notification for Tenant B admin only — never a Swift profile
+  INSERT INTO notifications (id, business_id, user_id, type, title, project_id)
+  VALUES (v_notif_admin, v_business, v_tenant_b_admin_user_id, 'project_message',
+    'Tenant B admin notification', v_project);
+
   INSERT INTO tours (id, business_id, project_id, tour_name, kuula_url)
   VALUES (v_tour, v_business, v_project, 'Tenant B Tour', 'https://example.test/kuula/tenant-b');
 
@@ -319,6 +325,21 @@ BEGIN
   PERFORM _tenant_test_assert_read_hidden('media_downloads', v_download);
   PERFORM _tenant_test_assert_read_hidden('media_asset_events', v_event);
   PERFORM _tenant_test_assert_read_hidden('project_clients', v_proj_cli);
+
+  -- Prompt 11: creating a Tenant B project notification must produce ZERO rows for any Swift profile
+  SELECT count(*) INTO v_n FROM notifications
+    WHERE business_id = v_business AND user_id = v_swift_admin_user_id;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'NOTIF LEAK: Tenant B notification targeting Swift admin (% rows)', v_n;
+  END IF;
+  PERFORM _tenant_test_bump();
+
+  -- Prompt 11: inbox-shaped query — Swift admin must not see Tenant B client_messages
+  SELECT count(*) INTO v_n FROM client_messages WHERE id = v_message;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'INBOX LEAK: Tenant B client_message visible to Swift admin inbox';
+  END IF;
+  PERFORM _tenant_test_bump();
 
   SELECT count(*) INTO v_n FROM business_settings WHERE business_id = v_business;
   IF v_n > 0 THEN RAISE EXCEPTION 'READ LEAK: business_settings Tenant B visible (% rows)', v_n; END IF;

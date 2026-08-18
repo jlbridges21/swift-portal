@@ -1,7 +1,6 @@
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { sendBrandedEmail } from "@/lib/email";
 import { getAppSettings } from "@/lib/app-settings";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import type { PremiumEmailContent } from "@/lib/email-templates";
 import { getStatusOrder } from "@/lib/constants";
 import type { NotificationType } from "@/lib/types";
@@ -39,6 +38,7 @@ function eventTypeToMessageKey(
 }
 
 export interface ClientEmailNotificationOptions {
+  businessId: string;
   userId: string;
   clientId?: string | null;
   email: string;
@@ -212,12 +212,13 @@ export function getClientEmailPresentation(
   return { template, ...preset, subject, ctaUrl };
 }
 
-export async function getClientNotificationPreferences(userId: string) {
-  const supabase = await createServiceClient();
-  const { data, error } = await supabase
+export async function getClientNotificationPreferences(userId: string, businessId: string) {
+  const db = await createTenantServiceClient(businessId);
+  const { data, error } = await db.raw
     .from("profiles")
     .select("email_notifications_enabled, in_app_notifications_enabled, role, email")
     .eq("id", userId)
+    .eq("business_id", businessId)
     .single();
 
   if (error) {
@@ -259,16 +260,14 @@ export async function sendClientEmailNotification(
   const isCritical = CRITICAL_CLIENT_EMAIL_TYPES.has(options.eventType);
 
   if (!isCritical) {
-    const prefs = await getClientNotificationPreferences(options.userId);
+    const prefs = await getClientNotificationPreferences(options.userId, options.businessId);
     if (!prefs.email_notifications_enabled) {
       console.info("[email] skipped — client opted out:", options.eventType, options.userId);
       return { sent: false, reason: "opted_out" };
     }
   }
 
-  const appSettings = await getAppSettings(
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass client/project.business_id into client email notifications
-  );
+  const appSettings = await getAppSettings(options.businessId);
   const brandNames = {
     businessName: appSettings.business.businessName,
     portalName: appSettings.business.portalName,
@@ -302,6 +301,7 @@ export async function sendClientEmailNotification(
 
   try {
     const result = await sendBrandedEmail({
+      businessId: options.businessId,
       to: recipientEmail,
       subject: presentation.subject,
       title: presentation.title,

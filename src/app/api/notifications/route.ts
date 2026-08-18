@@ -10,12 +10,16 @@ export async function GET() {
     }
 
     const supabase = await createClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from("notifications")
       .select("id, type, title, body, link, project_id, read_at, created_at")
       .eq("user_id", profile.id)
       .order("created_at", { ascending: false })
       .limit(30);
+    if (profile.business_id) {
+      query = query.eq("business_id", profile.business_id);
+    }
+    const { data, error } = await query;
 
     if (error) {
       console.error("[notifications] GET failed", {
@@ -49,11 +53,15 @@ export async function PATCH(request: Request) {
     const supabase = await createClient();
 
     if (body.markAll) {
-      const { error } = await supabase
+      let markAll = supabase
         .from("notifications")
         .update({ read_at: new Date().toISOString() })
         .eq("user_id", profile.id)
         .is("read_at", null);
+      if (profile.business_id) {
+        markAll = markAll.eq("business_id", profile.business_id);
+      }
+      const { error } = await markAll;
 
       if (error) {
         console.error("[notifications] PATCH markAll failed", {
@@ -70,11 +78,15 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "id required" }, { status: 400 });
     }
 
-    const { error } = await supabase
+    let markOne = supabase
       .from("notifications")
       .update({ read_at: new Date().toISOString() })
       .eq("id", body.id)
       .eq("user_id", profile.id);
+    if (profile.business_id) {
+      markOne = markOne.eq("business_id", profile.business_id);
+    }
+    const { error } = await markOne;
 
     if (error) {
       console.error("[notifications] PATCH failed", {

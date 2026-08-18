@@ -2,7 +2,6 @@ import { Resend } from "resend";
 import { buildPremiumEmailHtml } from "@/lib/email-templates";
 import { recordEmailEvent } from "@/lib/email-analytics";
 import { getAppSettings } from "@/lib/app-settings";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 const resendClients = new Map<string, Resend>();
 
@@ -37,22 +36,25 @@ function getResend() {
   return client;
 }
 
-async function emailBusinessId(): Promise<string> {
-  // Context-free: reachable from cron, webhooks, and authenticated sends that
-  // do not yet thread a businessId. Unconditional so it stays greppable.
-  // TODO(tenant): prompt 16 — pass businessId from the caller (project/payment/webhook row)
-  return LEGACY_DEFAULT_BUSINESS_ID;
-}
-
 export function getResendFromEmail(): string {
   return process.env.RESEND_FROM_EMAIL || "Swift Portal <portal@swiftaerialmedia.com>";
 }
 
-export async function getConfiguredFromEmail(): Promise<string> {
-  const settings = await getAppSettings(await emailBusinessId());
+function platformFromAddress(): string {
+  const raw = getResendFromEmail();
+  return raw.match(/<([^>]+)>/)?.[1] ?? raw;
+}
+
+/** From-name and reply-to come from this business's settings; the address is the platform sender. */
+export async function getConfiguredFromEmail(businessId: string): Promise<string> {
+  // TODO(tenant): per-business sending domain — prompt 16
+  const settings = await getAppSettings(businessId);
   const { fromName, senderEmail } = settings.email;
   if (fromName && senderEmail) {
     return `${fromName} <${senderEmail}>`;
+  }
+  if (fromName) {
+    return `${fromName} <${platformFromAddress()}>`;
   }
   return getResendFromEmail();
 }
@@ -71,6 +73,7 @@ export function getEmailConfigStatus() {
 }
 
 export interface SendEmailOptions {
+  businessId: string;
   to: string;
   subject: string;
   title: string;
@@ -100,8 +103,11 @@ function formatResendError(error: unknown): string {
   return String(error);
 }
 
-function buildResendTags(analytics?: SendEmailOptions["analytics"]): { name: string; value: string }[] {
-  const tags: { name: string; value: string }[] = [];
+function buildResendTags(
+  businessId: string,
+  analytics?: SendEmailOptions["analytics"]
+): { name: string; value: string }[] {
+  const tags: { name: string; value: string }[] = [{ name: "business_id", value: businessId }];
   if (analytics?.projectId) tags.push({ name: "project_id", value: analytics.projectId });
   if (analytics?.notificationId) tags.push({ name: "notification_id", value: analytics.notificationId });
   if (analytics?.emailType) tags.push({ name: "email_type", value: analytics.emailType });
@@ -115,7 +121,7 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
     sent: false,
   };
 
-  const businessId = await emailBusinessId();
+  const businessId = options.businessId;
   const client = getResend();
   if (!client) {
     const msg = "RESEND_API_KEY is not set — email sending skipped";
@@ -144,8 +150,8 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
     },
   });
 
-  const from = await getConfiguredFromEmail();
-  const tags = buildResendTags(options.analytics);
+  const from = await getConfiguredFromEmail(businessId);
+  const tags = buildResendTags(businessId, options.analytics);
   const emailType = options.analytics?.emailType ?? options.emailType ?? "general";
 
   try {
@@ -169,6 +175,7 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
     console.info("[email] sent:", options.subject, "→", options.to, data?.id ?? "");
 
     void recordEmailEvent({
+      businessId,
       resendEmailId: data?.id,
       projectId: options.analytics?.projectId,
       notificationId: options.analytics?.notificationId,
@@ -191,9 +198,10 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
   }
 }
 
-export async function sendTestEmail(to: string): Promise<EmailSendResult> {
+export async function sendTestEmail(to: string, businessId: string): Promise<EmailSendResult> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://portal.swiftaerialmedia.com";
   return sendBrandedEmail({
+    businessId,
     to,
     subject: "Swift Portal Test Email",
     title: "Email notifications are working",

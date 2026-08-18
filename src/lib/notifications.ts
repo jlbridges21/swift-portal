@@ -1,9 +1,9 @@
 import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { sendBrandedEmail } from "@/lib/email";
 import { sendAdminPushNotification } from "@/lib/onesignal-push";
 import { sendClientEmailNotification } from "@/lib/client-email-notifications";
 import { getAppSettings } from "@/lib/app-settings";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import type { NotificationEventKey } from "@/lib/app-settings";
 import { resolveNotificationEventKey } from "@/lib/notification-settings";
 import type { NotificationType } from "@/lib/types";
@@ -24,6 +24,7 @@ interface NotifyOptions {
   clientId?: string;
   sendEmail?: boolean;
   eventKey?: NotificationEventKey;
+  businessId?: string;
 }
 
 interface NotificationRecipient {
@@ -45,22 +46,48 @@ type ProfileRow = {
   in_app_notifications_enabled?: boolean | null;
 };
 
-async function loadProfiles(userIds: string[]): Promise<ProfileRow[]> {
+/** Discover business_id from an explicit arg, else the related project or client row. */
+async function resolveNotifyBusinessId(options: NotifyOptions): Promise<string | null> {
+  if (options.businessId) return options.businessId;
+
+  const raw = await createServiceClient();
+  if (options.projectId) {
+    const { data } = await raw
+      .from("projects")
+      .select("business_id")
+      .eq("id", options.projectId)
+      .maybeSingle();
+    if (data?.business_id) return data.business_id;
+  }
+  if (options.clientId) {
+    const { data } = await raw
+      .from("clients")
+      .select("business_id")
+      .eq("id", options.clientId)
+      .maybeSingle();
+    if (data?.business_id) return data.business_id;
+  }
+  return null;
+}
+
+async function loadProfiles(businessId: string, userIds: string[]): Promise<ProfileRow[]> {
   if (!userIds.length) return [];
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
 
-  const { data, error } = await supabase
+  const { data, error } = await db.raw
     .from("profiles")
     .select("id, email, full_name, client_id, email_notifications_enabled, in_app_notifications_enabled")
+    .eq("business_id", businessId)
     .in("id", userIds);
 
   if (!error && data) return data as ProfileRow[];
 
   console.warn("[notifications] profile preference columns unavailable, using base profile fields:", error?.message);
-  const { data: fallback, error: fallbackError } = await supabase
+  const { data: fallback, error: fallbackError } = await db.raw
     .from("profiles")
     .select("id, email, full_name, client_id")
+    .eq("business_id", businessId)
     .in("id", userIds);
 
   if (fallbackError) {
@@ -71,12 +98,15 @@ async function loadProfiles(userIds: string[]): Promise<ProfileRow[]> {
   return (fallback ?? []) as ProfileRow[];
 }
 
-async function getAdminRecipients(): Promise<NotificationRecipient[]> {
-  const supabase = await createServiceClient();
-  const { data } = await supabase
+async function getAdminRecipients(businessId: string): Promise<NotificationRecipient[]> {
+  const db = await createTenantServiceClient(businessId);
+  // profiles is unscoped in the tenant wrapper — filter role AND business_id here.
+  // super_admin rows (NULL business_id) are intentionally excluded.
+  const { data } = await db.raw
     .from("profiles")
     .select("id, email, full_name, email_notifications_enabled, in_app_notifications_enabled")
-    .eq("role", "admin");
+    .eq("role", "admin")
+    .eq("business_id", businessId);
 
   return (data ?? []).map((profile) => ({
     id: profile.id,
@@ -88,14 +118,14 @@ async function getAdminRecipients(): Promise<NotificationRecipient[]> {
   }));
 }
 
-async function getSingleClientRecipient(clientId: string): Promise<NotificationRecipient | null> {
-  const supabase = await createServiceClient();
-  await ensureClientPortalLink(
-    clientId,
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass client.business_id into ensureClientPortalLink
-  );
+async function getSingleClientRecipient(
+  businessId: string,
+  clientId: string
+): Promise<NotificationRecipient | null> {
+  const db = await createTenantServiceClient(businessId);
+  await ensureClientPortalLink(clientId, businessId);
 
-  const { data: client } = await supabase
+  const { data: client } = await db
     .from("clients")
     .select("id, user_id, email, name")
     .eq("id", clientId)
@@ -106,7 +136,7 @@ async function getSingleClientRecipient(clientId: string): Promise<NotificationR
     return null;
   }
 
-  const profiles = await loadProfiles([client.user_id]);
+  const profiles = await loadProfiles(businessId, [client.user_id]);
   const profile = profiles[0];
   const email = (profile?.email || client.email || "").trim();
 
@@ -121,10 +151,13 @@ async function getSingleClientRecipient(clientId: string): Promise<NotificationR
   };
 }
 
-async function getProjectClientRecipients(projectId: string): Promise<NotificationRecipient[]> {
-  const supabase = await createServiceClient();
+async function getProjectClientRecipients(
+  businessId: string,
+  projectId: string
+): Promise<NotificationRecipient[]> {
+  const db = await createTenantServiceClient(businessId);
 
-  const { data: project } = await supabase
+  const { data: project } = await db
     .from("projects")
     .select("client_id")
     .eq("id", projectId)
@@ -133,7 +166,7 @@ async function getProjectClientRecipients(projectId: string): Promise<Notificati
   const clientIds = new Set<string>();
   if (project?.client_id) clientIds.add(project.client_id);
 
-  const { data: junction } = await supabase
+  const { data: junction } = await db
     .from("project_clients")
     .select("client_id")
     .eq("project_id", projectId);
@@ -145,7 +178,7 @@ async function getProjectClientRecipients(projectId: string): Promise<Notificati
     return [];
   }
 
-  const { data: clients, error: clientsError } = await supabase
+  const { data: clients, error: clientsError } = await db
     .from("clients")
     .select("id, user_id, email, name")
     .in("id", Array.from(clientIds));
@@ -159,7 +192,7 @@ async function getProjectClientRecipients(projectId: string): Promise<Notificati
     (clients ?? []).filter((c) => c.user_id).map((c) => [c.user_id as string, c])
   );
   const userIds = Array.from(clientByUserId.keys());
-  const profiles = await loadProfiles(userIds);
+  const profiles = await loadProfiles(businessId, userIds);
   const profileById = new Map(profiles.map((p) => [p.id, p]));
 
   const recipients: NotificationRecipient[] = [];
@@ -193,11 +226,12 @@ async function getProjectClientRecipients(projectId: string): Promise<Notificati
 }
 
 async function hasDuplicatePaymentNotification(
+  businessId: string,
   userId: string,
   paymentId: string
 ): Promise<boolean> {
-  const supabase = await createServiceClient();
-  const { data, error } = await supabase
+  const db = await createTenantServiceClient(businessId);
+  const { data, error } = await db
     .from("notifications")
     .select("id")
     .eq("user_id", userId)
@@ -215,19 +249,27 @@ async function hasDuplicatePaymentNotification(
 }
 
 export async function notifyUsers(options: NotifyOptions) {
-  const supabase = await createServiceClient();
+  const businessId = await resolveNotifyBusinessId(options);
+  if (!businessId) {
+    console.warn("[notifications] skipped — could not resolve businessId", {
+      type: options.type,
+      projectId: options.projectId,
+      clientId: options.clientId,
+    });
+    return;
+  }
+
+  const db = await createTenantServiceClient(businessId);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const recipients: NotificationRecipient[] = [];
 
-  const appSettings = await getAppSettings(
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass recipient/project.business_id into notifyUsers
-  );
+  const appSettings = await getAppSettings(businessId);
   const eventKey = resolveNotificationEventKey(options);
   const channelSettings = eventKey ? appSettings.notifications[eventKey] : null;
 
   let projectContext: { project_name: string; status: string } | null = null;
   if (options.projectId) {
-    const { data } = await supabase
+    const { data } = await db
       .from("projects")
       .select("project_name, status")
       .eq("id", options.projectId)
@@ -236,14 +278,14 @@ export async function notifyUsers(options: NotifyOptions) {
   }
 
   if (options.notifyAdmins) {
-    recipients.push(...(await getAdminRecipients()));
+    recipients.push(...(await getAdminRecipients(businessId)));
   }
 
   if (options.clientId) {
-    const single = await getSingleClientRecipient(options.clientId);
+    const single = await getSingleClientRecipient(businessId, options.clientId);
     if (single) recipients.push(single);
   } else if (options.notifyClients && options.projectId) {
-    recipients.push(...(await getProjectClientRecipients(options.projectId)));
+    recipients.push(...(await getProjectClientRecipients(businessId, options.projectId)));
   }
 
   const unique = new Map<string, NotificationRecipient>();
@@ -261,7 +303,7 @@ export async function notifyUsers(options: NotifyOptions) {
     if (!user.id || user.id.includes("@")) continue;
 
     if (options.paymentId && options.type === "payment_received") {
-      const duplicate = await hasDuplicatePaymentNotification(user.id, options.paymentId);
+      const duplicate = await hasDuplicatePaymentNotification(businessId, user.id, options.paymentId);
       if (duplicate) {
         console.info("[notifications] skipped duplicate payment_received", {
           userId: user.id,
@@ -277,7 +319,7 @@ export async function notifyUsers(options: NotifyOptions) {
     let notificationId: string | null = null;
 
     if (shouldCreateInApp) {
-      const { data: notification } = await supabase
+      const { data: notification } = await db
         .from("notifications")
         .insert({
           user_id: user.id,
@@ -303,6 +345,7 @@ export async function notifyUsers(options: NotifyOptions) {
     if (user.role === "admin") {
       try {
         await sendBrandedEmail({
+          businessId,
           to: user.email,
           subject: options.title,
           title: options.title,
@@ -326,6 +369,7 @@ export async function notifyUsers(options: NotifyOptions) {
 
     try {
       const emailResult = await sendClientEmailNotification({
+        businessId,
         userId: user.id,
         clientId: user.client_id,
         email: user.email,
@@ -357,6 +401,7 @@ export async function notifyUsers(options: NotifyOptions) {
   if (options.notifyAdmins && allowPush) {
     try {
       const pushResult = await sendAdminPushNotification({
+        businessId,
         title: options.title,
         message: options.body || options.title,
         url: options.link,

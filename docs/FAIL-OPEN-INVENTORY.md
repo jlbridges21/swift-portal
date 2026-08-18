@@ -110,14 +110,9 @@ grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "expo
 
 | File | Resolving prompt |
 |---|---|
-| `src/lib/email.ts` `emailBusinessId()` | **16** — per-business email; callers must pass `businessId` |
 | `src/app/api/cron/workflow-reminders/route.ts` | **12** — iterate active businesses / `project.business_id` |
 | `src/lib/stripe-payments.ts` (5 sites) | **12** — Stripe webhook; `payment.business_id` from metadata |
 | `src/app/api/request/route.ts` (2 sites) | **12** — public `/request` stamps a real `business_id` |
-| `src/lib/notifications.ts` (2 sites) | **11** — notifications/messaging batch |
-| `src/lib/client-email-notifications.ts` | **11** |
-| `src/app/api/messages/route.ts` `ensureClientPortalLink` | **11** |
-| `src/app/api/projects/[id]/messages/route.ts` `ensureClientPortalLink` | **11** |
 | `src/lib/status-automation.ts` (2 sites) | **12** |
 | `src/lib/preliminary-estimates.ts` (3 sites) | **12** |
 | `src/lib/workflow.ts` (2 sites) | **12** |
@@ -125,7 +120,8 @@ grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "expo
 | `src/app/api/shoot-proposals/route.ts` activity logs (3 sites) | **12** |
 | `src/app/api/approvals/route.ts` | **12** |
 | `src/app/api/revisions/route.ts` (2 sites) | **12** |
-| `src/lib/email-analytics.ts` | **16** |
+
+Prompt 11 removed Category C from `email.ts`, `notifications.ts`, `client-email-notifications.ts`, `email-analytics.ts`, and both message routes. `src/lib/onesignal-push.ts` compares the send-time `businessId` to `LEGACY_DEFAULT_BUSINESS_ID` so **untagged** subscriptions still match Swift admin push; that is send-filter policy, not a missing-context placeholder.
 
 (`src/lib/tenant.ts` export of the constant is not a call site.)
 
@@ -168,7 +164,7 @@ grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "expo
 grep -n "user_metadata" src/app/api/request/route.ts
 ```
 
-| Check | After prompt 10 | Before 2nd business |
+| Check | After prompt 11 | Before 2nd business |
 |---|---|---|
 | `?? LEGACY_DEFAULT_BUSINESS_ID` on authenticated paths | **0** | **0** |
 | `?? LEGACY_DEFAULT_BUSINESS_ID` in `getProfile()` (Category D) | **0** | **0** |

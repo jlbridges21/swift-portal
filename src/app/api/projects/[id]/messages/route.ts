@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { canAccessProject } from "@/lib/project-access";
 import {
@@ -9,7 +9,7 @@ import {
 import { notifyAdmins, notifyClient } from "@/lib/notifications";
 import { sendBrandedEmail } from "@/lib/email";
 import { getAppSettings } from "@/lib/app-settings";
-import { getTenantContext, missingTenantResponse, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import type { ClientMessage } from "@/lib/types";
 
@@ -46,7 +46,10 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "No client profile linked" }, { status: 403 });
   }
 
-  const messages = await getClientMessages(profile.client_id, profile.id);
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+
+  const messages = await getClientMessages(tenant.businessId, profile.client_id, profile.id);
   return NextResponse.json(messages);
 }
 
@@ -91,9 +94,9 @@ export async function POST(request: Request, { params }: RouteParams) {
     clientId = profile.client_id;
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
 
-  const { data: client } = await supabase
+  const { data: client } = await db
     .from("clients")
     .select("id, name, email, user_id")
     .eq("id", clientId!)
@@ -103,7 +106,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  const { data: message, error } = await supabase
+  const { data: message, error } = await db
     .from("client_messages")
     .insert({
       client_id: clientId,
@@ -120,7 +123,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
   }
 
-  await supabase.from("client_message_reads").upsert(
+  await db.from("client_message_reads").upsert(
     { message_id: message.id, user_id: profile.id, read_at: new Date().toISOString() },
     { onConflict: "message_id,user_id" }
   );
@@ -132,11 +135,9 @@ export async function POST(request: Request, { params }: RouteParams) {
   );
 
   if (isAdmin) {
-    await ensureClientPortalLink(
-      clientId!,
-      LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass client.business_id into ensureClientPortalLink
-    );
+    await ensureClientPortalLink(clientId!, businessId);
     await notifyClient({
+      businessId,
       clientId: clientId!,
       type: "project_message",
       eventKey: "project_message",
@@ -149,6 +150,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     if (client.email) {
       const appSettings = await getAppSettings(businessId);
       void sendBrandedEmail({
+        businessId,
         to: client.email,
         subject: "You have a new message from Swift Aerial Media",
         title: "You have a new message",
@@ -161,6 +163,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     }
   } else {
     await notifyAdmins({
+      businessId,
       type: "project_message",
       eventKey: "project_message",
       title: `Message from ${client.name}`,
@@ -190,13 +193,17 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Project not found or access denied" }, { status: 404 });
   }
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+  const businessId = tenant.businessId;
+
   if (profile.role === "admin") {
     const body = await request.json().catch(() => ({}));
     const clientId = typeof body.client_id === "string" ? body.client_id : null;
     if (!clientId) {
       return NextResponse.json({ error: "client_id required" }, { status: 400 });
     }
-    const marked = await markClientMessagesRead(clientId, profile.id);
+    const marked = await markClientMessagesRead(businessId, clientId, profile.id);
     return NextResponse.json({ success: true, marked });
   }
 
@@ -204,6 +211,6 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "No client profile linked" }, { status: 403 });
   }
 
-  const marked = await markClientMessagesRead(profile.client_id, profile.id);
+  const marked = await markClientMessagesRead(businessId, profile.client_id, profile.id);
   return NextResponse.json({ success: true, marked });
 }

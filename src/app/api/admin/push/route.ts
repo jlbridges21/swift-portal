@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { markAdminPushEnabled, sendAdminTestPush } from "@/lib/onesignal-push";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET() {
   const profile = await getProfile();
@@ -9,11 +10,15 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = await createServiceClient();
-  const { data } = await supabase
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+  const db = await createTenantServiceClient(tenant.businessId);
+
+  const { data } = await db.raw
     .from("profiles")
     .select("push_notifications_enabled, onesignal_subscription_id")
     .eq("id", profile.id)
+    .eq("business_id", tenant.businessId)
     .single();
 
   return NextResponse.json({
@@ -29,16 +34,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+
   const body = await request.json();
   const action = body.action as string;
 
   if (action === "subscribe") {
-    await markAdminPushEnabled(profile.id, body.subscriptionId ?? null);
+    await markAdminPushEnabled(profile.id, body.subscriptionId ?? null, tenant.businessId);
     return NextResponse.json({ success: true });
   }
 
   if (action === "test") {
-    const result = await sendAdminTestPush(profile.id);
+    const result = await sendAdminTestPush(profile.id, tenant.businessId);
     if (!result.sent) {
       const message =
         result.reason === "not_configured"

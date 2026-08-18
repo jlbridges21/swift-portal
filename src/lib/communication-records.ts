@@ -1,4 +1,4 @@
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 
 export type CommunicationType =
   | "email"
@@ -20,6 +20,7 @@ export type CommunicationStatus =
   | "failed";
 
 export async function logCommunication(options: {
+  businessId: string;
   projectId?: string | null;
   clientId?: string | null;
   userId?: string | null;
@@ -34,8 +35,8 @@ export async function logCommunication(options: {
   createdAt?: string;
 }) {
   try {
-    const supabase = await createServiceClient();
-    await supabase.from("communications").insert({
+    const db = await createTenantServiceClient(options.businessId);
+    await db.from("communications").insert({
       project_id: options.projectId ?? null,
       client_id: options.clientId ?? null,
       user_id: options.userId ?? null,

@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { formatDate } from "@/lib/utils";
 import type { MessageTemplateKey } from "@/lib/workflow-settings";
 
@@ -88,13 +89,14 @@ export async function buildProjectMessageVariables(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("project_name, property_address, shoot_date, client_id")
+    .select("project_name, property_address, shoot_date, client_id, business_id")
     .eq("id", projectId)
     .maybeSingle();
 
   let clientName = "";
-  if (project?.client_id) {
-    const { data: client } = await supabase
+  if (project?.client_id && project.business_id) {
+    const db = await createTenantServiceClient(project.business_id);
+    const { data: client } = await db
       .from("clients")
       .select("name, full_name, first_name, last_name")
       .eq("id", project.client_id)

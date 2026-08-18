@@ -1,9 +1,8 @@
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { logProjectActivity } from "@/lib/activity";
 import { logCommunication } from "@/lib/communication-records";
 import { EMAIL_TYPE_LABELS } from "@/lib/email-templates";
 import type { ActivityType } from "@/lib/types";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export type EmailLifecycleEvent =
   | "sent"
@@ -75,6 +74,7 @@ function getActivityDescription(
 }
 
 export async function recordEmailEvent(params: {
+  businessId: string;
   resendEmailId?: string | null;
   projectId?: string | null;
   notificationId?: string | null;
@@ -87,10 +87,10 @@ export async function recordEmailEvent(params: {
   logActivity?: boolean;
 }): Promise<void> {
   try {
-    const supabase = await createServiceClient();
+    const db = await createTenantServiceClient(params.businessId);
     const occurredAt = params.occurredAt ?? new Date().toISOString();
 
-    const { error } = await supabase.from("email_events").insert({
+    const { error } = await db.from("email_events").insert({
       resend_email_id: params.resendEmailId ?? null,
       project_id: params.projectId ?? null,
       notification_id: params.notificationId ?? null,
@@ -112,7 +112,7 @@ export async function recordEmailEvent(params: {
         ACTIVITY_TYPE_MAP[params.eventType],
         getActivityDescription(params.emailType, params.eventType, params.ctaLabel),
         {
-          businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
+          businessId: params.businessId,
           projectId: params.projectId,
           visibility: "admin",
           metadata: {
@@ -137,6 +137,7 @@ export async function recordEmailEvent(params: {
     };
 
     await logCommunication({
+      businessId: params.businessId,
       projectId: params.projectId,
       commType: "email",
       title: params.emailType,
@@ -328,9 +329,12 @@ export function groupEmailEvents(events: EmailEventRecord[]): EmailCommunication
     });
 }
 
-export async function getProjectEmailEvents(projectId: string): Promise<EmailEventRecord[]> {
-  const supabase = await createServiceClient();
-  const { data, error } = await supabase
+export async function getProjectEmailEvents(
+  projectId: string,
+  businessId: string
+): Promise<EmailEventRecord[]> {
+  const db = await createTenantServiceClient(businessId);
+  const { data, error } = await db
     .from("email_events")
     .select("*")
     .eq("project_id", projectId)
