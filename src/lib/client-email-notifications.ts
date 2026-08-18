@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendBrandedEmail } from "@/lib/email";
 import { getAppSettings } from "@/lib/app-settings";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import type { PremiumEmailContent } from "@/lib/email-templates";
 import { getStatusOrder } from "@/lib/constants";
 import type { NotificationType } from "@/lib/types";
@@ -265,7 +266,9 @@ export async function sendClientEmailNotification(
     }
   }
 
-  const appSettings = await getAppSettings();
+  const appSettings = await getAppSettings(
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass client/project.business_id into client email notifications
+  );
   const brandNames = {
     businessName: appSettings.business.businessName,
     portalName: appSettings.business.portalName,

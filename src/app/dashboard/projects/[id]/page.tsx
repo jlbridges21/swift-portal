@@ -7,6 +7,7 @@ import { redirect, notFound } from "next/navigation";
 import { filterClientVisibleActivities } from "@/lib/communications";
 import { getClientVisibleQuotes } from "@/lib/quote-display";
 import { getAppSettings } from "@/lib/app-settings";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { ProjectPageClient } from "@/components/projects/project-page-client";
 import { UrlToastHandler } from "@/components/ui/url-toast-handler";
 
@@ -61,7 +62,10 @@ async function ProjectContent({
 
   if (!project) notFound();
 
-  const appSettings = await getAppSettings();
+  const tenant = await getTenantContext();
+  const appSettings = await getAppSettings(
+    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on client project detail
+  );
   const hero = await getProjectHeroMedia(supabase, project);
   const visibleMedia = filterClientMedia(media ?? []);
   const visibleTours = filterClientTours(tours ?? []);

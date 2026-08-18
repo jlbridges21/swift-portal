@@ -11,6 +11,7 @@ import {
 import { notifyAdmins, notifyClient } from "@/lib/notifications";
 import { sendBrandedEmail } from "@/lib/email";
 import { getAppSettings } from "@/lib/app-settings";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import type { ClientMessage } from "@/lib/types";
 
@@ -162,7 +163,10 @@ export async function POST(request: Request) {
     });
 
     if (client.email) {
-      const appSettings = await getAppSettings();
+      const tenant = await getTenantContext();
+      const appSettings = await getAppSettings(
+        tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on messages API
+      );
       void sendBrandedEmail({
         to: client.email,
         subject: "You have a new message from Swift Aerial Media",

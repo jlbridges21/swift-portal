@@ -181,21 +181,25 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
   };
 }
 
-let cachedSettings: AppSettings | null = null;
-let cacheExpiresAt = 0;
+const settingsCache = new Map<string, { settings: AppSettings; expiresAt: number }>();
 const CACHE_TTL_MS = 30_000;
 
-export function invalidateAppSettingsCache() {
-  cachedSettings = null;
-  cacheExpiresAt = 0;
+export function invalidateAppSettingsCache(businessId?: string) {
+  if (businessId) {
+    settingsCache.delete(businessId);
+    return;
+  }
+  settingsCache.clear();
 }
 
-export async function getAppSettings(): Promise<AppSettings> {
+export async function getAppSettings(businessId: string): Promise<AppSettings> {
   const now = Date.now();
-  if (cachedSettings && now < cacheExpiresAt) return cachedSettings;
+  const cached = settingsCache.get(businessId);
+  if (cached && now < cached.expiresAt) return cached.settings;
 
   try {
     const supabase = await createServiceClient();
+    // TODO(tenant): read business_settings — prompt 8
     const { data, error } = await supabase
       .from("app_settings")
       .select("settings")
@@ -207,9 +211,9 @@ export async function getAppSettings(): Promise<AppSettings> {
       return structuredClone(DEFAULT_APP_SETTINGS);
     }
 
-    cachedSettings = mergeAppSettings((data?.settings as Partial<AppSettings>) ?? null);
-    cacheExpiresAt = now + CACHE_TTL_MS;
-    return cachedSettings;
+    const settings = mergeAppSettings((data?.settings as Partial<AppSettings>) ?? null);
+    settingsCache.set(businessId, { settings, expiresAt: now + CACHE_TTL_MS });
+    return settings;
   } catch (error) {
     console.warn("[app-settings] unexpected load error, using defaults:", error);
     return structuredClone(DEFAULT_APP_SETTINGS);
@@ -218,9 +222,10 @@ export async function getAppSettings(): Promise<AppSettings> {
 
 export async function saveAppSettings(
   patch: Partial<AppSettings>,
-  updatedBy: string
+  updatedBy: string,
+  businessId: string
 ): Promise<AppSettings> {
-  const current = await getAppSettings();
+  const current = await getAppSettings(businessId);
   const merged = mergeAppSettings({ ...current, ...patch });
 
   const supabase = await createServiceClient();
@@ -235,8 +240,7 @@ export async function saveAppSettings(
 
   if (error) throw new Error(error.message);
 
-  cachedSettings = merged;
-  cacheExpiresAt = Date.now() + CACHE_TTL_MS;
+  settingsCache.set(businessId, { settings: merged, expiresAt: Date.now() + CACHE_TTL_MS });
   return merged;
 }
 

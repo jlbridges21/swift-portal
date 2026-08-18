@@ -3,6 +3,7 @@ import { sendBrandedEmail } from "@/lib/email";
 import { sendAdminPushNotification } from "@/lib/onesignal-push";
 import { sendClientEmailNotification } from "@/lib/client-email-notifications";
 import { getAppSettings } from "@/lib/app-settings";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import type { NotificationEventKey } from "@/lib/app-settings";
 import { resolveNotificationEventKey } from "@/lib/notification-settings";
 import type { NotificationType } from "@/lib/types";
@@ -215,7 +216,9 @@ export async function notifyUsers(options: NotifyOptions) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const recipients: NotificationRecipient[] = [];
 
-  const appSettings = await getAppSettings();
+  const appSettings = await getAppSettings(
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass recipient/project.business_id into notifyUsers
+  );
   const eventKey = resolveNotificationEventKey(options);
   const channelSettings = eventKey ? appSettings.notifications[eventKey] : null;
 

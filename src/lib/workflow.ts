@@ -1,4 +1,5 @@
 import { getAppSettings } from "@/lib/app-settings";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { logProjectActivity } from "@/lib/activity";
 import type { MessageTemplateKey, WorkflowSettings } from "@/lib/workflow-settings";
 import {
@@ -10,7 +11,9 @@ import {
 export type TemplateContext = Partial<WorkflowMessageVariables>;
 
 export async function getWorkflowSettings(): Promise<WorkflowSettings> {
-  const settings = await getAppSettings();
+  const settings = await getAppSettings(
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass businessId into getWorkflowSettings
+  );
   return settings.workflow;
 }
 

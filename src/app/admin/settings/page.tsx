@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Header, PageHeader } from "@/components/layout/header";
 import { getProfile } from "@/lib/auth";
 import { getAppSettings, NOTIFICATION_EVENT_DEFINITIONS } from "@/lib/app-settings";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { redirect } from "next/navigation";
 import { AdminSettingsClient } from "@/components/admin/admin-settings-client";
 import { GoogleCalendarCard } from "@/components/admin/google-calendar-card";
@@ -12,7 +13,10 @@ export default async function AdminSettingsPage() {
   if (!profile) redirect("/login");
   if (profile.role !== "admin") redirect("/dashboard");
 
-  const settings = await getAppSettings();
+  const tenant = await getTenantContext();
+  const settings = await getAppSettings(
+    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on admin settings
+  );
 
   return (
     <div className="min-h-screen bg-background">

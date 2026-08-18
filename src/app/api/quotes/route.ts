@@ -5,6 +5,7 @@ import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus, setProjectStatusForward } from "@/lib/status-automation";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { archivePreviousOfficialQuotes } from "@/lib/quote-archive";
@@ -46,7 +47,10 @@ export async function POST(request: Request) {
   );
 
   const supabase = await createServiceClient();
-  const appSettings = await getAppSettings();
+  const tenant = await getTenantContext();
+  const appSettings = await getAppSettings(
+    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on quotes API
+  );
   const requireReview = appSettings.proposals.requireAdminReviewBeforeOfficial;
   const willSend = Boolean(send) && !requireReview;
   const status = willSend ? "sent" : send ? "draft" : "draft";
@@ -133,7 +137,10 @@ export async function PATCH(request: Request) {
       return NextResponse.json(quote);
     }
     const service = await createServiceClient();
-    const appSettings = await getAppSettings();
+    const tenant = await getTenantContext();
+  const appSettings = await getAppSettings(
+    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on quotes API
+  );
 
     await archivePreviousOfficialQuotes(service, quote.project_id, id);
 
@@ -195,7 +202,10 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Only preliminary estimates can be converted." }, { status: 400 });
     }
 
-    const appSettings = await getAppSettings();
+    const tenant = await getTenantContext();
+  const appSettings = await getAppSettings(
+    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on quotes API
+  );
     const requireReview = appSettings.proposals.requireAdminReviewBeforeOfficial;
     const proposalExpiresAt = addProposalExpiration(
       new Date(),

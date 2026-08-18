@@ -6,6 +6,7 @@ import {
   type AppSettings,
   NOTIFICATION_EVENT_DEFINITIONS,
 } from "@/lib/app-settings";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function GET() {
   const profile = await getProfile();
@@ -13,7 +14,10 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const settings = await getAppSettings();
+  const tenant = await getTenantContext();
+  const businessId =
+    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on settings API
+  const settings = await getAppSettings(businessId);
   return NextResponse.json({
     settings,
     notificationEvents: NOTIFICATION_EVENT_DEFINITIONS,
@@ -32,7 +36,10 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Missing settings" }, { status: 400 });
     }
 
-    const saved = await saveAppSettings(body.settings, profile.id);
+    const tenant = await getTenantContext();
+    const businessId =
+      tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on settings API
+    const saved = await saveAppSettings(body.settings, profile.id, businessId);
     return NextResponse.json({ settings: saved });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save settings";

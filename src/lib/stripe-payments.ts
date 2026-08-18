@@ -3,6 +3,7 @@ import { logProjectActivity } from "@/lib/activity";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { getStripe } from "@/lib/stripe";
 import { parsePaymentIdFromMetadata } from "@/lib/stripe-metadata";
@@ -29,7 +30,9 @@ export interface PaymentLookupOptions {
 /** Idempotent payment success — safe to call from multiple webhook events. */
 export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
   const { payment, checkoutSessionId, paymentIntentId, receiptUrl, source } = options;
-  const appSettings = await getAppSettings();
+  const appSettings = await getAppSettings(
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass payment.business_id from Stripe webhook metadata
+  );
   const { payments: payWorkflow } = appSettings.workflow;
 
   if (isPaymentComplete(payment.status)) {
@@ -291,7 +294,9 @@ export async function resolvePaymentFromPaymentIntent(
 }
 
 export async function handlePaymentFailed(payment: Payment, reason: string) {
-  const appSettings = await getAppSettings();
+  const appSettings = await getAppSettings(
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass payment.business_id from Stripe webhook metadata
+  );
 
   await logProjectActivity("payment_requested", `Payment attempt failed: ${reason}`, {
     projectId: payment.project_id,

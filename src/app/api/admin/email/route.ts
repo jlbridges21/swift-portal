@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getEmailConfigStatus, getLastEmailSendResult, sendTestEmail } from "@/lib/email";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -87,7 +88,10 @@ export async function GET(request: Request) {
     }
   }
 
-  const lastSend = getLastEmailSendResult();
+  const tenant = await getTenantContext();
+  const lastSend = getLastEmailSendResult(
+    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on email diagnostics
+  );
 
   return NextResponse.json({
     config: getEmailConfigStatus(),

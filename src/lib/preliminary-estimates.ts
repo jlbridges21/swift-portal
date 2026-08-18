@@ -3,13 +3,16 @@ import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
 import { buildPreliminaryEstimatePayload } from "@/lib/service-templates";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function upsertPreliminaryEstimate(
   projectId: string,
   serviceType: string,
   options?: { userId?: string | null }
 ) {
-  const appSettings = await getAppSettings();
+  const appSettings = await getAppSettings(
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass project.business_id into upsertPreliminaryEstimate
+  );
   if (!appSettings.proposals.autoPreliminaryEstimate) {
     return null;
   }
@@ -63,7 +66,9 @@ export async function createPreliminaryEstimate(
   serviceType: string,
   options?: { userId?: string | null; skipIfExists?: boolean }
 ) {
-  const appSettings = await getAppSettings();
+  const appSettings = await getAppSettings(
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass project.business_id into upsertPreliminaryEstimate
+  );
   if (!appSettings.proposals.autoPreliminaryEstimate) {
     return null;
   }

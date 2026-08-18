@@ -5,6 +5,7 @@ import type { OneSignalNamespace } from "@/types/onesignal";
 const APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
 const SDK_SRC = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
 
+// Per-browser-tab SDK state ("use client"), not a server tenant leak — leave as module lets.
 let scriptPromise: Promise<void> | null = null;
 let initPromise: Promise<OneSignalNamespace> | null = null;
 let sdkInstance: OneSignalNamespace | null = null;

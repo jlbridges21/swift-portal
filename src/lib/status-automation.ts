@@ -5,6 +5,7 @@ import type { ProjectStatus } from "@/lib/constants";
 import { clientStatusNotification } from "@/lib/client-messages";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import type { NotificationEventKey } from "@/lib/app-settings";
 import {
   canAutoTransition,
@@ -35,7 +36,9 @@ interface SetStatusOptions {
 
 export async function setProjectStatus(options: SetStatusOptions) {
   const supabase = await createServiceClient();
-  const appSettings = await getAppSettings();
+  const appSettings = await getAppSettings(
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass project.business_id from setProjectStatus callers
+  );
   const workflow = appSettings.workflow;
 
   const { data: existing } = await supabase

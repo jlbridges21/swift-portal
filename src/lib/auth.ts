@@ -19,26 +19,59 @@ export async function getProfile(): Promise<Profile | null> {
 
   if (!profile) return null;
 
-  // Auto-link CRM client ↔ portal profile so multi-client project RLS works
+  // Auto-link CRM client ↔ portal profile so multi-client project RLS works.
+  // Supabase Auth is a single global user pool (one auth user per email). The
+  // product rule is one person = one business — never attach by email across tenants.
   if (profile.role === "client" && !profile.client_id) {
     const service = await createServiceClient();
-    const { data: byUser } = await service
-      .from("clients")
-      .select("id")
-      .eq("user_id", user.id)
-      .is("deleted_at", null)
-      .maybeSingle();
+    const businessId = profile.business_id ?? null;
 
-    let clientId = byUser?.id ?? null;
+    let userQuery = service
+      .from("clients")
+      .select("id, business_id")
+      .eq("user_id", user.id)
+      .is("deleted_at", null);
+    if (businessId) userQuery = userQuery.eq("business_id", businessId);
+    const { data: byUserRows } = await userQuery;
+    if ((byUserRows?.length ?? 0) > 1 && !businessId) {
+      console.warn(
+        "[auth] user_id matches clients in multiple businesses; leaving client_id null",
+        { userId: user.id }
+      );
+      return profile as Profile;
+    }
+    let clientId = byUserRows?.[0]?.id ?? null;
     if (!clientId && user.email) {
-      const { data: byEmail } = await service
-        .from("clients")
-        .select("id")
-        // TODO(tenant): business-scope this lookup — see prompt 7
-        .ilike("email", user.email)
-        .is("deleted_at", null)
-        .maybeSingle();
-      clientId = byEmail?.id ?? null;
+      if (businessId) {
+        const { data: byEmail } = await service
+          .from("clients")
+          .select("id")
+          .ilike("email", user.email)
+          .eq("business_id", businessId)
+          .is("deleted_at", null)
+          .maybeSingle();
+        clientId = byEmail?.id ?? null;
+      } else {
+        const { data: matches } = await service
+          .from("clients")
+          .select("id, business_id")
+          .ilike("email", user.email)
+          .is("deleted_at", null);
+
+        const businessIds = new Set(
+          (matches ?? []).map((row) => row.business_id).filter(Boolean)
+        );
+        if (businessIds.size > 1) {
+          console.warn(
+            "[auth] email matches clients in multiple businesses; leaving client_id null",
+            { email: user.email, userId: user.id, businesses: [...businessIds] }
+          );
+          return profile as Profile;
+        }
+        if (matches?.length === 1) {
+          clientId = matches[0].id;
+        }
+      }
       if (clientId) {
         await service.from("clients").update({ user_id: user.id }).eq("id", clientId);
       }

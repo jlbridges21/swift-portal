@@ -2,8 +2,9 @@ import { Resend } from "resend";
 import { buildPremiumEmailHtml } from "@/lib/email-templates";
 import { recordEmailEvent } from "@/lib/email-analytics";
 import { getAppSettings } from "@/lib/app-settings";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
-let resend: Resend | null = null;
+const resendClients = new Map<string, Resend>();
 
 export interface EmailSendResult {
   sent: boolean;
@@ -16,20 +17,30 @@ export interface EmailSendResult {
   at: string;
 }
 
-let lastEmailSendResult: EmailSendResult | null = null;
+const lastEmailSendResultByBusiness = new Map<string, EmailSendResult>();
 
-export function getLastEmailSendResult(): EmailSendResult | null {
-  return lastEmailSendResult;
+export function getLastEmailSendResult(businessId: string): EmailSendResult | null {
+  return lastEmailSendResultByBusiness.get(businessId) ?? null;
 }
 
-function recordEmailResult(result: Omit<EmailSendResult, "at">) {
-  lastEmailSendResult = { ...result, at: new Date().toISOString() };
+function recordEmailResult(businessId: string, result: Omit<EmailSendResult, "at">) {
+  lastEmailSendResultByBusiness.set(businessId, { ...result, at: new Date().toISOString() });
 }
 
 function getResend() {
-  if (!process.env.RESEND_API_KEY) return null;
-  if (!resend) resend = new Resend(process.env.RESEND_API_KEY);
-  return resend;
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return null;
+  const existing = resendClients.get(apiKey);
+  if (existing) return existing;
+  const client = new Resend(apiKey);
+  resendClients.set(apiKey, client);
+  return client;
+}
+
+async function emailBusinessId(): Promise<string> {
+  const tenant = await getTenantContext();
+  // TODO(tenant): pass businessId from the caller (project/payment/webhook row)
+  return tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID;
 }
 
 export function getResendFromEmail(): string {
@@ -37,7 +48,7 @@ export function getResendFromEmail(): string {
 }
 
 export async function getConfiguredFromEmail(): Promise<string> {
-  const settings = await getAppSettings();
+  const settings = await getAppSettings(await emailBusinessId());
   const { fromName, senderEmail } = settings.email;
   if (fromName && senderEmail) {
     return `${fromName} <${senderEmail}>`;
@@ -103,16 +114,17 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
     sent: false,
   };
 
+  const businessId = await emailBusinessId();
   const client = getResend();
   if (!client) {
     const msg = "RESEND_API_KEY is not set — email sending skipped";
     console.warn("[email]", msg, options.subject, "→", options.to);
     const result = { ...base, skipped: true, skipReason: "missing_api_key", error: msg };
-    recordEmailResult(result);
+    recordEmailResult(businessId, result);
     return { ...result, at: new Date().toISOString() };
   }
 
-  const appSettings = await getAppSettings();
+  const appSettings = await getAppSettings(businessId);
   const html = buildPremiumEmailHtml({
     title: options.title,
     body: options.body,
@@ -149,7 +161,7 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
       const errorMessage = formatResendError(error);
       console.error("[email] Resend API error:", options.subject, "→", options.to, errorMessage, error);
       const result = { ...base, error: errorMessage };
-      recordEmailResult(result);
+      recordEmailResult(businessId, result);
       return { ...result, at: new Date().toISOString() };
     }
 
@@ -167,13 +179,13 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
     });
 
     const result = { ...base, sent: true, messageId: data?.id };
-    recordEmailResult(result);
+    recordEmailResult(businessId, result);
     return { ...result, at: new Date().toISOString() };
   } catch (err) {
     const errorMessage = formatResendError(err);
     console.error("[email] send failed:", options.subject, "→", options.to, errorMessage, err);
     const result = { ...base, error: errorMessage };
-    recordEmailResult(result);
+    recordEmailResult(businessId, result);
     return { ...result, at: new Date().toISOString() };
   }
 }

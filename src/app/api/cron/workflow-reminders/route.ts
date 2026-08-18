@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getAppSettings, type NotificationEventKey } from "@/lib/app-settings";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { reminderTimingToMs } from "@/lib/workflow-settings";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { notifyProjectClients } from "@/lib/notifications";
@@ -17,7 +18,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const appSettings = await getAppSettings();
+  const appSettings = await getAppSettings(
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): resolve per project.business_id in cron batches
+  );
   const { reminders } = appSettings.workflow;
   const supabase = await createServiceClient();
   const now = Date.now();
