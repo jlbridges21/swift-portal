@@ -124,7 +124,7 @@ export default async function ClientDashboard() {
             <p className="text-xs font-semibold uppercase tracking-wide text-accent mb-3 flex items-center gap-1">
               <Sparkles className="h-3.5 w-3.5" /> Next Action
             </p>
-            <Link href={`/dashboard/projects/${featured.id}${featuredStep.actionHref?.startsWith("#") ? featuredStep.actionHref : ""}`}>
+            <Link href={`/dashboard/projects/${featured.id}`}>
               <Card className="overflow-hidden border-0 shadow-xl transition-all hover:shadow-2xl hover:-translate-y-0.5">
                 <div className="grid md:grid-cols-5">
                   <div className="relative aspect-[16/10] md:aspect-auto md:col-span-2 bg-primary min-h-[200px]">
@@ -238,7 +238,7 @@ export default async function ClientDashboard() {
                   {pendingEstimates.map(({ project, quote }) => {
                     const price = getQuotePriceDisplay(quote);
                     return (
-                      <Link key={`estimate-${quote.id}`} href={`/dashboard/projects/${project.id}#quote`}>
+                      <Link key={`estimate-${quote.id}`} href={`/dashboard/projects/${project.id}`}>
                         <Card className="border-amber-200/80 shadow-sm hover:shadow-md transition-shadow">
                           <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="min-w-0">
