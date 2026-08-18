@@ -6,15 +6,7 @@ import {
   type AppSettings,
   NOTIFICATION_EVENT_DEFINITIONS,
 } from "@/lib/app-settings";
-import { getTenantContext } from "@/lib/tenant";
-
-function missingTenantResponse(role: string) {
-  const message =
-    role === "super_admin"
-      ? "No business context. Super admins must impersonate a business before reading or writing settings."
-      : "No business context on this account. Cannot load or save settings.";
-  return NextResponse.json({ error: message }, { status: 400 });
-}
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET() {
   const profile = await getProfile();

@@ -31,7 +31,7 @@ export interface PaymentLookupOptions {
 export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
   const { payment, checkoutSessionId, paymentIntentId, receiptUrl, source } = options;
   const appSettings = await getAppSettings(
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass payment.business_id from Stripe webhook metadata
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): prompt 12 — pass payment.business_id from Stripe webhook metadata
   );
   const { payments: payWorkflow } = appSettings.workflow;
 
@@ -95,7 +95,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     });
   } else {
     await logProjectActivity("payment_received", activityDescription, {
-      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass payment.business_id
+      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): prompt 12 — pass payment.business_id
       projectId: payment.project_id,
       idempotencyKey: `payment:${payment.id}:received`,
       metadata: { paymentId: payment.id, source },
@@ -296,11 +296,11 @@ export async function resolvePaymentFromPaymentIntent(
 
 export async function handlePaymentFailed(payment: Payment, reason: string) {
   const appSettings = await getAppSettings(
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass payment.business_id from Stripe webhook metadata
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): prompt 12 — pass payment.business_id from Stripe webhook metadata
   );
 
   await logProjectActivity("payment_requested", `Payment attempt failed: ${reason}`, {
-    businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass payment.business_id
+      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): prompt 12 — pass payment.business_id
     projectId: payment.project_id,
     metadata: { paymentId: payment.id, reason },
   });
@@ -325,7 +325,7 @@ export async function handlePaymentFailed(payment: Payment, reason: string) {
 
 export async function handleCheckoutExpired(payment: Payment) {
   await logProjectActivity("payment_requested", "Checkout session expired — payment link still active", {
-    businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass payment.business_id
+      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): prompt 12 — pass payment.business_id
     projectId: payment.project_id,
     metadata: { paymentId: payment.id },
   });

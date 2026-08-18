@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   }
 
   const appSettings = await getAppSettings(
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): resolve per project.business_id in cron batches
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): prompt 12 — resolve per project.business_id in cron batches
   );
   const { reminders } = appSettings.workflow;
   const supabase = await createServiceClient();

@@ -1,12 +1,34 @@
 # Fail-open inventory
 
-Transitional behavior that **silently attributes data or settings to Swift Aerial Media** (`00000000-0000-0000-0000-000000000001`) when the real business cannot be determined.
+> **From prompt 9b onward, any NEW authenticated code path must fail closed. Do not add
+> `?? LEGACY_DEFAULT_BUSINESS_ID` to an authenticated route or component.**
 
-Re-run the grep commands at the bottom after **every** tenant prompt. Counts must reach the checklist targets before onboarding a second business.
+When an authenticated admin or client has no resolvable tenant, that is an error. Silently
+substituting Swift Aerial Media (`00000000-0000-0000-0000-000000000001`) would make a future
+Tenant B user read and write Swift’s data while the UI looks healthy. A query scoped to the
+wrong tenant returns plausible data — harder to detect than an empty result.
+
+This cannot occur for current traffic: every admin and client profile already has
+`business_id` set. The prompt 9b flip is therefore inert for Swift users.
+
+Re-run the grep commands at the bottom after **every** tenant prompt.
 
 ---
 
-## 1. DATABASE — v30 `business_id` DEFAULT
+## Prompt 9b classification (before edits)
+
+`grep -rn "?? LEGACY_DEFAULT_BUSINESS_ID" src/` reported **42** sites:
+
+| Category | Count | Disposition |
+|---|---|---|
+| **(A)** Authenticated API route | **32** | Fail-closed HTTP 400 via `missingTenantResponse(role)` |
+| **(B)** Authenticated page or layout | **7** | `requireTenantContext()` throws; surfaces in `src/app/error.tsx` |
+| **(C)** Context-free library helper | **1** | Unconditional `LEGACY_DEFAULT_BUSINESS_ID` + TODO |
+| **(D)** Bootstrap (`getProfile`) | **2** | Left as `??` — identity resolution cannot depend on tenant context |
+
+---
+
+## 1. DATABASE — v30 `business_id` DEFAULT (still open)
 
 Migration `supabase/migration-v30-tenant-integrity.sql` set
 
@@ -32,92 +54,66 @@ Any `INSERT` that **omits** `business_id` becomes Swift’s row.
 
 ---
 
-## 2. APPLICATION — fail-open `?? LEGACY_DEFAULT_BUSINESS_ID`
+## 2. AUTHENTICATED PATHS — fail-closed (zero `??` sites)
 
-Find with:
+There are **no** remaining `?? LEGACY_DEFAULT_BUSINESS_ID` sites on authenticated API routes,
+pages, or layouts.
 
-```bash
-grep -rn "?? LEGACY_DEFAULT_BUSINESS_ID" src/
-```
-
-These sites use tenant context when present, otherwise **silently read/write Swift’s** data. They must become fail-CLOSED (throw or HTTP 400) rather than fail-open.
-
-Prompt 9 added `businessId` parameters across CRM/project libraries. Admin APIs in that batch still fall open so HTTP statuses stay unchanged.
-
-| File:line | Status |
-|---|---|
-| `src/app/api/clients/route.ts:10` | OPEN (prompt 9) |
-| `src/app/api/clients/route.ts:34` | OPEN (prompt 9) |
-| `src/app/api/clients/route.ts:108` | OPEN (prompt 9) |
-| `src/app/api/clients/[id]/route.ts:15` | OPEN (prompt 9) |
-| `src/app/api/clients/[id]/route.ts:35` | OPEN (prompt 9) |
-| `src/app/api/clients/[id]/notes/route.ts:14` | OPEN (prompt 9) |
-| `src/app/api/clients/[id]/notes/route.ts:43` | OPEN (prompt 9) |
-| `src/app/api/clients/[id]/notes/route.ts:76` | OPEN (prompt 9) |
-| `src/app/api/clients/[id]/notes/route.ts:108` | OPEN (prompt 9) |
-| `src/app/api/clients/[id]/portal/route.ts:20` | OPEN (prompt 9) |
-| `src/app/api/clients/[id]/portal/route.ts:49` | OPEN (prompt 9) |
-| `src/app/api/projects/route.ts:37` | OPEN (prompt 9) |
-| `src/app/api/projects/route.ts:134` | OPEN (prompt 9) |
-| `src/app/api/projects/[id]/route.ts:15` | OPEN (prompt 9) |
-| `src/app/api/projects/[id]/route.ts:35` | OPEN (prompt 9) |
-| `src/app/api/project-clients/route.ts:15` | OPEN (prompt 9) |
-| `src/app/api/project-clients/route.ts:48` | OPEN (prompt 9) |
-| `src/app/api/project-clients/route.ts:111` | OPEN (prompt 9) |
-| `src/app/admin/clients/page.tsx:20` | OPEN (prompt 9) |
-| `src/app/admin/clients/[id]/page.tsx:21` | OPEN (prompt 9) |
-| `src/lib/auth.ts:89` | OPEN (prompt 9) |
-| `src/lib/auth.ts:102` | OPEN (prompt 9) |
-| `src/app/api/request/logged-in/route.ts:73` | OPEN (prompt 9) |
-| `src/app/api/request/logged-in/route.ts:77` | OPEN (prompt 9) |
-| `src/app/api/request/logged-in/route.ts:101` | OPEN (prompt 9) |
-| `src/app/api/payments/route.ts:24` | OPEN |
-| `src/app/api/shoot-proposals/route.ts:77` | OPEN |
-| `src/app/api/shoot-proposals/route.ts:220` | OPEN |
-| `src/app/api/shoot-proposals/route.ts:263` | OPEN |
-| `src/app/api/asset-reviews/route.ts:183` | OPEN |
-| `src/app/api/projects/[id]/messages/route.ts:148` | OPEN |
-| `src/app/api/messages/route.ts:171` | OPEN |
-| `src/app/api/quotes/route.ts:51` | OPEN |
-| `src/app/api/quotes/route.ts:141` | OPEN |
-| `src/app/api/quotes/route.ts:206` | OPEN |
-| `src/app/api/admin/email/route.ts:93` | OPEN |
-| `src/app/api/admin/settings/route.ts` GET | **CLOSED (prompt 8)** — 400 when tenant context is missing (including super_admin with no impersonation) |
-| `src/app/api/admin/settings/route.ts` PATCH | **CLOSED (prompt 8)** — 400 when tenant context is missing |
-| `src/app/dashboard/projects/[id]/page.tsx:67` | OPEN |
-| `src/app/dashboard/page.tsx:39` | OPEN |
-| `src/app/admin/settings/page.tsx:18` | OPEN |
-| `src/app/dashboard/layout.tsx:9` | OPEN |
-| `src/app/admin/layout.tsx:10` | OPEN |
-| `src/lib/email.ts:43` | OPEN |
-
-After prompt 9, `grep -rn "?? LEGACY_DEFAULT_BUSINESS_ID" src/` reports **42** remaining hits.
-
-**Removal gate:** before the second tenant is created. Every remaining hit must throw or 400.
-
----
-
-## 3. SIGNUP — `handle_new_user()` NULL `profiles.business_id`
-
-`src/app/api/request/route.ts` (`auth.admin.createUser`) passes
+Pattern (API — matches `src/app/api/admin/settings/route.ts`):
 
 ```ts
-user_metadata: { full_name, role: "client" }
+const tenant = await getTenantContext();
+if (!tenant) return missingTenantResponse(profile.role);
 ```
 
-and does **not** pass `business_id`. `handle_new_user()` (v31b) therefore leaves `profiles.business_id` NULL.
+`missingTenantResponse` (`src/lib/tenant.ts`):
 
-Currently masked by `current_business_id()` falling back to `clients.business_id` for `user_id = auth.uid()` (non-deleted).
+- `super_admin` → 400 `"No business context. Super admins must impersonate a business before reading or writing data."`
+- anyone else → 400 `"No business context on this account. Tenant context could not be resolved."`
 
-Admin-created portal users (`clients/route.ts` POST, `enableClientPortalAccess`) now pass `business_id` in `user_metadata`. Public `/request` still does not.
+Pattern (pages/layouts behind `/admin` or `/dashboard`):
 
-**Removal gate:** prompt 12 (public `/request` must stamp a real business on signup).
+```ts
+const tenant = await requireTenantContext();
+await getAppSettings(tenant.businessId);
+```
+
+`requireTenantContext()` throws `Error("Unauthorized")`. That is caught by the root
+`src/app/error.tsx` boundary (“Something went wrong” / “An unexpected error occurred”, Try again,
+Back to dashboard) — not a blank page. Middleware already redirects unauthenticated users to
+`/login` before these layouts run.
 
 ---
 
-## 4. Honest placeholders (not fail-open)
+## 3. CATEGORY D — `src/lib/auth.ts` `getProfile()` (2 remaining `??` sites)
 
-Unconditional `LEGACY_DEFAULT_BUSINESS_ID` arguments — no `??` fallback. Cron, webhooks, library helpers, and out-of-batch callers of newly-required `businessId` parameters. They still need a real source (usually `project.business_id` / `payment.business_id` / `client.business_id`).
+These two are the **only** remaining `?? LEGACY_DEFAULT_BUSINESS_ID` hits. They stay because
+`getProfile()` **is** identity bootstrap: `getTenantContext()` calls `getProfile()`, so
+`getProfile()` cannot call `getTenantContext()`.
+
+Prompt 7 Part C already scopes the auto-link lookups:
+
+- When `profiles.business_id` is set, both `clients.user_id` and `clients.email` matches are
+  filtered to that business.
+- When it is not, a match across more than one business **aborts** rather than attaching.
+
+The LEGACY argument is only used if **both** `profile.business_id` and the matched client’s
+`business_id` are null. That does not occur for current traffic (non-super_admin profiles were
+backfilled in v31b; 0 NULLs verified in prompt 4). It cannot leak Swift’s data onto a Tenant B
+user because a multi-business email match refuses to attach.
+
+| File:line | Why it stays |
+|---|---|
+| `src/lib/auth.ts` `ensureClientPortalLink` | Cannot recurse into tenant context; pass matched `clients.business_id` once auto-link always has it |
+| `src/lib/auth.ts` `touchClientLogin` | Same; prefers `client.business_id` then `profile.business_id` |
+
+---
+
+## 4. CATEGORY C — honest placeholders (unconditional `LEGACY_DEFAULT_BUSINESS_ID`)
+
+No `??` fallback. Cron, webhooks, public signup, and library helpers reachable from those
+paths. Each still needs a real source (usually `project.business_id` / `payment.business_id` /
+`client.business_id`).
 
 Find with:
 
@@ -125,43 +121,52 @@ Find with:
 grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "export const" | grep -v "import "
 ```
 
-| File:line | Why |
+| File | Resolving prompt |
 |---|---|
-| `src/app/api/cron/workflow-reminders/route.ts:22` | Cron has no user; must iterate `project.business_id` |
-| `src/lib/stripe-payments.ts:34` | Stripe webhook; pass `payment.business_id` from metadata |
-| `src/lib/stripe-payments.ts:98` | Same (activity log) |
-| `src/lib/stripe-payments.ts:299` | Same |
-| `src/lib/stripe-payments.ts:303` | Same (activity log) |
-| `src/lib/stripe-payments.ts:328` | Same (activity log) |
-| `src/lib/notifications.ts:95` | `ensureClientPortalLink` until notify paths are converted |
-| `src/lib/notifications.ts:223` | Pass recipient/project `business_id` into `notifyUsers` |
-| `src/lib/status-automation.ts:40` | Pass `project.business_id` from `setProjectStatus` callers |
-| `src/lib/status-automation.ts:119` | Same (activity log) |
-| `src/lib/preliminary-estimates.ts:14` | Pass `project.business_id` |
-| `src/lib/preliminary-estimates.ts:70` | Same |
-| `src/lib/preliminary-estimates.ts:121` | Same (activity log) |
-| `src/lib/client-email-notifications.ts:270` | Pass client/project `business_id` |
-| `src/lib/workflow.ts:15` | Pass `businessId` into `getWorkflowSettings` |
-| `src/lib/workflow.ts:102` | Pass `project.business_id` into `logWorkflowAudit` |
-| `src/lib/email-analytics.ts:115` | Pass `project.business_id` |
-| `src/app/api/request/route.ts:133` | Public signup; prompt 12 |
-| `src/app/api/request/route.ts:137` | Same |
-| `src/app/api/messages/route.ts:154` | `ensureClientPortalLink` until messaging is converted |
-| `src/app/api/projects/[id]/messages/route.ts:133` | Same |
-| `src/app/api/quotes/route.ts:360` | Activity log; quotes batch later |
-| `src/app/api/quotes/route.ts:442` | Same |
-| `src/app/api/asset-reviews/route.ts:105` | Activity log |
-| `src/app/api/approvals/route.ts:45` | Activity log |
-| `src/app/api/revisions/route.ts:79` | Activity log |
-| `src/app/api/revisions/route.ts:126` | Same |
-| `src/app/api/tours/route.ts:62` | Activity log |
-| `src/app/api/media/upload/route.ts:141` | Activity log |
-| `src/app/api/media/upload/complete/route.ts:242` | Activity log |
-| `src/app/api/shoot-proposals/route.ts:349` | Activity log |
-| `src/app/api/shoot-proposals/route.ts:396` | Same |
-| `src/app/api/shoot-proposals/route.ts:442` | Same |
+| `src/lib/email.ts` `emailBusinessId()` | **16** — per-business email; callers must pass `businessId` |
+| `src/app/api/cron/workflow-reminders/route.ts` | **12** — iterate active businesses / `project.business_id` |
+| `src/lib/stripe-payments.ts` (5 sites) | **12** — Stripe webhook; `payment.business_id` from metadata |
+| `src/app/api/request/route.ts` (2 sites) | **12** — public `/request` stamps a real `business_id` |
+| `src/lib/notifications.ts` (2 sites) | **11** — notifications/messaging batch |
+| `src/lib/client-email-notifications.ts` | **11** |
+| `src/app/api/messages/route.ts` `ensureClientPortalLink` | **11** |
+| `src/app/api/projects/[id]/messages/route.ts` `ensureClientPortalLink` | **11** |
+| `src/lib/status-automation.ts` (2 sites) | **12** |
+| `src/lib/preliminary-estimates.ts` (3 sites) | **12** |
+| `src/lib/workflow.ts` (2 sites) | **12** |
+| `src/app/api/quotes/route.ts` activity logs (2 sites) | **12** |
+| `src/app/api/shoot-proposals/route.ts` activity logs (3 sites) | **12** |
+| `src/app/api/approvals/route.ts` | **12** |
+| `src/app/api/revisions/route.ts` (2 sites) | **12** |
+| `src/lib/email-analytics.ts` | **16** |
+| `src/app/api/asset-reviews/route.ts` activity log | **10** — media batch |
+| `src/app/api/tours/route.ts` | **10** |
+| `src/app/api/media/upload/route.ts` | **10** |
+| `src/app/api/media/upload/complete/route.ts` | **10** |
 
-**33 sites.** (`src/lib/tenant.ts` export of the constant is not a call site.)
+(`src/lib/tenant.ts` export of the constant is not a call site.)
+
+---
+
+## 5. SIGNUP — `handle_new_user()` NULL `profiles.business_id` (still open)
+
+`src/app/api/request/route.ts` (`auth.admin.createUser`) passes
+
+```ts
+user_metadata: { full_name, role: "client" }
+```
+
+and does **not** pass `business_id`. `handle_new_user()` (v31b) therefore leaves
+`profiles.business_id` NULL.
+
+Currently masked by `current_business_id()` falling back to `clients.business_id` for
+`user_id = auth.uid()` (non-deleted). Public `/request` still uses unconditional LEGACY for
+property/activity stamps (Category C, prompt 12).
+
+Admin-created portal users (`clients/route.ts` POST, `enableClientPortalAccess`) now pass
+`business_id` in `user_metadata`.
+
+**Removal gate:** prompt 12 (public `/request` must stamp a real business on signup).
 
 ---
 
@@ -170,7 +175,7 @@ grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "expo
 Re-verify after every subsequent prompt:
 
 ```bash
-# Fail-open application sites (must be 0)
+# Fail-open application sites (must be 0 except Category D in auth.ts)
 grep -rn "?? LEGACY_DEFAULT_BUSINESS_ID" src/
 
 # Honest placeholders (must be 0, or each must resolve a real business_id)
@@ -180,10 +185,11 @@ grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "expo
 grep -n "user_metadata" src/app/api/request/route.ts
 ```
 
-| Check | After prompt 9 | Before 2nd business |
+| Check | After prompt 9b | Before 2nd business |
 |---|---|---|
-| `?? LEGACY_DEFAULT_BUSINESS_ID` | **42** | **0** |
-| Unconditional `LEGACY_DEFAULT_BUSINESS_ID` call sites | **33** | **0** |
+| `?? LEGACY_DEFAULT_BUSINESS_ID` on authenticated paths | **0** | **0** |
+| `?? LEGACY_DEFAULT_BUSINESS_ID` in `getProfile()` (Category D) | **2** | **0** (or rewritten without LEGACY) |
+| Unconditional `LEGACY_DEFAULT_BUSINESS_ID` call sites | listed in §4 | **0** |
 | `/api/request` `user_metadata` includes `business_id` | no (prompt 12) | **yes** |
 | v30 `business_id` DEFAULT still on 25 tables | yes (prompt 12) | **dropped** |
 

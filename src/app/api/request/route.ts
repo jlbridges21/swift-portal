@@ -130,11 +130,11 @@ export async function POST(request: Request) {
       project.id,
       client.id,
       property_address,
-      LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): stamp public /request with a real business_id
+      LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): prompt 12 — stamp public /request with a real business_id
     );
     await touchClientActivity(
       client.id,
-      LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): stamp public /request with a real business_id
+      LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): prompt 12 — stamp public /request with a real business_id
     );
 
     const { data: lead } = await supabase

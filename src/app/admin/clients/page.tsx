@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { ClientsTable } from "@/components/admin/clients-table";
 import { getClientListRows } from "@/lib/clients-crm";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { requireTenantContext } from "@/lib/tenant";
 
 interface PageProps {
   searchParams: Promise<{ view?: string }>;
@@ -16,8 +16,8 @@ export default async function AdminClientsPage({ searchParams }: PageProps) {
   const profile = await getProfile();
   if (!profile || profile.role !== "admin") redirect("/dashboard");
 
-  const tenant = await getTenantContext();
-  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on admin clients list
+  const tenant = await requireTenantContext();
+  const businessId = tenant.businessId;
   const { view } = await searchParams;
   const showDeleted = view === "deleted";
   const rows = await getClientListRows(businessId, { includeDeleted: showDeleted });

@@ -23,6 +23,14 @@ export async function getProfile(): Promise<Profile | null> {
   // Auto-link CRM client ↔ portal profile so multi-client project RLS works.
   // Supabase Auth is a single global user pool (one auth user per email). The
   // product rule is one person = one business — never attach by email across tenants.
+  //
+  // Category D (prompt 9b): getProfile() is the identity bootstrap and cannot
+  // call getTenantContext() (that would recurse). Lookups are already
+  // business-scoped when profiles.business_id is set (prompt 7 Part C). When it
+  // is not, a multi-business match aborts rather than attaching. The LEGACY
+  // fallback below only runs if both profile.business_id and the matched
+  // client's business_id are null — which does not occur for current traffic
+  // (non-super_admin profiles were backfilled in v31b).
   if (profile.role === "client" && !profile.client_id) {
     const service = await createServiceClient();
     const businessId = profile.business_id ?? null;

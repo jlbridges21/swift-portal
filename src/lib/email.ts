@@ -2,7 +2,7 @@ import { Resend } from "resend";
 import { buildPremiumEmailHtml } from "@/lib/email-templates";
 import { recordEmailEvent } from "@/lib/email-analytics";
 import { getAppSettings } from "@/lib/app-settings";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 const resendClients = new Map<string, Resend>();
 
@@ -38,9 +38,10 @@ function getResend() {
 }
 
 async function emailBusinessId(): Promise<string> {
-  const tenant = await getTenantContext();
-  // TODO(tenant): pass businessId from the caller (project/payment/webhook row)
-  return tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID;
+  // Context-free: reachable from cron, webhooks, and authenticated sends that
+  // do not yet thread a businessId. Unconditional so it stays greppable.
+  // TODO(tenant): prompt 16 — pass businessId from the caller (project/payment/webhook row)
+  return LEGACY_DEFAULT_BUSINESS_ID;
 }
 
 export function getResendFromEmail(): string {

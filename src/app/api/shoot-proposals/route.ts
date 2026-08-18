@@ -7,7 +7,7 @@ import { loadShootSyncContext, syncShootToGoogleCalendar } from "@/lib/google-ca
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 
 export async function GET(request: Request) {
@@ -53,6 +53,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+  const businessId = tenant.businessId;
+
   const supabase = isAdmin ? await createServiceClient() : await createClient();
 
   const { data, error } = await supabase
@@ -73,8 +77,6 @@ export async function POST(request: Request) {
   }
 
   const dateStr = new Date(body.proposed_at).toLocaleString();
-  const tenant = await getTenantContext();
-  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on shoot-proposals API
   const appSettings = await getAppSettings(businessId);
   const scheduling = appSettings.workflow.scheduling;
 
@@ -133,6 +135,10 @@ export async function PATCH(request: Request) {
   if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+  const businessId = tenant.businessId;
 
   const body = await request.json();
   const { id, action, message, proposed_at, project_id } = body;
@@ -215,10 +221,7 @@ export async function PATCH(request: Request) {
     });
 
     const syncCtx = await loadShootSyncContext(id);
-    const tenant = await getTenantContext();
-  const appSettings = await getAppSettings(
-    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on shoot-proposals API
-  );
+    const appSettings = await getAppSettings(businessId);
     if (syncCtx && appSettings.workflow.scheduling.syncGoogleCalendar) {
       void syncShootToGoogleCalendar(syncCtx);
       await logWorkflowAudit(proposal.project_id, "Google Calendar updated after shoot confirmation.", {
@@ -259,8 +262,6 @@ export async function PATCH(request: Request) {
       .eq("id", shoot.project_id);
 
     const dateStr = new Date(proposed_at).toLocaleString();
-    const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on shoot-proposals API
     const appSettings = await getAppSettings(businessId);
     const scheduling = appSettings.workflow.scheduling;
 

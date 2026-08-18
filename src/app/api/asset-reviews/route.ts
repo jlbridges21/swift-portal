@@ -6,7 +6,7 @@ import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { canAccessProject } from "@/lib/project-access";
 
@@ -177,11 +177,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
   const tenant = await getTenantContext();
-  const appSettings = await getAppSettings(
-    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on asset-reviews API
-  );
+  if (!tenant) return missingTenantResponse(profile.role);
+
+  const supabase = await createServiceClient();
+  const appSettings = await getAppSettings(tenant.businessId);
   const { data: project } = await supabase
     .from("projects")
     .select("status")

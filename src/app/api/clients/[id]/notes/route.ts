@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdmin } from "@/lib/auth";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
     const { id: clientId } = await params;
     const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on client notes
+    if (!tenant) return missingTenantResponse(profile.role);
+    const businessId = tenant.businessId;
     const db = await createTenantServiceClient(businessId);
     const { data, error } = await db
       .from("client_notes")
@@ -40,7 +41,8 @@ export async function POST(
     }
 
     const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on client notes
+    if (!tenant) return missingTenantResponse(profile.role);
+    const businessId = tenant.businessId;
     const db = await createTenantServiceClient(businessId);
     const { data, error } = await db
       .from("client_notes")
@@ -64,7 +66,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
     const { id: clientId } = await params;
     const body = await request.json();
 
@@ -73,7 +75,8 @@ export async function PATCH(
     }
 
     const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on client notes
+    if (!tenant) return missingTenantResponse(profile.role);
+    const businessId = tenant.businessId;
     const db = await createTenantServiceClient(businessId);
     const { data, error } = await db
       .from("client_notes")
@@ -95,7 +98,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
     const { id: clientId } = await params;
     const { searchParams } = new URL(request.url);
     const noteId = searchParams.get("note_id");
@@ -105,7 +108,8 @@ export async function DELETE(
     }
 
     const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on client notes
+    if (!tenant) return missingTenantResponse(profile.role);
+    const businessId = tenant.businessId;
     const db = await createTenantServiceClient(businessId);
     const { error } = await db
       .from("client_notes")

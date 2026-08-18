@@ -10,13 +10,17 @@ import { touchClientActivity } from "@/lib/clients-data";
 import { resolvePersonName } from "@/lib/person-name";
 import { buildPortalLeadPayload } from "@/lib/ghl/build-portal-lead-payload";
 import { syncNewProjectLeadToGhl } from "@/lib/ghl/sync-portal-lead";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function POST(request: Request) {
   const profile = await getProfile();
   if (!profile || profile.role !== "client" || !profile.client_id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+  const businessId = tenant.businessId;
 
   const body = await request.json();
   const { service_requested, preferred_date, notes, company, phone } = body;
@@ -70,11 +74,11 @@ export async function POST(request: Request) {
     project.id,
     clientId,
     property_address,
-    profile.business_id ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on logged-in request
+    businessId
   );
   await touchClientActivity(
     clientId,
-    profile.business_id ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on logged-in request
+    businessId
   );
 
   await supabase.from("project_clients").upsert(
@@ -98,7 +102,7 @@ export async function POST(request: Request) {
   });
 
   await logProjectActivity("proposal_submitted", `New project requested: ${service_requested}`, {
-    businessId: profile.business_id ?? LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): require tenant on logged-in request
+    businessId,
     projectId: project.id,
     userId: profile.id,
     metadata: { client_id: clientId },

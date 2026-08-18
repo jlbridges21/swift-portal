@@ -9,7 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { getProfile } from "@/lib/auth";
 import { getAppSettings } from "@/lib/app-settings";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { requireTenantContext } from "@/lib/tenant";
 import { createClient } from "@/lib/supabase/server";
 import { getProjectHeroPosterUrl } from "@/lib/cover";
 import { CoverPlaceholder } from "@/components/projects/cover-placeholder";
@@ -34,10 +34,8 @@ export default async function ClientDashboard() {
   if (profile.role === "admin") redirect("/admin");
 
   const supabase = await createClient();
-  const tenant = await getTenantContext();
-  const appSettings = await getAppSettings(
-    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on client dashboard
-  );
+  const tenant = await requireTenantContext();
+  const appSettings = await getAppSettings(tenant.businessId);
   const brand = getPortalBrandFromSettings(appSettings);
   const firstName = profile.full_name?.split(" ")[0] || "there";
 

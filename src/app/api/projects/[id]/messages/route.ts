@@ -9,7 +9,7 @@ import {
 import { notifyAdmins, notifyClient } from "@/lib/notifications";
 import { sendBrandedEmail } from "@/lib/email";
 import { getAppSettings } from "@/lib/app-settings";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import type { ClientMessage } from "@/lib/types";
 
@@ -53,6 +53,10 @@ export async function GET(_request: Request, { params }: RouteParams) {
 export async function POST(request: Request, { params }: RouteParams) {
   const profile = await getProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+  const businessId = tenant.businessId;
 
   const { id: projectId } = await params;
   const hasAccess = await canAccessProject(profile, projectId);
@@ -143,10 +147,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       sendEmail: false,
     });
     if (client.email) {
-      const tenant = await getTenantContext();
-      const appSettings = await getAppSettings(
-        tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on project messages API
-      );
+      const appSettings = await getAppSettings(businessId);
       void sendBrandedEmail({
         to: client.email,
         subject: "You have a new message from Swift Aerial Media",

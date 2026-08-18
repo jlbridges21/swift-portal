@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdmin } from "@/lib/auth";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET() {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
     const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on clients API
+    if (!tenant) return missingTenantResponse(profile.role);
+    const businessId = tenant.businessId;
     const db = await createTenantServiceClient(businessId);
     const { data, error } = await db
       .from("clients")
@@ -23,7 +24,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
     const body = await request.json();
 
     if (!body.name || !body.email) {
@@ -31,7 +32,8 @@ export async function POST(request: Request) {
     }
 
     const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on clients API
+    if (!tenant) return missingTenantResponse(profile.role);
+    const businessId = tenant.businessId;
     const db = await createTenantServiceClient(businessId);
 
     const { data: client, error } = await db
@@ -94,7 +96,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
     const body = await request.json();
     const { id, ...updates } = body;
 
@@ -105,7 +107,8 @@ export async function PATCH(request: Request) {
     }
 
     const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on clients API
+    if (!tenant) return missingTenantResponse(profile.role);
+    const businessId = tenant.businessId;
     const db = await createTenantServiceClient(businessId);
     const { data, error } = await db
       .from("clients")

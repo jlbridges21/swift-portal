@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -129,6 +130,18 @@ async function resolveTenantContext(): Promise<TenantContext | null> {
 export const getTenantContext: () => Promise<TenantContext | null> = cache(
   resolveTenantContext
 );
+
+/**
+ * Fail-closed 400 for authenticated API routes with no resolvable tenant.
+ * Super admins must impersonate; everyone else must have a business on the profile.
+ */
+export function missingTenantResponse(role: string) {
+  const message =
+    role === "super_admin"
+      ? "No business context. Super admins must impersonate a business before reading or writing data."
+      : "No business context on this account. Tenant context could not be resolved.";
+  return NextResponse.json({ error: message }, { status: 400 });
+}
 
 export async function requireTenantContext(): Promise<TenantContext> {
   const tenant = await getTenantContext();

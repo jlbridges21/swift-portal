@@ -10,7 +10,7 @@ import { notifyProjectClients } from "@/lib/notifications";
 import { defaultProjectTitle, formatAutoProjectName, resolveAddressFromBody } from "@/lib/address";
 import { linkProjectToProperty } from "@/lib/properties";
 import { createPreliminaryEstimate, upsertPreliminaryEstimate } from "@/lib/preliminary-estimates";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import type { NotificationEventKey } from "@/lib/app-settings";
 
 function clientEventKeyForStatus(status: string): NotificationEventKey | undefined {
@@ -34,7 +34,8 @@ export async function POST(request: Request) {
   try {
     const profile = await requireAdmin();
     const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on projects API
+    if (!tenant) return missingTenantResponse(profile.role);
+    const businessId = tenant.businessId;
     const body = await request.json();
 
     const { property_address, error: addressError } = resolveAddressFromBody(body);
@@ -129,9 +130,10 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
     const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on projects API
+    if (!tenant) return missingTenantResponse(profile.role);
+    const businessId = tenant.businessId;
     const body = await request.json();
     const { id, ...updates } = body;
 

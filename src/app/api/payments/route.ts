@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { setProjectStatus } from "@/lib/status-automation";
 import { getAppSettings } from "@/lib/app-settings";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getStripe } from "@/lib/stripe";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { logProjectActivity } from "@/lib/activity";
@@ -21,7 +21,8 @@ export async function POST(request: Request) {
 
     const supabase = await createClient();
     const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on payments API
+    if (!tenant) return missingTenantResponse(profile.role);
+    const businessId = tenant.businessId;
     const appSettings = await getAppSettings(businessId);
 
     const dueDate = body.due_date

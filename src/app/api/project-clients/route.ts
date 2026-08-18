@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   const auth = await requireAdminApi();
@@ -12,7 +12,8 @@ export async function GET(request: Request) {
   const projectId = searchParams.get("project_id");
 
   const tenant = await getTenantContext();
-  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on project-clients API
+  if (!tenant) return missingTenantResponse(auth.profile.role);
+  const businessId = tenant.businessId;
   const db = await createTenantServiceClient(businessId);
 
   let query = db
@@ -45,7 +46,8 @@ export async function POST(request: Request) {
   }
 
   const tenant = await getTenantContext();
-  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on project-clients API
+  if (!tenant) return missingTenantResponse(auth.profile.role);
+  const businessId = tenant.businessId;
   const db = await createTenantServiceClient(businessId);
 
   // Link existing portal account by email / user_id before assigning
@@ -108,7 +110,8 @@ export async function DELETE(request: Request) {
   }
 
   const tenant = await getTenantContext();
-  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on project-clients API
+  if (!tenant) return missingTenantResponse(auth.profile.role);
+  const businessId = tenant.businessId;
   const db = await createTenantServiceClient(businessId);
   const { data: row } = await db
     .from("project_clients")

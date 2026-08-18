@@ -5,7 +5,7 @@ import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus, setProjectStatusForward } from "@/lib/status-automation";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { archivePreviousOfficialQuotes } from "@/lib/quote-archive";
@@ -41,14 +41,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+  const businessId = tenant.businessId;
+
   const total_cents = line_items.reduce(
     (sum: number, item: { amount_cents: number }) => sum + (item.amount_cents || 0),
     0
   );
 
   const supabase = await createServiceClient();
-  const tenant = await getTenantContext();
-  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on quotes API
   const appSettings = await getAppSettings(businessId);
   const requireReview = appSettings.proposals.requireAdminReviewBeforeOfficial;
   const willSend = Boolean(send) && !requireReview;
@@ -114,6 +116,10 @@ export async function PATCH(request: Request) {
   const profile = await getProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+  const businessId = tenant.businessId;
+
   const body = await request.json();
   const { id, action, feedback } = body;
 
@@ -137,8 +143,6 @@ export async function PATCH(request: Request) {
       return NextResponse.json(quote);
     }
     const service = await createServiceClient();
-    const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on quotes API
     const appSettings = await getAppSettings(businessId);
 
     await archivePreviousOfficialQuotes(service, quote.project_id, id);
@@ -202,8 +206,6 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Only preliminary estimates can be converted." }, { status: 400 });
     }
 
-    const tenant = await getTenantContext();
-    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on quotes API
     const appSettings = await getAppSettings(businessId);
     const requireReview = appSettings.proposals.requireAdminReviewBeforeOfficial;
     const proposalExpiresAt = addProposalExpiration(

@@ -6,7 +6,7 @@ import { redirect, notFound } from "next/navigation";
 import { getClientCrmProfile } from "@/lib/clients-crm";
 import { ClientCrmProfile } from "@/components/admin/clients-table";
 import { ChevronLeft } from "lucide-react";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { requireTenantContext } from "@/lib/tenant";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -17,8 +17,8 @@ export default async function AdminClientDetailPage({ params }: PageProps) {
   if (!profile || profile.role !== "admin") redirect("/dashboard");
 
   const { id } = await params;
-  const tenant = await getTenantContext();
-  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on admin client detail
+  const tenant = await requireTenantContext();
+  const businessId = tenant.businessId;
   const data = await getClientCrmProfile(id, businessId, { includeDeleted: true });
   if (!data) notFound();
 
