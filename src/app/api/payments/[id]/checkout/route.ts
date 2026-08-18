@@ -4,7 +4,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAuth } from "@/lib/auth";
 import { canAccessProject } from "@/lib/project-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { getStripe } from "@/lib/stripe";
+import { getStripeForBusiness, isPlatformStripeBusiness, portalCheckoutBaseUrl, StripeConnectNotReadyError } from "@/lib/stripe-connect";
 import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
 import { isPaymentComplete } from "@/lib/payment-status";
 import type { Payment } from "@/lib/types";
@@ -31,8 +31,10 @@ async function authorizePaymentAccess(payment: Payment) {
   return { ok: true as const, profile };
 }
 
-async function createCheckoutSession(payment: Payment, businessId: string) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+async function createCheckoutSession(payment: Payment, businessId: string, customDomain?: string | null) {
+  const appUrl = isPlatformStripeBusiness(businessId)
+    ? process.env.NEXT_PUBLIC_APP_URL
+    : portalCheckoutBaseUrl({ custom_domain: customDomain ?? null });
   if (!appUrl) {
     return { ok: false as const, response: NextResponse.json({ error: "App URL not configured" }, { status: 500 }) };
   }
@@ -44,8 +46,20 @@ async function createCheckoutSession(payment: Payment, businessId: string) {
     clientId: payment.client_id,
   });
 
-  const session = await getStripe().checkout.sessions.create({
-    mode: "payment",
+  let stripeContext;
+  try {
+    stripeContext = await getStripeForBusiness(businessId);
+  } catch (err) {
+    if (err instanceof StripeConnectNotReadyError) {
+      return { ok: false as const, response: NextResponse.json({ error: err.message }, { status: 400 }) };
+    }
+    throw err;
+  }
+
+  const { stripe, requestOptions, stripeAccountId } = stripeContext;
+
+  const sessionParams = {
+    mode: "payment" as const,
     line_items: [
       {
         price_data: {
@@ -63,7 +77,11 @@ async function createCheckoutSession(payment: Payment, businessId: string) {
     client_reference_id: payment.id,
     success_url: `${appUrl}/dashboard/projects/${payment.project_id}?payment=success#payments`,
     cancel_url: `${appUrl}/dashboard/projects/${payment.project_id}?payment=cancelled#payments`,
-  });
+  };
+
+  const session = requestOptions
+    ? await stripe.checkout.sessions.create(sessionParams, requestOptions)
+    : await stripe.checkout.sessions.create(sessionParams);
 
   if (!session.url) {
     return {
@@ -75,7 +93,10 @@ async function createCheckoutSession(payment: Payment, businessId: string) {
   const db = await createTenantServiceClient(businessId);
   await db
     .from("payments")
-    .update({ stripe_checkout_session_id: session.id })
+    .update({
+      stripe_checkout_session_id: session.id,
+      ...(payment.stripe_account_id ? {} : { stripe_account_id: stripeAccountId }),
+    })
     .eq("id", payment.id);
 
   return { ok: true as const, session };
@@ -102,7 +123,7 @@ export async function GET(
       return NextResponse.redirect(redirectUrl);
     }
 
-    const result = await createCheckoutSession(payment, tenant.businessId);
+    const result = await createCheckoutSession(payment, tenant.businessId, tenant.business.custom_domain);
     if (!result.ok) return result.response;
 
     return NextResponse.redirect(result.session.url!);
@@ -110,6 +131,9 @@ export async function GET(
     const message = err instanceof Error ? err.message : "Checkout failed";
     if (message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof StripeConnectNotReadyError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
     }
     console.error("[payments/checkout] GET error:", err);
     return NextResponse.json({ error: "Failed to start checkout" }, { status: 500 });
@@ -136,7 +160,7 @@ export async function POST(
       return NextResponse.json({ error: ALREADY_PAID_MESSAGE }, { status: 409 });
     }
 
-    const result = await createCheckoutSession(payment, tenant.businessId);
+    const result = await createCheckoutSession(payment, tenant.businessId, tenant.business.custom_domain);
     if (!result.ok) return result.response;
 
     return NextResponse.json({ url: result.session.url, sessionId: result.session.id });
@@ -144,6 +168,9 @@ export async function POST(
     const message = err instanceof Error ? err.message : "Checkout failed";
     if (message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof StripeConnectNotReadyError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
     }
     console.error("[payments/checkout] POST error:", err);
     return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 });

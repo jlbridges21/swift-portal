@@ -5,7 +5,7 @@ import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
-import { getStripe } from "@/lib/stripe";
+import { getStripeForStoredAccount } from "@/lib/stripe-connect";
 import { parseBusinessIdFromMetadata, parsePaymentIdFromMetadata } from "@/lib/stripe-metadata";
 import { isPaymentComplete } from "@/lib/payment-status";
 import type { Payment } from "@/lib/types";
@@ -121,7 +121,12 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
 
   if (payment.stripe_payment_link_id) {
     try {
-      await getStripe().paymentLinks.update(payment.stripe_payment_link_id, { active: false });
+      const { stripe, requestOptions } = getStripeForStoredAccount(payment.stripe_account_id);
+      if (requestOptions) {
+        await stripe.paymentLinks.update(payment.stripe_payment_link_id, { active: false }, requestOptions);
+      } else {
+        await stripe.paymentLinks.update(payment.stripe_payment_link_id, { active: false });
+      }
     } catch (err) {
       console.error(
         `[stripe-webhook] Failed to deactivate payment link for payment ${payment.id}:`,
@@ -281,7 +286,8 @@ export async function findPaymentFromSession(metadata: {
 }
 
 export async function resolvePaymentFromCheckoutSession(
-  session: Stripe.Checkout.Session
+  session: Stripe.Checkout.Session,
+  stripeAccountId?: string | null
 ): Promise<Payment | null> {
   const paymentLinkId =
     typeof session.payment_link === "string"
@@ -297,7 +303,10 @@ export async function resolvePaymentFromCheckoutSession(
 
   if (!parsePaymentIdFromMetadata(metadata) && paymentIntentId) {
     try {
-      const intent = await getStripe().paymentIntents.retrieve(paymentIntentId);
+      const { stripe, requestOptions } = getStripeForStoredAccount(stripeAccountId);
+      const intent = requestOptions
+        ? await stripe.paymentIntents.retrieve(paymentIntentId, {}, requestOptions)
+        : await stripe.paymentIntents.retrieve(paymentIntentId);
       metadata = { ...metadata, ...intent.metadata };
     } catch (err) {
       console.error(
@@ -316,7 +325,10 @@ export async function resolvePaymentFromCheckoutSession(
   });
 }
 
-export async function resolvePaymentFromCharge(charge: Stripe.Charge): Promise<Payment | null> {
+export async function resolvePaymentFromCharge(
+  charge: Stripe.Charge,
+  stripeAccountId?: string | null
+): Promise<Payment | null> {
   const paymentIntentId =
     typeof charge.payment_intent === "string"
       ? charge.payment_intent
@@ -326,7 +338,10 @@ export async function resolvePaymentFromCharge(charge: Stripe.Charge): Promise<P
 
   if (!parsePaymentIdFromMetadata(metadata) && paymentIntentId) {
     try {
-      const intent = await getStripe().paymentIntents.retrieve(paymentIntentId);
+      const { stripe, requestOptions } = getStripeForStoredAccount(stripeAccountId);
+      const intent = requestOptions
+        ? await stripe.paymentIntents.retrieve(paymentIntentId, {}, requestOptions)
+        : await stripe.paymentIntents.retrieve(paymentIntentId);
       metadata = { ...metadata, ...intent.metadata };
     } catch (err) {
       console.error(

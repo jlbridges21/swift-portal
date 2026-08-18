@@ -4,7 +4,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getAppSettings } from "@/lib/app-settings";
-import { getStripe } from "@/lib/stripe";
+import { getStripeForStoredAccount } from "@/lib/stripe-connect";
 
 function escapeHtml(value: string): string {
   return value
@@ -47,8 +47,15 @@ export async function GET(
 
   if (payment.stripe_checkout_session_id) {
     try {
-      const session = await getStripe().checkout.sessions.retrieve(
-        payment.stripe_checkout_session_id
+      const { stripe, requestOptions } = getStripeForStoredAccount(payment.stripe_account_id);
+      const session = (
+        requestOptions
+          ? await stripe.checkout.sessions.retrieve(
+              payment.stripe_checkout_session_id,
+              {},
+              requestOptions
+            )
+          : await stripe.checkout.sessions.retrieve(payment.stripe_checkout_session_id)
       ) as { receipt_url?: string | null };
       if (session.receipt_url) {
         const db = await createTenantServiceClient(businessId);

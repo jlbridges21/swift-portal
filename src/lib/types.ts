@@ -277,6 +277,7 @@ export interface Payment {
   stripe_payment_intent_id?: string | null;
   stripe_invoice_id?: string | null;
   stripe_receipt_url: string | null;
+  stripe_account_id?: string | null;
   paid_at: string | null;
   created_at: string;
   updated_at: string;

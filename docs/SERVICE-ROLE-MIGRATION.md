@@ -92,7 +92,8 @@ Status key: **done** = converted this batch; **pending** = still raw service rol
 | `src/app/api/payments/[id]/route.ts` | **done** (prompt 12). Fail-closed tenant. Mark-paid / delete scoped to caller business. |
 | `src/app/api/payments/[id]/checkout/route.ts` | **done** (prompt 12). Cookie RLS load + extra `business_id` when tenant is known; Checkout Session metadata includes `business_id`. HTTP codes (404/403/409/redirect) unchanged. |
 | `src/app/api/payments/[id]/receipt/route.ts` | **done** (prompt 12). Cookie RLS + `business_id`. HTML receipt uses `getAppSettings(businessId).business.businessName` (escaped). Full branding is prompt 15. |
-| `src/app/api/stripe/webhook/route.ts` | **done** (prompt 12). Highest-risk route: no auth, excluded from proxy matcher. Global Stripe-ID lookup unchanged. After resolve: attribute from `payment.business_id`, reject metadata mismatch without writing, log `businessId` on events. Idempotency / signature / success-failure HTTP unchanged. Stripe Connect is prompt 14. |
+| `src/app/api/stripe/webhook/route.ts` | **done** (prompt 12 + v37). Platform events only. Signature still `STRIPE_WEBHOOK_SECRET`. `getStripe().stripe.webhooks.constructEvent`. No `Stripe-Account` header. |
+| `src/app/api/stripe/webhook/connect/route.ts` | **done** (v37). Separate Connect endpoint + `STRIPE_CONNECT_WEBHOOK_SECRET`. Resolves `event.account` → `business_integrations`, then `checkPaymentBusinessAttribution` plus payment.business_id must match. |
 | `src/app/api/approvals/route.ts` | **done** (prompt 12). Fail-closed tenant. Project update extra `.eq("business_id")`. Activity + `notifyAdmins` use `businessId`. |
 | `src/app/api/revisions/route.ts` | **done** (prompt 12). GET cookie RLS + extra `business_id`. POST/PATCH fail-closed tenant wrapper (insert stamps `revisions.business_id`). |
 | `src/app/api/quotes/route.ts` | **done** (prompt 12). GET cookie RLS + extra `business_id`. POST/PATCH fail-closed tenant wrapper. `archivePreviousOfficialQuotes(businessId, …)`. |
@@ -161,4 +162,12 @@ NEW uploads use `{business_id}/{project_id}/…` or `{business_id}/library/…` 
 
 Isolation harness after v36: **70** assertions (was 68). A Swift admin still sees own-business storage objects and cannot SELECT a Tenant B `{business}/library/` object.
 
-Do **not** convert Stripe Connect or branding in this batch.
+## Stripe Connect Standard (v37)
+
+`business_integrations` stores Connect **account ids**, never secret keys. Swift's row is `stripe_account_status='active'` with `NULL stripe_account_id` (platform account, no `Stripe-Account` header). Other businesses onboard via Account Links; charges are **direct** with no application fee.
+
+`getStripe()` returns `{ stripe, requestOptions }` from the prompt-7 Map. `requestOptions` is `{ stripeAccount }` only when a connected account id is present. Platform webhook stays at `/api/stripe/webhook`. Connect events use `/api/stripe/webhook/connect` and `STRIPE_CONNECT_WEBHOOK_SECRET`.
+
+Isolation harness after v37: **74** assertions (was 70). Tenant B `business_integrations` is invisible to a Swift admin; clients have no access.
+
+Do **not** convert branding or tenant routing in this batch.

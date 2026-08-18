@@ -20,10 +20,19 @@ export async function isStripeEventProcessed(eventId: string): Promise<boolean> 
   return !!data;
 }
 
-export async function markStripeEventProcessed(eventId: string, eventType: string): Promise<void> {
+export async function markStripeEventProcessed(
+  eventId: string,
+  eventType: string,
+  businessId?: string | null
+): Promise<void> {
   const supabase = await createServiceClient();
   const { error } = await supabase.from("processed_stripe_events").upsert(
-    { event_id: eventId, event_type: eventType, processed_at: new Date().toISOString() },
+    {
+      event_id: eventId,
+      event_type: eventType,
+      processed_at: new Date().toISOString(),
+      ...(businessId ? { business_id: businessId } : {}),
+    },
     { onConflict: "event_id" }
   );
 

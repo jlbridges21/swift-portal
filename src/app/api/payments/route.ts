@@ -4,7 +4,7 @@ import { setProjectStatus } from "@/lib/status-automation";
 import { getAppSettings } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
-import { getStripe } from "@/lib/stripe";
+import { getStripeForBusiness, isPlatformStripeBusiness, portalCheckoutBaseUrl, StripeConnectNotReadyError } from "@/lib/stripe-connect";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { logProjectActivity } from "@/lib/activity";
 import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
@@ -45,6 +45,8 @@ export async function POST(request: Request) {
       }
     }
 
+    const { stripe, requestOptions, stripeAccountId } = await getStripeForBusiness(businessId);
+
     const { data: project } = await db
       .from("projects")
       .select("project_name")
@@ -61,6 +63,7 @@ export async function POST(request: Request) {
         description: body.description,
         due_date: dueDate,
         status: "pending",
+        stripe_account_id: stripeAccountId,
       })
       .select()
       .single();
@@ -81,7 +84,11 @@ export async function POST(request: Request) {
       clientId: body.client_id,
     });
 
-    const paymentLink = await getStripe().paymentLinks.create({
+    const successBase = isPlatformStripeBusiness(businessId)
+      ? process.env.NEXT_PUBLIC_APP_URL
+      : portalCheckoutBaseUrl(tenant.business);
+
+    const paymentLinkParams = {
       line_items: [
         {
           price_data: {
@@ -104,12 +111,16 @@ export async function POST(request: Request) {
         metadata: stripeMetadata,
       },
       after_completion: {
-        type: "redirect",
+        type: "redirect" as const,
         redirect: {
-          url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/projects/${body.project_id}?payment=success#payments`,
+          url: `${successBase}/dashboard/projects/${body.project_id}?payment=success#payments`,
         },
       },
-    });
+    };
+
+    const paymentLink = requestOptions
+      ? await stripe.paymentLinks.create(paymentLinkParams, requestOptions)
+      : await stripe.paymentLinks.create(paymentLinkParams);
 
     const { data: payment, error } = await db
       .from("payments")
@@ -175,6 +186,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(payment);
   } catch (err) {
+    if (err instanceof StripeConnectNotReadyError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
     console.error("Payment creation error:", err);
     return NextResponse.json({ error: "Failed to create payment link" }, { status: 500 });
   }

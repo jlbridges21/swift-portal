@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { CreditCard, Download, Receipt } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { paymentCheckoutPath } from "@/lib/payment-status";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 
 /** Payment awaiting client action (link sent but not yet paid). */
 export function isOutstandingPayment(status: string): boolean {
@@ -21,6 +22,7 @@ interface PaymentsSectionProps {
 }
 
 export function PaymentsSection({ payments, isPreview, alwaysShow }: PaymentsSectionProps) {
+  const brand = usePortalBrand();
   const outstanding = payments.filter((p) => isOutstandingPayment(p.status));
   const paid = payments.filter((p) => p.status === "paid");
   const cancelled = payments.filter((p) => p.status === "cancelled");
@@ -37,7 +39,7 @@ export function PaymentsSection({ payments, isPreview, alwaysShow }: PaymentsSec
         <EmptyState
           icon={CreditCard}
           title="No payment requested yet"
-          description="No payment has been requested yet. Once your project is approved, Swift Aerial Media will send your secure payment link here. You'll be able to pay online and immediately unlock your high-resolution downloads."
+          description={`No payment has been requested yet. Once your project is approved, ${brand.name} will send your secure payment link here. You'll be able to pay online and immediately unlock your high-resolution downloads.`}
         />
       ) : (
       <div className="space-y-6">

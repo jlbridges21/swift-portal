@@ -6,6 +6,7 @@ import { requireTenantContext } from "@/lib/tenant";
 import { redirect } from "next/navigation";
 import { AdminSettingsClient } from "@/components/admin/admin-settings-client";
 import { GoogleCalendarCard } from "@/components/admin/google-calendar-card";
+import { StripeConnectCard } from "@/components/admin/stripe-connect-card";
 import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 
 export default async function AdminSettingsPage() {
@@ -24,6 +25,14 @@ export default async function AdminSettingsPage() {
           title="Admin Settings"
           description="Manage global notification, email, business, and proposal settings for Swift Portal."
         />
+        <SettingsCollapsible
+          title="Payments"
+          description="Connect your Stripe account so clients pay you directly."
+        >
+          <Suspense fallback={null}>
+            <StripeConnectCard />
+          </Suspense>
+        </SettingsCollapsible>
         <SettingsCollapsible
           title="Google Calendar"
           description="Connect Google Calendar to sync confirmed shoot dates."

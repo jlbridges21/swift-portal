@@ -10,6 +10,6 @@ export const config = {
     /*
      * Run session refresh on app routes and APIs, excluding static assets and webhooks.
      */
-    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|api/stripe/webhook|api/resend/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js|css|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|api/stripe/webhook/connect|api/stripe/webhook|api/resend/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js|css|woff2?)$).*)",
   ],
 };

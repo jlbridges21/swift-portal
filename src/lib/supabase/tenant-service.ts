@@ -23,6 +23,8 @@ import { createServiceClient } from "@/lib/supabase/server";
  *   - anything under storage (`raw.storage.from(...)`)
  *   - Auth admin APIs   (`raw.auth.admin.*`)
  *   - RPCs              (`raw.rpc(...)`) unless the function itself is tenant-aware
+ *
+ * `business_integrations` IS business-scoped — use `.from()`.
  */
 export interface TenantServiceClient {
   businessId: string;
