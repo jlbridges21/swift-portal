@@ -28,29 +28,27 @@ Re-run the grep commands at the bottom after **every** tenant prompt.
 
 ---
 
-## 1. DATABASE — v30 `business_id` DEFAULT (still open)
+## 1. DATABASE — v30 `business_id` DEFAULT (closed in v35)
 
-Migration `supabase/migration-v30-tenant-integrity.sql` set
+Migration `supabase/migration-v35-drop-transitional-defaults.sql` dropped the v30
+`DEFAULT '00000000-0000-0000-0000-000000000001'` from all **25** tables. `NOT NULL`
+remains. An INSERT that omits `business_id` now fails at the database instead of
+silently attaching to Swift.
 
-```sql
-DEFAULT '00000000-0000-0000-0000-000000000001'
-```
+`profiles` never had this DEFAULT and was not touched.
 
-on **25 tables** (not `profiles`):
+The 25 tables (from v30 lines 106–130):
 
 `clients`, `leads`, `properties`, `projects`, `project_clients`, `project_quotes`, `asset_reviews`, `revisions`, `media_assets`, `media_folders`, `media_asset_tags`, `media_downloads`, `media_asset_events`, `tours`, `payments`, `shoot_proposals`, `client_messages`, `client_message_reads`, `project_messages`, `project_message_reads`, `notifications`, `communications`, `email_events`, `activity_logs`, `client_notes`.
 
-Any `INSERT` that **omits** `business_id` becomes Swift’s row.
+Every `src/` INSERT against those tables stamps `business_id` either as an explicit
+column (cookie-client writes) or via `createTenantServiceClient` `injectBusinessId`.
+`project_messages` / `project_message_reads` have no application writes; dropping
+their DEFAULT still fail-closes any future INSERT that forgets the column.
 
-`enforce_same_business()` (v30) only fires when a parent FK is present and non-null. It does **not** catch omitted `business_id` on:
-
-- `clients` (no parent)
-- `leads` (optional `project_id`)
-- `properties` (optional `client_id`)
-- unassigned `media_assets` (`project_id` nullable)
-- parentless `activity_logs`, `communications`, `notifications`
-
-**Removal gate:** after prompt **12b**, once every write path (including public `/request`, scheduling, and cron) sets `business_id` explicitly. Then `DROP DEFAULT` on those 25 columns. Do **not** drop the DEFAULT in this prompt — it is the only remaining open inventory item.
+With v35 applied, the checklist below is **fully satisfied**. Do not onboard a
+second production business until a post-deploy day of logs has been watched for
+`business_id` NOT NULL violations (any unconverted write path will now fail loudly).
 
 ---
 
@@ -144,12 +142,12 @@ grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "expo
 grep -n "user_metadata" src/app/api/request/route.ts
 ```
 
-| Check | After prompt 12b | Before 2nd business |
+| Check | After v35 | Before 2nd business |
 |---|---|---|
 | `?? LEGACY_DEFAULT_BUSINESS_ID` on authenticated paths | **0** | **0** |
 | `?? LEGACY_DEFAULT_BUSINESS_ID` in `getProfile()` (Category D) | **0** | **0** |
 | Category C missing-context placeholders | **0** (OneSignal + public-form Swift default until prompt 18 are not placeholders) | **0** placeholders |
 | `/api/request` `user_metadata` includes `business_id` | **yes** | **yes** |
-| v30 `business_id` DEFAULT still on 25 tables | **yes** (only remaining open inventory item) | **dropped** |
+| v30 `business_id` DEFAULT on 25 tables | **dropped** | **dropped** |
 
-Do not create a second production tenant until every row in the last column is satisfied.
+**This checklist is fully satisfied.** New authenticated code paths must still fail closed (standing rule at the top of this file). Do not create a second production tenant until post-deploy logs have been watched for `business_id` NOT NULL violations.

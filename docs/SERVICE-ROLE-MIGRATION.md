@@ -148,3 +148,11 @@ GHL webhook URL lives in `AppSettings.integrations`. Swift still uses `GHL_PORTA
 `cover.ts` requires an explicit `businessId` on every media lookup (chosen over an RLS-only contract because admin calendar uses service role for signed URLs).
 
 Isolation harness after prompt 12b: **68** assertions (was 66). A Tenant B `shoot_proposals` row and `google_calendar_connections_v2` row are invisible to a Swift admin.
+
+## Drop transitional `business_id` DEFAULTs (v35)
+
+Every application INSERT against the 25 v30 tables stamps `business_id` (explicit column or tenant-wrapper `injectBusinessId`). `migration-v35-drop-transitional-defaults.sql` drops the Swift DEFAULT and leaves `NOT NULL`. Omitting `business_id` now fails at insert time.
+
+`profiles` was never given a DEFAULT. Isolation harness still **68** assertions (fixture INSERTs already set `business_id` explicitly).
+
+Do **not** convert storage path prefix or Stripe Connect in this batch.

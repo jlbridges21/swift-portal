@@ -4,7 +4,7 @@ Repeatable SQL harness proving **cross-tenant READ isolation** via RLS (v32) and
 
 ## Prerequisites
 
-- Migrations **v29–v33** applied on PostgreSQL 16.
+- Migrations **v29–v35** applied on PostgreSQL 16.
 - Supabase project with RLS enabled (production or staging).
 - Two auth users created in **Supabase Dashboard → Authentication → Add user** (email + password, auto-confirm):
   - `tenant-b-admin@example.test`
@@ -13,11 +13,13 @@ Repeatable SQL harness proving **cross-tenant READ isolation** via RLS (v32) and
 
 Swift cross-tenant tests use an existing Swift admin profile (default: `jackson@swiftaerialmedia.com`). Change `v_swift_admin_user_id` if you prefer another admin.
 
-## ⚠️ Production hazard (v30 defaults)
+## `business_id` on INSERTs (v35)
 
-Twenty-five tables have a transitional `DEFAULT` on `business_id` pointing at Swift Aerial Media (`00000000-0000-0000-0000-000000000001`). **Any INSERT that omits `business_id` silently attaches to the live Swift tenant.**
+As of `migration-v35-drop-transitional-defaults.sql`, the v30 Swift DEFAULT is gone.
+`business_id` is still `NOT NULL`. **Any INSERT that omits `business_id` now fails**
+instead of attaching to Swift.
 
-This harness sets `business_id` explicitly on every INSERT. When extending the script, audit your own changes the same way.
+This harness still sets `business_id` explicitly on every INSERT. When extending the script, do the same — the database will no longer paper over a missing column.
 
 ## How to run
 

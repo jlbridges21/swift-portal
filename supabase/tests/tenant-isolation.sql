@@ -1,8 +1,8 @@
 -- Swift Portal — tenant isolation harness (RLS read + write)
--- Run in Supabase SQL Editor after v29–v34. See docs/TENANT-TESTING.md.
+-- Run in Supabase SQL Editor after v29–v35. See docs/TENANT-TESTING.md.
 --
--- ⚠️ v30 DEFAULT: every INSERT below sets business_id EXPLICITLY.
---    Omitting business_id attaches rows to Swift production (…000001).
+-- v35: business_id has no DEFAULT. Every INSERT below sets it EXPLICITLY.
+--      Omitting business_id now fails NOT NULL (it used to attach to Swift).
 --
 -- Prerequisite auth users (Dashboard → Authentication → Add user, auto-confirm):
 --   tenant-b-admin@example.test
