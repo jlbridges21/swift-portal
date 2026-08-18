@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { setProjectStatus } from "@/lib/status-automation";
 import { getAppSettings } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getStripe } from "@/lib/stripe";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { logProjectActivity } from "@/lib/activity";
@@ -19,10 +19,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const supabase = await createClient();
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
+    const db = await createTenantServiceClient(businessId);
     const appSettings = await getAppSettings(businessId);
 
     const dueDate = body.due_date
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
         })();
 
     if (body.quote_id) {
-      const { data: existingForQuote } = await supabase
+      const { data: existingForQuote } = await db
         .from("payments")
         .select("*")
         .eq("quote_id", body.quote_id)
@@ -45,13 +45,13 @@ export async function POST(request: Request) {
       }
     }
 
-    const { data: project } = await supabase
+    const { data: project } = await db
       .from("projects")
       .select("project_name")
       .eq("id", body.project_id)
       .single();
 
-    const { data: paymentRow, error: insertError } = await supabase
+    const { data: paymentRow, error: insertError } = await db
       .from("payments")
       .insert({
         project_id: body.project_id,
@@ -76,6 +76,7 @@ export async function POST(request: Request) {
 
     const stripeMetadata = buildStripePaymentMetadata({
       paymentId: paymentRow.id,
+      businessId,
       projectId: body.project_id,
       clientId: body.client_id,
     });
@@ -110,7 +111,7 @@ export async function POST(request: Request) {
       },
     });
 
-    const { data: payment, error } = await supabase
+    const { data: payment, error } = await db
       .from("payments")
       .update({
         stripe_payment_link_id: paymentLink.id,

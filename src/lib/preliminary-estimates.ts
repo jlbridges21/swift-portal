@@ -1,30 +1,44 @@
 import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
 import { buildPreliminaryEstimatePayload } from "@/lib/service-templates";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+
+async function resolveProjectBusinessId(projectId: string): Promise<string | null> {
+  const raw = await createServiceClient();
+  const { data } = await raw
+    .from("projects")
+    .select("business_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  return data?.business_id ?? null;
+}
 
 export async function upsertPreliminaryEstimate(
   projectId: string,
   serviceType: string,
-  options?: { userId?: string | null }
+  options?: { userId?: string | null; businessId?: string }
 ) {
-  const appSettings = await getAppSettings(
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass project.business_id into upsertPreliminaryEstimate
-  );
+  const businessId = options?.businessId || (await resolveProjectBusinessId(projectId));
+  if (!businessId) {
+    console.warn("[preliminary-estimate] skipped upsert — could not resolve businessId", { projectId });
+    return null;
+  }
+
+  const appSettings = await getAppSettings(businessId);
   if (!appSettings.proposals.autoPreliminaryEstimate) {
     return null;
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
   const payload = buildPreliminaryEstimatePayload(serviceType);
   const expiresAt = addProposalExpiration(
     new Date(),
     appSettings.proposals.defaultEstimateExpirationDays
   );
 
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from("project_quotes")
     .select("id")
     .eq("project_id", projectId)
@@ -32,7 +46,7 @@ export async function upsertPreliminaryEstimate(
     .maybeSingle();
 
   if (existing) {
-    const { data: updated, error } = await supabase
+    const { data: updated, error } = await db
       .from("project_quotes")
       .update({
         title: payload.title,
@@ -58,25 +72,30 @@ export async function upsertPreliminaryEstimate(
   return createPreliminaryEstimate(projectId, serviceType, {
     userId: options?.userId,
     skipIfExists: false,
+    businessId,
   });
 }
 
 export async function createPreliminaryEstimate(
   projectId: string,
   serviceType: string,
-  options?: { userId?: string | null; skipIfExists?: boolean }
+  options?: { userId?: string | null; skipIfExists?: boolean; businessId?: string }
 ) {
-  const appSettings = await getAppSettings(
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass project.business_id into upsertPreliminaryEstimate
-  );
+  const businessId = options?.businessId || (await resolveProjectBusinessId(projectId));
+  if (!businessId) {
+    console.warn("[preliminary-estimate] skipped create — could not resolve businessId", { projectId });
+    return null;
+  }
+
+  const appSettings = await getAppSettings(businessId);
   if (!appSettings.proposals.autoPreliminaryEstimate) {
     return null;
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
 
   if (options?.skipIfExists) {
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from("project_quotes")
       .select("id")
       .eq("project_id", projectId)
@@ -91,7 +110,7 @@ export async function createPreliminaryEstimate(
     appSettings.proposals.defaultEstimateExpirationDays
   );
 
-  const { data: quote, error } = await supabase
+  const { data: quote, error } = await db
     .from("project_quotes")
     .insert({
       project_id: projectId,
@@ -118,7 +137,7 @@ export async function createPreliminaryEstimate(
     "preliminary_estimate_created",
     "📄 Preliminary Estimate created automatically",
     {
-      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
+      businessId,
       projectId,
       userId: options?.userId ?? null,
       metadata: { quoteId: quote.id, serviceType },
@@ -126,6 +145,7 @@ export async function createPreliminaryEstimate(
   );
 
   await notifyProjectClients({
+    businessId,
     type: "status_changed",
     eventKey: "preliminary_estimate_created",
     title: "Your preliminary estimate is ready",

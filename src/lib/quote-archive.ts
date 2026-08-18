@@ -1,14 +1,15 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { ARCHIVED_QUOTE_NOTE, isArchivedQuote } from "@/lib/quote-display";
 import type { ProjectQuote } from "@/lib/types";
 
 /** Mark older official proposals as archived so only the newest is shown in the UI. */
 export async function archivePreviousOfficialQuotes(
-  supabase: SupabaseClient,
+  businessId: string,
   projectId: string,
   keepQuoteId: string
 ) {
-  const { data: previous } = await supabase
+  const db = await createTenantServiceClient(businessId);
+  const { data: previous } = await db
     .from("project_quotes")
     .select("id, notes")
     .eq("project_id", projectId)
@@ -22,7 +23,7 @@ export async function archivePreviousOfficialQuotes(
       ? `${ARCHIVED_QUOTE_NOTE}\n\n${row.notes.trim()}`
       : ARCHIVED_QUOTE_NOTE;
 
-    await supabase
+    await db
       .from("project_quotes")
       .update({ status: "draft", notes })
       .eq("id", row.id);

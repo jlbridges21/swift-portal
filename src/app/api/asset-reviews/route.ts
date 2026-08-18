@@ -19,10 +19,14 @@ export async function GET(request: Request) {
   if (!projectId) return NextResponse.json({ error: "project_id required" }, { status: 400 });
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("asset_reviews")
     .select("*")
     .eq("project_id", projectId);
+  if (profile.business_id) {
+    query = query.eq("business_id", profile.business_id);
+  }
+  const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
@@ -113,6 +117,7 @@ export async function POST(request: Request) {
     });
 
     await notifyAdmins({
+      businessId: tenant.businessId,
       type: "revision_requested",
       eventKey: "revision_requested",
       title: "Deliverable feedback",

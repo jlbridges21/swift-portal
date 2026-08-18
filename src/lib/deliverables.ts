@@ -1,6 +1,10 @@
 import { normalizeStatus } from "@/lib/constants";
 
-/** Full-resolution downloads unlocked only after payment (delivered). */
+/**
+ * Full-resolution downloads unlocked only after payment (delivered).
+ * Callers must load the project through a business-scoped query first
+ * (`media/download`, `project-zip-download`). This helper only inspects status.
+ */
 export function canDownloadDeliverables(status: string): boolean {
   return normalizeStatus(status) === "delivered";
 }

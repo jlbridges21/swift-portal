@@ -405,6 +405,13 @@ BEGIN
   RAISE NOTICE 'WRITE blocked — UPDATE payment: RLS (0 rows)';
   PERFORM _tenant_test_bump();
 
+  UPDATE project_quotes SET status = 'draft' WHERE id = v_quote;
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows > 0 THEN RAISE EXCEPTION 'WRITE LEAK: UPDATE Tenant B project_quote (% rows)', v_rows; END IF;
+  INSERT INTO _tenant_test_writes VALUES ('UPDATE Tenant B project_quote', 'RLS (0 rows)');
+  RAISE NOTICE 'WRITE blocked — UPDATE project_quote: RLS (0 rows)';
+  PERFORM _tenant_test_bump();
+
   DELETE FROM clients WHERE id = v_client;
   GET DIAGNOSTICS v_rows = ROW_COUNT;
   IF v_rows > 0 THEN RAISE EXCEPTION 'WRITE LEAK: DELETE Tenant B client (% rows)', v_rows; END IF;

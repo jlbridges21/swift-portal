@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
-import { notifyAdmins } from "@/lib/notifications";
+import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { canAccessProject } from "@/lib/project-access";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -28,6 +29,10 @@ export async function GET(request: Request) {
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
 
+  if (profile.business_id) {
+    query = query.eq("business_id", profile.business_id);
+  }
+
   const { data, error } = await query;
 
   if (error) {
@@ -43,6 +48,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+  const businessId = tenant.businessId;
+
   const body = await request.json();
 
   if (!body.project_id || !body.description) {
@@ -54,9 +63,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Project not found or access denied" }, { status: 404 });
   }
 
-  const supabase = await createClient();
+  const db = await createTenantServiceClient(businessId);
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("revisions")
     .insert({
       project_id: body.project_id,
@@ -70,13 +79,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  await supabase
+  await db
     .from("projects")
     .update({ deliverables_approved_at: null, deliverables_approved_by: null })
     .eq("id", body.project_id);
 
   await logProjectActivity("revision_requested", "Revision requested", {
-    businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
+    businessId,
     projectId: body.project_id,
     userId: profile.id,
     idempotencyKey: idempotencyKey("revision", data.id, "requested"),
@@ -84,6 +93,7 @@ export async function POST(request: Request) {
   });
 
   await notifyAdmins({
+    businessId,
     type: "revision_requested",
     eventKey: "revision_requested",
     title: "Revision Requested",
@@ -101,6 +111,10 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+  const businessId = tenant.businessId;
+
   const body = await request.json();
   const { id, status, admin_notes } = body;
 
@@ -108,9 +122,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Missing id or status" }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const db = await createTenantServiceClient(businessId);
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("revisions")
     .update({ status, admin_notes: admin_notes ?? null })
     .eq("id", id)
@@ -123,7 +137,7 @@ export async function PATCH(request: Request) {
 
   if (status === "completed") {
     await logProjectActivity("revision_completed", "Revision completed", {
-      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
+      businessId,
       projectId: data.project_id,
       userId: profile.id,
       metadata: { revisionId: id },
@@ -149,8 +163,8 @@ export async function PATCH(request: Request) {
     body: admin_notes || "Your revision request has been updated.",
   };
 
-  const { notifyProjectClients } = await import("@/lib/notifications");
   await notifyProjectClients({
+    businessId,
     type: "revision_requested",
     eventKey: status === "completed" ? "revision_completed" : undefined,
     title: msg.title,

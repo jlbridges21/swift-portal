@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { getStripe } from "@/lib/stripe";
 import {
+  checkPaymentBusinessAttribution,
   findPaymentFromStripe,
   handleCheckoutExpired,
   handlePaymentFailed,
@@ -39,10 +40,23 @@ async function processPaymentSuccess(
     return;
   }
 
+  const attribution = checkPaymentBusinessAttribution(payment, options.metadata);
+  if (!attribution.ok) {
+    console.error("[stripe-webhook] business attribution failed — writing nothing", {
+      eventType,
+      paymentId: payment.id,
+      reason: attribution.reason,
+      paymentBusinessId: attribution.paymentBusinessId,
+      metadataBusinessId: attribution.metadataBusinessId,
+    });
+    return;
+  }
+
   logWebhook("payment resolved", {
     eventType,
     paymentId: payment.id,
     paymentStatus: payment.status,
+    businessId: attribution.businessId,
     metadata: sanitizeMetadataForLog(options.metadata),
   });
 
@@ -53,11 +67,13 @@ async function processPaymentSuccess(
       paymentIntentId: options.paymentIntentId,
       receiptUrl: options.receiptUrl,
       source: eventType,
+      metadata: options.metadata,
     });
 
     logWebhook("payment update complete", {
       eventType,
       paymentId: result.paymentId,
+      businessId: result.businessId,
       alreadyPaid: result.alreadyPaid,
       updated: result.updated,
     });
@@ -65,6 +81,7 @@ async function processPaymentSuccess(
     logWebhook("payment update failed", {
       eventType,
       paymentId: payment.id,
+      businessId: payment.business_id,
       error: err instanceof Error ? err.message : "Unknown error",
     });
     throw err;
@@ -147,7 +164,12 @@ export async function POST(request: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         const payment = await resolvePaymentFromCheckoutSession(session);
         if (payment && payment.status === "pending") {
-          await handleCheckoutExpired(payment);
+          logWebhook("checkout session expired", {
+            eventType: event.type,
+            paymentId: payment.id,
+            businessId: payment.business_id,
+          });
+          await handleCheckoutExpired(payment, session.metadata);
         }
         recordEvent = true;
         break;
@@ -169,6 +191,7 @@ export async function POST(request: Request) {
           logWebhook("payment_intent skipped — handled by checkout.session.completed", {
             eventType: event.type,
             paymentId: payment.id,
+            businessId: payment.business_id,
             checkoutSessionId: payment.stripe_checkout_session_id,
           });
           recordEvent = true;
@@ -196,9 +219,15 @@ export async function POST(request: Request) {
         const intent = event.data.object as Stripe.PaymentIntent;
         const payment = await resolvePaymentFromPaymentIntent(intent);
         if (payment) {
+          logWebhook("payment failed", {
+            eventType: event.type,
+            paymentId: payment.id,
+            businessId: payment.business_id,
+          });
           await handlePaymentFailed(
             payment,
-            intent.last_payment_error?.message || "Payment failed"
+            intent.last_payment_error?.message || "Payment failed",
+            intent.metadata
           );
         }
         recordEvent = true;
@@ -224,7 +253,12 @@ export async function POST(request: Request) {
           metadata: invoice.metadata,
         });
         if (payment) {
-          await handlePaymentFailed(payment, "Invoice payment failed");
+          logWebhook("invoice payment failed", {
+            eventType: event.type,
+            paymentId: payment.id,
+            businessId: payment.business_id,
+          });
+          await handlePaymentFailed(payment, "Invoice payment failed", invoice.metadata);
         }
         recordEvent = true;
         break;

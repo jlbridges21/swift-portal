@@ -1,5 +1,9 @@
 import { createServiceClient } from "@/lib/supabase/server";
 
+/**
+ * processed_stripe_events is platform-scoped (not a tenant table). Lookups
+ * stay global on purpose — do not wrap with createTenantServiceClient.from().
+ */
 export async function isStripeEventProcessed(eventId: string): Promise<boolean> {
   const supabase = await createServiceClient();
   const { data, error } = await supabase

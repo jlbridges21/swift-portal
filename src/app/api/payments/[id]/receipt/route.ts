@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { getAppSettings } from "@/lib/app-settings";
 import { getStripe } from "@/lib/stripe";
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 export async function GET(
   _request: Request,
@@ -12,6 +23,10 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
+  const businessId = tenant.businessId;
+
   const { id } = await params;
   const supabase = await createClient();
 
@@ -19,6 +34,7 @@ export async function GET(
     .from("payments")
     .select("*")
     .eq("id", id)
+    .eq("business_id", businessId)
     .single();
 
   if (!payment || payment.status !== "paid") {
@@ -35,7 +51,8 @@ export async function GET(
         payment.stripe_checkout_session_id
       ) as { receipt_url?: string | null };
       if (session.receipt_url) {
-        await supabase
+        const db = await createTenantServiceClient(businessId);
+        await db
           .from("payments")
           .update({ stripe_receipt_url: session.receipt_url })
           .eq("id", id);
@@ -46,16 +63,21 @@ export async function GET(
     }
   }
 
+  const appSettings = await getAppSettings(businessId);
+  const businessName = appSettings.business.businessName || "Receipt";
+  const safeName = escapeHtml(businessName);
+  const safeDescription = escapeHtml(payment.description || "");
+
   const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Receipt — Swift Aerial Media</title>
+<html><head><meta charset="utf-8"><title>Receipt — ${safeName}</title>
 <style>body{font-family:system-ui,sans-serif;max-width:480px;margin:40px auto;padding:24px;color:#0f172a}
 h1{font-size:20px;margin:0 0 8px}p{margin:4px 0;color:#64748b;font-size:14px}
 .amount{font-size:28px;font-weight:700;color:#0f172a;margin:16px 0}
 .badge{display:inline-block;background:#ecfdf5;color:#059669;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600}
 </style></head><body>
-<h1>Swift Aerial Media</h1><p>Payment Receipt</p>
+<h1>${safeName}</h1><p>Payment Receipt</p>
 <div class="amount">$${(payment.amount / 100).toFixed(2)}</div>
-<p>${payment.description}</p>
+<p>${safeDescription}</p>
 <p>Paid: ${payment.paid_at ? new Date(payment.paid_at).toLocaleString() : "—"}</p>
 <p>Reference: ${payment.id.slice(0, 8).toUpperCase()}</p>
 <span class="badge">PAID</span>

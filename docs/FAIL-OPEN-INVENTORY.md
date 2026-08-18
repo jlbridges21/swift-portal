@@ -50,7 +50,7 @@ Any `INSERT` that **omits** `business_id` becomes Swift’s row.
 - unassigned `media_assets` (`project_id` nullable)
 - parentless `activity_logs`, `communications`, `notifications`
 
-**Removal gate:** after prompt 12, once every write path sets `business_id` explicitly. Then `DROP DEFAULT` on those 25 columns.
+**Removal gate:** after prompt **12b**, once every write path (including public `/request`, scheduling, and cron) sets `business_id` explicitly. Then `DROP DEFAULT` on those 25 columns. Do **not** drop the DEFAULT after this money batch.
 
 ---
 
@@ -110,18 +110,13 @@ grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "expo
 
 | File | Resolving prompt |
 |---|---|
-| `src/app/api/cron/workflow-reminders/route.ts` | **12** — iterate active businesses / `project.business_id` |
-| `src/lib/stripe-payments.ts` (5 sites) | **12** — Stripe webhook; `payment.business_id` from metadata |
-| `src/app/api/request/route.ts` (2 sites) | **12** — public `/request` stamps a real `business_id` |
-| `src/lib/status-automation.ts` (2 sites) | **12** |
-| `src/lib/preliminary-estimates.ts` (3 sites) | **12** |
-| `src/lib/workflow.ts` (2 sites) | **12** |
-| `src/app/api/quotes/route.ts` activity logs (2 sites) | **12** |
-| `src/app/api/shoot-proposals/route.ts` activity logs (3 sites) | **12** |
-| `src/app/api/approvals/route.ts` | **12** |
-| `src/app/api/revisions/route.ts` (2 sites) | **12** |
+| `src/app/api/cron/workflow-reminders/route.ts` | **12b** — iterate active businesses / `project.business_id` |
+| `src/app/api/request/route.ts` (2 sites) | **12b** — public `/request` stamps a real `business_id` |
+| `src/lib/status-automation.ts` (2 sites) | **12b** |
+| `src/lib/workflow.ts` (2 sites) | **12b** |
+| `src/app/api/shoot-proposals/route.ts` activity logs (3 sites) | **12b** |
 
-Prompt 11 removed Category C from `email.ts`, `notifications.ts`, `client-email-notifications.ts`, `email-analytics.ts`, and both message routes. `src/lib/onesignal-push.ts` compares the send-time `businessId` to `LEGACY_DEFAULT_BUSINESS_ID` so **untagged** subscriptions still match Swift admin push; that is send-filter policy, not a missing-context placeholder.
+Prompt 12 removed Category C from `stripe-payments.ts`, `preliminary-estimates.ts`, `quotes/route.ts`, `approvals/route.ts`, and `revisions/route.ts`. Prompt 11 removed Category C from `email.ts`, `notifications.ts`, `client-email-notifications.ts`, `email-analytics.ts`, and both message routes. `src/lib/onesignal-push.ts` compares the send-time `businessId` to `LEGACY_DEFAULT_BUSINESS_ID` so **untagged** subscriptions still match Swift admin push; that is send-filter policy, not a missing-context placeholder.
 
 (`src/lib/tenant.ts` export of the constant is not a call site.)
 
@@ -140,12 +135,12 @@ and does **not** pass `business_id`. `handle_new_user()` (v31b) therefore leaves
 
 Currently masked by `current_business_id()` falling back to `clients.business_id` for
 `user_id = auth.uid()` (non-deleted). Public `/request` still uses unconditional LEGACY for
-property/activity stamps (Category C, prompt 12).
+property/activity stamps (Category C, prompt **12b**).
 
 Admin-created portal users (`clients/route.ts` POST, `enableClientPortalAccess`) now pass
 `business_id` in `user_metadata`.
 
-**Removal gate:** prompt 12 (public `/request` must stamp a real business on signup).
+**Removal gate:** prompt **12b** (public `/request` must stamp a real business on signup).
 
 ---
 
@@ -164,12 +159,12 @@ grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "expo
 grep -n "user_metadata" src/app/api/request/route.ts
 ```
 
-| Check | After prompt 11 | Before 2nd business |
+| Check | After prompt 12 | Before 2nd business |
 |---|---|---|
 | `?? LEGACY_DEFAULT_BUSINESS_ID` on authenticated paths | **0** | **0** |
 | `?? LEGACY_DEFAULT_BUSINESS_ID` in `getProfile()` (Category D) | **0** | **0** |
-| Unconditional `LEGACY_DEFAULT_BUSINESS_ID` call sites | listed in §4 | **0** |
-| `/api/request` `user_metadata` includes `business_id` | no (prompt 12) | **yes** |
-| v30 `business_id` DEFAULT still on 25 tables | yes (prompt 12) | **dropped** |
+| Unconditional `LEGACY_DEFAULT_BUSINESS_ID` call sites | listed in §4 (cron, `/request`, status-automation, workflow, shoot-proposals) | **0** |
+| `/api/request` `user_metadata` includes `business_id` | no (prompt 12b) | **yes** |
+| v30 `business_id` DEFAULT still on 25 tables | yes (prompt 12b) | **dropped** |
 
 Do not create a second production tenant until every row in the last column is satisfied.

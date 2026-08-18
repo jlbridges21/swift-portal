@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus, setProjectStatusForward } from "@/lib/status-automation";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
-import { getTenantContext, missingTenantResponse, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { archivePreviousOfficialQuotes } from "@/lib/quote-archive";
@@ -18,11 +19,15 @@ export async function GET(request: Request) {
   if (!projectId) return NextResponse.json({ error: "project_id required" }, { status: 400 });
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("project_quotes")
     .select("*")
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
+  if (profile.business_id) {
+    query = query.eq("business_id", profile.business_id);
+  }
+  const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
@@ -50,7 +55,7 @@ export async function POST(request: Request) {
     0
   );
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
   const appSettings = await getAppSettings(businessId);
   const requireReview = appSettings.proposals.requireAdminReviewBeforeOfficial;
   const willSend = Boolean(send) && !requireReview;
@@ -59,7 +64,7 @@ export async function POST(request: Request) {
     ? addProposalExpiration(new Date(), appSettings.proposals.defaultProposalExpirationDays)
     : null;
 
-  const { data: quote, error } = await supabase
+  const { data: quote, error } = await db
     .from("project_quotes")
     .insert({
       project_id,
@@ -79,7 +84,7 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await archivePreviousOfficialQuotes(supabase, project_id, quote.id);
+  await archivePreviousOfficialQuotes(businessId, project_id, quote.id);
 
   if (willSend) {
     await setProjectStatusForward({
@@ -100,6 +105,7 @@ export async function POST(request: Request) {
     });
 
     await notifyProjectClients({
+      businessId,
       type: "quote_sent",
       eventKey: "official_proposal_sent",
       title: "Your official proposal is ready",
@@ -127,10 +133,16 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Missing id or action" }, { status: 400 });
   }
 
-  const supabase = profile.role === "admin" ? await createServiceClient() : await createClient();
+  const db = await createTenantServiceClient(businessId);
+  const cookie = profile.role === "admin" ? null : await createClient();
 
-  const { data: quote } = await supabase.from("project_quotes").select("*").eq("id", id).single();
+  const { data: quote } = cookie
+    ? await cookie.from("project_quotes").select("*").eq("id", id).eq("business_id", businessId).single()
+    : await db.from("project_quotes").select("*").eq("id", id).single();
   if (!quote) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (quote.business_id && quote.business_id !== businessId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   if (action === "send" && profile.role === "admin") {
     if (quote.quote_kind === "preliminary") {
@@ -142,17 +154,16 @@ export async function PATCH(request: Request) {
     if (quote.status === "sent" || quote.status === "approved") {
       return NextResponse.json(quote);
     }
-    const service = await createServiceClient();
     const appSettings = await getAppSettings(businessId);
 
-    await archivePreviousOfficialQuotes(service, quote.project_id, id);
+    await archivePreviousOfficialQuotes(businessId, quote.project_id, id);
 
     const expiresAt =
       appSettings.workflow.proposals.autoSetExpiration
         ? addProposalExpiration(new Date(), appSettings.proposals.defaultProposalExpirationDays)
         : quote.expires_at;
 
-    const { data: updated } = await service
+    const { data: updated } = await db
       .from("project_quotes")
       .update({
         status: "sent",
@@ -181,6 +192,7 @@ export async function PATCH(request: Request) {
     });
 
     await notifyProjectClients({
+      businessId,
       type: "quote_sent",
       eventKey: "official_proposal_sent",
       title: "Review Proposal",
@@ -221,10 +233,8 @@ export async function PATCH(request: Request) {
       0
     );
 
-    const service = await createServiceClient();
-
     if (line_items?.length || title || description !== undefined || notes !== undefined) {
-      await service
+      await db
         .from("project_quotes")
         .update({
           title: title || quote.title,
@@ -237,7 +247,7 @@ export async function PATCH(request: Request) {
         .eq("id", id);
     }
 
-    const { data: official, error: officialError } = await service
+    const { data: official, error: officialError } = await db
       .from("project_quotes")
       .insert({
         project_id: quote.project_id,
@@ -261,7 +271,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: officialError.message }, { status: 500 });
     }
 
-    await archivePreviousOfficialQuotes(service, quote.project_id, official.id);
+    await archivePreviousOfficialQuotes(businessId, quote.project_id, official.id);
 
     if (!requireReview) {
       await setProjectStatusForward({
@@ -282,6 +292,7 @@ export async function PATCH(request: Request) {
       });
 
       await notifyProjectClients({
+        businessId,
         type: "quote_sent",
         eventKey: "official_proposal_sent",
         title: "Your official proposal is ready",
@@ -311,8 +322,7 @@ export async function PATCH(request: Request) {
     if (quote.status === "approved") {
       return NextResponse.json(quote);
     }
-    const service = await createServiceClient();
-    const { data: updated } = await service
+    const { data: updated } = await db
       .from("project_quotes")
       .update({ status: "approved", approved_at: new Date().toISOString() })
       .eq("id", id)
@@ -329,6 +339,7 @@ export async function PATCH(request: Request) {
     });
 
     await notifyAdmins({
+      businessId,
       type: "proposal_approved",
       eventKey: "proposal_approved",
       title: "Proposal Approved",
@@ -350,8 +361,7 @@ export async function PATCH(request: Request) {
     if (quote.status === "changes_requested") {
       return NextResponse.json(quote);
     }
-    const service = await createServiceClient();
-    const { data: updated } = await service
+    const { data: updated } = await db
       .from("project_quotes")
       .update({ status: "changes_requested", changes_feedback: feedback || null })
       .eq("id", id)
@@ -359,7 +369,7 @@ export async function PATCH(request: Request) {
       .single();
 
     await logProjectActivity("quote_changes_requested", `Client requested quote changes: ${feedback || "No details"}`, {
-      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass quote/project.business_id
+      businessId,
       projectId: quote.project_id,
       userId: profile.id,
       idempotencyKey: idempotencyKey("quote", id, "changes_requested"),
@@ -367,6 +377,7 @@ export async function PATCH(request: Request) {
     });
 
     await notifyAdmins({
+      businessId,
       type: "proposal_changes",
       eventKey: "proposal_changes_requested",
       title: "Proposal Changes Requested",
@@ -397,8 +408,7 @@ export async function PATCH(request: Request) {
       0
     );
 
-    const service = await createServiceClient();
-    const { data: updated, error } = await service
+    const { data: updated, error } = await db
       .from("project_quotes")
       .update({
         title,
@@ -417,9 +427,8 @@ export async function PATCH(request: Request) {
   }
 
   if (action === "duplicate" && profile.role === "admin") {
-    const service = await createServiceClient();
     const revisionNumber = body.revision_label || "Revised";
-    const { data: newQuote, error } = await service
+    const { data: newQuote, error } = await db
       .from("project_quotes")
       .insert({
         project_id: quote.project_id,
@@ -438,10 +447,10 @@ export async function PATCH(request: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    await archivePreviousOfficialQuotes(service, quote.project_id, newQuote.id);
+    await archivePreviousOfficialQuotes(businessId, quote.project_id, newQuote.id);
 
     await logProjectActivity("quote_revised", `Draft revision created from "${quote.title}"`, {
-      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass quote/project.business_id
+      businessId,
       projectId: quote.project_id,
       userId: profile.id,
       metadata: { sourceQuoteId: id, newQuoteId: newQuote.id },

@@ -95,6 +95,7 @@ export async function POST(request: Request) {
     await createPreliminaryEstimate(project.id, body.service_type, {
       userId: profile.id,
       skipIfExists: true,
+      businessId,
     });
 
     const proposedShootAt = body.proposed_shoot_at || body.shoot_date;
@@ -212,7 +213,7 @@ export async function PATCH(request: Request) {
     }
 
     if (updates.service_type && typeof updates.service_type === "string") {
-      await upsertPreliminaryEstimate(id, updates.service_type);
+      await upsertPreliminaryEstimate(id, updates.service_type, { businessId });
     }
 
     return NextResponse.json(data);

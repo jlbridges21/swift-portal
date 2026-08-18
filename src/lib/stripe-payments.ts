@@ -1,12 +1,12 @@
 import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { logProjectActivity } from "@/lib/activity";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { getStripe } from "@/lib/stripe";
-import { parsePaymentIdFromMetadata } from "@/lib/stripe-metadata";
+import { parseBusinessIdFromMetadata, parsePaymentIdFromMetadata } from "@/lib/stripe-metadata";
 import { isPaymentComplete } from "@/lib/payment-status";
 import type { Payment } from "@/lib/types";
 import type Stripe from "stripe";
@@ -17,6 +17,7 @@ interface PaymentSuccessOptions {
   paymentIntentId?: string;
   receiptUrl?: string | null;
   source: string;
+  metadata?: Stripe.Metadata | null;
 }
 
 export interface PaymentLookupOptions {
@@ -27,19 +28,68 @@ export interface PaymentLookupOptions {
   clientReferenceId?: string;
 }
 
+export type StripeBusinessCheck =
+  | { ok: true; businessId: string }
+  | { ok: false; reason: "missing_payment_business" | "metadata_mismatch"; paymentBusinessId: string | null; metadataBusinessId: string | null };
+
+/**
+ * After a payment is found by Stripe ID (global lookup), attribute it to a
+ * business. Metadata is optional today (legacy events); when present it must
+ * match the payment row. Never treat a mismatch as Swift.
+ */
+export function checkPaymentBusinessAttribution(
+  payment: Payment,
+  metadata?: Stripe.Metadata | null
+): StripeBusinessCheck {
+  const paymentBusinessId = payment.business_id ?? null;
+  const metadataBusinessId = parseBusinessIdFromMetadata(metadata) ?? null;
+
+  if (!paymentBusinessId) {
+    return {
+      ok: false,
+      reason: "missing_payment_business",
+      paymentBusinessId: null,
+      metadataBusinessId,
+    };
+  }
+
+  if (metadataBusinessId && metadataBusinessId !== paymentBusinessId) {
+    return {
+      ok: false,
+      reason: "metadata_mismatch",
+      paymentBusinessId,
+      metadataBusinessId,
+    };
+  }
+
+  return { ok: true, businessId: paymentBusinessId };
+}
+
 /** Idempotent payment success — safe to call from multiple webhook events. */
 export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
   const { payment, checkoutSessionId, paymentIntentId, receiptUrl, source } = options;
-  const appSettings = await getAppSettings(
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): prompt 12 — pass payment.business_id from Stripe webhook metadata
-  );
+
+  const attribution = checkPaymentBusinessAttribution(payment, options.metadata);
+  if (!attribution.ok) {
+    console.error("[stripe-webhook] refusing payment success — cannot attribute business", {
+      paymentId: payment.id,
+      reason: attribution.reason,
+      paymentBusinessId: attribution.paymentBusinessId,
+      metadataBusinessId: attribution.metadataBusinessId,
+      source,
+    });
+    throw new Error("Payment business attribution failed");
+  }
+  const businessId = attribution.businessId;
+
+  const appSettings = await getAppSettings(businessId);
   const { payments: payWorkflow } = appSettings.workflow;
 
   if (isPaymentComplete(payment.status)) {
-    return { alreadyPaid: true, paymentId: payment.id, updated: false };
+    return { alreadyPaid: true, paymentId: payment.id, updated: false, businessId };
   }
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
   const paidAt = new Date().toISOString();
   const amountStr = `$${(payment.amount / 100).toFixed(2)}`;
   const activityDescription =
@@ -47,7 +97,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
       ? `Payment marked as paid manually: ${amountStr}`
       : `Payment received: ${amountStr}`;
 
-  const { data: updated, error: updateError } = await supabase
+  const { data: updated, error: updateError } = await db
     .from("payments")
     .update({
       status: "paid",
@@ -66,7 +116,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
   }
 
   if (!updated) {
-    return { alreadyPaid: true, paymentId: payment.id, updated: false };
+    return { alreadyPaid: true, paymentId: payment.id, updated: false, businessId };
   }
 
   if (payment.stripe_payment_link_id) {
@@ -95,7 +145,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     });
   } else {
     await logProjectActivity("payment_received", activityDescription, {
-      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): prompt 12 — pass payment.business_id
+      businessId,
       projectId: payment.project_id,
       idempotencyKey: `payment:${payment.id}:received`,
       metadata: { paymentId: payment.id, source },
@@ -134,7 +184,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     clientBody
   );
 
-  const { data: project } = await supabase
+  const { data: project } = await db
     .from("projects")
     .select("project_name")
     .eq("id", payment.project_id)
@@ -143,6 +193,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
   const projectLabel = project?.project_name || payment.description;
 
   await notifyAdmins({
+    businessId,
     type: "payment_received",
     eventKey: "payment_received",
     title: "Payment Received",
@@ -154,6 +205,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
 
   if (payWorkflow.autoSendReceipt) {
     await notifyProjectClients({
+      businessId,
       type: "payment_confirmed",
       eventKey: "project_delivered",
       title: "Project Complete",
@@ -163,9 +215,14 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     });
   }
 
-  return { alreadyPaid: false, paymentId: payment.id, updated: true };
+  return { alreadyPaid: false, paymentId: payment.id, updated: true, businessId };
 }
 
+/**
+ * Global lookup by Stripe IDs / payment UUID. The webhook has no tenant
+ * context; these indexes are unique. Callers MUST run
+ * checkPaymentBusinessAttribution before writing.
+ */
 export async function findPaymentFromStripe(
   options: PaymentLookupOptions
 ): Promise<Payment | null> {
@@ -294,19 +351,29 @@ export async function resolvePaymentFromPaymentIntent(
   });
 }
 
-export async function handlePaymentFailed(payment: Payment, reason: string) {
-  const appSettings = await getAppSettings(
-    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): prompt 12 — pass payment.business_id from Stripe webhook metadata
-  );
+export async function handlePaymentFailed(payment: Payment, reason: string, metadata?: Stripe.Metadata | null) {
+  const attribution = checkPaymentBusinessAttribution(payment, metadata);
+  if (!attribution.ok) {
+    console.error("[stripe-webhook] refusing payment failure write — cannot attribute business", {
+      paymentId: payment.id,
+      reason: attribution.reason,
+      paymentBusinessId: attribution.paymentBusinessId,
+      metadataBusinessId: attribution.metadataBusinessId,
+    });
+    return;
+  }
+  const businessId = attribution.businessId;
+  const appSettings = await getAppSettings(businessId);
 
   await logProjectActivity("payment_requested", `Payment attempt failed: ${reason}`, {
-      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): prompt 12 — pass payment.business_id
+    businessId,
     projectId: payment.project_id,
     metadata: { paymentId: payment.id, reason },
   });
 
   if (appSettings.workflow.payments.notifyAdminOnFailure) {
     await notifyAdmins({
+      businessId,
       type: "payment_received",
       eventKey: "payment_failed",
       title: "Payment Failed",
@@ -323,14 +390,27 @@ export async function handlePaymentFailed(payment: Payment, reason: string) {
   }
 }
 
-export async function handleCheckoutExpired(payment: Payment) {
+export async function handleCheckoutExpired(payment: Payment, metadata?: Stripe.Metadata | null) {
+  const attribution = checkPaymentBusinessAttribution(payment, metadata);
+  if (!attribution.ok) {
+    console.error("[stripe-webhook] refusing checkout-expired write — cannot attribute business", {
+      paymentId: payment.id,
+      reason: attribution.reason,
+      paymentBusinessId: attribution.paymentBusinessId,
+      metadataBusinessId: attribution.metadataBusinessId,
+    });
+    return;
+  }
+  const businessId = attribution.businessId;
+
   await logProjectActivity("payment_requested", "Checkout session expired — payment link still active", {
-      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): prompt 12 — pass payment.business_id
+    businessId,
     projectId: payment.project_id,
     metadata: { paymentId: payment.id },
   });
 
   await notifyAdmins({
+    businessId,
     type: "invoice_available",
     eventKey: "payment_link_sent",
     title: "Checkout session expired",

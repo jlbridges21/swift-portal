@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { handlePaymentSuccess } from "@/lib/stripe-payments";
 import type { Payment } from "@/lib/types";
 
@@ -9,14 +10,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin();
+    const profile = await requireAdmin();
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
+    const businessId = tenant.businessId;
+
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
     const projectId = typeof body.project_id === "string" ? body.project_id : null;
 
-    const supabase = await createServiceClient();
+    const db = await createTenantServiceClient(businessId);
 
-    const { data: payment, error: fetchError } = await supabase
+    const { data: payment, error: fetchError } = await db
       .from("payments")
       .select("*")
       .eq("id", id)
@@ -46,7 +51,7 @@ export async function PATCH(
       source: "manual_admin",
     });
 
-    const { data: updated } = await supabase.from("payments").select("*").eq("id", id).single();
+    const { data: updated } = await db.from("payments").select("*").eq("id", id).single();
     return NextResponse.json({ ...(updated as Payment), alreadyPaid: result.alreadyPaid });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to mark payment as paid";
@@ -63,11 +68,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin();
-    const { id } = await params;
-    const supabase = await createServiceClient();
+    const profile = await requireAdmin();
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
 
-    const { error } = await supabase.from("payments").delete().eq("id", id);
+    const { id } = await params;
+    const db = await createTenantServiceClient(tenant.businessId);
+
+    const { error } = await db.from("payments").delete().eq("id", id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

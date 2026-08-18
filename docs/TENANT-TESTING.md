@@ -39,7 +39,7 @@ Do **not** run teardown on a shared environment until tests pass.
 | **0 — RLS context** | SQL editor | `SET LOCAL ROLE authenticated` + `request.jwt.claims` yields the expected `auth.uid()` on this project. Without this, all later assertions are meaningless. |
 | **Setup** | Postgres (bypasses RLS) | Tenant B business + CRM graph with explicit `business_id`; v30 triggers accept parent/child within Tenant B. |
 | **4 — Read (Swift admin)** | Swift admin JWT | Zero visibility of Tenant B rows in 24 business tables + `client_stats` + `business_settings`. |
-| **5 — Write (Swift admin)** | Swift admin JWT | Cannot insert/update/delete across tenants; `reorder_media_assets` rejects Tenant B project. Reports **RLS** vs **trigger** per attempt. |
+| **5 — Write (Swift admin)** | Swift admin JWT | Cannot insert/update/delete across tenants (`payments`, `project_quotes`, projects, clients, media, `reorder_media_assets`). Reports **RLS** vs **trigger** per attempt. |
 | **6 — Reverse read (Tenant B admin)** | Tenant B admin JWT | Zero visibility of Swift `business_id = …0001` rows, including Swift's `business_settings` row. |
 | **7 — Client role** | Tenant B client JWT | Zero Swift rows; `client_stats` returns exactly one row (own client). |
 
