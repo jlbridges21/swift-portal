@@ -1,4 +1,4 @@
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { isEmailAnalyticsActivity } from "@/lib/communications";
 import type { ActivityVisibility } from "@/lib/types";
 
@@ -7,10 +7,13 @@ interface ProjectContext {
   property_id: string | null;
 }
 
-async function loadProjectContext(projectId: string): Promise<ProjectContext | null> {
+async function loadProjectContext(
+  projectId: string,
+  businessId: string
+): Promise<ProjectContext | null> {
   try {
-    const supabase = await createServiceClient();
-    const { data } = await supabase
+    const db = await createTenantServiceClient(businessId);
+    const { data } = await db
       .from("projects")
       .select("client_id, property_id")
       .eq("id", projectId)
@@ -24,7 +27,8 @@ async function loadProjectContext(projectId: string): Promise<ProjectContext | n
 export async function logProjectActivity(
   activityType: string,
   description: string,
-  options?: {
+  options: {
+    businessId: string;
     projectId?: string;
     leadId?: string;
     userId?: string | null;
@@ -37,19 +41,19 @@ export async function logProjectActivity(
   }
 ): Promise<string | null> {
   try {
-    const supabase = await createServiceClient();
+    const db = await createTenantServiceClient(options.businessId);
 
-    let clientId = options?.clientId ?? null;
-    let propertyId = options?.propertyId ?? null;
+    let clientId = options.clientId ?? null;
+    let propertyId = options.propertyId ?? null;
 
-    if (options?.projectId && (!clientId || !propertyId)) {
-      const ctx = await loadProjectContext(options.projectId);
+    if (options.projectId && (!clientId || !propertyId)) {
+      const ctx = await loadProjectContext(options.projectId, options.businessId);
       clientId = clientId ?? ctx?.client_id ?? null;
       propertyId = propertyId ?? ctx?.property_id ?? null;
     }
 
-    if (options?.idempotencyKey) {
-      let dupQuery = supabase
+    if (options.idempotencyKey) {
+      let dupQuery = db
         .from("activity_logs")
         .select("id")
         .eq("idempotency_key", options.idempotencyKey);
@@ -65,36 +69,36 @@ export async function logProjectActivity(
     }
 
     const visibility: ActivityVisibility =
-      options?.visibility ??
+      options.visibility ??
       (isEmailAnalyticsActivity(activityType) ? "admin" : "both");
 
-    const { data: inserted, error } = await supabase
+    const { data: inserted, error } = await db
       .from("activity_logs")
       .insert({
         activity_type: activityType,
         description,
-        title: options?.title ?? null,
-        user_id: options?.userId ?? null,
-        project_id: options?.projectId ?? null,
+        title: options.title ?? null,
+        user_id: options.userId ?? null,
+        project_id: options.projectId ?? null,
         client_id: clientId,
         property_id: propertyId,
-        lead_id: options?.leadId ?? null,
+        lead_id: options.leadId ?? null,
         visibility,
-        idempotency_key: options?.idempotencyKey ?? null,
-        metadata: options?.metadata ?? null,
+        idempotency_key: options.idempotencyKey ?? null,
+        metadata: options.metadata ?? null,
       })
       .select("id")
       .single();
 
     if (error) {
-      if (error.code === "23505" && options?.idempotencyKey) {
+      if (error.code === "23505" && options.idempotencyKey) {
         return null;
       }
       throw error;
     }
 
     if (clientId) {
-      await supabase
+      await db
         .from("clients")
         .update({ last_activity_at: new Date().toISOString() })
         .eq("id", clientId);
@@ -112,7 +116,7 @@ export async function logProjectActivityOnce(
   activityType: string,
   description: string,
   idempotencyKey: string,
-  options?: Parameters<typeof logProjectActivity>[2]
+  options: Parameters<typeof logProjectActivity>[2]
 ) {
   return logProjectActivity(activityType, description, {
     ...options,

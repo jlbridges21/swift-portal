@@ -5,6 +5,7 @@ import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
 import { notifyAdmins } from "@/lib/notifications";
 import { canAccessProject } from "@/lib/project-access";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
     .eq("id", body.project_id);
 
   await logProjectActivity("revision_requested", "Revision requested", {
+    businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
     projectId: body.project_id,
     userId: profile.id,
     idempotencyKey: idempotencyKey("revision", data.id, "requested"),
@@ -121,6 +123,7 @@ export async function PATCH(request: Request) {
 
   if (status === "completed") {
     await logProjectActivity("revision_completed", "Revision completed", {
+      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
       projectId: data.project_id,
       userId: profile.id,
       metadata: { revisionId: id },

@@ -128,7 +128,10 @@ export async function POST(request: Request, { params }: RouteParams) {
   );
 
   if (isAdmin) {
-    await ensureClientPortalLink(clientId!);
+    await ensureClientPortalLink(
+      clientId!,
+      LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass client.business_id into ensureClientPortalLink
+    );
     await notifyClient({
       clientId: clientId!,
       type: "project_message",

@@ -1,4 +1,5 @@
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import type { Client, Communication, Payment, Project, Property } from "@/lib/types";
 import { normalizeStatus } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
@@ -82,13 +83,17 @@ const EMPTY_FINANCIAL: ClientFinancialStats = {
 const STALE_DAYS = 30;
 const NEW_CLIENT_DAYS = 14;
 
-export async function touchClientLogin(clientId: string, existingLastLogin: string | null) {
+export async function touchClientLogin(
+  clientId: string,
+  businessId: string,
+  existingLastLogin: string | null
+) {
   try {
     const hourAgo = Date.now() - 60 * 60 * 1000;
     if (existingLastLogin && new Date(existingLastLogin).getTime() > hourAgo) return;
 
-    const supabase = await createServiceClient();
-    await supabase
+    const db = await createTenantServiceClient(businessId);
+    await db
       .from("clients")
       .update({ last_login_at: new Date().toISOString() })
       .eq("id", clientId);
@@ -97,21 +102,33 @@ export async function touchClientLogin(clientId: string, existingLastLogin: stri
   }
 }
 
-export async function getClientListRows(options?: { includeDeleted?: boolean }): Promise<ClientListRow[]> {
+export async function getClientListRows(
+  businessId: string,
+  options?: { includeDeleted?: boolean }
+): Promise<ClientListRow[]> {
+  // Cookie RLS client (not service role). Explicit business_id is defense in depth.
   const supabase = await createClient();
-  const service = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
 
-  let clientsQuery = supabase.from("clients").select("*").order("created_at", { ascending: false });
+  let clientsQuery = supabase
+    .from("clients")
+    .select("*")
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false });
   if (options?.includeDeleted) {
     clientsQuery = clientsQuery.not("deleted_at", "is", null);
   } else {
     clientsQuery = clientsQuery.is("deleted_at", null);
   }
 
-  const [{ data: clients }, { data: statsRows }, { data: payments }] = await Promise.all([
-    clientsQuery,
-    supabase.from("client_stats").select("*"),
-    supabase.from("payments").select("client_id, amount, status"),
+  const { data: clients } = await clientsQuery;
+  const clientIds = (clients ?? []).map((c) => c.id);
+
+  const [{ data: statsRows }, { data: payments }] = await Promise.all([
+    clientIds.length
+      ? supabase.from("client_stats").select("*").in("client_id", clientIds)
+      : Promise.resolve({ data: [] as { client_id: string }[] }),
+    supabase.from("payments").select("client_id, amount, status").eq("business_id", businessId),
   ]);
 
   const statsMap = new Map((statsRows ?? []).map((s) => [s.client_id as string, s]));
@@ -119,10 +136,16 @@ export async function getClientListRows(options?: { includeDeleted?: boolean }):
 
   const userIds = (clients ?? []).map((c) => c.user_id).filter(Boolean) as string[];
   if (userIds.length) {
-    const { data: authData } = await service.auth.admin.listUsers({ perPage: 1000 });
-    authData?.users?.forEach((u) => {
-      if (u.last_sign_in_at) loginMap.set(u.id, u.last_sign_in_at);
-    });
+    // Per-user lookups instead of auth.admin.listUsers({ perPage: 1000 }), which
+    // enumerated the entire Auth directory (cross-tenant) and truncated at 1000.
+    // N getUserById calls is acceptable while the client list is small; batch or
+    // cache if this path becomes hot.
+    const authUsers = await Promise.all(
+      userIds.map((id) => db.raw.auth.admin.getUserById(id))
+    );
+    for (const { data } of authUsers) {
+      if (data?.user?.last_sign_in_at) loginMap.set(data.user.id, data.user.last_sign_in_at);
+    }
   }
 
   const now = Date.now();
@@ -179,10 +202,12 @@ export async function getClientListRows(options?: { includeDeleted?: boolean }):
 
 export async function getClientCrmProfile(
   clientId: string,
+  businessId: string,
   options?: { includeDeleted?: boolean }
 ): Promise<ClientCrmProfile | null> {
+  // Cookie RLS client (not service role). Explicit business_id is defense in depth.
   const supabase = await createClient();
-  const service = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
 
   const [
     { data: client },
@@ -196,26 +221,28 @@ export async function getClientCrmProfile(
     { data: activities },
     { data: allProjectsForProps },
   ] = await Promise.all([
-    supabase.from("clients").select("*").eq("id", clientId).single(),
+    supabase.from("clients").select("*").eq("id", clientId).eq("business_id", businessId).single(),
     supabase.from("client_stats").select("*").eq("client_id", clientId).maybeSingle(),
-    supabase.from("properties").select("*").eq("client_id", clientId).order("created_at", { ascending: false }),
-    supabase.from("projects").select("*").eq("client_id", clientId).order("updated_at", { ascending: false }),
-    supabase.from("project_clients").select("project_id, projects(*)").eq("client_id", clientId),
-    supabase.from("payments").select("*, projects(project_name)").eq("client_id", clientId).order("created_at", { ascending: false }),
-    supabase.from("client_notes").select("*").eq("client_id", clientId).order("created_at", { ascending: false }),
+    supabase.from("properties").select("*").eq("client_id", clientId).eq("business_id", businessId).order("created_at", { ascending: false }),
+    supabase.from("projects").select("*").eq("client_id", clientId).eq("business_id", businessId).order("updated_at", { ascending: false }),
+    supabase.from("project_clients").select("project_id, projects(*)").eq("client_id", clientId).eq("business_id", businessId),
+    supabase.from("payments").select("*, projects(project_name)").eq("client_id", clientId).eq("business_id", businessId).order("created_at", { ascending: false }),
+    supabase.from("client_notes").select("*").eq("client_id", clientId).eq("business_id", businessId).order("created_at", { ascending: false }),
     supabase
       .from("communications")
       .select("*")
       .eq("client_id", clientId)
+      .eq("business_id", businessId)
       .order("created_at", { ascending: false })
       .limit(40),
     supabase
       .from("activity_logs")
       .select("id, activity_type, description, project_id, created_at, visibility")
       .eq("client_id", clientId)
+      .eq("business_id", businessId)
       .order("created_at", { ascending: false })
       .limit(25),
-    supabase.from("projects").select("id, property_id, client_id, updated_at, status").eq("client_id", clientId),
+    supabase.from("projects").select("id, property_id, client_id, updated_at, status").eq("client_id", clientId).eq("business_id", businessId),
   ]);
 
   if (!client) return null;
@@ -263,7 +290,7 @@ export async function getClientCrmProfile(
 
   let lastLogin: string | null = (client.last_login_at as string | null) ?? null;
   if (!lastLogin && client.user_id) {
-    const { data: authData } = await service.auth.admin.getUserById(client.user_id);
+    const { data: authData } = await db.raw.auth.admin.getUserById(client.user_id);
     lastLogin = authData?.user?.last_sign_in_at ?? null;
   }
 
@@ -331,10 +358,10 @@ export function formatClientRevenue(cents: number): string {
   return formatCurrency(cents);
 }
 
-export async function touchClientActivity(clientId: string) {
+export async function touchClientActivity(clientId: string, businessId: string) {
   try {
-    const supabase = await createServiceClient();
-    await supabase
+    const db = await createTenantServiceClient(businessId);
+    await db
       .from("clients")
       .update({ last_activity_at: new Date().toISOString() })
       .eq("id", clientId);

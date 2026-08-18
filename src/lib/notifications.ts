@@ -90,7 +90,10 @@ async function getAdminRecipients(): Promise<NotificationRecipient[]> {
 
 async function getSingleClientRecipient(clientId: string): Promise<NotificationRecipient | null> {
   const supabase = await createServiceClient();
-  await ensureClientPortalLink(clientId);
+  await ensureClientPortalLink(
+    clientId,
+    LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass client.business_id into ensureClientPortalLink
+  );
 
   const { data: client } = await supabase
     .from("clients")

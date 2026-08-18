@@ -116,6 +116,7 @@ export async function setProjectStatus(options: SetStatusOptions) {
       options.activityType || "status_updated",
       options.activityDescription || `Status updated to ${label}`,
       {
+        businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
         projectId: options.projectId,
         userId: options.userId ?? null,
         idempotencyKey:

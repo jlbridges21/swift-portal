@@ -149,7 +149,10 @@ export async function POST(request: Request) {
   );
 
   if (isAdmin) {
-    await ensureClientPortalLink(clientId!);
+    await ensureClientPortalLink(
+      clientId!,
+      LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass client.business_id into ensureClientPortalLink
+    );
 
     await notifyClient({
       clientId: clientId!,

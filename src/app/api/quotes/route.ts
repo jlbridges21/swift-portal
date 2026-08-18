@@ -48,9 +48,8 @@ export async function POST(request: Request) {
 
   const supabase = await createServiceClient();
   const tenant = await getTenantContext();
-  const appSettings = await getAppSettings(
-    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on quotes API
-  );
+  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on quotes API
+  const appSettings = await getAppSettings(businessId);
   const requireReview = appSettings.proposals.requireAdminReviewBeforeOfficial;
   const willSend = Boolean(send) && !requireReview;
   const status = willSend ? "sent" : send ? "draft" : "draft";
@@ -92,6 +91,7 @@ export async function POST(request: Request) {
     });
 
     await logProjectActivity("official_proposal_sent", "📄 Official Proposal sent", {
+      businessId,
       projectId: project_id,
       userId: profile.id,
       metadata: { quoteId: quote.id, total_cents },
@@ -138,9 +138,8 @@ export async function PATCH(request: Request) {
     }
     const service = await createServiceClient();
     const tenant = await getTenantContext();
-  const appSettings = await getAppSettings(
-    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on quotes API
-  );
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on quotes API
+    const appSettings = await getAppSettings(businessId);
 
     await archivePreviousOfficialQuotes(service, quote.project_id, id);
 
@@ -170,6 +169,7 @@ export async function PATCH(request: Request) {
     });
 
     await logProjectActivity("official_proposal_sent", "📄 Official Proposal sent", {
+      businessId,
       projectId: quote.project_id,
       userId: profile.id,
       idempotencyKey: idempotencyKey("quote", id, "send"),
@@ -203,9 +203,8 @@ export async function PATCH(request: Request) {
     }
 
     const tenant = await getTenantContext();
-  const appSettings = await getAppSettings(
-    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on quotes API
-  );
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on quotes API
+    const appSettings = await getAppSettings(businessId);
     const requireReview = appSettings.proposals.requireAdminReviewBeforeOfficial;
     const proposalExpiresAt = addProposalExpiration(
       new Date(),
@@ -274,6 +273,7 @@ export async function PATCH(request: Request) {
       });
 
       await logProjectActivity("official_proposal_sent", "📄 Official Proposal sent", {
+        businessId,
         projectId: quote.project_id,
         userId: profile.id,
         metadata: { quoteId: official.id, preliminaryQuoteId: id },
@@ -289,6 +289,7 @@ export async function PATCH(request: Request) {
       });
     } else {
       await logProjectActivity("quote_sent", `Official proposal draft created: ${official.title}`, {
+        businessId,
         projectId: quote.project_id,
         userId: profile.id,
         metadata: { quoteId: official.id, preliminaryQuoteId: id, requiresReview: true },
@@ -356,6 +357,7 @@ export async function PATCH(request: Request) {
       .single();
 
     await logProjectActivity("quote_changes_requested", `Client requested quote changes: ${feedback || "No details"}`, {
+      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass quote/project.business_id
       projectId: quote.project_id,
       userId: profile.id,
       idempotencyKey: idempotencyKey("quote", id, "changes_requested"),
@@ -437,6 +439,7 @@ export async function PATCH(request: Request) {
     await archivePreviousOfficialQuotes(service, quote.project_id, newQuote.id);
 
     await logProjectActivity("quote_revised", `Draft revision created from "${quote.title}"`, {
+      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass quote/project.business_id
       projectId: quote.project_id,
       userId: profile.id,
       metadata: { sourceQuoteId: id, newQuoteId: newQuote.id },

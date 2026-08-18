@@ -1,10 +1,11 @@
-import { createServiceClient } from "@/lib/supabase/server";
-import { normalizeAddress, parseAddress, type ParsedAddress } from "@/lib/address";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { normalizeAddress, parseAddress } from "@/lib/address";
 import type { Property, PropertyType } from "@/lib/types";
 
 export { normalizeAddress, parseAddress };
 
 export async function findOrCreateProperty(options: {
+  businessId: string;
   clientId: string;
   fullAddress: string;
   propertyType?: PropertyType;
@@ -14,11 +15,11 @@ export async function findOrCreateProperty(options: {
   const fullAddress = options.fullAddress?.trim();
   if (!fullAddress) return null;
 
-  const supabase = await createServiceClient();
+  const db = await createTenantServiceClient(options.businessId);
   const parsed = parseAddress(fullAddress);
   const normalized = parsed.normalized || normalizeAddress(fullAddress);
 
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from("properties")
     .select("*")
     .eq("client_id", options.clientId)
@@ -39,7 +40,7 @@ export async function findOrCreateProperty(options: {
     notes: options.notes ?? null,
   };
 
-  const { data: created, error } = await supabase
+  const { data: created, error } = await db
     .from("properties")
     .insert(insertRow)
     .select()
@@ -47,7 +48,7 @@ export async function findOrCreateProperty(options: {
 
   if (error) {
     if (error.code === "23505") {
-      const { data: retry } = await supabase
+      const { data: retry } = await db
         .from("properties")
         .select("*")
         .eq("client_id", options.clientId)
@@ -66,17 +67,19 @@ export async function linkProjectToProperty(
   projectId: string,
   clientId: string,
   fullAddress: string,
+  businessId: string,
   propertyType?: PropertyType
 ): Promise<string | null> {
   const property = await findOrCreateProperty({
+    businessId,
     clientId,
     fullAddress,
     propertyType,
   });
   if (!property) return null;
 
-  const supabase = await createServiceClient();
-  await supabase.from("projects").update({ property_id: property.id }).eq("id", projectId);
+  const db = await createTenantServiceClient(businessId);
+  await db.from("projects").update({ property_id: property.id }).eq("id", projectId);
 
   return property.id;
 }

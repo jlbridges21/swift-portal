@@ -118,6 +118,7 @@ export async function createPreliminaryEstimate(
     "preliminary_estimate_created",
     "📄 Preliminary Estimate created automatically",
     {
+      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
       projectId,
       userId: options?.userId ?? null,
       metadata: { quoteId: quote.id, serviceType },

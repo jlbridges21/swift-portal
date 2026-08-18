@@ -21,9 +21,8 @@ export async function POST(request: Request) {
 
     const supabase = await createClient();
     const tenant = await getTenantContext();
-    const appSettings = await getAppSettings(
-      tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on payments API
-    );
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on payments API
+    const appSettings = await getAppSettings(businessId);
 
     const dueDate = body.due_date
       ? body.due_date
@@ -165,6 +164,7 @@ export async function POST(request: Request) {
     }
 
     await logProjectActivity("invoice_sent", `Payment link created for ${amountStr}`, {
+      businessId,
       projectId: body.project_id,
       userId: profile.id,
       idempotencyKey: idempotencyKey("payment", "link", paymentRow.id),

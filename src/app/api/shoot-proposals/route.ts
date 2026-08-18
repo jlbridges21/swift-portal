@@ -74,13 +74,13 @@ export async function POST(request: Request) {
 
   const dateStr = new Date(body.proposed_at).toLocaleString();
   const tenant = await getTenantContext();
-  const appSettings = await getAppSettings(
-    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on shoot-proposals API
-  );
+  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on shoot-proposals API
+  const appSettings = await getAppSettings(businessId);
   const scheduling = appSettings.workflow.scheduling;
 
   if (scheduling.logSchedulingChanges) {
     await logProjectActivity("shoot_proposed", `Shoot proposed for ${dateStr}`, {
+      businessId,
       projectId: body.project_id,
       userId: profile.id,
       metadata: { proposed_by: proposedBy },
@@ -260,13 +260,13 @@ export async function PATCH(request: Request) {
 
     const dateStr = new Date(proposed_at).toLocaleString();
     const tenant = await getTenantContext();
-  const appSettings = await getAppSettings(
-    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on shoot-proposals API
-  );
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on shoot-proposals API
+    const appSettings = await getAppSettings(businessId);
     const scheduling = appSettings.workflow.scheduling;
 
     if (scheduling.logSchedulingChanges) {
       await logProjectActivity("shoot_rescheduled", `Shoot rescheduled to ${dateStr}`, {
+        businessId,
         projectId: shoot.project_id,
         userId: profile.id,
         idempotencyKey: idempotencyKey("shoot", id, "update_date", proposed_at),
@@ -346,6 +346,7 @@ export async function PATCH(request: Request) {
 
     const dateStr = new Date(proposed_at).toLocaleString();
     await logProjectActivity("shoot_proposed", `New shoot date proposed: ${dateStr}`, {
+      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
       projectId,
       userId: profile.id,
       metadata: { proposed_by: "admin", rescheduled: true },
@@ -392,6 +393,7 @@ export async function PATCH(request: Request) {
 
     const dateStr = new Date(proposed_at).toLocaleString();
     await logProjectActivity("shoot_proposed", `Alternative shoot date proposed: ${dateStr}`, {
+      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
       projectId: proposal.project_id,
       userId: profile.id,
     });
@@ -437,6 +439,7 @@ export async function PATCH(request: Request) {
         ? `Shoot proposal withdrawn (${dateStr})`
         : `${isAdmin ? "Swift Aerial Media declined" : "Client declined"} shoot time ${dateStr}`,
       {
+        businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
         projectId: proposal.project_id,
         userId: profile.id,
         idempotencyKey: idempotencyKey("shoot", id, withdrawn ? "withdrawn" : "decline"),

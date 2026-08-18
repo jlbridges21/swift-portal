@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdmin } from "@/lib/auth";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function GET(
   _request: Request,
@@ -9,8 +10,10 @@ export async function GET(
   try {
     await requireAdmin();
     const { id: clientId } = await params;
-    const supabase = await createServiceClient();
-    const { data, error } = await supabase
+    const tenant = await getTenantContext();
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on client notes
+    const db = await createTenantServiceClient(businessId);
+    const { data, error } = await db
       .from("client_notes")
       .select("*")
       .eq("client_id", clientId)
@@ -36,8 +39,10 @@ export async function POST(
       return NextResponse.json({ error: "Note is required" }, { status: 400 });
     }
 
-    const supabase = await createServiceClient();
-    const { data, error } = await supabase
+    const tenant = await getTenantContext();
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on client notes
+    const db = await createTenantServiceClient(businessId);
+    const { data, error } = await db
       .from("client_notes")
       .insert({
         client_id: clientId,
@@ -67,8 +72,10 @@ export async function PATCH(
       return NextResponse.json({ error: "note_id and note are required" }, { status: 400 });
     }
 
-    const supabase = await createServiceClient();
-    const { data, error } = await supabase
+    const tenant = await getTenantContext();
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on client notes
+    const db = await createTenantServiceClient(businessId);
+    const { data, error } = await db
       .from("client_notes")
       .update({ note: body.note.trim() })
       .eq("id", body.note_id)
@@ -97,8 +104,10 @@ export async function DELETE(
       return NextResponse.json({ error: "note_id required" }, { status: 400 });
     }
 
-    const supabase = await createServiceClient();
-    const { error } = await supabase
+    const tenant = await getTenantContext();
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on client notes
+    const db = await createTenantServiceClient(businessId);
+    const { error } = await db
       .from("client_notes")
       .delete()
       .eq("id", noteId)

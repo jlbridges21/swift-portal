@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdmin } from "@/lib/auth";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function GET() {
   try {
     await requireAdmin();
-    const supabase = await createServiceClient();
-    const { data, error } = await supabase
+    const tenant = await getTenantContext();
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on clients API
+    const db = await createTenantServiceClient(businessId);
+    const { data, error } = await db
       .from("clients")
       .select("id, name, company")
       .order("name");
@@ -27,9 +30,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
     }
 
-    const supabase = await createServiceClient();
+    const tenant = await getTenantContext();
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on clients API
+    const db = await createTenantServiceClient(businessId);
 
-    const { data: client, error } = await supabase
+    const { data: client, error } = await db
       .from("clients")
       .insert({
         name: body.name,
@@ -46,11 +51,11 @@ export async function POST(request: Request) {
     }
 
     if (body.password) {
-      const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+      const { data: authUser, error: authError } = await db.raw.auth.admin.createUser({
         email: body.email,
         password: body.password,
         email_confirm: true,
-        user_metadata: { full_name: body.name, role: "client" },
+        user_metadata: { full_name: body.name, role: "client", business_id: businessId },
       });
 
       if (authError) {
@@ -62,12 +67,12 @@ export async function POST(request: Request) {
       }
 
       if (authUser.user) {
-        await supabase
+        await db
           .from("clients")
           .update({ user_id: authUser.user.id })
           .eq("id", client.id);
 
-        await supabase
+        await db.raw
           .from("profiles")
           .update({
             client_id: client.id,
@@ -99,8 +104,10 @@ export async function PATCH(request: Request) {
       if (key in updates) sanitized[key] = updates[key];
     }
 
-    const supabase = await createServiceClient();
-    const { data, error } = await supabase
+    const tenant = await getTenantContext();
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on clients API
+    const db = await createTenantServiceClient(businessId);
+    const { data, error } = await db
       .from("clients")
       .update(sanitized)
       .eq("id", id)

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   const auth = await requireAdminApi();
@@ -10,9 +11,11 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const projectId = searchParams.get("project_id");
 
-  const supabase = await createServiceClient();
+  const tenant = await getTenantContext();
+  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on project-clients API
+  const db = await createTenantServiceClient(businessId);
 
-  let query = supabase
+  let query = db
     .from("project_clients")
     .select("*, clients(id, name, email, company, user_id)")
     .order("is_primary", { ascending: false });
@@ -41,17 +44,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "project_id and client_id required" }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
+  const tenant = await getTenantContext();
+  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on project-clients API
+  const db = await createTenantServiceClient(businessId);
 
   // Link existing portal account by email / user_id before assigning
-  let portal = await ensureClientPortalLink(client_id);
+  let portal = await ensureClientPortalLink(client_id, businessId);
 
   if (!portal.hasPortal && typeof password === "string" && password.length >= 8) {
     const { enableClientPortalAccess } = await import("@/lib/client-portal-link");
-    portal = await enableClientPortalAccess(client_id, password);
+    portal = await enableClientPortalAccess(client_id, password, businessId);
   }
 
-  const { count: existingCount } = await supabase
+  const { count: existingCount } = await db
     .from("project_clients")
     .select("id", { count: "exact", head: true })
     .eq("project_id", project_id);
@@ -59,18 +64,18 @@ export async function POST(request: Request) {
   const makePrimary = Boolean(is_primary) || (existingCount ?? 0) === 0;
 
   if (makePrimary) {
-    await supabase
+    await db
       .from("project_clients")
       .update({ is_primary: false })
       .eq("project_id", project_id);
 
-    await supabase
+    await db
       .from("projects")
       .update({ client_id })
       .eq("id", project_id);
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("project_clients")
     .upsert(
       { project_id, client_id, is_primary: makePrimary },
@@ -102,8 +107,10 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
-  const { data: row } = await supabase
+  const tenant = await getTenantContext();
+  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on project-clients API
+  const db = await createTenantServiceClient(businessId);
+  const { data: row } = await db
     .from("project_clients")
     .select("id, project_id, client_id, is_primary")
     .eq("id", id)
@@ -114,7 +121,7 @@ export async function DELETE(request: Request) {
   }
 
   if (row.is_primary) {
-    const { count } = await supabase
+    const { count } = await db
       .from("project_clients")
       .select("id", { count: "exact", head: true })
       .eq("project_id", row.project_id);
@@ -132,7 +139,7 @@ export async function DELETE(request: Request) {
     );
   }
 
-  const { error } = await supabase.from("project_clients").delete().eq("id", id);
+  const { error } = await db.from("project_clients").delete().eq("id", id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

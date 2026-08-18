@@ -99,6 +99,7 @@ export async function logWorkflowAudit(
   }
 
   return logProjectActivity("workflow_automation", description, {
+    businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id into logWorkflowAudit
     projectId,
     userId: options?.userId ?? null,
     idempotencyKey: options?.idempotencyKey,

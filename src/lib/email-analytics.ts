@@ -3,6 +3,7 @@ import { logProjectActivity } from "@/lib/activity";
 import { logCommunication } from "@/lib/communication-records";
 import { EMAIL_TYPE_LABELS } from "@/lib/email-templates";
 import type { ActivityType } from "@/lib/types";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export type EmailLifecycleEvent =
   | "sent"
@@ -111,6 +112,7 @@ export async function recordEmailEvent(params: {
         ACTIVITY_TYPE_MAP[params.eventType],
         getActivityDescription(params.emailType, params.eventType, params.ctaLabel),
         {
+          businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
           projectId: params.projectId,
           visibility: "admin",
           metadata: {

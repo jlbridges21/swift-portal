@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { restoreClient, softDeleteClient } from "@/lib/soft-delete";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -10,7 +11,9 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
   try {
     const profile = await requireAdmin();
     const { id } = await params;
-    await softDeleteClient(id, profile.id);
+    const tenant = await getTenantContext();
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on client delete
+    await softDeleteClient(id, profile.id, businessId);
     return NextResponse.json({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to hide client";
@@ -28,7 +31,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const body = await request.json();
 
     if (body.action === "restore") {
-      await restoreClient(id);
+      const tenant = await getTenantContext();
+      const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on client restore
+      await restoreClient(id, businessId);
       return NextResponse.json({ success: true, restored: true });
     }
 

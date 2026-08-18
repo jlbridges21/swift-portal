@@ -4,6 +4,7 @@ import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
 import { notifyAdmins } from "@/lib/notifications";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function POST(request: Request) {
   const profile = await getProfile();
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
   }
 
   await logProjectActivity("deliverables_approved", "Deliverables approved by client", {
+    businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
     projectId: body.project_id,
     userId: profile.id,
     idempotencyKey: idempotencyKey("project", body.project_id, "deliverables_approved"),

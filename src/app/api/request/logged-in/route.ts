@@ -10,6 +10,7 @@ import { touchClientActivity } from "@/lib/clients-data";
 import { resolvePersonName } from "@/lib/person-name";
 import { buildPortalLeadPayload } from "@/lib/ghl/build-portal-lead-payload";
 import { syncNewProjectLeadToGhl } from "@/lib/ghl/sync-portal-lead";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function POST(request: Request) {
   const profile = await getProfile();
@@ -65,8 +66,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: projectError.message }, { status: 500 });
   }
 
-  await linkProjectToProperty(project.id, clientId, property_address);
-  await touchClientActivity(clientId);
+  await linkProjectToProperty(
+    project.id,
+    clientId,
+    property_address,
+    profile.business_id ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on logged-in request
+  );
+  await touchClientActivity(
+    clientId,
+    profile.business_id ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): require tenant on logged-in request
+  );
 
   await supabase.from("project_clients").upsert(
     { project_id: project.id, client_id: clientId, is_primary: true },
@@ -89,6 +98,7 @@ export async function POST(request: Request) {
   });
 
   await logProjectActivity("proposal_submitted", `New project requested: ${service_requested}`, {
+    businessId: profile.business_id ?? LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): require tenant on logged-in request
     projectId: project.id,
     userId: profile.id,
     metadata: { client_id: clientId },

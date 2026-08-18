@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 import { touchClientLogin } from "@/lib/clients-crm";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient();
@@ -83,17 +84,24 @@ export async function getProfile(): Promise<Profile | null> {
         .update({ client_id: clientId, role: "client" })
         .eq("id", user.id);
       profile = { ...profile, client_id: clientId };
-      void ensureClientPortalLink(clientId);
+      void ensureClientPortalLink(
+        clientId,
+        businessId ?? LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): pass the matched client's business_id
+      );
     }
   }
 
   if (profile.role === "client" && profile.client_id) {
     const { data: client } = await supabase
       .from("clients")
-      .select("last_login_at")
+      .select("last_login_at, business_id")
       .eq("id", profile.client_id)
       .maybeSingle();
-    void touchClientLogin(profile.client_id, client?.last_login_at ?? null);
+    void touchClientLogin(
+      profile.client_id,
+      client?.business_id ?? profile.business_id ?? LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): require a resolved business_id
+      client?.last_login_at ?? null
+    );
   }
 
   return profile as Profile | null;
@@ -128,7 +136,8 @@ import { logProjectActivity } from "@/lib/activity";
 export async function logActivity(
   activityType: string,
   description: string,
-  options?: {
+  options: {
+    businessId: string;
     projectId?: string;
     leadId?: string;
     metadata?: Record<string, unknown>;

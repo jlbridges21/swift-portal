@@ -5,6 +5,7 @@ import {
   ensureClientPortalLink,
   getClientPortalStatus,
 } from "@/lib/client-portal-link";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -15,9 +16,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
-  const status = await getClientPortalStatus([id]);
+  const tenant = await getTenantContext();
+  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on client portal
+  const status = await getClientPortalStatus([id], businessId);
   const row = status.get(id) ?? { hasPortal: false, userId: null };
-  const linked = await ensureClientPortalLink(id);
+  const linked = await ensureClientPortalLink(id, businessId);
 
   return NextResponse.json({
     has_portal: linked.hasPortal || row.hasPortal,
@@ -42,7 +45,9 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
   }
 
-  const result = await enableClientPortalAccess(id, password);
+  const tenant = await getTenantContext();
+  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on client portal
+  const result = await enableClientPortalAccess(id, password, businessId);
   if (!result.hasPortal) {
     return NextResponse.json({ error: result.message }, { status: 400 });
   }

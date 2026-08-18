@@ -1,17 +1,21 @@
-import { createServiceClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 
-export async function softDeleteClient(clientId: string, adminUserId: string): Promise<void> {
-  const supabase = await createServiceClient();
+export async function softDeleteClient(
+  clientId: string,
+  adminUserId: string,
+  businessId: string
+): Promise<void> {
+  const db = await createTenantServiceClient(businessId);
   const now = new Date().toISOString();
 
-  const { data: junction } = await supabase
+  const { data: junction } = await db
     .from("project_clients")
     .select("project_id, is_primary")
     .eq("client_id", clientId);
 
   const candidateIds = new Set<string>(junction?.map((row) => row.project_id) ?? []);
 
-  const { data: ownedProjects } = await supabase
+  const { data: ownedProjects } = await db
     .from("projects")
     .select("id")
     .eq("client_id", clientId)
@@ -22,7 +26,7 @@ export async function softDeleteClient(clientId: string, adminUserId: string): P
   const projectIdsToDelete: string[] = [];
 
   for (const projectId of candidateIds) {
-    const { data: allAssignees } = await supabase
+    const { data: allAssignees } = await db
       .from("project_clients")
       .select("id, client_id, is_primary")
       .eq("project_id", projectId);
@@ -36,7 +40,7 @@ export async function softDeleteClient(clientId: string, adminUserId: string): P
     }
 
     // Shared project — remove this client and keep the project for others
-    await supabase
+    await db
       .from("project_clients")
       .delete()
       .eq("project_id", projectId)
@@ -48,18 +52,18 @@ export async function softDeleteClient(clientId: string, adminUserId: string): P
 
     if (wasPrimary) {
       const nextPrimary = others[0];
-      await supabase
+      await db
         .from("project_clients")
         .update({ is_primary: true })
         .eq("id", nextPrimary.id);
-      await supabase
+      await db
         .from("projects")
         .update({ client_id: nextPrimary.client_id })
         .eq("id", projectId);
     }
   }
 
-  const { error: clientError } = await supabase
+  const { error: clientError } = await db
     .from("clients")
     .update({ deleted_at: now, deleted_by: adminUserId })
     .eq("id", clientId)
@@ -70,7 +74,7 @@ export async function softDeleteClient(clientId: string, adminUserId: string): P
   }
 
   if (projectIdsToDelete.length) {
-    const { error: projectError } = await supabase
+    const { error: projectError } = await db
       .from("projects")
       .update({ deleted_at: now, deleted_by: adminUserId })
       .in("id", projectIdsToDelete)
@@ -81,14 +85,14 @@ export async function softDeleteClient(clientId: string, adminUserId: string): P
     }
   }
 
-  await supabase
+  await db
     .from("properties")
     .update({ deleted_at: now, deleted_by: adminUserId })
     .eq("client_id", clientId)
     .is("deleted_at", null);
 
   if (projectIdsToDelete.length) {
-    await supabase
+    await db
       .from("leads")
       .update({ deleted_at: now, deleted_by: adminUserId })
       .in("project_id", projectIdsToDelete)
@@ -96,22 +100,22 @@ export async function softDeleteClient(clientId: string, adminUserId: string): P
   }
 }
 
-export async function restoreClient(clientId: string): Promise<void> {
-  const supabase = await createServiceClient();
+export async function restoreClient(clientId: string, businessId: string): Promise<void> {
+  const db = await createTenantServiceClient(businessId);
 
-  const { data: junction } = await supabase
+  const { data: junction } = await db
     .from("project_clients")
     .select("project_id")
     .eq("client_id", clientId);
 
   const projectIds = new Set<string>(junction?.map((row) => row.project_id) ?? []);
-  const { data: ownedProjects } = await supabase
+  const { data: ownedProjects } = await db
     .from("projects")
     .select("id")
     .eq("client_id", clientId);
   ownedProjects?.forEach((p) => projectIds.add(p.id));
 
-  const { error } = await supabase
+  const { error } = await db
     .from("clients")
     .update({ deleted_at: null, deleted_by: null })
     .eq("id", clientId);
@@ -121,23 +125,27 @@ export async function restoreClient(clientId: string): Promise<void> {
   }
 
   if (projectIds.size) {
-    await supabase
+    await db
       .from("projects")
       .update({ deleted_at: null, deleted_by: null })
       .in("id", Array.from(projectIds));
 
-    await supabase
+    await db
       .from("properties")
       .update({ deleted_at: null, deleted_by: null })
       .eq("client_id", clientId);
   }
 }
 
-export async function softDeleteProject(projectId: string, adminUserId: string): Promise<void> {
-  const supabase = await createServiceClient();
+export async function softDeleteProject(
+  projectId: string,
+  adminUserId: string,
+  businessId: string
+): Promise<void> {
+  const db = await createTenantServiceClient(businessId);
   const now = new Date().toISOString();
 
-  const { error } = await supabase
+  const { error } = await db
     .from("projects")
     .update({ deleted_at: now, deleted_by: adminUserId })
     .eq("id", projectId)
@@ -148,10 +156,10 @@ export async function softDeleteProject(projectId: string, adminUserId: string):
   }
 }
 
-export async function restoreProject(projectId: string): Promise<void> {
-  const supabase = await createServiceClient();
+export async function restoreProject(projectId: string, businessId: string): Promise<void> {
+  const db = await createTenantServiceClient(businessId);
 
-  const { error } = await supabase
+  const { error } = await db
     .from("projects")
     .update({ deleted_at: null, deleted_by: null })
     .eq("id", projectId);

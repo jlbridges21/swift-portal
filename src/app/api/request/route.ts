@@ -8,6 +8,7 @@ import { touchClientActivity } from "@/lib/clients-data";
 import { resolvePersonName } from "@/lib/person-name";
 import { buildPortalLeadPayload } from "@/lib/ghl/build-portal-lead-payload";
 import { syncNewProjectLeadToGhl } from "@/lib/ghl/sync-portal-lead";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function POST(request: Request) {
   try {
@@ -125,8 +126,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: projectError.message }, { status: 500 });
     }
 
-    await linkProjectToProperty(project.id, client.id, property_address);
-    await touchClientActivity(client.id);
+    await linkProjectToProperty(
+      project.id,
+      client.id,
+      property_address,
+      LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): stamp public /request with a real business_id
+    );
+    await touchClientActivity(
+      client.id,
+      LEGACY_DEFAULT_BUSINESS_ID // TODO(tenant): stamp public /request with a real business_id
+    );
 
     const { data: lead } = await supabase
       .from("leads")

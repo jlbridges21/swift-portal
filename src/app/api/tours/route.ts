@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { requireAdminApi } from "@/lib/api-auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 function storagePathFromPublicUrl(url: string): { bucket: string; path: string } | null {
   try {
@@ -58,6 +59,7 @@ export async function POST(request: Request) {
   }
 
   await logProjectActivity("tour_added", `360° tour added: ${body.tour_name}`, {
+    businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
     projectId: body.project_id,
     metadata: { tourId: data.id },
   });

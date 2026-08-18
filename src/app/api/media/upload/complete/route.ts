@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { requireAdminApi } from "@/lib/api-auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { logUploadStep } from "@/lib/upload/logger";
 import { verifyStorageObject } from "@/lib/upload/storage-verify";
 import { setMediaTags } from "@/lib/media-library";
@@ -238,6 +239,7 @@ export async function POST(request: Request) {
             : "Document uploaded";
 
       await logProjectActivity(activityType, label, {
+        businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
         projectId: validated.projectId,
         metadata: { mediaType: validated.mediaType, assetId: asset.id },
       });

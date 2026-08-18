@@ -102,6 +102,7 @@ export async function POST(request: Request) {
 
   const actionLabel = status === "approved" ? "approved" : "flagged for changes";
   await logProjectActivity("asset_reviewed", `Deliverable ${actionLabel}`, {
+    businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
     projectId: project_id,
     userId: profile.id,
     idempotencyKey: idempotencyKey("asset_review", project_id, asset_type, asset_id, status),

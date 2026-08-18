@@ -10,6 +10,7 @@ import { logActivity } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { logMediaEvent } from "@/lib/media-library";
 import { notifyProjectClients } from "@/lib/notifications";
+import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
@@ -137,6 +138,7 @@ export async function POST(request: Request) {
           : `${count} document${count > 1 ? "s" : ""} uploaded`;
 
     await logProjectActivity(activityType, label, {
+      businessId: LEGACY_DEFAULT_BUSINESS_ID, // TODO(tenant): pass project.business_id
       projectId,
       metadata: { count, mediaType },
     });

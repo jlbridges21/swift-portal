@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdmin, logActivity } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
@@ -9,6 +10,7 @@ import { notifyProjectClients } from "@/lib/notifications";
 import { defaultProjectTitle, formatAutoProjectName, resolveAddressFromBody } from "@/lib/address";
 import { linkProjectToProperty } from "@/lib/properties";
 import { createPreliminaryEstimate, upsertPreliminaryEstimate } from "@/lib/preliminary-estimates";
+import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import type { NotificationEventKey } from "@/lib/app-settings";
 
 function clientEventKeyForStatus(status: string): NotificationEventKey | undefined {
@@ -31,6 +33,8 @@ function clientEventKeyForStatus(status: string): NotificationEventKey | undefin
 export async function POST(request: Request) {
   try {
     const profile = await requireAdmin();
+    const tenant = await getTenantContext();
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on projects API
     const body = await request.json();
 
     const { property_address, error: addressError } = resolveAddressFromBody(body);
@@ -48,6 +52,7 @@ export async function POST(request: Request) {
       .from("clients")
       .select("name, full_name")
       .eq("id", body.client_id)
+      .eq("business_id", businessId)
       .single();
 
     const clientName = client?.full_name || client?.name || "Client";
@@ -62,6 +67,7 @@ export async function POST(request: Request) {
     const { data: project, error } = await supabase
       .from("projects")
       .insert({
+        business_id: businessId,
         client_id: body.client_id,
         project_name: projectName,
         property_address,
@@ -78,10 +84,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    await linkProjectToProperty(project.id, body.client_id, property_address);
+    await linkProjectToProperty(project.id, body.client_id, property_address, businessId);
 
     await supabase.from("project_clients").upsert(
-      { project_id: project.id, client_id: body.client_id, is_primary: true },
+      { business_id: businessId, project_id: project.id, client_id: body.client_id, is_primary: true },
       { onConflict: "project_id,client_id" }
     );
 
@@ -93,7 +99,7 @@ export async function POST(request: Request) {
     const proposedShootAt = body.proposed_shoot_at || body.shoot_date;
     if (proposedShootAt) {
       const proposedIso = new Date(proposedShootAt).toISOString();
-      const service = await createServiceClient();
+      const service = await createTenantServiceClient(businessId);
       await service.from("shoot_proposals").insert({
         project_id: project.id,
         proposed_by: "client",
@@ -103,6 +109,7 @@ export async function POST(request: Request) {
         created_by: profile.id,
       });
       await logProjectActivity("shoot_proposed", `Preferred shoot time: ${new Date(proposedIso).toLocaleString()}`, {
+        businessId,
         projectId: project.id,
         userId: profile.id,
         metadata: { source: "project_create" },
@@ -110,6 +117,7 @@ export async function POST(request: Request) {
     }
 
     await logActivity("project_created", `Project "${project.project_name}" created`, {
+      businessId,
       projectId: project.id,
     });
 
@@ -122,6 +130,8 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     await requireAdmin();
+    const tenant = await getTenantContext();
+    const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on projects API
     const body = await request.json();
     const { id, ...updates } = body;
 
@@ -131,12 +141,14 @@ export async function PATCH(request: Request) {
       .from("projects")
       .select("status")
       .eq("id", id)
+      .eq("business_id", businessId)
       .single();
 
     const { data, error } = await supabase
       .from("projects")
       .update(updates)
       .eq("id", id)
+      .eq("business_id", businessId)
       .select()
       .single();
 
@@ -161,6 +173,7 @@ export async function PATCH(request: Request) {
             ? "Deliverables sent for review"
             : `Status updated to ${label}`,
         {
+          businessId,
           projectId: id,
           idempotencyKey: idempotencyKey("project", id, activityType),
           metadata: { from: existing.status, to: updates.status },
@@ -183,6 +196,7 @@ export async function PATCH(request: Request) {
         .from("shoot_proposals")
         .select("id")
         .eq("project_id", id)
+        .eq("business_id", businessId)
         .eq("status", "confirmed")
         .maybeSingle();
 
@@ -190,7 +204,8 @@ export async function PATCH(request: Request) {
         await service
           .from("shoot_proposals")
           .update({ proposed_at: `${updates.shoot_date}T09:00:00.000Z` })
-          .eq("id", confirmed.id);
+          .eq("id", confirmed.id)
+          .eq("business_id", businessId);
       }
     }
 
