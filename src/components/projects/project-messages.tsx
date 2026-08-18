@@ -30,6 +30,7 @@ export function ProjectMessages({
   const [unreadCount, setUnreadCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const markedRef = useRef(false);
+  const didInitialRenderRef = useRef(false);
 
   const loadMessages = useCallback(async () => {
     try {
@@ -70,6 +71,12 @@ export function ProjectMessages({
   }, [loading, messages, previewMode, projectId]);
 
   useEffect(() => {
+    // Skip the initial load: messages.length goes 0 -> N when the thread first
+    // renders, and scrolling then hijacks the top of the project page.
+    if (!didInitialRenderRef.current) {
+      didInitialRenderRef.current = true;
+      return;
+    }
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [messages.length]);
 
