@@ -6,18 +6,26 @@ import {
   type AppSettings,
   NOTIFICATION_EVENT_DEFINITIONS,
 } from "@/lib/app-settings";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getTenantContext } from "@/lib/tenant";
+
+function missingTenantResponse(role: string) {
+  const message =
+    role === "super_admin"
+      ? "No business context. Super admins must impersonate a business before reading or writing settings."
+      : "No business context on this account. Cannot load or save settings.";
+  return NextResponse.json({ error: message }, { status: 400 });
+}
 
 export async function GET() {
   const profile = await getProfile();
-  if (!profile || profile.role !== "admin") {
+  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const tenant = await getTenantContext();
-  const businessId =
-    tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on settings API
-  const settings = await getAppSettings(businessId);
+  if (!tenant) return missingTenantResponse(profile.role);
+
+  const settings = await getAppSettings(tenant.businessId);
   return NextResponse.json({
     settings,
     notificationEvents: NOTIFICATION_EVENT_DEFINITIONS,
@@ -26,9 +34,12 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   const profile = await getProfile();
-  if (!profile || profile.role !== "admin") {
+  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(profile.role);
 
   try {
     const body = (await request.json()) as { settings?: Partial<AppSettings> };
@@ -36,10 +47,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Missing settings" }, { status: 400 });
     }
 
-    const tenant = await getTenantContext();
-    const businessId =
-      tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID; // TODO(tenant): require tenant on settings API
-    const saved = await saveAppSettings(body.settings, profile.id, businessId);
+    const saved = await saveAppSettings(body.settings, profile.id, tenant.businessId);
     return NextResponse.json({ settings: saved });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save settings";

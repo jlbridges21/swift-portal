@@ -18,7 +18,7 @@ export const SWIFT_BUSINESS_DEFAULTS: AppSettings["business"] = {
   portalName: "Swift Portal",
   adminDisplayName: "Jackson Bridges",
   primaryContactEmail: "jackson@swiftaerialmedia.com",
-  phoneNumber: "6626871259",
+  phoneNumber: "2515017464",
   websiteUrl: "https://swiftaerialmedia.com",
   logoUrl: BRAND.logoUrl,
   brandPrimaryColor: "#0F172A",

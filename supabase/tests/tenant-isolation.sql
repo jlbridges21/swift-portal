@@ -1,5 +1,5 @@
 -- Swift Portal — tenant isolation harness (RLS read + write)
--- Run in Supabase SQL Editor after v29–v32. See docs/TENANT-TESTING.md.
+-- Run in Supabase SQL Editor after v29–v33. See docs/TENANT-TESTING.md.
 --
 -- ⚠️ v30 DEFAULT: every INSERT below sets business_id EXPLICITLY.
 --    Omitting business_id attaches rows to Swift production (…000001).
@@ -181,6 +181,7 @@ BEGIN
   DELETE FROM projects WHERE business_id = v_business;
   DELETE FROM properties WHERE business_id = v_business;
   DELETE FROM clients WHERE business_id = v_business;
+  DELETE FROM business_settings WHERE business_id = v_business;
   UPDATE profiles SET business_id = NULL, client_id = NULL
   WHERE id IN (v_tenant_b_admin_user_id, v_tenant_b_client_user_id)
     AND business_id = v_business;
@@ -189,6 +190,10 @@ BEGIN
   INSERT INTO businesses (id, slug, name, status, plan)
   VALUES (v_business, 'test-tenant-b', 'Test Tenant B', 'active', 'standard')
   ON CONFLICT (id) DO UPDATE SET slug = EXCLUDED.slug, name = EXCLUDED.name, status = EXCLUDED.status;
+
+  INSERT INTO business_settings (business_id, settings)
+  VALUES (v_business, '{}'::jsonb)
+  ON CONFLICT (business_id) DO NOTHING;
 
   UPDATE profiles SET role = 'admin', business_id = v_business, client_id = NULL,
     email = 'tenant-b-admin@example.test', full_name = 'Tenant B Admin'
@@ -306,6 +311,10 @@ BEGIN
   PERFORM _tenant_test_assert_read_hidden('media_asset_events', v_event);
   PERFORM _tenant_test_assert_read_hidden('project_clients', v_proj_cli);
 
+  SELECT count(*) INTO v_n FROM business_settings WHERE business_id = v_business;
+  IF v_n > 0 THEN RAISE EXCEPTION 'READ LEAK: business_settings Tenant B visible (% rows)', v_n; END IF;
+  PERFORM _tenant_test_bump();
+
   SELECT count(*) INTO v_n FROM client_stats WHERE client_id = v_client;
   IF v_n > 0 THEN RAISE EXCEPTION 'READ LEAK: client_stats Tenant B client (% rows)', v_n; END IF;
   PERFORM _tenant_test_bump();
@@ -411,6 +420,10 @@ BEGIN
   PERFORM _tenant_test_assert_swift_hidden('media_asset_events', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('project_clients', v_swift_bid);
 
+  SELECT count(*) INTO v_n FROM business_settings WHERE business_id = v_swift_bid;
+  IF v_n > 0 THEN RAISE EXCEPTION 'REVERSE READ LEAK: business_settings shows Swift row(s) (%)', v_n; END IF;
+  PERFORM _tenant_test_bump();
+
   SELECT count(*) INTO v_n FROM client_stats cs JOIN clients c ON c.id = cs.client_id WHERE c.business_id = v_swift_bid;
   IF v_n > 0 THEN RAISE EXCEPTION 'REVERSE READ LEAK: client_stats Swift rows (%)', v_n; END IF;
   PERFORM _tenant_test_bump();
@@ -485,6 +498,7 @@ BEGIN
   DELETE FROM projects WHERE business_id = v_teardown_business_id;
   DELETE FROM properties WHERE business_id = v_teardown_business_id;
   DELETE FROM clients WHERE business_id = v_teardown_business_id;
+  DELETE FROM business_settings WHERE business_id = v_teardown_business_id;
   -- profiles.business_id FK: clear Tenant B test profiles before deleting the business
   UPDATE profiles SET business_id = NULL, client_id = NULL
   WHERE id IN (v_tenant_b_admin_user_id, v_tenant_b_client_user_id);

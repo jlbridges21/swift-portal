@@ -199,11 +199,10 @@ export async function getAppSettings(businessId: string): Promise<AppSettings> {
 
   try {
     const supabase = await createServiceClient();
-    // TODO(tenant): read business_settings — prompt 8
     const { data, error } = await supabase
-      .from("app_settings")
+      .from("business_settings")
       .select("settings")
-      .eq("id", 1)
+      .eq("business_id", businessId)
       .maybeSingle();
 
     if (error) {
@@ -230,9 +229,9 @@ export async function saveAppSettings(
 
   const supabase = await createServiceClient();
   const { error } = await supabase
-    .from("app_settings")
+    .from("business_settings")
     .upsert({
-      id: 1,
+      business_id: businessId,
       settings: merged,
       updated_at: new Date().toISOString(),
       updated_by: updatedBy,
