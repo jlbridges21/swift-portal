@@ -109,7 +109,7 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-white/90 backdrop-blur-lg safe-area-top safe-area-x relative">
+    <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-card/90 backdrop-blur-lg safe-area-top safe-area-x relative">
       <div className="relative mx-auto flex h-14 w-full max-w-7xl items-center gap-2 px-4 sm:h-16 sm:gap-3 sm:px-6 lg:px-8">
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <Logo href={homeHref} compact showText={false} className="flex sm:hidden" />
@@ -242,7 +242,7 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
       </div>
 
       {variant === "dashboard" && menuOpen && (
-        <div className="absolute left-0 right-0 top-full z-50 border-b border-border bg-white shadow-lg lg:hidden">
+        <div className="absolute left-0 right-0 top-full z-50 border-b border-border bg-card shadow-lg lg:hidden">
           <div className="mx-auto max-w-7xl space-y-1 px-4 py-3 safe-area-x sm:px-6 lg:px-8">
             {(userRole === "admin" ? adminMobileLinks : clientMobileLinks).map((link) => (
               <Link

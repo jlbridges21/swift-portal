@@ -10,15 +10,13 @@ import {
 
 export type { BusinessServiceRow };
 
-const catalogCache = new Map<string, { rows: BusinessServiceRow[]; expiresAt: number }>();
-const CACHE_TTL_MS = 15_000;
-
-export function invalidateBusinessServicesCache(businessId?: string) {
-  if (businessId) {
-    catalogCache.delete(businessId);
-    return;
-  }
-  catalogCache.clear();
+/**
+ * No process TTL. Same class of bug as app-settings: a Map hit on another
+ * isolate after save returned the previous catalog. Reads always go to the DB
+ * (one small query, already filtered by business_id).
+ */
+export function invalidateBusinessServicesCache(_businessId?: string) {
+  // No process cache.
 }
 
 function asStringArray(value: unknown): string[] {
@@ -79,12 +77,6 @@ export async function listBusinessServices(
   businessId: string,
   options?: { activeOnly?: boolean; bypassCache?: boolean }
 ): Promise<BusinessServiceRow[]> {
-  const now = Date.now();
-  if (!options?.bypassCache && !options?.activeOnly) {
-    const cached = catalogCache.get(businessId);
-    if (cached && now < cached.expiresAt) return cached.rows;
-  }
-
   const supabase = await createServiceClient();
   let query = supabase
     .from("business_services")
@@ -102,11 +94,7 @@ export async function listBusinessServices(
     return [];
   }
 
-  const rows = (data ?? []).map((row) => parseRow(row as Record<string, unknown>));
-  if (!options?.activeOnly) {
-    catalogCache.set(businessId, { rows, expiresAt: now + CACHE_TTL_MS });
-  }
-  return rows;
+  return (data ?? []).map((row) => parseRow(row as Record<string, unknown>));
 }
 
 export async function listServiceTemplatesForBusiness(

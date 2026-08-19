@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,19 +11,21 @@ import { toast } from "sonner";
 import { Loader2, RotateCcw, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ColorField } from "@/components/ui/color-field";
-import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
+import { SettingsTabNav } from "@/components/admin/settings-tab-nav";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
 import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
-import { brandContrastWarnings } from "@/lib/brand-color";
+import { brandContrastWarnings, deriveBrandTheme, sanitizeCssColor } from "@/lib/brand-color";
+import { SETTINGS_SECTIONS, sectionForHash, type SettingsSectionId } from "@/lib/settings-nav";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import type {
   AppSettings,
   NotificationChannelSettings,
   NotificationEventKey,
 } from "@/lib/app-settings";
+import type { ReactNode } from "react";
 
 interface NotificationEventDef {
   key: NotificationEventKey;

@@ -192,12 +192,121 @@ export type BrandThemeVars = {
   accentSubtle: string;
   accentBorder: string;
   ring: string;
+  background: string;
+  card: string;
+  subtle: string;
+  border: string;
+  foreground: string;
+  muted: string;
+  heading: string;
+  backgroundForeground: string;
+  cardForeground: string;
 };
 
 export type BrandContrastWarning = {
   field: "brandPrimaryColor" | "brandAccentColor";
   message: string;
 };
+
+/** Brand-guide Cloud, Midnight, Slate — used as derivation anchors, not raw page fills. */
+const CLOUD: Rgb = [248, 250, 252];
+const SLATE_200: Rgb = [226, 232, 240];
+const SLATE_600: Rgb = [71, 85, 105];
+const BODY: Rgb = [51, 65, 85]; // existing Swift body #334155
+const MUTED: Rgb = [100, 116, 139]; // existing Swift muted #64748b
+const SWIFT_PRIMARY: Rgb = [15, 23, 42];
+const SWIFT_ACCENT: Rgb = [59, 130, 246];
+
+function rgbClose(a: Rgb, b: Rgb, tol = 4): boolean {
+  return Math.abs(a[0] - b[0]) <= tol && Math.abs(a[1] - b[1]) <= tol && Math.abs(a[2] - b[2]) <= tol;
+}
+
+function toHex(rgb: Rgb): string {
+  return `#${rgb.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function ensureContrast(fg: Rgb, bg: Rgb, minRatio: number): Rgb {
+  let current = fg;
+  for (let i = 0; i < 32; i++) {
+    if (contrastRatio(current, bg) >= minRatio) return current;
+    current = mix(current, INK, 0.12);
+  }
+  return INK;
+}
+
+/**
+ * Near-white page fill in the spirit of Cloud #F8FAFC.
+ * Never returns the raw brand color. Mix amount collapses for very dark hues
+ * so #000000 / #0F172A do not produce a dark page.
+ */
+function cloudTint(hue: Rgb): Rgb {
+  const lum = relativeLuminance(hue);
+  let t = lum < 0.08 ? 0.016 : lum > 0.9 ? 0.045 : 0.028 + (1 - lum) * 0.012;
+  t = Math.min(0.05, Math.max(0.012, t));
+  let bg = mix(CLOUD, hue, t);
+  let guard = 0;
+  while (relativeLuminance(bg) < 0.94 && guard < 12) {
+    t *= 0.65;
+    bg = mix(CLOUD, hue, t);
+    guard += 1;
+  }
+  if (relativeLuminance(bg) < 0.92) return CLOUD;
+  return bg;
+}
+
+function sanitizeTheme(vars: BrandThemeVars): BrandThemeVars {
+  const fallbacks: BrandThemeVars = {
+    primary: "#0F172A",
+    primaryForeground: "#ffffff",
+    primaryHover: "#1e293b",
+    primaryActive: "#020617",
+    accent: "#3B82F6",
+    accentForeground: "#ffffff",
+    accentHover: "#2563eb",
+    accentActive: "#1d4ed8",
+    accentSubtle: "#eff6ff",
+    accentBorder: "#93c5fd",
+    ring: "#3B82F6",
+    background: "#F8FAFC",
+    card: "#ffffff",
+    subtle: "#F8FAFC",
+    border: "#E2E8F0",
+    foreground: "#334155",
+    muted: "#64748b",
+    heading: "#0F172A",
+    backgroundForeground: "#334155",
+    cardForeground: "#334155",
+  };
+  const out = { ...vars };
+  (Object.keys(fallbacks) as (keyof BrandThemeVars)[]).forEach((key) => {
+    out[key] = sanitizeCssColor(vars[key], fallbacks[key]);
+  });
+  return out;
+}
+
+export function cssContrast(a: string, b: string): number | null {
+  const ar = parseRgb(a);
+  const br = parseRgb(b);
+  if (!ar || !br) return null;
+  return contrastRatio(ar, br);
+}
+
+export function themeContrastPairs(t: BrandThemeVars): { pair: string; ratio: number; min: number; ok: boolean }[] {
+  const pairs: { pair: string; ratio: number; min: number }[] = [];
+  const add = (pair: string, a: string, b: string, min: number) => {
+    const ratio = cssContrast(a, b);
+    if (ratio == null) return;
+    pairs.push({ pair, ratio, min });
+  };
+  add("body on page", t.foreground, t.background, TEXT_CONTRAST);
+  add("heading on page", t.heading, t.background, TEXT_CONTRAST);
+  add("muted on page", t.muted, t.background, TEXT_CONTRAST);
+  add("body on card", t.cardForeground, t.card, TEXT_CONTRAST);
+  add("accent on page (UI)", t.accent, t.background, UI_CONTRAST);
+  add("accent fg on accent", t.accentForeground, t.accent, UI_CONTRAST);
+  add("primary fg on primary", t.primaryForeground, t.primary, UI_CONTRAST);
+  return pairs.map((p) => ({ ...p, ok: p.ratio + 1e-6 >= p.min }));
+}
 
 export function brandContrastWarnings(primary: string, accent: string): BrandContrastWarning[] {
   const warnings: BrandContrastWarning[] = [];
@@ -250,6 +359,41 @@ export function deriveBrandTheme(primaryRaw: string, accentRaw: string): BrandTh
   const primaryFg = pickForeground(primaryRgb);
   const accentFg = pickForeground(accentForUi);
 
+  const swiftSurfaces = rgbClose(primaryRgb, SWIFT_PRIMARY) && rgbClose(accentChosen, SWIFT_ACCENT);
+
+  let background: Rgb;
+  let card: Rgb;
+  let subtle: Rgb;
+  let border: Rgb;
+  let foreground: Rgb;
+  let muted: Rgb;
+  let heading: Rgb;
+
+  if (swiftSurfaces) {
+    // Keep the live Swift portal on the exact tokens in globals.css.
+    background = CLOUD;
+    card = WHITE;
+    subtle = CLOUD;
+    border = SLATE_200;
+    foreground = BODY;
+    muted = MUTED;
+    heading = SWIFT_PRIMARY;
+  } else {
+    // Tint from accent (the color admins think of as "brand"), never raw fill.
+    background = cloudTint(accentForUi);
+    card = mix(WHITE, accentForUi, 0.012);
+    if (relativeLuminance(card) < 0.97) card = WHITE;
+    subtle = mix(background, accentForUi, 0.04);
+    if (relativeLuminance(subtle) < 0.93) subtle = mix(CLOUD, accentForUi, 0.03);
+    border = mix(SLATE_200, accentForUi, 0.1);
+    heading = ensureContrast(relativeLuminance(primaryRgb) < 0.35 ? primaryRgb : INK, background, TEXT_CONTRAST);
+    foreground = ensureContrast(SLATE_600, background, TEXT_CONTRAST);
+    muted = ensureContrast(MUTED, background, TEXT_CONTRAST);
+  }
+
+  const bgFg = ensureContrast(foreground, background, TEXT_CONTRAST);
+  const cardFg = ensureContrast(foreground, card, TEXT_CONTRAST);
+
   const vars: BrandThemeVars = {
     primary: toCss(primaryRgb),
     primaryForeground: primaryFg.css,
@@ -262,21 +406,18 @@ export function deriveBrandTheme(primaryRaw: string, accentRaw: string): BrandTh
     accentSubtle: toCss(mix(accentForUi, WHITE, 0.9)),
     accentBorder: toCss(mix(accentForUi, WHITE, 0.55)),
     ring: toCss(accentForUi),
+    background: swiftSurfaces ? "#F8FAFC" : toCss(background),
+    card: swiftSurfaces ? "#ffffff" : toCss(card),
+    subtle: swiftSurfaces ? "#F8FAFC" : toCss(subtle),
+    border: swiftSurfaces ? "#E2E8F0" : toCss(border),
+    foreground: swiftSurfaces ? "#334155" : toCss(bgFg),
+    muted: swiftSurfaces ? "#64748b" : toCss(muted),
+    heading: swiftSurfaces ? "#0F172A" : toCss(heading),
+    backgroundForeground: swiftSurfaces ? "#334155" : toCss(bgFg),
+    cardForeground: swiftSurfaces ? "#334155" : toCss(cardFg),
   };
 
-  return {
-    primary: sanitizeCssColor(vars.primary, "#0F172A"),
-    primaryForeground: sanitizeCssColor(vars.primaryForeground, "#ffffff"),
-    primaryHover: sanitizeCssColor(vars.primaryHover, vars.primary),
-    primaryActive: sanitizeCssColor(vars.primaryActive, vars.primary),
-    accent: sanitizeCssColor(vars.accent, "#3B82F6"),
-    accentForeground: sanitizeCssColor(vars.accentForeground, "#ffffff"),
-    accentHover: sanitizeCssColor(vars.accentHover, vars.accent),
-    accentActive: sanitizeCssColor(vars.accentActive, vars.accent),
-    accentSubtle: sanitizeCssColor(vars.accentSubtle, "#eff6ff"),
-    accentBorder: sanitizeCssColor(vars.accentBorder, "#93c5fd"),
-    ring: sanitizeCssColor(vars.ring, vars.accent),
-  };
+  return sanitizeTheme(vars);
 }
 
 export function brandThemeCss(primary: string, accent: string): string {
@@ -293,6 +434,14 @@ export function brandThemeCss(primary: string, accent: string): string {
   --color-accent-subtle: ${t.accentSubtle};
   --color-accent-border: ${t.accentBorder};
   --color-ring: ${t.ring};
+  --color-background: ${t.background};
+  --color-foreground: ${t.foreground};
+  --color-muted: ${t.muted};
+  --color-border: ${t.border};
+  --color-card: ${t.card};
+  --color-heading: ${t.heading};
+  --color-subtle: ${t.subtle};
+  --color-card-foreground: ${t.cardForeground};
   --brand-primary: ${t.primary};
   --brand-accent: ${t.accent};
 }`;

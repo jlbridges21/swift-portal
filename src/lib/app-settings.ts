@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createServiceClient } from "@/lib/supabase/server";
 import { assertSafeBrandAssetUrls, assertSafeBrandColors, changedBrandColors } from "@/lib/brand-color";
 import {
@@ -220,22 +221,21 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
   };
 }
 
-const settingsCache = new Map<string, { settings: AppSettings; expiresAt: number }>();
-const CACHE_TTL_MS = 30_000;
-
-export function invalidateAppSettingsCache(businessId?: string) {
-  if (businessId) {
-    settingsCache.delete(businessId);
-    return;
-  }
-  settingsCache.clear();
+/**
+ * No process-wide TTL cache. A 30s module Map caused read-after-write to return
+ * the previous brand color: PATCH updated this instance, then router.refresh()
+ * hit a different Vercel isolate whose Map was still stale.
+ *
+ * Isolation: still keyed only by `businessId` (never a singleton). Request
+ * dedup uses React `cache()` inside Next (`NEXT_RUNTIME`); scripts always hit DB.
+ * `saveAppSettings` reads via `loadAppSettingsFromDb` so a merge never sits on
+ * a stale in-request copy.
+ */
+export function invalidateAppSettingsCache(_businessId?: string) {
+  // Intentionally empty — there is no process TTL to drop. Next request reads DB.
 }
 
-export async function getAppSettings(businessId: string): Promise<AppSettings> {
-  const now = Date.now();
-  const cached = settingsCache.get(businessId);
-  if (cached && now < cached.expiresAt) return cached.settings;
-
+async function loadAppSettingsFromDb(businessId: string): Promise<AppSettings> {
   try {
     const supabase = await createServiceClient();
     const { data, error } = await supabase
@@ -265,12 +265,20 @@ export async function getAppSettings(businessId: string): Promise<AppSettings> {
       }
     }
 
-    settingsCache.set(businessId, { settings, expiresAt: now + CACHE_TTL_MS });
     return settings;
   } catch (error) {
     console.warn("[app-settings] unexpected load error, using defaults:", error);
     return structuredClone(DEFAULT_APP_SETTINGS);
   }
+}
+
+const getAppSettingsForRequest = cache(loadAppSettingsFromDb);
+
+export async function getAppSettings(businessId: string): Promise<AppSettings> {
+  if (process.env.NEXT_RUNTIME) {
+    return getAppSettingsForRequest(businessId);
+  }
+  return loadAppSettingsFromDb(businessId);
 }
 
 export async function saveAppSettings(
@@ -279,7 +287,7 @@ export async function saveAppSettings(
   businessId: string,
   options?: { allowVerificationWrite?: boolean }
 ): Promise<AppSettings> {
-  const current = await getAppSettings(businessId);
+  const current = await loadAppSettingsFromDb(businessId);
   const merged = mergeAppSettings(
     deepMerge(current as unknown as Record<string, unknown>, patch as unknown as Record<string, unknown>) as unknown as AppSettings
   );
@@ -328,7 +336,6 @@ export async function saveAppSettings(
 
   if (error) throw new Error(error.message);
 
-  settingsCache.set(businessId, { settings: merged, expiresAt: Date.now() + CACHE_TTL_MS });
   return merged;
 }
 
