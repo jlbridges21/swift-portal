@@ -7,6 +7,7 @@ import {
   NOTIFICATION_EVENT_DEFINITIONS,
 } from "@/lib/app-settings";
 import { InvalidBrandColorError } from "@/lib/brand-color";
+import { InvalidEmailSenderError } from "@/lib/email-sender-policy";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET() {
@@ -40,10 +41,15 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Missing settings" }, { status: 400 });
     }
 
-    const saved = await saveAppSettings(body.settings, profile.id, tenant.businessId);
+    const saved = await saveAppSettings(body.settings, profile.id, tenant.businessId, {
+      allowVerificationWrite: profile.role === "super_admin",
+    });
     return NextResponse.json({ settings: saved });
   } catch (error) {
     if (error instanceof InvalidBrandColorError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof InvalidEmailSenderError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     const message = error instanceof Error ? error.message : "Failed to save settings";

@@ -12,6 +12,7 @@ import { Loader2, RotateCcw, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ColorField } from "@/components/ui/color-field";
 import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
+import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
 import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { usePortalBrand } from "@/components/brand/brand-provider";
@@ -31,6 +32,44 @@ interface NotificationEventDef {
 interface AdminSettingsClientProps {
   initialSettings: AppSettings;
   notificationEvents: NotificationEventDef[];
+}
+
+function DomainRecordsList({ refreshKey }: { refreshKey: string }) {
+  const [records, setRecords] = useState<{ name: string; type: string; value: string; record: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/email/domain", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data.records)) setRecords(data.records);
+      })
+      .catch(() => undefined);
+  }, [refreshKey]);
+
+  if (records.length === 0) return null;
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-slate-50 text-left text-muted">
+            <th className="px-2 py-1.5">Type</th>
+            <th className="px-2 py-1.5">Name</th>
+            <th className="px-2 py-1.5">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {records.map((row, i) => (
+            <tr key={`${row.name}-${i}`} className="border-t border-border">
+              <td className="px-2 py-1.5 font-mono">{row.type}</td>
+              <td className="px-2 py-1.5 font-mono">{row.name}</td>
+              <td className="px-2 py-1.5 font-mono break-all">{row.value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function CompactToggle({
@@ -311,21 +350,129 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
       >
       <Card className="shadow-sm border-0">
         <CardContent className="grid gap-4 sm:grid-cols-2 pt-0">
+          <div className="space-y-2 sm:col-span-2">
+            <p className="text-sm font-medium text-primary">How mail is sent</p>
+            <div className="flex flex-col gap-2">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="radio"
+                  className="mt-1"
+                  checked={settings.email.senderMode !== "custom_domain"}
+                  onChange={() =>
+                    patchEmail({
+                      senderMode: "platform",
+                      senderEmail: "",
+                    })
+                  }
+                />
+                <span>
+                  Platform (default) — clients see this business name on the shared sending domain.
+                  Replies go to the contact address. No DNS setup.
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="radio"
+                  className="mt-1"
+                  checked={settings.email.senderMode === "custom_domain"}
+                  disabled={settings.email.domainVerificationStatus !== "verified"}
+                  onChange={() => {
+                    if (settings.email.domainVerificationStatus !== "verified") {
+                      toast.error("Verify a custom domain before switching sender mode");
+                      return;
+                    }
+                    patchEmail({ senderMode: "custom_domain" });
+                  }}
+                />
+                <span>
+                  Custom domain — only after DNS verification. Sender address must be on that domain.
+                </span>
+              </label>
+            </div>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="fromName">Default from name</Label>
             <Input id="fromName" value={settings.email.fromName} onChange={(e) => patchEmail({ fromName: e.target.value })} />
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="senderEmail">Notification sender email</Label>
-            <Input id="senderEmail" type="email" value={settings.email.senderEmail} onChange={(e) => patchEmail({ senderEmail: e.target.value })} />
+            <Input
+              id="senderEmail"
+              type="email"
+              value={settings.email.senderEmail}
+              disabled={settings.email.senderMode !== "custom_domain"}
+              onChange={(e) => patchEmail({ senderEmail: e.target.value })}
+            />
             <p className="text-xs text-muted leading-relaxed">
-              Display address for notification emails. Must be a verified domain in Resend. If empty at send time,
-              the app falls back to the <code className="text-[11px]">RESEND_FROM_EMAIL</code> environment variable.
+              Used only with a verified custom domain, and the address must be on that domain.
+              Platform mode always sends from the shared mailbox.
             </p>
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="customDomain">Custom sending domain</Label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="customDomain"
+                value={settings.email.customDomain}
+                onChange={(e) => patchEmail({ customDomain: e.target.value })}
+                placeholder="mail.yourdomain.com"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/admin/email/domain", {
+                      method: "POST",
+                      credentials: "include",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ domain: settings.email.customDomain }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Could not start verification");
+                    if (data.settings) setSettings(data.settings);
+                    toast.success("Add the DNS records below, then re-check verification");
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Domain setup failed");
+                  }
+                }}
+              >
+                Start verification
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/admin/email/domain/verify", {
+                      method: "POST",
+                      credentials: "include",
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Re-check failed");
+                    if (data.settings) setSettings(data.settings);
+                    toast.success(`Domain status: ${data.domainVerificationStatus}`);
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Re-check failed");
+                  }
+                }}
+              >
+                Re-check DNS
+              </Button>
+            </div>
+            <p className="text-xs text-muted">
+              Status: {settings.email.domainVerificationStatus}
+            </p>
+            <DomainRecordsList refreshKey={`${settings.email.resendDomainId}:${settings.email.domainVerificationStatus}`} />
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="replyTo">Reply-to email</Label>
             <Input id="replyTo" type="email" value={settings.email.replyTo} onChange={(e) => patchEmail({ replyTo: e.target.value })} />
+            <p className="text-xs text-muted">
+              If empty, replies use the business primary contact email.
+            </p>
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="footerText">Email footer text</Label>
@@ -333,6 +480,7 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
           </div>
         </CardContent>
       </Card>
+      <EmailDiagnosticsCard />
       </SettingsCollapsible>
 
       <SettingsCollapsible

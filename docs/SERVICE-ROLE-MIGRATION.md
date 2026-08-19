@@ -174,4 +174,8 @@ Isolation harness after v37: **74** assertions (was 70). Tenant B `business_inte
 
 Platform-generic `DEFAULT_APP_SETTINGS` / `PLATFORM_BUSINESS_DEFAULTS`. Swift identity lives in `business_settings` (seeded in v38, including `landing`). Test Pilot Drones (`…0000aa`) is seeded with its `businesses.name`. Logo uploads go to public bucket `business-logos` via `POST /api/admin/settings/logo`. Brand colors are validated as hex/`rgb()` in `saveAppSettings` and `BrandProvider`. Isolation assertion count unchanged.
 
-Do **not** start per-business email domains or tenant routing in this batch.
+## Email sender policy (v39)
+
+`saveAppSettings` enforces sender allowlisting: platform mode uses `{businessName} <noreply@{PLATFORM_EMAIL_DOMAIN}>`; custom-domain mode requires `domainVerificationStatus='verified'` and `senderEmail` on that business's `customDomain`. Admins cannot write `domainVerificationStatus` via PATCH (super_admin or the Resend verify endpoint can). Resend webhook still requires `business_id` tag and cross-checks `projects.business_id`. Isolation assertion count unchanged.
+
+Do **not** start editable services or tenant routing in this batch.

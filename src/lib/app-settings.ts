@@ -1,5 +1,11 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { assertSafeBrandColors } from "@/lib/brand-color";
+import {
+  assertEmailSenderPolicy,
+  getPlatformEmailDomain,
+  type DomainVerificationStatus,
+  type EmailSenderMode,
+} from "@/lib/email-sender-policy";
 import { mergeLandingAssets, type LandingAssets } from "@/lib/landing-assets";
 import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import {
@@ -42,6 +48,11 @@ export interface EmailSettings {
   senderEmail: string;
   replyTo: string;
   footerText: string;
+  senderMode: EmailSenderMode;
+  customDomain: string;
+  domainVerificationStatus: DomainVerificationStatus;
+  /** Resend domain id for DNS verification. Empty until a domain is created. */
+  resendDomainId: string;
 }
 
 export interface BusinessSettings {
@@ -143,6 +154,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     senderEmail: "",
     replyTo: "",
     footerText: "You received this email because you have a project with this portal.",
+    senderMode: "platform",
+    customDomain: "",
+    domainVerificationStatus: "unverified",
+    resendDomainId: "",
   },
   business: { ...PLATFORM_BUSINESS_DEFAULTS },
   proposals: {
@@ -260,13 +275,42 @@ export async function getAppSettings(businessId: string): Promise<AppSettings> {
 export async function saveAppSettings(
   patch: Partial<AppSettings>,
   updatedBy: string,
-  businessId: string
+  businessId: string,
+  options?: { allowVerificationWrite?: boolean }
 ): Promise<AppSettings> {
   const current = await getAppSettings(businessId);
-  const merged = mergeAppSettings({ ...current, ...patch });
+  const merged = mergeAppSettings(
+    deepMerge(current as unknown as Record<string, unknown>, patch as unknown as Record<string, unknown>) as unknown as AppSettings
+  );
   assertSafeBrandColors(merged.business);
 
+  if (!options?.allowVerificationWrite) {
+    merged.email.domainVerificationStatus = current.email.domainVerificationStatus;
+    merged.email.resendDomainId = current.email.resendDomainId;
+  }
+
   const supabase = await createServiceClient();
+  const { data: rows } = await supabase
+    .from("business_settings")
+    .select("business_id, settings")
+    .neq("business_id", businessId);
+
+  const otherBusinessDomains = (rows ?? [])
+    .map((row) => {
+      const domain = (row.settings as { email?: { customDomain?: string } } | null)?.email
+        ?.customDomain;
+      return domain
+        ? { businessId: row.business_id as string, customDomain: domain }
+        : null;
+    })
+    .filter((row): row is { businessId: string; customDomain: string } => Boolean(row));
+
+  assertEmailSenderPolicy({
+    email: merged.email,
+    businessId,
+    platformDomain: getPlatformEmailDomain(),
+    otherBusinessDomains,
+  });
   const { error } = await supabase
     .from("business_settings")
     .upsert({

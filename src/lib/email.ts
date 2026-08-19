@@ -1,8 +1,12 @@
 import { Resend } from "resend";
 import { buildPremiumEmailHtml } from "@/lib/email-templates";
 import { recordEmailEvent } from "@/lib/email-analytics";
-import { getAppSettings } from "@/lib/app-settings";
+import { getAppSettings, type AppSettings } from "@/lib/app-settings";
 import { getSiteUrl } from "@/lib/site-metadata";
+import {
+  formatFromHeader,
+  getPlatformFromAddress,
+} from "@/lib/email-sender-policy";
 
 const resendClients = new Map<string, Resend>();
 
@@ -38,36 +42,54 @@ function getResend() {
 }
 
 export function getResendFromEmail(): string {
-  return process.env.RESEND_FROM_EMAIL || "Client Portal <notifications@localhost>";
+  return process.env.RESEND_FROM_EMAIL || `Client Portal <${getPlatformFromAddress() || "notifications@localhost"}>`;
 }
 
-function platformFromAddress(): string {
-  const raw = getResendFromEmail();
-  return raw.match(/<([^>]+)>/)?.[1] ?? raw;
+function platformMailbox(): string {
+  return getPlatformFromAddress() || "notifications@localhost";
 }
 
-/** From-name and reply-to come from this business's settings; the address is the platform sender. */
+/**
+ * Resolve the From header for this business.
+ * Platform mode always uses the shared mailbox + this business's name.
+ * Custom-domain mode uses the stored sender only after verification (enforced on save).
+ */
 export async function getConfiguredFromEmail(businessId: string): Promise<string> {
-  // TODO(tenant): per-business sending domain — prompt 16
   const settings = await getAppSettings(businessId);
-  const { fromName, senderEmail } = settings.email;
-  if (fromName && senderEmail) {
-    return `${fromName} <${senderEmail}>`;
-  }
-  if (fromName) {
-    return `${fromName} <${platformFromAddress()}>`;
-  }
-  return getResendFromEmail();
+  return resolveFromHeader(settings);
 }
 
-export function getEmailConfigStatus() {
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL;
+export function resolveFromHeader(settings: AppSettings): string {
+  const businessName = settings.business.businessName.trim() || settings.email.fromName.trim() || "Client Portal";
+
+  if (
+    settings.email.senderMode === "custom_domain" &&
+    settings.email.domainVerificationStatus === "verified" &&
+    settings.email.senderEmail.trim()
+  ) {
+    const display = settings.email.fromName.trim() || businessName;
+    return formatFromHeader(display, settings.email.senderEmail.trim());
+  }
+
+  return formatFromHeader(businessName, platformMailbox());
+}
+
+export function resolveReplyTo(settings: AppSettings): string | undefined {
+  const reply = settings.email.replyTo.trim() || settings.business.primaryContactEmail.trim();
+  return reply || undefined;
+}
+
+export async function getEmailConfigStatus(businessId: string) {
+  const settings = await getAppSettings(businessId);
+  const apiKeyPresent = Boolean(process.env.RESEND_API_KEY);
   return {
-    resendApiKeyPresent: Boolean(apiKey),
-    resendFromEmailPresent: Boolean(fromEmail),
-    resendWebhookSecretPresent: Boolean(process.env.RESEND_WEBHOOK_SECRET),
-    fromEmail: getResendFromEmail(),
+    sendingConfigured: apiKeyPresent,
+    webhookConfigured: Boolean(process.env.RESEND_WEBHOOK_SECRET),
+    senderMode: settings.email.senderMode,
+    domainVerificationStatus: settings.email.domainVerificationStatus,
+    customDomain: settings.email.customDomain,
+    resolvedFrom: resolveFromHeader(settings),
+    resolvedReplyTo: resolveReplyTo(settings) ?? null,
     environment: process.env.NODE_ENV || "development",
     appUrl: process.env.NEXT_PUBLIC_APP_URL || null,
   };
@@ -152,6 +174,7 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
   });
 
   const from = await getConfiguredFromEmail(businessId);
+  const replyTo = resolveReplyTo(appSettings);
   const tags = buildResendTags(businessId, options.analytics);
   const emailType = options.analytics?.emailType ?? options.emailType ?? "general";
 
@@ -161,7 +184,7 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
       to: options.to,
       subject: options.subject,
       html,
-      replyTo: appSettings.email.replyTo || undefined,
+      replyTo,
       tags: tags.length ? tags : undefined,
     });
 

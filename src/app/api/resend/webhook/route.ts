@@ -79,6 +79,9 @@ export async function POST(request: Request) {
     const data = payload.data;
     const tags = normalizeResendTags(data?.tags);
     const taggedBusinessId = tags.business_id?.trim() || null;
+    // Attribution: every send tags business_id. Lifecycle events are dropped
+    // unless that tag is present and, when project_id is also tagged, it matches
+    // projects.business_id.
     const projectId = tags.project_id ?? null;
     const notificationId = tags.notification_id ?? null;
     const emailType = tags.email_type ?? "general";

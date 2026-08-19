@@ -12,7 +12,7 @@ import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 export default async function AdminSettingsPage() {
   const profile = await getProfile();
   if (!profile) redirect("/login");
-  if (profile.role !== "admin") redirect("/dashboard");
+  if (profile.role !== "admin" && profile.role !== "super_admin") redirect("/dashboard");
 
   const tenant = await requireTenantContext();
   const settings = await getAppSettings(tenant.businessId);

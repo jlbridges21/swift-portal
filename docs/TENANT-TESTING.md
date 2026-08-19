@@ -4,7 +4,7 @@ Repeatable SQL harness proving **cross-tenant READ isolation** via RLS (v32) and
 
 ## Prerequisites
 
-- Migrations **v29–v38** applied on PostgreSQL 16.
+- Migrations **v29–v39** applied on PostgreSQL 16.
 - Supabase project with RLS enabled (production or staging).
 - Two auth users created in **Supabase Dashboard → Authentication → Add user** (email + password, auto-confirm):
   - `tenant-b-admin@example.test`

@@ -6,7 +6,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
-  if (!profile || profile.role !== "admin") {
+  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -97,7 +97,7 @@ export async function GET(request: Request) {
   const lastSend = getLastEmailSendResult(businessId);
 
   return NextResponse.json({
-    config: getEmailConfigStatus(),
+    config: await getEmailConfigStatus(businessId),
     clientPrefs,
     lastSend: lastSend
       ? {
@@ -116,7 +116,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const profile = await getProfile();
-  if (!profile || profile.role !== "admin") {
+  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
