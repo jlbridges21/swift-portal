@@ -104,16 +104,24 @@ Find remaining identifiers with:
 grep -rn "LEGACY_DEFAULT_BUSINESS_ID" src/ | grep -v "?? LEGACY" | grep -v "export const" | grep -v "import "
 ```
 
-After prompt 12b that grep reports **2** lines, neither of which is a missing-context placeholder:
+After prompt 18 that grep reports **2** lines (plus GHL’s aliased import), none of which is a missing-context placeholder:
 
-| File | Why it is not Category C |
-|---|---|
-| `src/lib/onesignal-push.ts` | Send-filter policy: untagged subscriptions still match **Swift** admin push. |
-| `src/lib/tenant.ts` `resolvePublicSignupBusinessId` | Public `/request` and `/api/leads` POST, when no `business_id`/`business_slug` is sent. Swift until **prompt 18** host resolution (`// TODO(tenant): resolve business from host — prompt 18`). |
+| File | Why it is not Category C | Count |
+|---|---|---|
+| `src/lib/onesignal-push.ts` | Send-filter policy: untagged subscriptions still match **Swift** admin push. | 1 |
+| `src/lib/stripe-connect.ts` `isPlatformStripeBusiness` | Which Stripe **account** Swift uses (platform vs Connect), not a data-access fallback. | 1 |
 
-GHL's Swift env-var fallback aliases the constant on import (`SWIFT_AERIAL_MEDIA_ID`) so it does not appear in this grep. Tenant B with an empty webhook URL skips sync; only Swift inherits `GHL_PORTAL_LEAD_WEBHOOK_URL`.
+`resolvePublicSignupBusinessId` no longer uses Swift when the host is missing. Public `/api/request` and `/api/leads` require an active host-resolved tenant; the body `business_id` / `business_slug` must match that host or the request is 400.
+
+GHL’s Swift env-var fallback aliases the constant on import (`SWIFT_AERIAL_MEDIA_ID`) so it does not appear in the identifier grep. Tenant B with an empty webhook URL skips sync; only Swift inherits `GHL_PORTAL_LEAD_WEBHOOK_URL`.
 
 (`src/lib/tenant.ts` export of the constant is not a call site.)
+
+Fail-open grep after prompt 18:
+
+- `?? LEGACY_DEFAULT_BUSINESS_ID` → **0**
+- Identifier grep (excluding export/import) → **2** (OneSignal filter + Stripe platform-account check)
+- Public signup Swift default → **removed**
 
 ---
 
@@ -121,7 +129,7 @@ GHL's Swift env-var fallback aliases the constant on import (`SWIFT_AERIAL_MEDIA
 
 `src/app/api/request/route.ts` now passes `business_id` in `auth.admin.createUser` `user_metadata` and stamps `profiles.business_id` on the follow-up update. `handle_new_user()` (v31b) writes the same id when present.
 
-Optional `business_id` / `business_slug` on the public body must refer to an active, non-deleted business (400 otherwise). Absent both, Swift is used so the existing form is unchanged.
+Optional `business_id` / `business_slug` on the public body must **match the host-resolved business** and refer to an active, non-deleted row (400 otherwise). There is no Swift fallback when the host is the platform or unmatched.
 
 One person cannot be a client of two businesses: if the email already exists as a client of a **different** business, the route returns 409 `email_other_business` rather than creating a second client.
 
@@ -146,7 +154,7 @@ grep -n "user_metadata" src/app/api/request/route.ts
 |---|---|---|
 | `?? LEGACY_DEFAULT_BUSINESS_ID` on authenticated paths | **0** | **0** |
 | `?? LEGACY_DEFAULT_BUSINESS_ID` in `getProfile()` (Category D) | **0** | **0** |
-| Category C missing-context placeholders | **0** (OneSignal + public-form Swift default until prompt 18 are not placeholders) | **0** placeholders |
+| Category C missing-context placeholders | **0** (OneSignal Swift **push filter** + Stripe `isPlatformStripeBusiness` remain; public-form Swift default **removed** in prompt 18) | **0** placeholders |
 | `/api/request` `user_metadata` includes `business_id` | **yes** | **yes** |
 | v30 `business_id` DEFAULT on 25 tables | **dropped** | **dropped** |
 

@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { getStripe, type StripeClientContext } from "@/lib/stripe";
+import { getBusinessPortalOrigin } from "@/lib/portal-url";
 
 export type StripeAccountStatus =
   | "not_connected"
@@ -34,13 +35,18 @@ export function isPlatformStripeBusiness(businessId: string): boolean {
   return businessId === LEGACY_DEFAULT_BUSINESS_ID;
 }
 
-export function portalCheckoutBaseUrl(business?: { custom_domain?: string | null } | null): string {
+export function portalCheckoutBaseUrl(business?: { slug?: string; custom_domain?: string | null } | null): string {
+  if (business?.slug) {
+    return getBusinessPortalOrigin({
+      slug: business.slug,
+      custom_domain: business.custom_domain ?? null,
+    });
+  }
   const custom = business?.custom_domain?.trim();
   if (custom) {
-    const host = custom.replace(/^https?:\/\//i, "").replace(/\/$/, "");
-    return `https://${host}`;
+    return getBusinessPortalOrigin({ slug: "unknown", custom_domain: custom });
   }
-  return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  return `https://${process.env.PLATFORM_ROOT_DOMAIN?.trim() || "shootportal.app"}`;
 }
 
 export function stripeDashboardUrl(): string {

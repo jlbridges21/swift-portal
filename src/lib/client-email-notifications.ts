@@ -1,12 +1,12 @@
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { sendBrandedEmail } from "@/lib/email";
 import { getAppSettings } from "@/lib/app-settings";
-import { getSiteUrl } from "@/lib/site-metadata";
-import type { PremiumEmailContent } from "@/lib/email-templates";
 import { getStatusOrder } from "@/lib/constants";
+import type { PremiumEmailContent } from "@/lib/email-templates";
 import type { NotificationType } from "@/lib/types";
 import type { MessageTemplateKey } from "@/lib/workflow-settings";
 import { renderWorkflowTemplate } from "@/lib/message-templates";
+import { businessPortalHref } from "@/lib/portal-url";
 
 /** Payment-related emails always send even if the client opted out of marketing-style emails. */
 const CRITICAL_CLIENT_EMAIL_TYPES = new Set<NotificationType>([
@@ -62,10 +62,9 @@ export interface ClientEmailNotificationResult {
   messageId?: string;
 }
 
-function resolvePortalUrl(path?: string): string | undefined {
+async function resolvePortalUrl(businessId: string, path?: string): Promise<string | undefined> {
   if (!path) return undefined;
-  const appUrl = getSiteUrl();
-  return path.startsWith("http") ? path : `${appUrl}${path}`;
+  return businessPortalHref(businessId, path);
 }
 
 function resolveTemplate(
@@ -103,7 +102,7 @@ export function getClientEmailPresentation(
 ): PremiumEmailContent {
   const businessName = brand?.businessName ?? "our team";
   const portalName = brand?.portalName ?? "the portal";
-  const ctaUrl = resolvePortalUrl(url);
+  const ctaUrl = url;
   const progressStep =
     projectStatus !== undefined ? getStatusOrder(projectStatus) : undefined;
   const template = resolveTemplate(eventType, title, message);
@@ -291,7 +290,7 @@ export async function sendClientEmailNotification(
     options.eventType,
     options.title,
     options.message,
-    options.url,
+    await resolvePortalUrl(options.businessId, options.url),
     options.projectStatus,
     brandNames,
     subjectOverride

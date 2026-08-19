@@ -3,6 +3,8 @@ import { getProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { AdminProjectDetail } from "@/components/admin/project-detail";
+import { requireTenantContext } from "@/lib/tenant";
+import { getBusinessPortalOrigin } from "@/lib/portal-url";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -12,6 +14,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
   const profile = await getProfile();
   if (!profile || profile.role !== "admin") redirect("/dashboard");
 
+  const tenant = await requireTenantContext();
   const { id } = await params;
   const supabase = await createClient();
 
@@ -49,7 +52,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
 
   if (!project) notFound();
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getBusinessPortalOrigin(tenant.business);
   const portalUrl = `${appUrl}/dashboard/projects/${id}?preview=1`;
 
   return (

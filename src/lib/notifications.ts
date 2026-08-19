@@ -9,6 +9,7 @@ import { resolveNotificationEventKey } from "@/lib/notification-settings";
 import type { NotificationType } from "@/lib/types";
 import { getStatusOrder } from "@/lib/constants";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
+import { getBusinessPortalOriginById } from "@/lib/portal-url";
 
 export type { NotificationType };
 
@@ -260,7 +261,7 @@ export async function notifyUsers(options: NotifyOptions) {
   }
 
   const db = await createTenantServiceClient(businessId);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = await getBusinessPortalOriginById(businessId);
   const recipients: NotificationRecipient[] = [];
 
   const appSettings = await getAppSettings(businessId);

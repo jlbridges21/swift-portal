@@ -174,7 +174,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     payment.project_id,
     {
       payment_amount: amountStr,
-      portal_link: portalLink(`/dashboard/projects/${payment.project_id}#payments`),
+      portal_link: await portalLink(`/dashboard/projects/${payment.project_id}#payments`, businessId),
     },
     "Payment confirmed — all deliverables are now available to download. Thank you!"
   );
@@ -184,7 +184,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     "project_completed",
     payment.project_id,
     {
-      portal_link: portalLink(`/dashboard/projects/${payment.project_id}`),
+      portal_link: await portalLink(`/dashboard/projects/${payment.project_id}`, businessId),
     },
     clientBody
   );

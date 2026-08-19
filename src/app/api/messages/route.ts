@@ -11,9 +11,9 @@ import {
 import { notifyAdmins, notifyClient } from "@/lib/notifications";
 import { sendBrandedEmail } from "@/lib/email";
 import { getAppSettings } from "@/lib/app-settings";
-import { getSiteUrl } from "@/lib/site-metadata";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
+import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import type { ClientMessage } from "@/lib/types";
 
 /** Admin inbox list, or client gets their own thread via ?mine=1 */
@@ -152,7 +152,7 @@ export async function POST(request: Request) {
   );
 
   const preview = text.length > 160 ? `${text.slice(0, 157)}…` : text;
-  const appUrl = getSiteUrl();
+  const appUrl = await getBusinessPortalOriginById(businessId);
 
   if (isAdmin) {
     await ensureClientPortalLink(clientId!, businessId);

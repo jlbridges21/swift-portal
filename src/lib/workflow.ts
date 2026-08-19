@@ -7,6 +7,7 @@ import {
   buildProjectMessageVariables,
   type WorkflowMessageVariables,
 } from "@/lib/message-templates";
+import { businessPortalHref } from "@/lib/portal-url";
 
 export type TemplateContext = Partial<WorkflowMessageVariables>;
 
@@ -132,9 +133,8 @@ export async function logWorkflowSkipped(
   });
 }
 
-export function portalLink(path: string): string {
-  const base = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
-  return path.startsWith("http") ? path : `${base}${path}`;
+export async function portalLink(path: string, businessId: string): Promise<string> {
+  return businessPortalHref(businessId, path);
 }
 
 export { mergeWorkflowSettings } from "@/lib/workflow-settings";

@@ -1,5 +1,6 @@
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getAppSettings } from "@/lib/app-settings";
+import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import { LEGACY_DEFAULT_BUSINESS_ID as SWIFT_AERIAL_MEDIA_ID } from "@/lib/tenant";
 import type { GhlPortalLeadPayload, GhlSyncAttemptResult, GhlSyncStatus } from "./types";
 
@@ -11,12 +12,12 @@ function truncateResponseBody(body: string | null): string | null {
   return `${body.slice(0, MAX_RESPONSE_BODY_LENGTH)}…`;
 }
 
-function appBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
-}
-
-export function buildPortalUrls(options: { clientId: string; projectId: string }) {
-  const base = appBaseUrl();
+export async function buildPortalUrls(options: {
+  clientId: string;
+  projectId: string;
+  businessId: string;
+}) {
+  const base = await getBusinessPortalOriginById(options.businessId);
   return {
     portalClientUrl: `${base}/admin/clients/${options.clientId}`,
     portalProjectUrl: `${base}/admin/projects/${options.projectId}`,

@@ -203,7 +203,7 @@ export async function PATCH(request: Request) {
       appSettings.workflow,
       "deliverables_ready",
       project_id,
-      { portal_link: portalLink(`/dashboard/projects/${project_id}#deliverables`) },
+      { portal_link: await portalLink(`/dashboard/projects/${project_id}#deliverables`, tenant.businessId) },
       "Preview your photos, videos, and tours. Approve each item when you're satisfied."
     ),
     link: `/dashboard/projects/${project_id}#deliverables`,

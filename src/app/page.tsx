@@ -1,19 +1,41 @@
 import type { Metadata } from "next";
 import { LandingPage } from "@/components/landing/landing-page";
+import { PlatformLanding } from "@/components/landing/platform-landing";
+import { BrandProvider } from "@/components/brand/brand-provider";
+import { TenantUnavailable } from "@/components/public/tenant-unavailable";
 import { getAppSettings } from "@/lib/app-settings";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
-import { metadataFromBusiness } from "@/lib/site-metadata";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
+import { publicHostBrand } from "@/lib/public-host-chrome";
 
-// TODO(tenant): host-based public landing — prompt 18. Until then the marketing
-// site at `/` loads the legacy production business so Swift stays pixel-identical.
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata(): Promise<Metadata> {
-  const settings = await getAppSettings(LEGACY_DEFAULT_BUSINESS_ID);
-  return metadataFromBusiness(settings.business);
+  const { metadata } = await publicHostBrand();
+  return metadata;
 }
 
 export default async function HomePage() {
-  const settings = await getAppSettings(LEGACY_DEFAULT_BUSINESS_ID);
-  const brand = getPortalBrandFromSettings(settings);
-  return <LandingPage brand={brand} landing={settings.landing} />;
+  const host = await getPublicHostContext();
+
+  if (host.kind === "tenant" && host.businessId && host.status !== "active") {
+    const { brand } = await publicHostBrand();
+    return (
+      <BrandProvider brand={brand}>
+        <TenantUnavailable />
+      </BrandProvider>
+    );
+  }
+
+  if (isActivePublicTenant(host) && host.businessId) {
+    const settings = await getAppSettings(host.businessId);
+    const brand = getPortalBrandFromSettings(settings);
+    return (
+      <BrandProvider brand={brand}>
+        <LandingPage brand={brand} landing={settings.landing} />
+      </BrandProvider>
+    );
+  }
+
+  return <PlatformLanding />;
 }

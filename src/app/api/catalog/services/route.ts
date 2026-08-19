@@ -1,18 +1,25 @@
 import { NextResponse } from "next/server";
-import { getProfile } from "@/lib/auth";
+import { getTenantContext } from "@/lib/tenant";
+import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
 import { listActiveServiceOptions } from "@/lib/business-services";
-import { getTenantContext, LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 /**
  * Active services for request / create-project dropdowns.
- * TODO(tenant): public /request has no hostname routing until prompt 18 —
- * unauthenticated callers receive LEGACY_DEFAULT_BUSINESS_ID (Swift).
+ * Authenticated callers use profile tenant context. Public callers use the
+ * host resolved in proxy — never a hardcoded business id.
  */
 export async function GET() {
-  const profile = await getProfile();
   const tenant = await getTenantContext();
-  const businessId = tenant?.businessId ?? LEGACY_DEFAULT_BUSINESS_ID;
-  void profile;
-  const options = await listActiveServiceOptions(businessId);
-  return NextResponse.json({ options, businessId });
+  if (tenant?.businessId) {
+    const options = await listActiveServiceOptions(tenant.businessId);
+    return NextResponse.json({ options, businessId: tenant.businessId });
+  }
+
+  const host = await getPublicHostContext();
+  if (isActivePublicTenant(host) && host.businessId) {
+    const options = await listActiveServiceOptions(host.businessId);
+    return NextResponse.json({ options, businessId: host.businessId });
+  }
+
+  return NextResponse.json({ options: [], businessId: null });
 }

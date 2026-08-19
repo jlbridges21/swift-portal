@@ -1,6 +1,6 @@
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getAppSettings } from "@/lib/app-settings";
-import { getSiteUrl } from "@/lib/site-metadata";
+import { getBusinessPortalOriginById, joinPortalPath } from "@/lib/portal-url";
 import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 const ONESIGNAL_API_URL = "https://api.onesignal.com/notifications?c=push";
@@ -37,15 +37,15 @@ function trimForLockScreen(text: string, max = 178): string {
   return `${normalized.slice(0, max - 1)}…`;
 }
 
-function resolveAdminPushUrl(options: AdminPushNotificationOptions): string {
-  const appUrl = getSiteUrl();
+async function resolveAdminPushUrl(options: AdminPushNotificationOptions): Promise<string> {
+  const appUrl = await getBusinessPortalOriginById(options.businessId);
 
   if (options.projectId) {
     return `${appUrl}/admin/projects/${options.projectId}`;
   }
 
   if (options.url) {
-    return options.url.startsWith("http") ? options.url : `${appUrl}${options.url}`;
+    return options.url.startsWith("http") ? options.url : joinPortalPath(appUrl, options.url);
   }
 
   return `${appUrl}/admin`;
@@ -147,7 +147,7 @@ async function callOneSignal(
 export async function sendAdminPushNotification(
   options: AdminPushNotificationOptions
 ): Promise<PushSendResult> {
-  const targetUrl = resolveAdminPushUrl(options);
+  const targetUrl = await resolveAdminPushUrl(options);
   const title = trimForLockScreen(options.title, 65);
   const message = trimForLockScreen(options.message || options.title);
   const filters = adminPushFilters(options.businessId);
@@ -183,7 +183,7 @@ export async function sendAdminTestPush(
     return { sent: false, reason: "not_configured" };
   }
 
-  const appUrl = getSiteUrl();
+  const appUrl = await getBusinessPortalOriginById(businessId);
   const settings = await getAppSettings(businessId);
 
   const db = await createTenantServiceClient(businessId);

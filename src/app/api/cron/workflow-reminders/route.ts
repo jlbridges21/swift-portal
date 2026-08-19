@@ -101,7 +101,7 @@ async function sweepBusiness(businessId: string, results: ReminderResult[]): Pro
           appSettings.workflow,
           "proposal_ready",
           row.id,
-          { project_name: row.project_name, portal_link: portalLink(`${link}#quote`) },
+          { project_name: row.project_name, portal_link: await portalLink(`${link}#quote`, businessId) },
           `Your proposal for ${row.project_name} is waiting for review.`
         );
         eventKey = "official_proposal_sent";
@@ -111,7 +111,7 @@ async function sweepBusiness(businessId: string, results: ReminderResult[]): Pro
           appSettings.workflow,
           "scheduling_request",
           row.id,
-          { portal_link: portalLink(`${link}?scheduling=pending#scheduling`) },
+          { portal_link: await portalLink(`${link}?scheduling=pending#scheduling`, businessId) },
           "Please confirm or suggest a shoot time in your portal."
         );
         eventKey = "shoot_time_proposed";
@@ -121,7 +121,7 @@ async function sweepBusiness(businessId: string, results: ReminderResult[]): Pro
           appSettings.workflow,
           "deliverables_ready",
           row.id,
-          { project_name: row.project_name, portal_link: portalLink(`${link}#deliverables`) },
+          { project_name: row.project_name, portal_link: await portalLink(`${link}#deliverables`, businessId) },
           `Your deliverables for ${row.project_name} are ready for review.`
         );
         eventKey = "deliverables_ready";
@@ -131,7 +131,7 @@ async function sweepBusiness(businessId: string, results: ReminderResult[]): Pro
           appSettings.workflow,
           "payment_request",
           row.id,
-          { portal_link: portalLink(`${link}#payments`) },
+          { portal_link: await portalLink(`${link}#payments`, businessId) },
           "Your final payment is ready. Complete it to unlock downloads."
         );
         eventKey = "payment_link_sent";

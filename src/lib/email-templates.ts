@@ -65,6 +65,7 @@ export interface EmailBrandingOptions {
   footerText?: string;
   accentColor?: string;
   primaryColor?: string;
+  portalUrl?: string;
 }
 
 export function buildPremiumEmailHtml(options: {
@@ -77,7 +78,7 @@ export function buildPremiumEmailHtml(options: {
   progressStep?: number;
   branding?: EmailBrandingOptions;
 }): string {
-  const appUrl = getSiteUrl();
+  const appUrl = options.branding?.portalUrl ?? getSiteUrl();
   const portalName = options.branding?.portalName ?? BRAND.portalName;
   const businessName = options.branding?.businessName ?? BRAND.name;
   const logoUrl = options.branding?.logoUrl ?? LOGO_URL;

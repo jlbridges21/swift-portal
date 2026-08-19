@@ -202,7 +202,7 @@ export async function PATCH(request: Request) {
         quote.project_id,
         {
           project_name: quote.title,
-          portal_link: portalLink(`/dashboard/projects/${quote.project_id}#quote`),
+          portal_link: await portalLink(`/dashboard/projects/${quote.project_id}#quote`, businessId),
         },
         `Review your proposal for "${quote.title}".`
       ),

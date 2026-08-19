@@ -4,7 +4,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAuth } from "@/lib/auth";
 import { canAccessProject } from "@/lib/project-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { getStripeForBusiness, isPlatformStripeBusiness, portalCheckoutBaseUrl, StripeConnectNotReadyError } from "@/lib/stripe-connect";
+import { getStripeForBusiness, portalCheckoutBaseUrl, StripeConnectNotReadyError } from "@/lib/stripe-connect";
 import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
 import { isPaymentComplete } from "@/lib/payment-status";
 import type { Payment } from "@/lib/types";
@@ -31,10 +31,8 @@ async function authorizePaymentAccess(payment: Payment) {
   return { ok: true as const, profile };
 }
 
-async function createCheckoutSession(payment: Payment, businessId: string, customDomain?: string | null) {
-  const appUrl = isPlatformStripeBusiness(businessId)
-    ? process.env.NEXT_PUBLIC_APP_URL
-    : portalCheckoutBaseUrl({ custom_domain: customDomain ?? null });
+async function createCheckoutSession(payment: Payment, businessId: string, business: { slug: string; custom_domain?: string | null }) {
+  const appUrl = portalCheckoutBaseUrl(business);
   if (!appUrl) {
     return { ok: false as const, response: NextResponse.json({ error: "App URL not configured" }, { status: 500 }) };
   }
@@ -119,11 +117,11 @@ export async function GET(
     if (!tenant) return missingTenantResponse(auth.profile.role);
 
     if (isPaymentComplete(payment.status)) {
-      const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/projects/${payment.project_id}?payment=already_completed#payments`;
+      const redirectUrl = `${portalCheckoutBaseUrl(tenant.business)}/dashboard/projects/${payment.project_id}?payment=already_completed#payments`;
       return NextResponse.redirect(redirectUrl);
     }
 
-    const result = await createCheckoutSession(payment, tenant.businessId, tenant.business.custom_domain);
+    const result = await createCheckoutSession(payment, tenant.businessId, tenant.business);
     if (!result.ok) return result.response;
 
     return NextResponse.redirect(result.session.url!);
@@ -160,7 +158,7 @@ export async function POST(
       return NextResponse.json({ error: ALREADY_PAID_MESSAGE }, { status: 409 });
     }
 
-    const result = await createCheckoutSession(payment, tenant.businessId, tenant.business.custom_domain);
+    const result = await createCheckoutSession(payment, tenant.businessId, tenant.business);
     if (!result.ok) return result.response;
 
     return NextResponse.json({ url: result.session.url, sessionId: result.session.id });

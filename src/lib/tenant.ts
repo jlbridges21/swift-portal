@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
+import { getPublicHostContext } from "@/lib/host-resolution";
 
 /**
  * Legacy production business — the only tenant until onboarding exists.
@@ -165,42 +166,41 @@ export type PublicSignupBusinessResult =
 
 /**
  * Resolve the business for unauthenticated public intake (`/api/request`, `/api/leads`).
- * Optional `business_id` / `business_slug` must refer to an active, non-deleted business.
- * When both are absent, Swift is used so the existing public form keeps working.
+ * The host (proxy headers) is the source of truth. Optional `business_id` / `business_slug`
+ * on the body must match that host and refer to an active, non-deleted business.
  */
 export async function resolvePublicSignupBusinessId(body: {
   business_id?: unknown;
   business_slug?: unknown;
 }): Promise<PublicSignupBusinessResult> {
+  const host = await getPublicHostContext();
+  if (host.kind !== "tenant" || !host.businessId || host.status !== "active") {
+    return {
+      ok: false,
+      status: 400,
+      error: "This page is not accepting requests. Open the business portal to continue.",
+    };
+  }
+
   const rawId = typeof body.business_id === "string" ? body.business_id.trim() : "";
   const rawSlug = typeof body.business_slug === "string" ? body.business_slug.trim() : "";
 
-  if (!rawId && !rawSlug) {
-    // TODO(tenant): resolve business from host — prompt 18
-    return { ok: true, businessId: LEGACY_DEFAULT_BUSINESS_ID };
+  if (rawId && rawId !== host.businessId) {
+    return { ok: false, status: 400, error: "Invalid or inactive business." };
   }
-
-  if (rawId && !isUuid(rawId)) {
+  if (rawSlug && host.slug && rawSlug !== host.slug) {
     return { ok: false, status: 400, error: "Invalid or inactive business." };
   }
 
   const supabase = await createServiceClient();
-  let query = supabase
+  const { data } = await supabase
     .from("businesses")
     .select("id, slug, status")
-    .is("deleted_at", null);
+    .eq("id", host.businessId)
+    .is("deleted_at", null)
+    .maybeSingle();
 
-  if (rawId) {
-    query = query.eq("id", rawId);
-  } else {
-    query = query.eq("slug", rawSlug);
-  }
-
-  const { data } = await query.maybeSingle();
   if (!data || data.status !== "active") {
-    return { ok: false, status: 400, error: "Invalid or inactive business." };
-  }
-  if (rawId && rawSlug && data.slug !== rawSlug) {
     return { ok: false, status: 400, error: "Invalid or inactive business." };
   }
 

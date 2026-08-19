@@ -4,7 +4,7 @@ import { setProjectStatus } from "@/lib/status-automation";
 import { getAppSettings } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
-import { getStripeForBusiness, isPlatformStripeBusiness, portalCheckoutBaseUrl, StripeConnectNotReadyError } from "@/lib/stripe-connect";
+import { getStripeForBusiness, portalCheckoutBaseUrl, StripeConnectNotReadyError } from "@/lib/stripe-connect";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { logProjectActivity } from "@/lib/activity";
 import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
@@ -84,9 +84,7 @@ export async function POST(request: Request) {
       clientId: body.client_id,
     });
 
-    const successBase = isPlatformStripeBusiness(businessId)
-      ? process.env.NEXT_PUBLIC_APP_URL
-      : portalCheckoutBaseUrl(tenant.business);
+    const successBase = portalCheckoutBaseUrl(tenant.business);
 
     const paymentLinkParams = {
       line_items: [
@@ -147,7 +145,7 @@ export async function POST(request: Request) {
         body.project_id,
         {
           payment_amount: amountStr,
-          portal_link: portalLink(`/dashboard/projects/${body.project_id}#payments`),
+          portal_link: await portalLink(`/dashboard/projects/${body.project_id}#payments`, businessId),
         },
         `Complete your ${amountStr} payment to unlock your final downloads.`
       );

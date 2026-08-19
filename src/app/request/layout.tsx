@@ -1,14 +1,15 @@
-import { getAppSettings } from "@/lib/app-settings";
-import { getPortalBrandFromSettings } from "@/lib/portal-brand";
+import type { Metadata } from "next";
 import { BrandProvider } from "@/components/brand/brand-provider";
-import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { publicHostBrand } from "@/lib/public-host-chrome";
 
 export const dynamic = "force-dynamic";
 
-/** TODO(tenant): host-based public chrome — prompt 18. */
+export async function generateMetadata(): Promise<Metadata> {
+  const { metadata } = await publicHostBrand();
+  return metadata;
+}
+
 export default async function RequestLayout({ children }: { children: React.ReactNode }) {
-  const settings = await getAppSettings(LEGACY_DEFAULT_BUSINESS_ID);
-  return (
-    <BrandProvider brand={getPortalBrandFromSettings(settings)}>{children}</BrandProvider>
-  );
+  const { brand } = await publicHostBrand();
+  return <BrandProvider brand={brand}>{children}</BrandProvider>;
 }

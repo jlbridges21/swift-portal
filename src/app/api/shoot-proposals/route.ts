@@ -111,7 +111,7 @@ export async function POST(request: Request) {
         appSettings.workflow,
         "scheduling_request",
         body.project_id,
-        { shoot_date: dateStr, portal_link: portalLink(`/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`) },
+        { shoot_date: dateStr, portal_link: await portalLink(`/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`, businessId) },
         `${appSettings.business.businessName} proposed a shoot for ${dateStr}. Please review and confirm in your portal.`
       ),
       link: `/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`,

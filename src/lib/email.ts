@@ -2,7 +2,7 @@ import { Resend } from "resend";
 import { buildPremiumEmailHtml } from "@/lib/email-templates";
 import { recordEmailEvent } from "@/lib/email-analytics";
 import { getAppSettings, type AppSettings } from "@/lib/app-settings";
-import { getSiteUrl } from "@/lib/site-metadata";
+import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import {
   formatFromHeader,
   getPlatformFromAddress,
@@ -155,6 +155,7 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
   }
 
   const appSettings = await getAppSettings(businessId);
+  const portalUrl = await getBusinessPortalOriginById(businessId);
   const html = buildPremiumEmailHtml({
     title: options.title,
     body: options.body,
@@ -170,6 +171,7 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
       footerText: appSettings.email.footerText,
       accentColor: appSettings.business.brandAccentColor,
       primaryColor: appSettings.business.brandPrimaryColor,
+      portalUrl,
     },
   });
 
@@ -223,7 +225,7 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
 }
 
 export async function sendTestEmail(to: string, businessId: string): Promise<EmailSendResult> {
-  const appUrl = getSiteUrl();
+  const appUrl = await getBusinessPortalOriginById(businessId);
   const settings = await getAppSettings(businessId);
   const portalName = settings.business.portalName;
   return sendBrandedEmail({

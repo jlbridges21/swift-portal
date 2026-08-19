@@ -3,11 +3,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getAppSettings } from "@/lib/app-settings";
 import { formatDate } from "@/lib/utils";
 import type { MessageTemplateKey } from "@/lib/workflow-settings";
-
-function portalLink(path: string): string {
-  const base = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
-  return path.startsWith("http") ? path : `${base}${path}`;
-}
+import { businessPortalHref } from "@/lib/portal-url";
 
 export interface WorkflowMessageVariables {
   client_name: string;
@@ -108,7 +104,9 @@ export async function buildProjectMessageVariables(
   }
 
   const portalPath = overrides.portal_path ?? `/dashboard/projects/${projectId}`;
-  const portalLinkValue = trimValue(overrides.portal_link) || portalLink(portalPath);
+  const portalLinkValue =
+    trimValue(overrides.portal_link) ||
+    (project?.business_id ? await businessPortalHref(project.business_id, portalPath) : portalPath);
 
   let businessName = trimValue(overrides.business_name);
   if (!businessName && project?.business_id) {

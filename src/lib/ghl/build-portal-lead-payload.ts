@@ -41,7 +41,11 @@ export async function buildPortalLeadPayload(
   const state = input.state?.trim() || parsed.state || "";
   const postalCode = input.postalCode?.trim() || parsed.zip || "";
   const projectAddress = input.streetAddress?.trim() || parsed.address || input.propertyAddress;
-  const urls = buildPortalUrls({ clientId: input.clientId, projectId: input.projectId });
+  const urls = await buildPortalUrls({
+    clientId: input.clientId,
+    projectId: input.projectId,
+    businessId: input.businessId,
+  });
   const template = await getServiceTemplate(input.serviceRequested, input.businessId);
 
   const source = input.source?.trim() || "ShootPortal";
