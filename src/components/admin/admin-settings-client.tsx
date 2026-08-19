@@ -15,6 +15,7 @@ import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
 import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
+import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import type {
   AppSettings,
@@ -224,7 +225,11 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
 
   async function restorePlatformDefaults() {
     setRestoring(true);
-    const restored = { ...settings, business: { ...PLATFORM_BUSINESS_DEFAULTS } };
+    const restored = {
+      ...settings,
+      business: { ...PLATFORM_BUSINESS_DEFAULTS },
+      email: { ...settings.email, ...PLATFORM_EMAIL_SENDER_DEFAULTS },
+    };
     setSettings(restored);
     setRestoreOpen(false);
     await saveSettings(restored);

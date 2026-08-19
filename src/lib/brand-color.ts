@@ -39,3 +39,24 @@ export function assertSafeBrandColors(business: {
     throw new InvalidBrandColorError("brandAccentColor");
   }
 }
+
+/** Only the color fields whose stored value is changing. */
+export function changedBrandColors(
+  current: { brandPrimaryColor?: string; brandAccentColor?: string },
+  next: { brandPrimaryColor?: string; brandAccentColor?: string }
+): { brandPrimaryColor?: string; brandAccentColor?: string } {
+  const out: { brandPrimaryColor?: string; brandAccentColor?: string } = {};
+  if (
+    next.brandPrimaryColor !== undefined &&
+    (current.brandPrimaryColor ?? "").trim() !== next.brandPrimaryColor.trim()
+  ) {
+    out.brandPrimaryColor = next.brandPrimaryColor;
+  }
+  if (
+    next.brandAccentColor !== undefined &&
+    (current.brandAccentColor ?? "").trim() !== next.brandAccentColor.trim()
+  ) {
+    out.brandAccentColor = next.brandAccentColor;
+  }
+  return out;
+}

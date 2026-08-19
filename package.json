@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
-    "test:email-sender": "npx tsx scripts/verify-email-sender-policy.ts"
+    "test:email-sender": "npx tsx scripts/verify-email-sender-policy.ts",
+    "test:settings-patch": "npx tsx scripts/verify-settings-patch-validation.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

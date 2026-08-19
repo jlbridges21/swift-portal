@@ -202,4 +202,19 @@ expectReject(
   "customDomain belongs to another business"
 );
 
+expectReject(
+  "NEW: Test Pilot senderEmail notification@swiftaerialmedia.com",
+  () =>
+    assertEmailSenderPolicy({
+      email: email({
+        senderMode: "platform",
+        senderEmail: "notification@swiftaerialmedia.com",
+      }),
+      businessId: PILOT,
+      platformDomain: PLATFORM,
+      otherBusinessDomains: others,
+    }),
+  "belongs to another business"
+);
+
 console.log("\nAll email sender policy cases passed.");

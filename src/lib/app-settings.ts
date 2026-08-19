@@ -1,8 +1,10 @@
 import { createServiceClient } from "@/lib/supabase/server";
-import { assertSafeBrandColors } from "@/lib/brand-color";
+import { assertSafeBrandColors, changedBrandColors } from "@/lib/brand-color";
 import {
   assertEmailSenderPolicy,
+  emailSenderPolicyFieldsChanged,
   getPlatformEmailDomain,
+  PLATFORM_EMAIL_SENDER_DEFAULTS,
   type DomainVerificationStatus,
   type EmailSenderMode,
 } from "@/lib/email-sender-policy";
@@ -153,13 +155,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   notifications: buildDefaultNotifications(),
   email: {
     fromName: "ShootPortal",
-    senderEmail: "",
     replyTo: "",
     footerText: "You received this email because you have a project with this portal.",
-    senderMode: "platform",
-    customDomain: "",
-    domainVerificationStatus: "unverified",
-    resendDomainId: "",
+    ...PLATFORM_EMAIL_SENDER_DEFAULTS,
   },
   business: { ...PLATFORM_BUSINESS_DEFAULTS },
   proposals: {
@@ -285,35 +283,39 @@ export async function saveAppSettings(
   const merged = mergeAppSettings(
     deepMerge(current as unknown as Record<string, unknown>, patch as unknown as Record<string, unknown>) as unknown as AppSettings
   );
-  assertSafeBrandColors(merged.business);
 
   if (!options?.allowVerificationWrite) {
     merged.email.domainVerificationStatus = current.email.domainVerificationStatus;
     merged.email.resendDomainId = current.email.resendDomainId;
   }
 
+  const colorDelta = changedBrandColors(current.business, merged.business);
+  assertSafeBrandColors(colorDelta);
+
   const supabase = await createServiceClient();
-  const { data: rows } = await supabase
-    .from("business_settings")
-    .select("business_id, settings")
-    .neq("business_id", businessId);
+  if (emailSenderPolicyFieldsChanged(current.email, merged.email)) {
+    const { data: rows } = await supabase
+      .from("business_settings")
+      .select("business_id, settings")
+      .neq("business_id", businessId);
 
-  const otherBusinessDomains = (rows ?? [])
-    .map((row) => {
-      const domain = (row.settings as { email?: { customDomain?: string } } | null)?.email
-        ?.customDomain;
-      return domain
-        ? { businessId: row.business_id as string, customDomain: domain }
-        : null;
-    })
-    .filter((row): row is { businessId: string; customDomain: string } => Boolean(row));
+    const otherBusinessDomains = (rows ?? [])
+      .map((row) => {
+        const domain = (row.settings as { email?: { customDomain?: string } } | null)?.email
+          ?.customDomain;
+        return domain
+          ? { businessId: row.business_id as string, customDomain: domain }
+          : null;
+      })
+      .filter((row): row is { businessId: string; customDomain: string } => Boolean(row));
 
-  assertEmailSenderPolicy({
-    email: merged.email,
-    businessId,
-    platformDomain: getPlatformEmailDomain(),
-    otherBusinessDomains,
-  });
+    assertEmailSenderPolicy({
+      email: merged.email,
+      businessId,
+      platformDomain: getPlatformEmailDomain(),
+      otherBusinessDomains,
+    });
+  }
   const { error } = await supabase
     .from("business_settings")
     .upsert({

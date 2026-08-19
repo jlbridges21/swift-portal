@@ -53,9 +53,47 @@ export interface SenderPolicyInput {
   otherBusinessDomains: OtherBusinessDomain[];
 }
 
+export const EMAIL_SENDER_POLICY_FIELDS = [
+  "senderMode",
+  "senderEmail",
+  "customDomain",
+  "domainVerificationStatus",
+] as const;
+
+export type EmailSenderPolicyField = (typeof EMAIL_SENDER_POLICY_FIELDS)[number];
+
+function normalizeSenderPolicyValue(key: EmailSenderPolicyField, value: unknown): string {
+  const raw = typeof value === "string" ? value : value == null ? "" : String(value);
+  if (key === "senderEmail" || key === "customDomain") {
+    return raw.trim().toLowerCase().replace(/\.$/, "");
+  }
+  return raw.trim();
+}
+
+/** True when a save would persist a different sender-policy field than what is already stored. */
+export function emailSenderPolicyFieldsChanged(
+  current: EmailSettings,
+  next: EmailSettings
+): boolean {
+  return EMAIL_SENDER_POLICY_FIELDS.some(
+    (key) => normalizeSenderPolicyValue(key, current[key]) !== normalizeSenderPolicyValue(key, next[key])
+  );
+}
+
+export const PLATFORM_EMAIL_SENDER_DEFAULTS: Pick<
+  EmailSettings,
+  "senderMode" | "senderEmail" | "customDomain" | "domainVerificationStatus" | "resendDomainId"
+> = {
+  senderMode: "platform",
+  senderEmail: "",
+  customDomain: "",
+  domainVerificationStatus: "unverified",
+  resendDomainId: "",
+};
+
 /**
  * Tenant email-spoofing controls. Call from saveAppSettings so PATCH /api/admin/settings
- * cannot be bypassed by a crafted body.
+ * cannot be bypassed by a crafted body. Only invoke when sender-policy fields actually change.
  */
 export function assertEmailSenderPolicy(input: SenderPolicyInput): void {
   const email = input.email;
