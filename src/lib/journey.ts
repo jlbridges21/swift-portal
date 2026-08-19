@@ -14,7 +14,8 @@ export interface NextStepInfo {
 export function getClientNextStep(
   project: Project,
   hasPendingPayment: boolean,
-  proposals: ShootProposal[] = []
+  proposals: ShootProposal[] = [],
+  businessName = "our team"
 ): NextStepInfo {
   const status = normalizeStatus(project.status);
   const shootWhen = getProjectShootDateTime(project, proposals);
@@ -31,7 +32,7 @@ export function getClientNextStep(
     case "new_request":
       return {
         title: getClientStatusLabel("new_request"),
-        description: "Review your preliminary estimate below. Swift Aerial Media will confirm final pricing after reviewing your property and scope.",
+        description: `Review your preliminary estimate below. ${businessName} will confirm final pricing after reviewing your property and scope.`,
         actionLabel: "View Estimate",
         actionHref: "#quote",
         variant: "accent",
@@ -48,7 +49,7 @@ export function getClientNextStep(
       if (pendingAdminProposal) {
         return {
           title: getClientStatusLabel("proposal_approved"),
-          description: `Swift Aerial Media proposed ${formatShootDateTime(pendingAdminProposal.proposed_at)}. Approve the time or request a different one.`,
+          description: `${businessName} proposed ${formatShootDateTime(pendingAdminProposal.proposed_at)}. Approve the time or request a different one.`,
           actionLabel: "Review Schedule",
           actionHref: "#scheduling",
           variant: "accent",
@@ -57,7 +58,7 @@ export function getClientNextStep(
       if (pendingClientProposal) {
         return {
           title: getClientStatusLabel("proposal_approved"),
-          description: "Your suggested shoot time is awaiting review from Swift Aerial Media.",
+          description: `Your suggested shoot time is awaiting review from ${businessName}.`,
           actionHref: "#scheduling",
           variant: "info",
         };
@@ -104,7 +105,7 @@ export function getClientNextStep(
     case "delivered":
       return {
         title: getClientStatusLabel("delivered"),
-        description: "Thank you for choosing Swift Aerial Media! All deliverables are available to download.",
+        description: `Thank you for choosing ${businessName}! All deliverables are available to download.`,
         actionLabel: "Request Another Project",
         actionHref: "/dashboard/request",
         variant: "success",

@@ -7,6 +7,7 @@ import { cn, formatRelativeTime } from "@/lib/utils";
 import type { ClientMessage } from "@/lib/types";
 import { Loader2, MessageSquare, Send } from "lucide-react";
 import { toast } from "sonner";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 
 interface ClientMessagesChatProps {
   /** Optional project context when composing from a project page */
@@ -16,6 +17,7 @@ interface ClientMessagesChatProps {
 }
 
 export function ClientMessagesChat({ projectId, className, compact }: ClientMessagesChatProps) {
+  const brand = usePortalBrand();
   const [messages, setMessages] = useState<ClientMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -91,7 +93,7 @@ export function ClientMessagesChat({ projectId, className, compact }: ClientMess
           <MessageSquare className="h-5 w-5 text-accent" />
           <div>
             <h2 className="text-base font-semibold text-primary">Messages</h2>
-            <p className="text-xs text-muted">Chat with Swift Aerial Media</p>
+            <p className="text-xs text-muted">Chat with {brand.name}</p>
           </div>
         </div>
 

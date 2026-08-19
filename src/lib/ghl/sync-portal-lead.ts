@@ -12,7 +12,7 @@ function truncateResponseBody(body: string | null): string | null {
 }
 
 function appBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL || "https://portal.swiftaerialmedia.com").replace(/\/$/, "");
+  return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
 }
 
 export function buildPortalUrls(options: { clientId: string; projectId: string }) {

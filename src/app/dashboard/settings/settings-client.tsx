@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Bell, Camera, Lock } from "lucide-react";
 import { compressAvatarFile } from "@/lib/image-compress";
 import type { Client, Profile } from "@/lib/types";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 
 interface SettingsClientProps {
   profile: Profile;
@@ -20,6 +21,7 @@ interface SettingsClientProps {
 }
 
 export function SettingsClient({ profile: initialProfile, client: initialClient }: SettingsClientProps) {
+  const brand = usePortalBrand();
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [profile, setProfile] = useState(initialProfile);
@@ -220,7 +222,7 @@ export function SettingsClient({ profile: initialProfile, client: initialClient 
               <div>
                 <p className="text-sm font-medium text-primary">In-app notifications</p>
                 <p className="text-xs text-muted mt-1">
-                  Show updates in your Swift Portal notification bell.
+                  Show updates in your {brand.portalName} notification bell.
                 </p>
               </div>
               <input

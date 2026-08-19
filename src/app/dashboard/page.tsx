@@ -90,7 +90,7 @@ export default async function ClientDashboard() {
   let featuredCover = featured ? coverMap.get(featured.id) ?? null : null;
   let featuredPayment = featured ? outstandingInvoices.find((p) => p.project_id === featured.id) : undefined;
   let featuredStep = featured
-    ? getClientNextStep(featured, !!featuredPayment, proposalsByProject.get(featured.id) ?? [])
+    ? getClientNextStep(featured, !!featuredPayment, proposalsByProject.get(featured.id) ?? [], brand.name)
     : null;
 
   return (
@@ -192,7 +192,7 @@ export default async function ClientDashboard() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {otherActive.map((project) => {
                 const cover = coverMap.get(project.id);
-                const step = getClientNextStep(project, outstandingInvoices.some((p) => p.project_id === project.id), proposalsByProject.get(project.id) ?? []);
+                const step = getClientNextStep(project, outstandingInvoices.some((p) => p.project_id === project.id), proposalsByProject.get(project.id) ?? [], brand.name);
                 return (
                   <Link key={`active-${project.id}`} href={`/dashboard/projects/${project.id}`}>
                     <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow h-full">

@@ -42,6 +42,8 @@ export function buildPortalLeadPayload(input: PortalLeadPayloadInput): GhlPortal
   const urls = buildPortalUrls({ clientId: input.clientId, projectId: input.projectId });
   const template = getServiceTemplate(input.serviceRequested);
 
+  const source = input.source?.trim() || "Client Portal";
+
   return {
     firstName: input.firstName,
     lastName: input.lastName,
@@ -57,8 +59,8 @@ export function buildPortalLeadPayload(input: PortalLeadPayloadInput): GhlPortal
     projectNotes: input.projectNotes?.trim() || "",
     portalClientUrl: urls.portalClientUrl,
     portalProjectUrl: urls.portalProjectUrl,
-    source: input.source?.trim() || "Swift Portal",
-    tags: ["Swift Portal Lead", "Instant Quote"],
+    source,
+    tags: [`${source} Lead`, "Instant Quote"],
     referralSource: input.referralSource?.trim() || undefined,
     preferredDate: input.preferredDate || undefined,
     propertyType: input.propertyType?.trim() || undefined,

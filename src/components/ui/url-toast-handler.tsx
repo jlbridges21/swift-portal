@@ -3,18 +3,21 @@
 import { useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 
 export function UrlToastHandler() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
+  const brand = usePortalBrand();
+
   useEffect(() => {
     const welcome = searchParams.get("welcome");
     const payment = searchParams.get("payment");
 
     if (welcome === "1") {
-      toast.success("Welcome to Swift Portal! Your project has been created.");
+      toast.success(`Welcome to ${brand.portalName}! Your project has been created.`);
       router.replace(pathname);
     }
 
@@ -32,7 +35,7 @@ export function UrlToastHandler() {
       toast.message("Payment cancelled — you can try again when ready.");
       router.replace(`${pathname}#payments`);
     }
-  }, [searchParams, router, pathname]);
+  }, [searchParams, router, pathname, brand.portalName]);
 
   return null;
 }

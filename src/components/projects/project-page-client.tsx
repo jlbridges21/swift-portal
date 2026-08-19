@@ -19,6 +19,7 @@ import { NextStepBanner } from "@/components/projects/next-step-banner";
 import { PaymentsSection } from "@/components/projects/payments-section";
 import { ClientMessagesChat } from "@/components/projects/client-messages-chat";
 import { getClientNextStep } from "@/lib/journey";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 import { QuoteSection } from "@/components/projects/quote-section";
 import { DeliverableReview } from "@/components/projects/deliverable-review";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -110,6 +111,7 @@ export function ProjectPageClient({
   allowClientProposalChanges = true,
 }: ProjectPageClientProps) {
   const router = useRouter();
+  const brand = usePortalBrand();
   const [showRevisionForm, setShowRevisionForm] = useState(false);
   const [revisionText, setRevisionText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -120,7 +122,7 @@ export function ProjectPageClient({
   const hasAnyMedia = photos.length > 0 || videos.length > 0 || tours.length > 0 || documents.length > 0;
   const mediaVisible = isPreview || isAdmin || hasAnyMedia;
   const pendingPayments = payments.filter((p) => p.status === "pending" || p.status === "sent");
-  const clientStep = getClientNextStep(project, pendingPayments.length > 0, shootProposals);
+  const clientStep = getClientNextStep(project, pendingPayments.length > 0, shootProposals, brand.name);
   const uploadedVideos = videos.filter((v) => v.media_source !== "youtube");
   const youtubeVideos = videos.filter((v) => v.media_source === "youtube");
   const hasMedia = photos.length > 0 || videos.length > 0 || tours.length > 0 || documents.length > 0;

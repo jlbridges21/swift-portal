@@ -9,6 +9,7 @@ import {
 import { notifyAdmins, notifyClient } from "@/lib/notifications";
 import { sendBrandedEmail } from "@/lib/email";
 import { getAppSettings } from "@/lib/app-settings";
+import { getSiteUrl } from "@/lib/site-metadata";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import type { ClientMessage } from "@/lib/types";
@@ -129,10 +130,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   );
 
   const preview = text.length > 160 ? `${text.slice(0, 157)}…` : text;
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://portal.swiftaerialmedia.com").replace(
-    /\/$/,
-    ""
-  );
+  const appUrl = getSiteUrl();
 
   if (isAdmin) {
     await ensureClientPortalLink(clientId!, businessId);
@@ -152,9 +150,9 @@ export async function POST(request: Request, { params }: RouteParams) {
       void sendBrandedEmail({
         businessId,
         to: client.email,
-        subject: "You have a new message from Swift Aerial Media",
+        subject: `You have a new message from ${appSettings.business.businessName}`,
         title: "You have a new message",
-        body: `${appSettings.business.adminDisplayName || "Swift Aerial Media"} sent you a message:\n\n"${text}"`,
+        body: `${appSettings.business.adminDisplayName || appSettings.business.businessName} sent you a message:\n\n"${text}"`,
         ctaLabel: "Open Conversation",
         ctaUrl: `${appUrl}/dashboard/messages`,
         emailType: "project_message",

@@ -6,7 +6,7 @@ import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 export const dynamic = "force-dynamic";
 
 /** TODO(tenant): host-based public chrome — prompt 18. */
-export default async function LoginLayout({ children }: { children: React.ReactNode }) {
+export default async function RequestLayout({ children }: { children: React.ReactNode }) {
   const settings = await getAppSettings(LEGACY_DEFAULT_BUSINESS_ID);
   return (
     <BrandProvider brand={getPortalBrandFromSettings(settings)}>{children}</BrandProvider>

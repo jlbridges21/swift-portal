@@ -176,7 +176,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
       payment_amount: amountStr,
       portal_link: portalLink(`/dashboard/projects/${payment.project_id}#payments`),
     },
-    "Payment confirmed — all deliverables are now available to download. Thank you for choosing Swift Aerial Media!"
+    "Payment confirmed — all deliverables are now available to download. Thank you!"
   );
 
   const completedBody = await resolveProjectMessageTemplate(

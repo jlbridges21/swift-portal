@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { buildPremiumEmailHtml } from "@/lib/email-templates";
 import { recordEmailEvent } from "@/lib/email-analytics";
 import { getAppSettings } from "@/lib/app-settings";
+import { getSiteUrl } from "@/lib/site-metadata";
 
 const resendClients = new Map<string, Resend>();
 
@@ -37,7 +38,7 @@ function getResend() {
 }
 
 export function getResendFromEmail(): string {
-  return process.env.RESEND_FROM_EMAIL || "Swift Portal <portal@swiftaerialmedia.com>";
+  return process.env.RESEND_FROM_EMAIL || "Client Portal <notifications@localhost>";
 }
 
 function platformFromAddress(): string {
@@ -143,7 +144,7 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
     branding: {
       portalName: appSettings.business.portalName,
       businessName: appSettings.business.businessName,
-      logoUrl: appSettings.business.logoUrl,
+      logoUrl: appSettings.business.emailLogoUrl || appSettings.business.logoUrl,
       footerText: appSettings.email.footerText,
       accentColor: appSettings.business.brandAccentColor,
       primaryColor: appSettings.business.brandPrimaryColor,
@@ -199,15 +200,17 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
 }
 
 export async function sendTestEmail(to: string, businessId: string): Promise<EmailSendResult> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://portal.swiftaerialmedia.com";
+  const appUrl = getSiteUrl();
+  const settings = await getAppSettings(businessId);
+  const portalName = settings.business.portalName;
   return sendBrandedEmail({
     businessId,
     to,
-    subject: "Swift Portal Test Email",
+    subject: `${portalName} Test Email`,
     title: "Email notifications are working",
-    body: "Email notifications are working for Swift Portal. Your clients will receive polished, branded updates for proposals, scheduling, deliverables, and payments.",
-    secondaryInfo: "This is a test message from your Swift Portal admin dashboard.",
-    ctaLabel: "Open Swift Portal",
+    body: `Email notifications are working for ${portalName}. Your clients will receive polished, branded updates for proposals, scheduling, deliverables, and payments.`,
+    secondaryInfo: `This is a test message from your ${portalName} admin dashboard.`,
+    ctaLabel: `Open ${portalName}`,
     ctaUrl: appUrl,
     progressStep: 0,
     emailType: "test",

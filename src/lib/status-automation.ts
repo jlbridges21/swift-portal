@@ -153,7 +153,7 @@ export async function setProjectStatus(options: SetStatusOptions) {
     stageSettings?.push !== false;
 
   if (options.notifyClient && allowNotify) {
-    const clientMsg = clientStatusNotification(options.status);
+    const clientMsg = clientStatusNotification(options.status, appSettings.business.businessName);
     const clientType = options.status === "awaiting_payment" ? "invoice_available" : "status_changed";
     await notifyProjectClients({
       type: clientType,

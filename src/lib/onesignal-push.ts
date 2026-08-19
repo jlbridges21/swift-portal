@@ -1,4 +1,6 @@
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { getAppSettings } from "@/lib/app-settings";
+import { getSiteUrl } from "@/lib/site-metadata";
 import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 
 const ONESIGNAL_API_URL = "https://api.onesignal.com/notifications?c=push";
@@ -36,10 +38,7 @@ function trimForLockScreen(text: string, max = 178): string {
 }
 
 function resolveAdminPushUrl(options: AdminPushNotificationOptions): string {
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://portal.swiftaerialmedia.com").replace(
-    /\/$/,
-    ""
-  );
+  const appUrl = getSiteUrl();
 
   if (options.projectId) {
     return `${appUrl}/admin/projects/${options.projectId}`;
@@ -142,7 +141,7 @@ async function callOneSignal(
 }
 
 /**
- * Send a web push notification to subscribed Swift Portal admins via OneSignal.
+ * Send a web push notification to subscribed portal admins via OneSignal.
  * Never throws — failures are logged and returned to callers.
  */
 export async function sendAdminPushNotification(
@@ -184,10 +183,8 @@ export async function sendAdminTestPush(
     return { sent: false, reason: "not_configured" };
   }
 
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://portal.swiftaerialmedia.com").replace(
-    /\/$/,
-    ""
-  );
+  const appUrl = getSiteUrl();
+  const settings = await getAppSettings(businessId);
 
   const db = await createTenantServiceClient(businessId);
   const { data: profile } = await db.raw
@@ -199,7 +196,7 @@ export async function sendAdminTestPush(
   const filters = adminPushFilters(businessId);
   const basePayload = {
     target_channel: "push",
-    headings: { en: "Swift Portal Test" },
+    headings: { en: `${settings.business.portalName} Test` },
     contents: { en: "Push notifications are working." },
     url: `${appUrl}/admin`,
     data: { url: `${appUrl}/admin`, eventType: "test" },

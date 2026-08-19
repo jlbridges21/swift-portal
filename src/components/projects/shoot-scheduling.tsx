@@ -14,6 +14,7 @@ import { useAsyncAction } from "@/lib/use-async-action";
 import { Calendar, Check, MessageSquare, X, Pencil, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 
 interface ShootSchedulingProps {
   projectId: string;
@@ -23,6 +24,7 @@ interface ShootSchedulingProps {
 }
 
 export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: ShootSchedulingProps) {
+  const brand = usePortalBrand();
   const searchParams = useSearchParams();
   const focusPending = searchParams.get("scheduling") === "pending";
   const cardRef = useRef<HTMLDivElement>(null);
@@ -328,7 +330,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
         {!isAdmin && pendingFromClient.length > 0 && (
           <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50/60 p-4 text-sm text-blue-900">
             <Clock className="h-5 w-5 shrink-0 mt-0.5" />
-            <p>Your suggested shoot time is awaiting review from Swift Aerial Media.</p>
+            <p>Your suggested shoot time is awaiting review from {brand.name}.</p>
           </div>
         )}
 
@@ -354,7 +356,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
               <div className="min-w-0">
                 <p className="font-medium">{formatShootDateTime(p.proposed_at)}</p>
                 <p className="text-xs text-muted mt-0.5">
-                  Proposed by {p.proposed_by === "admin" ? "Swift Aerial Media" : isAdmin ? "Client" : "You"}
+                  Proposed by {p.proposed_by === "admin" ? brand.name : isAdmin ? "Client" : "You"}
                 </p>
                 {p.message && <p className="text-sm text-muted mt-2">{p.message}</p>}
               </div>

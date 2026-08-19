@@ -1,30 +1,55 @@
-export const LANDING = {
-  heroVideoId: "OdLRhe5nNmw",
-  logoNavy:
-    "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a358e501c5d711b3592f718.png",
-  logoWhite:
-    "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a358e50f2131051b8eefbec.png",
-  logoStackedWhite:
-    "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a42cba90c7afddf1484c118.png",
+export interface LandingScreenshots {
+  request: string;
+  dashboard: string;
+  quote: string;
+  microsite: string;
+  review: string;
+}
+
+export interface LandingAssets {
+  heroVideoId: string;
+  logoNavy: string;
+  logoWhite: string;
+  logoStackedWhite: string;
+  logoHeader: string;
+  logoFooter: string;
+  favicon: string;
+  ownerHeadshot: string;
+  luxuryHome: string;
+  golfCourse: string;
+  construction: string;
+  screenshots: LandingScreenshots;
+}
+
+/** Empty marketing kit — another business must not inherit Swift photography. */
+export const DEFAULT_LANDING_ASSETS: LandingAssets = {
+  heroVideoId: "",
+  logoNavy: "",
+  logoWhite: "",
+  logoStackedWhite: "",
+  logoHeader: "",
+  logoFooter: "",
   favicon: "/icons/icon-192.png",
-  ownerHeadshot:
-    "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a3496ab04386d4d76546ec3.png",
-  luxuryHome:
-    "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a359649f2131051b8f0b999.png",
-  golfCourse:
-    "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a342547162c3e3e340a341c.png",
-  construction:
-    "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a371512f2131051b819002b.jpg",
+  ownerHeadshot: "",
+  luxuryHome: "",
+  golfCourse: "",
+  construction: "",
   screenshots: {
-    request:
-      "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a3d9b856507a7960180b2b7.png",
-    dashboard:
-      "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a3d975a4ac4f65406c4e8d9.png",
-    quote:
-      "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a3d93076507a796017fa2e2.png",
-    microsite:
-      "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a3d975a4ac4f65406c4e8d9.png",
-    review:
-      "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a3d9d8cd4f4031f97bddccf.png",
+    request: "",
+    dashboard: "",
+    quote: "",
+    microsite: "",
+    review: "",
   },
-} as const;
+};
+
+export function mergeLandingAssets(stored?: Partial<LandingAssets> | null): LandingAssets {
+  return {
+    ...DEFAULT_LANDING_ASSETS,
+    ...(stored ?? {}),
+    screenshots: {
+      ...DEFAULT_LANDING_ASSETS.screenshots,
+      ...(stored?.screenshots ?? {}),
+    },
+  };
+}

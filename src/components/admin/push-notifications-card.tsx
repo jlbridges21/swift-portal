@@ -11,6 +11,7 @@ import {
   isOneSignalConfigured,
 } from "@/lib/onesignal-client";
 import { useIsMobileOrPwa } from "@/lib/use-mobile-or-pwa";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 
 interface PushStatus {
   configured: boolean;
@@ -20,6 +21,7 @@ interface PushStatus {
 }
 
 export function PushNotificationsCard() {
+  const brand = usePortalBrand();
   const isMobileOrPwa = useIsMobileOrPwa();
   const [status, setStatus] = useState<PushStatus | null>(null);
   const [setupNeeded, setSetupNeeded] = useState<boolean | null>(null);
@@ -151,7 +153,7 @@ export function PushNotificationsCard() {
         </CardTitle>
         <CardDescription>
           Get instant alerts when new requests, approvals, scheduling changes, revisions, or payments
-          happen in Swift Portal.
+          happen in {brand.portalName}.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -198,7 +200,7 @@ export function PushNotificationsCard() {
         <div className="flex items-start gap-2 rounded-lg border border-border bg-white/80 px-4 py-3 text-sm text-muted">
           <Smartphone className="h-4 w-4 shrink-0 mt-0.5" />
           <p>
-            For iPhone lock-screen alerts, open Swift Portal from your Home Screen icon, then enable
+            For iPhone lock-screen alerts, open {brand.portalName} from your Home Screen icon, then enable
             notifications here.
           </p>
         </div>

@@ -49,7 +49,7 @@ export async function POST() {
       return NextResponse.json(
         {
           error:
-            "Swift Aerial Media uses the platform Stripe account and cannot be onboarded as a connected account.",
+            "This business uses the platform Stripe account and cannot be onboarded as a connected account.",
         },
         { status: 400 }
       );

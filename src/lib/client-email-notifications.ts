@@ -1,6 +1,7 @@
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { sendBrandedEmail } from "@/lib/email";
 import { getAppSettings } from "@/lib/app-settings";
+import { getSiteUrl } from "@/lib/site-metadata";
 import type { PremiumEmailContent } from "@/lib/email-templates";
 import { getStatusOrder } from "@/lib/constants";
 import type { NotificationType } from "@/lib/types";
@@ -63,10 +64,7 @@ export interface ClientEmailNotificationResult {
 
 function resolvePortalUrl(path?: string): string | undefined {
   if (!path) return undefined;
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://portal.swiftaerialmedia.com").replace(
-    /\/$/,
-    ""
-  );
+  const appUrl = getSiteUrl();
   return path.startsWith("http") ? path : `${appUrl}${path}`;
 }
 
@@ -103,8 +101,8 @@ export function getClientEmailPresentation(
   brand?: { businessName: string; portalName: string },
   subjectOverride?: string
 ): PremiumEmailContent {
-  const businessName = brand?.businessName ?? "Swift Aerial Media";
-  const portalName = brand?.portalName ?? "Swift Portal";
+  const businessName = brand?.businessName ?? "our team";
+  const portalName = brand?.portalName ?? "the portal";
   const ctaUrl = resolvePortalUrl(url);
   const progressStep =
     projectStatus !== undefined ? getStatusOrder(projectStatus) : undefined;
@@ -146,7 +144,7 @@ export function getClientEmailPresentation(
       title: "Shoot confirmed",
       body:
         message ||
-        "Your shoot is confirmed. We'll see you on site — check Swift Portal for the latest schedule details.",
+        `Your shoot is confirmed. We'll see you on site — check ${portalName} for the latest schedule details.`,
       ctaLabel: "View Schedule",
       secondaryInfo: "We'll notify you when your media is in production.",
       progressStep: progressStep ?? 3,
@@ -156,7 +154,7 @@ export function getClientEmailPresentation(
       title: "Deliverables ready for review",
       body:
         message ||
-        "New media has been added to your project. Review your deliverables and share feedback inside Swift Portal.",
+        `New media has been added to your project. Review your deliverables and share feedback inside ${portalName}.`,
       ctaLabel: "Review Deliverables",
       secondaryInfo: "You can approve assets or request revisions directly in your portal.",
       progressStep: progressStep ?? 5,
@@ -165,7 +163,7 @@ export function getClientEmailPresentation(
       subject: title,
       title,
       body: message,
-      ctaLabel: "Open Swift Portal",
+      ctaLabel: `Open ${portalName}`,
       progressStep: progressStep ?? 5,
     },
     payment_requested: {
@@ -173,8 +171,8 @@ export function getClientEmailPresentation(
       title: "Complete your payment",
       body:
         message ||
-        "Your final payment is ready inside Swift Portal. Complete payment to unlock your final downloads.",
-      ctaLabel: "Pay in Swift Portal",
+        `Your final payment is ready inside ${portalName}. Complete payment to unlock your final downloads.`,
+      ctaLabel: `Pay in ${portalName}`,
       secondaryInfo: "Secure payment powered by Stripe.",
       progressStep: progressStep ?? 6,
     },
@@ -183,7 +181,7 @@ export function getClientEmailPresentation(
       title: "Payment received",
       body:
         message ||
-        "Payment confirmed. Your final deliverables are now available to download in Swift Portal.",
+        `Payment confirmed. Your final deliverables are now available to download in ${portalName}.`,
       ctaLabel: "Download Deliverables",
       secondaryInfo: `Thank you for choosing ${businessName}.`,
       progressStep: progressStep ?? 7,

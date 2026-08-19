@@ -15,8 +15,12 @@ export interface ServiceTemplate {
   recommended?: boolean;
 }
 
-export const PRELIMINARY_ESTIMATE_DISCLAIMER =
-  "This estimate is generated automatically based on the service you selected. It is intended to provide a realistic starting price for your project. Final pricing may be adjusted after Swift Aerial Media reviews the property, confirms the scope of work, and schedules the shoot.";
+export function preliminaryEstimateDisclaimer(businessName: string): string {
+  return `This estimate is generated automatically based on the service you selected. It is intended to provide a realistic starting price for your project. Final pricing may be adjusted after ${businessName} reviews the property, confirms the scope of work, and schedules the shoot.`;
+}
+
+/** @deprecated Use preliminaryEstimateDisclaimer(businessName) */
+export const PRELIMINARY_ESTIMATE_DISCLAIMER = preliminaryEstimateDisclaimer("our team");
 
 export const SERVICE_TEMPLATES: ServiceTemplate[] = [
   {
@@ -33,7 +37,7 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
       "Waterfront or neighborhood context (when applicable)",
       "MLS-ready high-resolution images",
       "Commercial usage rights",
-      "Secure Swift Portal delivery",
+      "Secure {{portalName}} delivery",
       "Typical turnaround: 24–48 hours",
     ],
     notes: "Final pricing depends on property size, accessibility, airspace, travel, and requested shot list.",
@@ -53,7 +57,7 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
       "Social media version",
       "Website version",
       "Commercial usage rights",
-      "Swift Portal delivery",
+      "{{portalName}} delivery",
     ],
     notes: "",
   },
@@ -69,7 +73,7 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
       "Hosted interactive tour",
       "Shareable tour link",
       "Website embed code",
-      "Swift Portal access",
+      "{{portalName}} access",
     ],
     description:
       "Designed for homes, commercial properties, developments, golf courses, resorts, marinas, and outdoor spaces.",
@@ -105,7 +109,7 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
       "MLS-ready media",
       "Social media video",
       "Commercial usage rights",
-      "Swift Portal delivery",
+      "{{portalName}} delivery",
     ],
     notes: "",
   },
@@ -137,7 +141,7 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
       "Drone videography",
       "Highlight video",
       "Commercial licensing",
-      "Swift Portal delivery",
+      "{{portalName}} delivery",
     ],
     notes: "",
   },
@@ -153,7 +157,7 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
       "Progress photography",
       "Progress video",
       "Chronological project archive",
-      "Secure Swift Portal delivery",
+      "Secure {{portalName}} delivery",
     ],
     notes: "",
   },
@@ -217,10 +221,10 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
       "Storm damage documentation",
       "High-resolution photography",
       "Date-stamped digital delivery",
-      "Secure Swift Portal delivery",
+      "Secure {{portalName}} delivery",
     ],
     notes:
-      "Swift Aerial Media documents visible property conditions from the air. We do not provide engineering reports or insurance adjusting services.",
+      "{{businessName}} documents visible property conditions from the air. We do not provide engineering reports or insurance adjusting services.",
   },
   {
     id: "marina_waterfront",
@@ -265,7 +269,7 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
     lineItems: [{ description: "Custom Proposal Required", amount_cents: 0 }],
     includes: [],
     description:
-      "Swift Aerial Media will review your request and prepare a custom proposal based on the project scope.",
+      "{{businessName}} will review your request and prepare a custom proposal based on the project scope.",
     notes: "Final pricing will be confirmed after scope review and scheduling.",
   },
 ];
@@ -316,8 +320,28 @@ export function getServiceTemplate(serviceType: string): ServiceTemplate {
   return FALLBACK_TEMPLATE;
 }
 
-export function buildPreliminaryEstimatePayload(serviceType: string) {
-  const template = getServiceTemplate(serviceType);
+export function applyServiceTemplateBrand(
+  template: ServiceTemplate,
+  brand: { portalName: string; businessName: string }
+): ServiceTemplate {
+  const fill = (value: string) =>
+    value.replaceAll("{{portalName}}", brand.portalName).replaceAll("{{businessName}}", brand.businessName);
+  return {
+    ...template,
+    includes: template.includes.map(fill),
+    notes: fill(template.notes),
+    description: template.description ? fill(template.description) : template.description,
+  };
+}
+
+export function buildPreliminaryEstimatePayload(
+  serviceType: string,
+  brand?: { portalName: string; businessName: string }
+) {
+  const template = applyServiceTemplateBrand(
+    getServiceTemplate(serviceType),
+    brand ?? { portalName: "the portal", businessName: "our team" }
+  );
   const total_cents = template.lineItems.reduce((sum, item) => sum + item.amount_cents, 0);
   const includesBlock = formatIncludesBlock(template.includes);
   const description = [template.description, includesBlock].filter(Boolean).join("\n\n");

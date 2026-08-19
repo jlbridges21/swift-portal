@@ -112,7 +112,7 @@ export async function POST(request: Request) {
         "scheduling_request",
         body.project_id,
         { shoot_date: dateStr, portal_link: portalLink(`/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`) },
-        `Swift Aerial Media proposed a shoot for ${dateStr}. Please review and confirm in your portal.`
+        `${appSettings.business.businessName} proposed a shoot for ${dateStr}. Please review and confirm in your portal.`
       ),
       link: `/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`,
       projectId: body.project_id,
@@ -421,11 +421,12 @@ export async function PATCH(request: Request) {
     });
 
     if (isAdmin) {
+      const appSettings = await getAppSettings(businessId);
       await notifyProjectClients({
         type: "shoot_proposed",
         eventKey: "shoot_time_proposed",
         title: "Scheduling Your Shoot",
-        body: `Swift Aerial Media proposed ${dateStr}. Please review.`,
+        body: `${appSettings.business.businessName} proposed ${dateStr}. Please review.`,
         link: `/dashboard/projects/${proposal.project_id}?scheduling=pending#scheduling`,
         projectId: proposal.project_id,
         businessId,
@@ -456,12 +457,13 @@ export async function PATCH(request: Request) {
 
     const dateStr = new Date(proposal.proposed_at).toLocaleString();
     const withdrawn = isAdmin && proposal.proposed_by === "admin";
+    const appSettings = await getAppSettings(businessId);
 
     await logProjectActivity(
       withdrawn ? "shoot_withdrawn" : "shoot_declined",
       withdrawn
         ? `Shoot proposal withdrawn (${dateStr})`
-        : `${isAdmin ? "Swift Aerial Media declined" : "Client declined"} shoot time ${dateStr}`,
+        : `${isAdmin ? `${appSettings.business.businessName} declined` : "Client declined"} shoot time ${dateStr}`,
       {
         businessId,
         projectId: proposal.project_id,

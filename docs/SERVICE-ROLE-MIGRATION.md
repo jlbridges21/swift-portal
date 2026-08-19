@@ -170,4 +170,8 @@ Isolation harness after v36: **70** assertions (was 68). A Swift admin still see
 
 Isolation harness after v37: **74** assertions (was 70). Tenant B `business_integrations` is invisible to a Swift admin; clients have no access.
 
-Do **not** convert branding or tenant routing in this batch.
+## DB-driven branding (v38)
+
+Platform-generic `DEFAULT_APP_SETTINGS` / `PLATFORM_BUSINESS_DEFAULTS`. Swift identity lives in `business_settings` (seeded in v38, including `landing`). Test Pilot Drones (`…0000aa`) is seeded with its `businesses.name`. Logo uploads go to public bucket `business-logos` via `POST /api/admin/settings/logo`. Brand colors are validated as hex/`rgb()` in `saveAppSettings` and `BrandProvider`. Isolation assertion count unchanged.
+
+Do **not** start per-business email domains or tenant routing in this batch.

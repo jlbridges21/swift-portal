@@ -6,6 +6,7 @@ import {
   type AppSettings,
   NOTIFICATION_EVENT_DEFINITIONS,
 } from "@/lib/app-settings";
+import { InvalidBrandColorError } from "@/lib/brand-color";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET() {
@@ -42,6 +43,9 @@ export async function PATCH(request: Request) {
     const saved = await saveAppSettings(body.settings, profile.id, tenant.businessId);
     return NextResponse.json({ settings: saved });
   } catch (error) {
+    if (error instanceof InvalidBrandColorError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     const message = error instanceof Error ? error.message : "Failed to save settings";
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { getAppSettings } from "@/lib/app-settings";
 import { formatDate } from "@/lib/utils";
 import type { MessageTemplateKey } from "@/lib/workflow-settings";
 
@@ -15,6 +16,7 @@ export interface WorkflowMessageVariables {
   portal_link: string;
   payment_amount: string;
   shoot_date: string;
+  business_name: string;
 }
 
 export const WORKFLOW_VARIABLE_FALLBACKS: WorkflowMessageVariables = {
@@ -24,6 +26,7 @@ export const WORKFLOW_VARIABLE_FALLBACKS: WorkflowMessageVariables = {
   portal_link: "",
   payment_amount: "",
   shoot_date: "",
+  business_name: "our team",
 };
 
 const REQUIRED_FOR_QUALITY: (keyof WorkflowMessageVariables)[] = [
@@ -107,6 +110,12 @@ export async function buildProjectMessageVariables(
   const portalPath = overrides.portal_path ?? `/dashboard/projects/${projectId}`;
   const portalLinkValue = trimValue(overrides.portal_link) || portalLink(portalPath);
 
+  let businessName = trimValue(overrides.business_name);
+  if (!businessName && project?.business_id) {
+    const settings = await getAppSettings(project.business_id);
+    businessName = settings.business.businessName;
+  }
+
   return {
     client_name: trimValue(overrides.client_name) || clientName,
     project_name: trimValue(overrides.project_name) || trimValue(project?.project_name),
@@ -116,5 +125,6 @@ export async function buildProjectMessageVariables(
     shoot_date:
       trimValue(overrides.shoot_date) ||
       (project?.shoot_date ? formatDate(project.shoot_date) : ""),
+    business_name: businessName,
   };
 }

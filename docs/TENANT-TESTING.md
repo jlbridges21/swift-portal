@@ -4,7 +4,7 @@ Repeatable SQL harness proving **cross-tenant READ isolation** via RLS (v32) and
 
 ## Prerequisites
 
-- Migrations **v29–v37** applied on PostgreSQL 16.
+- Migrations **v29–v38** applied on PostgreSQL 16.
 - Supabase project with RLS enabled (production or staging).
 - Two auth users created in **Supabase Dashboard → Authentication → Add user** (email + password, auto-confirm):
   - `tenant-b-admin@example.test`
@@ -50,6 +50,7 @@ Do **not** run teardown on a shared environment until tests pass.
 - **Service role** (`createServiceClient()`): bypasses RLS entirely. Fifty-four application files use it; this script does **not** test those paths. v30 triggers still apply to service-role writes, but reads and RLS-only guards are invisible here.
 - **Storage** policies (v36): both legacy `{project}/…` and `{business}/{project}/…` / `{business}/library/…` shapes. Harness inserts a Tenant B object under the new prefix and asserts a Swift admin cannot SELECT it. Legacy objects are never moved.
 - **Stripe Connect** (`business_integrations`, v37): Tenant B row is invisible to a Swift admin; Tenant B admin cannot see Swift's platform row; clients have no policy.
+- **Business logos** (`business-logos` bucket, v38): public SELECT; writes require admin + folder `[1] = current_business_id()`. Not covered by the SQL isolation harness.
 - **super_admin** impersonation GUC: not exercised (no platform console yet).
 - **Anon/public** lead capture: `/request` uses service role; only the authenticated `leads` INSERT policy shape is indirectly relevant if you add anon-key tests later.
 

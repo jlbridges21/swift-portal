@@ -23,7 +23,7 @@ export default async function AdminSettingsPage() {
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8 pb-12">
         <PageHeader
           title="Admin Settings"
-          description="Manage global notification, email, business, and proposal settings for Swift Portal."
+          description={`Manage global notification, email, business, and proposal settings for ${settings.business.portalName}.`}
         />
         <SettingsCollapsible
           title="Payments"

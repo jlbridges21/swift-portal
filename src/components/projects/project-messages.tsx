@@ -8,6 +8,7 @@ import { cn, formatRelativeTime } from "@/lib/utils";
 import type { ProjectMessage } from "@/lib/types";
 import { MessageSquare, Send, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 
 interface ProjectMessagesProps {
   projectId: string;
@@ -23,6 +24,7 @@ export function ProjectMessages({
   previewMode = false,
   className,
 }: ProjectMessagesProps) {
+  const brand = usePortalBrand();
   const [messages, setMessages] = useState<ProjectMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -120,7 +122,7 @@ export function ProjectMessages({
             )}
           </CardTitle>
           <p className="text-xs text-muted">
-            {isAdmin ? "Client conversation" : "Message Swift Aerial Media"}
+            {isAdmin ? "Client conversation" : `Message ${brand.name}`}
           </p>
         </CardHeader>
         <CardContent className="p-0">
@@ -157,7 +159,7 @@ export function ProjectMessages({
                           {mine
                             ? "You"
                             : message.sender_role === "admin"
-                              ? "Swift Aerial Media"
+                              ? brand.name
                               : message.sender_name || "Client"}
                         </span>
                         <span>{formatRelativeTime(message.created_at)}</span>

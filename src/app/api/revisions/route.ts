@@ -7,6 +7,7 @@ import { idempotencyKey } from "@/lib/idempotency";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { canAccessProject } from "@/lib/project-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { getAppSettings } from "@/lib/app-settings";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -114,6 +115,7 @@ export async function PATCH(request: Request) {
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(profile.role);
   const businessId = tenant.businessId;
+  const appSettings = await getAppSettings(businessId);
 
   const body = await request.json();
   const { id, status, admin_notes } = body;
@@ -147,7 +149,7 @@ export async function PATCH(request: Request) {
   const clientMessages: Record<string, { title: string; body: string }> = {
     in_progress: {
       title: "We're working on your revision",
-      body: admin_notes || "Swift Aerial Media is addressing your revision request.",
+      body: admin_notes || `${appSettings.business.businessName} is addressing your revision request.`,
     },
     completed: {
       title: "Your revision is complete",

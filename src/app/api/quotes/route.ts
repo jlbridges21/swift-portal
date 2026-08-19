@@ -109,7 +109,7 @@ export async function POST(request: Request) {
       type: "quote_sent",
       eventKey: "official_proposal_sent",
       title: "Your official proposal is ready",
-      body: `Swift Aerial Media sent an official proposal for "${title}". Review and approve in your portal.`,
+      body: `${appSettings.business.businessName} sent an official proposal for "${title}". Review and approve in your portal.`,
       link: `/dashboard/projects/${project_id}#quote`,
       projectId: project_id,
     });
@@ -296,7 +296,7 @@ export async function PATCH(request: Request) {
         type: "quote_sent",
         eventKey: "official_proposal_sent",
         title: "Your official proposal is ready",
-        body: `Swift Aerial Media sent your official proposal. Review and approve it in your portal.`,
+        body: `${appSettings.business.businessName} sent your official proposal. Review and approve it in your portal.`,
         link: `/dashboard/projects/${quote.project_id}#quote`,
         projectId: quote.project_id,
       });

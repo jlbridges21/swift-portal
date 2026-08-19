@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SITE, SITE_THEME_COLOR } from "@/lib/site-metadata";
 
+// TODO(tenant): per-business PWA manifest and OG images — later phase
 export const alt = SITE.title;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";

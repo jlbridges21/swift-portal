@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { ColorField } from "@/components/ui/color-field";
 import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
-import { SWIFT_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
+import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import type {
   AppSettings,
@@ -155,9 +155,9 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
     }
   }
 
-  async function restoreSwiftDefaults() {
+  async function restorePlatformDefaults() {
     setRestoring(true);
-    const restored = { ...settings, business: { ...SWIFT_BUSINESS_DEFAULTS } };
+    const restored = { ...settings, business: { ...PLATFORM_BUSINESS_DEFAULTS } };
     setSettings(restored);
     setRestoreOpen(false);
     await saveSettings(restored);
@@ -344,7 +344,7 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between pb-3 pt-0 px-0">
           <div />
           <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setRestoreOpen(true)}>
-            <RotateCcw className="h-4 w-4" /> Restore Swift Defaults
+            <RotateCcw className="h-4 w-4" /> Restore platform defaults
           </Button>
         </CardHeader>
         <CardContent className="space-y-6 pt-0 px-0">
@@ -399,8 +399,100 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
             <Input id="websiteUrl" value={settings.business.websiteUrl} onChange={(e) => patchBusiness({ websiteUrl: e.target.value })} />
           </div>
           <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="logoUrl">Logo URL</Label>
-            <Input id="logoUrl" value={settings.business.logoUrl} onChange={(e) => patchBusiness({ logoUrl: e.target.value })} />
+            <Label htmlFor="logoUrl">Logo</Label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Input id="logoUrl" value={settings.business.logoUrl} onChange={(e) => patchBusiness({ logoUrl: e.target.value })} />
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => document.getElementById("logo-file")?.click()}
+              >
+                Upload logo
+              </Button>
+              <input
+                id="logo-file"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  const form = new FormData();
+                  form.append("file", file);
+                  try {
+                    const res = await fetch("/api/admin/settings/logo", {
+                      method: "POST",
+                      credentials: "include",
+                      body: form,
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Upload failed");
+                    patchBusiness({ logoUrl: data.logoUrl, emailLogoUrl: data.logoUrl });
+                    toast.success("Logo uploaded");
+                    router.refresh();
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Upload failed");
+                  }
+                }}
+              />
+            </div>
+            <p className="text-xs text-muted">
+              Uploads to this business&apos;s logo bucket. Existing hosted URLs (including filesafe.space) still work.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="supportEmail">Support email</Label>
+            <Input id="supportEmail" type="email" value={settings.business.supportEmail ?? ""} onChange={(e) => patchBusiness({ supportEmail: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="legalName">Legal name (copyright)</Label>
+            <Input id="legalName" value={settings.business.legalName ?? ""} onChange={(e) => patchBusiness({ legalName: e.target.value })} />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="tagline">Tagline</Label>
+            <Input id="tagline" value={settings.business.tagline ?? ""} onChange={(e) => patchBusiness({ tagline: e.target.value })} />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="emailLogoUrl">Email logo URL</Label>
+            <Input id="emailLogoUrl" value={settings.business.emailLogoUrl ?? ""} onChange={(e) => patchBusiness({ emailLogoUrl: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="faviconUrl">Favicon URL</Label>
+            <Input id="faviconUrl" value={settings.business.faviconUrl ?? ""} onChange={(e) => patchBusiness({ faviconUrl: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="termsUrl">Terms URL</Label>
+            <Input id="termsUrl" value={settings.business.termsUrl ?? ""} onChange={(e) => patchBusiness({ termsUrl: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="privacyUrl">Privacy URL</Label>
+            <Input id="privacyUrl" value={settings.business.privacyUrl ?? ""} onChange={(e) => patchBusiness({ privacyUrl: e.target.value })} />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="addressLine1">Address line 1</Label>
+            <Input id="addressLine1" value={settings.business.addressLine1 ?? ""} onChange={(e) => patchBusiness({ addressLine1: e.target.value })} />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="addressLine2">Address line 2</Label>
+            <Input id="addressLine2" value={settings.business.addressLine2 ?? ""} onChange={(e) => patchBusiness({ addressLine2: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="city">City</Label>
+            <Input id="city" value={settings.business.city ?? ""} onChange={(e) => patchBusiness({ city: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="state">State</Label>
+            <Input id="state" value={settings.business.state ?? ""} onChange={(e) => patchBusiness({ state: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="postalCode">Postal code</Label>
+            <Input id="postalCode" value={settings.business.postalCode ?? ""} onChange={(e) => patchBusiness({ postalCode: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="country">Country</Label>
+            <Input id="country" value={settings.business.country ?? ""} onChange={(e) => patchBusiness({ country: e.target.value })} />
           </div>
           <ColorField
             id="brandPrimaryColor"
@@ -434,7 +526,7 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
               id="ghlLeadSource"
               value={settings.integrations?.ghlLeadSource ?? ""}
               onChange={(e) => patchIntegrations({ ghlLeadSource: e.target.value })}
-              placeholder="Swift Portal"
+              placeholder="Client Portal"
             />
           </div>
           </div>
@@ -503,16 +595,16 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
       {restoreOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-primary">Restore Swift defaults?</h3>
+            <h3 className="text-lg font-semibold text-primary">Restore platform defaults?</h3>
             <p className="mt-2 text-sm text-muted">
-              This resets business name, portal name, contact info, logo URL, and brand colors to Swift Aerial Media
-              defaults and saves immediately.
+              This resets business name, portal name, contact info, logo URL, and brand colors to generic
+              platform defaults and saves immediately.
             </p>
             <div className="mt-6 flex flex-wrap justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setRestoreOpen(false)} disabled={restoring}>
                 Cancel
               </Button>
-              <Button type="button" variant="accent" onClick={restoreSwiftDefaults} disabled={restoring}>
+              <Button type="button" variant="accent" onClick={restorePlatformDefaults} disabled={restoring}>
                 {restoring ? <Loader2 className="h-4 w-4 animate-spin" /> : "Restore & Save"}
               </Button>
             </div>

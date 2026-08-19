@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
-import { BRAND, LOGO_URL } from "@/lib/brand";
-import { getPortalBrandFromSettings, SWIFT_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
+import { assertSafeBrandColors } from "@/lib/brand-color";
+import { mergeLandingAssets, type LandingAssets } from "@/lib/landing-assets";
+import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import {
   buildDefaultWorkflowSettings,
   mergeWorkflowSettings,
@@ -53,6 +54,19 @@ export interface BusinessSettings {
   logoUrl: string;
   brandPrimaryColor: string;
   brandAccentColor: string;
+  supportEmail: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  legalName: string;
+  tagline: string;
+  faviconUrl: string;
+  emailLogoUrl: string;
+  termsUrl: string;
+  privacyUrl: string;
 }
 
 export interface ProposalSettings {
@@ -78,6 +92,7 @@ export interface AppSettings {
   proposals: ProposalSettings;
   workflow: WorkflowSettings;
   integrations: IntegrationSettings;
+  landing: LandingAssets;
 }
 
 export const NOTIFICATION_EVENT_DEFINITIONS: {
@@ -124,22 +139,12 @@ function buildDefaultNotifications(): Record<NotificationEventKey, NotificationC
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   notifications: buildDefaultNotifications(),
   email: {
-    fromName: "Swift Portal",
-    senderEmail: "notification@swiftaerialmedia.com",
-    replyTo: "jackson@swiftaerialmedia.com",
-    footerText: "You received this email because you have a project with Swift Aerial Media.",
+    fromName: "Client Portal",
+    senderEmail: "",
+    replyTo: "",
+    footerText: "You received this email because you have a project with this portal.",
   },
-  business: {
-    businessName: SWIFT_BUSINESS_DEFAULTS.businessName,
-    portalName: SWIFT_BUSINESS_DEFAULTS.portalName,
-    adminDisplayName: SWIFT_BUSINESS_DEFAULTS.adminDisplayName,
-    primaryContactEmail: SWIFT_BUSINESS_DEFAULTS.primaryContactEmail,
-    phoneNumber: SWIFT_BUSINESS_DEFAULTS.phoneNumber,
-    websiteUrl: SWIFT_BUSINESS_DEFAULTS.websiteUrl,
-    logoUrl: LOGO_URL,
-    brandPrimaryColor: SWIFT_BUSINESS_DEFAULTS.brandPrimaryColor,
-    brandAccentColor: SWIFT_BUSINESS_DEFAULTS.brandAccentColor,
-  },
+  business: { ...PLATFORM_BUSINESS_DEFAULTS },
   proposals: {
     autoPreliminaryEstimate: true,
     requireAdminReviewBeforeOfficial: false,
@@ -151,8 +156,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   workflow: buildDefaultWorkflowSettings(),
   integrations: {
     ghlWebhookUrl: "",
-    ghlLeadSource: "Swift Portal",
+    ghlLeadSource: "Client Portal",
   },
+  landing: mergeLandingAssets(null),
 };
 
 function deepMerge<T extends Record<string, unknown>>(base: T, patch: Partial<T>): T {
@@ -194,6 +200,7 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
       ...DEFAULT_APP_SETTINGS.integrations,
       ...(stored.integrations ?? {}),
     },
+    landing: mergeLandingAssets(stored.landing),
   };
 }
 
@@ -226,7 +233,22 @@ export async function getAppSettings(businessId: string): Promise<AppSettings> {
       return structuredClone(DEFAULT_APP_SETTINGS);
     }
 
-    const settings = mergeAppSettings((data?.settings as Partial<AppSettings>) ?? null);
+    const stored = (data?.settings as Partial<AppSettings>) ?? null;
+    const settings = mergeAppSettings(stored);
+
+    if (!stored?.business?.businessName) {
+      const { data: biz } = await supabase
+        .from("businesses")
+        .select("name")
+        .eq("id", businessId)
+        .maybeSingle();
+      if (biz?.name) {
+        settings.business.businessName = biz.name;
+        if (!stored?.business?.portalName) settings.business.portalName = biz.name;
+        if (!stored?.business?.legalName) settings.business.legalName = biz.name;
+      }
+    }
+
     settingsCache.set(businessId, { settings, expiresAt: now + CACHE_TTL_MS });
     return settings;
   } catch (error) {
@@ -242,6 +264,7 @@ export async function saveAppSettings(
 ): Promise<AppSettings> {
   const current = await getAppSettings(businessId);
   const merged = mergeAppSettings({ ...current, ...patch });
+  assertSafeBrandColors(merged.business);
 
   const supabase = await createServiceClient();
   const { error } = await supabase

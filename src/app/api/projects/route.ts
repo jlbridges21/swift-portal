@@ -11,7 +11,7 @@ import { defaultProjectTitle, formatAutoProjectName, resolveAddressFromBody } fr
 import { linkProjectToProperty } from "@/lib/properties";
 import { createPreliminaryEstimate, upsertPreliminaryEstimate } from "@/lib/preliminary-estimates";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import type { NotificationEventKey } from "@/lib/app-settings";
+import { getAppSettings, type NotificationEventKey } from "@/lib/app-settings";
 
 function clientEventKeyForStatus(status: string): NotificationEventKey | undefined {
   switch (normalizeStatus(status)) {
@@ -183,11 +183,12 @@ export async function PATCH(request: Request) {
         }
       );
 
+      const appSettings = await getAppSettings(businessId);
       await notifyProjectClients({
         type: updates.status === "awaiting_payment" ? "invoice_available" : "status_changed",
         eventKey: clientEventKeyForStatus(updates.status),
-        title: clientStatusNotification(updates.status).title,
-        body: clientStatusNotification(updates.status).body,
+        title: clientStatusNotification(updates.status, appSettings.business.businessName).title,
+        body: clientStatusNotification(updates.status, appSettings.business.businessName).body,
         link: `/dashboard/projects/${id}`,
         projectId: id,
       });

@@ -1,7 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { LANDING } from "@/lib/landing-assets";
+import type { LandingAssets } from "@/lib/landing-assets";
+import type { PortalBrand } from "@/lib/portal-brand";
 import {
   Camera,
   Video,
@@ -16,41 +17,40 @@ import {
   Home,
 } from "lucide-react";
 
-const SWIFT_LOGO =
-  "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a42b49721adde19f4c00193.png";
-
 const STEP_CARD_WIDTH = 480;
 
-const STEPS = [
+function buildSteps(landing: LandingAssets, portalName: string) {
+  return [
   {
     step: "01",
     title: "Request your shoot",
     description: "Submit your property details, service type, and preferred timing in minutes.",
-    image: LANDING.screenshots.request,
-    alt: "Swift Portal request form",
+    image: landing.screenshots.request,
+    alt: `${portalName} request form`,
   },
   {
     step: "02",
     title: "See a preliminary estimate",
     description: "Get a fast ballpark estimate before final details are confirmed.",
-    image: LANDING.screenshots.quote,
+    image: landing.screenshots.quote,
     alt: "Quote and estimate screen",
   },
   {
     step: "03",
     title: "Track your project",
     description: "Follow scheduling, shoot progress, and deliverables in one organized dashboard.",
-    image: LANDING.screenshots.dashboard,
+    image: landing.screenshots.dashboard,
     alt: "Client command center",
   },
   {
     step: "04",
     title: "Pay and download",
     description: "Preview deliverables, complete secure payment, and access final media.",
-    image: LANDING.screenshots.review,
+    image: landing.screenshots.review,
     alt: "Review deliverables screen",
   },
-];
+  ];
+}
 
 const FEATURES = [
   { icon: MessageSquare, title: "Project requests", description: "Submit new shoots without email back-and-forth." },
@@ -63,29 +63,33 @@ const FEATURES = [
   { icon: CheckCircle2, title: "Project history", description: "Keep every project, update, and deliverable organized." },
 ];
 
-const PORTAL_SHOWCASE = [
-  { title: "Request form", image: LANDING.screenshots.request },
-  { title: "Estimate & scheduling", image: LANDING.screenshots.quote },
-  { title: "Property microsite", image: LANDING.screenshots.microsite },
-];
+function buildShowcase(landing: LandingAssets) {
+  return [
+    { title: "Request form", image: landing.screenshots.request },
+    { title: "Estimate & scheduling", image: landing.screenshots.quote },
+    { title: "Property microsite", image: landing.screenshots.microsite },
+  ];
+}
 
-const MEDIA_USES = [
+function buildMediaUses(landing: LandingAssets) {
+  return [
   {
     title: "Real estate listings",
-    image: LANDING.luxuryHome,
+    image: landing.luxuryHome,
     description: "Cinematic aerial photography and video that elevates listings and shows property context.",
   },
   {
     title: "Golf courses",
-    image: LANDING.golfCourse,
+    image: landing.golfCourse,
     description: "Course flyovers, clubhouse media, and marketing visuals for clubs and resorts.",
   },
   {
     title: "Construction progress",
-    image: LANDING.construction,
+    image: landing.construction,
     description: "Recurring aerial progress media for builders, developers, and project teams.",
   },
-];
+  ];
+}
 
 function RequestShootButton({
   size = "default",
@@ -107,40 +111,48 @@ function RequestShootButton({
   );
 }
 
-function Logo({ className = "h-8 w-auto" }: { className?: string }) {
+function LandingLogo({
+  className = "h-8 w-auto",
+  href,
+  src,
+  name,
+}: {
+  className?: string;
+  href: string;
+  src: string;
+  name: string;
+}) {
+  if (!src) return <span className="text-sm font-semibold text-white">{name}</span>;
   return (
-    <a
-      href="https://swiftaerialmedia.com"
-      aria-label="Go to Swift Aerial Media website"
-      className="inline-flex items-center"
-    >
-      <Image
-        src={SWIFT_LOGO}
-        alt="Swift Aerial Media"
-        width={180}
-        height={52}
-        className={className}
-        priority
-      />
+    <a href={href || undefined} aria-label={`Go to ${name} website`} className="inline-flex items-center">
+      <Image src={src} alt={name} width={180} height={52} className={className} priority />
     </a>
   );
 }
 
-export function LandingPage() {
+export function LandingPage({ brand, landing }: { brand: PortalBrand; landing: LandingAssets }) {
+  const STEPS = buildSteps(landing, brand.portalName);
+  const PORTAL_SHOWCASE = buildShowcase(landing);
+  const MEDIA_USES = buildMediaUses(landing);
+  const headerLogo = landing.logoHeader || brand.logoUrl;
+  const footerLogo = landing.logoFooter || headerLogo;
+  const website = brand.websiteUrl || "/";
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#334155]">
       <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0F172A]/90 backdrop-blur-xl safe-area-top safe-area-x">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Logo />
+          <LandingLogo href={website} src={headerLogo} name={brand.name} />
 
           <nav className="flex items-center gap-2 sm:gap-3">
+            {brand.websiteUrl ? (
             <a
-              href="https://swiftaerialmedia.com"
+              href={brand.websiteUrl}
               className="hidden items-center gap-1 text-sm font-medium text-slate-300 transition hover:text-white sm:flex"
             >
               <Home className="h-4 w-4" />
               Main Website
             </a>
+            ) : null}
 
             <Link href="/request">
               <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white">
@@ -158,19 +170,21 @@ export function LandingPage() {
       <main>
         <section className="relative flex min-h-[92vh] items-center overflow-hidden bg-[#0F172A]">
           <div className="absolute inset-0">
+            {landing.heroVideoId ? (
             <iframe
-              src={`https://www.youtube.com/embed/${LANDING.heroVideoId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${LANDING.heroVideoId}&showinfo=0&rel=0&modestbranding=1&playsinline=1`}
-              title="Swift Aerial Media showreel"
+              src={`https://www.youtube.com/embed/${landing.heroVideoId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${landing.heroVideoId}&showinfo=0&rel=0&modestbranding=1&playsinline=1`}
+              title={`${brand.name} showreel`}
               className="pointer-events-none absolute inset-0 h-full w-full scale-[1.4] opacity-40"
               allow="autoplay; encrypted-media"
             />
+            ) : null}
             <div className="absolute inset-0 bg-gradient-to-b from-[#0F172A]/80 via-[#0F172A]/70 to-[#0F172A]" />
           </div>
 
           <div className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8 lg:py-32">
             <div className="max-w-3xl">
               <p className="mb-6 text-sm font-medium uppercase tracking-[0.2em] text-blue-300">
-                Swift Aerial Media Client Portal
+                {brand.name} Client Portal
               </p>
 
               <h1 className="text-4xl font-bold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl">
@@ -328,7 +342,7 @@ export function LandingPage() {
                 Built for properties that need to stand out
               </h2>
               <p className="mt-4 text-lg text-[#64748B]">
-                Swift Portal supports every type of aerial project Swift Aerial Media delivers.
+                {brand.portalName} supports every type of aerial project {brand.name} delivers.
               </p>
             </div>
 
@@ -360,24 +374,26 @@ export function LandingPage() {
         <section className="border-y border-slate-100 bg-white py-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid items-center gap-12 lg:grid-cols-[280px_1fr]">
+              {landing.ownerHeadshot ? (
               <div className="mx-auto lg:mx-0">
                 <div className="relative h-56 w-56 overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/5">
                   <Image
-                    src={LANDING.ownerHeadshot}
-                    alt="Swift Aerial Media"
+                    src={landing.ownerHeadshot}
+                    alt={brand.name}
                     fill
                     className="object-cover"
                     sizes="224px"
                   />
                 </div>
               </div>
+              ) : null}
 
               <div>
                 <h2 className="text-3xl font-bold tracking-tight text-[#0F172A]">
-                  Built to make working with Swift Aerial Media effortless
+                  Built to make working with {brand.name} effortless
                 </h2>
                 <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#64748B]">
-                  Swift Portal keeps requests, estimates, project updates, deliverables, and payments
+                  {brand.portalName} keeps requests, estimates, project updates, deliverables, and payments
                   organized in one beautiful place, so you spend less time chasing files and more time
                   using your media.
                 </p>
@@ -403,13 +419,13 @@ export function LandingPage() {
 
         <section className="bg-gradient-to-br from-[#0F172A] to-slate-900 py-24 sm:py-32">
           <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
-            <Logo className="mx-auto mb-8 h-12 w-auto opacity-95" />
+            <LandingLogo className="mx-auto mb-8 h-12 w-auto opacity-95" href={website} src={landing.logoStackedWhite || headerLogo} name={brand.name} />
 
             <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
               Ready to request your next shoot?
             </h2>
             <p className="mt-4 text-lg text-slate-300">
-              Start your project in minutes and manage everything through Swift Portal.
+              Start your project in minutes and manage everything through {brand.portalName}.
             </p>
 
             <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-center">
@@ -431,30 +447,40 @@ export function LandingPage() {
 
             <footer className="border-t border-slate-200 bg-white py-10">
         <div className="mx-auto flex max-w-7xl flex-col items-center gap-4 px-4 sm:flex-row sm:justify-between sm:px-6 lg:px-8">
+          {website && website !== "/" ? (
           <a
-            href="https://swiftaerialmedia.com"
-            aria-label="Go to Swift Aerial Media website"
+            href={website}
+            aria-label={`Go to ${brand.name} website`}
             className="inline-flex items-center"
           >
+            {footerLogo ? (
             <Image
-              src="https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a42ade13a7f0c54688aaa09.png"
-              alt="Swift Aerial Media"
+              src={footerLogo}
+              alt={brand.name}
               width={180}
               height={52}
               className="h-8 w-auto opacity-90"
             />
+            ) : (
+              <span className="text-sm font-semibold text-[#0F172A]">{brand.name}</span>
+            )}
           </a>
+          ) : (
+            <span className="text-sm font-semibold text-[#0F172A]">{brand.legalName}</span>
+          )}
 
           <div className="flex flex-col items-center gap-2 text-center sm:items-end sm:text-right">
             <p className="text-sm text-[#64748B]">
-              © {new Date().getFullYear()} Swift Aerial Media. All rights reserved.
+              © {new Date().getFullYear()} {brand.legalName}. All rights reserved.
             </p>
+            {brand.websiteUrl ? (
             <a
-              href="https://swiftaerialmedia.com"
+              href={brand.websiteUrl}
               className="text-sm font-medium text-[#3B82F6] hover:text-[#0F172A]"
             >
               Back to main website →
             </a>
+            ) : null}
           </div>
         </div>
       </footer>

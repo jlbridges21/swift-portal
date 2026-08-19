@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import type { ReactNode } from "react";
 import { MapPin, CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 
 interface ProjectHeroProps {
   hero: HeroMedia;
@@ -34,6 +35,7 @@ export function ProjectHero({
   microsite = false,
   paymentStatus,
 }: ProjectHeroProps) {
+  const brand = usePortalBrand();
   const isMicrosite = microsite && audience === "client";
   const padding = compact ? "py-12 sm:py-14" : isMicrosite ? "py-20 sm:py-28" : "py-16 sm:py-20";
   const minHeight = isMicrosite ? "min-h-[420px] sm:min-h-[520px]" : "min-h-[240px] sm:min-h-[280px]";
@@ -88,7 +90,7 @@ export function ProjectHero({
       >
         {isMicrosite && (
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
-            Swift Aerial Media
+            {brand.name}
           </p>
         )}
         <div className="mb-4 flex flex-wrap items-center gap-2">

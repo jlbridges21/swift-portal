@@ -101,7 +101,7 @@ export function StripeConnectCard() {
           </div>
         ) : state.isPlatform ? (
           <p className="text-sm text-muted">
-            Swift Aerial Media uses the platform Stripe account. Payments continue to settle here — no connected-account
+            This business uses the platform Stripe account. Payments continue to settle here — no connected-account
             onboarding.
           </p>
         ) : (

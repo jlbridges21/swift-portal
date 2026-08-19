@@ -32,7 +32,10 @@ export async function upsertPreliminaryEstimate(
   }
 
   const db = await createTenantServiceClient(businessId);
-  const payload = buildPreliminaryEstimatePayload(serviceType);
+  const payload = buildPreliminaryEstimatePayload(serviceType, {
+    portalName: appSettings.business.portalName,
+    businessName: appSettings.business.businessName,
+  });
   const expiresAt = addProposalExpiration(
     new Date(),
     appSettings.proposals.defaultEstimateExpirationDays
@@ -104,7 +107,10 @@ export async function createPreliminaryEstimate(
     if (existing) return existing;
   }
 
-  const payload = buildPreliminaryEstimatePayload(serviceType);
+  const payload = buildPreliminaryEstimatePayload(serviceType, {
+    portalName: appSettings.business.portalName,
+    businessName: appSettings.business.businessName,
+  });
   const expiresAt = addProposalExpiration(
     new Date(),
     appSettings.proposals.defaultEstimateExpirationDays
@@ -149,7 +155,7 @@ export async function createPreliminaryEstimate(
     type: "status_changed",
     eventKey: "preliminary_estimate_created",
     title: "Your preliminary estimate is ready",
-    body: "Your automatically generated preliminary estimate is ready to review in Swift Portal.",
+    body: `Your automatically generated preliminary estimate is ready to review in ${appSettings.business.portalName}.`,
     link: `/dashboard/projects/${projectId}#quote`,
     projectId,
   });

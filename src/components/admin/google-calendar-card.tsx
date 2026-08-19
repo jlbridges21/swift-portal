@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Calendar, Link2, Unlink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 
 interface CalendarOption {
   id: string;
@@ -15,6 +16,7 @@ interface CalendarOption {
 }
 
 export function GoogleCalendarCard() {
+  const brand = usePortalBrand();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [configured, setConfigured] = useState(false);
@@ -76,7 +78,7 @@ export function GoogleCalendarCard() {
           Google Calendar
         </CardTitle>
         <p className="text-sm text-muted">
-          Sync confirmed shoots to Google Calendar. Swift Portal remains the source of truth.
+          Sync confirmed shoots to Google Calendar. {brand.portalName} remains the source of truth.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">

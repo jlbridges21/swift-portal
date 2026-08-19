@@ -1,14 +1,17 @@
 import { getClientStatusLabel, normalizeStatus } from "@/lib/constants";
 
 /** Client-facing notification copy — never expose internal status names. */
-export function clientStatusNotification(status: string): { title: string; body: string } {
+export function clientStatusNotification(
+  status: string,
+  businessName = "our team"
+): { title: string; body: string } {
   const s = normalizeStatus(status);
   const label = getClientStatusLabel(s);
 
   const messages: Record<string, { title: string; body: string }> = {
     new_request: {
       title: "Request Received",
-      body: "Swift Aerial Media is reviewing your project details. We'll be in touch shortly.",
+      body: `${businessName} is reviewing your project details. We'll be in touch shortly.`,
     },
     quote_sent: {
       title: "Review Proposal",
@@ -36,7 +39,7 @@ export function clientStatusNotification(status: string): { title: string; body:
     },
     delivered: {
       title: "Project Complete",
-      body: "Payment confirmed — all deliverables are now available to download. Thank you for choosing Swift Aerial Media!",
+      body: `Payment confirmed — all deliverables are now available to download. Thank you for choosing ${businessName}!`,
     },
   };
 

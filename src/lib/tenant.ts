@@ -5,7 +5,7 @@ import { getProfile } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 
 /**
- * Swift Aerial Media — the only production tenant until onboarding exists.
+ * Legacy production business — the only tenant until onboarding exists.
  * Every use of this constant is a TODO to be removed once the calling path
  * resolves a real business. Grep for it to find remaining work.
  */

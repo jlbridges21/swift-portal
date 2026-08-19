@@ -285,7 +285,7 @@ function buildEventBody(ctx: ShootSyncContext, appUrl: string) {
   };
 }
 
-/** Mirror a confirmed shoot to Google Calendar (create or update). Swift Portal is source of truth. */
+/** Mirror a confirmed shoot to Google Calendar (create or update). The portal is source of truth. */
 export async function syncShootToGoogleCalendar(
   ctx: ShootSyncContext,
   businessId: string

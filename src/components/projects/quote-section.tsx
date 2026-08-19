@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { ProposalCard } from "@/components/projects/proposal-card";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 import type { Payment, ProjectQuote, QuoteLineItem } from "@/lib/types";
 import {
   getProjectActiveQuote,
@@ -68,6 +69,7 @@ export function QuoteSection({
   onPaymentCreated,
 }: QuoteSectionProps) {
   const router = useRouter();
+  const brand = usePortalBrand();
   const [quotes, setQuotes] = useState(initialQuotes);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -485,7 +487,7 @@ export function QuoteSection({
     if (quote.status === "changes_requested") {
       return (
         <p className="text-sm text-muted">
-          Your change request was submitted. Swift Aerial Media will send a revised proposal soon.
+          Your change request was submitted. {brand.name} will send a revised proposal soon.
         </p>
       );
     }

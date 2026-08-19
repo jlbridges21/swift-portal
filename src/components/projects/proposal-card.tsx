@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import type { ProjectQuote } from "@/lib/types";
-import { PRELIMINARY_ESTIMATE_DISCLAIMER } from "@/lib/service-templates";
+import { preliminaryEstimateDisclaimer } from "@/lib/service-templates";
+import { usePortalBrand } from "@/components/brand/brand-provider";
 import {
   getQuoteIntroText,
   getQuotePackageName,
@@ -23,6 +24,7 @@ interface ProposalCardProps {
 }
 
 export function ProposalCard({ quote, kind, isAdmin, actions, className }: ProposalCardProps) {
+  const brand = usePortalBrand();
   const packageName = getQuotePackageName(quote);
   const { showPrice, priceLabel, priceCents } = getQuotePriceDisplay(quote);
   const includes = parseQuoteIncludes(quote.description);
@@ -44,9 +46,9 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
           <p className="text-sm font-semibold tracking-tight text-slate-900">
             About this Preliminary Estimate
           </p>
-          <p className="text-sm leading-relaxed text-slate-600">{PRELIMINARY_ESTIMATE_DISCLAIMER}</p>
+          <p className="text-sm leading-relaxed text-slate-600">{preliminaryEstimateDisclaimer(brand.name)}</p>
           <p className="text-xs leading-relaxed text-slate-500">
-            This is not the final proposal. Final pricing will be confirmed after Swift Aerial Media
+            This is not the final proposal. Final pricing will be confirmed after {brand.name}
             reviews the property, schedules the shoot, and confirms the project scope.
           </p>
         </div>

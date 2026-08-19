@@ -225,7 +225,7 @@ export function buildDefaultWorkflowSettings(): WorkflowSettings {
         body: "Hi {{client_name}}, we received your request for {{property_address}}. We'll review the details and follow up shortly. View your portal: {{portal_link}}",
       },
       proposal_ready: {
-        subject: "Your Swift Aerial Media proposal is ready",
+        subject: "Your {{business_name}} proposal is ready",
         body: "Hi {{client_name}}, your official proposal for {{project_name}} is ready to review. {{portal_link}}",
       },
       scheduling_request: {
@@ -250,7 +250,7 @@ export function buildDefaultWorkflowSettings(): WorkflowSettings {
       },
       project_completed: {
         subject: "Your project is complete",
-        body: "Hi {{client_name}}, {{project_name}} is complete. Thank you for choosing Swift Aerial Media! {{portal_link}}",
+        body: "Hi {{client_name}}, {{project_name}} is complete. Thank you for choosing {{business_name}}! {{portal_link}}",
       },
     },
     businessDefaults: {

@@ -2,15 +2,22 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
 import { MapPin, ArrowLeft } from "lucide-react";
+import { getAppSettings } from "@/lib/app-settings";
+import { getTenantContext } from "@/lib/tenant";
+import { SITE } from "@/lib/site-metadata";
 
 export const metadata: Metadata = {
   title: "Page Not Found",
 };
 
-export default function NotFound() {
+export default async function NotFound() {
+  const tenant = await getTenantContext();
+  const settings = tenant ? await getAppSettings(tenant.businessId) : null;
+  const label = settings?.business.businessName || SITE.company;
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
-      <p className="text-sm font-medium uppercase tracking-widest text-accent">Swift Aerial Media</p>
+      <p className="text-sm font-medium uppercase tracking-widest text-accent">{label}</p>
       <h1 className="mt-4 text-6xl font-bold tracking-tight text-primary">404</h1>
       <p className="mt-3 max-w-sm text-lg text-muted">
         This page doesn&apos;t exist, or you may not have permission to view it.

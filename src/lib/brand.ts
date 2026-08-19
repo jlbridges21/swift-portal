@@ -1,14 +1,18 @@
-export const LOGO_URL =
-  "https://assets.cdn.filesafe.space/6wSSuNQZ67Uqdlfzvz8B/media/6a42cba90c7afddf1484c118.png";
+/**
+ * Platform fallback identity only. Never render these values to a user when
+ * `BrandProvider` / `getAppSettings(businessId)` is available — they exist so
+ * imports of `BRAND` / `LOGO_URL` do not crash in code paths without a tenant.
+ */
+export const LOGO_URL = "/icons/icon-192.png";
 
 export const BRAND = {
-  name: "Swift Aerial Media",
-  portalName: "Swift Portal",
+  name: "Client Portal",
+  portalName: "Client Portal",
   logoUrl: LOGO_URL,
   faviconUrl: "/icons/icon-192.png",
 } as const;
 
-// File size limits in bytes
+// File size limits in bytes — not brand data.
 export const FILE_SIZE_LIMITS = {
   photo: 100 * 1024 * 1024, // 100MB
   video: 2 * 1024 * 1024 * 1024, // 2GB
