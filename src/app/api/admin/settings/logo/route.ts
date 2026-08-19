@@ -5,6 +5,8 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getAppSettings, saveAppSettings } from "@/lib/app-settings";
 
 const LOGO_BUCKET = "business-logos";
+/** Stay under Vercel’s 4.5MB serverless body cap so the route actually runs. */
+const MAX_LOGO_BYTES = 4 * 1024 * 1024;
 
 export async function POST(request: Request) {
   const profile = await getProfile();
@@ -23,8 +25,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "File must be an image" }, { status: 400 });
   }
 
-  if (file.size > 5 * 1024 * 1024) {
-    return NextResponse.json({ error: "Image must be under 5MB" }, { status: 400 });
+  if (file.size > MAX_LOGO_BYTES) {
+    return NextResponse.json({ error: "Image must be under 4MB" }, { status: 400 });
   }
 
   const db = await createTenantServiceClient(tenant.businessId);

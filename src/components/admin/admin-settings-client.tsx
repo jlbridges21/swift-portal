@@ -34,14 +34,43 @@ interface AdminSettingsClientProps {
   notificationEvents: NotificationEventDef[];
 }
 
+const MAX_LOGO_BYTES = 4 * 1024 * 1024;
+const LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+
+async function parseApiResponse(res: Response): Promise<Record<string, unknown>> {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    let data: Record<string, unknown>;
+    try {
+      data = (await res.json()) as Record<string, unknown>;
+    } catch {
+      throw new Error(`Request failed with HTTP ${res.status}`);
+    }
+    if (!res.ok) {
+      const message = typeof data.error === "string" && data.error.trim() ? data.error : null;
+      throw new Error(message || `Request failed with HTTP ${res.status}`);
+    }
+    return data;
+  }
+
+  const text = (await res.text()).trim().replace(/\s+/g, " ").slice(0, 180);
+  throw new Error(
+    text
+      ? `Request failed with HTTP ${res.status}: ${text}`
+      : `Request failed with HTTP ${res.status}`
+  );
+}
+
 function DomainRecordsList({ refreshKey }: { refreshKey: string }) {
   const [records, setRecords] = useState<{ name: string; type: string; value: string; record: string }[]>([]);
 
   useEffect(() => {
     fetch("/api/admin/email/domain", { credentials: "include" })
-      .then((r) => r.json())
+      .then((r) => parseApiResponse(r))
       .then((data) => {
-        if (Array.isArray(data.records)) setRecords(data.records);
+        if (Array.isArray(data.records)) {
+          setRecords(data.records as { name: string; type: string; value: string; record: string }[]);
+        }
       })
       .catch(() => undefined);
   }, [refreshKey]);
@@ -180,9 +209,8 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
         credentials: "include",
         body: JSON.stringify({ settings: payload }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to save");
-      setSettings(data.settings);
+      const data = await parseApiResponse(res);
+      setSettings(data.settings as AppSettings);
       setBaseline(JSON.stringify(data.settings));
       setDirty(false);
       toast.success("Settings saved");
@@ -430,9 +458,8 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ domain: settings.email.customDomain }),
                     });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.error || "Could not start verification");
-                    if (data.settings) setSettings(data.settings);
+                    const data = await parseApiResponse(res);
+                    if (data.settings) setSettings(data.settings as AppSettings);
                     toast.success("Add the DNS records below, then re-check verification");
                   } catch (error) {
                     toast.error(error instanceof Error ? error.message : "Domain setup failed");
@@ -451,9 +478,8 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
                       method: "POST",
                       credentials: "include",
                     });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.error || "Re-check failed");
-                    if (data.settings) setSettings(data.settings);
+                    const data = await parseApiResponse(res);
+                    if (data.settings) setSettings(data.settings as AppSettings);
                     toast.success(`Domain status: ${data.domainVerificationStatus}`);
                   } catch (error) {
                     toast.error(error instanceof Error ? error.message : "Re-check failed");
@@ -569,6 +595,14 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
                   const file = e.target.files?.[0];
                   e.target.value = "";
                   if (!file) return;
+                  if (!LOGO_TYPES.has(file.type)) {
+                    toast.error("Logo must be a PNG, JPEG, or WebP image.");
+                    return;
+                  }
+                  if (file.size > MAX_LOGO_BYTES) {
+                    toast.error("Logo must be under 4MB.");
+                    return;
+                  }
                   const form = new FormData();
                   form.append("file", file);
                   try {
@@ -577,9 +611,10 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
                       credentials: "include",
                       body: form,
                     });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.error || "Upload failed");
-                    patchBusiness({ logoUrl: data.logoUrl, emailLogoUrl: data.logoUrl });
+                    const data = await parseApiResponse(res);
+                    const logoUrl = typeof data.logoUrl === "string" ? data.logoUrl : "";
+                    if (!logoUrl) throw new Error("Upload failed");
+                    patchBusiness({ logoUrl, emailLogoUrl: logoUrl });
                     toast.success("Logo uploaded");
                     router.refresh();
                   } catch (error) {
@@ -589,7 +624,8 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
               />
             </div>
             <p className="text-xs text-muted">
-              Uploads to this business&apos;s logo bucket. Existing hosted URLs (including filesafe.space) still work.
+              PNG, JPEG, or WebP, under 4MB. Uploads to this business&apos;s logo bucket. Existing
+              hosted URLs (including filesafe.space) still work.
             </p>
           </div>
           <div className="space-y-2">
