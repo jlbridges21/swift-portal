@@ -349,7 +349,7 @@ function SortablePhotoCard({
           className={cn(
             "absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border-2 shadow",
             selected
-              ? "border-accent bg-accent text-white"
+              ? "border-accent bg-accent text-accent-foreground"
               : "border-white bg-black/30 text-transparent"
           )}
           aria-hidden
@@ -1049,7 +1049,7 @@ export function AdminPhotoGrid({
           className={cn(
             "rounded-full px-3 py-1.5 text-xs font-medium transition",
             folderFilter === "all"
-              ? "bg-accent text-white"
+              ? "bg-accent text-accent-foreground"
               : "bg-slate-100 text-slate-700 hover:bg-slate-200"
           )}
         >
@@ -1061,7 +1061,7 @@ export function AdminPhotoGrid({
           className={cn(
             "rounded-full px-3 py-1.5 text-xs font-medium transition",
             folderFilter === "unfiled"
-              ? "bg-accent text-white"
+              ? "bg-accent text-accent-foreground"
               : "bg-slate-100 text-slate-700 hover:bg-slate-200"
           )}
         >
@@ -1082,7 +1082,7 @@ export function AdminPhotoGrid({
               className={cn(
                 "rounded-full px-3 py-1.5 text-xs font-medium transition",
                 folderFilter === folder.id
-                  ? "bg-accent text-white"
+                  ? "bg-accent text-accent-foreground"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               )}
             >

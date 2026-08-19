@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { getBusinessPortalOriginById, getDeploymentOrigin } from "@/lib/portal-url";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -21,7 +22,7 @@ export interface GoogleCalendarConnection {
 function getGoogleConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = getDeploymentOrigin();
   const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? `${appUrl}/api/google-calendar/callback`;
 
   if (!clientId || !clientSecret) {
@@ -295,7 +296,7 @@ export async function syncShootToGoogleCalendar(
     if (!conn?.calendar_id) return null;
 
     const token = await getValidAccessToken(conn, businessId);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const appUrl = await getBusinessPortalOriginById(businessId);
     const body = buildEventBody(ctx, appUrl);
     const calendarId = encodeURIComponent(conn.calendar_id);
 

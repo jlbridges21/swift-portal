@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -777,9 +777,14 @@ export function AdminProjectDetail({
             <Button variant="accent" size="sm" onClick={saveProject} disabled={saving} className="hidden md:inline-flex">
               {saving ? "Saving…" : "Save"}
             </Button>
-            <Link href={portalUrl} target="_blank">
-              <Button variant="outline" size="sm"><Eye className="h-4 w-4" /> Client Page</Button>
-            </Link>
+            <a
+              href={portalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Eye className="h-4 w-4" /> Client Page
+            </a>
             {initialProject.deleted_at ? (
               <Button variant="outline" size="sm" disabled={restoringProject} onClick={() => restoreProject()}>
                 Restore

@@ -27,7 +27,7 @@ export function StatusTimeline({ currentStatus, audience = "client" }: StatusTim
                   className={cn(
                     "flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors",
                     isComplete
-                      ? "border-accent bg-accent text-white"
+                      ? "border-accent bg-accent text-accent-foreground"
                       : "border-border bg-white text-muted"
                   )}
                 >
@@ -71,7 +71,7 @@ export function StatusTimeline({ currentStatus, audience = "client" }: StatusTim
                 className={cn(
                   "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2",
                   isComplete
-                    ? "border-accent bg-accent text-white"
+                    ? "border-accent bg-accent text-accent-foreground"
                     : "border-border bg-white"
                 )}
               >

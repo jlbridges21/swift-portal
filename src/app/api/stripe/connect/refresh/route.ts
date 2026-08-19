@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { getBusinessPortalOrigin, getDeploymentOrigin } from "@/lib/portal-url";
 import {
   createConnectAccountLink,
   isPlatformStripeBusiness,
@@ -9,9 +10,8 @@ import {
 
 export const runtime = "nodejs";
 
-function settingsRedirect(query: string): NextResponse {
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
-  return NextResponse.redirect(`${appUrl}/admin/settings?${query}`);
+function settingsRedirect(origin: string, query: string): NextResponse {
+  return NextResponse.redirect(`${origin}/admin/settings?${query}`);
 }
 
 /**
@@ -19,24 +19,26 @@ function settingsRedirect(query: string): NextResponse {
  * user back into hosted onboarding. Never log the URL.
  */
 export async function GET() {
+  const fallback = getDeploymentOrigin();
   try {
     const profile = await requireAdmin();
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
 
+    const origin = getBusinessPortalOrigin(tenant.business);
+
     if (isPlatformStripeBusiness(tenant.businessId)) {
-      return settingsRedirect("stripe=platform");
+      return settingsRedirect(origin, "stripe=platform");
     }
 
     const integration = await loadBusinessStripeIntegration(tenant.businessId);
     if (!integration?.stripe_account_id) {
-      return settingsRedirect("stripe=error");
+      return settingsRedirect(origin, "stripe=error");
     }
 
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
-    const url = await createConnectAccountLink(integration.stripe_account_id, appUrl);
+    const url = await createConnectAccountLink(integration.stripe_account_id, origin);
     return NextResponse.redirect(url);
   } catch {
-    return settingsRedirect("stripe=error");
+    return settingsRedirect(fallback, "stripe=error");
   }
 }

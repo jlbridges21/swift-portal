@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Circle, X } from "lucide-react";
@@ -45,19 +44,19 @@ export function SetupChecklistCard({ settings }: SetupChecklistCardProps) {
     {
       id: "name",
       label: "Business name",
-      href: "#settings-business",
+      href: "#settings-business-name",
       done: Boolean(b.businessName.trim()) && b.businessName !== PLATFORM_BUSINESS_DEFAULTS.businessName,
     },
     {
       id: "logo",
       label: "Logo",
-      href: "#settings-business",
+      href: "#settings-logo",
       done: Boolean(b.logoUrl) && b.logoUrl !== PLATFORM_BUSINESS_DEFAULTS.logoUrl && b.logoUrl !== BRAND.logoUrl,
     },
     {
       id: "colors",
       label: "Brand colors",
-      href: "#settings-business",
+      href: "#settings-colors",
       done:
         b.brandPrimaryColor !== PLATFORM_BUSINESS_DEFAULTS.brandPrimaryColor ||
         b.brandAccentColor !== PLATFORM_BUSINESS_DEFAULTS.brandAccentColor,
@@ -65,7 +64,7 @@ export function SetupChecklistCard({ settings }: SetupChecklistCardProps) {
     {
       id: "contact",
       label: "Contact info",
-      href: "#settings-business",
+      href: "#settings-contact",
       done: Boolean(b.primaryContactEmail.trim() || b.phoneNumber.trim()),
     },
     {
@@ -112,7 +111,7 @@ export function SetupChecklistCard({ settings }: SetupChecklistCardProps) {
       </CardHeader>
       <CardContent className="space-y-2">
         {items.map((item) => (
-          <Link
+          <a
             key={item.id}
             href={item.href}
             className="flex items-center gap-2 text-sm text-primary hover:underline"
@@ -124,7 +123,7 @@ export function SetupChecklistCard({ settings }: SetupChecklistCardProps) {
             )}
             <span>{item.label}</span>
             <span className="text-xs text-muted">{item.done ? "Done" : "Needs attention"}</span>
-          </Link>
+          </a>
         ))}
       </CardContent>
     </Card>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { getBusinessPortalOrigin } from "@/lib/portal-url";
 import {
   createConnectAccountLink,
   createStandardConnectedAccount,
@@ -11,10 +12,6 @@ import {
 } from "@/lib/stripe-connect";
 
 export const runtime = "nodejs";
-
-function appUrl(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
-}
 
 export async function GET() {
   try {
@@ -64,7 +61,10 @@ export async function POST() {
       await upsertPendingConnectedAccount(tenant.businessId, stripeAccountId);
     }
 
-    const url = await createConnectAccountLink(stripeAccountId, appUrl());
+    const url = await createConnectAccountLink(
+      stripeAccountId,
+      getBusinessPortalOrigin(tenant.business)
+    );
     return NextResponse.json({ url });
   } catch (err) {
     console.error("[stripe-connect] failed to start onboarding", {

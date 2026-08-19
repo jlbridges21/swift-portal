@@ -181,7 +181,7 @@ export function AdminMessagesInbox() {
                   <p className="mt-0.5 truncate text-sm text-slate-600">{c.last_message}</p>
                 </div>
                 {c.unread_count > 0 && (
-                  <span className="mt-1 inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-white">
+                  <span className="mt-1 inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-accent-foreground">
                     {c.unread_count}
                   </span>
                 )}
@@ -291,7 +291,7 @@ function TimelineRow({ item }: { item: CrmTimelineItem }) {
           className={cn(
             "max-w-[min(92%,28rem)] px-4 py-2.5 text-[15px] leading-relaxed shadow-sm",
             mine
-              ? "rounded-[20px] rounded-br-md bg-accent text-white"
+              ? "rounded-[20px] rounded-br-md bg-accent text-accent-foreground"
               : "rounded-[20px] rounded-bl-md bg-white text-slate-900 ring-1 ring-black/[0.06]",
             item.is_unread && !mine && "ring-2 ring-accent/35"
           )}

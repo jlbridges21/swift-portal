@@ -116,7 +116,7 @@ export function ProjectMessages({
             <MessageSquare className="h-5 w-5 text-accent" />
             Messages
             {unreadCount > 0 && (
-              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-white">
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-accent-foreground">
                 {unreadCount}
               </span>
             )}
@@ -149,7 +149,7 @@ export function ProjectMessages({
                       className={cn(
                         "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm",
                         mine
-                          ? "rounded-br-md bg-accent text-white"
+                          ? "rounded-br-md bg-accent text-accent-foreground"
                           : "rounded-bl-md bg-slate-100 text-slate-900",
                         message.is_unread && !mine && "ring-2 ring-accent/40"
                       )}

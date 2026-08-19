@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import { sanitizeCssColor } from "@/lib/brand-color";
+import { brandThemeCss, sanitizeCssColor } from "@/lib/brand-color";
 import { PLATFORM_BUSINESS_DEFAULTS, type PortalBrand } from "@/lib/portal-brand";
 import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
 
@@ -49,11 +49,7 @@ export function BrandProvider({
 
   return (
     <BrandContext.Provider value={{ ...brand, primaryColor: primary, accentColor: accent }}>
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `:root { --color-primary: ${primary}; --color-accent: ${accent}; --brand-primary: ${primary}; --brand-accent: ${accent}; }`,
-        }}
-      />
+      <style dangerouslySetInnerHTML={{ __html: brandThemeCss(primary, accent) }} />
       {children}
     </BrandContext.Provider>
   );

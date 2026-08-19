@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/notification-bell";
@@ -67,6 +67,7 @@ function ClientProfileNav({
 
 export function Header({ variant = "public", userRole, userName, userAvatar }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [messagesUnread, setMessagesUnread] = useState(0);
@@ -118,20 +119,32 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
 
         {variant === "dashboard" && userRole === "admin" && (
           <nav className="hidden lg:flex flex-1 items-center justify-center gap-0.5">
-            {adminLinks.map((link) => (
+            {adminLinks.map((link) => {
+              const active =
+                link.href === "/admin"
+                  ? pathname === "/admin"
+                  : pathname === link.href || pathname.startsWith(`${link.href}/`);
+              return (
               <Link
                 key={link.href}
                 href={link.href}
-                className="relative rounded-md px-2.5 py-1.5 text-sm text-muted transition-colors hover:bg-slate-100 hover:text-foreground xl:px-3"
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative rounded-md px-2.5 py-1.5 text-sm transition-colors xl:px-3",
+                  active
+                    ? "bg-accent-subtle font-medium text-accent"
+                    : "text-muted hover:bg-accent-subtle hover:text-foreground"
+                )}
               >
                 {link.label}
                 {link.href === "/admin/messages" && messagesUnread > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white">
+                  <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-foreground">
                     {messagesUnread > 9 ? "9+" : messagesUnread}
                   </span>
                 )}
               </Link>
-            ))}
+              );
+            })}
           </nav>
         )}
 

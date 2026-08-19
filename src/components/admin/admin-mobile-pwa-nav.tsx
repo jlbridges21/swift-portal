@@ -48,7 +48,7 @@ export function AdminMobilePwaNav() {
                   type="button"
                   onClick={() => setSheetOpen(true)}
                   aria-label="Create"
-                  className="flex min-h-11 min-w-11 -mt-5 flex-col items-center justify-center rounded-full bg-accent px-4 py-3 text-white shadow-lg shadow-accent/30 transition active:scale-95"
+                  className="flex min-h-11 min-w-11 -mt-5 flex-col items-center justify-center rounded-full bg-accent px-4 py-3 text-accent-foreground shadow-lg shadow-accent/30 transition active:scale-95"
                 >
                   <Plus className="h-6 w-6" />
                 </button>

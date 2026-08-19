@@ -6,7 +6,7 @@ import { TenantUnavailable } from "@/components/public/tenant-unavailable";
 import { getAppSettings } from "@/lib/app-settings";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
-import { publicHostBrand } from "@/lib/public-host-chrome";
+import { platformPortalBrand, publicHostBrand } from "@/lib/public-host-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -37,5 +37,9 @@ export default async function HomePage() {
     );
   }
 
-  return <PlatformLanding />;
+  return (
+    <BrandProvider brand={platformPortalBrand()}>
+      <PlatformLanding />
+    </BrandProvider>
+  );
 }

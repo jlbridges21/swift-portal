@@ -496,7 +496,7 @@ function AssetCard({
             </div>
           )}
           {asset.is_cover && (
-            <Badge className="absolute left-2 top-2 text-[10px] bg-accent text-white">Cover</Badge>
+            <Badge className="absolute left-2 top-2 text-[10px] bg-accent text-accent-foreground">Cover</Badge>
           )}
           {asset.is_favorite && (
             <Star className="absolute right-2 top-2 h-4 w-4 fill-amber-400 text-amber-400" />

@@ -261,7 +261,7 @@ function MonthDayCell({
         <span
           className={cn(
             "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold tabular-nums",
-            today && "bg-accent text-white",
+            today && "bg-accent text-accent-foreground",
             !today && isSelected && variant === "mobile" && "bg-accent/15 text-accent"
           )}
         >
@@ -477,7 +477,7 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
                 onClick={() => setView(id)}
                 className={cn(
                   "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-medium transition touch-manipulation min-h-11 sm:flex-initial sm:px-4",
-                  view === id ? "bg-accent text-white shadow-sm" : "text-muted hover:bg-slate-50 hover:text-primary"
+                  view === id ? "bg-accent text-accent-foreground shadow-sm" : "text-muted hover:bg-slate-50 hover:text-primary"
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
@@ -624,7 +624,7 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
                       <span
                         className={cn(
                           "flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold",
-                          today ? "bg-accent text-white" : "bg-white text-primary ring-1 ring-border"
+                          today ? "bg-accent text-accent-foreground" : "bg-white text-primary ring-1 ring-border"
                         )}
                       >
                         {format(day, "d")}
@@ -669,7 +669,7 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
                       <p
                         className={cn(
                           "mx-auto mt-0.5 flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold",
-                          today && "bg-accent text-white"
+                          today && "bg-accent text-accent-foreground"
                         )}
                       >
                         {format(day, "d")}

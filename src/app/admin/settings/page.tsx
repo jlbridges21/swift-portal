@@ -10,6 +10,7 @@ import { StripeConnectCard } from "@/components/admin/stripe-connect-card";
 import { SetupChecklistCard } from "@/components/admin/setup-checklist-card";
 import { ServicesSettingsCard } from "@/components/admin/services-settings-card";
 import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
+import { HashScrollHandler } from "@/components/ui/hash-scroll-handler";
 
 export default async function AdminSettingsPage() {
   const profile = await getProfile();
@@ -27,6 +28,7 @@ export default async function AdminSettingsPage() {
           title="Admin Settings"
           description={`Manage global notification, email, business, and proposal settings for ${settings.business.portalName}.`}
         />
+        <HashScrollHandler />
         <SetupChecklistCard settings={settings} />
         <SettingsCollapsible
           id="settings-payments"

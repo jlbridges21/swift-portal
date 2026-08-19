@@ -10,8 +10,14 @@ import {
   verifyGoogleOAuthState,
 } from "@/lib/google-calendar";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { getBusinessPortalOrigin, getDeploymentOrigin } from "@/lib/portal-url";
+
+function settingsUrl(tenantOrigin: string, query: string) {
+  return `${tenantOrigin}/admin/settings?${query}`;
+}
 
 export async function GET(request: Request) {
+  const fallbackOrigin = getDeploymentOrigin();
   try {
     const profile = await requireAdmin();
     const tenant = await getTenantContext();
@@ -22,29 +28,30 @@ export async function GET(request: Request) {
     const state = searchParams.get("state");
     const error = searchParams.get("error");
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    // Return the admin to this business's portal (not the registered OAuth host).
+    const appUrl = getBusinessPortalOrigin(tenant.business);
 
     if (error) {
-      return NextResponse.redirect(`${appUrl}/admin/settings?gcal=error`);
+      return NextResponse.redirect(settingsUrl(appUrl, "gcal=error"));
     }
 
     const cookieStore = await cookies();
     const savedState = cookieStore.get("gcal_oauth_state")?.value;
     if (!code || !state || state !== savedState) {
-      return NextResponse.redirect(`${appUrl}/admin/settings?gcal=invalid`);
+      return NextResponse.redirect(settingsUrl(appUrl, "gcal=invalid"));
     }
 
     const verified = verifyGoogleOAuthState(state);
     if (!verified.ok) {
       console.warn("[google-calendar] OAuth state rejected", { reason: verified.reason });
-      return NextResponse.redirect(`${appUrl}/admin/settings?gcal=invalid`);
+      return NextResponse.redirect(settingsUrl(appUrl, "gcal=invalid"));
     }
     if (verified.businessId !== tenant.businessId) {
       console.warn("[google-calendar] OAuth state business mismatch", {
         signed: verified.businessId,
         tenant: tenant.businessId,
       });
-      return NextResponse.redirect(`${appUrl}/admin/settings?gcal=invalid`);
+      return NextResponse.redirect(settingsUrl(appUrl, "gcal=invalid"));
     }
 
     const tokens = await exchangeGoogleCode(code);
@@ -65,11 +72,10 @@ export async function GET(request: Request) {
       await setGoogleCalendarId(verified.businessId, primary.id, primary.summary);
     }
 
-    const response = NextResponse.redirect(`${appUrl}/admin/settings?gcal=connected`);
+    const response = NextResponse.redirect(settingsUrl(appUrl, "gcal=connected"));
     response.cookies.delete("gcal_oauth_state");
     return response;
   } catch {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    return NextResponse.redirect(`${appUrl}/admin/settings?gcal=error`);
+    return NextResponse.redirect(settingsUrl(fallbackOrigin, "gcal=error"));
   }
 }

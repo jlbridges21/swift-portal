@@ -12,10 +12,12 @@ import { Loader2, RotateCcw, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ColorField } from "@/components/ui/color-field";
 import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
+import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
 import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
+import { brandContrastWarnings } from "@/lib/brand-color";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import type {
   AppSettings,
@@ -34,9 +36,6 @@ interface AdminSettingsClientProps {
   initialSettings: AppSettings;
   notificationEvents: NotificationEventDef[];
 }
-
-const MAX_LOGO_BYTES = 4 * 1024 * 1024;
-const LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 async function parseApiResponse(res: Response): Promise<Record<string, unknown>> {
   const contentType = res.headers.get("content-type") ?? "";
@@ -165,6 +164,10 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
   const [dirty, setDirty] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const colorWarnings = brandContrastWarnings(
+    settings.business.brandPrimaryColor,
+    settings.business.brandAccentColor
+  );
 
   useEffect(() => {
     setSettings(initialSettings);
@@ -555,7 +558,7 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
+          <div id="settings-business-name" tabIndex={-1} className="space-y-2 scroll-mt-24">
             <Label htmlFor="businessName">Business name</Label>
             <Input id="businessName" value={settings.business.businessName} onChange={(e) => patchBusiness({ businessName: e.target.value })} />
           </div>
@@ -567,7 +570,7 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
             <Label htmlFor="adminDisplayName">Admin display name</Label>
             <Input id="adminDisplayName" value={settings.business.adminDisplayName} onChange={(e) => patchBusiness({ adminDisplayName: e.target.value })} />
           </div>
-          <div className="space-y-2">
+          <div id="settings-contact" tabIndex={-1} className="space-y-2 scroll-mt-24">
             <Label htmlFor="primaryContactEmail">Primary contact email</Label>
             <Input id="primaryContactEmail" type="email" value={settings.business.primaryContactEmail} onChange={(e) => patchBusiness({ primaryContactEmail: e.target.value })} />
           </div>
@@ -579,59 +582,18 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
             <Label htmlFor="websiteUrl">Website URL</Label>
             <Input id="websiteUrl" value={settings.business.websiteUrl} onChange={(e) => patchBusiness({ websiteUrl: e.target.value })} />
           </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="logoUrl">Logo</Label>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Input id="logoUrl" value={settings.business.logoUrl} onChange={(e) => patchBusiness({ logoUrl: e.target.value })} />
-              <Button
-                type="button"
-                variant="outline"
-                className="shrink-0"
-                onClick={() => document.getElementById("logo-file")?.click()}
-              >
-                Upload logo
-              </Button>
-              <input
-                id="logo-file"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file) return;
-                  if (!LOGO_TYPES.has(file.type)) {
-                    toast.error("Logo must be a PNG, JPEG, or WebP image.");
-                    return;
-                  }
-                  if (file.size > MAX_LOGO_BYTES) {
-                    toast.error("Logo must be under 4MB.");
-                    return;
-                  }
-                  const form = new FormData();
-                  form.append("file", file);
-                  try {
-                    const res = await fetch("/api/admin/settings/logo", {
-                      method: "POST",
-                      credentials: "include",
-                      body: form,
-                    });
-                    const data = await parseApiResponse(res);
-                    const logoUrl = typeof data.logoUrl === "string" ? data.logoUrl : "";
-                    if (!logoUrl) throw new Error("Upload failed");
-                    patchBusiness({ logoUrl, emailLogoUrl: logoUrl });
-                    toast.success("Logo uploaded");
-                    router.refresh();
-                  } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Upload failed");
-                  }
-                }}
-              />
-            </div>
-            <p className="text-xs text-muted">
-              PNG, JPEG, or WebP, under 4MB. Uploads to this business&apos;s logo bucket. Existing
-              hosted URLs (including filesafe.space) still work.
-            </p>
+          <div id="settings-logo" tabIndex={-1} className="sm:col-span-2 scroll-mt-24">
+            <BrandAssetField
+              kind="logo"
+              inputId="logoUrl"
+              value={settings.business.logoUrl}
+              onUrlChange={(logoUrl) =>
+                patchBusiness({
+                  logoUrl,
+                  emailLogoUrl: settings.business.emailLogoUrl || logoUrl,
+                })
+              }
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="supportEmail">Support email</Label>
@@ -645,13 +607,21 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
             <Label htmlFor="tagline">Tagline</Label>
             <Input id="tagline" value={settings.business.tagline ?? ""} onChange={(e) => patchBusiness({ tagline: e.target.value })} />
           </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="emailLogoUrl">Email logo URL</Label>
-            <Input id="emailLogoUrl" value={settings.business.emailLogoUrl ?? ""} onChange={(e) => patchBusiness({ emailLogoUrl: e.target.value })} />
+          <div id="settings-email-logo" tabIndex={-1} className="sm:col-span-2 scroll-mt-24">
+            <BrandAssetField
+              kind="emailLogo"
+              inputId="emailLogoUrl"
+              value={settings.business.emailLogoUrl ?? ""}
+              onUrlChange={(emailLogoUrl) => patchBusiness({ emailLogoUrl })}
+            />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="faviconUrl">Favicon URL</Label>
-            <Input id="faviconUrl" value={settings.business.faviconUrl ?? ""} onChange={(e) => patchBusiness({ faviconUrl: e.target.value })} />
+          <div id="settings-favicon" tabIndex={-1} className="sm:col-span-2 scroll-mt-24">
+            <BrandAssetField
+              kind="favicon"
+              inputId="faviconUrl"
+              value={settings.business.faviconUrl ?? ""}
+              onUrlChange={(faviconUrl) => patchBusiness({ faviconUrl })}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="termsUrl">Terms URL</Label>
@@ -685,12 +655,14 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
             <Label htmlFor="country">Country</Label>
             <Input id="country" value={settings.business.country ?? ""} onChange={(e) => patchBusiness({ country: e.target.value })} />
           </div>
+          <div id="settings-colors" tabIndex={-1} className="sm:col-span-2 grid gap-4 sm:grid-cols-2 scroll-mt-24">
           <ColorField
             id="brandPrimaryColor"
             label="Brand primary color"
             value={settings.business.brandPrimaryColor}
             fallback="#0F172A"
             onChange={(v) => patchBusiness({ brandPrimaryColor: v })}
+            warning={colorWarnings.find((w) => w.field === "brandPrimaryColor")?.message}
           />
           <ColorField
             id="brandAccentColor"
@@ -698,7 +670,9 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
             value={settings.business.brandAccentColor}
             fallback="#3B82F6"
             onChange={(v) => patchBusiness({ brandAccentColor: v })}
+            warning={colorWarnings.find((w) => w.field === "brandAccentColor")?.message}
           />
+          </div>
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="ghlWebhookUrl">GoHighLevel webhook URL</Label>
             <Input

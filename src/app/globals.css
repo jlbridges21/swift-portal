@@ -1,13 +1,31 @@
 @import "tailwindcss";
 
-@theme inline {
+/*
+ * Color tokens are NOT in `@theme inline` so utilities keep `var(--color-*)`
+ * and BrandProvider can restyle the whole app at runtime. Defaults match
+ * Swift Aerial Media (#0F172A / #3B82F6) so that tenant looks unchanged
+ * before the provider paints.
+ */
+@theme {
   --color-primary: #0f172a;
+  --color-primary-foreground: #ffffff;
+  --color-primary-hover: #1e293b;
+  --color-primary-active: #020617;
   --color-accent: #3b82f6;
+  --color-accent-foreground: #ffffff;
+  --color-accent-hover: #2563eb;
+  --color-accent-active: #1d4ed8;
+  --color-accent-subtle: #eff6ff;
+  --color-accent-border: #93c5fd;
+  --color-ring: #3b82f6;
   --color-background: #f8fafc;
   --color-foreground: #334155;
   --color-muted: #64748b;
   --color-border: #e2e8f0;
   --color-card: #ffffff;
+}
+
+@theme inline {
   --font-sans: var(--font-geist-sans);
   --admin-pwa-nav-height: 72px;
 }

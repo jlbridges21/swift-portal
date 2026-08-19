@@ -18,6 +18,56 @@ function serviceClient() {
   );
 }
 
+export function isLocalOrRelativeOrigin(origin: string): boolean {
+  const trimmed = origin.trim();
+  if (!trimmed || trimmed.startsWith("/") || trimmed.startsWith(".")) return true;
+  try {
+    const url = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    const host = url.hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost");
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Never return localhost or a relative URL in production. Callers pass the
+ * candidate origin; we log and fall back to the platform apex if it is unsafe.
+ */
+export function assertPublicPortalOrigin(
+  origin: string,
+  context: string,
+  production = process.env.NODE_ENV === "production"
+): string {
+  const trimmed = origin.trim().replace(/\/$/, "");
+  const local = isLocalOrRelativeOrigin(trimmed);
+  const missingHttps = production && !trimmed.toLowerCase().startsWith("https://");
+
+  if (production && (local || missingHttps)) {
+    const fallback = `https://${getPlatformRootDomain()}`;
+    console.error("[portal-url] refused non-public origin in production", {
+      context,
+      origin: trimmed || "(empty)",
+      fallback,
+    });
+    return fallback;
+  }
+  return trimmed;
+}
+
+/**
+ * Deployment origin for OAuth callback URLs registered with Google/Stripe.
+ * Localhost is allowed in development only.
+ */
+export function getDeploymentOrigin(): string {
+  const raw = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+  if (raw) return assertPublicPortalOrigin(raw, "NEXT_PUBLIC_APP_URL");
+  if (process.env.NODE_ENV === "production") {
+    return `https://${getPlatformRootDomain()}`;
+  }
+  return "http://localhost:3000";
+}
+
 /**
  * Canonical public origin for a business (emails, push, Stripe customer redirects).
  * Prefer `custom_domain`; otherwise `{slug}.{PLATFORM_ROOT_DOMAIN}`.
@@ -25,10 +75,17 @@ function serviceClient() {
 export function getBusinessPortalOrigin(business: PortalUrlBusiness): string {
   const custom = business.custom_domain?.trim();
   if (custom) {
-    return `https://${stripHost(custom)}`;
+    return assertPublicPortalOrigin(`https://${stripHost(custom)}`, "getBusinessPortalOrigin.custom_domain");
   }
-  const slug = business.slug.trim().toLowerCase();
-  return `https://${slug}.${getPlatformRootDomain()}`;
+  const slug = business.slug?.trim().toLowerCase() ?? "";
+  if (!slug) {
+    console.error("[portal-url] getBusinessPortalOrigin: business has no slug or custom_domain", business);
+    return assertPublicPortalOrigin(`https://${getPlatformRootDomain()}`, "getBusinessPortalOrigin.unresolved");
+  }
+  return assertPublicPortalOrigin(
+    `https://${slug}.${getPlatformRootDomain()}`,
+    "getBusinessPortalOrigin.subdomain"
+  );
 }
 
 export async function getBusinessPortalOriginById(businessId: string): Promise<string> {
@@ -40,7 +97,8 @@ export async function getBusinessPortalOriginById(businessId: string): Promise<s
     .is("deleted_at", null)
     .maybeSingle();
   if (!data?.slug) {
-    return `https://${getPlatformRootDomain()}`;
+    console.error("[portal-url] getBusinessPortalOriginById: business not resolved", { businessId });
+    return assertPublicPortalOrigin(`https://${getPlatformRootDomain()}`, "getBusinessPortalOriginById.unresolved");
   }
   return getBusinessPortalOrigin(data);
 }
