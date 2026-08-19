@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getPublicHostContext } from "@/lib/host-resolution";
+import { validateBusinessSlug } from "@/lib/reserved-subdomains";
 
 /**
  * Legacy production business — the only tenant until onboarding exists.
@@ -184,6 +185,13 @@ export async function resolvePublicSignupBusinessId(body: {
 
   const rawId = typeof body.business_id === "string" ? body.business_id.trim() : "";
   const rawSlug = typeof body.business_slug === "string" ? body.business_slug.trim() : "";
+
+  if (rawSlug) {
+    const slugCheck = validateBusinessSlug(rawSlug);
+    if (!slugCheck.ok) {
+      return { ok: false, status: 400, error: slugCheck.error };
+    }
+  }
 
   if (rawId && rawId !== host.businessId) {
     return { ok: false, status: 400, error: "Invalid or inactive business." };

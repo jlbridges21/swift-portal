@@ -2,6 +2,10 @@ import { cache } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { headers } from "next/headers";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
+import {
+  BUSINESS_SLUG_RE,
+  isReservedPlatformSubdomain,
+} from "@/lib/reserved-subdomains";
 
 /** Overwritten on every proxy pass — never trust a client-supplied value. */
 export const HOST_KIND_HEADER = "x-sp-host-kind";
@@ -13,23 +17,8 @@ export const HOST_RESOLVE_SOURCE_HEADER = "x-sp-resolve-source";
 export const PATH_TENANT_COOKIE = "sp_path_tenant";
 
 const HOST_CACHE_TTL_MS = 30_000;
-const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const RESERVED_PLATFORM_LABELS = new Set([
-  "www",
-  "mail",
-  "smtp",
-  "ftp",
-  "api",
-  "app",
-  "admin",
-  "platform",
-  "status",
-  "docs",
-  "cdn",
-]);
 
 export type HostKind = "tenant" | "platform" | "unmatched";
 export type HostResolveSource =
@@ -37,6 +26,7 @@ export type HostResolveSource =
   | "subdomain"
   | "path"
   | "apex"
+  | "reserved"
   | "unmatched";
 
 export type HostBusinessRow = {
@@ -81,7 +71,7 @@ export function parsePathTenantPrefix(pathname: string): {
   const match = pathname.match(/^\/b\/([^/]+)(?:\/(.*))?$/);
   if (!match) return { slug: null, remainder: pathname };
   const slug = match[1].toLowerCase();
-  if (!SLUG_RE.test(slug)) return { slug: null, remainder: pathname };
+  if (!BUSINESS_SLUG_RE.test(slug)) return { slug: null, remainder: pathname };
   const rest = match[2] ? `/${match[2]}` : "/";
   return { slug, remainder: rest };
 }
@@ -177,7 +167,9 @@ function tenantResult(
  * Resolution order (prompt 18):
  * a) exact `businesses.custom_domain`
  * b) first label under PLATFORM_ROOT_DOMAIN equals `businesses.slug` exactly
- * c) `/b/{slug}` path (local / unmatched hosts; also allowed on the platform apex)
+ *    (reserved labels never match — they are the platform)
+ * c) `/b/{slug}` path (local / unmatched hosts; also allowed on the platform apex).
+ *    Reserved labels here are the platform, not a tenant.
  * d) apex shootportal.app → platform
  * e) unmatched
  *
@@ -201,7 +193,8 @@ export async function resolveRequestHost(input: {
   }
 
   const label = host ? subdomainLabel(host, root) : null;
-  if (label && !RESERVED_PLATFORM_LABELS.has(label) && SLUG_RE.test(label)) {
+  const reservedHostLabel = Boolean(label && isReservedPlatformSubdomain(label));
+  if (label && !reservedHostLabel && BUSINESS_SLUG_RE.test(label)) {
     const byLabel = await lookupBySlug(label);
     if (byLabel) {
       return tenantResult(byLabel, "subdomain", {
@@ -211,6 +204,17 @@ export async function resolveRequestHost(input: {
   }
 
   if (pathSlug) {
+    if (isReservedPlatformSubdomain(pathSlug)) {
+      return {
+        kind: "platform",
+        source: "reserved",
+        business: null,
+        pathPrefix: "",
+        rewritePathname: remainder,
+        setPathCookie: null,
+        clearPathCookie: true,
+      };
+    }
     const byPath = await lookupBySlug(pathSlug);
     if (byPath) {
       return tenantResult(byPath, "path", {
@@ -230,10 +234,10 @@ export async function resolveRequestHost(input: {
     };
   }
 
-  if (host && apex.has(host)) {
+  if (host && (apex.has(host) || reservedHostLabel)) {
     return {
       kind: "platform",
-      source: "apex",
+      source: reservedHostLabel ? "reserved" : "apex",
       business: null,
       pathPrefix: "",
       rewritePathname: null,
@@ -245,7 +249,8 @@ export async function resolveRequestHost(input: {
   const cookieSlug = input.pathCookie?.trim().toLowerCase() ?? "";
   if (
     cookieSlug &&
-    SLUG_RE.test(cookieSlug) &&
+    BUSINESS_SLUG_RE.test(cookieSlug) &&
+    !isReservedPlatformSubdomain(cookieSlug) &&
     input.pathname.startsWith("/api/")
   ) {
     const byCookie = await lookupBySlug(cookieSlug);

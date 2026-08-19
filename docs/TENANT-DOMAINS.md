@@ -15,7 +15,7 @@ Lookup cache: in-memory Map, **30s TTL**, keys `custom:{host}`, `slug:{slug}`, `
 | Step | Match | Result |
 |---|---|---|
 | **a** | Exact `businesses.custom_domain` (lowercase host, port stripped). Swift: `portal.swiftaerialmedia.com`. | That business (including `status='suspended'`, so public pages can explain). Soft-deleted rows are ignored. |
-| **b** | First DNS label under `PLATFORM_ROOT_DOMAIN` (default `shootportal.app`) **equals `businesses.slug` exactly**. | That business. `test-pilot-drones.shootportal.app` → Test Pilot Drones (`slug = test-pilot-drones`). `testpilot.shootportal.app` does **not** match. Reserved labels (`www`, `app`, `api`, `mail`, `admin`, `platform`, …) are never treated as slugs. |
+| **b** | First DNS label under `PLATFORM_ROOT_DOMAIN` (default `shootportal.app`) **equals `businesses.slug` exactly**, and the label is **not reserved**. | That business. `test-pilot-drones.shootportal.app` → Test Pilot Drones. `testpilot.shootportal.app` does **not** match. Reserved labels (`www`, `api`, `admin`, `app`, `mail`, `smtp`, `ftp`, `cdn`, `static`, `assets`, `status`, `help`, `support`, `docs`, `blog`, `platform`, `dashboard`) never resolve to a tenant — they are the platform (`api.shootportal.app` shows ShootPortal, not a business). |
 | **c** | Path `/b/{slug}` (and `/b/{slug}/…`). Used for local development and for testing on unmatched hosts (including Vercel previews). Also honored on the platform apex. Ignored when (a) or (b) already matched. | Rewrite internally to the remainder (`/b/swift-aerial-media/login` → `/login`) so existing routes run. Sets httpOnly cookie `sp_path_tenant` so `/api/request` and `/api/catalog/services` keep the same tenant after the path is rewritten. The cookie is **not** used for HTML pages — `http://localhost:3000/` after visiting `/b/{slug}` is still the platform landing. `/b/nonexistent` is the platform, not Swift, and clears that cookie. |
 | **d** | Apex `shootportal.app` or `www.shootportal.app` with no `/b/{slug}`. | **Platform**, not a tenant. Minimal ShootPortal landing. |
 | **e** | No match (Vercel `*.vercel.app` previews, unknown hosts, bare `localhost` without `/b/` or cookie). | **Unmatched.** Authenticated users continue with profile tenant context (same as today). Public pages show the **platform** landing, not a 404 and not Swift. |
@@ -43,15 +43,23 @@ To attach another business’s own hostname:
 
 ## Onboard a new tenant end to end
 
-1. Insert `businesses` with unique `slug` (DNS label), `name`, `status='active'`.
+1. Insert `businesses` with unique `slug` (DNS label), `name`, `status='active'`. The slug must not be a reserved platform subdomain (see below); create/edit goes through `validateBusinessSlug` / `parseBusinessSlugOrThrow` in `src/lib/reserved-subdomains.ts`, and Postgres rejects reserved values with the same message.
 2. Seed `business_settings`, `business_services`, Stripe/email as in earlier prompts.
 3. Create the first admin `profiles` row with that `business_id`.
 4. Wildcard: open `https://{slug}.shootportal.app` — branded landing, login, request form.
 5. Optional custom domain: registrar + Vercel + `custom_domain` as above.
-6. Local: `http://localhost:3000/b/{slug}` for landing / login / request.
+6. Local: `http://localhost:3000/b/{slug}` for landing / login / request. `/b/www` (and other reserved labels) is the platform page, not a tenant.
 7. Confirm public `/api/request` stamps `clients`, `projects`, `profiles.business_id`, and the preliminary estimate on **that** business.
 8. Confirm a client of another business who visits this host is redirected to **their** origin (`custom_domain` or `{slug}.{PLATFORM_ROOT_DOMAIN}`).
 9. Suspend: `status='suspended'` — public pages show unavailable; admins/clients cannot complete login. Reactivate to restore.
+
+## Reserved subdomains
+
+These labels are never tenant slugs. Host resolution skips them; `businesses.slug` insert/update is rejected (migration v41).
+
+`www`, `api`, `admin`, `app`, `mail`, `smtp`, `ftp`, `cdn`, `static`, `assets`, `status`, `help`, `support`, `docs`, `blog`, `platform`, `dashboard`
+
+Keep `src/lib/reserved-subdomains.ts` and `supabase/migration-v41-reserved-subdomains.sql` in sync.
 
 ## Portal URLs in email, push, and Stripe
 
