@@ -44,7 +44,9 @@ export const PROPERTY_TYPES = [
   "Other",
 ] as const;
 
-/** DAM filter labels mapped to stored service_type values */
+/** DAM filter labels mapped to stored service_type values.
+ *  Swift catalog fallback only — live DAM filters come from business_services + historical projects.
+ */
 export const DAM_SERVICE_FILTERS = [
   { label: "Aerial Photography", value: "Aerial Photography" },
   { label: "Aerial Video", value: "Aerial Videography" },
@@ -78,6 +80,7 @@ export const DAM_SUGGESTED_TAGS = [
   "Cover Photo",
 ] as const;
 
+/** Swift catalog strings. Live request forms load per-business `business_services`. */
 export const SERVICE_TYPES = [
   "Aerial Photography",
   "Aerial Videography",

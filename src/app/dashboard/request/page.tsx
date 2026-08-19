@@ -7,9 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { SERVICE_TYPES } from "@/lib/constants";
+import { ServiceSelect } from "@/components/forms/service-select";
 import { AddressFields } from "@/components/forms/address-fields";
 
 export default function LoggedInRequestPage() {
@@ -62,13 +61,7 @@ export default function LoggedInRequestPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="service_requested">Service *</Label>
-                  <Select
-                    id="service_requested"
-                    name="service_requested"
-                    required
-                    placeholder="Select service"
-                    options={SERVICE_TYPES.map((s) => ({ value: s, label: s }))}
-                  />
+                  <ServiceSelect id="service_requested" name="service_requested" required placeholder="Select service" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="preferred_date">Preferred Date</Label>

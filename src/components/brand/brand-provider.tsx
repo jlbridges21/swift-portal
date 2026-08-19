@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 import { sanitizeCssColor } from "@/lib/brand-color";
 import { PLATFORM_BUSINESS_DEFAULTS, type PortalBrand } from "@/lib/portal-brand";
+import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
 
 const DEFAULT_BRAND: PortalBrand = {
   name: PLATFORM_BUSINESS_DEFAULTS.businessName,
@@ -27,6 +28,7 @@ const DEFAULT_BRAND: PortalBrand = {
   emailLogoUrl: PLATFORM_BUSINESS_DEFAULTS.emailLogoUrl,
   termsUrl: PLATFORM_BUSINESS_DEFAULTS.termsUrl,
   privacyUrl: PLATFORM_BUSINESS_DEFAULTS.privacyUrl,
+  preliminaryDisclaimer: DEFAULT_PRELIMINARY_DISCLAIMER,
 };
 
 const BrandContext = createContext<PortalBrand>(DEFAULT_BRAND);

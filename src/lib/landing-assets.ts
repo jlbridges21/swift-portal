@@ -29,7 +29,7 @@ export const DEFAULT_LANDING_ASSETS: LandingAssets = {
   logoStackedWhite: "",
   logoHeader: "",
   logoFooter: "",
-  favicon: "/icons/icon-192.png",
+  favicon: "/icons/sp-icon-192.png",
   ownerHeadshot: "",
   luxuryHome: "",
   golfCourse: "",

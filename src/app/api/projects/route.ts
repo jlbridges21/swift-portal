@@ -11,6 +11,7 @@ import { defaultProjectTitle, formatAutoProjectName, resolveAddressFromBody } fr
 import { linkProjectToProperty } from "@/lib/properties";
 import { createPreliminaryEstimate, upsertPreliminaryEstimate } from "@/lib/preliminary-estimates";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { resolveServiceId } from "@/lib/business-services";
 import { getAppSettings, type NotificationEventKey } from "@/lib/app-settings";
 
 function clientEventKeyForStatus(status: string): NotificationEventKey | undefined {
@@ -65,6 +66,8 @@ export async function POST(request: Request) {
       formatAutoProjectName(clientName, street, body.service_type) ||
       defaultProjectTitle(property_address, body.service_type);
 
+    const serviceId = await resolveServiceId(businessId, body.service_type);
+
     const { data: project, error } = await supabase
       .from("projects")
       .insert({
@@ -73,6 +76,7 @@ export async function POST(request: Request) {
         project_name: projectName,
         property_address,
         service_type: body.service_type,
+        service_id: serviceId,
         status: body.status || "new_request",
         shoot_date: null,
         delivery_date: body.delivery_date || null,
@@ -137,6 +141,10 @@ export async function PATCH(request: Request) {
     const businessId = tenant.businessId;
     const body = await request.json();
     const { id, ...updates } = body;
+
+    if (updates.service_type && typeof updates.service_type === "string") {
+      updates.service_id = await resolveServiceId(businessId, updates.service_type);
+    }
 
     const supabase = await createClient();
 

@@ -7,6 +7,8 @@ import { redirect } from "next/navigation";
 import { AdminSettingsClient } from "@/components/admin/admin-settings-client";
 import { GoogleCalendarCard } from "@/components/admin/google-calendar-card";
 import { StripeConnectCard } from "@/components/admin/stripe-connect-card";
+import { SetupChecklistCard } from "@/components/admin/setup-checklist-card";
+import { ServicesSettingsCard } from "@/components/admin/services-settings-card";
 import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 
 export default async function AdminSettingsPage() {
@@ -25,7 +27,9 @@ export default async function AdminSettingsPage() {
           title="Admin Settings"
           description={`Manage global notification, email, business, and proposal settings for ${settings.business.portalName}.`}
         />
+        <SetupChecklistCard settings={settings} />
         <SettingsCollapsible
+          id="settings-payments"
           title="Payments"
           description="Connect your Stripe account so clients pay you directly."
         >
@@ -40,6 +44,13 @@ export default async function AdminSettingsPage() {
           <Suspense fallback={null}>
             <GoogleCalendarCard />
           </Suspense>
+        </SettingsCollapsible>
+        <SettingsCollapsible
+          id="settings-services"
+          title="Services"
+          description="Catalog and preliminary estimate prices for this business."
+        >
+          <ServicesSettingsCard />
         </SettingsCollapsible>
         <AdminSettingsClient
           initialSettings={settings}

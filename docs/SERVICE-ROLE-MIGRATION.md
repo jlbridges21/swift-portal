@@ -178,4 +178,12 @@ Platform-generic `DEFAULT_APP_SETTINGS` / `PLATFORM_BUSINESS_DEFAULTS`. Swift id
 
 `saveAppSettings` enforces sender allowlisting: platform mode uses `{businessName} <noreply@{PLATFORM_EMAIL_DOMAIN}>`; custom-domain mode requires `domainVerificationStatus='verified'` and `senderEmail` on that business's `customDomain`. Admins cannot write `domainVerificationStatus` via PATCH (super_admin or the Resend verify endpoint can). Resend webhook still requires `business_id` tag and cross-checks `projects.business_id`. Isolation assertion count unchanged.
 
-Do **not** start editable services or tenant routing in this batch.
+## Per-business services (v40)
+
+`business_services` holds each tenant's catalog (slug, aliases, preliminary cents, line items, includes). Swift is seeded from the former `SERVICE_TEMPLATES` array with `{{businessName}}` / `{{portalName}}` left unsubstituted. `projects.service_id` is backfilled; `service_type` remains free text. Isolation harness after v40: **76** assertions (was 74). Tenant B `business_services` is invisible to a Swift admin and does not reverse-leak Swift rows.
+
+## Platform identity (ShootPortal)
+
+Platform-generic constants (`SITE`, `BRAND`, `PLATFORM_BUSINESS_DEFAULTS`) now use ShootPortal (`shootportal.app`, Portal Indigo `#4F46E5`). Tenant `business_settings` rows were not modified. `PLATFORM_ROOT_DOMAIN` is documented only — hostname routing is a later prompt.
+
+Do **not** start tenant hostname routing in this batch.

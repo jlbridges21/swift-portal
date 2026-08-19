@@ -11,7 +11,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate } from "@/lib/utils";
 import { formatFileSize } from "@/lib/brand";
 import {
-  DAM_SERVICE_FILTERS,
   DAM_SUGGESTED_TAGS,
   PROPERTY_TYPES,
 } from "@/lib/constants";
@@ -38,6 +37,7 @@ interface FilterOptions {
   clients: { id: string; name: string; full_name: string | null; company: string | null }[];
   properties: { id: string; address: string; nickname: string | null }[];
   projects: { id: string; project_name: string; property_address: string }[];
+  services?: string[];
 }
 
 interface MediaLibraryClientProps {
@@ -296,7 +296,10 @@ export function MediaLibraryClient({
           <Select
             value={service}
             onChange={(e) => setService(e.target.value)}
-            options={[{ value: "", label: "All services" }, ...DAM_SERVICE_FILTERS.map((s) => ({ value: s.value, label: s.label }))]}
+            options={[
+              { value: "", label: "All services" },
+              ...(filterOptions.services ?? []).map((s) => ({ value: s, label: s })),
+            ]}
           />
           <Select
             value={propertyType}

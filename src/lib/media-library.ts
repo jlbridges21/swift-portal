@@ -655,7 +655,8 @@ export async function getLibraryFilterOptions(businessId: string) {
     { data: clients },
     { data: properties },
     { data: projects },
-    { data: serviceRows },
+    { data: catalogRows },
+    { data: projectServiceRows },
     { data: tagRows },
   ] = await Promise.all([
     db.from("clients").select("id, name, full_name, company").order("name"),
@@ -665,13 +666,17 @@ export async function getLibraryFilterOptions(businessId: string) {
       .select("id, project_name, property_address")
       .order("updated_at", { ascending: false })
       .limit(500),
+    db.from("business_services").select("name, aliases").eq("is_active", true),
     db.from("projects").select("service_type"),
     db.from("media_asset_tags").select("tag"),
   ]);
 
-  const services = [
-    ...new Set((serviceRows ?? []).map((row) => row.service_type).filter(Boolean)),
-  ].sort();
+  const fromCatalog = (catalogRows ?? []).flatMap((row) => {
+    const aliases = Array.isArray(row.aliases) ? row.aliases.map(String) : [];
+    return [row.name, ...aliases];
+  });
+  const fromProjects = (projectServiceRows ?? []).map((row) => row.service_type).filter(Boolean);
+  const services = [...new Set([...fromCatalog, ...fromProjects].filter(Boolean))].sort();
   const tags = [...new Set((tagRows ?? []).map((row) => row.tag).filter(Boolean))].sort();
 
   return {

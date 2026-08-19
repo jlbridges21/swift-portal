@@ -1,9 +1,10 @@
 -- Swift Portal — tenant isolation harness (RLS read + write)
--- Run in Supabase SQL Editor after v29–v37. See docs/TENANT-TESTING.md.
+-- Run in Supabase SQL Editor after v29–v40. See docs/TENANT-TESTING.md.
 --
 -- v35: business_id has no DEFAULT. Every INSERT below sets it EXPLICITLY.
 -- v36: storage object keys — Tenant B prefix must be invisible to a Swift admin.
 -- v37: business_integrations — Tenant B Stripe row must be invisible to a Swift admin.
+-- v40: business_services — Tenant B catalog row must be invisible to a Swift admin.
 --
 -- Prerequisite auth users (Dashboard → Authentication → Add user, auto-confirm):
 --   tenant-b-admin@example.test
@@ -121,6 +122,7 @@ DECLARE
   v_proj_msg   uuid := '00000000-0000-0000-0000-0000000000c8';
   v_media_unassigned uuid := '00000000-0000-0000-0000-0000000000c9';
   v_notif_admin uuid := '00000000-0000-0000-0000-0000000000ca';
+  v_svc        uuid := '00000000-0000-0000-0000-0000000000cb';
   v_storage_name text;
 
   v_assertions int;
@@ -196,6 +198,7 @@ BEGIN
     RAISE NOTICE 'storage.objects SQL DELETE skipped (%). Use Storage API.', SQLERRM;
   END;
   DELETE FROM projects WHERE business_id = v_business;
+  DELETE FROM business_services WHERE business_id = v_business;
   DELETE FROM properties WHERE business_id = v_business;
   DELETE FROM clients WHERE business_id = v_business;
   DELETE FROM business_settings WHERE business_id = v_business;
@@ -278,6 +281,14 @@ BEGIN
     business_id, stripe_account_id, stripe_account_status
   ) VALUES (
     v_business, 'acct_tenant_b_isolation', 'not_connected'
+  );
+
+  INSERT INTO business_services (
+    id, business_id, name, slug, description, preliminary_estimate_cents,
+    starting_label, includes, line_items, notes, hide_pricing, is_active, aliases, display_order
+  ) VALUES (
+    v_svc, v_business, 'Tenant B Aerial', 'tenant_b_aerial', 'Isolation catalog row', 12300,
+    'Starting at $123', '[]'::jsonb, '[]'::jsonb, '', false, true, '["Tenant B Aerial"]'::jsonb, 0
   );
 
   INSERT INTO client_messages (id, business_id, client_id, project_id, sender_user_id, sender_role, body)
@@ -365,7 +376,9 @@ BEGIN
     RAISE EXCEPTION 'READ LEAK: business_integrations Tenant B row visible (% rows)', v_n;
   END IF;
   PERFORM _tenant_test_bump();
-  PERFORM _tenant_test_assert_read_hidden('client_messages', v_message);
+
+  -- v40: Tenant B business_services is invisible to Swift admin
+  PERFORM _tenant_test_assert_read_hidden('business_services', v_svc);
   PERFORM _tenant_test_assert_read_hidden('project_messages', v_proj_msg);
   PERFORM _tenant_test_assert_read_hidden('notifications', v_notif);
   PERFORM _tenant_test_assert_read_hidden('communications', v_comm);
@@ -521,6 +534,7 @@ BEGIN
   PERFORM _tenant_test_assert_swift_hidden('shoot_proposals', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('google_calendar_connections_v2', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('business_integrations', v_swift_bid);
+  PERFORM _tenant_test_assert_swift_hidden('business_services', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('client_messages', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('project_messages', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('notifications', v_swift_bid);
@@ -623,6 +637,7 @@ BEGIN
     RAISE NOTICE 'storage.objects SQL DELETE skipped (%). Use Storage API.', SQLERRM;
   END;
   DELETE FROM projects WHERE business_id = v_teardown_business_id;
+  DELETE FROM business_services WHERE business_id = v_teardown_business_id;
   DELETE FROM properties WHERE business_id = v_teardown_business_id;
   DELETE FROM clients WHERE business_id = v_teardown_business_id;
   DELETE FROM business_settings WHERE business_id = v_teardown_business_id;

@@ -1,4 +1,5 @@
 import type { EmailSettings } from "@/lib/app-settings";
+import { DEFAULT_PLATFORM_EMAIL_DOMAIN, DEFAULT_PLATFORM_FROM_ADDRESS } from "@/lib/site-metadata";
 
 export type EmailSenderMode = "platform" | "custom_domain";
 export type DomainVerificationStatus = "unverified" | "pending" | "verified";
@@ -26,7 +27,7 @@ export function getPlatformEmailDomain(): string {
   if (explicit) return normalizeDomain(explicit);
   const from = process.env.PLATFORM_FROM_ADDRESS || process.env.RESEND_FROM_EMAIL || "";
   const address = from.match(/<([^>]+)>/)?.[1] ?? from;
-  return parseEmailDomain(address) ?? "";
+  return parseEmailDomain(address) ?? DEFAULT_PLATFORM_EMAIL_DOMAIN;
 }
 
 export function getPlatformFromAddress(): string {
@@ -36,7 +37,7 @@ export function getPlatformFromAddress(): string {
   }
   const domain = getPlatformEmailDomain();
   if (domain) return `noreply@${domain}`;
-  const fallback = process.env.RESEND_FROM_EMAIL?.trim() || "";
+  const fallback = process.env.RESEND_FROM_EMAIL?.trim() || DEFAULT_PLATFORM_FROM_ADDRESS;
   return fallback.match(/<([^>]+)>/)?.[1] ?? fallback;
 }
 

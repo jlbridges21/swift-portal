@@ -1,5 +1,6 @@
 import { parseAddress } from "@/lib/address";
-import { getServiceTemplate } from "@/lib/service-templates";
+import { getServiceTemplate } from "@/lib/business-services";
+import type { ServiceTemplate } from "@/lib/service-templates";
 import type { GhlPortalLeadPayload } from "./types";
 import { buildPortalUrls } from "./sync-portal-lead";
 
@@ -24,8 +25,7 @@ export interface PortalLeadPayloadInput {
   source?: string | null;
 }
 
-function formatEstimatedValue(serviceRequested: string): string {
-  const template = getServiceTemplate(serviceRequested);
+function formatEstimatedValue(template: ServiceTemplate): string {
   const totalCents = template.lineItems.reduce((sum, item) => sum + item.amount_cents, 0);
   if (totalCents > 0) {
     return `$${(totalCents / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
@@ -33,16 +33,18 @@ function formatEstimatedValue(serviceRequested: string): string {
   return template.startingLabel || "";
 }
 
-export function buildPortalLeadPayload(input: PortalLeadPayloadInput): GhlPortalLeadPayload {
+export async function buildPortalLeadPayload(
+  input: PortalLeadPayloadInput & { businessId: string }
+): Promise<GhlPortalLeadPayload> {
   const parsed = parseAddress(input.propertyAddress);
   const city = input.city?.trim() || parsed.city || "";
   const state = input.state?.trim() || parsed.state || "";
   const postalCode = input.postalCode?.trim() || parsed.zip || "";
   const projectAddress = input.streetAddress?.trim() || parsed.address || input.propertyAddress;
   const urls = buildPortalUrls({ clientId: input.clientId, projectId: input.projectId });
-  const template = getServiceTemplate(input.serviceRequested);
+  const template = await getServiceTemplate(input.serviceRequested, input.businessId);
 
-  const source = input.source?.trim() || "Client Portal";
+  const source = input.source?.trim() || "ShootPortal";
 
   return {
     firstName: input.firstName,
@@ -55,7 +57,7 @@ export function buildPortalLeadPayload(input: PortalLeadPayloadInput): GhlPortal
     city,
     state,
     postalCode,
-    estimatedProposalValue: formatEstimatedValue(input.serviceRequested),
+    estimatedProposalValue: formatEstimatedValue(template),
     projectNotes: input.projectNotes?.trim() || "",
     portalClientUrl: urls.portalClientUrl,
     portalProjectUrl: urls.portalProjectUrl,

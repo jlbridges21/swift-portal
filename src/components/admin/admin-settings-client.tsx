@@ -345,6 +345,7 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
       </SettingsCollapsible>
 
       <SettingsCollapsible
+        id="settings-email"
         title="Email Settings"
         description="Branding and sender details for client notification emails."
       >
@@ -484,6 +485,7 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
       </SettingsCollapsible>
 
       <SettingsCollapsible
+        id="settings-business"
         title="Business Settings"
         description="Portal branding used in the header, emails, and customer-facing copy."
         defaultOpen
@@ -674,7 +676,7 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
               id="ghlLeadSource"
               value={settings.integrations?.ghlLeadSource ?? ""}
               onChange={(e) => patchIntegrations({ ghlLeadSource: e.target.value })}
-              placeholder="Client Portal"
+              placeholder="ShootPortal"
             />
           </div>
           </div>
@@ -734,6 +736,16 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
                 value={settings.proposals.defaultProposalExpirationDays}
                 onChange={(e) => patchProposals({ defaultProposalExpirationDays: Number(e.target.value) || 0 })}
               />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="preliminaryDisclaimer">Preliminary estimate disclaimer</Label>
+              <Textarea
+                id="preliminaryDisclaimer"
+                rows={4}
+                value={settings.proposals.preliminaryDisclaimer}
+                onChange={(e) => patchProposals({ preliminaryDisclaimer: e.target.value })}
+              />
+              <p className="text-xs text-muted">Use {"{{businessName}}"} — it is replaced when the estimate is shown.</p>
             </div>
           </div>
         </CardContent>

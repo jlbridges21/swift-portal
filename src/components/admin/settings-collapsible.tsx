@@ -10,6 +10,7 @@ interface SettingsCollapsibleProps {
   defaultOpen?: boolean;
   children: React.ReactNode;
   className?: string;
+  id?: string;
 }
 
 export function SettingsCollapsible({
@@ -18,11 +19,12 @@ export function SettingsCollapsible({
   defaultOpen = false,
   children,
   className,
+  id,
 }: SettingsCollapsibleProps) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <section className={cn("rounded-xl border border-border bg-white shadow-sm overflow-hidden", className)}>
+    <section id={id} className={cn("rounded-xl border border-border bg-white shadow-sm overflow-hidden", className)}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

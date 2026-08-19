@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { SITE, SITE_THEME_COLOR } from "@/lib/site-metadata";
+import { SITE, SITE_ICONS } from "@/lib/site-metadata";
 
 // TODO(tenant): per-business PWA manifest and OG images — later phase
 export const alt = SITE.title;
@@ -9,8 +9,8 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export default async function Image() {
-  const iconBuffer = await readFile(join(process.cwd(), "public/icons/icon-512.png"));
-  const iconSrc = `data:image/png;base64,${iconBuffer.toString("base64")}`;
+  const brandBuffer = await readFile(join(process.cwd(), "public", SITE_ICONS.ogBrand.replace(/^\//, "")));
+  const brandSrc = `data:image/png;base64,${brandBuffer.toString("base64")}`;
 
   return new ImageResponse(
     (
@@ -19,33 +19,18 @@ export default async function Image() {
           width: "100%",
           height: "100%",
           display: "flex",
-          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: SITE_THEME_COLOR,
+          background: "#0F172A",
         }}
       >
-        <img src={iconSrc} width={200} height={200} alt="" />
-        <div
-          style={{
-            marginTop: 40,
-            fontSize: 56,
-            fontWeight: 700,
-            color: "#ffffff",
-            letterSpacing: "-0.02em",
-          }}
-        >
-          {SITE.name}
-        </div>
-        <div
-          style={{
-            marginTop: 16,
-            fontSize: 28,
-            color: "#94a3b8",
-          }}
-        >
-          {SITE.company}
-        </div>
+        <img
+          src={brandSrc}
+          width={1200}
+          height={630}
+          alt=""
+          style={{ objectFit: "cover" }}
+        />
       </div>
     ),
     { ...size }

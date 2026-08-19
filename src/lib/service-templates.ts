@@ -1,5 +1,11 @@
 import type { QuoteLineItem } from "@/lib/types";
 import { formatIncludesBlock } from "@/lib/quote-display";
+import {
+  DEFAULT_PRELIMINARY_DISCLAIMER,
+  preliminaryEstimateDisclaimer,
+} from "@/lib/preliminary-disclaimer";
+
+export { DEFAULT_PRELIMINARY_DISCLAIMER, preliminaryEstimateDisclaimer };
 
 export interface ServiceTemplate {
   id: string;
@@ -13,16 +19,18 @@ export interface ServiceTemplate {
   notes: string;
   hidePricing?: boolean;
   recommended?: boolean;
-}
-
-export function preliminaryEstimateDisclaimer(businessName: string): string {
-  return `This estimate is generated automatically based on the service you selected. It is intended to provide a realistic starting price for your project. Final pricing may be adjusted after ${businessName} reviews the property, confirms the scope of work, and schedules the shoot.`;
+  /** Database row id when loaded from business_services. */
+  dbId?: string;
 }
 
 /** @deprecated Use preliminaryEstimateDisclaimer(businessName) */
 export const PRELIMINARY_ESTIMATE_DISCLAIMER = preliminaryEstimateDisclaimer("our team");
 
-export const SERVICE_TEMPLATES: ServiceTemplate[] = [
+/**
+ * Hardcoded Swift catalog used ONLY when a business has zero `business_services`
+ * rows (empty catalog fallback). Live businesses read from the database.
+ */
+export const FALLBACK_SERVICE_TEMPLATES: ServiceTemplate[] = [
   {
     id: "aerial_photography",
     serviceNames: ["Aerial Photography"],
@@ -274,50 +282,91 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
   },
 ];
 
-const FALLBACK_TEMPLATE = SERVICE_TEMPLATES.find((t) => t.id === "custom_project")!;
+export const SERVICE_TEMPLATES = FALLBACK_SERVICE_TEMPLATES;
 
-export function getServiceTemplate(serviceType: string): ServiceTemplate {
+function templateById(templates: ServiceTemplate[], id: string): ServiceTemplate | undefined {
+  return templates.find((t) => t.id === id);
+}
+
+/**
+ * Fuzzy matcher used for historical `service_type` strings.
+ * Candidates come from `business_services` (or the fallback array).
+ */
+export function matchServiceTemplate(
+  serviceType: string,
+  templates: ServiceTemplate[]
+): ServiceTemplate {
+  const list = templates.length ? templates : FALLBACK_SERVICE_TEMPLATES;
+  const fallback =
+    templateById(list, "custom_project") ??
+    templateById(FALLBACK_SERVICE_TEMPLATES, "custom_project")!;
+
   const trimmed = serviceType.trim();
-  const exact = SERVICE_TEMPLATES.find((t) => t.serviceNames.includes(trimmed));
+  const exact = list.find((t) => t.serviceNames.includes(trimmed) || t.title === trimmed);
   if (exact) return exact;
 
   const lower = trimmed.toLowerCase();
-  const fuzzy = SERVICE_TEMPLATES.find((t) =>
+  const fuzzy = list.find((t) =>
     t.serviceNames.some(
       (name) => lower.includes(name.toLowerCase()) || name.toLowerCase().includes(lower)
     )
   );
   if (fuzzy) return fuzzy;
 
-  if (lower.includes("photo")) return SERVICE_TEMPLATES.find((t) => t.id === "aerial_photography")!;
+  if (lower.includes("photo")) {
+    const hit = templateById(list, "aerial_photography");
+    if (hit) return hit;
+  }
   if (lower.includes("video") || lower.includes("cinematic")) {
-    return SERVICE_TEMPLATES.find((t) => t.id === "aerial_videography")!;
+    const hit = templateById(list, "aerial_videography");
+    if (hit) return hit;
   }
   if (lower.includes("360") || lower.includes("tour")) {
-    return SERVICE_TEMPLATES.find((t) => t.id === "exterior_360_tour")!;
+    const hit = templateById(list, "exterior_360_tour");
+    if (hit) return hit;
   }
-  if (lower.includes("mapping")) return SERVICE_TEMPLATES.find((t) => t.id === "drone_mapping")!;
+  if (lower.includes("mapping")) {
+    const hit = templateById(list, "drone_mapping");
+    if (hit) return hit;
+  }
   if (lower.includes("real estate") || lower.includes("listing media")) {
-    return SERVICE_TEMPLATES.find((t) => t.id === "real_estate_media_package")!;
+    const hit = templateById(list, "real_estate_media_package");
+    if (hit) return hit;
   }
-  if (lower.includes("commercial")) return SERVICE_TEMPLATES.find((t) => t.id === "commercial_aerial")!;
-  if (lower.includes("event")) return SERVICE_TEMPLATES.find((t) => t.id === "event_coverage")!;
-  if (lower.includes("construction")) return SERVICE_TEMPLATES.find((t) => t.id === "construction_progress")!;
-  if (lower.includes("roof")) return SERVICE_TEMPLATES.find((t) => t.id === "roof_inspection")!;
+  if (lower.includes("commercial")) {
+    const hit = templateById(list, "commercial_aerial");
+    if (hit) return hit;
+  }
+  if (lower.includes("event")) {
+    const hit = templateById(list, "event_coverage");
+    if (hit) return hit;
+  }
+  if (lower.includes("construction")) {
+    const hit = templateById(list, "construction_progress");
+    if (hit) return hit;
+  }
+  if (lower.includes("roof")) {
+    const hit = templateById(list, "roof_inspection");
+    if (hit) return hit;
+  }
   if (lower.includes("insurance") || lower.includes("documentation")) {
-    return SERVICE_TEMPLATES.find((t) => t.id === "property_documentation")!;
+    const hit = templateById(list, "property_documentation");
+    if (hit) return hit;
   }
   if (lower.includes("waterfront") || lower.includes("marina")) {
-    return SERVICE_TEMPLATES.find((t) => t.id === "marina_waterfront")!;
+    const hit = templateById(list, "marina_waterfront");
+    if (hit) return hit;
   }
   if (lower.includes("hoa") || lower.includes("community")) {
-    return SERVICE_TEMPLATES.find((t) => t.id === "hoa_community")!;
+    const hit = templateById(list, "hoa_community");
+    if (hit) return hit;
   }
   if (lower.includes("golf") || lower.includes("resort")) {
-    return SERVICE_TEMPLATES.find((t) => t.id === "golf_resort")!;
+    const hit = templateById(list, "golf_resort");
+    if (hit) return hit;
   }
 
-  return FALLBACK_TEMPLATE;
+  return fallback;
 }
 
 export function applyServiceTemplateBrand(
@@ -334,59 +383,63 @@ export function applyServiceTemplateBrand(
   };
 }
 
-export function buildPreliminaryEstimatePayload(
-  serviceType: string,
+export function buildPreliminaryEstimatePayloadFromTemplate(
+  template: ServiceTemplate,
   brand?: { portalName: string; businessName: string }
 ) {
-  const template = applyServiceTemplateBrand(
-    getServiceTemplate(serviceType),
+  const branded = applyServiceTemplateBrand(
+    template,
     brand ?? { portalName: "the portal", businessName: "our team" }
   );
-  const total_cents = template.lineItems.reduce((sum, item) => sum + item.amount_cents, 0);
-  const includesBlock = formatIncludesBlock(template.includes);
-  const description = [template.description, includesBlock].filter(Boolean).join("\n\n");
+  const total_cents = branded.lineItems.reduce((sum, item) => sum + item.amount_cents, 0);
+  const includesBlock = formatIncludesBlock(branded.includes);
+  const description = [branded.description, includesBlock].filter(Boolean).join("\n\n");
 
   const noteParts = [
-    template.hidePricing ? "Custom Proposal Required" : template.startingLabel,
-    template.notes,
+    branded.hidePricing ? "Custom Proposal Required" : branded.startingLabel,
+    branded.notes,
   ].filter(Boolean);
 
   return {
-    title: `Preliminary Estimate — ${template.title}`,
+    title: `Preliminary Estimate — ${branded.title}`,
     description,
-    line_items: template.lineItems,
+    line_items: branded.lineItems,
     total_cents,
     notes: noteParts.join("\n\n"),
     quote_kind: "preliminary" as const,
   };
 }
 
+const LEGACY_PAYMENT_DESCRIPTIONS: Record<string, string> = {
+  "Aerial Photography": "Professional aerial photography package for the selected property.",
+  "Aerial Videography": "Professional aerial videography package for the selected property.",
+  "360 Virtual Tour": "Professional exterior 360° virtual tour for the selected property.",
+  "Exterior 360° Virtual Tour": "Professional exterior 360° virtual tour for the selected property.",
+  "Drone Mapping": "Professional drone mapping package for the selected property.",
+  "Real Estate Media Package": "Complete real estate media package for the selected property.",
+  "Commercial Aerial Media": "Commercial aerial media package for the selected property.",
+  "Event Coverage": "Professional aerial event coverage for the selected property.",
+  "Construction Progress Documentation":
+    "Construction progress documentation package for the selected property.",
+  "Land Listing Package": "Land listing aerial media package for the selected property.",
+  "Roof Inspection": "Aerial roof inspection package for the selected property.",
+  "Property Documentation": "Property documentation package for the selected property.",
+  "Marina & Waterfront Marketing": "Marina and waterfront marketing package for the selected property.",
+  "HOA & Community Marketing": "HOA and community marketing package for the selected property.",
+};
+
 /** Short default copy for Stripe payment link descriptions. */
-export function getServicePaymentDescription(serviceType: string): string {
+export function getServicePaymentDescription(
+  serviceType: string,
+  template?: ServiceTemplate | null
+): string {
   const trimmed = serviceType.trim();
-  const known: Record<string, string> = {
-    "Aerial Photography": "Professional aerial photography package for the selected property.",
-    "Aerial Videography": "Professional aerial videography package for the selected property.",
-    "360 Virtual Tour": "Professional exterior 360° virtual tour for the selected property.",
-    "Exterior 360° Virtual Tour": "Professional exterior 360° virtual tour for the selected property.",
-    "Drone Mapping": "Professional drone mapping package for the selected property.",
-    "Real Estate Media Package": "Complete real estate media package for the selected property.",
-    "Commercial Aerial Media": "Commercial aerial media package for the selected property.",
-    "Event Coverage": "Professional aerial event coverage for the selected property.",
-    "Construction Progress Documentation":
-      "Construction progress documentation package for the selected property.",
-    "Land Listing Package": "Land listing aerial media package for the selected property.",
-    "Roof Inspection": "Aerial roof inspection package for the selected property.",
-    "Property Documentation": "Property documentation package for the selected property.",
-    "Marina & Waterfront Marketing": "Marina and waterfront marketing package for the selected property.",
-    "HOA & Community Marketing": "HOA and community marketing package for the selected property.",
-  };
-  if (known[trimmed]) return known[trimmed];
-
-  const template = getServiceTemplate(trimmed);
-  if (template.description && template.description.length <= 120 && !template.description.includes("\n")) {
-    return template.description;
+  const fromRow = template?.description?.trim().split("\n")[0]?.trim();
+  if (fromRow && !fromRow.includes("{{")) {
+    return fromRow.slice(0, 250);
   }
+  if (LEGACY_PAYMENT_DESCRIPTIONS[trimmed]) return LEGACY_PAYMENT_DESCRIPTIONS[trimmed];
 
-  return `Professional ${template.title.toLowerCase()} package for the selected property.`;
+  const resolved = template ?? matchServiceTemplate(trimmed, FALLBACK_SERVICE_TEMPLATES);
+  return `Professional ${resolved.title.toLowerCase()} package for the selected property.`;
 }

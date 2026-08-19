@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { SITE, SITE_BACKGROUND_COLOR, SITE_ICONS, SITE_THEME_COLOR } from "@/lib/site-metadata";
 
-// TODO(tenant): per-business PWA manifest and OG images — later phase
+// Per-tenant manifests remain a later phase — this file is platform ShootPortal only.
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: SITE.name,

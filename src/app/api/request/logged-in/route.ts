@@ -11,6 +11,7 @@ import { resolvePersonName } from "@/lib/person-name";
 import { buildPortalLeadPayload } from "@/lib/ghl/build-portal-lead-payload";
 import { syncNewProjectLeadToGhl } from "@/lib/ghl/sync-portal-lead";
 import { getAppSettings } from "@/lib/app-settings";
+import { resolveServiceId } from "@/lib/business-services";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function POST(request: Request) {
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
   });
 
   const projectName = defaultProjectTitle(property_address, service_requested);
+  const serviceId = await resolveServiceId(businessId, service_requested);
 
   const { data: project, error: projectError } = await db
     .from("projects")
@@ -63,6 +65,7 @@ export async function POST(request: Request) {
       project_name: projectName,
       property_address,
       service_type: service_requested,
+      service_id: serviceId,
       status: "new_request",
       notes: notes || null,
       shoot_date: preferred_date || null,
@@ -122,7 +125,8 @@ export async function POST(request: Request) {
   });
 
   const appSettings = await getAppSettings(businessId);
-  const ghlPayload = buildPortalLeadPayload({
+  const ghlPayload = await buildPortalLeadPayload({
+    businessId,
     clientId,
     projectId: project.id,
     firstName: person.firstName,

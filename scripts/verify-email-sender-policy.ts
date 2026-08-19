@@ -12,7 +12,7 @@ import type { EmailSettings } from "../src/lib/app-settings";
 
 const SWIFT = "00000000-0000-0000-0000-000000000001";
 const PILOT = "00000000-0000-0000-0000-0000000000aa";
-const PLATFORM = "swiftaerialmedia.com";
+const PLATFORM = "shootportal.app";
 
 function email(partial: Partial<EmailSettings>): EmailSettings {
   return {
@@ -61,12 +61,12 @@ expectOk("platform mode empty sender", () =>
 );
 
 expectReject(
-  "attack: Test Pilot sets Swift senderEmail",
+  "attack: Test Pilot sets platform senderEmail",
   () =>
     assertEmailSenderPolicy({
       email: email({
         senderMode: "platform",
-        senderEmail: "notification@swiftaerialmedia.com",
+        senderEmail: "noreply@shootportal.app",
       }),
       businessId: PILOT,
       platformDomain: PLATFORM,
@@ -178,7 +178,7 @@ expectReject(
     assertEmailSenderPolicy({
       email: email({
         senderMode: "platform",
-        customDomain: "swiftaerialmedia.com",
+        customDomain: "shootportal.app",
       }),
       businessId: PILOT,
       platformDomain: PLATFORM,

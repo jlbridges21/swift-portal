@@ -6,6 +6,7 @@ import {
   type DomainVerificationStatus,
   type EmailSenderMode,
 } from "@/lib/email-sender-policy";
+import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
 import { mergeLandingAssets, type LandingAssets } from "@/lib/landing-assets";
 import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import {
@@ -87,6 +88,7 @@ export interface ProposalSettings {
   defaultEstimateExpirationDays: number;
   defaultProposalExpirationDays: number;
   allowClientProposalChanges: boolean;
+  preliminaryDisclaimer: string;
 }
 
 export interface IntegrationSettings {
@@ -150,7 +152,7 @@ function buildDefaultNotifications(): Record<NotificationEventKey, NotificationC
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   notifications: buildDefaultNotifications(),
   email: {
-    fromName: "Client Portal",
+    fromName: "ShootPortal",
     senderEmail: "",
     replyTo: "",
     footerText: "You received this email because you have a project with this portal.",
@@ -167,11 +169,12 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     defaultEstimateExpirationDays: 30,
     defaultProposalExpirationDays: 14,
     allowClientProposalChanges: true,
+    preliminaryDisclaimer: DEFAULT_PRELIMINARY_DISCLAIMER,
   },
   workflow: buildDefaultWorkflowSettings(),
   integrations: {
     ghlWebhookUrl: "",
-    ghlLeadSource: "Client Portal",
+    ghlLeadSource: "ShootPortal",
   },
   landing: mergeLandingAssets(null),
 };

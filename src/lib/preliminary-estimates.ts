@@ -2,7 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
-import { buildPreliminaryEstimatePayload } from "@/lib/service-templates";
+import { buildPreliminaryEstimatePayload } from "@/lib/business-services";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
 
 async function resolveProjectBusinessId(projectId: string): Promise<string | null> {
@@ -32,10 +32,10 @@ export async function upsertPreliminaryEstimate(
   }
 
   const db = await createTenantServiceClient(businessId);
-  const payload = buildPreliminaryEstimatePayload(serviceType, {
+  const payload = await buildPreliminaryEstimatePayload(serviceType, {
     portalName: appSettings.business.portalName,
     businessName: appSettings.business.businessName,
-  });
+  }, businessId);
   const expiresAt = addProposalExpiration(
     new Date(),
     appSettings.proposals.defaultEstimateExpirationDays
@@ -107,10 +107,10 @@ export async function createPreliminaryEstimate(
     if (existing) return existing;
   }
 
-  const payload = buildPreliminaryEstimatePayload(serviceType, {
+  const payload = await buildPreliminaryEstimatePayload(serviceType, {
     portalName: appSettings.business.portalName,
     businessName: appSettings.business.businessName,
-  });
+  }, businessId);
   const expiresAt = addProposalExpiration(
     new Date(),
     appSettings.proposals.defaultEstimateExpirationDays

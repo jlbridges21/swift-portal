@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { ProjectQuote } from "@/lib/types";
-import { preliminaryEstimateDisclaimer } from "@/lib/service-templates";
+import { preliminaryEstimateDisclaimer } from "@/lib/preliminary-disclaimer";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import {
   getQuoteIntroText,
@@ -46,7 +46,9 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
           <p className="text-sm font-semibold tracking-tight text-slate-900">
             About this Preliminary Estimate
           </p>
-          <p className="text-sm leading-relaxed text-slate-600">{preliminaryEstimateDisclaimer(brand.name)}</p>
+          <p className="text-sm leading-relaxed text-slate-600">
+            {preliminaryEstimateDisclaimer(brand.name, brand.preliminaryDisclaimer)}
+          </p>
           <p className="text-xs leading-relaxed text-slate-500">
             This is not the final proposal. Final pricing will be confirmed after {brand.name}
             reviews the property, schedules the shoot, and confirms the project scope.

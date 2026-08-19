@@ -1,6 +1,7 @@
 import type { AppSettings } from "@/lib/app-settings";
 import { BRAND } from "@/lib/brand";
 import { sanitizeCssColor } from "@/lib/brand-color";
+import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
 
 export interface PortalBrand {
   name: string;
@@ -25,19 +26,20 @@ export interface PortalBrand {
   emailLogoUrl: string;
   termsUrl: string;
   privacyUrl: string;
+  preliminaryDisclaimer: string;
 }
 
 /** Platform fallback only — never the source of a tenant's rendered identity. */
 export const PLATFORM_BUSINESS_DEFAULTS: AppSettings["business"] = {
-  businessName: "Client Portal",
-  portalName: "Client Portal",
+  businessName: "ShootPortal",
+  portalName: "ShootPortal",
   adminDisplayName: "Admin",
   primaryContactEmail: "",
   phoneNumber: "",
   websiteUrl: "",
   logoUrl: BRAND.logoUrl,
   brandPrimaryColor: "#0F172A",
-  brandAccentColor: "#3B82F6",
+  brandAccentColor: "#4F46E5",
   supportEmail: "",
   addressLine1: "",
   addressLine2: "",
@@ -45,8 +47,8 @@ export const PLATFORM_BUSINESS_DEFAULTS: AppSettings["business"] = {
   state: "",
   postalCode: "",
   country: "",
-  legalName: "Client Portal",
-  tagline: "",
+  legalName: "ShootPortal",
+  tagline: "From request to delivery. One portal.",
   faviconUrl: BRAND.faviconUrl,
   emailLogoUrl: BRAND.logoUrl,
   termsUrl: "",
@@ -78,5 +80,6 @@ export function getPortalBrandFromSettings(settings: AppSettings): PortalBrand {
     emailLogoUrl: b.emailLogoUrl || b.logoUrl || BRAND.logoUrl,
     termsUrl: b.termsUrl || "",
     privacyUrl: b.privacyUrl || "",
+    preliminaryDisclaimer: settings.proposals.preliminaryDisclaimer || DEFAULT_PRELIMINARY_DISCLAIMER,
   };
 }

@@ -1,15 +1,17 @@
+import { SITE, SITE_ICONS } from "@/lib/site-metadata";
+
 /**
  * Platform fallback identity only. Never render these values to a user when
  * `BrandProvider` / `getAppSettings(businessId)` is available — they exist so
  * imports of `BRAND` / `LOGO_URL` do not crash in code paths without a tenant.
  */
-export const LOGO_URL = "/icons/icon-192.png";
+export const LOGO_URL = SITE_ICONS.logoPrimary;
 
 export const BRAND = {
-  name: "Client Portal",
-  portalName: "Client Portal",
+  name: SITE.name,
+  portalName: SITE.name,
   logoUrl: LOGO_URL,
-  faviconUrl: "/icons/icon-192.png",
+  faviconUrl: SITE_ICONS.icon192,
 } as const;
 
 // File size limits in bytes — not brand data.

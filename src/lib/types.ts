@@ -169,6 +169,7 @@ export interface Project {
   property_address: string;
   project_name: string;
   service_type: string;
+  service_id?: string | null;
   shoot_date: string | null;
   delivery_date: string | null;
   status: ProjectStatus;
@@ -324,6 +325,24 @@ export interface Revision {
 export interface QuoteLineItem {
   description: string;
   amount_cents: number;
+}
+
+export interface BusinessServiceRow {
+  id: string;
+  business_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  preliminary_estimate_cents: number | null;
+  starting_label: string | null;
+  includes: string[];
+  line_items: QuoteLineItem[];
+  notes: string | null;
+  hide_pricing: boolean;
+  is_recommended: boolean;
+  display_order: number;
+  is_active: boolean;
+  aliases: string[];
 }
 
 export type QuoteStatus = "draft" | "sent" | "approved" | "changes_requested";

@@ -42,7 +42,7 @@ function getResend() {
 }
 
 export function getResendFromEmail(): string {
-  return process.env.RESEND_FROM_EMAIL || `Client Portal <${getPlatformFromAddress() || "notifications@localhost"}>`;
+  return process.env.RESEND_FROM_EMAIL || `ShootPortal <${getPlatformFromAddress() || "noreply@localhost"}>`;
 }
 
 function platformMailbox(): string {
@@ -60,7 +60,7 @@ export async function getConfiguredFromEmail(businessId: string): Promise<string
 }
 
 export function resolveFromHeader(settings: AppSettings): string {
-  const businessName = settings.business.businessName.trim() || settings.email.fromName.trim() || "Client Portal";
+  const businessName = settings.business.businessName.trim() || settings.email.fromName.trim() || "ShootPortal";
 
   if (
     settings.email.senderMode === "custom_domain" &&

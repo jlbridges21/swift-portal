@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PROJECT_STATUSES, SERVICE_TYPES } from "@/lib/constants";
+import { ServiceSelect } from "@/components/forms/service-select";
+import { PROJECT_STATUSES } from "@/lib/constants";
 
 interface Client {
   id: string;
@@ -101,13 +102,7 @@ export default function NewProjectPage() {
               <div className="grid gap-5 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="service_type">Service Type *</Label>
-                  <Select
-                    id="service_type"
-                    name="service_type"
-                    required
-                    placeholder="Select service"
-                    options={SERVICE_TYPES.map((s) => ({ value: s, label: s }))}
-                  />
+                  <ServiceSelect id="service_type" name="service_type" required placeholder="Select service" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
