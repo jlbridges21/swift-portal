@@ -12,7 +12,9 @@
     "test:email-sender": "npx tsx scripts/verify-email-sender-policy.ts",
     "test:settings-patch": "npx tsx scripts/verify-settings-patch-validation.ts",
     "test:portal-url": "npx tsx scripts/verify-portal-url.ts",
-    "test:brand-theme": "npx tsx scripts/verify-brand-theme.ts"
+    "test:brand-theme": "npx tsx scripts/verify-brand-theme.ts",
+    "tenant-lint": "npx tsx scripts/tenant-lint.ts",
+    "tenant-pentest": "npx tsx scripts/tenant-pentest.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

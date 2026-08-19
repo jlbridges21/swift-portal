@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { restoreProject, softDeleteProject } from "@/lib/soft-delete";
+import { restoreProject, softDeleteProject, TenantRecordNotFoundError } from "@/lib/soft-delete";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 interface RouteParams {
@@ -20,6 +20,12 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     const message = err instanceof Error ? err.message : "Failed to hide project";
     if (message === "Unauthorized") {
       return NextResponse.json({ error: message }, { status: 401 });
+    }
+    if (message === "Forbidden") {
+      return NextResponse.json({ error: message }, { status: 403 });
+    }
+    if (err instanceof TenantRecordNotFoundError) {
+      return NextResponse.json({ error: message }, { status: 404 });
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }
@@ -44,6 +50,12 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const message = err instanceof Error ? err.message : "Failed to restore project";
     if (message === "Unauthorized") {
       return NextResponse.json({ error: message }, { status: 401 });
+    }
+    if (message === "Forbidden") {
+      return NextResponse.json({ error: message }, { status: 403 });
+    }
+    if (err instanceof TenantRecordNotFoundError) {
+      return NextResponse.json({ error: message }, { status: 404 });
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }

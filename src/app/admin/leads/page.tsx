@@ -9,15 +9,18 @@ import { redirect } from "next/navigation";
 import { formatDate } from "@/lib/utils";
 import { Mail, Phone, Building, MapPin } from "lucide-react";
 import { MarkLeadReadButton } from "@/components/admin/mark-lead-read";
+import { requireTenantContext } from "@/lib/tenant";
 
 export default async function AdminLeadsPage() {
   const profile = await getProfile();
   if (!profile || profile.role !== "admin") redirect("/dashboard");
 
   const supabase = await createClient();
+  const tenant = await requireTenantContext();
   const { data: leads } = await supabase
     .from("leads")
     .select("*")
+    .eq("business_id", tenant.businessId)
     .order("created_at", { ascending: false });
 
   return (

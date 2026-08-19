@@ -7,12 +7,24 @@ export interface PortalLinkResult {
   message: string;
 }
 
+function profileBelongsToBusiness(
+  profile: { business_id?: string | null; role?: string | null },
+  businessId: string
+): boolean {
+  if (profile.role === "super_admin") return false;
+  if (profile.role === "admin") return profile.business_id === businessId;
+  if (profile.business_id && profile.business_id !== businessId) return false;
+  return true;
+}
+
 /**
  * Ensure a CRM client row is linked to a portal auth user via
  * clients.user_id and profiles.client_id so RLS (get_user_client_id) works.
  *
  * profiles lookups use `.raw` — super_admin rows have NULL business_id, and
  * Auth-created profiles may not have business_id until handle_new_user stamps it.
+ * Auth is one user pool (one email). Never attach a profile that already belongs
+ * to another business. Same-business admins may keep role=admin (dual-hat).
  */
 export async function ensureClientPortalLink(
   clientId: string,
@@ -34,13 +46,23 @@ export async function ensureClientPortalLink(
   if (client.user_id) {
     const { data: profile } = await db.raw
       .from("profiles")
-      .select("id, client_id")
+      .select("id, client_id, role, business_id")
       .eq("id", client.user_id)
       .maybeSingle();
 
     if (profile) {
-      if (profile.client_id !== client.id) {
+      if (!profileBelongsToBusiness(profile, businessId)) {
+        return {
+          linked: false,
+          hasPortal: false,
+          userId: null,
+          message: "This login belongs to another business and cannot be linked here.",
+        };
+      }
+      if (profile.role !== "admin" && profile.client_id !== client.id) {
         await db.raw.from("profiles").update({ client_id: client.id, role: "client" }).eq("id", profile.id);
+      } else if (profile.role === "admin" && profile.client_id !== client.id) {
+        await db.raw.from("profiles").update({ client_id: client.id }).eq("id", profile.id);
       }
       return {
         linked: true,
@@ -61,15 +83,22 @@ export async function ensureClientPortalLink(
     };
   }
 
-  // Find existing profile by email. Global email match — Auth is one user pool.
-  // TODO(tenant): constrain to this business once every client profile has business_id.
   const { data: profileByEmail } = await db.raw
     .from("profiles")
-    .select("id, client_id, role, email")
+    .select("id, client_id, role, email, business_id")
     .ilike("email", email)
     .maybeSingle();
 
   if (profileByEmail) {
+    if (!profileBelongsToBusiness(profileByEmail, businessId)) {
+      return {
+        linked: false,
+        hasPortal: false,
+        userId: null,
+        message: "This email belongs to another business and cannot be linked here.",
+      };
+    }
+
     await db
       .from("clients")
       .update({ user_id: profileByEmail.id })
@@ -80,6 +109,8 @@ export async function ensureClientPortalLink(
         .from("profiles")
         .update({ client_id: client.id, role: "client" })
         .eq("id", profileByEmail.id);
+    } else if (profileByEmail.client_id !== client.id) {
+      await db.raw.from("profiles").update({ client_id: client.id }).eq("id", profileByEmail.id);
     }
 
     return {
@@ -120,6 +151,19 @@ export async function enableClientPortalAccess(
   }
 
   if (client.user_id) {
+    const { data: existingProfile } = await db.raw
+      .from("profiles")
+      .select("id, role, business_id")
+      .eq("id", client.user_id)
+      .maybeSingle();
+    if (!existingProfile || !profileBelongsToBusiness(existingProfile, businessId)) {
+      return {
+        linked: false,
+        hasPortal: false,
+        userId: null,
+        message: "This login belongs to another business and cannot be updated here.",
+      };
+    }
     const { error } = await db.raw.auth.admin.updateUserById(client.user_id, {
       password,
       email_confirm: true,
@@ -127,10 +171,14 @@ export async function enableClientPortalAccess(
     if (error) {
       return { linked: false, hasPortal: false, userId: null, message: error.message };
     }
-    await db.raw
-      .from("profiles")
-      .update({ client_id: client.id, role: "client" })
-      .eq("id", client.user_id);
+    if (existingProfile.role !== "admin") {
+      await db.raw
+        .from("profiles")
+        .update({ client_id: client.id, role: "client" })
+        .eq("id", client.user_id);
+    } else {
+      await db.raw.from("profiles").update({ client_id: client.id }).eq("id", client.user_id);
+    }
     return {
       linked: true,
       hasPortal: true,
@@ -171,6 +219,7 @@ export async function enableClientPortalAccess(
       full_name: client.name,
       email_notifications_enabled: true,
       in_app_notifications_enabled: true,
+      business_id: businessId,
     })
     .eq("id", authUser.user.id);
 

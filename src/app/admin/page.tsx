@@ -12,22 +12,31 @@ import { ActivityFeed } from "@/components/admin/activity-feed";
 import { PushNotificationsCard } from "@/components/admin/push-notifications-card";
 import { AdminOpsDashboard } from "@/components/admin/admin-ops-dashboard";
 import { fetchAdminDashboardData } from "@/lib/admin-dashboard";
+import { requireTenantContext } from "@/lib/tenant";
 
 export default async function AdminDashboard() {
   const profile = await getProfile();
   if (!profile || profile.role !== "admin") redirect("/dashboard");
 
   const supabase = await createClient();
+  const tenant = await requireTenantContext();
+  const bid = tenant.businessId;
 
   const [{ data: recentProjects }, { data: recentActivity }, dashboardData] = await Promise.all([
     supabase
       .from("projects")
       .select("*, clients(name, company, deleted_at)")
+      .eq("business_id", bid)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(8),
-    supabase.from("activity_logs").select("*, projects(id, project_name)").order("created_at", { ascending: false }).limit(12),
-    fetchAdminDashboardData(),
+    supabase
+      .from("activity_logs")
+      .select("*, projects(id, project_name)")
+      .eq("business_id", bid)
+      .order("created_at", { ascending: false })
+      .limit(12),
+    fetchAdminDashboardData(bid),
   ]);
 
   return (

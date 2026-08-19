@@ -43,7 +43,7 @@ export async function POST() {
     const destOrigin = getLoginRedirectOrigin(own, {
       hostname: host,
       origin,
-    });
+    }, { foreignTenantHost: true });
     return NextResponse.json({ redirect: `${destOrigin}${destPath}` });
   }
 

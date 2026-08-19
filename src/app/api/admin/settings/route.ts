@@ -6,7 +6,7 @@ import {
   type AppSettings,
   NOTIFICATION_EVENT_DEFINITIONS,
 } from "@/lib/app-settings";
-import { InvalidBrandColorError } from "@/lib/brand-color";
+import { InvalidBrandAssetUrlError, InvalidBrandColorError } from "@/lib/brand-color";
 import { InvalidEmailSenderError } from "@/lib/email-sender-policy";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
@@ -46,7 +46,7 @@ export async function PATCH(request: Request) {
     });
     return NextResponse.json({ settings: saved });
   } catch (error) {
-    if (error instanceof InvalidBrandColorError) {
+    if (error instanceof InvalidBrandColorError || error instanceof InvalidBrandAssetUrlError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error instanceof InvalidEmailSenderError) {

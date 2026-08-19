@@ -5,6 +5,7 @@
 import {
   assertPublicPortalOrigin,
   getBusinessPortalOrigin,
+  getLoginRedirectOrigin,
   isLocalOrRelativeOrigin,
 } from "../src/lib/portal-url";
 
@@ -30,5 +31,22 @@ expect("custom domain is public", !isLocalOrRelativeOrigin("https://portal.swift
 
 const guarded = assertPublicPortalOrigin("http://localhost:3000", "test", true);
 expect("production localhost falls back to platform apex", guarded === "https://shootportal.app");
+
+expect(
+  "foreign custom-domain host sends slug-only tenant home",
+  getLoginRedirectOrigin(
+    PILOT,
+    { hostname: "portal.swiftaerialmedia.com", origin: "https://portal.swiftaerialmedia.com" },
+    { foreignTenantHost: true }
+  ) === "https://test-pilot-drones.shootportal.app"
+);
+expect(
+  "Swift on Test Pilot subdomain goes to custom domain",
+  getLoginRedirectOrigin(
+    SWIFT,
+    { hostname: "test-pilot-drones.shootportal.app", origin: "https://test-pilot-drones.shootportal.app" },
+    { foreignTenantHost: true }
+  ) === "https://portal.swiftaerialmedia.com"
+);
 
 console.log("\nAll portal-url cases passed.");

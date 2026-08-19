@@ -106,7 +106,7 @@ function activePaymentRows(rows: AdminPaymentRow[] | null): AdminPaymentRow[] {
   });
 }
 
-export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
+export async function fetchAdminDashboardData(businessId: string): Promise<AdminDashboardData> {
   const supabase = await createClient();
   const ctx = await buildPipelineContext();
   const sevenDaysAgo = addDays(startOfToday(), -7);
@@ -116,12 +116,14 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       supabase
         .from("payments")
         .select("*, projects(id, project_name, deleted_at, clients(name))")
+        .eq("business_id", businessId)
         .in("status", ["pending", "sent"])
         .order("created_at", { ascending: false })
         .limit(8),
       supabase
         .from("payments")
         .select("*, projects(id, project_name, deleted_at, clients(name))")
+        .eq("business_id", businessId)
         .eq("status", "paid")
         .gte("updated_at", sevenDaysAgo.toISOString())
         .order("updated_at", { ascending: false })
@@ -129,6 +131,7 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       supabase
         .from("payments")
         .select("*, projects(id, project_name, deleted_at, clients(name))")
+        .eq("business_id", businessId)
         .eq("status", "expired")
         .order("updated_at", { ascending: false })
         .limit(6),

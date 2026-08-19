@@ -14,6 +14,10 @@ export async function GET(
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
     const db = await createTenantServiceClient(businessId);
+    const { data: client } = await db.from("clients").select("id").eq("id", clientId).maybeSingle();
+    if (!client) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
     const { data, error } = await db
       .from("client_notes")
       .select("*")

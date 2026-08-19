@@ -1,4 +1,5 @@
 import { BRAND, LOGO_URL } from "@/lib/brand";
+import { sanitizeCssColor } from "@/lib/brand-color";
 import { getSiteUrl } from "@/lib/site-metadata";
 import { PROJECT_STATUSES } from "@/lib/constants";
 
@@ -81,12 +82,12 @@ export function buildPremiumEmailHtml(options: {
   const appUrl = options.branding?.portalUrl ?? getSiteUrl();
   const portalName = options.branding?.portalName ?? BRAND.portalName;
   const businessName = options.branding?.businessName ?? BRAND.name;
-  const logoUrl = options.branding?.logoUrl ?? LOGO_URL;
+  const logoUrl = escapeHtml(options.branding?.logoUrl ?? LOGO_URL);
   const footerText =
     options.branding?.footerText ??
     "You received this email because you have a project with this portal.";
-  const accentColor = options.branding?.accentColor ?? "#3B82F6";
-  const primaryColor = options.branding?.primaryColor ?? "#0F172A";
+  const accentColor = sanitizeCssColor(options.branding?.accentColor ?? "#3B82F6", "#3B82F6");
+  const primaryColor = sanitizeCssColor(options.branding?.primaryColor ?? "#0F172A", "#0F172A");
   const title = escapeHtml(options.title);
   const body = escapeHtml(options.body).replace(/\n/g, "<br/>");
   const projectName = options.projectName ? escapeHtml(options.projectName) : "";

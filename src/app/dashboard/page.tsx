@@ -40,15 +40,16 @@ export default async function ClientDashboard() {
   const firstName = profile.full_name?.split(" ")[0] || "there";
 
   const [{ data: projects }, { data: payments }, { data: activities }, { data: shootProposals }, { data: allQuotes }] = await Promise.all([
-    supabase.from("projects").select("*").order("updated_at", { ascending: false }),
-    supabase.from("payments").select("*, projects(project_name)").order("created_at", { ascending: false }),
+    supabase.from("projects").select("*").eq("business_id", tenant.businessId).order("updated_at", { ascending: false }),
+    supabase.from("payments").select("*, projects(project_name)").eq("business_id", tenant.businessId).order("created_at", { ascending: false }),
     supabase
       .from("activity_logs")
       .select("*, projects(id, project_name)")
+      .eq("business_id", tenant.businessId)
       .order("created_at", { ascending: false })
       .limit(15),
-    supabase.from("shoot_proposals").select("*").in("status", ["confirmed", "pending"]),
-    supabase.from("project_quotes").select("*").in("status", ["sent", "approved"]).order("updated_at", { ascending: false }),
+    supabase.from("shoot_proposals").select("*").eq("business_id", tenant.businessId).in("status", ["confirmed", "pending"]),
+    supabase.from("project_quotes").select("*").eq("business_id", tenant.businessId).in("status", ["sent", "approved"]).order("updated_at", { ascending: false }),
   ]);
 
   const proposalsByProject = new Map<string, ShootProposal[]>();

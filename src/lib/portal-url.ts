@@ -119,14 +119,24 @@ export async function businessPortalHref(businessId: string, path: string): Prom
  * Where to send a logged-in user after auth, given the current request host.
  * Unmatched hosts (Vercel previews, bare localhost) stay on this origin.
  * Local `/b/{slug}` uses the same origin with the path prefix.
+ *
+ * `foreignTenantHost`: the Host already resolved to a *different* business
+ * (middleware / post-login). Always send the user to their canonical origin.
+ * Without this flag, a business that has no custom_domain used to "stay" on
+ * any host that is not `*.{PLATFORM_ROOT_DOMAIN}` — including another
+ * tenant's custom domain (e.g. Test Pilot admin on portal.swiftaerialmedia.com).
  */
 export function getLoginRedirectOrigin(
   business: PortalUrlBusiness,
-  current: { hostname: string; origin: string }
+  current: { hostname: string; origin: string },
+  opts?: { foreignTenantHost?: boolean }
 ): string {
   const host = current.hostname.toLowerCase().split(":")[0];
   if (host === "localhost" || host === "127.0.0.1") {
     return `${current.origin.replace(/\/$/, "")}/b/${business.slug}`;
+  }
+  if (opts?.foreignTenantHost) {
+    return getBusinessPortalOrigin(business);
   }
   const vercelPreview = host.endsWith(".vercel.app");
   const root = getPlatformRootDomain();

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { normalizeStatus, type ProjectStatus } from "@/lib/constants";
+import { requireTenantContext } from "@/lib/tenant";
 import {
   buildProjectAdminContext,
   isActiveProject,
@@ -159,7 +160,8 @@ export function filterProjectsForStage(
 }
 
 async function loadUpcomingProjectIds(
-  supabase: Awaited<ReturnType<typeof createClient>>
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  businessId: string
 ): Promise<Set<string>> {
   const today = startOfToday();
   const twoWeeksOut = addDays(today, 14);
@@ -168,11 +170,13 @@ async function loadUpcomingProjectIds(
     supabase
       .from("projects")
       .select("id, shoot_date, deleted_at, clients(deleted_at)")
+      .eq("business_id", businessId)
       .is("deleted_at", null)
       .eq("status", "scheduled"),
     supabase
       .from("shoot_proposals")
       .select("project_id, proposed_at, projects(id, deleted_at, clients(deleted_at))")
+      .eq("business_id", businessId)
       .eq("status", "confirmed")
       .gte("proposed_at", today.toISOString())
       .lte("proposed_at", twoWeeksOut.toISOString()),
@@ -239,6 +243,8 @@ export interface PipelineContext {
 
 export async function buildPipelineContext(): Promise<PipelineContext> {
   const supabase = await createClient();
+  const tenant = await requireTenantContext();
+  const bid = tenant.businessId;
 
   const [
     { data: allProjects },
@@ -253,21 +259,24 @@ export async function buildPipelineContext(): Promise<PipelineContext> {
     supabase
       .from("projects")
       .select("*, clients(name, company, deleted_at)")
+      .eq("business_id", bid)
       .order("updated_at", { ascending: false }),
     supabase
       .from("projects")
       .select("id", { count: "exact", head: true })
+      .eq("business_id", bid)
       .not("deleted_at", "is", null),
-    supabase.from("project_quotes").select("*"),
-    supabase.from("payments").select("project_id, status"),
-    loadUpcomingProjectIds(supabase),
-    supabase.from("payments").select("project_id, status").in("status", ["pending", "sent"]),
+    supabase.from("project_quotes").select("*").eq("business_id", bid),
+    supabase.from("payments").select("project_id, status").eq("business_id", bid),
+    loadUpcomingProjectIds(supabase, bid),
+    supabase.from("payments").select("project_id, status").eq("business_id", bid).in("status", ["pending", "sent"]),
     supabase
       .from("activity_logs")
       .select("project_id, description, created_at")
+      .eq("business_id", bid)
       .order("created_at", { ascending: false })
       .limit(200),
-    supabase.from("shoot_proposals").select("project_id, proposed_at").eq("status", "confirmed"),
+    supabase.from("shoot_proposals").select("project_id, proposed_at").eq("business_id", bid).eq("status", "confirmed"),
   ]);
 
   const quotes = (quoteRows ?? []) as ProjectQuote[];
@@ -320,20 +329,24 @@ export async function loadPipelinePageProjects(options: {
 
   if (options.showDeleted) {
     const supabase = await createClient();
+    const tenant = await requireTenantContext();
+    const bid = tenant.businessId;
     const [{ data: hiddenProjects }, { data: payments }, { data: activities }, { data: confirmedShoots }] =
       await Promise.all([
         supabase
           .from("projects")
           .select("*, clients(name, company, deleted_at)")
+          .eq("business_id", bid)
           .not("deleted_at", "is", null)
           .order("updated_at", { ascending: false }),
-        supabase.from("payments").select("project_id, status").in("status", ["pending", "sent"]),
+        supabase.from("payments").select("project_id, status").eq("business_id", bid).in("status", ["pending", "sent"]),
         supabase
           .from("activity_logs")
           .select("project_id, description, created_at")
+          .eq("business_id", bid)
           .order("created_at", { ascending: false })
           .limit(200),
-        supabase.from("shoot_proposals").select("project_id, proposed_at").eq("status", "confirmed"),
+        supabase.from("shoot_proposals").select("project_id, proposed_at").eq("business_id", bid).eq("status", "confirmed"),
       ]);
 
     const pendingSet = new Set((payments ?? []).map((p) => p.project_id));

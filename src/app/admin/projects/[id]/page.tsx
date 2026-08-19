@@ -32,22 +32,23 @@ export default async function AdminProjectPage({ params }: PageProps) {
     { data: assetReviews },
     { data: mediaFolders },
   ] = await Promise.all([
-    supabase.from("projects").select("*, clients(*), properties(*)").eq("id", id).single(),
+    supabase.from("projects").select("*, clients(*), properties(*)").eq("business_id", tenant.businessId).eq("id", id).single(),
     supabase
       .from("media_assets")
       .select("*")
+      .eq("business_id", tenant.businessId)
       .eq("project_id", id)
       .order("display_order", { ascending: true }),
-    supabase.from("tours").select("*").eq("project_id", id).order("display_order"),
-    supabase.from("payments").select("*").eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("shoot_proposals").select("*").eq("project_id", id).order("proposed_at", { ascending: true }),
-    supabase.from("project_clients").select("*, clients(id, name, email, company, phone, full_name, user_id)").eq("project_id", id),
-    supabase.from("clients").select("id, name, email, company, phone, full_name, user_id").is("deleted_at", null).order("name"),
-    supabase.from("activity_logs").select("*").eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("revisions").select("*").eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("project_quotes").select("*").eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("asset_reviews").select("*").eq("project_id", id),
-    supabase.from("media_folders").select("*").eq("project_id", id).order("display_order", { ascending: true }),
+    supabase.from("tours").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order"),
+    supabase.from("payments").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
+    supabase.from("shoot_proposals").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("proposed_at", { ascending: true }),
+    supabase.from("project_clients").select("*, clients(id, name, email, company, phone, full_name, user_id)").eq("business_id", tenant.businessId).eq("project_id", id),
+    supabase.from("clients").select("id, name, email, company, phone, full_name, user_id").eq("business_id", tenant.businessId).is("deleted_at", null).order("name"),
+    supabase.from("activity_logs").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
+    supabase.from("revisions").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
+    supabase.from("project_quotes").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
+    supabase.from("asset_reviews").select("*").eq("business_id", tenant.businessId).eq("project_id", id),
+    supabase.from("media_folders").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order", { ascending: true }),
   ]);
 
   if (!project) notFound();

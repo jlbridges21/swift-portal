@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/server";
-import { assertSafeBrandColors, changedBrandColors } from "@/lib/brand-color";
+import { assertSafeBrandAssetUrls, assertSafeBrandColors, changedBrandColors } from "@/lib/brand-color";
 import {
   assertEmailSenderPolicy,
   emailSenderPolicyFieldsChanged,
@@ -291,6 +291,7 @@ export async function saveAppSettings(
 
   const colorDelta = changedBrandColors(current.business, merged.business);
   assertSafeBrandColors(colorDelta);
+  assertSafeBrandAssetUrls(merged.business);
 
   const supabase = await createServiceClient();
   if (emailSenderPolicyFieldsChanged(current.email, merged.email)) {

@@ -9,6 +9,46 @@ export class InvalidBrandColorError extends Error {
   }
 }
 
+export class InvalidBrandAssetUrlError extends Error {
+  constructor(field: string) {
+    super(
+      `Invalid ${field}: use a same-origin path (/…) or an https:// URL with no quotes, scripts, or CSS.`
+    );
+    this.name = "InvalidBrandAssetUrlError";
+  }
+}
+
+/** Logo / favicon / email-logo values stored in settings and interpolated into HTML. */
+export function isSafeBrandAssetUrl(value: string): boolean {
+  const v = value.trim();
+  if (!v) return true;
+  if (/[\s"'<>\\]/.test(v)) return false;
+  if (v.startsWith("/") && !v.startsWith("//")) return true;
+  try {
+    const url = new URL(v);
+    return url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function assertSafeBrandAssetUrls(business: {
+  logoUrl?: string;
+  faviconUrl?: string;
+  emailLogoUrl?: string;
+}): void {
+  const fields = [
+    ["logoUrl", business.logoUrl],
+    ["faviconUrl", business.faviconUrl],
+    ["emailLogoUrl", business.emailLogoUrl],
+  ] as const;
+  for (const [field, value] of fields) {
+    if (value !== undefined && !isSafeBrandAssetUrl(value)) {
+      throw new InvalidBrandAssetUrlError(field);
+    }
+  }
+}
+
 const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const RGB_RE =
   /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0|1|0?\.\d+))?\s*\)$/;

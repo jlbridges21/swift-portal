@@ -3,7 +3,9 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SITE, SITE_ICONS } from "@/lib/site-metadata";
 
-// TODO(tenant): per-business PWA manifest and OG images — later phase
+// Standing later-phase item (not a tenant-isolation hole): per-business PWA
+// manifest and OG images. Platform chrome uses ShootPortal assets until a
+// dedicated prompt adds tenant-specific OG generation. See docs/TENANT-ARCHITECTURE.md.
 export const alt = SITE.title;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";

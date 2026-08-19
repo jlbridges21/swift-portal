@@ -7,9 +7,12 @@ import { getPublicHostContext } from "@/lib/host-resolution";
 import { validateBusinessSlug } from "@/lib/reserved-subdomains";
 
 /**
- * Legacy production business — the only tenant until onboarding exists.
- * Every use of this constant is a TODO to be removed once the calling path
- * resolves a real business. Grep for it to find remaining work.
+ * Swift Aerial Media's production business UUID.
+ *
+ * Not a fail-open default. Authenticated paths must never use
+ * `?? LEGACY_DEFAULT_BUSINESS_ID`. Remaining comparisons (Stripe platform
+ * account, GHL env webhook, OneSignal untagged-device send filter) are
+ * Swift-specific product behavior, not tenant resolution.
  */
 export const LEGACY_DEFAULT_BUSINESS_ID =
   "00000000-0000-0000-0000-000000000001";

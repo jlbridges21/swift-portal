@@ -75,10 +75,13 @@ export async function DELETE(
     const { id } = await params;
     const db = await createTenantServiceClient(tenant.businessId);
 
-    const { error } = await db.from("payments").delete().eq("id", id);
+    const { data, error } = await db.from("payments").delete().eq("id", id).select("id");
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!data?.length) {
+      return NextResponse.json({ error: "Payment not found" }, { status: 404 });
     }
 
     return NextResponse.json({ success: true });

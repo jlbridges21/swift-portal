@@ -1,5 +1,12 @@
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 
+export class TenantRecordNotFoundError extends Error {
+  constructor(message = "Not found") {
+    super(message);
+    this.name = "TenantRecordNotFoundError";
+  }
+}
+
 export async function softDeleteClient(
   clientId: string,
   adminUserId: string,
@@ -63,14 +70,19 @@ export async function softDeleteClient(
     }
   }
 
-  const { error: clientError } = await db
+  const { data: deletedClient, error: clientError } = await db
     .from("clients")
     .update({ deleted_at: now, deleted_by: adminUserId })
     .eq("id", clientId)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle();
 
   if (clientError) {
     throw new Error(clientError.message);
+  }
+  if (!deletedClient) {
+    throw new TenantRecordNotFoundError("Client not found");
   }
 
   if (projectIdsToDelete.length) {
@@ -145,14 +157,19 @@ export async function softDeleteProject(
   const db = await createTenantServiceClient(businessId);
   const now = new Date().toISOString();
 
-  const { error } = await db
+  const { data, error } = await db
     .from("projects")
     .update({ deleted_at: now, deleted_by: adminUserId })
     .eq("id", projectId)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     throw new Error(error.message);
+  }
+  if (!data) {
+    throw new TenantRecordNotFoundError("Project not found");
   }
 }
 

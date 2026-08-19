@@ -31,6 +31,7 @@ async function ProjectContent({
   }
 
   const supabase = await createClient();
+  const tenant = await requireTenantContext();
 
   const [
     { data: project },
@@ -44,25 +45,25 @@ async function ProjectContent({
     { data: assetReviews },
     { data: mediaFolders },
   ] = await Promise.all([
-    supabase.from("projects").select("*").eq("id", id).single(),
+    supabase.from("projects").select("*").eq("business_id", tenant.businessId).eq("id", id).single(),
     supabase
       .from("media_assets")
       .select("*")
+      .eq("business_id", tenant.businessId)
       .eq("project_id", id)
       .order("display_order", { ascending: true }),
-    supabase.from("tours").select("*").eq("project_id", id).order("display_order"),
-    supabase.from("payments").select("*").eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("revisions").select("*").eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("shoot_proposals").select("*").eq("project_id", id).order("proposed_at", { ascending: true }),
-    supabase.from("activity_logs").select("*").eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("project_quotes").select("*").eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("asset_reviews").select("*").eq("project_id", id),
-    supabase.from("media_folders").select("*").eq("project_id", id).order("display_order", { ascending: true }),
+    supabase.from("tours").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order"),
+    supabase.from("payments").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
+    supabase.from("revisions").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
+    supabase.from("shoot_proposals").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("proposed_at", { ascending: true }),
+    supabase.from("activity_logs").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
+    supabase.from("project_quotes").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
+    supabase.from("asset_reviews").select("*").eq("business_id", tenant.businessId).eq("project_id", id),
+    supabase.from("media_folders").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order", { ascending: true }),
   ]);
 
   if (!project) notFound();
 
-  const tenant = await requireTenantContext();
   const appSettings = await getAppSettings(tenant.businessId);
   const hero = await getProjectHeroMedia(supabase, project, tenant.businessId);
   const visibleMedia = filterClientMedia(media ?? []);

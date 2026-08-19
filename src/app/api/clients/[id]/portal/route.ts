@@ -20,8 +20,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
   if (!tenant) return missingTenantResponse(auth.profile.role);
   const businessId = tenant.businessId;
   const status = await getClientPortalStatus([id], businessId);
-  const row = status.get(id) ?? { hasPortal: false, userId: null };
   const linked = await ensureClientPortalLink(id, businessId);
+  if (!linked.linked && linked.message === "Client not found") {
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
+  }
+  const row = status.get(id) ?? { hasPortal: false, userId: null };
 
   return NextResponse.json({
     has_portal: linked.hasPortal || row.hasPortal,

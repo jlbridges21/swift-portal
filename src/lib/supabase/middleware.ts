@@ -126,7 +126,7 @@ export async function updateSession(request: NextRequest) {
       const destOrigin = getLoginRedirectOrigin(ownBusiness, {
         hostname: inboundHost(request),
         origin: request.nextUrl.origin,
-      });
+      }, { foreignTenantHost: true });
       const dest = new URL(`${destOrigin}${path}${request.nextUrl.search}`);
       return applyPathCookie(NextResponse.redirect(dest), resolution);
     }
