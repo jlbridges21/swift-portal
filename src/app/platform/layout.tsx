@@ -22,6 +22,8 @@ export default async function PlatformLayout({ children }: { children: React.Rea
           allowWrites={tenant.allowWrites}
           subscriptionStatus={tenant.business.subscription_status}
           trialEndsAt={tenant.business.trial_ends_at}
+          compedUntil={tenant.business.comped_until}
+          compedReason={tenant.business.comped_reason}
         />
       )}
       <PlatformNav />

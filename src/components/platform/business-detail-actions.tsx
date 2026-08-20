@@ -15,8 +15,14 @@ import {
   type PlanRow,
 } from "@/lib/plan-catalog";
 import { SUBSCRIPTION_STATUSES, getSubscriptionState } from "@/lib/subscription";
+import {
+  SWIFT_COMP_PROTECTED_BUSINESS_ID,
+  SWIFT_COMP_REVOKE_CONFIRM,
+} from "@/lib/platform-session";
 
 type Admin = { id: string; email: string; full_name: string | null };
+
+const MANUAL_STATUSES = SUBSCRIPTION_STATUSES.filter((s) => s !== "comped");
 
 export function BusinessDetailActions({
   business,
@@ -36,6 +42,8 @@ export function BusinessDetailActions({
     deleted_at: string | null;
     subscription_status: string;
     trial_ends_at: string | null;
+    comped_until: string | null;
+    comped_reason: string | null;
   };
   admins: Admin[];
   settingsJson: string;
@@ -48,6 +56,7 @@ export function BusinessDetailActions({
   const [error, setError] = useState<string | null>(null);
   const protectedBiz = isProtected;
   const sub = getSubscriptionState(business);
+  const isSwiftComp = business.id === SWIFT_COMP_PROTECTED_BUSINESS_ID;
 
   async function post(path: string, body?: unknown) {
     setBusy(true);
@@ -129,6 +138,76 @@ export function BusinessDetailActions({
     }
   }
 
+  async function grantComp(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const permanent = form.get("duration") === "permanent";
+    const untilRaw = String(form.get("compedUntil") ?? "").trim();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/platform/businesses/${business.id}/comp`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "grant",
+          reason: form.get("reason"),
+          compedUntil: permanent ? null : untilRaw || null,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Grant failed");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Grant failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeComp(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const nextStatus = String(form.get("nextStatus") ?? "canceled") as "trialing" | "canceled";
+    const trialRaw = String(form.get("trialEndsAt") ?? "").trim();
+
+    if (isSwiftComp) {
+      const typed = window.prompt(
+        `Revoke complimentary access for ${business.name}? Type ${SWIFT_COMP_REVOKE_CONFIRM} to confirm.`
+      );
+      if (typed !== SWIFT_COMP_REVOKE_CONFIRM) {
+        setError(`Confirmation required: type ${SWIFT_COMP_REVOKE_CONFIRM}.`);
+        return;
+      }
+    } else if (!window.confirm(`Revoke complimentary access for ${business.name}?`)) {
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/platform/businesses/${business.id}/comp`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "revoke",
+          nextStatus,
+          trialEndsAt: nextStatus === "trialing" ? trialRaw || null : null,
+          confirm: isSwiftComp ? SWIFT_COMP_REVOKE_CONFIRM : undefined,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Revoke failed");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Revoke failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const trialLocalDefault = business.trial_ends_at
     ? new Date(business.trial_ends_at).toISOString().slice(0, 16)
     : "";
@@ -189,13 +268,108 @@ export function BusinessDetailActions({
 
       <Card>
         <CardHeader>
+          <CardTitle>Complimentary access</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted">
+            Comp keeps the business on its real plan for entitlements but never bills. Permanent
+            comps use <code className="text-xs">comped_until = NULL</code>.
+          </p>
+          {sub.isComped ? (
+            <>
+              <div className="flex flex-wrap gap-2 text-sm">
+                <Badge variant="success">comped</Badge>
+                {business.comped_until == null ? (
+                  <Badge variant="default">permanent</Badge>
+                ) : (
+                  <Badge variant="default">
+                    ends {new Date(business.comped_until).toLocaleDateString()}
+                    {sub.daysLeftInComp != null ? ` · ${sub.daysLeftInComp}d left` : ""}
+                  </Badge>
+                )}
+              </div>
+              {business.comped_reason && (
+                <p className="text-sm">
+                  Reason: <span className="font-medium text-heading">{business.comped_reason}</span>
+                </p>
+              )}
+              {isSwiftComp && (
+                <p className="text-sm text-amber-800">
+                  Platform owner business — revoking requires typing{" "}
+                  <code className="text-xs">{SWIFT_COMP_REVOKE_CONFIRM}</code>.
+                </p>
+              )}
+              <form className="space-y-4 border-t border-border pt-4" onSubmit={revokeComp}>
+                <div>
+                  <Label htmlFor="nextStatus">After revoke, move to</Label>
+                  <select
+                    id="nextStatus"
+                    name="nextStatus"
+                    defaultValue="canceled"
+                    className="mt-1 flex h-11 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="canceled">canceled (paywall)</option>
+                    <option value="trialing">trialing (set trial end below)</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="revokeTrialEndsAt">trial_ends_at if trialing</Label>
+                  <Input
+                    id="revokeTrialEndsAt"
+                    name="trialEndsAt"
+                    type="datetime-local"
+                    className="mt-1"
+                  />
+                </div>
+                <Button type="submit" variant="outline" disabled={busy}>
+                  Revoke comped access
+                </Button>
+              </form>
+            </>
+          ) : (
+            <form className="space-y-4" onSubmit={grantComp}>
+              <div>
+                <Label htmlFor="compReason">Reason (required)</Label>
+                <Input
+                  id="compReason"
+                  name="reason"
+                  required
+                  placeholder="Beta tester, Founding partner, …"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="compDuration">Duration</Label>
+                <select
+                  id="compDuration"
+                  name="duration"
+                  defaultValue="permanent"
+                  className="mt-1 flex h-11 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
+                >
+                  <option value="permanent">Permanent</option>
+                  <option value="until">Until date…</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="compedUntil">End date (if not permanent)</Label>
+                <Input id="compedUntil" name="compedUntil" type="datetime-local" className="mt-1" />
+              </div>
+              <Button type="submit" disabled={busy}>
+                Grant comped access
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Subscription</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted">
-            Manual status for testing and comps — no Stripe yet. Live expiry for trials uses{" "}
-            <code className="text-xs">trial_ends_at</code> even if status is still{" "}
-            <code className="text-xs">trialing</code>.
+            Manual status for testing — no Stripe yet. Use Complimentary access above for comps.
+            Live expiry for trials uses <code className="text-xs">trial_ends_at</code>.
           </p>
           <div className="flex flex-wrap gap-2 text-sm">
             <Badge variant={sub.requiresPayment ? "warning" : "success"}>{sub.status}</Badge>
@@ -204,37 +378,43 @@ export function BusinessDetailActions({
             )}
             {sub.requiresPayment && <Badge variant="warning">paywalled</Badge>}
           </div>
-          <form className="space-y-4" onSubmit={saveSubscription}>
-            <div>
-              <Label htmlFor="subscriptionStatus">subscription_status</Label>
-              <select
-                id="subscriptionStatus"
-                name="subscriptionStatus"
-                defaultValue={business.subscription_status}
-                className="mt-1 flex h-11 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
-              >
-                {SUBSCRIPTION_STATUSES.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="trialEndsAt">trial_ends_at (local)</Label>
-              <Input
-                id="trialEndsAt"
-                name="trialEndsAt"
-                type="datetime-local"
-                defaultValue={trialLocalDefault}
-                className="mt-1"
-              />
-              <p className="mt-1 text-xs text-muted">Clear the field and save to set NULL.</p>
-            </div>
-            <Button type="submit" disabled={busy}>
-              Save subscription
-            </Button>
-          </form>
+          {!sub.isComped && (
+            <form className="space-y-4" onSubmit={saveSubscription}>
+              <div>
+                <Label htmlFor="subscriptionStatus">subscription_status</Label>
+                <select
+                  id="subscriptionStatus"
+                  name="subscriptionStatus"
+                  defaultValue={
+                    business.subscription_status === "comped"
+                      ? "active"
+                      : business.subscription_status
+                  }
+                  className="mt-1 flex h-11 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
+                >
+                  {MANUAL_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="trialEndsAt">trial_ends_at (local)</Label>
+                <Input
+                  id="trialEndsAt"
+                  name="trialEndsAt"
+                  type="datetime-local"
+                  defaultValue={trialLocalDefault}
+                  className="mt-1"
+                />
+                <p className="mt-1 text-xs text-muted">Clear the field and save to set NULL.</p>
+              </div>
+              <Button type="submit" disabled={busy}>
+                Save subscription
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
 

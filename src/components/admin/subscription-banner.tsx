@@ -3,14 +3,20 @@ import { getSubscriptionState } from "@/lib/subscription";
 export function SubscriptionBanner({
   subscriptionStatus,
   trialEndsAt,
+  compedUntil,
 }: {
   subscriptionStatus: string;
   trialEndsAt: string | null;
+  compedUntil?: string | null;
 }) {
   const sub = getSubscriptionState({
     subscription_status: subscriptionStatus,
     trial_ends_at: trialEndsAt,
+    comped_until: compedUntil ?? null,
   });
+
+  // Comped businesses: no trial / past_due / upgrade banners.
+  if (sub.isComped) return null;
 
   if (sub.status === "trialing" && !sub.requiresPayment && sub.daysLeftInTrial != null) {
     const days = sub.daysLeftInTrial;

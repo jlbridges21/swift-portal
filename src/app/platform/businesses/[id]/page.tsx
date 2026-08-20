@@ -63,9 +63,17 @@ export default async function PlatformBusinessDetailPage({
         {" · "}
         Subscription{" "}
         <span className="font-medium text-heading">{detail.business.subscription_status}</span>
-        {detail.stats?.daysLeftInTrial != null && !detail.stats.requiresPayment
-          ? ` · ${detail.stats.daysLeftInTrial}d trial left`
-          : ""}
+        {detail.stats?.isComped
+          ? ` · ${detail.business.comped_reason || "comped"}${
+              detail.business.comped_until == null
+                ? " (permanent)"
+                : detail.stats.daysLeftInComp != null
+                  ? ` (${detail.stats.daysLeftInComp}d left)`
+                  : ""
+            }`
+          : detail.stats?.daysLeftInTrial != null && !detail.stats.requiresPayment
+            ? ` · ${detail.stats.daysLeftInTrial}d trial left`
+            : ""}
         {detail.stats?.requiresPayment ? " · paywalled" : ""}
         {" · "}
         Created {formatDate(detail.business.created_at)}

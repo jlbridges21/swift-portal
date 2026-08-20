@@ -30,11 +30,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           allowWrites={tenant.allowWrites}
           subscriptionStatus={tenant.business.subscription_status}
           trialEndsAt={tenant.business.trial_ends_at}
+          compedUntil={tenant.business.comped_until}
+          compedReason={tenant.business.comped_reason}
         />
       )}
       <SubscriptionBanner
         subscriptionStatus={tenant.business.subscription_status}
         trialEndsAt={tenant.business.trial_ends_at}
+        compedUntil={tenant.business.comped_until}
       />
       <AdminShell>{children}</AdminShell>
     </BrandProvider>

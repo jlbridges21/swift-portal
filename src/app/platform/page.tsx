@@ -105,7 +105,17 @@ export default async function PlatformHomePage({
                       <Badge variant={b.requiresPayment ? "warning" : "success"}>
                         {b.subscription_status}
                       </Badge>
-                      {b.daysLeftInTrial != null && !b.requiresPayment && (
+                      {b.isComped && (
+                        <span className="text-xs text-muted">
+                          {b.comped_reason || "comped"}
+                          {b.comped_until == null
+                            ? " · permanent"
+                            : b.daysLeftInComp != null
+                              ? ` · ${b.daysLeftInComp}d left`
+                              : ""}
+                        </span>
+                      )}
+                      {b.daysLeftInTrial != null && !b.requiresPayment && !b.isComped && (
                         <span className="text-xs text-muted">{b.daysLeftInTrial}d left</span>
                       )}
                       {b.requiresPayment && <span className="text-xs text-amber-700">paywalled</span>}

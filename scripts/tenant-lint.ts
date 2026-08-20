@@ -93,6 +93,7 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/platform-dashboard.ts",
   "src/lib/entitlements.ts",
   "src/lib/platform-plans.ts",
+  "src/lib/platform-comp.ts",
   "src/app/api/platform/impersonate/route.ts",
   "src/app/api/platform/plans/[id]/route.ts",
 ]);
@@ -128,6 +129,7 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/lib/platform-dashboard.ts",
   "src/lib/entitlements.ts",
   "src/lib/platform-plans.ts",
+  "src/lib/platform-comp.ts",
   "src/app/api/platform/impersonate/route.ts",
   "src/app/api/platform/plans/[id]/route.ts",
 ]);

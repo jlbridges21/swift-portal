@@ -12,6 +12,8 @@ export type PlatformBusinessRow = {
   plan: string;
   subscription_status: string;
   trial_ends_at: string | null;
+  comped_until: string | null;
+  comped_reason: string | null;
   created_at: string;
   deleted_at: string | null;
   clientCount: number;
@@ -22,7 +24,9 @@ export type PlatformBusinessRow = {
   lastActivityAt: string | null;
   portalUrl: string;
   daysLeftInTrial: number | null;
+  daysLeftInComp: number | null;
   requiresPayment: boolean;
+  isComped: boolean;
 };
 
 async function countEq(table: string, businessId: string): Promise<number> {
@@ -39,7 +43,7 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
   const { data: businesses, error } = await raw
     .from("businesses")
     .select(
-      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, created_at, deleted_at"
+      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, created_at, deleted_at"
     )
     .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
@@ -74,6 +78,8 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
       const sub = getSubscriptionState({
         subscription_status: b.subscription_status,
         trial_ends_at: b.trial_ends_at,
+        comped_until: b.comped_until,
+        comped_reason: b.comped_reason,
       });
 
       return {
@@ -86,7 +92,9 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
         lastActivityAt: activity.data?.created_at ?? b.created_at,
         portalUrl: getBusinessPortalOrigin({ slug: b.slug, custom_domain: b.custom_domain }),
         daysLeftInTrial: sub.daysLeftInTrial,
+        daysLeftInComp: sub.daysLeftInComp,
         requiresPayment: sub.requiresPayment,
+        isComped: sub.isComped,
       };
     })
   );
@@ -147,7 +155,7 @@ export async function loadBusinessDetail(id: string) {
   const { data: business, error } = await raw
     .from("businesses")
     .select(
-      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, created_at, deleted_at, updated_at"
+      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, created_at, deleted_at, updated_at"
     )
     .eq("id", id)
     .maybeSingle();

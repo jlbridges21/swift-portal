@@ -401,6 +401,16 @@ export async function updateBusinessForPlatform(
     if (!isSubscriptionStatus(input.subscriptionStatus)) {
       throw new Error("Invalid subscription_status.");
     }
+    if (input.subscriptionStatus === "comped") {
+      throw new Error(
+        "Use Grant comped access (platform console) instead of setting subscription_status to comped."
+      );
+    }
+    if (existing.subscription_status === "comped") {
+      throw new Error(
+        "This business is comped. Revoke complimentary access before changing subscription status."
+      );
+    }
     patch.subscription_status = input.subscriptionStatus;
     if (input.subscriptionStatus !== existing.subscription_status) {
       subscriptionChanged = true;

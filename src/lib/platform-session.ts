@@ -98,3 +98,8 @@ export const PROTECTED_PRODUCTION_BUSINESS_IDS = new Set([
   "00000000-0000-0000-0000-000000000001",
   "00000000-0000-0000-0000-0000000000aa",
 ]);
+
+/** Swift Aerial Media — platform owner; revoke-comp requires typed confirm. */
+export const SWIFT_COMP_PROTECTED_BUSINESS_ID = "00000000-0000-0000-0000-000000000001";
+
+export const SWIFT_COMP_REVOKE_CONFIRM = "REVOKE_SWIFT_COMP";

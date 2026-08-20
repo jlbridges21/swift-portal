@@ -11,12 +11,16 @@ export function ImpersonationBanner({
   allowWrites,
   subscriptionStatus,
   trialEndsAt,
+  compedUntil,
+  compedReason,
 }: {
   businessName: string;
   businessId: string;
   allowWrites: boolean;
   subscriptionStatus?: string | null;
   trialEndsAt?: string | null;
+  compedUntil?: string | null;
+  compedReason?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -25,6 +29,8 @@ export function ImpersonationBanner({
       ? getSubscriptionState({
           subscription_status: subscriptionStatus,
           trial_ends_at: trialEndsAt ?? null,
+          comped_until: compedUntil ?? null,
+          comped_reason: compedReason ?? null,
         })
       : null;
 
@@ -61,13 +67,17 @@ export function ImpersonationBanner({
           {sub && (
             <p className="mt-0.5 font-normal">
               Subscription: <strong>{sub.status}</strong>
-              {sub.requiresPayment
-                ? " — paywalled for this business’s admins (you retain access)."
-                : sub.status === "trialing" && sub.daysLeftInTrial != null
-                  ? ` — ${sub.daysLeftInTrial} day${sub.daysLeftInTrial === 1 ? "" : "s"} left in trial.`
-                  : sub.status === "past_due"
-                    ? " — payment past due (access continues)."
-                    : null}
+              {sub.isComped
+                ? sub.reason
+                  ? ` — complimentary (${sub.reason}).`
+                  : " — complimentary access."
+                : sub.requiresPayment
+                  ? " — paywalled for this business’s admins (you retain access)."
+                  : sub.status === "trialing" && sub.daysLeftInTrial != null
+                    ? ` — ${sub.daysLeftInTrial} day${sub.daysLeftInTrial === 1 ? "" : "s"} left in trial.`
+                    : sub.status === "past_due"
+                      ? " — payment past due (access continues)."
+                      : null}
             </p>
           )}
         </div>

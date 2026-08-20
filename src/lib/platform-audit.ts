@@ -10,6 +10,8 @@ export type PlatformAuditAction =
   | "business.hard_delete"
   | "business.plan_change"
   | "business.subscription_change"
+  | "business.comp_grant"
+  | "business.comp_revoke"
   | "admin.invite"
   | "admin.invite_resend"
   | "impersonation.start"

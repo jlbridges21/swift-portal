@@ -13,6 +13,7 @@
     "test:settings-patch": "npx tsx scripts/verify-settings-patch-validation.ts",
     "test:portal-url": "npx tsx scripts/verify-portal-url.ts",
     "test:brand-theme": "npx tsx scripts/verify-brand-theme.ts",
+    "test:comped-access": "npx tsx scripts/verify-comped-access.ts",
     "tenant-lint": "npx tsx scripts/tenant-lint.ts",
     "tenant-pentest": "npx tsx scripts/tenant-pentest.ts"
   },
