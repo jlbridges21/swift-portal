@@ -3,6 +3,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getAppSettings, saveAppSettings } from "@/lib/app-settings";
+import { EntitlementError, requireEntitlement } from "@/lib/entitlements";
 
 const LOGO_BUCKET = "business-logos";
 /** Stay under Vercel’s 4.5MB serverless body cap so the route actually runs. */
@@ -54,6 +55,15 @@ export async function POST(request: Request) {
 
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(profile.role);
+
+  try {
+    await requireEntitlement(tenant.businessId, "custom_branding");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    throw error;
+  }
 
   const formData = await request.formData();
   const file = formData.get("file") as File | null;

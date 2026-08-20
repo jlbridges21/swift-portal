@@ -6,14 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatPlanPrice, type PlanRow } from "@/lib/plan-catalog";
 
-export function NewBusinessForm() {
+export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ portalUrl: string; adminEmail: string; stagesNote: string } | null>(
     null
   );
+
+  const defaultPlan = plans.find((p) => p.key === "studio")?.key ?? plans[0]?.key ?? "studio";
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,7 +32,7 @@ export function NewBusinessForm() {
           name: form.get("name"),
           slug: form.get("slug"),
           customDomain: form.get("customDomain") || null,
-          plan: form.get("plan") || "standard",
+          plan: form.get("plan") || defaultPlan,
           adminEmail: form.get("adminEmail"),
           adminName: form.get("adminName") || undefined,
         }),
@@ -100,10 +103,24 @@ export function NewBusinessForm() {
           <div>
             <Label htmlFor="customDomain">Custom domain (optional)</Label>
             <Input id="customDomain" name="customDomain" placeholder="portal.example.com" className="mt-1" />
+            <p className="mt-1 text-xs text-muted">Requires a plan that includes custom domain (Studio+).</p>
           </div>
           <div>
             <Label htmlFor="plan">Plan</Label>
-            <Input id="plan" name="plan" defaultValue="standard" className="mt-1" />
+            <select
+              id="plan"
+              name="plan"
+              required
+              defaultValue={defaultPlan}
+              className="mt-1 flex h-11 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
+            >
+              {plans.map((plan) => (
+                <option key={plan.id} value={plan.key}>
+                  {plan.name} — {formatPlanPrice(plan.price_monthly_cents)}/mo
+                  {plan.key === "studio" ? " (recommended)" : ""}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <Label htmlFor="adminEmail">First admin email</Label>
@@ -113,7 +130,7 @@ export function NewBusinessForm() {
             <Label htmlFor="adminName">Admin display name (optional)</Label>
             <Input id="adminName" name="adminName" className="mt-1" />
           </div>
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" disabled={busy || plans.length === 0}>
             {busy ? "Creating…" : "Create business"}
           </Button>
         </form>

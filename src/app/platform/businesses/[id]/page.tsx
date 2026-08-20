@@ -3,6 +3,7 @@ import { requireSuperAdminPage } from "@/lib/admin-access";
 import { loadBusinessDetail } from "@/lib/platform-dashboard";
 import { BusinessDetailActions } from "@/components/platform/business-detail-actions";
 import { PROTECTED_PRODUCTION_BUSINESS_IDS } from "@/lib/platform-session";
+import { listAllPlans, type PlanRow } from "@/lib/entitlements";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -15,8 +16,10 @@ export default async function PlatformBusinessDetailPage({
 }) {
   await requireSuperAdminPage();
   const { id } = await params;
-  const detail = await loadBusinessDetail(id);
+  const [detail, plans] = await Promise.all([loadBusinessDetail(id), listAllPlans()]);
   if (!detail) notFound();
+
+  const currentPlan: PlanRow | null = plans.find((p) => p.key === detail.business.plan) ?? null;
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -55,13 +58,18 @@ export default async function PlatformBusinessDetailPage({
           </Card>
         </div>
       )}
-      <p className="mb-6 text-sm text-muted">Created {formatDate(detail.business.created_at)}</p>
+      <p className="mb-6 text-sm text-muted">
+        Plan <span className="font-medium text-heading">{detail.business.plan}</span> · Created{" "}
+        {formatDate(detail.business.created_at)}
+      </p>
 
       <BusinessDetailActions
         business={detail.business}
         admins={detail.admins}
         settingsJson={JSON.stringify(detail.settings, null, 2)}
         isProtected={PROTECTED_PRODUCTION_BUSINESS_IDS.has(detail.business.id)}
+        plans={plans}
+        currentPlan={currentPlan}
       />
     </main>
   );

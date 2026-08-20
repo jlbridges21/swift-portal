@@ -3,12 +3,22 @@ import { requireAdminApi } from "@/lib/api-auth";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { invalidateBusinessServicesCache } from "@/lib/business-services";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { EntitlementError, requireEntitlement } from "@/lib/entitlements";
 
 export async function PATCH(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(auth.profile.role);
+
+  try {
+    await requireEntitlement(tenant.businessId, "custom_services");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    throw error;
+  }
 
   const body = (await request.json()) as { ids?: string[] };
   const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];

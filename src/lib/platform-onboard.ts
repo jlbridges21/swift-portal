@@ -8,6 +8,10 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getBusinessPortalOrigin } from "@/lib/portal-url";
 import { FALLBACK_SERVICE_TEMPLATES } from "@/lib/service-templates";
 import { invalidateHostLookupCache } from "@/lib/host-resolution";
+import {
+  assertActivePlanKey,
+  planGrantsEntitlement,
+} from "@/lib/entitlements";
 
 const STARTER_SLUGS = [
   "aerial_photography",
@@ -48,9 +52,16 @@ export async function createBusinessForPlatform(
   const slugCheck = validateBusinessSlug(input.slug);
   if (!slugCheck.ok) throw new Error(slugCheck.error);
   const customDomain = normalizeDomain(input.customDomain);
-  const plan = (input.plan || "standard").trim() || "standard";
+  const planRow = await assertActivePlanKey(input.plan || "studio");
+  const plan = planRow.key;
   const adminEmail = input.adminEmail.trim().toLowerCase();
   if (!adminEmail || !adminEmail.includes("@")) throw new Error("A valid admin email is required.");
+
+  if (customDomain && !(await planGrantsEntitlement(plan, "custom_domain"))) {
+    throw new Error(
+      `Custom domain is not included on the ${planRow.name} plan. Choose a plan that includes custom domain (e.g. Studio).`
+    );
+  }
 
   const raw = await createServiceClient();
 
@@ -356,6 +367,13 @@ export async function updateBusinessForPlatform(
   if (input.customDomain !== undefined) {
     const customDomain = normalizeDomain(input.customDomain);
     if (customDomain) {
+      const effectivePlanKey =
+        input.plan !== undefined ? (await assertActivePlanKey(input.plan)).key : existing.plan;
+      if (!(await planGrantsEntitlement(effectivePlanKey, "custom_domain"))) {
+        throw new Error(
+          "Custom domain is not included on the selected plan. Choose Studio (or another plan that includes custom domain)."
+        );
+      }
       const { data: taken } = await raw
         .from("businesses")
         .select("id")
@@ -368,9 +386,9 @@ export async function updateBusinessForPlatform(
   }
   let planChanged = false;
   if (input.plan !== undefined) {
-    const plan = input.plan.trim() || "standard";
-    patch.plan = plan;
-    planChanged = plan !== existing.plan;
+    const planRow = await assertActivePlanKey(input.plan);
+    patch.plan = planRow.key;
+    planChanged = planRow.key !== existing.plan;
   }
   if (Object.keys(patch).length === 0) return existing;
 

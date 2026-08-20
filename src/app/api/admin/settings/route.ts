@@ -8,6 +8,7 @@ import {
 } from "@/lib/app-settings";
 import { InvalidBrandAssetUrlError, InvalidBrandColorError } from "@/lib/brand-color";
 import { InvalidEmailSenderError } from "@/lib/email-sender-policy";
+import { EntitlementError } from "@/lib/entitlements";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET() {
@@ -51,6 +52,9 @@ export async function PATCH(request: Request) {
     }
     if (error instanceof InvalidEmailSenderError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof EntitlementError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
     }
     const message = error instanceof Error ? error.message : "Failed to save settings";
     return NextResponse.json({ error: message }, { status: 500 });

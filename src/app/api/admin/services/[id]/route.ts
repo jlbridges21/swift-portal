@@ -3,6 +3,7 @@ import { requireAdminApi } from "@/lib/api-auth";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { invalidateBusinessServicesCache } from "@/lib/business-services";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { EntitlementError, requireEntitlement } from "@/lib/entitlements";
 
 function parseStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -18,6 +19,15 @@ export async function PATCH(
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(auth.profile.role);
   const { id } = await params;
+
+  try {
+    await requireEntitlement(tenant.businessId, "custom_services");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    throw error;
+  }
 
   const body = (await request.json()) as Record<string, unknown>;
   const patch: Record<string, unknown> = {};
@@ -72,6 +82,15 @@ export async function DELETE(
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(auth.profile.role);
   const { id } = await params;
+
+  try {
+    await requireEntitlement(tenant.businessId, "custom_services");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    throw error;
+  }
 
   const db = await createTenantServiceClient(tenant.businessId);
   const { data: service } = await db

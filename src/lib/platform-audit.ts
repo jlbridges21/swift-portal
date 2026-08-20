@@ -14,7 +14,12 @@ export type PlatformAuditAction =
   | "impersonation.start"
   | "impersonation.stop"
   | "impersonation.allow_writes"
-  | "impersonation.request";
+  | "impersonation.request"
+  | "plan.create"
+  | "plan.update"
+  | "plan.activate"
+  | "plan.deactivate"
+  | "plan.reorder";
 
 export async function requestIpAddress(): Promise<string | null> {
   try {

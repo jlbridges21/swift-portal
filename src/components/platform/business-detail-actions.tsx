@@ -6,6 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  ENFORCED_ENTITLEMENTS,
+  FUTURE_ENTITLEMENTS,
+  ENTITLEMENT_LABELS,
+  formatPlanPrice,
+  type PlanRow,
+} from "@/lib/plan-catalog";
 
 type Admin = { id: string; email: string; full_name: string | null };
 
@@ -14,6 +22,8 @@ export function BusinessDetailActions({
   admins,
   settingsJson,
   isProtected,
+  plans,
+  currentPlan,
 }: {
   business: {
     id: string;
@@ -27,6 +37,8 @@ export function BusinessDetailActions({
   admins: Admin[];
   settingsJson: string;
   isProtected: boolean;
+  plans: PlanRow[];
+  currentPlan: PlanRow | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -116,12 +128,74 @@ export function BusinessDetailActions({
             </div>
             <div>
               <Label htmlFor="plan">Plan</Label>
-              <Input id="plan" name="plan" defaultValue={business.plan} className="mt-1" />
+              <select
+                id="plan"
+                name="plan"
+                defaultValue={business.plan}
+                className="mt-1 flex h-11 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
+              >
+                {plans.map((plan) => (
+                  <option key={plan.id} value={plan.key}>
+                    {plan.name} — {formatPlanPrice(plan.price_monthly_cents)}/mo
+                    {!plan.is_active ? " (inactive)" : ""}
+                    {plan.key === "studio" ? " (recommended)" : ""}
+                  </option>
+                ))}
+                {!plans.some((p) => p.key === business.plan) && (
+                  <option value={business.plan}>{business.plan} (current)</option>
+                )}
+              </select>
             </div>
             <Button type="submit" disabled={busy}>
               Save
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Plan entitlements</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          {currentPlan ? (
+            <>
+              <p>
+                <span className="font-medium text-heading">{currentPlan.name}</span>
+                {" · "}
+                {formatPlanPrice(currentPlan.price_monthly_cents)}/mo
+                {!currentPlan.is_active && (
+                  <span className="ml-2 text-amber-700">(inactive — fail-closed for entitlements)</span>
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {ENFORCED_ENTITLEMENTS.map((key) => (
+                  <Badge key={key} variant={currentPlan.entitlements?.[key] === true ? "success" : "default"}>
+                    {ENTITLEMENT_LABELS[key]}
+                    {currentPlan.entitlements?.[key] === true ? "" : " · off"}
+                  </Badge>
+                ))}
+                {FUTURE_ENTITLEMENTS.map((key) =>
+                  currentPlan.entitlements?.[key] === true ? (
+                    <Badge key={key} variant="warning">
+                      {ENTITLEMENT_LABELS[key]} · not yet enforced
+                    </Badge>
+                  ) : null
+                )}
+              </div>
+              <p className="text-muted">
+                Limits: {(currentPlan.limits as { admin_seats?: number })?.admin_seats ?? "—"} seats ·{" "}
+                {(currentPlan.limits as { storage_gb?: number })?.storage_gb ?? "—"} GB ·{" "}
+                {(currentPlan.limits as { projects_per_month?: number | null })?.projects_per_month ??
+                  "unlimited"}{" "}
+                projects/mo
+              </p>
+            </>
+          ) : (
+            <p className="text-muted">
+              Unknown or inactive plan key “{business.plan}” — entitlements fail closed (none granted).
+            </p>
+          )}
         </CardContent>
       </Card>
 

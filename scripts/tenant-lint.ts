@@ -91,7 +91,10 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/platform-audit.ts",
   "src/lib/platform-onboard.ts",
   "src/lib/platform-dashboard.ts",
+  "src/lib/entitlements.ts",
+  "src/lib/platform-plans.ts",
   "src/app/api/platform/impersonate/route.ts",
+  "src/app/api/platform/plans/[id]/route.ts",
 ]);
 
 /**
@@ -123,7 +126,10 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/lib/platform-audit.ts",
   "src/lib/platform-onboard.ts",
   "src/lib/platform-dashboard.ts",
+  "src/lib/entitlements.ts",
+  "src/lib/platform-plans.ts",
   "src/app/api/platform/impersonate/route.ts",
+  "src/app/api/platform/plans/[id]/route.ts",
 ]);
 
 const MODULE_LET_ALLOWLIST = new Set([

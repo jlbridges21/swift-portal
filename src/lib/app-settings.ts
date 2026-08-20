@@ -12,6 +12,7 @@ import {
 import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
 import { mergeLandingAssets, type LandingAssets } from "@/lib/landing-assets";
 import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
+import { brandingFieldsChanged, requireEntitlement } from "@/lib/entitlements";
 import {
   buildDefaultWorkflowSettings,
   mergeWorkflowSettings,
@@ -300,6 +301,15 @@ export async function saveAppSettings(
   const colorDelta = changedBrandColors(current.business, merged.business);
   assertSafeBrandColors(colorDelta);
   assertSafeBrandAssetUrls(merged.business);
+
+  if (
+    brandingFieldsChanged(
+      current.business as unknown as Record<string, unknown>,
+      merged.business as unknown as Record<string, unknown>
+    )
+  ) {
+    await requireEntitlement(businessId, "custom_branding");
+  }
 
   const supabase = await createServiceClient();
   if (emailSenderPolicyFieldsChanged(current.email, merged.email)) {

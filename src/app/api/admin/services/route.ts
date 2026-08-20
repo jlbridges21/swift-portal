@@ -8,6 +8,7 @@ import {
   type BusinessServiceRow,
 } from "@/lib/business-services";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { EntitlementError, requireEntitlement } from "@/lib/entitlements";
 
 function parseStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -40,6 +41,15 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(auth.profile.role);
+
+  try {
+    await requireEntitlement(tenant.businessId, "custom_services");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    throw error;
+  }
 
   const body = (await request.json()) as Record<string, unknown>;
   const name = String(body.name ?? "").trim();

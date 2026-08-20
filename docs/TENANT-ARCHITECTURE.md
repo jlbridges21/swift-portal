@@ -55,7 +55,7 @@ Isolation layers:
 2. **`createTenantServiceClient(businessId)`** — service role bypasses RLS; the wrapper re-applies `business_id` on `from()`. Use `.raw` only for `profiles`, `businesses`, `processed_stripe_events`, Auth, Storage, RPC.
 3. **`enforce_same_business` triggers** (v30 + v43 `projects.service_id`) — not bypassed by the service role. NULL parents are allowed where the schema allows them (`media_assets.project_id`, etc.).
 
-Platform tables without tenant rows: `processed_stripe_events`, `platform_audit_log` (v44, super_admin SELECT only), leftover singletons `app_settings` and `google_calendar_connections` (RLS on, zero policies — fail closed). Live config is `business_settings` and `google_calendar_connections_v2`.
+Platform tables without tenant rows: `processed_stripe_events`, `platform_audit_log` (v44, super_admin SELECT only), `plans` (v45 entitlement catalog; super_admin manage + authenticated read of active plans), leftover singletons `app_settings` and `google_calendar_connections` (RLS on, zero policies — fail closed). Live config is `business_settings` and `google_calendar_connections_v2`.
 
 ## Standing rule for every new table
 
@@ -65,6 +65,21 @@ Platform tables without tenant rows: `processed_stripe_events`, `platform_audit_
 4. Application writes go through `createTenantServiceClient` or cookie RLS **plus** `.eq("business_id", …)`.
 5. `npm run tenant-lint` and `supabase/tests/tenant-sql-audit.sql` must stay green.
 6. Extend `supabase/tests/tenant-isolation.sql` with a read + write assertion.
+
+**Intentional exceptions (no `business_id`):** platform-scoped tables that are not tenant data —
+`processed_stripe_events`, `platform_audit_log`, and `plans` (v45 subscription catalog). Plans are
+shared ShootPortal product definitions; every business points at `plans.key` via `businesses.plan`.
+
+## Plans & entitlements (v45)
+
+`businesses.plan` is TEXT FK’d to `plans.key` (plus a trigger that rejects unknown keys). No Stripe
+subscriptions, trials, or proration in this layer — entitlements only.
+
+Enforced today (server-side): `custom_branding`, `custom_services`, `custom_domain`. All other
+entitlement flags are catalog-only and marked “not yet enforced” in `/platform/plans`.
+
+Helpers: `getBusinessPlan` / `hasEntitlement` / `getPlanLimits` in `src/lib/entitlements.ts`
+(React `cache()`, fail closed on unknown or inactive plans).
 
 ## Onboard a business end to end
 
@@ -97,7 +112,7 @@ The constant is Swift’s production UUID. It is **not** a fail-open default (`?
 
 ## Singleton tables (no v43 drop)
 
-`app_settings` and `google_calendar_connections` are unused in `src/`. Successors (`business_settings` v33, `google_calendar_connections_v2` v34) have been live since 2026-08-18. That is not a meaningful production period. **Do not drop them yet.** v43 is `projects.service_id` integrity. v44 is `platform_audit_log` + `peek_impersonated_current_business_id`.
+`app_settings` and `google_calendar_connections` are unused in `src/`. Successors (`business_settings` v33, `google_calendar_connections_v2` v34) have been live since 2026-08-18. That is not a meaningful production period. **Do not drop them yet.** v43 is `projects.service_id` integrity. v44 is `platform_audit_log` + `peek_impersonated_current_business_id`. v45 is `plans` + `businesses.plan` FK.
 
 ## Dual-hat profiles
 
