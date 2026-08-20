@@ -4,9 +4,8 @@ import { getAppSettings } from "@/lib/app-settings";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { BrandProvider } from "@/components/brand/brand-provider";
 import { ImpersonationBanner } from "@/components/platform/impersonation-banner";
-import { listActivePlans } from "@/lib/entitlements";
 import { getSubscriptionState } from "@/lib/subscription";
-import { formatPlanPrice, type PlanRow } from "@/lib/plan-catalog";
+import { formatPlanPrice } from "@/lib/plan-catalog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +14,12 @@ import { metadataFromBusiness } from "@/lib/site-metadata";
 import type { Metadata } from "next";
 import { getTenantContext } from "@/lib/tenant";
 import { ManageBillingButton, SubscribeButton } from "@/components/billing/billing-actions";
-import { loadBillingBusiness } from "@/lib/stripe-billing";
+import {
+  customerIdForMode,
+  listPublicPlansWithModePrices,
+  loadBillingBusiness,
+} from "@/lib/stripe-billing";
+import { getStripeMode } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -30,37 +34,12 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-async function loadBillingData(businessId: string, planKey: string | undefined) {
-  let settings;
-  let plans: PlanRow[] = [];
-  try {
-    settings = await getAppSettings(businessId);
-  } catch (err) {
-    console.error("[billing] getAppSettings failed", err);
-    throw err;
-  }
-  try {
-    plans = await listActivePlans();
-  } catch (err) {
-    console.error("[billing] listActivePlans failed", err);
-    plans = [];
-  }
-  const currentPlan = planKey ? plans.find((p) => p.key === planKey) ?? null : null;
-  const publicPlans = plans.filter((p) => p.is_public && p.key !== "founding");
-  return { settings, plans, currentPlan, publicPlans };
-}
-
 export default async function BillingPage() {
   const { tenant } = await requireAdminPage();
 
   let settings;
-  let currentPlan: PlanRow | null = null;
-  let publicPlans: PlanRow[] = [];
   try {
-    const loaded = await loadBillingData(tenant.businessId, tenant.business.plan);
-    settings = loaded.settings;
-    currentPlan = loaded.currentPlan;
-    publicPlans = loaded.publicPlans;
+    settings = await getAppSettings(tenant.businessId);
   } catch (err) {
     console.error("[billing] page load failed", err);
     return (
@@ -84,13 +63,18 @@ export default async function BillingPage() {
 
   const brand = getPortalBrandFromSettings(settings);
   const billingRow = await loadBillingBusiness(tenant.businessId);
+  const stripeMode = getStripeMode();
+  const publicPlans = await listPublicPlansWithModePrices(stripeMode);
+  const currentPlan = publicPlans.find((p) => p.key === tenant.business.plan) ?? null;
+  const anyModePriceConfigured = publicPlans.some((p) => Boolean(p.stripe_price_monthly_id));
+
   const sub = getSubscriptionState({
     ...tenant.business,
     subscription_current_period_end: billingRow?.subscription_current_period_end,
     subscription_cancel_at_period_end: billingRow?.subscription_cancel_at_period_end,
   });
   const planLabel = currentPlan?.name || tenant.business.plan || "Unknown plan";
-  const hasStripeCustomer = Boolean(billingRow?.stripe_customer_id);
+  const hasStripeCustomer = Boolean(billingRow && customerIdForMode(billingRow, stripeMode));
 
   const headline = sub.isComped
     ? "You’re covered"
@@ -155,9 +139,6 @@ export default async function BillingPage() {
                     · {formatPlanPrice(currentPlan.price_monthly_cents)}/mo
                   </span>
                 )}
-                {!currentPlan && tenant.business.plan && (
-                  <span className="text-muted"> · plan catalog unavailable</span>
-                )}
               </p>
               <div className="flex flex-wrap gap-2">
                 <Badge variant={sub.requiresPayment ? "warning" : "success"}>{sub.status}</Badge>
@@ -213,7 +194,13 @@ export default async function BillingPage() {
           {!sub.isComped && (
             <>
               <h2 className="mb-3 text-lg font-semibold text-heading">Plans</h2>
-              {publicPlans.length === 0 ? (
+              {!anyModePriceConfigured ? (
+                <p className="mb-8 text-sm text-muted">
+                  Billing is not configured for this environment (no {stripeMode} Stripe prices).
+                  An admin must run the setup script with {stripeMode} keys before checkout will
+                  work.
+                </p>
+              ) : publicPlans.length === 0 ? (
                 <p className="mb-8 text-sm text-muted">
                   Plans are temporarily unavailable. Contact ShootPortal support if you need access
                   restored.
@@ -223,6 +210,8 @@ export default async function BillingPage() {
                   {publicPlans.map((plan) => {
                     const isCurrent = plan.key === tenant.business.plan;
                     const canSubscribe = Boolean(plan.stripe_price_monthly_id);
+                    // Expired / canceled / past_due must always be able to (re)subscribe.
+                    const alreadyOnPaidPlan = isCurrent && sub.status === "active" && !sub.requiresPayment;
                     return (
                       <Card key={plan.id} className={isCurrent ? "border-accent" : undefined}>
                         <CardHeader className="pb-2">
@@ -244,17 +233,23 @@ export default async function BillingPage() {
                           {plan.description && (
                             <p className="text-sm text-muted">{plan.description}</p>
                           )}
-                          <SubscribeButton
-                            planKey={plan.key}
-                            label={
-                              canSubscribe
-                                ? isCurrent && sub.status === "active"
-                                  ? "Current plan"
-                                  : "Subscribe"
-                                : "Unavailable"
-                            }
-                            disabled={!canSubscribe || (isCurrent && sub.status === "active")}
-                          />
+                          {canSubscribe ? (
+                            <SubscribeButton
+                              planKey={plan.key}
+                              label={alreadyOnPaidPlan ? "Current plan" : "Subscribe"}
+                              disabled={alreadyOnPaidPlan}
+                            />
+                          ) : (
+                            <div className="space-y-1">
+                              <Button type="button" className="w-full" disabled>
+                                Unavailable
+                              </Button>
+                              <p className="text-xs text-muted">
+                                No {stripeMode} price configured for {plan.name}. Run the setup
+                                script with {stripeMode} keys.
+                              </p>
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     );

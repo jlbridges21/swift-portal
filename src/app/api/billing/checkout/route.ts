@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getBusinessPortalOrigin } from "@/lib/portal-url";
-import { getStripe } from "@/lib/stripe";
+import { getStripe, getStripeMode } from "@/lib/stripe";
 import { getSubscriptionState } from "@/lib/subscription";
 import {
+  BillingConfigError,
   billingMetadata,
   ensureStripeCustomer,
   loadBillingBusiness,
-  loadPlanByKeyForBilling,
+  resolvePriceIdForCheckout,
   type BillingInterval,
 } from "@/lib/stripe-billing";
 
@@ -52,18 +53,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const plan = await loadPlanByKeyForBilling(planKey);
-    if (!plan || !plan.is_active || !plan.is_public) {
-      return NextResponse.json({ error: "Plan is not available." }, { status: 400 });
-    }
-
-    const priceId =
-      interval === "annual" ? plan.stripe_price_annual_id : plan.stripe_price_monthly_id;
-    if (!priceId) {
-      return NextResponse.json(
-        { error: "This plan is not configured for Stripe Checkout yet." },
-        { status: 400 }
-      );
+    let priceId: string;
+    let mode: ReturnType<typeof getStripeMode>;
+    try {
+      const resolved = await resolvePriceIdForCheckout({ planKey, interval });
+      priceId = resolved.priceId;
+      mode = resolved.mode;
+    } catch (err) {
+      if (err instanceof BillingConfigError) {
+        console.error("[billing/checkout] missing price for mode", err.details);
+        return NextResponse.json({ error: err.message }, { status: 400 });
+      }
+      throw err;
     }
 
     const origin = getBusinessPortalOrigin(tenant.business);
@@ -80,6 +81,9 @@ export async function POST(request: Request) {
     } = { metadata: meta };
 
     // Trial handoff: keep remaining trial so mid-trial subscribe does not charge early.
+    // Stripe requires trial_end to be at least 2 days in the future — if fewer than
+    // 48h remain, omit trial_end (subscription starts without an extended trial).
+    // Expired / trial_expired customers must never get trial_end.
     if (
       business.subscription_status === "trialing" &&
       business.trial_ends_at &&
@@ -87,8 +91,15 @@ export async function POST(request: Request) {
     ) {
       const trialEndSec = Math.floor(new Date(business.trial_ends_at).getTime() / 1000);
       const nowSec = Math.floor(Date.now() / 1000);
-      if (trialEndSec > nowSec + 60) {
+      const minTrialLeadSec = 2 * 24 * 60 * 60 + 60; // Stripe minimum + 1 minute buffer
+      if (trialEndSec > nowSec + minTrialLeadSec) {
         subscriptionData.trial_end = trialEndSec;
+      } else {
+        console.info("[billing/checkout] omitting trial_end — less than 2 days remaining", {
+          businessId: business.id,
+          trialEndsAt: business.trial_ends_at,
+          mode,
+        });
       }
     }
 
@@ -110,10 +121,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Checkout session missing URL." }, { status: 500 });
     }
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: session.url, mode });
   } catch (err) {
     console.error("[billing/checkout] failed", {
       error: err instanceof Error ? err.message : "unknown",
+      mode: (() => {
+        try {
+          return getStripeMode();
+        } catch {
+          return "unknown";
+        }
+      })(),
     });
     return NextResponse.json({ error: "Could not start checkout." }, { status: 500 });
   }

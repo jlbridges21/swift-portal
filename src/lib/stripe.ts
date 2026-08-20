@@ -14,6 +14,19 @@ export type StripeClientContext = {
   requestOptions: StripeConnectRequestOptions | undefined;
 };
 
+export type StripeMode = "test" | "live";
+
+/**
+ * Derive Stripe mode from the active secret key. Do not use a separate env
+ * var — it can drift out of sync with STRIPE_SECRET_KEY.
+ */
+export function getStripeMode(secretKey?: string): StripeMode {
+  const key = secretKey ?? process.env.STRIPE_SECRET_KEY ?? "";
+  if (key.startsWith("sk_live")) return "live";
+  if (key.startsWith("sk_test")) return "test";
+  throw new Error("STRIPE_SECRET_KEY must start with sk_test_ or sk_live_");
+}
+
 /**
  * Cached Stripe client keyed by secret (prompt 7 Map). Request options include
  * `{ stripeAccount }` only when a connected account id is provided.

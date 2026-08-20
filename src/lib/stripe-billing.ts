@@ -7,7 +7,7 @@
 
 import type Stripe from "stripe";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getStripe } from "@/lib/stripe";
+import { getStripe, getStripeMode, type StripeMode } from "@/lib/stripe";
 import {
   shouldApplyStripeSubscriptionUpdate,
   type SubscriptionStatus,
@@ -28,24 +28,42 @@ export type BillingBusinessRow = {
   trial_ends_at: string | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
+  stripe_customer_id_test: string | null;
+  stripe_customer_id_live: string | null;
+  stripe_subscription_id_test: string | null;
+  stripe_subscription_id_live: string | null;
   billing_email: string | null;
   subscription_current_period_end: string | null;
   subscription_cancel_at_period_end: boolean;
 };
 
-export type PlanStripeIds = {
+export type PlanBillingRow = {
   id: string;
   key: string;
   name: string;
   description: string | null;
   price_monthly_cents: number | null;
   price_annual_cents: number | null;
-  stripe_product_id: string | null;
-  stripe_price_monthly_id: string | null;
-  stripe_price_annual_id: string | null;
   is_active: boolean;
   is_public: boolean;
 };
+
+export type PlanPriceForMode = {
+  plan: PlanBillingRow;
+  stripe_product_id: string | null;
+  stripe_price_monthly_id: string | null;
+  stripe_price_annual_id: string | null;
+};
+
+export class BillingConfigError extends Error {
+  constructor(
+    message: string,
+    public readonly details: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "BillingConfigError";
+  }
+}
 
 export function isShootPortalBillingMetadata(
   metadata: Stripe.Metadata | null | undefined
@@ -59,6 +77,37 @@ export function billingMetadata(businessId: string): Record<string, string> {
     business_id: businessId,
     [SHOOTPORTAL_BILLING_META_KEY]: SHOOTPORTAL_BILLING_META_VALUE,
   };
+}
+
+function customerColumn(mode: StripeMode): "stripe_customer_id_test" | "stripe_customer_id_live" {
+  return mode === "live" ? "stripe_customer_id_live" : "stripe_customer_id_test";
+}
+
+function subscriptionColumn(
+  mode: StripeMode
+): "stripe_subscription_id_test" | "stripe_subscription_id_live" {
+  return mode === "live" ? "stripe_subscription_id_live" : "stripe_subscription_id_test";
+}
+
+/** Prefer mode-specific id; fall back to legacy mirror column. */
+export function customerIdForMode(
+  business: BillingBusinessRow,
+  mode: StripeMode = getStripeMode()
+): string | null {
+  const modeSpecific =
+    mode === "live" ? business.stripe_customer_id_live : business.stripe_customer_id_test;
+  return modeSpecific || business.stripe_customer_id || null;
+}
+
+export function subscriptionIdForMode(
+  business: BillingBusinessRow,
+  mode: StripeMode = getStripeMode()
+): string | null {
+  const modeSpecific =
+    mode === "live"
+      ? business.stripe_subscription_id_live
+      : business.stripe_subscription_id_test;
+  return modeSpecific || business.stripe_subscription_id || null;
 }
 
 /** Invoice subscription id — API 2026 uses parent.subscription_details. */
@@ -83,12 +132,6 @@ export function invoiceSubscriptionMetadata(
   return invoice.metadata ?? null;
 }
 
-/**
- * Multi-signal: ShootPortal SaaS invoice vs tenant→client invoice.
- * Requires (1) a subscription on the invoice AND (2) at least one of:
- * metadata marker, or customer matching businesses.stripe_customer_id
- * (caller supplies customerMatch). Prefer both when available.
- */
 export function isShootPortalBillingInvoiceSignals(options: {
   hasSubscription: boolean;
   metadataLooksBilling: boolean;
@@ -133,6 +176,14 @@ export function mapStripeSubscriptionStatus(
   }
 }
 
+function isStripeModeMismatchError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    /similar object exists in (test|live) mode/i.test(message) ||
+    /No such customer/i.test(message)
+  );
+}
+
 export async function loadBillingBusiness(
   businessId: string
 ): Promise<BillingBusinessRow | null> {
@@ -140,7 +191,7 @@ export async function loadBillingBusiness(
   const { data, error } = await supabase
     .from("businesses")
     .select(
-      "id, name, slug, custom_domain, plan, subscription_status, trial_ends_at, stripe_customer_id, stripe_subscription_id, billing_email, subscription_current_period_end, subscription_cancel_at_period_end"
+      "id, name, slug, custom_domain, plan, subscription_status, trial_ends_at, stripe_customer_id, stripe_subscription_id, stripe_customer_id_test, stripe_customer_id_live, stripe_subscription_id_test, stripe_subscription_id_live, billing_email, subscription_current_period_end, subscription_cancel_at_period_end"
     )
     .eq("id", businessId)
     .is("deleted_at", null)
@@ -156,26 +207,133 @@ export async function findBusinessIdByStripeCustomerId(
   const { data, error } = await supabase
     .from("businesses")
     .select("id")
-    .eq("stripe_customer_id", customerId)
+    .or(
+      `stripe_customer_id.eq.${customerId},stripe_customer_id_test.eq.${customerId},stripe_customer_id_live.eq.${customerId}`
+    )
     .is("deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data?.id ?? null;
 }
 
-export async function loadPlanByKeyForBilling(
-  key: string
-): Promise<PlanStripeIds | null> {
+async function loadModePriceRows(
+  planId: string,
+  mode: StripeMode
+): Promise<{ monthly: string | null; annual: string | null; product: string | null }> {
   const supabase = await createServiceClient();
   const { data, error } = await supabase
+    .from("plan_stripe_prices")
+    .select("billing_interval, stripe_product_id, stripe_price_id")
+    .eq("plan_id", planId)
+    .eq("mode", mode);
+  if (error) throw new Error(error.message);
+
+  let monthly: string | null = null;
+  let annual: string | null = null;
+  let product: string | null = null;
+  for (const row of data ?? []) {
+    product = row.stripe_product_id ?? product;
+    if (row.billing_interval === "monthly") monthly = row.stripe_price_id;
+    if (row.billing_interval === "annual") annual = row.stripe_price_id;
+  }
+  return { monthly, annual, product };
+}
+
+export async function loadPlanPriceForMode(
+  planKey: string,
+  mode: StripeMode = getStripeMode()
+): Promise<PlanPriceForMode | null> {
+  const supabase = await createServiceClient();
+  const { data: plan, error } = await supabase
     .from("plans")
     .select(
-      "id, key, name, description, price_monthly_cents, price_annual_cents, stripe_product_id, stripe_price_monthly_id, stripe_price_annual_id, is_active, is_public"
+      "id, key, name, description, price_monthly_cents, price_annual_cents, is_active, is_public"
     )
-    .eq("key", key)
+    .eq("key", planKey)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return (data as PlanStripeIds | null) ?? null;
+  if (!plan) return null;
+
+  const prices = await loadModePriceRows(plan.id, mode);
+  return {
+    plan: plan as PlanBillingRow,
+    stripe_product_id: prices.product,
+    stripe_price_monthly_id: prices.monthly,
+    stripe_price_annual_id: prices.annual,
+  };
+}
+
+export async function listPublicPlansWithModePrices(
+  mode: StripeMode = getStripeMode()
+): Promise<
+  Array<
+    PlanBillingRow & {
+      stripe_price_monthly_id: string | null;
+      stripe_price_annual_id: string | null;
+      display_order: number;
+    }
+  >
+> {
+  const supabase = await createServiceClient();
+  const { data: plans, error } = await supabase
+    .from("plans")
+    .select(
+      "id, key, name, description, price_monthly_cents, price_annual_cents, is_active, is_public, display_order"
+    )
+    .eq("is_active", true)
+    .eq("is_public", true)
+    .order("display_order", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const rows = [];
+  for (const plan of plans ?? []) {
+    if (plan.key === "founding") continue;
+    const prices = await loadModePriceRows(plan.id, mode);
+    rows.push({
+      ...(plan as PlanBillingRow & { display_order: number }),
+      stripe_price_monthly_id: prices.monthly,
+      stripe_price_annual_id: prices.annual,
+    });
+  }
+  return rows;
+}
+
+export async function resolvePriceIdForCheckout(options: {
+  planKey: string;
+  interval: BillingInterval;
+  mode?: StripeMode;
+}): Promise<{ priceId: string; planName: string; mode: StripeMode }> {
+  const mode = options.mode ?? getStripeMode();
+  const loaded = await loadPlanPriceForMode(options.planKey, mode);
+  if (!loaded || !loaded.plan.is_active || !loaded.plan.is_public) {
+    throw new BillingConfigError("Plan is not available.", {
+      mode,
+      planKey: options.planKey,
+      interval: options.interval,
+      missing: "plan",
+    });
+  }
+
+  const priceId =
+    options.interval === "annual"
+      ? loaded.stripe_price_annual_id
+      : loaded.stripe_price_monthly_id;
+
+  if (!priceId) {
+    const envLabel = mode === "live" ? "live" : "test";
+    throw new BillingConfigError(
+      `Billing is not configured for this environment (no ${envLabel} price for the ${loaded.plan.name} plan). Run the setup script with ${envLabel} keys.`,
+      {
+        mode,
+        planKey: options.planKey,
+        planName: loaded.plan.name,
+        interval: options.interval,
+        missing: options.interval === "annual" ? "stripe_price_annual_id" : "stripe_price_monthly_id",
+      }
+    );
+  }
+
+  return { priceId, planName: loaded.plan.name, mode };
 }
 
 export async function findPlanKeyByStripePriceId(
@@ -183,12 +341,29 @@ export async function findPlanKeyByStripePriceId(
 ): Promise<string | null> {
   const supabase = await createServiceClient();
   const { data, error } = await supabase
+    .from("plan_stripe_prices")
+    .select("plan_id")
+    .eq("stripe_price_id", priceId)
+    .maybeSingle();
+
+  if (!error && data?.plan_id) {
+    const { data: plan, error: planErr } = await supabase
+      .from("plans")
+      .select("key")
+      .eq("id", data.plan_id)
+      .maybeSingle();
+    if (planErr) throw new Error(planErr.message);
+    if (plan?.key) return plan.key;
+  }
+
+  // Fallback to legacy columns while both paths exist.
+  const legacy = await supabase
     .from("plans")
     .select("key")
     .or(`stripe_price_monthly_id.eq.${priceId},stripe_price_annual_id.eq.${priceId}`)
     .maybeSingle();
-  if (error) throw new Error(error.message);
-  return data?.key ?? null;
+  if (legacy.error) throw new Error(legacy.error.message);
+  return legacy.data?.key ?? null;
 }
 
 /**
@@ -263,11 +438,12 @@ export async function resolveBillingBusinessAttribution(options: {
   let customerBusinessId: string | null = null;
   if (customerId) {
     customerBusinessId = await findBusinessIdByStripeCustomerId(customerId);
-    if (business.stripe_customer_id && business.stripe_customer_id !== customerId) {
+    const expected = customerIdForMode(business);
+    if (expected && expected !== customerId) {
       console.error("[stripe-billing] attribution failed — customer mismatch", {
         source: options.source,
         metadataBusinessId,
-        businessCustomerId: business.stripe_customer_id,
+        businessCustomerId: expected,
         eventCustomerId: customerId,
         customerBusinessId,
       });
@@ -299,37 +475,70 @@ export async function resolveBillingBusinessAttribution(options: {
   return { ok: true, business };
 }
 
+async function persistCustomerIds(
+  businessId: string,
+  customerId: string,
+  mode: StripeMode,
+  email?: string | null
+) {
+  const supabase = await createServiceClient();
+  const patch: Record<string, unknown> = {
+    stripe_customer_id: customerId,
+    [customerColumn(mode)]: customerId,
+  };
+  if (email) patch.billing_email = email;
+  const { error } = await supabase.from("businesses").update(patch).eq("id", businessId);
+  if (error) {
+    console.error("[stripe-billing] failed to persist stripe_customer_id", {
+      businessId,
+      customerId,
+      mode,
+      error: error.message,
+    });
+    throw new Error("Could not save Stripe customer.");
+  }
+}
+
+/**
+ * Return a customer id valid for the current Stripe mode. If a stored id belongs
+ * to the other mode (or is missing), create a new customer and persist it.
+ */
 export async function ensureStripeCustomer(
   business: BillingBusinessRow,
   email?: string | null
 ): Promise<string> {
-  if (business.stripe_customer_id) return business.stripe_customer_id;
-
+  const mode = getStripeMode();
   const { stripe } = getStripe();
+  const existing = customerIdForMode(business, mode);
+
+  if (existing) {
+    try {
+      const retrieved = await stripe.customers.retrieve(existing);
+      if (!("deleted" in retrieved && retrieved.deleted)) {
+        // Keep legacy mirror in sync for this mode.
+        if (business.stripe_customer_id !== existing) {
+          await persistCustomerIds(business.id, existing, mode, email);
+        }
+        return existing;
+      }
+    } catch (err) {
+      console.warn("[stripe-billing] stored customer unusable for current mode — recreating", {
+        businessId: business.id,
+        mode,
+        customerId: existing,
+        error: err instanceof Error ? err.message : "unknown",
+        modeMismatch: isStripeModeMismatchError(err),
+      });
+    }
+  }
+
   const customer = await stripe.customers.create({
     email: email || business.billing_email || undefined,
     name: business.name,
     metadata: billingMetadata(business.id),
   });
 
-  const supabase = await createServiceClient();
-  const { error } = await supabase
-    .from("businesses")
-    .update({
-      stripe_customer_id: customer.id,
-      ...(email ? { billing_email: email } : {}),
-    })
-    .eq("id", business.id);
-
-  if (error) {
-    console.error("[stripe-billing] failed to persist stripe_customer_id", {
-      businessId: business.id,
-      customerId: customer.id,
-      error: error.message,
-    });
-    throw new Error("Could not save Stripe customer.");
-  }
-
+  await persistCustomerIds(business.id, customer.id, mode, email);
   return customer.id;
 }
 
@@ -364,16 +573,21 @@ export async function applySubscriptionSnapshot(options: {
     return { applied: false, reason: "unmapped_status" };
   }
 
+  const mode = getStripeMode();
   const patch: Record<string, unknown> = {
     subscription_status: mapped,
     stripe_subscription_id: options.stripeSubscriptionId,
+    [subscriptionColumn(mode)]: options.stripeSubscriptionId,
     subscription_cancel_at_period_end: options.cancelAtPeriodEnd,
     subscription_current_period_end: options.currentPeriodEndUnix
       ? new Date(options.currentPeriodEndUnix * 1000).toISOString()
       : null,
   };
   if (options.planKey) patch.plan = options.planKey;
-  if (options.customerId) patch.stripe_customer_id = options.customerId;
+  if (options.customerId) {
+    patch.stripe_customer_id = options.customerId;
+    patch[customerColumn(mode)] = options.customerId;
+  }
 
   const supabase = await createServiceClient();
   const { error } = await supabase.from("businesses").update(patch).eq("id", options.businessId);
@@ -382,6 +596,7 @@ export async function applySubscriptionSnapshot(options: {
   console.info("[stripe-billing] subscription snapshot applied", {
     source: options.source,
     businessId: options.businessId,
+    mode,
     subscription_status: mapped,
     stripe_subscription_id: options.stripeSubscriptionId,
     plan: options.planKey ?? undefined,
@@ -423,10 +638,6 @@ export async function syncFromStripeSubscription(
   });
 }
 
-/**
- * Platform webhook guard: should this invoice be ignored as ShootPortal SaaS?
- * Uses multiple signals; when unsure, returns false (do not skip payment flow).
- */
 export async function shouldSkipInvoiceAsShootPortalBilling(
   invoice: Stripe.Invoice
 ): Promise<{ skip: boolean; reason: string }> {
@@ -453,15 +664,10 @@ export async function shouldSkipInvoiceAsShootPortalBilling(
     customerMatchesBusinessBillingCustomer: customerMatches,
   });
 
-  // Strengthen: require metadata marker OR (subscription + customer match).
-  // Already encoded above. Extra: if only customer match without subscription, do not skip.
   if (!skip) {
     return { skip: false, reason: "not_shootportal_billing" };
   }
 
-  // Prefer requiring the marker when present on subscription invoices; if marker
-  // missing but customer is a SaaS customer AND invoice has subscription, still
-  // skip to avoid corrupting payments when metadata snapshot is empty.
   return {
     skip: true,
     reason: metadataLooksBilling

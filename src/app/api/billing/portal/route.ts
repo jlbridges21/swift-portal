@@ -4,7 +4,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getBusinessPortalOrigin } from "@/lib/portal-url";
 import { getStripe } from "@/lib/stripe";
 import { getSubscriptionState } from "@/lib/subscription";
-import { loadBillingBusiness } from "@/lib/stripe-billing";
+import { ensureStripeCustomer, loadBillingBusiness } from "@/lib/stripe-billing";
 
 export const runtime = "nodejs";
 
@@ -27,22 +27,18 @@ export async function POST() {
       );
     }
 
-    if (!business.stripe_customer_id) {
-      return NextResponse.json(
-        { error: "No billing customer yet. Subscribe to a plan first." },
-        { status: 400 }
-      );
-    }
-
     const origin = getBusinessPortalOrigin(tenant.business);
     if (!origin) {
       return NextResponse.json({ error: "Portal URL not configured." }, { status: 500 });
     }
 
+    // Recreates a mode-correct customer when a legacy id belongs to the other mode.
+    const customerId = await ensureStripeCustomer(business, profile.email);
+
     const { stripe } = getStripe();
     // Platform account only — never pass stripeAccount.
     const session = await stripe.billingPortal.sessions.create({
-      customer: business.stripe_customer_id,
+      customer: customerId,
       return_url: `${origin}/billing`,
     });
 

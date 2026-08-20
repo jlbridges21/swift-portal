@@ -2,10 +2,11 @@
  * Idempotent Stripe Product/Price setup for ShootPortal SaaS plans.
  * Operates on the PLATFORM account only (no Stripe-Account header).
  *
+ * Writes into plan_stripe_prices for the mode derived from STRIPE_SECRET_KEY.
  * Skips the founding plan — founding / comped access is outside Checkout.
  *
- * Run (TEST mode keys only):
- *   npx tsx scripts/setup-stripe-billing.ts
+ *   npx tsx scripts/setup-stripe-billing.ts              # TEST only
+ *   npx tsx scripts/setup-stripe-billing.ts --confirm-live  # required for LIVE
  */
 
 import { readFileSync, existsSync } from "fs";
@@ -34,6 +35,9 @@ loadEnvLocal();
 
 const SKIP_PLAN_KEYS = new Set(["founding"]);
 
+type StripeMode = "test" | "live";
+type BillingInterval = "monthly" | "annual";
+
 type PlanRow = {
   id: string;
   key: string;
@@ -41,10 +45,13 @@ type PlanRow = {
   description: string | null;
   price_monthly_cents: number | null;
   price_annual_cents: number | null;
-  stripe_product_id: string | null;
-  stripe_price_monthly_id: string | null;
-  stripe_price_annual_id: string | null;
 };
+
+function detectMode(secret: string): StripeMode {
+  if (secret.startsWith("sk_live")) return "live";
+  if (secret.startsWith("sk_test")) return "test";
+  throw new Error("STRIPE_SECRET_KEY must start with sk_test_ or sk_live_");
+}
 
 async function findProductByLookup(
   stripe: Stripe,
@@ -55,14 +62,56 @@ async function findProductByLookup(
   return hit ?? null;
 }
 
-async function ensureProduct(stripe: Stripe, plan: PlanRow): Promise<Stripe.Product> {
-  if (plan.stripe_product_id) {
+async function loadStoredPrice(
+  supabase: ReturnType<typeof createClient>,
+  planId: string,
+  mode: StripeMode,
+  interval: BillingInterval
+): Promise<{ stripe_product_id: string; stripe_price_id: string } | null> {
+  const { data, error } = await supabase
+    .from("plan_stripe_prices")
+    .select("stripe_product_id, stripe_price_id")
+    .eq("plan_id", planId)
+    .eq("mode", mode)
+    .eq("billing_interval", interval)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function upsertStoredPrice(
+  supabase: ReturnType<typeof createClient>,
+  planId: string,
+  mode: StripeMode,
+  interval: BillingInterval,
+  productId: string,
+  priceId: string
+) {
+  const { error } = await supabase.from("plan_stripe_prices").upsert(
+    {
+      plan_id: planId,
+      mode,
+      billing_interval: interval,
+      stripe_product_id: productId,
+      stripe_price_id: priceId,
+    },
+    { onConflict: "plan_id,mode,billing_interval" }
+  );
+  if (error) throw error;
+}
+
+async function ensureProduct(
+  stripe: Stripe,
+  plan: PlanRow,
+  existingProductId: string | null
+): Promise<Stripe.Product> {
+  if (existingProductId) {
     try {
-      const existing = await stripe.products.retrieve(plan.stripe_product_id);
+      const existing = await stripe.products.retrieve(existingProductId);
       console.log(`  product found (db): ${existing.id} (${plan.key})`);
       return existing;
     } catch {
-      console.log(`  product id ${plan.stripe_product_id} missing in Stripe — recreating`);
+      console.log(`  product id ${existingProductId} missing in Stripe — recreating`);
     }
   }
 
@@ -136,8 +185,18 @@ async function ensureRecurringPrice(
 async function main() {
   const secret = process.env.STRIPE_SECRET_KEY;
   if (!secret) throw new Error("STRIPE_SECRET_KEY missing");
-  if (secret.startsWith("sk_live")) {
-    throw new Error("Refusing to run against live keys — use TEST mode only.");
+
+  const mode = detectMode(secret);
+  const confirmLive = process.argv.includes("--confirm-live");
+
+  console.log("========================================");
+  console.log(mode === "live" ? "Running in LIVE mode" : "Running in TEST mode");
+  console.log("========================================");
+
+  if (mode === "live" && !confirmLive) {
+    throw new Error(
+      "Refusing to create LIVE Stripe products without --confirm-live. Re-run with that flag when intentional."
+    );
   }
 
   const stripe = new Stripe(secret, {
@@ -153,9 +212,7 @@ async function main() {
 
   const { data: plans, error } = await supabase
     .from("plans")
-    .select(
-      "id, key, name, description, price_monthly_cents, price_annual_cents, stripe_product_id, stripe_price_monthly_id, stripe_price_annual_id"
-    )
+    .select("id, key, name, description, price_monthly_cents, price_annual_cents")
     .eq("is_active", true)
     .order("display_order", { ascending: true });
 
@@ -178,48 +235,61 @@ async function main() {
       continue;
     }
 
-    const product = await ensureProduct(stripe, plan);
-    let monthlyId = plan.stripe_price_monthly_id;
-    let annualId = plan.stripe_price_annual_id;
+    const storedMonthly = await loadStoredPrice(supabase, plan.id, mode, "monthly");
+    const storedAnnual = await loadStoredPrice(supabase, plan.id, mode, "annual");
+    const existingProductId =
+      storedMonthly?.stripe_product_id ?? storedAnnual?.stripe_product_id ?? null;
+
+    const product = await ensureProduct(stripe, plan, existingProductId);
 
     if (plan.price_monthly_cents != null) {
-      monthlyId = await ensureRecurringPrice(
+      const monthlyId = await ensureRecurringPrice(
         stripe,
         product.id,
-        plan.stripe_price_monthly_id,
+        storedMonthly?.stripe_price_id ?? null,
         plan.price_monthly_cents,
         "month",
         plan.key
       );
+      await upsertStoredPrice(supabase, plan.id, mode, "monthly", product.id, monthlyId);
+      // Keep legacy columns mirrored for TEST only (back-compat during transition).
+      if (mode === "test") {
+        await supabase
+          .from("plans")
+          .update({
+            stripe_product_id: product.id,
+            stripe_price_monthly_id: monthlyId,
+          })
+          .eq("id", plan.id);
+      }
     }
 
     if (plan.price_annual_cents != null) {
-      // Annual catalog stores monthly-equivalent cents (display); charge 12×.
       const annualCharge = plan.price_annual_cents * 12;
-      annualId = await ensureRecurringPrice(
+      const annualId = await ensureRecurringPrice(
         stripe,
         product.id,
-        plan.stripe_price_annual_id,
+        storedAnnual?.stripe_price_id ?? null,
         annualCharge,
         "year",
         plan.key
       );
+      await upsertStoredPrice(supabase, plan.id, mode, "annual", product.id, annualId);
+      if (mode === "test") {
+        await supabase
+          .from("plans")
+          .update({
+            stripe_product_id: product.id,
+            stripe_price_annual_id: annualId,
+          })
+          .eq("id", plan.id);
+      }
     }
 
-    const { error: upErr } = await supabase
-      .from("plans")
-      .update({
-        stripe_product_id: product.id,
-        stripe_price_monthly_id: monthlyId,
-        stripe_price_annual_id: annualId,
-      })
-      .eq("id", plan.id);
-
-    if (upErr) throw upErr;
-    console.log("  db updated");
+    console.log(`  db updated (${mode})`);
   }
 
-  console.log("\nDone. Re-run is safe — existing products/prices are reused.");
+  console.log(`\nDone (${mode}). Re-run is safe — existing products/prices are reused.`);
 }
 
 main().catch((err) => {
