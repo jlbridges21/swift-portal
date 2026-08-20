@@ -14,6 +14,7 @@ import {
   formatPlanPrice,
   type PlanRow,
 } from "@/lib/plan-catalog";
+import { SUBSCRIPTION_STATUSES, getSubscriptionState } from "@/lib/subscription";
 
 type Admin = { id: string; email: string; full_name: string | null };
 
@@ -33,6 +34,8 @@ export function BusinessDetailActions({
     plan: string;
     status: string;
     deleted_at: string | null;
+    subscription_status: string;
+    trial_ends_at: string | null;
   };
   admins: Admin[];
   settingsJson: string;
@@ -44,6 +47,7 @@ export function BusinessDetailActions({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const protectedBiz = isProtected;
+  const sub = getSubscriptionState(business);
 
   async function post(path: string, body?: unknown) {
     setBusy(true);
@@ -99,6 +103,36 @@ export function BusinessDetailActions({
     }
   }
 
+  async function saveSubscription(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const trialRaw = String(form.get("trialEndsAt") ?? "").trim();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/platform/businesses/${business.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subscriptionStatus: form.get("subscriptionStatus"),
+          trialEndsAt: trialRaw === "" ? null : trialRaw,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Save failed");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const trialLocalDefault = business.trial_ends_at
+    ? new Date(business.trial_ends_at).toISOString().slice(0, 16)
+    : "";
+
   return (
     <div className="space-y-6">
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -148,6 +182,57 @@ export function BusinessDetailActions({
             </div>
             <Button type="submit" disabled={busy}>
               Save
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Subscription</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted">
+            Manual status for testing and comps — no Stripe yet. Live expiry for trials uses{" "}
+            <code className="text-xs">trial_ends_at</code> even if status is still{" "}
+            <code className="text-xs">trialing</code>.
+          </p>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <Badge variant={sub.requiresPayment ? "warning" : "success"}>{sub.status}</Badge>
+            {sub.daysLeftInTrial != null && !sub.requiresPayment && (
+              <Badge variant="default">{sub.daysLeftInTrial} days left</Badge>
+            )}
+            {sub.requiresPayment && <Badge variant="warning">paywalled</Badge>}
+          </div>
+          <form className="space-y-4" onSubmit={saveSubscription}>
+            <div>
+              <Label htmlFor="subscriptionStatus">subscription_status</Label>
+              <select
+                id="subscriptionStatus"
+                name="subscriptionStatus"
+                defaultValue={business.subscription_status}
+                className="mt-1 flex h-11 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
+              >
+                {SUBSCRIPTION_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="trialEndsAt">trial_ends_at (local)</Label>
+              <Input
+                id="trialEndsAt"
+                name="trialEndsAt"
+                type="datetime-local"
+                defaultValue={trialLocalDefault}
+                className="mt-1"
+              />
+              <p className="mt-1 text-xs text-muted">Clear the field and save to set NULL.</p>
+            </div>
+            <Button type="submit" disabled={busy}>
+              Save subscription
             </Button>
           </form>
         </CardContent>

@@ -29,6 +29,10 @@ export type HostResolveSource =
   | "reserved"
   | "unmatched";
 
+/** Columns middleware + isLiveBusiness need for tenant host lookups. */
+export const HOST_BUSINESS_SELECT =
+  "id, slug, name, status, custom_domain, deleted_at, subscription_status, trial_ends_at";
+
 export type HostBusinessRow = {
   id: string;
   slug: string;
@@ -36,6 +40,8 @@ export type HostBusinessRow = {
   status: string;
   custom_domain: string | null;
   deleted_at: string | null;
+  subscription_status: string;
+  trial_ends_at: string | null;
 };
 
 export type HostResolution = {
@@ -102,11 +108,11 @@ async function lookupByCustomDomain(host: string): Promise<HostBusinessRow | nul
   const supabase = serviceClient();
   const { data } = await supabase
     .from("businesses")
-    .select("id, slug, name, status, custom_domain, deleted_at")
+    .select(HOST_BUSINESS_SELECT)
     .eq("custom_domain", host)
     .maybeSingle();
-  cacheSet(key, data ?? null);
-  return data ?? null;
+  cacheSet(key, (data as HostBusinessRow | null) ?? null);
+  return (data as HostBusinessRow | null) ?? null;
 }
 
 export async function lookupBusinessById(id: string): Promise<HostBusinessRow | null> {
@@ -116,11 +122,11 @@ export async function lookupBusinessById(id: string): Promise<HostBusinessRow | 
   const supabase = serviceClient();
   const { data } = await supabase
     .from("businesses")
-    .select("id, slug, name, status, custom_domain, deleted_at")
+    .select(HOST_BUSINESS_SELECT)
     .eq("id", id)
     .maybeSingle();
-  cacheSet(key, data ?? null);
-  return data ?? null;
+  cacheSet(key, (data as HostBusinessRow | null) ?? null);
+  return (data as HostBusinessRow | null) ?? null;
 }
 
 async function lookupBySlug(slug: string): Promise<HostBusinessRow | null> {
@@ -130,11 +136,11 @@ async function lookupBySlug(slug: string): Promise<HostBusinessRow | null> {
   const supabase = serviceClient();
   const { data } = await supabase
     .from("businesses")
-    .select("id, slug, name, status, custom_domain, deleted_at")
+    .select(HOST_BUSINESS_SELECT)
     .eq("slug", slug)
     .maybeSingle();
-  cacheSet(key, data ?? null);
-  return data ?? null;
+  cacheSet(key, (data as HostBusinessRow | null) ?? null);
+  return (data as HostBusinessRow | null) ?? null;
 }
 
 function platformApexHosts(): Set<string> {

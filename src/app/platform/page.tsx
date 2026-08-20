@@ -70,11 +70,12 @@ export default async function PlatformHomePage({
           <CardTitle>All businesses</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[880px] text-left text-sm">
             <thead>
               <tr className="border-b border-border text-muted">
                 <th className="py-2 pr-3 font-medium">Business</th>
                 <th className="py-2 pr-3 font-medium">Status</th>
+                <th className="py-2 pr-3 font-medium">Subscription</th>
                 <th className="py-2 pr-3 font-medium">Plan</th>
                 <th className="py-2 pr-3 font-medium">Clients</th>
                 <th className="py-2 pr-3 font-medium">Projects</th>
@@ -98,6 +99,17 @@ export default async function PlatformHomePage({
                     <Badge variant={b.deleted_at ? "default" : b.status === "active" ? "success" : "warning"}>
                       {b.deleted_at ? "deleted" : b.status}
                     </Badge>
+                  </td>
+                  <td className="py-3 pr-3">
+                    <div className="flex flex-col gap-1">
+                      <Badge variant={b.requiresPayment ? "warning" : "success"}>
+                        {b.subscription_status}
+                      </Badge>
+                      {b.daysLeftInTrial != null && !b.requiresPayment && (
+                        <span className="text-xs text-muted">{b.daysLeftInTrial}d left</span>
+                      )}
+                      {b.requiresPayment && <span className="text-xs text-amber-700">paywalled</span>}
+                    </div>
                   </td>
                   <td className="py-3 pr-3">{b.plan}</td>
                   <td className="py-3 pr-3">{b.clientCount}</td>

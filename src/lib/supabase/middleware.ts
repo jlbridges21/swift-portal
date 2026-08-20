@@ -10,6 +10,11 @@ import {
 import { getLoginRedirectOrigin } from "@/lib/portal-url";
 import { verifyImpersonationCookie, SA_BUSINESS_CONTEXT_COOKIE } from "@/lib/platform-session";
 import { writePlatformAudit } from "@/lib/platform-audit";
+import {
+  getSubscriptionState,
+  isClientMutatingApi,
+  paywallApiBody,
+} from "@/lib/subscription";
 
 function inboundHost(request: NextRequest): string {
   return request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
@@ -82,8 +87,9 @@ export async function updateSession(request: NextRequest) {
 
   const path = resolution.rewritePathname ?? request.nextUrl.pathname;
   const isApi = path.startsWith("/api/");
+  const method = request.method.toUpperCase();
 
-  const protectedPaths = ["/dashboard", "/admin", "/platform"];
+  const protectedPaths = ["/dashboard", "/admin", "/platform", "/billing"];
   const isProtected = protectedPaths.some((p) => path.startsWith(p));
 
   if (isProtected && !user) {
@@ -135,12 +141,18 @@ export async function updateSession(request: NextRequest) {
 
     if (user && (path === "/login" || path === "/signup") && !businessUnavailable) {
       const url = request.nextUrl.clone();
+      const adminPaywalled =
+        profile?.role === "admin" &&
+        ownBusiness &&
+        getSubscriptionState(ownBusiness).requiresPayment;
       url.pathname =
         profile?.role === "super_admin"
           ? "/platform"
-          : profile?.role === "admin"
-            ? `${resolution.pathPrefix}/admin`
-            : `${resolution.pathPrefix}/dashboard`;
+          : adminPaywalled
+            ? `${resolution.pathPrefix}/billing`
+            : profile?.role === "admin"
+              ? `${resolution.pathPrefix}/admin`
+              : `${resolution.pathPrefix}/dashboard`;
       return applyPathCookie(NextResponse.redirect(url), resolution);
     }
 
@@ -157,6 +169,63 @@ export async function updateSession(request: NextRequest) {
           url.pathname = "/platform";
           url.searchParams.set("notice", "impersonate");
           return applyPathCookie(NextResponse.redirect(url), resolution);
+        }
+      }
+    }
+
+    if (path.startsWith("/billing")) {
+      if (profile?.role !== "admin" && profile?.role !== "super_admin") {
+        const url = request.nextUrl.clone();
+        url.pathname = `${resolution.pathPrefix}/dashboard`;
+        return applyPathCookie(NextResponse.redirect(url), resolution);
+      }
+      if (profile?.role === "super_admin" && !isApi) {
+        const claims = verifyImpersonationCookie(request.cookies.get(SA_BUSINESS_CONTEXT_COOKIE)?.value);
+        if (!claims) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/platform";
+          url.searchParams.set("notice", "impersonate");
+          return applyPathCookie(NextResponse.redirect(url), resolution);
+        }
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Subscription paywall — DO NOT sign the user out (unlike businessUnavailable).
+    // Expired admins must stay signed in so they can reach /billing and subscribe.
+    // super_admin is never gated; impersonation keeps access and shows state in UI.
+    // -------------------------------------------------------------------------
+    if (profile && profile.role !== "super_admin" && ownBusiness) {
+      const sub = getSubscriptionState(ownBusiness);
+      if (sub.requiresPayment) {
+        if (profile.role === "admin") {
+          const authExempt = path.startsWith("/api/auth");
+          if (isApi && !authExempt) {
+            return applyPathCookie(
+              NextResponse.json(paywallApiBody(sub), { status: 402 }),
+              resolution
+            );
+          }
+          if (!isApi && path.startsWith("/admin")) {
+            const url = request.nextUrl.clone();
+            url.pathname = `${resolution.pathPrefix}/billing`;
+            url.search = "";
+            return applyPathCookie(NextResponse.redirect(url), resolution);
+          }
+        } else if (profile.role === "client") {
+          if (isClientMutatingApi(path, method)) {
+            return applyPathCookie(
+              NextResponse.json(
+                {
+                  ...paywallApiBody(sub),
+                  error:
+                    "This studio’s subscription is paused. You can still view existing projects and downloads, but new requests and messages are unavailable until they renew.",
+                },
+                { status: 402 }
+              ),
+              resolution
+            );
+          }
         }
       }
     }
@@ -183,8 +252,7 @@ export async function updateSession(request: NextRequest) {
 
     if (profile?.role === "super_admin") {
       const claims = verifyImpersonationCookie(request.cookies.get(SA_BUSINESS_CONTEXT_COOKIE)?.value);
-        if (claims) {
-        const method = request.method.toUpperCase();
+      if (claims) {
         const mutating = method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
         const platformApi = path.startsWith("/api/platform");
         const authApi = path.startsWith("/api/auth");
@@ -212,7 +280,9 @@ export async function updateSession(request: NextRequest) {
             targetBusinessId: claims.businessId,
             targetType: "request",
             metadata: { method, path, allowWrites: claims.allowWrites },
-            ipAddress: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip"),
+            ipAddress:
+              request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+              request.headers.get("x-real-ip"),
           });
         }
       }

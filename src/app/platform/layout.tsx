@@ -20,6 +20,8 @@ export default async function PlatformLayout({ children }: { children: React.Rea
           businessName={tenant.business.name}
           businessId={tenant.businessId}
           allowWrites={tenant.allowWrites}
+          subscriptionStatus={tenant.business.subscription_status}
+          trialEndsAt={tenant.business.trial_ends_at}
         />
       )}
       <PlatformNav />

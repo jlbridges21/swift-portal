@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { getBusinessPortalOrigin } from "@/lib/portal-url";
 import { getAppSettings } from "@/lib/app-settings";
+import { getSubscriptionState } from "@/lib/subscription";
 
 export type PlatformBusinessRow = {
   id: string;
@@ -9,6 +10,8 @@ export type PlatformBusinessRow = {
   custom_domain: string | null;
   status: string;
   plan: string;
+  subscription_status: string;
+  trial_ends_at: string | null;
   created_at: string;
   deleted_at: string | null;
   clientCount: number;
@@ -18,6 +21,8 @@ export type PlatformBusinessRow = {
   stripeStatus: string;
   lastActivityAt: string | null;
   portalUrl: string;
+  daysLeftInTrial: number | null;
+  requiresPayment: boolean;
 };
 
 async function countEq(table: string, businessId: string): Promise<number> {
@@ -33,7 +38,9 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
   const raw = await createServiceClient();
   const { data: businesses, error } = await raw
     .from("businesses")
-    .select("id, name, slug, custom_domain, status, plan, created_at, deleted_at")
+    .select(
+      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, created_at, deleted_at"
+    )
     .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
 
@@ -64,6 +71,11 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
         0
       );
 
+      const sub = getSubscriptionState({
+        subscription_status: b.subscription_status,
+        trial_ends_at: b.trial_ends_at,
+      });
+
       return {
         ...b,
         clientCount,
@@ -73,6 +85,8 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
         stripeStatus: integ.data?.stripe_account_status ?? "not_connected",
         lastActivityAt: activity.data?.created_at ?? b.created_at,
         portalUrl: getBusinessPortalOrigin({ slug: b.slug, custom_domain: b.custom_domain }),
+        daysLeftInTrial: sub.daysLeftInTrial,
+        requiresPayment: sub.requiresPayment,
       };
     })
   );
@@ -132,7 +146,9 @@ export async function loadBusinessDetail(id: string) {
   const raw = await createServiceClient();
   const { data: business, error } = await raw
     .from("businesses")
-    .select("id, name, slug, custom_domain, status, plan, created_at, deleted_at, updated_at")
+    .select(
+      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, created_at, deleted_at, updated_at"
+    )
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(error.message);

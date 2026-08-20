@@ -22,6 +22,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       slug?: string;
       customDomain?: string | null;
       plan?: string;
+      subscriptionStatus?: string;
+      trialEndsAt?: string | null;
     };
     const data = await updateBusinessForPlatform(id, body, {
       id: auth.profile.id,

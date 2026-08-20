@@ -32,6 +32,9 @@ export interface TenantContext {
     name: string;
     status: string;
     custom_domain: string | null;
+    subscription_status: string;
+    trial_ends_at: string | null;
+    plan?: string;
   };
   role: "super_admin" | "admin" | "client";
   isSuperAdmin: boolean;
@@ -50,7 +53,7 @@ async function loadBusiness(id: string): Promise<TenantContext["business"] | nul
   const supabase = await createServiceClient();
   const { data } = await supabase
     .from("businesses")
-    .select("id, slug, name, status, custom_domain")
+    .select("id, slug, name, status, custom_domain, subscription_status, trial_ends_at, plan")
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();

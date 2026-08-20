@@ -3,18 +3,30 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { getSubscriptionState } from "@/lib/subscription";
 
 export function ImpersonationBanner({
   businessName,
   businessId,
   allowWrites,
+  subscriptionStatus,
+  trialEndsAt,
 }: {
   businessName: string;
   businessId: string;
   allowWrites: boolean;
+  subscriptionStatus?: string | null;
+  trialEndsAt?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const sub =
+    subscriptionStatus != null
+      ? getSubscriptionState({
+          subscription_status: subscriptionStatus,
+          trial_ends_at: trialEndsAt ?? null,
+        })
+      : null;
 
   async function post(body: Record<string, unknown>) {
     setBusy(true);
@@ -39,12 +51,26 @@ export function ImpersonationBanner({
   return (
     <div className="sticky top-0 z-[60] border-b border-amber-400 bg-amber-400 px-4 py-2.5 text-slate-950">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-        <p className="text-sm font-semibold">
-          Viewing as {businessName}
-          <span className="ml-2 font-normal">
-            {allowWrites ? "Writes are enabled for this session." : "Read-only impersonation."}
-          </span>
-        </p>
+        <div className="text-sm">
+          <p className="font-semibold">
+            Viewing as {businessName}
+            <span className="ml-2 font-normal">
+              {allowWrites ? "Writes are enabled for this session." : "Read-only impersonation."}
+            </span>
+          </p>
+          {sub && (
+            <p className="mt-0.5 font-normal">
+              Subscription: <strong>{sub.status}</strong>
+              {sub.requiresPayment
+                ? " — paywalled for this business’s admins (you retain access)."
+                : sub.status === "trialing" && sub.daysLeftInTrial != null
+                  ? ` — ${sub.daysLeftInTrial} day${sub.daysLeftInTrial === 1 ? "" : "s"} left in trial.`
+                  : sub.status === "past_due"
+                    ? " — payment past due (access continues)."
+                    : null}
+            </p>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           {!allowWrites && (
             <Button

@@ -59,8 +59,16 @@ export default async function PlatformBusinessDetailPage({
         </div>
       )}
       <p className="mb-6 text-sm text-muted">
-        Plan <span className="font-medium text-heading">{detail.business.plan}</span> · Created{" "}
-        {formatDate(detail.business.created_at)}
+        Plan <span className="font-medium text-heading">{detail.business.plan}</span>
+        {" · "}
+        Subscription{" "}
+        <span className="font-medium text-heading">{detail.business.subscription_status}</span>
+        {detail.stats?.daysLeftInTrial != null && !detail.stats.requiresPayment
+          ? ` · ${detail.stats.daysLeftInTrial}d trial left`
+          : ""}
+        {detail.stats?.requiresPayment ? " · paywalled" : ""}
+        {" · "}
+        Created {formatDate(detail.business.created_at)}
       </p>
 
       <BusinessDetailActions

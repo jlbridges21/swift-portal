@@ -9,6 +9,7 @@ export type PlatformAuditAction =
   | "business.soft_delete"
   | "business.hard_delete"
   | "business.plan_change"
+  | "business.subscription_change"
   | "admin.invite"
   | "admin.invite_resend"
   | "impersonation.start"

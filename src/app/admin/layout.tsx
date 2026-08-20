@@ -2,6 +2,7 @@ import { getAppSettings } from "@/lib/app-settings";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { BrandProvider } from "@/components/brand/brand-provider";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { SubscriptionBanner } from "@/components/admin/subscription-banner";
 import { ImpersonationBanner } from "@/components/platform/impersonation-banner";
 import { requireAdminPage } from "@/lib/admin-access";
 import { getTenantContext } from "@/lib/tenant";
@@ -27,8 +28,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           businessName={tenant.business.name}
           businessId={tenant.businessId}
           allowWrites={tenant.allowWrites}
+          subscriptionStatus={tenant.business.subscription_status}
+          trialEndsAt={tenant.business.trial_ends_at}
         />
       )}
+      <SubscriptionBanner
+        subscriptionStatus={tenant.business.subscription_status}
+        trialEndsAt={tenant.business.trial_ends_at}
+      />
       <AdminShell>{children}</AdminShell>
     </BrandProvider>
   );

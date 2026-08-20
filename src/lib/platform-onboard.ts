@@ -12,6 +12,7 @@ import {
   assertActivePlanKey,
   planGrantsEntitlement,
 } from "@/lib/entitlements";
+import { isSubscriptionStatus } from "@/lib/subscription";
 
 const STARTER_SLUGS = [
   "aerial_photography",
@@ -331,6 +332,8 @@ export type UpdateBusinessInput = {
   slug?: string;
   customDomain?: string | null;
   plan?: string;
+  subscriptionStatus?: string;
+  trialEndsAt?: string | null;
 };
 
 export async function updateBusinessForPlatform(
@@ -341,7 +344,9 @@ export async function updateBusinessForPlatform(
   const raw = await createServiceClient();
   const { data: existing } = await raw
     .from("businesses")
-    .select("id, name, slug, custom_domain, plan, status, deleted_at")
+    .select(
+      "id, name, slug, custom_domain, plan, status, deleted_at, subscription_status, trial_ends_at"
+    )
     .eq("id", businessId)
     .maybeSingle();
   if (!existing) throw new Error("Business not found.");
@@ -390,24 +395,67 @@ export async function updateBusinessForPlatform(
     patch.plan = planRow.key;
     planChanged = planRow.key !== existing.plan;
   }
+
+  let subscriptionChanged = false;
+  if (input.subscriptionStatus !== undefined) {
+    if (!isSubscriptionStatus(input.subscriptionStatus)) {
+      throw new Error("Invalid subscription_status.");
+    }
+    patch.subscription_status = input.subscriptionStatus;
+    if (input.subscriptionStatus !== existing.subscription_status) {
+      subscriptionChanged = true;
+    }
+  }
+  if (input.trialEndsAt !== undefined) {
+    if (input.trialEndsAt === null || input.trialEndsAt === "") {
+      patch.trial_ends_at = null;
+    } else {
+      const parsed = new Date(input.trialEndsAt);
+      if (!Number.isFinite(parsed.getTime())) {
+        throw new Error("Invalid trial_ends_at.");
+      }
+      patch.trial_ends_at = parsed.toISOString();
+    }
+    const prev = existing.trial_ends_at;
+    const next = patch.trial_ends_at as string | null;
+    if (prev !== next) subscriptionChanged = true;
+  }
+
   if (Object.keys(patch).length === 0) return existing;
 
   const { data, error } = await raw
     .from("businesses")
     .update(patch)
     .eq("id", businessId)
-    .select("id, name, slug, custom_domain, plan, status, deleted_at, created_at")
+    .select(
+      "id, name, slug, custom_domain, plan, status, deleted_at, created_at, subscription_status, trial_ends_at"
+    )
     .single();
   if (error || !data) throw new Error(error?.message || "Failed to update business.");
+
+  const action = subscriptionChanged
+    ? "business.subscription_change"
+    : planChanged
+      ? "business.plan_change"
+      : "business.update";
 
   await writePlatformAudit({
     actorUserId: actor.id,
     actorEmail: actor.email,
-    action: planChanged ? "business.plan_change" : "business.update",
+    action,
     targetBusinessId: businessId,
     targetType: "business",
     targetId: businessId,
-    metadata: { patch, previous: { name: existing.name, slug: existing.slug, plan: existing.plan } },
+    metadata: {
+      patch,
+      previous: {
+        name: existing.name,
+        slug: existing.slug,
+        plan: existing.plan,
+        subscription_status: existing.subscription_status,
+        trial_ends_at: existing.trial_ends_at,
+      },
+    },
   });
   invalidateHostLookupCache();
   return data;
