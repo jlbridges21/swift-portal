@@ -10,11 +10,29 @@ Final model after prompts 1–19 plus this hardening pass. Production hosts:
 
 Auth is one global Supabase user pool. The Host header never grants data access.
 
+## Platform console (`/platform`)
+
+Super-admin only. Enforced in middleware **and** every `/platform` server component / `/api/platform/*` route handler (`requireSuperAdminPage` / `requireSuperAdminApi`). Business admins hitting those APIs directly receive 403.
+
+`/admin` is the business admin area. A `super_admin` with no impersonation cookie is redirected to `/platform?notice=impersonate` (not `/dashboard`). With a signed `sa_business_context` cookie they use `/admin` as that business.
+
+Onboarding a business is `POST /api/platform/businesses` (`createBusinessForPlatform`): businesses row, `business_settings` seeded with `senderMode='platform'` and empty `senderEmail`, Stripe `not_connected`, starter `business_services`, invite via Auth metadata `business_id` (never `client_id`). `business_stages` does not exist yet.
+
+## Impersonation
+
+Cookie `sa_business_context` is HMAC-SHA256 (`v1.<payload>.<hex>`), httpOnly, 30 minutes, signed with `PLATFORM_SESSION_SECRET` (fallback `CRON_SECRET`). Unsigned UUIDs are rejected. The cookie is **only read when `profile.role === 'super_admin'`**.
+
+Read-only by default. Writes require an audit-logged `allow_writes` toggle that expires with the session. Enforced in middleware (mutating HTTP methods), and in `createTenantServiceClient` insert/update/delete/upsert.
+
+`current_business_id()` still honours `app.impersonated_business_id` (v31b). PostgREST is one statement per transaction, so the app cannot persist `SET LOCAL` across JS queries. Tenant data access for impersonation is the signed cookie + `.eq("business_id", tenant.businessId)` / `createTenantServiceClient`. The GUC is proven in-database via `peek_impersonated_current_business_id(uuid)` (v44, same statement as `set_config`).
+
+v44 `platform_audit_log` is append-only: SELECT for `is_super_admin()` only; no UPDATE/DELETE policies; INSERT revoked from `authenticated`.
+
 ## Tenant resolution
 
 **Authenticated data** — `getTenantContext()` (`src/lib/tenant.ts`), request-scoped via `React.cache`:
 
-1. `super_admin` — only the httpOnly `sa_business_context` cookie (a business UUID). No cookie → no tenant. Forging this cookie as `admin`/`client` is ignored.
+1. `super_admin` — only a **signed** httpOnly `sa_business_context` cookie. Forged, unsigned, expired, or non-super_admin cookies are ignored. No cookie → no tenant.
 2. Everyone else — `profiles.business_id`, else `clients.business_id` via `profiles.client_id`, else `clients.business_id` via `clients.user_id`. Never `?? LEGACY_DEFAULT_BUSINESS_ID`.
 
 **Public chrome and signup** — `resolveRequestHost()` (`src/lib/host-resolution.ts`), copied onto request headers by `src/proxy.ts`:
@@ -37,7 +55,7 @@ Isolation layers:
 2. **`createTenantServiceClient(businessId)`** — service role bypasses RLS; the wrapper re-applies `business_id` on `from()`. Use `.raw` only for `profiles`, `businesses`, `processed_stripe_events`, Auth, Storage, RPC.
 3. **`enforce_same_business` triggers** (v30 + v43 `projects.service_id`) — not bypassed by the service role. NULL parents are allowed where the schema allows them (`media_assets.project_id`, etc.).
 
-Platform tables without tenant rows: `processed_stripe_events`, leftover singletons `app_settings` and `google_calendar_connections` (RLS on, zero policies — fail closed). Live config is `business_settings` and `google_calendar_connections_v2`.
+Platform tables without tenant rows: `processed_stripe_events`, `platform_audit_log` (v44, super_admin SELECT only), leftover singletons `app_settings` and `google_calendar_connections` (RLS on, zero policies — fail closed). Live config is `business_settings` and `google_calendar_connections_v2`.
 
 ## Standing rule for every new table
 
@@ -49,6 +67,8 @@ Platform tables without tenant rows: `processed_stripe_events`, leftover singlet
 6. Extend `supabase/tests/tenant-isolation.sql` with a read + write assertion.
 
 ## Onboard a business end to end
+
+Prefer **Platform → Create a business**. The SQL runbook below is the same sequence the console runs.
 
 1. Insert `businesses` (`slug` not reserved, `status='active'`). App + v41 trigger both reject reserved labels.
 2. Seed `business_settings` from `DEFAULT_APP_SETTINGS`, `business_services` from the v40 catalog, Stripe Connect if they will take payments.
@@ -77,7 +97,7 @@ The constant is Swift’s production UUID. It is **not** a fail-open default (`?
 
 ## Singleton tables (no v43 drop)
 
-`app_settings` and `google_calendar_connections` are unused in `src/`. Successors (`business_settings` v33, `google_calendar_connections_v2` v34) have been live since 2026-08-18. That is not a meaningful production period. **Do not drop them yet.** v43 is `projects.service_id` integrity only.
+`app_settings` and `google_calendar_connections` are unused in `src/`. Successors (`business_settings` v33, `google_calendar_connections_v2` v34) have been live since 2026-08-18. That is not a meaningful production period. **Do not drop them yet.** v43 is `projects.service_id` integrity. v44 is `platform_audit_log` + `peek_impersonated_current_business_id`.
 
 ## Dual-hat profiles
 

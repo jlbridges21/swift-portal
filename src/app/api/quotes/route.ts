@@ -18,15 +18,20 @@ export async function GET(request: Request) {
   const projectId = new URL(request.url).searchParams.get("project_id");
   if (!projectId) return NextResponse.json({ error: "project_id required" }, { status: 400 });
 
+  const tenant = await getTenantContext();
+  const bid = tenant?.businessId ?? profile.business_id;
+  if (!bid) {
+    if (profile.role === "super_admin") return missingTenantResponse(profile.role);
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const supabase = await createClient();
-  let query = supabase
+  const query = supabase
     .from("project_quotes")
     .select("*")
     .eq("project_id", projectId)
+    .eq("business_id", bid)
     .order("created_at", { ascending: false });
-  if (profile.business_id) {
-    query = query.eq("business_id", profile.business_id);
-  }
   const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -35,7 +40,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const profile = await getProfile();
-  if (!profile || profile.role !== "admin") {
+  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

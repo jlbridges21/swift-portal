@@ -1,9 +1,8 @@
 import { Header } from "@/components/layout/header";
-import { getProfile } from "@/lib/auth";
+import { requireAdminPage } from "@/lib/admin-access";
 import { createClient } from "@/lib/supabase/server";
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import { AdminProjectDetail } from "@/components/admin/project-detail";
-import { requireTenantContext } from "@/lib/tenant";
 import { getBusinessPortalOrigin } from "@/lib/portal-url";
 
 interface PageProps {
@@ -11,10 +10,7 @@ interface PageProps {
 }
 
 export default async function AdminProjectPage({ params }: PageProps) {
-  const profile = await getProfile();
-  if (!profile || profile.role !== "admin") redirect("/dashboard");
-
-  const tenant = await requireTenantContext();
+  const { tenant } = await requireAdminPage();
   const { id } = await params;
   const supabase = await createClient();
 

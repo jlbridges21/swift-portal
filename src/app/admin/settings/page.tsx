@@ -1,9 +1,7 @@
 import { Suspense } from "react";
 import { Header, PageHeader } from "@/components/layout/header";
-import { getProfile } from "@/lib/auth";
+import { requireAdminPage } from "@/lib/admin-access";
 import { getAppSettings, NOTIFICATION_EVENT_DEFINITIONS } from "@/lib/app-settings";
-import { requireTenantContext } from "@/lib/tenant";
-import { redirect } from "next/navigation";
 import { AdminSettingsClient } from "@/components/admin/admin-settings-client";
 import { GoogleCalendarCard } from "@/components/admin/google-calendar-card";
 import { StripeConnectCard } from "@/components/admin/stripe-connect-card";
@@ -12,11 +10,7 @@ import { ServicesSettingsCard } from "@/components/admin/services-settings-card"
 import { HashScrollHandler } from "@/components/ui/hash-scroll-handler";
 
 export default async function AdminSettingsPage() {
-  const profile = await getProfile();
-  if (!profile) redirect("/login");
-  if (profile.role !== "admin" && profile.role !== "super_admin") redirect("/dashboard");
-
-  const tenant = await requireTenantContext();
+  const { tenant } = await requireAdminPage();
   const settings = await getAppSettings(tenant.businessId);
 
   return (

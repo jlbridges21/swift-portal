@@ -414,6 +414,29 @@ BEGIN
   IF v_n > 0 THEN RAISE EXCEPTION 'READ LEAK: client_stats Tenant B client (% rows)', v_n; END IF;
   PERFORM _tenant_test_bump();
 
+  -- v44: business admin cannot read or mutate platform_audit_log
+  SELECT count(*) INTO v_n FROM platform_audit_log;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'READ LEAK: platform_audit_log visible to Swift admin (% rows)', v_n;
+  END IF;
+  PERFORM _tenant_test_bump();
+
+  BEGIN
+    UPDATE platform_audit_log SET action = action;
+    RAISE EXCEPTION 'WRITE LEAK: UPDATE platform_audit_log granted to Swift admin';
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      PERFORM _tenant_test_bump();
+  END;
+
+  BEGIN
+    DELETE FROM platform_audit_log;
+    RAISE EXCEPTION 'WRITE LEAK: DELETE platform_audit_log granted to Swift admin';
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      PERFORM _tenant_test_bump();
+  END;
+
   -- v36: Swift admin still sees own-business storage objects (legacy {project}/… must keep working)
   SELECT count(*) INTO v_n FROM storage.objects
     WHERE bucket_id IN ('project-media', 'project-documents');

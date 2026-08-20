@@ -1,0 +1,164 @@
+import { createServiceClient } from "@/lib/supabase/server";
+import { getBusinessPortalOrigin } from "@/lib/portal-url";
+import { getAppSettings } from "@/lib/app-settings";
+
+export type PlatformBusinessRow = {
+  id: string;
+  name: string;
+  slug: string;
+  custom_domain: string | null;
+  status: string;
+  plan: string;
+  created_at: string;
+  deleted_at: string | null;
+  clientCount: number;
+  projectCount: number;
+  mediaCount: number;
+  lifetimeRevenueCents: number;
+  stripeStatus: string;
+  lastActivityAt: string | null;
+  portalUrl: string;
+};
+
+async function countEq(table: string, businessId: string): Promise<number> {
+  const raw = await createServiceClient();
+  const { count } = await raw
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq("business_id", businessId);
+  return count ?? 0;
+}
+
+export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
+  const raw = await createServiceClient();
+  const { data: businesses, error } = await raw
+    .from("businesses")
+    .select("id, name, slug, custom_domain, status, plan, created_at, deleted_at")
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const rows = businesses ?? [];
+  return Promise.all(
+    rows.map(async (b) => {
+      const [clientCount, projectCount, mediaCount, payments, integ, activity] = await Promise.all([
+        countEq("clients", b.id),
+        countEq("projects", b.id),
+        countEq("media_assets", b.id),
+        raw.from("payments").select("amount, status").eq("business_id", b.id).eq("status", "paid"),
+        raw
+          .from("business_integrations")
+          .select("stripe_account_status")
+          .eq("business_id", b.id)
+          .maybeSingle(),
+        raw
+          .from("activity_logs")
+          .select("created_at")
+          .eq("business_id", b.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      const lifetimeRevenueCents = (payments.data ?? []).reduce(
+        (sum, p) => sum + (typeof p.amount === "number" ? p.amount : 0),
+        0
+      );
+
+      return {
+        ...b,
+        clientCount,
+        projectCount,
+        mediaCount,
+        lifetimeRevenueCents,
+        stripeStatus: integ.data?.stripe_account_status ?? "not_connected",
+        lastActivityAt: activity.data?.created_at ?? b.created_at,
+        portalUrl: getBusinessPortalOrigin({ slug: b.slug, custom_domain: b.custom_domain }),
+      };
+    })
+  );
+}
+
+export function platformTotals(rows: PlatformBusinessRow[]) {
+  const live = rows.filter((r) => r.status === "active" && !r.deleted_at);
+  return {
+    businesses: rows.length,
+    live: live.length,
+    clients: rows.reduce((s, r) => s + r.clientCount, 0),
+    projects: rows.reduce((s, r) => s + r.projectCount, 0),
+    media: rows.reduce((s, r) => s + r.mediaCount, 0),
+    revenueCents: rows.reduce((s, r) => s + r.lifetimeRevenueCents, 0),
+  };
+}
+
+export async function loadPlatformAudit(filters: {
+  actor?: string;
+  action?: string;
+  businessId?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+}) {
+  const raw = await createServiceClient();
+  let q = raw
+    .from("platform_audit_log")
+    .select(
+      "id, actor_user_id, actor_email, action, target_business_id, target_type, target_id, metadata, ip_address, created_at"
+    )
+    .order("created_at", { ascending: false })
+    .limit(filters.limit ?? 200);
+
+  if (filters.actor?.trim()) {
+    q = q.ilike("actor_email", `%${filters.actor.trim()}%`);
+  }
+  if (filters.action?.trim()) {
+    q = q.eq("action", filters.action.trim());
+  }
+  if (filters.businessId?.trim()) {
+    q = q.eq("target_business_id", filters.businessId.trim());
+  }
+  if (filters.from) {
+    q = q.gte("created_at", filters.from);
+  }
+  if (filters.to) {
+    q = q.lte("created_at", filters.to);
+  }
+
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function loadBusinessDetail(id: string) {
+  const raw = await createServiceClient();
+  const { data: business, error } = await raw
+    .from("businesses")
+    .select("id, name, slug, custom_domain, status, plan, created_at, deleted_at, updated_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!business) return null;
+
+  const [admins, settings, integ, listRow] = await Promise.all([
+    raw
+      .from("profiles")
+      .select("id, email, full_name, role, created_at")
+      .eq("business_id", id)
+      .eq("role", "admin")
+      .order("created_at", { ascending: true }),
+    getAppSettings(id),
+    raw.from("business_integrations").select("*").eq("business_id", id).maybeSingle(),
+    loadPlatformBusinesses().then((rows) => rows.find((r) => r.id === id) ?? null),
+  ]);
+
+  return {
+    business,
+    admins: admins.data ?? [],
+    settings,
+    integrations: integ.data,
+    stats: listRow,
+    portalUrl: getBusinessPortalOrigin({
+      slug: business.slug,
+      custom_domain: business.custom_domain,
+    }),
+  };
+}

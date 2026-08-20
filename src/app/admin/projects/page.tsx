@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { Header, PageHeader } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { getProfile } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { requireAdminPage } from "@/lib/admin-access";
 import { Plus } from "lucide-react";
 import { ProjectPipeline } from "@/components/admin/project-pipeline";
 import {
@@ -25,8 +24,7 @@ const LEGACY_STATUS_TO_STAGE: Record<string, PipelineStageParam> = {
 };
 
 export default async function AdminProjectsPage({ searchParams }: PageProps) {
-  const profile = await getProfile();
-  if (!profile || profile.role !== "admin") redirect("/dashboard");
+  await requireAdminPage();
 
   const { view, stage: stageParam, status: legacyStatus } = await searchParams;
   const showDeleted = view === "deleted";

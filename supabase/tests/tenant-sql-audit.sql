@@ -92,7 +92,8 @@ WHERE table_schema = 'public'
 --       handle_new_user — auth trigger; stamps business_id from signup metadata
 --       enforce_same_business — trigger; not a read path
 --       reorder_media_assets — JWT path checks current_business_id(); service_role is app-gated
---     Views: client_stats is security_invoker (uses table RLS), not DEFINER.
+--       peek_impersonated_current_business_id — super_admin-only; sets
+--         app.impersonated_business_id then returns current_business_id()
 -- ---------------------------------------------------------------------------
 INSERT INTO _tenant_sql_audit (check_name, detail)
 SELECT
@@ -110,7 +111,8 @@ WHERE n.nspname = 'public'
     'client_has_project_access',
     'handle_new_user',
     'enforce_same_business',
-    'reorder_media_assets'
+    'reorder_media_assets',
+    'peek_impersonated_current_business_id'
   )
   AND (
     COALESCE(p.proacl::text, '') ILIKE '%authenticated%'
@@ -159,7 +161,8 @@ FROM unnest(ARRAY[
   'client_has_project_access',
   'handle_new_user',
   'enforce_same_business',
-  'reorder_media_assets'
+  'reorder_media_assets',
+  'peek_impersonated_current_business_id'
 ]) AS expected
 WHERE NOT EXISTS (
   SELECT 1 FROM pg_proc p

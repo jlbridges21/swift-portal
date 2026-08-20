@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
+import {
+  SA_BUSINESS_CONTEXT_COOKIE,
+  verifyImpersonationCookie,
+} from "@/lib/platform-session";
 
 /**
  * Tenant-scoped service-role client.
@@ -72,20 +77,42 @@ export async function createTenantServiceClient(
   }
 
   const raw = await createServiceClient();
+  let readOnlyImpersonation = false;
+  try {
+    const store = await cookies();
+    const claims = verifyImpersonationCookie(store.get(SA_BUSINESS_CONTEXT_COOKIE)?.value);
+    readOnlyImpersonation = Boolean(claims && !claims.allowWrites);
+  } catch {
+    readOnlyImpersonation = false;
+  }
+
+  const denyWrite = () => {
+    throw new Error(
+      "Impersonation is read-only. Confirm “allow writes” on the platform banner to change this business."
+    );
+  };
 
   const from: SupabaseClient["from"] = ((table: string) => {
     const qb = raw.from(table);
     return {
       select: (...args: Parameters<typeof qb.select>) =>
         qb.select(...args).eq("business_id", businessId),
-      insert: (values: Parameters<typeof qb.insert>[0], options?: Parameters<typeof qb.insert>[1]) =>
-        qb.insert(injectBusinessId(values, businessId), options),
-      upsert: (values: Parameters<typeof qb.upsert>[0], options?: Parameters<typeof qb.upsert>[1]) =>
-        qb.upsert(injectBusinessId(values, businessId), options),
-      update: (values: Parameters<typeof qb.update>[0], options?: Parameters<typeof qb.update>[1]) =>
-        qb.update(values, options).eq("business_id", businessId),
-      delete: (options?: Parameters<typeof qb.delete>[0]) =>
-        qb.delete(options).eq("business_id", businessId),
+      insert: (values: Parameters<typeof qb.insert>[0], options?: Parameters<typeof qb.insert>[1]) => {
+        if (readOnlyImpersonation) denyWrite();
+        return qb.insert(injectBusinessId(values, businessId), options);
+      },
+      upsert: (values: Parameters<typeof qb.upsert>[0], options?: Parameters<typeof qb.upsert>[1]) => {
+        if (readOnlyImpersonation) denyWrite();
+        return qb.upsert(injectBusinessId(values, businessId), options);
+      },
+      update: (values: Parameters<typeof qb.update>[0], options?: Parameters<typeof qb.update>[1]) => {
+        if (readOnlyImpersonation) denyWrite();
+        return qb.update(values, options).eq("business_id", businessId);
+      },
+      delete: (options?: Parameters<typeof qb.delete>[0]) => {
+        if (readOnlyImpersonation) denyWrite();
+        return qb.delete(options).eq("business_id", businessId);
+      },
     };
   }) as SupabaseClient["from"];
 

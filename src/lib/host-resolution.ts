@@ -35,6 +35,7 @@ export type HostBusinessRow = {
   name: string;
   status: string;
   custom_domain: string | null;
+  deleted_at: string | null;
 };
 
 export type HostResolution = {
@@ -90,6 +91,10 @@ function cacheSet(key: string, business: HostBusinessRow | null) {
   hostLookupCache.set(key, { expiresAt: Date.now() + HOST_CACHE_TTL_MS, business });
 }
 
+export function invalidateHostLookupCache() {
+  hostLookupCache.clear();
+}
+
 async function lookupByCustomDomain(host: string): Promise<HostBusinessRow | null> {
   const key = `custom:${host}`;
   const cached = cacheGet(key);
@@ -97,9 +102,8 @@ async function lookupByCustomDomain(host: string): Promise<HostBusinessRow | nul
   const supabase = serviceClient();
   const { data } = await supabase
     .from("businesses")
-    .select("id, slug, name, status, custom_domain")
+    .select("id, slug, name, status, custom_domain, deleted_at")
     .eq("custom_domain", host)
-    .is("deleted_at", null)
     .maybeSingle();
   cacheSet(key, data ?? null);
   return data ?? null;
@@ -112,9 +116,8 @@ export async function lookupBusinessById(id: string): Promise<HostBusinessRow | 
   const supabase = serviceClient();
   const { data } = await supabase
     .from("businesses")
-    .select("id, slug, name, status, custom_domain")
+    .select("id, slug, name, status, custom_domain, deleted_at")
     .eq("id", id)
-    .is("deleted_at", null)
     .maybeSingle();
   cacheSet(key, data ?? null);
   return data ?? null;
@@ -127,9 +130,8 @@ async function lookupBySlug(slug: string): Promise<HostBusinessRow | null> {
   const supabase = serviceClient();
   const { data } = await supabase
     .from("businesses")
-    .select("id, slug, name, status, custom_domain")
+    .select("id, slug, name, status, custom_domain, deleted_at")
     .eq("slug", slug)
-    .is("deleted_at", null)
     .maybeSingle();
   cacheSet(key, data ?? null);
   return data ?? null;
@@ -282,7 +284,7 @@ export function applyHostHeaders(headers: Headers, resolution: HostResolution) {
   if (resolution.business) {
     headers.set(HOST_BUSINESS_ID_HEADER, resolution.business.id);
     headers.set(HOST_BUSINESS_SLUG_HEADER, resolution.business.slug);
-    headers.set(HOST_BUSINESS_STATUS_HEADER, resolution.business.status);
+    headers.set(HOST_BUSINESS_STATUS_HEADER, resolution.business.deleted_at ? "deleted" : resolution.business.status);
   } else {
     headers.set(HOST_BUSINESS_ID_HEADER, "");
     headers.set(HOST_BUSINESS_SLUG_HEADER, "");

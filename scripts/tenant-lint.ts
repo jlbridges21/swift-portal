@@ -88,6 +88,10 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/app/api/request/route.ts",
   "src/app/api/resend/webhook/route.ts",
   "src/app/api/admin/email/domain/route.ts",
+  "src/lib/platform-audit.ts",
+  "src/lib/platform-onboard.ts",
+  "src/lib/platform-dashboard.ts",
+  "src/app/api/platform/impersonate/route.ts",
 ]);
 
 /**
@@ -116,6 +120,10 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/app/api/admin/email/domain/route.ts",
   "src/lib/client-portal-link.ts",
   "src/lib/project-zip-download.ts",
+  "src/lib/platform-audit.ts",
+  "src/lib/platform-onboard.ts",
+  "src/lib/platform-dashboard.ts",
+  "src/app/api/platform/impersonate/route.ts",
 ]);
 
 const MODULE_LET_ALLOWLIST = new Set([

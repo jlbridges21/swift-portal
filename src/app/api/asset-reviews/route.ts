@@ -165,7 +165,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const profile = await getProfile();
-  if (!profile || profile.role !== "admin") {
+  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

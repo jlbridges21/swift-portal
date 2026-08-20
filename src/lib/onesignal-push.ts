@@ -2,6 +2,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getAppSettings } from "@/lib/app-settings";
 import { getBusinessPortalOriginById, joinPortalPath } from "@/lib/portal-url";
 import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
+import { isLiveBusiness } from "@/lib/business-live";
 
 const ONESIGNAL_API_URL = "https://api.onesignal.com/notifications?c=push";
 
@@ -147,6 +148,9 @@ async function callOneSignal(
 export async function sendAdminPushNotification(
   options: AdminPushNotificationOptions
 ): Promise<PushSendResult> {
+  if (!(await isLiveBusiness(options.businessId))) {
+    return { sent: false, reason: "business_not_live" };
+  }
   const targetUrl = await resolveAdminPushUrl(options);
   const title = trimForLockScreen(options.title, 65);
   const message = trimForLockScreen(options.message || options.title);

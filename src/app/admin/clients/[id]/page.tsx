@@ -1,23 +1,19 @@
 import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { getProfile } from "@/lib/auth";
-import { redirect, notFound } from "next/navigation";
+import { requireAdminPage } from "@/lib/admin-access";
+import { notFound } from "next/navigation";
 import { getClientCrmProfile } from "@/lib/clients-crm";
 import { ClientCrmProfile } from "@/components/admin/clients-table";
 import { ChevronLeft } from "lucide-react";
-import { requireTenantContext } from "@/lib/tenant";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
 export default async function AdminClientDetailPage({ params }: PageProps) {
-  const profile = await getProfile();
-  if (!profile || profile.role !== "admin") redirect("/dashboard");
-
+  const { tenant } = await requireAdminPage();
   const { id } = await params;
-  const tenant = await requireTenantContext();
   const businessId = tenant.businessId;
   const data = await getClientCrmProfile(id, businessId, { includeDeleted: true });
   if (!data) notFound();

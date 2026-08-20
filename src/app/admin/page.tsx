@@ -3,23 +3,19 @@ import { Header, PageHeader } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
-import { getProfile } from "@/lib/auth";
+import { requireAdminPage } from "@/lib/admin-access";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { formatDate } from "@/lib/utils";
 import { Plus } from "lucide-react";
 import { ActivityFeed } from "@/components/admin/activity-feed";
 import { PushNotificationsCard } from "@/components/admin/push-notifications-card";
 import { AdminOpsDashboard } from "@/components/admin/admin-ops-dashboard";
 import { fetchAdminDashboardData } from "@/lib/admin-dashboard";
-import { requireTenantContext } from "@/lib/tenant";
 
 export default async function AdminDashboard() {
-  const profile = await getProfile();
-  if (!profile || profile.role !== "admin") redirect("/dashboard");
+  const { profile, tenant } = await requireAdminPage();
 
   const supabase = await createClient();
-  const tenant = await requireTenantContext();
   const bid = tenant.businessId;
 
   const [{ data: recentProjects }, { data: recentActivity }, dashboardData] = await Promise.all([

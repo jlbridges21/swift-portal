@@ -84,7 +84,9 @@ export function PushNotificationsCard() {
       const profileRes = await fetch("/api/profile", { credentials: "include" });
       if (!profileRes.ok) throw new Error("Could not verify admin profile");
       const { profile } = await profileRes.json();
-      if (profile?.role !== "admin") throw new Error("Admin access required");
+      if (profile?.role !== "admin" && profile?.role !== "super_admin") {
+        throw new Error("Admin access required");
+      }
       if (!profile.business_id) throw new Error("No business context on this account.");
 
       const { subscriptionId, optedIn } = await enableAdminPushNotifications(

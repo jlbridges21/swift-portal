@@ -7,6 +7,7 @@ import {
   formatFromHeader,
   getPlatformFromAddress,
 } from "@/lib/email-sender-policy";
+import { isLiveBusiness } from "@/lib/business-live";
 
 const resendClients = new Map<string, Resend>();
 
@@ -145,6 +146,17 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
   };
 
   const businessId = options.businessId;
+  if (!(await isLiveBusiness(businessId))) {
+    const result = {
+      ...base,
+      skipped: true,
+      skipReason: "business_not_live",
+      error: "Business is suspended or deleted — email skipped",
+    };
+    recordEmailResult(businessId, result);
+    return { ...result, at: new Date().toISOString() };
+  }
+
   const client = getResend();
   if (!client) {
     const msg = "RESEND_API_KEY is not set — email sending skipped";

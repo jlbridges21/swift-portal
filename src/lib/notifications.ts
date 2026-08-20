@@ -10,6 +10,7 @@ import type { NotificationType } from "@/lib/types";
 import { getStatusOrder } from "@/lib/constants";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
+import { isLiveBusiness } from "@/lib/business-live";
 
 export type { NotificationType };
 
@@ -257,6 +258,11 @@ export async function notifyUsers(options: NotifyOptions) {
       projectId: options.projectId,
       clientId: options.clientId,
     });
+    return;
+  }
+
+  if (!(await isLiveBusiness(businessId))) {
+    console.info("[notifications] skipped — business is not live", { businessId, type: options.type });
     return;
   }
 

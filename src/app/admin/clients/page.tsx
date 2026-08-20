@@ -1,22 +1,17 @@
 import Link from "next/link";
 import { Header, PageHeader } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { getProfile } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { requireAdminPage } from "@/lib/admin-access";
 import { Plus } from "lucide-react";
 import { ClientsTable } from "@/components/admin/clients-table";
 import { getClientListRows } from "@/lib/clients-crm";
-import { requireTenantContext } from "@/lib/tenant";
 
 interface PageProps {
   searchParams: Promise<{ view?: string }>;
 }
 
 export default async function AdminClientsPage({ searchParams }: PageProps) {
-  const profile = await getProfile();
-  if (!profile || profile.role !== "admin") redirect("/dashboard");
-
-  const tenant = await requireTenantContext();
+  const { tenant } = await requireAdminPage();
   const businessId = tenant.businessId;
   const { view } = await searchParams;
   const showDeleted = view === "deleted";

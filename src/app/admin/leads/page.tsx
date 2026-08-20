@@ -3,20 +3,15 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getProfile } from "@/lib/auth";
+import { requireAdminPage } from "@/lib/admin-access";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { formatDate } from "@/lib/utils";
 import { Mail, Phone, Building, MapPin } from "lucide-react";
 import { MarkLeadReadButton } from "@/components/admin/mark-lead-read";
-import { requireTenantContext } from "@/lib/tenant";
 
 export default async function AdminLeadsPage() {
-  const profile = await getProfile();
-  if (!profile || profile.role !== "admin") redirect("/dashboard");
-
+  const { tenant } = await requireAdminPage();
   const supabase = await createClient();
-  const tenant = await requireTenantContext();
   const { data: leads } = await supabase
     .from("leads")
     .select("*")

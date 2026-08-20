@@ -5,6 +5,12 @@ import { getProfile } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getPublicHostContext } from "@/lib/host-resolution";
 import { validateBusinessSlug } from "@/lib/reserved-subdomains";
+import {
+  SA_BUSINESS_CONTEXT_COOKIE,
+  verifyImpersonationCookie,
+} from "@/lib/platform-session";
+
+export { SA_BUSINESS_CONTEXT_COOKIE } from "@/lib/platform-session";
 
 /**
  * Swift Aerial Media's production business UUID.
@@ -17,7 +23,6 @@ import { validateBusinessSlug } from "@/lib/reserved-subdomains";
 export const LEGACY_DEFAULT_BUSINESS_ID =
   "00000000-0000-0000-0000-000000000001";
 
-export const SA_BUSINESS_CONTEXT_COOKIE = "sa_business_context";
 
 export interface TenantContext {
   businessId: string;
@@ -31,6 +36,7 @@ export interface TenantContext {
   role: "super_admin" | "admin" | "client";
   isSuperAdmin: boolean;
   impersonating: boolean;
+  allowWrites: boolean;
 }
 
 const UUID_RE =
@@ -74,12 +80,12 @@ async function resolveTenantContext(): Promise<TenantContext | null> {
 
   const isSuperAdmin = profile.role === "super_admin";
 
-  // Super_admin: cookie impersonation only. No cookie → no business (callers handle).
+  // Super_admin: signed httpOnly cookie only. Forged / unsigned / non-super_admin cookies are ignored.
   if (isSuperAdmin) {
     const cookieStore = await cookies();
-    const raw = cookieStore.get(SA_BUSINESS_CONTEXT_COOKIE)?.value?.trim() ?? "";
-    if (!raw || !isUuid(raw)) return null;
-    const business = await loadBusiness(raw);
+    const claims = verifyImpersonationCookie(cookieStore.get(SA_BUSINESS_CONTEXT_COOKIE)?.value);
+    if (!claims) return null;
+    const business = await loadBusiness(claims.businessId);
     if (!business) return null;
     return {
       businessId: business.id,
@@ -87,6 +93,7 @@ async function resolveTenantContext(): Promise<TenantContext | null> {
       role: "super_admin",
       isSuperAdmin: true,
       impersonating: true,
+      allowWrites: claims.allowWrites,
     };
   }
 
@@ -129,6 +136,7 @@ async function resolveTenantContext(): Promise<TenantContext | null> {
     role: profile.role,
     isSuperAdmin: false,
     impersonating: false,
+    allowWrites: true,
   };
 }
 

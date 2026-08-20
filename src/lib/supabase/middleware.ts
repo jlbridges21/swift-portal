@@ -8,6 +8,8 @@ import {
   type HostResolution,
 } from "@/lib/host-resolution";
 import { getLoginRedirectOrigin } from "@/lib/portal-url";
+import { verifyImpersonationCookie, SA_BUSINESS_CONTEXT_COOKIE } from "@/lib/platform-session";
+import { writePlatformAudit } from "@/lib/platform-audit";
 
 function inboundHost(request: NextRequest): string {
   return request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
@@ -103,7 +105,7 @@ export async function updateSession(request: NextRequest) {
     const businessUnavailable =
       Boolean(profile?.business_id) &&
       profile?.role !== "super_admin" &&
-      (!ownBusiness || ownBusiness.status !== "active");
+      (!ownBusiness || ownBusiness.status !== "active" || Boolean(ownBusiness.deleted_at));
 
     if (businessUnavailable && !path.startsWith("/login") && !isApi) {
       await supabase.auth.signOut();
@@ -148,6 +150,24 @@ export async function updateSession(request: NextRequest) {
         url.pathname = `${resolution.pathPrefix}/dashboard`;
         return applyPathCookie(NextResponse.redirect(url), resolution);
       }
+      if (profile?.role === "super_admin" && !isApi) {
+        const claims = verifyImpersonationCookie(request.cookies.get(SA_BUSINESS_CONTEXT_COOKIE)?.value);
+        if (!claims) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/platform";
+          url.searchParams.set("notice", "impersonate");
+          return applyPathCookie(NextResponse.redirect(url), resolution);
+        }
+      }
+    }
+
+    if (path.startsWith("/api/platform")) {
+      if (profile?.role !== "super_admin") {
+        return applyPathCookie(
+          NextResponse.json({ error: "Super admin access required." }, { status: 403 }),
+          resolution
+        );
+      }
     }
 
     if (path.startsWith("/platform")) {
@@ -158,6 +178,43 @@ export async function updateSession(request: NextRequest) {
             ? `${resolution.pathPrefix}/admin`
             : `${resolution.pathPrefix}/dashboard`;
         return applyPathCookie(NextResponse.redirect(url), resolution);
+      }
+    }
+
+    if (profile?.role === "super_admin") {
+      const claims = verifyImpersonationCookie(request.cookies.get(SA_BUSINESS_CONTEXT_COOKIE)?.value);
+        if (claims) {
+        const method = request.method.toUpperCase();
+        const mutating = method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
+        const platformApi = path.startsWith("/api/platform");
+        const authApi = path.startsWith("/api/auth");
+        if (mutating && !claims.allowWrites && !platformApi && !authApi) {
+          return applyPathCookie(
+            NextResponse.json(
+              {
+                error:
+                  "Impersonation is read-only. Confirm “allow writes” on the platform banner to change this business.",
+              },
+              { status: 403 }
+            ),
+            resolution
+          );
+        }
+        const skipAudit =
+          path.startsWith("/_next") ||
+          path.startsWith("/favicon") ||
+          path.startsWith("/api/platform");
+        if (!skipAudit) {
+          void writePlatformAudit({
+            actorUserId: user.id,
+            actorEmail: user.email ?? null,
+            action: "impersonation.request",
+            targetBusinessId: claims.businessId,
+            targetType: "request",
+            metadata: { method, path, allowWrites: claims.allowWrites },
+            ipAddress: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip"),
+          });
+        }
       }
     }
   }

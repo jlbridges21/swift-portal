@@ -1,17 +1,12 @@
 import { Header, PageHeader } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
-import { getProfile } from "@/lib/auth";
+import { requireAdminPage } from "@/lib/admin-access";
 import { getProjectHeroPosterUrl } from "@/lib/cover";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
-import { requireTenantContext } from "@/lib/tenant";
-import { redirect } from "next/navigation";
 import { ShootCalendar, type CalendarShoot } from "@/components/admin/shoot-calendar";
 
 export default async function AdminCalendarPage() {
-  const profile = await getProfile();
-  if (!profile || profile.role !== "admin") redirect("/dashboard");
-
-  const tenant = await requireTenantContext();
+  const { tenant } = await requireAdminPage();
   const db = await createTenantServiceClient(tenant.businessId);
 
   const { data: confirmed } = await db
