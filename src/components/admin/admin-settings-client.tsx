@@ -11,7 +11,6 @@ import { toast } from "sonner";
 import { Loader2, RotateCcw, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ColorField } from "@/components/ui/color-field";
-import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import { SettingsTabNav } from "@/components/admin/settings-tab-nav";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
@@ -38,6 +37,9 @@ interface NotificationEventDef {
 interface AdminSettingsClientProps {
   initialSettings: AppSettings;
   notificationEvents: NotificationEventDef[];
+  payments: ReactNode;
+  services: ReactNode;
+  calendar: ReactNode;
 }
 
 async function parseApiResponse(res: Response): Promise<Record<string, unknown>> {
@@ -158,9 +160,108 @@ function RowToggle({
   );
 }
 
-export function AdminSettingsClient({ initialSettings, notificationEvents }: AdminSettingsClientProps) {
+function BrandSurfacePreview({
+  primary,
+  accent,
+  portalName,
+  businessName,
+  logoUrl,
+}: {
+  primary: string;
+  accent: string;
+  portalName: string;
+  businessName: string;
+  logoUrl: string;
+}) {
+  const theme = deriveBrandTheme(primary, accent);
+  return (
+    <div
+      id="settings-colors"
+      tabIndex={-1}
+      className="overflow-hidden rounded-xl border scroll-mt-24"
+      style={{ background: theme.background, borderColor: theme.border, color: theme.foreground }}
+    >
+      <div
+        className="flex items-center gap-3 border-b px-4 py-3"
+        style={{ background: theme.card, borderColor: theme.border }}
+      >
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-lg shadow-sm"
+          style={{ backgroundColor: theme.primary }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={logoUrl} alt="" className="h-7 w-7 object-contain" />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate font-semibold" style={{ color: theme.heading }}>
+            {portalName}
+          </p>
+          <p className="truncate text-[10px] font-medium uppercase tracking-wider" style={{ color: theme.muted }}>
+            {businessName}
+          </p>
+        </div>
+        <span
+          className="ml-auto rounded-lg px-3 py-1.5 text-sm font-medium"
+          style={{ background: theme.accent, color: theme.accentForeground }}
+        >
+          Save
+        </span>
+      </div>
+      <div className="p-4">
+        <div className="rounded-xl border p-4" style={{ background: theme.card, borderColor: theme.border }}>
+          <p className="font-semibold" style={{ color: theme.heading }}>
+            Project name
+          </p>
+          <p className="mt-1 text-sm" style={{ color: theme.foreground }}>
+            Body copy on the tinted page — never the raw brand fill.
+          </p>
+          <p className="mt-1 text-sm" style={{ color: theme.muted }}>
+            Muted metadata stays readable.
+          </p>
+          <p className="mt-2 text-sm font-medium" style={{ color: theme.accent }}>
+            View details
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsPanel({
+  id,
+  active,
+  children,
+}: {
+  id: SettingsSectionId;
+  active: SettingsSectionId;
+  children: ReactNode;
+}) {
+  const selected = id === active;
+  return (
+    <div
+      role="tabpanel"
+      id={`settings-panel-${id}`}
+      aria-labelledby={`settings-tab-${id}`}
+      hidden={!selected}
+      tabIndex={selected ? 0 : -1}
+      className={selected ? "outline-none" : "hidden"}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function AdminSettingsClient({
+  initialSettings,
+  notificationEvents,
+  payments,
+  services,
+  calendar,
+}: AdminSettingsClientProps) {
   const router = useRouter();
   const liveBrand = usePortalBrand();
+  const skipNextPropSync = useRef(false);
+  const [section, setSection] = useState<SettingsSectionId>("identity");
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [baseline, setBaseline] = useState(() => JSON.stringify(initialSettings));
   const [saving, setSaving] = useState(false);
@@ -171,11 +272,30 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
     settings.business.brandPrimaryColor,
     settings.business.brandAccentColor
   );
+  const tabAccent = sanitizeCssColor(settings.business.brandAccentColor, "#4F46E5");
 
   useEffect(() => {
+    if (skipNextPropSync.current) {
+      skipNextPropSync.current = false;
+      return;
+    }
     setSettings(initialSettings);
     setBaseline(JSON.stringify(initialSettings));
   }, [initialSettings]);
+
+  useEffect(() => {
+    const applyHash = () => {
+      const id = sectionForHash(window.location.hash);
+      if (id) setSection(id);
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    window.addEventListener("portal:hash-target", applyHash);
+    return () => {
+      window.removeEventListener("hashchange", applyHash);
+      window.removeEventListener("portal:hash-target", applyHash);
+    };
+  }, []);
 
   useEffect(() => {
     setDirty(JSON.stringify(settings) !== baseline);
@@ -217,6 +337,7 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
         body: JSON.stringify({ settings: payload }),
       });
       const data = await parseApiResponse(res);
+      skipNextPropSync.current = true;
       setSettings(data.settings as AppSettings);
       setBaseline(JSON.stringify(data.settings));
       setDirty(false);
@@ -265,547 +386,589 @@ export function AdminSettingsClient({ initialSettings, notificationEvents }: Adm
     setSettings((prev) => ({ ...prev, workflow }));
   }, []);
 
+  function selectSection(id: SettingsSectionId) {
+    setSection(id);
+    const hash = SETTINGS_SECTIONS.find((s) => s.id === id)?.hashes[0];
+    if (hash) window.history.replaceState(null, "", `#${hash}`);
+  }
+
   return (
-    <div className="space-y-4">
-      <SettingsCollapsible
-        title="Workflow Automation"
-        description="Configure business actions — payments, proposals, scheduling, deliverables, and reminders."
-        defaultOpen
-      >
-        <WorkflowSettingsCard workflow={settings.workflow} onChange={patchWorkflow} />
-      </SettingsCollapsible>
+    <div className="flex flex-col gap-6 md:flex-row md:items-start">
+      <aside className="w-full shrink-0 md:sticky md:top-20 md:w-56">
+        <SettingsTabNav active={section} onChange={selectSection} accentColor={tabAccent} />
+      </aside>
 
-      <SettingsCollapsible
-        title="Notification Settings"
-        description="Toggle delivery channels per event. Activity still logs when notifications are off."
-      >
-      <Card className="shadow-sm border-0">
-        <CardContent className="p-0 sm:px-0 sm:pb-0">
-          <div className="hidden overflow-hidden rounded-xl border border-border md:block">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-slate-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  <th className="px-4 py-3">Event</th>
-                  <th className="w-20 px-2 py-3 text-center">In-app</th>
-                  <th className="w-20 px-2 py-3 text-center">Email</th>
-                  <th className="w-20 px-2 py-3 text-center">Push</th>
-                </tr>
-              </thead>
-              <tbody>
-                {notificationEvents.map((event, index) => (
-                  <tr
-                    key={event.key}
-                    className={cn(
-                      "border-b border-border/70 last:border-0",
-                      index % 2 === 1 && "bg-slate-50/40"
-                    )}
-                  >
-                    <td className="px-4 py-2.5">
-                      <p className="font-medium text-primary leading-snug">{event.label}</p>
-                      <p className="text-[11px] text-muted leading-snug mt-0.5">{event.description}</p>
-                    </td>
-                    <td className="px-2 py-2.5 text-center">
-                      <CompactToggle
-                        id={`${event.key}-inapp-d`}
-                        label={`${event.label} in-app`}
-                        checked={settings.notifications[event.key].inApp}
-                        onChange={(v) => updateNotification(event.key, "inApp", v)}
-                      />
-                    </td>
-                    <td className="px-2 py-2.5 text-center">
-                      <CompactToggle
-                        id={`${event.key}-email-d`}
-                        label={`${event.label} email`}
-                        checked={settings.notifications[event.key].email}
-                        onChange={(v) => updateNotification(event.key, "email", v)}
-                      />
-                    </td>
-                    <td className="px-2 py-2.5 text-center">
-                      {event.audience === "admin" || event.audience === "both" ? (
-                        <CompactToggle
-                          id={`${event.key}-push-d`}
-                          label={`${event.label} push`}
-                          checked={settings.notifications[event.key].push}
-                          onChange={(v) => updateNotification(event.key, "push", v)}
-                        />
-                      ) : (
-                        <span className="text-xs text-muted">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="divide-y divide-border md:hidden">
-            {notificationEvents.map((event) => (
-              <div key={`mobile-${event.key}`} className="px-4 py-3">
-                <p className="text-sm font-medium text-primary">{event.label}</p>
-                <p className="text-xs text-muted mt-0.5 mb-2">{event.description}</p>
-                <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-medium text-muted">
-                  <div>
-                    <p className="mb-1">In-app</p>
-                    <CompactToggle
-                      id={`${event.key}-inapp-m`}
-                      label={`${event.label} in-app`}
-                      checked={settings.notifications[event.key].inApp}
-                      onChange={(v) => updateNotification(event.key, "inApp", v)}
-                    />
-                  </div>
-                  <div>
-                    <p className="mb-1">Email</p>
-                    <CompactToggle
-                      id={`${event.key}-email-m`}
-                      label={`${event.label} email`}
-                      checked={settings.notifications[event.key].email}
-                      onChange={(v) => updateNotification(event.key, "email", v)}
-                    />
-                  </div>
-                  <div>
-                    <p className="mb-1">Push</p>
-                    {event.audience === "admin" || event.audience === "both" ? (
-                      <CompactToggle
-                        id={`${event.key}-push-m`}
-                        label={`${event.label} push`}
-                        checked={settings.notifications[event.key].push}
-                        onChange={(v) => updateNotification(event.key, "push", v)}
-                      />
-                    ) : (
-                      <span className="text-xs text-muted">—</span>
-                    )}
-                  </div>
-                </div>
+      <div className="min-w-0 flex-1 space-y-4">
+        <SettingsPanel id="identity" active={section}>
+          <div id="settings-business" tabIndex={-1} className="scroll-mt-24">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-primary">Business Identity</h2>
+                <p className="mt-1 text-sm text-muted">Name, portal title, legal copy, and public links.</p>
               </div>
-            ))}
+              <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setRestoreOpen(true)}>
+                <RotateCcw className="h-4 w-4" /> Restore platform defaults
+              </Button>
+            </div>
+            <Card className="shadow-sm">
+              <CardContent className="grid gap-4 sm:grid-cols-2 pt-6">
+                <div id="settings-business-name" tabIndex={-1} className="space-y-2 scroll-mt-24">
+                  <Label htmlFor="businessName">Business name</Label>
+                  <Input id="businessName" value={settings.business.businessName} onChange={(e) => patchBusiness({ businessName: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="portalName">Portal name</Label>
+                  <Input id="portalName" value={settings.business.portalName} onChange={(e) => patchBusiness({ portalName: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="adminDisplayName">Admin display name</Label>
+                  <Input id="adminDisplayName" value={settings.business.adminDisplayName} onChange={(e) => patchBusiness({ adminDisplayName: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="legalName">Legal name (copyright)</Label>
+                  <Input id="legalName" value={settings.business.legalName ?? ""} onChange={(e) => patchBusiness({ legalName: e.target.value })} />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="tagline">Tagline</Label>
+                  <Input id="tagline" value={settings.business.tagline ?? ""} onChange={(e) => patchBusiness({ tagline: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="termsUrl">Terms URL</Label>
+                  <Input id="termsUrl" value={settings.business.termsUrl ?? ""} onChange={(e) => patchBusiness({ termsUrl: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="privacyUrl">Privacy URL</Label>
+                  <Input id="privacyUrl" value={settings.business.privacyUrl ?? ""} onChange={(e) => patchBusiness({ privacyUrl: e.target.value })} />
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
-      </SettingsCollapsible>
+        </SettingsPanel>
 
-      <SettingsCollapsible
-        id="settings-email"
-        title="Email Settings"
-        description="Branding and sender details for client notification emails."
-      >
-      <Card className="shadow-sm border-0">
-        <CardContent className="grid gap-4 sm:grid-cols-2 pt-0">
-          <div className="space-y-2 sm:col-span-2">
-            <p className="text-sm font-medium text-primary">How mail is sent</p>
-            <div className="flex flex-col gap-2">
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="radio"
-                  className="mt-1"
-                  checked={settings.email.senderMode !== "custom_domain"}
-                  onChange={() =>
-                    patchEmail({
-                      senderMode: "platform",
-                      senderEmail: "",
+        <SettingsPanel id="branding" active={section}>
+          <h2 className="text-lg font-semibold text-primary">Branding &amp; Colors</h2>
+          <p className="mt-1 mb-4 text-sm text-muted">Logo, favicon, and brand colors used across the portal.</p>
+          <Card className="shadow-sm">
+            <CardContent className="space-y-6 pt-6">
+              <BrandSurfacePreview
+                primary={settings.business.brandPrimaryColor}
+                accent={settings.business.brandAccentColor}
+                portalName={settings.business.portalName}
+                businessName={settings.business.businessName}
+                logoUrl={settings.business.logoUrl}
+              />
+              <p className="text-xs text-muted">
+                Header currently shows: {liveBrand.portalName} · {liveBrand.name}
+                {dirty ? " (save to apply changes)" : ""}
+              </p>
+              <div id="settings-logo" tabIndex={-1} className="scroll-mt-24">
+                <BrandAssetField
+                  kind="logo"
+                  inputId="logoUrl"
+                  value={settings.business.logoUrl}
+                  onUrlChange={(logoUrl) =>
+                    patchBusiness({
+                      logoUrl,
+                      emailLogoUrl: settings.business.emailLogoUrl || logoUrl,
                     })
                   }
                 />
-                <span>
-                  Platform (default) — clients see this business name on the shared sending domain.
-                  Replies go to the contact address. No DNS setup.
-                </span>
-              </label>
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="radio"
-                  className="mt-1"
-                  checked={settings.email.senderMode === "custom_domain"}
-                  disabled={settings.email.domainVerificationStatus !== "verified"}
-                  onChange={() => {
-                    if (settings.email.domainVerificationStatus !== "verified") {
-                      toast.error("Verify a custom domain before switching sender mode");
-                      return;
-                    }
-                    patchEmail({ senderMode: "custom_domain" });
-                  }}
+              </div>
+              <div id="settings-email-logo" tabIndex={-1} className="scroll-mt-24">
+                <BrandAssetField
+                  kind="emailLogo"
+                  inputId="emailLogoUrl"
+                  value={settings.business.emailLogoUrl ?? ""}
+                  onUrlChange={(emailLogoUrl) => patchBusiness({ emailLogoUrl })}
                 />
-                <span>
-                  Custom domain — only after DNS verification. Sender address must be on that domain.
-                </span>
-              </label>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="fromName">Default from name</Label>
-            <Input id="fromName" value={settings.email.fromName} onChange={(e) => patchEmail({ fromName: e.target.value })} />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="senderEmail">Notification sender email</Label>
-            <Input
-              id="senderEmail"
-              type="email"
-              value={settings.email.senderEmail}
-              disabled={settings.email.senderMode !== "custom_domain"}
-              onChange={(e) => patchEmail({ senderEmail: e.target.value })}
-            />
-            <p className="text-xs text-muted leading-relaxed">
-              Used only with a verified custom domain, and the address must be on that domain.
-              Platform mode always sends from the shared mailbox.
-            </p>
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="customDomain">Custom sending domain</Label>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                id="customDomain"
-                value={settings.email.customDomain}
-                onChange={(e) => patchEmail({ customDomain: e.target.value })}
-                placeholder="mail.yourdomain.com"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="shrink-0"
-                onClick={async () => {
-                  try {
-                    const res = await fetch("/api/admin/email/domain", {
-                      method: "POST",
-                      credentials: "include",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ domain: settings.email.customDomain }),
-                    });
-                    const data = await parseApiResponse(res);
-                    if (data.settings) setSettings(data.settings as AppSettings);
-                    toast.success("Add the DNS records below, then re-check verification");
-                  } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Domain setup failed");
-                  }
-                }}
-              >
-                Start verification
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="shrink-0"
-                onClick={async () => {
-                  try {
-                    const res = await fetch("/api/admin/email/domain/verify", {
-                      method: "POST",
-                      credentials: "include",
-                    });
-                    const data = await parseApiResponse(res);
-                    if (data.settings) setSettings(data.settings as AppSettings);
-                    toast.success(`Domain status: ${data.domainVerificationStatus}`);
-                  } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Re-check failed");
-                  }
-                }}
-              >
-                Re-check DNS
-              </Button>
-            </div>
-            <p className="text-xs text-muted">
-              Status: {settings.email.domainVerificationStatus}
-            </p>
-            <DomainRecordsList refreshKey={`${settings.email.resendDomainId}:${settings.email.domainVerificationStatus}`} />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="replyTo">Reply-to email</Label>
-            <Input id="replyTo" type="email" value={settings.email.replyTo} onChange={(e) => patchEmail({ replyTo: e.target.value })} />
-            <p className="text-xs text-muted">
-              If empty, replies use the business primary contact email.
-            </p>
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="footerText">Email footer text</Label>
-            <Textarea id="footerText" rows={3} value={settings.email.footerText} onChange={(e) => patchEmail({ footerText: e.target.value })} />
-          </div>
-        </CardContent>
-      </Card>
-      <EmailDiagnosticsCard />
-      </SettingsCollapsible>
-
-      <SettingsCollapsible
-        id="settings-business"
-        title="Business Settings"
-        description="Portal branding used in the header, emails, and customer-facing copy."
-        defaultOpen
-      >
-      <Card className="shadow-sm border-0">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between pb-3 pt-0 px-0">
-          <div />
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setRestoreOpen(true)}>
-            <RotateCcw className="h-4 w-4" /> Restore platform defaults
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-6 pt-0 px-0">
-          <div className="rounded-xl border border-border bg-slate-50/60 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Live preview</p>
-            <div className="flex items-center gap-3">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-lg shadow-sm"
-                style={{ backgroundColor: settings.business.brandPrimaryColor }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={settings.business.logoUrl} alt="" className="h-7 w-7 object-contain" />
               </div>
-              <div>
-                <p className="font-semibold text-primary">{settings.business.portalName}</p>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted">{settings.business.businessName}</p>
+              <div id="settings-favicon" tabIndex={-1} className="scroll-mt-24">
+                <BrandAssetField
+                  kind="favicon"
+                  inputId="faviconUrl"
+                  value={settings.business.faviconUrl ?? ""}
+                  onUrlChange={(faviconUrl) => patchBusiness({ faviconUrl })}
+                />
               </div>
-              <div className="ml-auto flex gap-2">
-                <span className="h-8 w-8 rounded-lg border border-border" style={{ backgroundColor: settings.business.brandPrimaryColor }} title="Primary" />
-                <span className="h-8 w-8 rounded-lg border border-border" style={{ backgroundColor: settings.business.brandAccentColor }} title="Accent" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ColorField
+                  id="brandPrimaryColor"
+                  label="Brand primary color"
+                  value={settings.business.brandPrimaryColor}
+                  fallback="#0F172A"
+                  onChange={(v) => patchBusiness({ brandPrimaryColor: v })}
+                  warning={colorWarnings.find((w) => w.field === "brandPrimaryColor")?.message}
+                />
+                <ColorField
+                  id="brandAccentColor"
+                  label="Brand accent color"
+                  value={settings.business.brandAccentColor}
+                  fallback="#3B82F6"
+                  onChange={(v) => patchBusiness({ brandAccentColor: v })}
+                  warning={colorWarnings.find((w) => w.field === "brandAccentColor")?.message}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </SettingsPanel>
+
+        <SettingsPanel id="contact" active={section}>
+          <h2 className="text-lg font-semibold text-primary">Contact Information</h2>
+          <p className="mt-1 mb-4 text-sm text-muted">Email, phone, website, and mailing address.</p>
+          <Card className="shadow-sm">
+            <CardContent className="grid gap-4 sm:grid-cols-2 pt-6">
+              <div id="settings-contact" tabIndex={-1} className="space-y-2 scroll-mt-24">
+                <Label htmlFor="primaryContactEmail">Primary contact email</Label>
+                <Input id="primaryContactEmail" type="email" value={settings.business.primaryContactEmail} onChange={(e) => patchBusiness({ primaryContactEmail: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phoneNumber">Phone number</Label>
+                <Input id="phoneNumber" value={settings.business.phoneNumber} onChange={(e) => patchBusiness({ phoneNumber: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="websiteUrl">Website URL</Label>
+                <Input id="websiteUrl" value={settings.business.websiteUrl} onChange={(e) => patchBusiness({ websiteUrl: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="supportEmail">Support email</Label>
+                <Input id="supportEmail" type="email" value={settings.business.supportEmail ?? ""} onChange={(e) => patchBusiness({ supportEmail: e.target.value })} />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="addressLine1">Address line 1</Label>
+                <Input id="addressLine1" value={settings.business.addressLine1 ?? ""} onChange={(e) => patchBusiness({ addressLine1: e.target.value })} />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="addressLine2">Address line 2</Label>
+                <Input id="addressLine2" value={settings.business.addressLine2 ?? ""} onChange={(e) => patchBusiness({ addressLine2: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="city">City</Label>
+                <Input id="city" value={settings.business.city ?? ""} onChange={(e) => patchBusiness({ city: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="state">State</Label>
+                <Input id="state" value={settings.business.state ?? ""} onChange={(e) => patchBusiness({ state: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="postalCode">Postal code</Label>
+                <Input id="postalCode" value={settings.business.postalCode ?? ""} onChange={(e) => patchBusiness({ postalCode: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="country">Country</Label>
+                <Input id="country" value={settings.business.country ?? ""} onChange={(e) => patchBusiness({ country: e.target.value })} />
+              </div>
+            </CardContent>
+          </Card>
+        </SettingsPanel>
+
+        <SettingsPanel id="email" active={section}>
+          <div id="settings-email" tabIndex={-1} className="scroll-mt-24">
+            <h2 className="text-lg font-semibold text-primary">Email</h2>
+            <p className="mt-1 mb-4 text-sm text-muted">Sender identity, custom domain, and diagnostics.</p>
+            <Card className="shadow-sm">
+              <CardContent className="grid gap-4 sm:grid-cols-2 pt-6">
+                <div className="space-y-2 sm:col-span-2">
+                  <p className="text-sm font-medium text-primary">How mail is sent</p>
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="radio"
+                        className="mt-1"
+                        checked={settings.email.senderMode !== "custom_domain"}
+                        onChange={() =>
+                          patchEmail({
+                            senderMode: "platform",
+                            senderEmail: "",
+                          })
+                        }
+                      />
+                      <span>
+                        Platform (default) — clients see this business name on the shared sending domain.
+                        Replies go to the contact address. No DNS setup.
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="radio"
+                        className="mt-1"
+                        checked={settings.email.senderMode === "custom_domain"}
+                        disabled={settings.email.domainVerificationStatus !== "verified"}
+                        onChange={() => {
+                          if (settings.email.domainVerificationStatus !== "verified") {
+                            toast.error("Verify a custom domain before switching sender mode");
+                            return;
+                          }
+                          patchEmail({ senderMode: "custom_domain" });
+                        }}
+                      />
+                      <span>
+                        Custom domain — only after DNS verification. Sender address must be on that domain.
+                      </span>
+                    </label>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fromName">Default from name</Label>
+                  <Input id="fromName" value={settings.email.fromName} onChange={(e) => patchEmail({ fromName: e.target.value })} />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="senderEmail">Notification sender email</Label>
+                  <Input
+                    id="senderEmail"
+                    type="email"
+                    value={settings.email.senderEmail}
+                    disabled={settings.email.senderMode !== "custom_domain"}
+                    onChange={(e) => patchEmail({ senderEmail: e.target.value })}
+                  />
+                  <p className="text-xs text-muted leading-relaxed">
+                    Used only with a verified custom domain, and the address must be on that domain.
+                    Platform mode always sends from the shared mailbox.
+                  </p>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="customDomain">Custom sending domain</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="customDomain"
+                      value={settings.email.customDomain}
+                      onChange={(e) => patchEmail({ customDomain: e.target.value })}
+                      placeholder="mail.yourdomain.com"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch("/api/admin/email/domain", {
+                            method: "POST",
+                            credentials: "include",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ domain: settings.email.customDomain }),
+                          });
+                          const data = await parseApiResponse(res);
+                          if (data.settings) setSettings(data.settings as AppSettings);
+                          toast.success("Add the DNS records below, then re-check verification");
+                        } catch (error) {
+                          toast.error(error instanceof Error ? error.message : "Domain setup failed");
+                        }
+                      }}
+                    >
+                      Start verification
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch("/api/admin/email/domain/verify", {
+                            method: "POST",
+                            credentials: "include",
+                          });
+                          const data = await parseApiResponse(res);
+                          if (data.settings) setSettings(data.settings as AppSettings);
+                          toast.success(`Domain status: ${data.domainVerificationStatus}`);
+                        } catch (error) {
+                          toast.error(error instanceof Error ? error.message : "Re-check failed");
+                        }
+                      }}
+                    >
+                      Re-check DNS
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted">
+                    Status: {settings.email.domainVerificationStatus}
+                  </p>
+                  <DomainRecordsList refreshKey={`${settings.email.resendDomainId}:${settings.email.domainVerificationStatus}`} />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="replyTo">Reply-to email</Label>
+                  <Input id="replyTo" type="email" value={settings.email.replyTo} onChange={(e) => patchEmail({ replyTo: e.target.value })} />
+                  <p className="text-xs text-muted">
+                    If empty, replies use the business primary contact email.
+                  </p>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="footerText">Email footer text</Label>
+                  <Textarea id="footerText" rows={3} value={settings.email.footerText} onChange={(e) => patchEmail({ footerText: e.target.value })} />
+                </div>
+              </CardContent>
+            </Card>
+            <div className="mt-4">
+              <EmailDiagnosticsCard />
+            </div>
+          </div>
+        </SettingsPanel>
+
+        <SettingsPanel id="payments" active={section}>
+          <div id="settings-payments" tabIndex={-1} className="scroll-mt-24">
+            <h2 className="text-lg font-semibold text-primary">Payments</h2>
+            <p className="mt-1 mb-4 text-sm text-muted">Connect your Stripe account so clients pay you directly.</p>
+            {payments}
+          </div>
+        </SettingsPanel>
+
+        <SettingsPanel id="services" active={section}>
+          <div id="settings-services" tabIndex={-1} className="scroll-mt-24">
+            <h2 className="text-lg font-semibold text-primary">Services</h2>
+            <p className="mt-1 mb-4 text-sm text-muted">Catalog and preliminary estimate prices for this business.</p>
+            {services}
+          </div>
+        </SettingsPanel>
+
+        <SettingsPanel id="workflow" active={section}>
+          <div id="settings-workflow" tabIndex={-1} className="scroll-mt-24 space-y-4">
+            <h2 className="text-lg font-semibold text-primary">Workflow Automation</h2>
+            <p className="mt-1 text-sm text-muted">Stage actions, reminders, and proposal defaults.</p>
+            <WorkflowSettingsCard workflow={settings.workflow} onChange={patchWorkflow} />
+            <Card className="shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Proposal Settings</CardTitle>
+                <p className="text-sm text-muted">Affects new projects and proposals going forward.</p>
+              </CardHeader>
+              <CardContent className="overflow-hidden rounded-xl border border-border p-0">
+                <div className="divide-y divide-border">
+                  <RowToggle
+                    id="autoPreliminaryEstimate"
+                    label="Automatically create preliminary estimate on new request"
+                    checked={settings.proposals.autoPreliminaryEstimate}
+                    onChange={(v) => patchProposals({ autoPreliminaryEstimate: v })}
+                  />
+                  <RowToggle
+                    id="requireAdminReview"
+                    label="Require admin review before official proposal is sent"
+                    checked={settings.proposals.requireAdminReviewBeforeOfficial}
+                    onChange={(v) => patchProposals({ requireAdminReviewBeforeOfficial: v })}
+                  />
+                  <RowToggle
+                    id="showPreliminary"
+                    label="Show preliminary estimate to clients"
+                    checked={settings.proposals.showPreliminaryToClients}
+                    onChange={(v) => patchProposals({ showPreliminaryToClients: v })}
+                  />
+                  <RowToggle
+                    id="allowChanges"
+                    label="Allow clients to request proposal changes"
+                    checked={settings.proposals.allowClientProposalChanges}
+                    onChange={(v) => patchProposals({ allowClientProposalChanges: v })}
+                  />
+                </div>
+                <div className="grid gap-4 border-t border-border p-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="estimateExpiration">Default estimate expiration (days)</Label>
+                    <Input
+                      id="estimateExpiration"
+                      type="number"
+                      min={0}
+                      value={settings.proposals.defaultEstimateExpirationDays}
+                      onChange={(e) => patchProposals({ defaultEstimateExpirationDays: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="proposalExpiration">Default proposal expiration (days)</Label>
+                    <Input
+                      id="proposalExpiration"
+                      type="number"
+                      min={0}
+                      value={settings.proposals.defaultProposalExpirationDays}
+                      onChange={(e) => patchProposals({ defaultProposalExpirationDays: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="preliminaryDisclaimer">Preliminary estimate disclaimer</Label>
+                    <Textarea
+                      id="preliminaryDisclaimer"
+                      rows={4}
+                      value={settings.proposals.preliminaryDisclaimer}
+                      onChange={(e) => patchProposals({ preliminaryDisclaimer: e.target.value })}
+                    />
+                    <p className="text-xs text-muted">Use {"{{businessName}}"} — it is replaced when the estimate is shown.</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </SettingsPanel>
+
+        <SettingsPanel id="notifications" active={section}>
+          <div id="settings-notifications" tabIndex={-1} className="scroll-mt-24">
+            <h2 className="text-lg font-semibold text-primary">Notifications</h2>
+            <p className="mt-1 mb-4 text-sm text-muted">Toggle delivery channels per event. Activity still logs when notifications are off.</p>
+            <Card className="shadow-sm">
+              <CardContent className="p-0 sm:p-0">
+                <div className="hidden overflow-hidden md:block">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-subtle text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
+                        <th className="px-4 py-3">Event</th>
+                        <th className="w-20 px-2 py-3 text-center">In-app</th>
+                        <th className="w-20 px-2 py-3 text-center">Email</th>
+                        <th className="w-20 px-2 py-3 text-center">Push</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {notificationEvents.map((event, index) => (
+                        <tr
+                          key={event.key}
+                          className={cn(
+                            "border-b border-border/70 last:border-0",
+                            index % 2 === 1 && "bg-subtle/40"
+                          )}
+                        >
+                          <td className="px-4 py-2.5">
+                            <p className="font-medium text-primary leading-snug">{event.label}</p>
+                            <p className="text-[11px] text-muted leading-snug mt-0.5">{event.description}</p>
+                          </td>
+                          <td className="px-2 py-2.5 text-center">
+                            <CompactToggle
+                              id={`${event.key}-inapp-d`}
+                              label={`${event.label} in-app`}
+                              checked={settings.notifications[event.key].inApp}
+                              onChange={(v) => updateNotification(event.key, "inApp", v)}
+                            />
+                          </td>
+                          <td className="px-2 py-2.5 text-center">
+                            <CompactToggle
+                              id={`${event.key}-email-d`}
+                              label={`${event.label} email`}
+                              checked={settings.notifications[event.key].email}
+                              onChange={(v) => updateNotification(event.key, "email", v)}
+                            />
+                          </td>
+                          <td className="px-2 py-2.5 text-center">
+                            {event.audience === "admin" || event.audience === "both" ? (
+                              <CompactToggle
+                                id={`${event.key}-push-d`}
+                                label={`${event.label} push`}
+                                checked={settings.notifications[event.key].push}
+                                onChange={(v) => updateNotification(event.key, "push", v)}
+                              />
+                            ) : (
+                              <span className="text-xs text-muted">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="divide-y divide-border md:hidden">
+                  {notificationEvents.map((event) => (
+                    <div key={`mobile-${event.key}`} className="px-4 py-3">
+                      <p className="text-sm font-medium text-primary">{event.label}</p>
+                      <p className="text-xs text-muted mt-0.5 mb-2">{event.description}</p>
+                      <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-medium text-muted">
+                        <div>
+                          <p className="mb-1">In-app</p>
+                          <CompactToggle
+                            id={`${event.key}-inapp-m`}
+                            label={`${event.label} in-app`}
+                            checked={settings.notifications[event.key].inApp}
+                            onChange={(v) => updateNotification(event.key, "inApp", v)}
+                          />
+                        </div>
+                        <div>
+                          <p className="mb-1">Email</p>
+                          <CompactToggle
+                            id={`${event.key}-email-m`}
+                            label={`${event.label} email`}
+                            checked={settings.notifications[event.key].email}
+                            onChange={(v) => updateNotification(event.key, "email", v)}
+                          />
+                        </div>
+                        <div>
+                          <p className="mb-1">Push</p>
+                          {event.audience === "admin" || event.audience === "both" ? (
+                            <CompactToggle
+                              id={`${event.key}-push-m`}
+                              label={`${event.label} push`}
+                              checked={settings.notifications[event.key].push}
+                              onChange={(v) => updateNotification(event.key, "push", v)}
+                            />
+                          ) : (
+                            <span className="text-xs">—</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </SettingsPanel>
+
+        <SettingsPanel id="integrations" active={section}>
+          <div id="settings-integrations" tabIndex={-1} className="scroll-mt-24 space-y-4">
+            <h2 className="text-lg font-semibold text-primary">Integrations</h2>
+            <p className="mt-1 text-sm text-muted">Google Calendar and GoHighLevel.</p>
+            {calendar}
+            <Card className="shadow-sm">
+              <CardContent className="space-y-4 pt-6">
+                <div className="space-y-2">
+                  <Label htmlFor="ghlWebhookUrl">GoHighLevel webhook URL</Label>
+                  <Input
+                    id="ghlWebhookUrl"
+                    value={settings.integrations?.ghlWebhookUrl ?? ""}
+                    onChange={(e) => patchIntegrations({ ghlWebhookUrl: e.target.value })}
+                    placeholder="https://…"
+                  />
+                  <p className="text-xs text-muted">
+                    Leave blank to skip GHL sync for this business. Swift uses the platform env var until a URL is saved.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ghlLeadSource">GHL lead source</Label>
+                  <Input
+                    id="ghlLeadSource"
+                    value={settings.integrations?.ghlLeadSource ?? ""}
+                    onChange={(e) => patchIntegrations({ ghlLeadSource: e.target.value })}
+                    placeholder="ShootPortal"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </SettingsPanel>
+
+        {restoreOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-primary">Restore platform defaults?</h3>
+              <p className="mt-2 text-sm text-muted">
+                This resets business name, portal name, contact info, logo URL, and brand colors to generic
+                platform defaults and saves immediately.
+              </p>
+              <div className="mt-6 flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setRestoreOpen(false)} disabled={restoring}>
+                  Cancel
+                </Button>
+                <Button type="button" variant="accent" onClick={restorePlatformDefaults} disabled={restoring}>
+                  {restoring ? <Loader2 className="h-4 w-4 animate-spin" /> : "Restore & Save"}
+                </Button>
               </div>
             </div>
-            <p className="text-xs text-muted mt-3">
-              Header currently shows: {liveBrand.portalName} · {liveBrand.name}
-              {dirty ? " (save to apply changes)" : ""}
+          </div>
+        )}
+
+        <div className="sticky bottom-0 z-30 -mx-4 border-t border-border bg-card/95 px-4 py-4 backdrop-blur-md sm:-mx-6 sm:px-6 md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted">
+              {dirty ? "You have unsaved changes." : "All changes saved."}
             </p>
+            <Button variant="accent" onClick={() => saveSettings()} disabled={saving || !dirty} className="min-h-11 min-w-[140px]">
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" /> Save Settings
+                </>
+              )}
+            </Button>
           </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-          <div id="settings-business-name" tabIndex={-1} className="space-y-2 scroll-mt-24">
-            <Label htmlFor="businessName">Business name</Label>
-            <Input id="businessName" value={settings.business.businessName} onChange={(e) => patchBusiness({ businessName: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="portalName">Portal name</Label>
-            <Input id="portalName" value={settings.business.portalName} onChange={(e) => patchBusiness({ portalName: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="adminDisplayName">Admin display name</Label>
-            <Input id="adminDisplayName" value={settings.business.adminDisplayName} onChange={(e) => patchBusiness({ adminDisplayName: e.target.value })} />
-          </div>
-          <div id="settings-contact" tabIndex={-1} className="space-y-2 scroll-mt-24">
-            <Label htmlFor="primaryContactEmail">Primary contact email</Label>
-            <Input id="primaryContactEmail" type="email" value={settings.business.primaryContactEmail} onChange={(e) => patchBusiness({ primaryContactEmail: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="phoneNumber">Phone number</Label>
-            <Input id="phoneNumber" value={settings.business.phoneNumber} onChange={(e) => patchBusiness({ phoneNumber: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="websiteUrl">Website URL</Label>
-            <Input id="websiteUrl" value={settings.business.websiteUrl} onChange={(e) => patchBusiness({ websiteUrl: e.target.value })} />
-          </div>
-          <div id="settings-logo" tabIndex={-1} className="sm:col-span-2 scroll-mt-24">
-            <BrandAssetField
-              kind="logo"
-              inputId="logoUrl"
-              value={settings.business.logoUrl}
-              onUrlChange={(logoUrl) =>
-                patchBusiness({
-                  logoUrl,
-                  emailLogoUrl: settings.business.emailLogoUrl || logoUrl,
-                })
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="supportEmail">Support email</Label>
-            <Input id="supportEmail" type="email" value={settings.business.supportEmail ?? ""} onChange={(e) => patchBusiness({ supportEmail: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="legalName">Legal name (copyright)</Label>
-            <Input id="legalName" value={settings.business.legalName ?? ""} onChange={(e) => patchBusiness({ legalName: e.target.value })} />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="tagline">Tagline</Label>
-            <Input id="tagline" value={settings.business.tagline ?? ""} onChange={(e) => patchBusiness({ tagline: e.target.value })} />
-          </div>
-          <div id="settings-email-logo" tabIndex={-1} className="sm:col-span-2 scroll-mt-24">
-            <BrandAssetField
-              kind="emailLogo"
-              inputId="emailLogoUrl"
-              value={settings.business.emailLogoUrl ?? ""}
-              onUrlChange={(emailLogoUrl) => patchBusiness({ emailLogoUrl })}
-            />
-          </div>
-          <div id="settings-favicon" tabIndex={-1} className="sm:col-span-2 scroll-mt-24">
-            <BrandAssetField
-              kind="favicon"
-              inputId="faviconUrl"
-              value={settings.business.faviconUrl ?? ""}
-              onUrlChange={(faviconUrl) => patchBusiness({ faviconUrl })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="termsUrl">Terms URL</Label>
-            <Input id="termsUrl" value={settings.business.termsUrl ?? ""} onChange={(e) => patchBusiness({ termsUrl: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="privacyUrl">Privacy URL</Label>
-            <Input id="privacyUrl" value={settings.business.privacyUrl ?? ""} onChange={(e) => patchBusiness({ privacyUrl: e.target.value })} />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="addressLine1">Address line 1</Label>
-            <Input id="addressLine1" value={settings.business.addressLine1 ?? ""} onChange={(e) => patchBusiness({ addressLine1: e.target.value })} />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="addressLine2">Address line 2</Label>
-            <Input id="addressLine2" value={settings.business.addressLine2 ?? ""} onChange={(e) => patchBusiness({ addressLine2: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="city">City</Label>
-            <Input id="city" value={settings.business.city ?? ""} onChange={(e) => patchBusiness({ city: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="state">State</Label>
-            <Input id="state" value={settings.business.state ?? ""} onChange={(e) => patchBusiness({ state: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="postalCode">Postal code</Label>
-            <Input id="postalCode" value={settings.business.postalCode ?? ""} onChange={(e) => patchBusiness({ postalCode: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="country">Country</Label>
-            <Input id="country" value={settings.business.country ?? ""} onChange={(e) => patchBusiness({ country: e.target.value })} />
-          </div>
-          <div id="settings-colors" tabIndex={-1} className="sm:col-span-2 grid gap-4 sm:grid-cols-2 scroll-mt-24">
-          <ColorField
-            id="brandPrimaryColor"
-            label="Brand primary color"
-            value={settings.business.brandPrimaryColor}
-            fallback="#0F172A"
-            onChange={(v) => patchBusiness({ brandPrimaryColor: v })}
-            warning={colorWarnings.find((w) => w.field === "brandPrimaryColor")?.message}
-          />
-          <ColorField
-            id="brandAccentColor"
-            label="Brand accent color"
-            value={settings.business.brandAccentColor}
-            fallback="#3B82F6"
-            onChange={(v) => patchBusiness({ brandAccentColor: v })}
-            warning={colorWarnings.find((w) => w.field === "brandAccentColor")?.message}
-          />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="ghlWebhookUrl">GoHighLevel webhook URL</Label>
-            <Input
-              id="ghlWebhookUrl"
-              value={settings.integrations?.ghlWebhookUrl ?? ""}
-              onChange={(e) => patchIntegrations({ ghlWebhookUrl: e.target.value })}
-              placeholder="https://…"
-            />
-            <p className="text-xs text-muted">
-              Leave blank to skip GHL sync for this business. Swift uses the platform env var until a URL is saved.
-            </p>
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="ghlLeadSource">GHL lead source</Label>
-            <Input
-              id="ghlLeadSource"
-              value={settings.integrations?.ghlLeadSource ?? ""}
-              onChange={(e) => patchIntegrations({ ghlLeadSource: e.target.value })}
-              placeholder="ShootPortal"
-            />
-          </div>
-          </div>
-        </CardContent>
-      </Card>
-      </SettingsCollapsible>
-
-      <SettingsCollapsible
-        title="Proposal Settings"
-        description="Affects new projects and proposals going forward."
-      >
-      <Card className="shadow-sm border-0">
-        <CardContent className="overflow-hidden rounded-xl border border-border p-0 pt-0 px-0">
-          <div className="divide-y divide-border">
-          <RowToggle
-            id="autoPreliminaryEstimate"
-            label="Automatically create preliminary estimate on new request"
-            checked={settings.proposals.autoPreliminaryEstimate}
-            onChange={(v) => patchProposals({ autoPreliminaryEstimate: v })}
-          />
-          <RowToggle
-            id="requireAdminReview"
-            label="Require admin review before official proposal is sent"
-            checked={settings.proposals.requireAdminReviewBeforeOfficial}
-            onChange={(v) => patchProposals({ requireAdminReviewBeforeOfficial: v })}
-          />
-          <RowToggle
-            id="showPreliminary"
-            label="Show preliminary estimate to clients"
-            checked={settings.proposals.showPreliminaryToClients}
-            onChange={(v) => patchProposals({ showPreliminaryToClients: v })}
-          />
-          <RowToggle
-            id="allowChanges"
-            label="Allow clients to request proposal changes"
-            checked={settings.proposals.allowClientProposalChanges}
-            onChange={(v) => patchProposals({ allowClientProposalChanges: v })}
-          />
-          </div>
-          <div className="grid gap-4 border-t border-border p-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="estimateExpiration">Default estimate expiration (days)</Label>
-              <Input
-                id="estimateExpiration"
-                type="number"
-                min={0}
-                value={settings.proposals.defaultEstimateExpirationDays}
-                onChange={(e) => patchProposals({ defaultEstimateExpirationDays: Number(e.target.value) || 0 })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="proposalExpiration">Default proposal expiration (days)</Label>
-              <Input
-                id="proposalExpiration"
-                type="number"
-                min={0}
-                value={settings.proposals.defaultProposalExpirationDays}
-                onChange={(e) => patchProposals({ defaultProposalExpirationDays: Number(e.target.value) || 0 })}
-              />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="preliminaryDisclaimer">Preliminary estimate disclaimer</Label>
-              <Textarea
-                id="preliminaryDisclaimer"
-                rows={4}
-                value={settings.proposals.preliminaryDisclaimer}
-                onChange={(e) => patchProposals({ preliminaryDisclaimer: e.target.value })}
-              />
-              <p className="text-xs text-muted">Use {"{{businessName}}"} — it is replaced when the estimate is shown.</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      </SettingsCollapsible>
-
-      {restoreOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-primary">Restore platform defaults?</h3>
-            <p className="mt-2 text-sm text-muted">
-              This resets business name, portal name, contact info, logo URL, and brand colors to generic
-              platform defaults and saves immediately.
-            </p>
-            <div className="mt-6 flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setRestoreOpen(false)} disabled={restoring}>
-                Cancel
-              </Button>
-              <Button type="button" variant="accent" onClick={restorePlatformDefaults} disabled={restoring}>
-                {restoring ? <Loader2 className="h-4 w-4 animate-spin" /> : "Restore & Save"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="sticky bottom-0 z-30 -mx-4 border-t border-border bg-white/95 px-4 py-4 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted">
-            {dirty ? "You have unsaved changes." : "All changes saved."}
-          </p>
-          <Button variant="accent" onClick={() => saveSettings()} disabled={saving || !dirty} className="min-h-11 min-w-[140px]">
-            {saving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" /> Save Settings
-              </>
-            )}
-          </Button>
         </div>
       </div>
     </div>

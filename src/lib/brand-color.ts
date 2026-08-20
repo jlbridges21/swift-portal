@@ -221,10 +221,6 @@ function rgbClose(a: Rgb, b: Rgb, tol = 4): boolean {
   return Math.abs(a[0] - b[0]) <= tol && Math.abs(a[1] - b[1]) <= tol && Math.abs(a[2] - b[2]) <= tol;
 }
 
-function toHex(rgb: Rgb): string {
-  return `#${rgb.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
-}
-
 function ensureContrast(fg: Rgb, bg: Rgb, minRatio: number): Rgb {
   let current = fg;
   for (let i = 0; i < 32; i++) {
@@ -357,8 +353,6 @@ export function deriveBrandTheme(primaryRaw: string, accentRaw: string): BrandTh
       : darkenUntilContrast(accentChosen, WHITE, UI_CONTRAST);
 
   const primaryFg = pickForeground(primaryRgb);
-  const accentFg = pickForeground(accentForUi);
-
   const swiftSurfaces = rgbClose(primaryRgb, SWIFT_PRIMARY) && rgbClose(accentChosen, SWIFT_ACCENT);
 
   let background: Rgb;
@@ -379,17 +373,30 @@ export function deriveBrandTheme(primaryRaw: string, accentRaw: string): BrandTh
     muted = MUTED;
     heading = SWIFT_PRIMARY;
   } else {
-    // Tint from accent (the color admins think of as "brand"), never raw fill.
-    background = cloudTint(accentForUi);
-    card = mix(WHITE, accentForUi, 0.012);
+    // Tint from the chosen accent hue, never a raw brand fill.
+    const tintSource =
+      contrastRatio(accentChosen, WHITE) >= UI_CONTRAST ? accentChosen : accentForUi;
+    background = cloudTint(tintSource);
+    card = mix(WHITE, tintSource, 0.012);
     if (relativeLuminance(card) < 0.97) card = WHITE;
-    subtle = mix(background, accentForUi, 0.04);
-    if (relativeLuminance(subtle) < 0.93) subtle = mix(CLOUD, accentForUi, 0.03);
-    border = mix(SLATE_200, accentForUi, 0.1);
+    subtle = mix(background, tintSource, 0.04);
+    if (relativeLuminance(subtle) < 0.93) subtle = mix(CLOUD, tintSource, 0.03);
+    border = mix(SLATE_200, tintSource, 0.1);
     heading = ensureContrast(relativeLuminance(primaryRgb) < 0.35 ? primaryRgb : INK, background, TEXT_CONTRAST);
     foreground = ensureContrast(SLATE_600, background, TEXT_CONTRAST);
     muted = ensureContrast(MUTED, background, TEXT_CONTRAST);
   }
+
+  let accentUi = accentForUi;
+  if (!swiftSurfaces) {
+    if (contrastRatio(accentUi, background) < UI_CONTRAST) {
+      accentUi = darkenUntilContrast(accentUi, background, UI_CONTRAST);
+    }
+    if (contrastRatio(accentUi, WHITE) < UI_CONTRAST) {
+      accentUi = darkenUntilContrast(accentUi, WHITE, UI_CONTRAST);
+    }
+  }
+  const accentFg = pickForeground(accentUi);
 
   const bgFg = ensureContrast(foreground, background, TEXT_CONTRAST);
   const cardFg = ensureContrast(foreground, card, TEXT_CONTRAST);
@@ -399,13 +406,13 @@ export function deriveBrandTheme(primaryRaw: string, accentRaw: string): BrandTh
     primaryForeground: primaryFg.css,
     primaryHover: toCss(mix(primaryRgb, WHITE, 0.12)),
     primaryActive: toCss(mix(primaryRgb, INK, 0.12)),
-    accent: toCss(accentForUi),
+    accent: toCss(accentUi),
     accentForeground: accentFg.css,
-    accentHover: toCss(mix(accentForUi, INK, 0.12)),
-    accentActive: toCss(mix(accentForUi, INK, 0.2)),
-    accentSubtle: toCss(mix(accentForUi, WHITE, 0.9)),
-    accentBorder: toCss(mix(accentForUi, WHITE, 0.55)),
-    ring: toCss(accentForUi),
+    accentHover: toCss(mix(accentUi, INK, 0.12)),
+    accentActive: toCss(mix(accentUi, INK, 0.2)),
+    accentSubtle: toCss(mix(accentUi, WHITE, 0.9)),
+    accentBorder: toCss(mix(accentUi, WHITE, 0.55)),
+    ring: toCss(accentUi),
     background: swiftSurfaces ? "#F8FAFC" : toCss(background),
     card: swiftSurfaces ? "#ffffff" : toCss(card),
     subtle: swiftSurfaces ? "#F8FAFC" : toCss(subtle),
