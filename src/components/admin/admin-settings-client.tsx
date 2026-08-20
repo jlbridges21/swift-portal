@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Loader2, RotateCcw, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ColorField } from "@/components/ui/color-field";
+import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import { SettingsTabNav } from "@/components/admin/settings-tab-nav";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
