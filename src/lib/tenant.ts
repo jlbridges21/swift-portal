@@ -36,7 +36,8 @@ export interface TenantContext {
     trial_ends_at: string | null;
     comped_until: string | null;
     comped_reason: string | null;
-    plan?: string;
+    /** Plan key — always loaded with the business row (required for /billing). */
+    plan: string;
   };
   role: "super_admin" | "admin" | "client";
   isSuperAdmin: boolean;
@@ -61,7 +62,11 @@ async function loadBusiness(id: string): Promise<TenantContext["business"] | nul
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
-  return data;
+  if (!data) return null;
+  return {
+    ...data,
+    plan: typeof data.plan === "string" ? data.plan : "",
+  };
 }
 
 /**

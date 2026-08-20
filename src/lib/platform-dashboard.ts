@@ -180,10 +180,13 @@ export async function loadBusinessDetail(id: string) {
     adminRows.map(async (admin) => {
       const { data } = await raw.auth.admin.getUserById(admin.id);
       const confirmedAt = data.user?.email_confirmed_at ?? null;
+      const lastSignInAt = data.user?.last_sign_in_at ?? null;
       return {
         ...admin,
         emailConfirmed: Boolean(confirmedAt),
         emailConfirmedAt: confirmedAt,
+        lastSignInAt,
+        mustChangePassword: Boolean(data.user?.user_metadata?.must_change_password),
       };
     })
   );

@@ -11,13 +11,20 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user?.user_metadata?.must_change_password === true) {
+    return NextResponse.json({ redirect: "/auth/update-password?reason=forced" });
+  }
+
   if (profile.role === "super_admin") {
     return NextResponse.json({ redirect: "/platform" });
   }
 
   const own = profile.business_id ? await lookupBusinessById(profile.business_id) : null;
   if (!own || own.status !== "active") {
-    const supabase = await createClient();
     await supabase.auth.signOut();
     return NextResponse.json(
       {

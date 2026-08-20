@@ -14,6 +14,8 @@ export type PlatformAuditAction =
   | "business.comp_revoke"
   | "admin.invite"
   | "admin.invite_resend"
+  | "admin.password_reset_email"
+  | "admin.temp_password_set"
   | "impersonation.start"
   | "impersonation.stop"
   | "impersonation.allow_writes"

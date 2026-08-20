@@ -15,6 +15,7 @@ import {
   isClientMutatingApi,
   paywallApiBody,
 } from "@/lib/subscription";
+import { NEEDS_PASSWORD_COOKIE } from "@/lib/auth-password-gate";
 
 function inboundHost(request: NextRequest): string {
   return request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
@@ -125,6 +126,35 @@ export async function updateSession(request: NextRequest) {
       .select("role, business_id")
       .eq("id", user.id)
       .single();
+
+    // Invite / recovery / temp-password: must set password before using the app.
+    const mustChangePassword =
+      request.cookies.get(NEEDS_PASSWORD_COOKIE)?.value === "1" ||
+      user.user_metadata?.must_change_password === true;
+    const passwordSetupExempt =
+      path.startsWith("/auth/update-password") ||
+      path.startsWith("/api/auth/") ||
+      path.startsWith("/_next") ||
+      path === "/favicon.ico";
+    if (mustChangePassword && !passwordSetupExempt) {
+      if (isApi) {
+        return applyPathCookie(
+          NextResponse.json(
+            { error: "Set a password before continuing.", code: "password_setup_required" },
+            { status: 403 }
+          ),
+          resolution
+        );
+      }
+      const url = request.nextUrl.clone();
+      url.pathname = `${resolution.pathPrefix}/auth/update-password`;
+      if (user.user_metadata?.must_change_password === true) {
+        url.search = "?reason=forced";
+      } else if (!url.searchParams.get("reason")) {
+        url.search = "?reason=setup";
+      }
+      return applyPathCookie(NextResponse.redirect(url), resolution);
+    }
 
     const ownBusiness = profile?.business_id ? await lookupBusinessById(profile.business_id) : null;
     const businessUnavailable =

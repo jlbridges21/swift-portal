@@ -47,6 +47,8 @@ export type CreateBusinessResult = {
   inviteSent: boolean;
   /** Set when the business was created but invite email did not send. */
   inviteError?: string | null;
+  /** Existing auth user with no business was attached as admin. */
+  attachedExisting?: boolean;
   stagesNote: string;
   /** Present for signup — user must confirm email before login. */
   requiresEmailConfirmation?: boolean;
@@ -244,6 +246,7 @@ export async function createBusinessForPlatform(
 
     let inviteSent = false;
     let inviteError: string | null = null;
+    let attachedExisting = false;
     let requiresEmailConfirmation = false;
 
     // Verification hook: force failure after dependents exist, before auth user.
@@ -263,7 +266,12 @@ export async function createBusinessForPlatform(
       );
       inviteSent = invite.inviteSent;
       inviteError = invite.inviteError ?? null;
+      attachedExisting = Boolean(invite.attachedExisting);
       createdUserId = invite.userId;
+      // Email already on another business / super_admin — roll back empty tenant.
+      if (!createdUserId && inviteError && /already belongs|super-admin/i.test(inviteError)) {
+        throw new Error(inviteError);
+      }
       if (!inviteSent) {
         console.error("[platform-invite] reason=invite_failed_on_create", {
           event: "platform_invite_failure",
@@ -288,6 +296,7 @@ export async function createBusinessForPlatform(
           adminEmail,
           inviteSent,
           inviteError,
+          attachedExisting,
           plan,
         },
       });
@@ -327,7 +336,7 @@ export async function createBusinessForPlatform(
               business_id: businessId,
               full_name: adminName,
             },
-            emailRedirectTo: `${portalUrl}/login`,
+            emailRedirectTo: `${portalUrl}/auth/callback?next=${encodeURIComponent("/admin")}`,
           },
         });
         if (signErr || !signedUp.user) {
@@ -384,6 +393,7 @@ export async function createBusinessForPlatform(
       adminEmail,
       inviteSent,
       inviteError,
+      attachedExisting,
       requiresEmailConfirmation,
       stagesNote:
         "business_stages does not exist yet — stage automation is still workflow settings JSON, not a table.",
@@ -401,7 +411,13 @@ export async function inviteBusinessAdmin(
   fullName: string,
   actor: { id: string; email: string | null },
   options?: { isCreate?: boolean; resend?: boolean }
-): Promise<{ inviteSent: boolean; userId: string | null; inviteError?: string | null; alreadyExists?: boolean }> {
+): Promise<{
+  inviteSent: boolean;
+  userId: string | null;
+  inviteError?: string | null;
+  alreadyExists?: boolean;
+  attachedExisting?: boolean;
+}> {
   const raw = await createServiceClient();
   const { data: business } = await raw
     .from("businesses")
@@ -414,9 +430,154 @@ export async function inviteBusinessAdmin(
     slug: business.slug,
     custom_domain: business.custom_domain,
   });
-  const redirectTo = `${portalUrl}/login`;
+  // Invite users have no password — land on update-password (sp_flow survives PKCE redirect).
+  const redirectTo = `${portalUrl}/auth/callback?next=${encodeURIComponent("/auth/update-password")}&sp_flow=invite`;
   const normalizedEmail = email.trim().toLowerCase();
 
+  // Look up existing auth user first so we can distinguish "already registered"
+  // from a pure send failure.
+  const users = await raw.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const existing = users.data.users.find((u) => u.email?.toLowerCase() === normalizedEmail);
+
+  if (existing) {
+    const { data: profile } = await raw
+      .from("profiles")
+      .select("id, role, business_id")
+      .eq("id", existing.id)
+      .maybeSingle();
+
+    if (profile?.role === "super_admin") {
+      const msg =
+        "That email belongs to a platform super-admin and cannot be invited as a business admin.";
+      if (!options?.isCreate) throw new Error(msg);
+      return {
+        inviteSent: false,
+        userId: null,
+        inviteError: msg,
+        alreadyExists: true,
+        attachedExisting: false,
+      };
+    }
+
+    const existingBid = profile?.business_id ?? null;
+    if (existingBid && existingBid !== businessId) {
+      const { data: other } = await raw
+        .from("businesses")
+        .select("name, slug")
+        .eq("id", existingBid)
+        .maybeSingle();
+      const label = other?.name || other?.slug || "another business";
+      const msg = `That email already belongs to ${label}. One person can only administer one business — use a different email.`;
+      console.error("[platform-invite] reason=email_belongs_other_business", {
+        event: "platform_invite_failure",
+        businessId,
+        email: normalizedEmail,
+        otherBusinessId: existingBid,
+      });
+      if (!options?.isCreate) throw new Error(msg);
+      return {
+        inviteSent: false,
+        userId: null,
+        inviteError: msg,
+        alreadyExists: true,
+        attachedExisting: false,
+      };
+    }
+
+    // Exists with no business (or already this business) — attach as admin.
+    // Orphan auth users may have no profiles row (trigger missed) — upsert.
+    await raw.auth.admin.updateUserById(existing.id, {
+      user_metadata: {
+        ...existing.user_metadata,
+        role: "admin",
+        business_id: businessId,
+        full_name: fullName,
+      },
+    });
+    const { error: profileErr } = await raw.from("profiles").upsert(
+      {
+        id: existing.id,
+        role: "admin",
+        business_id: businessId,
+        client_id: null,
+        full_name: fullName,
+        email: normalizedEmail,
+      },
+      { onConflict: "id" }
+    );
+    if (profileErr) {
+      const msg = `Could not attach existing account as admin: ${profileErr.message}`;
+      if (!options?.isCreate) throw new Error(msg);
+      return {
+        inviteSent: false,
+        userId: null,
+        inviteError: msg,
+        alreadyExists: true,
+        attachedExisting: false,
+      };
+    }
+
+    // Prefer invite email when still unconfirmed; otherwise signup resend.
+    let inviteSent = false;
+    let inviteError: string | null = null;
+    if (!existing.email_confirmed_at) {
+      const invited = await raw.auth.admin.inviteUserByEmail(normalizedEmail, {
+        data: { role: "admin", business_id: businessId, full_name: fullName },
+        redirectTo,
+      });
+      if (!invited.error) {
+        inviteSent = true;
+      } else {
+        const anon = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          { auth: { persistSession: false, autoRefreshToken: false } }
+        );
+        const { error: resendErr } = await anon.auth.resend({
+          type: "signup",
+          email: normalizedEmail,
+          options: { emailRedirectTo: redirectTo },
+        });
+        inviteSent = !resendErr;
+        inviteError = resendErr?.message || invited.error.message || null;
+      }
+    } else {
+      // Confirmed user attached — no invite email needed; they can sign in now.
+      inviteSent = true;
+      inviteError = null;
+    }
+
+    if (!options?.isCreate) {
+      await writePlatformAudit({
+        actorUserId: actor.id,
+        actorEmail: actor.email,
+        action: options?.resend ? "admin.invite_resend" : "admin.invite",
+        targetBusinessId: businessId,
+        targetType: "profile",
+        targetId: existing.id,
+        metadata: {
+          email: normalizedEmail,
+          inviteSent,
+          inviteError,
+          alreadyExists: true,
+          attachedExisting: true,
+        },
+      });
+    }
+
+    return {
+      inviteSent,
+      userId: existing.id,
+      inviteError: inviteSent
+        ? null
+        : inviteError ||
+          "Attached existing account as admin, but the confirmation email failed to send — use Resend invite.",
+      alreadyExists: true,
+      attachedExisting: true,
+    };
+  }
+
+  // Brand-new email — invite (or force-fail for verification).
   const invited =
     process.env.PLATFORM_FORCE_INVITE_FAIL === "1"
       ? {
@@ -435,7 +596,6 @@ export async function inviteBusinessAdmin(
   let userId = invited.data.user?.id ?? null;
   let inviteSent = !invited.error;
   let inviteError: string | null = invited.error?.message ?? null;
-  let alreadyExists = false;
 
   if (invited.error) {
     console.error("[platform-invite] reason=invite_email_failed", {
@@ -448,79 +608,31 @@ export async function inviteBusinessAdmin(
       detail: invited.error.message,
     });
 
-    const users = await raw.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    const existing = users.data.users.find((u) => u.email?.toLowerCase() === normalizedEmail);
-    alreadyExists = Boolean(existing);
-
-    if (existing) {
-      userId = existing.id;
-      await raw.auth.admin.updateUserById(existing.id, {
-        user_metadata: {
-          ...existing.user_metadata,
-          role: "admin",
-          business_id: businessId,
-          full_name: fullName,
-        },
+    // Send failure with no existing user — create unconfirmed so Resend has a target.
+    const { data: created, error: createErr } = await raw.auth.admin.createUser({
+      email: normalizedEmail,
+      email_confirm: false,
+      user_metadata: {
+        role: "admin",
+        business_id: businessId,
+        full_name: fullName,
+      },
+    });
+    if (createErr || !created.user) {
+      inviteSent = false;
+      inviteError = invited.error.message || createErr?.message || "Invite email failed.";
+      if (!options?.isCreate) throw new Error(inviteError);
+      console.error("[platform-invite] reason=user_create_after_invite_failed", {
+        event: "platform_invite_failure",
+        businessId,
+        detail: inviteError,
       });
-
-      // Existing user: try signup-resend (works for unconfirmed) so Resend invite is real.
-      const anon = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { auth: { persistSession: false, autoRefreshToken: false } }
-      );
-      const { error: resendErr } = await anon.auth.resend({
-        type: "signup",
-        email: normalizedEmail,
-        options: { emailRedirectTo: redirectTo },
-      });
-      if (!resendErr) {
-        inviteSent = true;
-        inviteError = null;
-      } else {
-        inviteSent = false;
-        inviteError =
-          invited.error.message ||
-          resendErr.message ||
-          "Invite email failed to send. Use Resend invite.";
-        console.error("[platform-invite] reason=resend_failed", {
-          event: "platform_invite_failure",
-          businessId,
-          email: normalizedEmail,
-          detail: resendErr.message,
-        });
-      }
     } else {
-      // No auth user yet — create unconfirmed so the business is not orphaned without an admin.
-      const { data: created, error: createErr } = await raw.auth.admin.createUser({
-        email: normalizedEmail,
-        email_confirm: false,
-        user_metadata: {
-          role: "admin",
-          business_id: businessId,
-          full_name: fullName,
-        },
-      });
-      if (createErr || !created.user) {
-        // During create: keep business, report invite failure (no rollback).
-        // During standalone invite: surface the error.
-        inviteSent = false;
-        inviteError = invited.error.message || createErr?.message || "Invite email failed.";
-        if (!options?.isCreate) {
-          throw new Error(inviteError);
-        }
-        console.error("[platform-invite] reason=user_create_after_invite_failed", {
-          event: "platform_invite_failure",
-          businessId,
-          detail: inviteError,
-        });
-      } else {
-        userId = created.user.id;
-        inviteSent = false;
-        inviteError =
-          invited.error.message ||
-          "Business created, but the invite email failed to send — resend it.";
-      }
+      userId = created.user.id;
+      inviteSent = false;
+      inviteError =
+        invited.error.message ||
+        "Business created, but the invite email failed to send — resend it.";
     }
   }
 
@@ -545,11 +657,11 @@ export async function inviteBusinessAdmin(
       targetBusinessId: businessId,
       targetType: "profile",
       targetId: userId,
-      metadata: { email: normalizedEmail, inviteSent, inviteError, alreadyExists },
+      metadata: { email: normalizedEmail, inviteSent, inviteError, alreadyExists: false },
     });
   }
 
-  return { inviteSent, userId, inviteError, alreadyExists };
+  return { inviteSent, userId, inviteError, alreadyExists: false, attachedExisting: false };
 }
 
 export async function hardDeleteBusiness(

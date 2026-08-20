@@ -19,6 +19,7 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
     businessId?: string;
     inviteSent?: boolean;
     inviteError?: string | null;
+    attachedExisting?: boolean;
   } | null>(null);
 
   const defaultPlan = plans.find((p) => p.key === "studio")?.key ?? plans[0]?.key ?? "studio";
@@ -50,6 +51,7 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
         businessId?: string;
         inviteSent?: boolean;
         inviteError?: string | null;
+        attachedExisting?: boolean;
       };
       if (!res.ok) throw new Error(data.error || "Failed to create business");
       setResult({
@@ -59,6 +61,7 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
         businessId: data.businessId,
         inviteSent: data.inviteSent,
         inviteError: data.inviteError,
+        attachedExisting: data.attachedExisting,
       });
       if (data.businessId) {
         router.refresh();
@@ -77,11 +80,25 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
           <CardTitle>Business created</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          {result.inviteSent === false && (
+          {result.attachedExisting && (
+            <p className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sky-950">
+              That email already had an account with no business. It was attached as this
+              business&apos;s admin
+              {result.inviteSent
+                ? " — they can sign in (check email if still unconfirmed)."
+                : " — but the invite/confirmation email failed; use Resend invite."}
+            </p>
+          )}
+          {!result.attachedExisting && result.inviteSent === false && (
             <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-950">
               Business created, but the invite email failed to send — resend it from the business
               page.
               {result.inviteError ? ` (${result.inviteError})` : ""}
+            </p>
+          )}
+          {!result.attachedExisting && result.inviteError && result.inviteSent === false && result.inviteError.includes("already belongs") && (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-950">
+              {result.inviteError}
             </p>
           )}
           <p>

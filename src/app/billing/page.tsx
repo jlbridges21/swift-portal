@@ -6,7 +6,7 @@ import { BrandProvider } from "@/components/brand/brand-provider";
 import { ImpersonationBanner } from "@/components/platform/impersonation-banner";
 import { listActivePlans } from "@/lib/entitlements";
 import { getSubscriptionState } from "@/lib/subscription";
-import { formatPlanPrice } from "@/lib/plan-catalog";
+import { formatPlanPrice, type PlanRow } from "@/lib/plan-catalog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,22 +18,72 @@ import { getTenantContext } from "@/lib/tenant";
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const tenant = await getTenantContext();
-  if (!tenant) return {};
-  const settings = await getAppSettings(tenant.businessId);
-  return metadataFromBusiness(settings.business);
+  try {
+    const tenant = await getTenantContext();
+    if (!tenant) return { title: "Billing" };
+    const settings = await getAppSettings(tenant.businessId);
+    return metadataFromBusiness(settings.business);
+  } catch {
+    return { title: "Billing" };
+  }
+}
+
+async function loadBillingData(businessId: string, planKey: string | undefined) {
+  let settings;
+  let plans: PlanRow[] = [];
+  try {
+    settings = await getAppSettings(businessId);
+  } catch (err) {
+    console.error("[billing] getAppSettings failed", err);
+    throw err;
+  }
+  try {
+    plans = await listActivePlans();
+  } catch (err) {
+    console.error("[billing] listActivePlans failed", err);
+    plans = [];
+  }
+  const currentPlan = planKey ? plans.find((p) => p.key === planKey) ?? null : null;
+  const publicPlans = plans.filter((p) => p.is_public);
+  return { settings, plans, currentPlan, publicPlans };
 }
 
 export default async function BillingPage() {
   const { tenant } = await requireAdminPage();
-  const [settings, plans] = await Promise.all([
-    getAppSettings(tenant.businessId),
-    listActivePlans(),
-  ]);
+
+  let settings;
+  let currentPlan: PlanRow | null = null;
+  let publicPlans: PlanRow[] = [];
+  try {
+    const loaded = await loadBillingData(tenant.businessId, tenant.business.plan);
+    settings = loaded.settings;
+    currentPlan = loaded.currentPlan;
+    publicPlans = loaded.publicPlans;
+  } catch (err) {
+    console.error("[billing] page load failed", err);
+    // Last resort: still render a usable shell so lapsed customers are not stuck.
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
+        <h1 className="text-2xl font-bold text-heading">Billing</h1>
+        <p className="mt-2 max-w-md text-muted">
+          We couldn&apos;t load your billing details right now. You can still return to admin or try
+          again shortly.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <Link href="/admin">
+            <Button variant="accent">Back to admin</Button>
+          </Link>
+          <Link href="/billing">
+            <Button variant="outline">Try again</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const brand = getPortalBrandFromSettings(settings);
   const sub = getSubscriptionState(tenant.business);
-  const currentPlan = plans.find((p) => p.key === tenant.business.plan) ?? null;
-  const publicPlans = plans.filter((p) => p.is_public);
+  const planLabel = currentPlan?.name || tenant.business.plan || "Unknown plan";
 
   const headline = sub.isComped
     ? "You’re covered"
@@ -91,14 +141,15 @@ export default async function BillingPage() {
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <p>
-                <span className="font-medium text-heading">
-                  {currentPlan?.name ?? tenant.business.plan}
-                </span>
+                <span className="font-medium text-heading">{planLabel}</span>
                 {currentPlan && (
                   <span className="text-muted">
                     {" "}
                     · {formatPlanPrice(currentPlan.price_monthly_cents)}/mo
                   </span>
+                )}
+                {!currentPlan && tenant.business.plan && (
+                  <span className="text-muted"> · plan catalog unavailable</span>
                 )}
               </p>
               <div className="flex flex-wrap gap-2">
@@ -145,38 +196,45 @@ export default async function BillingPage() {
           {!sub.isComped && (
             <>
               <h2 className="mb-3 text-lg font-semibold text-heading">Plans</h2>
-              <div className="mb-8 grid gap-4 sm:grid-cols-2">
-                {publicPlans.map((plan) => {
-                  const isCurrent = plan.key === tenant.business.plan;
-                  return (
-                    <Card key={plan.id} className={isCurrent ? "border-accent" : undefined}>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center justify-between text-base">
-                          <span>{plan.name}</span>
-                          {isCurrent && <Badge variant="success">Current</Badge>}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <p className="text-2xl font-semibold text-heading">
-                          {formatPlanPrice(plan.price_monthly_cents)}
-                          <span className="text-sm font-normal text-muted">/mo</span>
-                        </p>
-                        {plan.price_annual_cents != null && (
-                          <p className="text-xs text-muted">
-                            or {formatPlanPrice(plan.price_annual_cents)}/mo billed annually
+              {publicPlans.length === 0 ? (
+                <p className="mb-8 text-sm text-muted">
+                  Plans are temporarily unavailable. Contact ShootPortal support if you need access
+                  restored.
+                </p>
+              ) : (
+                <div className="mb-8 grid gap-4 sm:grid-cols-2">
+                  {publicPlans.map((plan) => {
+                    const isCurrent = plan.key === tenant.business.plan;
+                    return (
+                      <Card key={plan.id} className={isCurrent ? "border-accent" : undefined}>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="flex items-center justify-between text-base">
+                            <span>{plan.name}</span>
+                            {isCurrent && <Badge variant="success">Current</Badge>}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <p className="text-2xl font-semibold text-heading">
+                            {formatPlanPrice(plan.price_monthly_cents)}
+                            <span className="text-sm font-normal text-muted">/mo</span>
                           </p>
-                        )}
-                        {plan.description && (
-                          <p className="text-sm text-muted">{plan.description}</p>
-                        )}
-                        <Button type="button" className="w-full" disabled>
-                          Subscribe — Coming soon
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
+                          {plan.price_annual_cents != null && (
+                            <p className="text-xs text-muted">
+                              or {formatPlanPrice(plan.price_annual_cents)}/mo billed annually
+                            </p>
+                          )}
+                          {plan.description && (
+                            <p className="text-sm text-muted">{plan.description}</p>
+                          )}
+                          <Button type="button" className="w-full" disabled>
+                            Subscribe — Coming soon
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
               <p className="text-sm text-muted">
                 Self-serve checkout ships next. Until then, contact ShootPortal support if you need
                 your access restored.

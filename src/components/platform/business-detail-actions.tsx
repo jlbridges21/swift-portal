@@ -26,6 +26,8 @@ type Admin = {
   full_name: string | null;
   emailConfirmed?: boolean;
   emailConfirmedAt?: string | null;
+  lastSignInAt?: string | null;
+  mustChangePassword?: boolean;
 };
 
 const MANUAL_STATUSES = SUBSCRIPTION_STATUSES.filter((s) => s !== "comped");
@@ -63,6 +65,10 @@ export function BusinessDetailActions({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [tempPasswordOnce, setTempPasswordOnce] = useState<{
+    email: string;
+    password: string;
+  } | null>(null);
   const protectedBiz = isProtected;
   const sub = getSubscriptionState(business);
   const isSwiftComp = business.id === SWIFT_COMP_PROTECTED_BUSINESS_ID;
@@ -84,6 +90,7 @@ export function BusinessDetailActions({
         inviteSent?: boolean;
         inviteError?: string | null;
         alreadyExists?: boolean;
+        attachedExisting?: boolean;
       };
       if (!res.ok) throw new Error(data.error || "Request failed");
       if (data.redirect) {
@@ -94,9 +101,13 @@ export function BusinessDetailActions({
       if (typeof data.inviteSent === "boolean") {
         if (data.inviteSent) {
           setNotice(
-            data.alreadyExists
-              ? "Invite re-sent. An account already existed for that email."
-              : "Invite email sent."
+            data.attachedExisting
+              ? data.alreadyExists && !data.inviteError
+                ? "Existing account attached as admin — they can sign in with their current password (or check email if still unconfirmed)."
+                : "Existing account attached and invite/confirmation email handled."
+              : data.alreadyExists
+                ? "Invite re-sent. An account already existed for that email."
+                : "Invite email sent."
           );
         } else {
           setError(
@@ -568,38 +579,165 @@ export function BusinessDetailActions({
 
       <Card>
         <CardHeader>
-          <CardTitle>Admins</CardTitle>
+          <CardTitle>Business admins</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <ul className="space-y-2 text-sm">
+          {tempPasswordOnce && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+              <p className="font-medium">Temporary password for {tempPasswordOnce.email}</p>
+              <p className="mt-1 font-mono text-base break-all">{tempPasswordOnce.password}</p>
+              <p className="mt-2 text-xs">
+                Shown once. Copy it now and share out-of-band. They must change it on next sign-in.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => setTempPasswordOnce(null)}
+              >
+                Dismiss
+              </Button>
+            </div>
+          )}
+          <ul className="space-y-4 text-sm">
             {admins.length === 0 && <li className="text-muted">No admin profiles yet.</li>}
             {admins.map((admin) => (
-              <li key={admin.id} className="flex flex-wrap items-center justify-between gap-2">
-                <span>
-                  {admin.full_name || "Admin"} — {admin.email}{" "}
+              <li
+                key={admin.id}
+                className="rounded-lg border border-border/80 px-3 py-3 space-y-2"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-heading">
+                    {admin.full_name || "Admin"} — {admin.email}
+                  </span>
                   {admin.emailConfirmed === false ? (
                     <Badge variant="warning">unconfirmed</Badge>
                   ) : admin.emailConfirmed ? (
                     <Badge variant="success">confirmed</Badge>
                   ) : null}
-                </span>
-                {admin.emailConfirmed === false && (
+                  {admin.mustChangePassword ? (
+                    <Badge variant="warning">must change password</Badge>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted">
+                  Last sign-in:{" "}
+                  {admin.lastSignInAt
+                    ? new Date(admin.lastSignInAt).toLocaleString()
+                    : "never"}
+                  {admin.emailConfirmedAt
+                    ? ` · confirmed ${new Date(admin.emailConfirmedAt).toLocaleString()}`
+                    : " · email not confirmed"}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() =>
+                      void (async () => {
+                        setBusy(true);
+                        setError(null);
+                        setNotice(null);
+                        try {
+                          const res = await fetch(
+                            `/api/platform/businesses/${business.id}/admins/${admin.id}/recovery`,
+                            {
+                              method: "POST",
+                              credentials: "include",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ action: "send_reset" }),
+                            }
+                          );
+                          const data = (await res.json().catch(() => ({}))) as { error?: string };
+                          if (!res.ok) throw new Error(data.error || "Reset failed");
+                          setNotice(`Password reset email sent to ${admin.email}.`);
+                          router.refresh();
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : "Reset failed");
+                        } finally {
+                          setBusy(false);
+                        }
+                      })()
+                    }
+                  >
+                    Send password reset email
+                  </Button>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     disabled={busy}
-                    onClick={() =>
-                      void post(`/api/platform/businesses/${business.id}/invite`, {
-                        email: admin.email,
-                        fullName: admin.full_name,
-                        resend: true,
-                      })
-                    }
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `Generate a temporary password for ${admin.email}? It will be shown once. Use only when they cannot receive email.`
+                        )
+                      ) {
+                        return;
+                      }
+                      const typed = window.prompt(
+                        'Type SET TEMP PASSWORD to confirm (super_admin cannot choose the password).'
+                      );
+                      if (typed !== "SET TEMP PASSWORD") return;
+                      void (async () => {
+                        setBusy(true);
+                        setError(null);
+                        setNotice(null);
+                        try {
+                          const res = await fetch(
+                            `/api/platform/businesses/${business.id}/admins/${admin.id}/recovery`,
+                            {
+                              method: "POST",
+                              credentials: "include",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                action: "set_temp_password",
+                                confirm: "SET TEMP PASSWORD",
+                              }),
+                            }
+                          );
+                          const data = (await res.json().catch(() => ({}))) as {
+                            error?: string;
+                            temporaryPassword?: string;
+                          };
+                          if (!res.ok) throw new Error(data.error || "Temp password failed");
+                          if (data.temporaryPassword) {
+                            setTempPasswordOnce({
+                              email: admin.email,
+                              password: data.temporaryPassword,
+                            });
+                          }
+                          setNotice("Temporary password set — shown once above.");
+                          router.refresh();
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : "Temp password failed");
+                        } finally {
+                          setBusy(false);
+                        }
+                      })();
+                    }}
                   >
-                    Resend invite
+                    Set temporary password
                   </Button>
-                )}
+                  {admin.emailConfirmed === false && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() =>
+                        void post(`/api/platform/businesses/${business.id}/invite`, {
+                          email: admin.email,
+                          fullName: admin.full_name,
+                          resend: true,
+                        })
+                      }
+                    >
+                      Resend invite
+                    </Button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
