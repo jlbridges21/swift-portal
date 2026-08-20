@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
 import { requireAdminPage } from "@/lib/admin-access";
 import { createClient } from "@/lib/supabase/server";
+import { getAppSettings } from "@/lib/app-settings";
 import { formatDate } from "@/lib/utils";
 import { Plus } from "lucide-react";
 import { ActivityFeed } from "@/components/admin/activity-feed";
 import { PushNotificationsCard } from "@/components/admin/push-notifications-card";
 import { AdminOpsDashboard } from "@/components/admin/admin-ops-dashboard";
+import { SetupChecklistCard } from "@/components/admin/setup-checklist-card";
 import { fetchAdminDashboardData } from "@/lib/admin-dashboard";
 
 export default async function AdminDashboard() {
@@ -18,22 +20,24 @@ export default async function AdminDashboard() {
   const supabase = await createClient();
   const bid = tenant.businessId;
 
-  const [{ data: recentProjects }, { data: recentActivity }, dashboardData] = await Promise.all([
-    supabase
-      .from("projects")
-      .select("*, clients(name, company, deleted_at)")
-      .eq("business_id", bid)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(8),
-    supabase
-      .from("activity_logs")
-      .select("*, projects(id, project_name)")
-      .eq("business_id", bid)
-      .order("created_at", { ascending: false })
-      .limit(12),
-    fetchAdminDashboardData(bid),
-  ]);
+  const [{ data: recentProjects }, { data: recentActivity }, dashboardData, settings] =
+    await Promise.all([
+      supabase
+        .from("projects")
+        .select("*, clients(name, company, deleted_at)")
+        .eq("business_id", bid)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(8),
+      supabase
+        .from("activity_logs")
+        .select("*, projects(id, project_name)")
+        .eq("business_id", bid)
+        .order("created_at", { ascending: false })
+        .limit(12),
+      fetchAdminDashboardData(bid),
+      getAppSettings(bid),
+    ]);
 
   return (
     <div className="min-h-screen w-full bg-background">
@@ -50,6 +54,8 @@ export default async function AdminDashboard() {
             </Button>
           </Link>
         </PageHeader>
+
+        <SetupChecklistCard settings={settings} linkToSettings />
 
         <PushNotificationsCard />
 

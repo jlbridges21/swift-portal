@@ -5,6 +5,7 @@ import { writePlatformAudit } from "@/lib/platform-audit";
 import { PROTECTED_PRODUCTION_BUSINESS_IDS } from "@/lib/platform-session";
 import { validateBusinessSlug } from "@/lib/reserved-subdomains";
 import { createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 import { getBusinessPortalOrigin } from "@/lib/portal-url";
 import { FALLBACK_SERVICE_TEMPLATES } from "@/lib/service-templates";
 import { invalidateHostLookupCache } from "@/lib/host-resolution";
@@ -21,6 +22,8 @@ const STARTER_SLUGS = [
   "custom_project",
 ] as const;
 
+export type CreateBusinessSource = "platform" | "signup";
+
 export type CreateBusinessInput = {
   name: string;
   slug: string;
@@ -28,6 +31,12 @@ export type CreateBusinessInput = {
   plan?: string;
   adminEmail: string;
   adminName?: string;
+  /** Defaults to platform (super_admin console). */
+  source?: CreateBusinessSource;
+  /** Required when source is signup — password auth, not invite. */
+  password?: string;
+  subscriptionStatus?: string;
+  trialEndsAt?: string | null;
 };
 
 export type CreateBusinessResult = {
@@ -37,32 +46,90 @@ export type CreateBusinessResult = {
   adminEmail: string;
   inviteSent: boolean;
   stagesNote: string;
+  /** Present for signup — user must confirm email before login. */
+  requiresEmailConfirmation?: boolean;
 };
+
+export const SYSTEM_SIGNUP_ACTOR = {
+  id: null as string | null,
+  email: "system@signup.shootportal.app",
+};
+
+const TRIAL_DAYS = 30;
 
 function normalizeDomain(raw: string | null | undefined): string | null {
   const v = raw?.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "") ?? "";
   return v || null;
 }
 
+function trialEndsAtIso(from = new Date()): string {
+  return new Date(from.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+async function rollbackBusinessProvision(
+  raw: Awaited<ReturnType<typeof createServiceClient>>,
+  businessId: string,
+  userId?: string | null
+) {
+  if (userId) {
+    try {
+      await raw.auth.admin.deleteUser(userId);
+    } catch {
+      /* best-effort */
+    }
+    await raw.from("profiles").delete().eq("id", userId);
+  }
+  await raw.from("business_services").delete().eq("business_id", businessId);
+  await raw.from("business_integrations").delete().eq("business_id", businessId);
+  await raw.from("business_settings").delete().eq("business_id", businessId);
+  await raw.from("businesses").delete().eq("id", businessId);
+}
+
+/**
+ * Shared provisioning for platform console and self-serve /signup.
+ * Platform path (default) is unchanged: invite email, no trial, actor audit.
+ * Signup path: trialing + 30 days, studio plan, password user, system audit.
+ */
 export async function createBusinessForPlatform(
   input: CreateBusinessInput,
-  actor: { id: string; email: string | null }
+  actor: { id: string | null; email: string | null }
 ): Promise<CreateBusinessResult> {
+  const source: CreateBusinessSource = input.source ?? "platform";
   const name = input.name.trim();
   if (!name) throw new Error("Business name is required.");
   const slugCheck = validateBusinessSlug(input.slug);
   if (!slugCheck.ok) throw new Error(slugCheck.error);
   const customDomain = normalizeDomain(input.customDomain);
-  const planRow = await assertActivePlanKey(input.plan || "studio");
+  const planRow = await assertActivePlanKey(
+    input.plan || (source === "signup" ? "studio" : "studio")
+  );
   const plan = planRow.key;
   const adminEmail = input.adminEmail.trim().toLowerCase();
   if (!adminEmail || !adminEmail.includes("@")) throw new Error("A valid admin email is required.");
+  const adminName = (input.adminName || name).trim() || name;
+
+  if (source === "signup") {
+    const password = input.password ?? "";
+    if (password.length < 8) throw new Error("Password must be at least 8 characters.");
+  }
 
   if (customDomain && !(await planGrantsEntitlement(plan, "custom_domain"))) {
     throw new Error(
       `Custom domain is not included on the ${planRow.name} plan. Choose a plan that includes custom domain (e.g. Studio).`
     );
   }
+
+  const subscriptionStatus =
+    input.subscriptionStatus ?? (source === "signup" ? "trialing" : "active");
+  if (!isSubscriptionStatus(subscriptionStatus)) {
+    throw new Error("Invalid subscription_status.");
+  }
+  const trialEndsAt =
+    input.trialEndsAt !== undefined
+      ? input.trialEndsAt
+      : source === "signup"
+        ? trialEndsAtIso()
+        : null;
 
   const raw = await createServiceClient();
 
@@ -77,6 +144,14 @@ export async function createBusinessForPlatform(
     if (domainTaken) throw new Error("That custom domain is already in use.");
   }
 
+  // 1–2. Create business + dependents BEFORE auth user (signup needs business_id in metadata)
+  if (source === "signup") {
+    const { data: listed } = await raw.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (listed.users.some((u) => u.email?.toLowerCase() === adminEmail)) {
+      throw new Error("Could not create account.");
+    }
+  }
+
   const { data: business, error: bizErr } = await raw
     .from("businesses")
     .insert({
@@ -85,12 +160,16 @@ export async function createBusinessForPlatform(
       custom_domain: customDomain,
       plan,
       status: "active",
+      created_via: source,
+      subscription_status: subscriptionStatus,
+      trial_ends_at: trialEndsAt,
     })
     .select("id, slug, name, custom_domain")
     .single();
   if (bizErr || !business) throw new Error(bizErr?.message || "Failed to create business.");
 
   const businessId = business.id as string;
+  let createdUserId: string | null = null;
 
   try {
     const settings = structuredClone(DEFAULT_APP_SETTINGS);
@@ -99,7 +178,7 @@ export async function createBusinessForPlatform(
       businessName: name,
       portalName: name,
       legalName: name,
-      adminDisplayName: name,
+      adminDisplayName: adminName,
     };
     settings.email = {
       ...settings.email,
@@ -145,36 +224,143 @@ export async function createBusinessForPlatform(
     const { error: svcErr } = await raw.from("business_services").insert(serviceRows);
     if (svcErr) throw new Error(svcErr.message);
 
-    const invite = await inviteBusinessAdmin(businessId, adminEmail, input.adminName || name, actor, {
-      isCreate: true,
+    const portalUrl = getBusinessPortalOrigin({
+      slug: slugCheck.slug,
+      custom_domain: customDomain,
     });
 
-    await writePlatformAudit({
-      actorUserId: actor.id,
-      actorEmail: actor.email,
-      action: "business.create",
-      targetBusinessId: businessId,
-      targetType: "business",
-      targetId: businessId,
-      metadata: { slug: slugCheck.slug, name, adminEmail, inviteSent: invite.inviteSent },
-    });
+    let inviteSent = false;
+    let requiresEmailConfirmation = false;
+
+    // Verification hook: force failure after dependents exist, before auth user.
+    if (source === "signup" && process.env.SIGNUP_FORCE_FAIL_AFTER_BUSINESS === "1") {
+      throw new Error("Forced failure after business provision (verification).");
+    }
+
+    if (source === "platform") {
+      if (!actor.id) throw new Error("Platform create requires a super_admin actor.");
+      const invite = await inviteBusinessAdmin(businessId, adminEmail, adminName, {
+        id: actor.id,
+        email: actor.email,
+      }, { isCreate: true });
+      inviteSent = invite.inviteSent;
+      createdUserId = invite.userId;
+
+      await writePlatformAudit({
+        actorUserId: actor.id,
+        actorEmail: actor.email,
+        action: "business.create",
+        targetBusinessId: businessId,
+        targetType: "business",
+        targetId: businessId,
+        metadata: {
+          source,
+          slug: slugCheck.slug,
+          name,
+          adminEmail,
+          inviteSent,
+          plan,
+        },
+      });
+    } else {
+      // 3. Password signup. Prefer anon.signUp so Supabase sends confirmation mail.
+      // SIGNUP_TEST_NO_EMAIL=1 uses admin.createUser (auto-confirm) for local verification
+      // when Supabase email rate limits block signUp.
+      let newUserId: string | null = null;
+      if (process.env.SIGNUP_TEST_NO_EMAIL === "1") {
+        const { data: created, error: createErr } = await raw.auth.admin.createUser({
+          email: adminEmail,
+          password: input.password!,
+          email_confirm: true,
+          user_metadata: {
+            role: "admin",
+            business_id: businessId,
+            full_name: adminName,
+          },
+        });
+        if (createErr || !created.user) {
+          throw new Error(createErr?.message || "Could not create account.");
+        }
+        newUserId = created.user.id;
+        requiresEmailConfirmation = false;
+      } else {
+        const anon = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          { auth: { persistSession: false, autoRefreshToken: false } }
+        );
+        const { data: signedUp, error: signErr } = await anon.auth.signUp({
+          email: adminEmail,
+          password: input.password!,
+          options: {
+            data: {
+              role: "admin",
+              business_id: businessId,
+              full_name: adminName,
+            },
+            emailRedirectTo: `${portalUrl}/login`,
+          },
+        });
+        if (signErr || !signedUp.user) {
+          throw new Error(signErr?.message || "Could not create account.");
+        }
+        // Supabase returns a user with empty identities when the email already
+        // exists (and confirmation is required) — treat as failure and roll back.
+        if (!signedUp.user.identities || signedUp.user.identities.length === 0) {
+          throw new Error("Could not create account.");
+        }
+        newUserId = signedUp.user.id;
+        requiresEmailConfirmation = !signedUp.session;
+      }
+      createdUserId = newUserId;
+
+      // Belt-and-suspenders: trigger should have set business_id; ensure role/name
+      await raw
+        .from("profiles")
+        .update({
+          role: "admin",
+          business_id: businessId,
+          client_id: null,
+          full_name: adminName,
+          email: adminEmail,
+        })
+        .eq("id", createdUserId);
+
+      await writePlatformAudit({
+        actorUserId: null,
+        actorEmail: SYSTEM_SIGNUP_ACTOR.email,
+        action: "business.create",
+        targetBusinessId: businessId,
+        targetType: "business",
+        targetId: businessId,
+        metadata: {
+          source: "signup",
+          slug: slugCheck.slug,
+          name,
+          adminEmail,
+          plan,
+          subscription_status: subscriptionStatus,
+          trial_ends_at: trialEndsAt,
+          requiresEmailConfirmation,
+        },
+      });
+    }
 
     invalidateHostLookupCache();
 
     return {
       businessId,
       slug: slugCheck.slug,
-      portalUrl: getBusinessPortalOrigin({ slug: slugCheck.slug, custom_domain: customDomain }),
+      portalUrl,
       adminEmail,
-      inviteSent: invite.inviteSent,
+      inviteSent,
+      requiresEmailConfirmation,
       stagesNote:
         "business_stages does not exist yet — stage automation is still workflow settings JSON, not a table.",
     };
   } catch (error) {
-    await raw.from("business_services").delete().eq("business_id", businessId);
-    await raw.from("business_integrations").delete().eq("business_id", businessId);
-    await raw.from("business_settings").delete().eq("business_id", businessId);
-    await raw.from("businesses").delete().eq("id", businessId);
+    await rollbackBusinessProvision(raw, businessId, createdUserId);
+    invalidateHostLookupCache();
     throw error;
   }
 }

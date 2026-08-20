@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { getPublicHostContext, lookupBusinessById } from "@/lib/host-resolution";
-import { getLoginRedirectOrigin } from "@/lib/portal-url";
+import { getLoginRedirectOrigin, joinPortalPath } from "@/lib/portal-url";
 
 export async function POST() {
   const profile = await getProfile();
@@ -35,17 +35,15 @@ export async function POST() {
   const publicHost = await getPublicHostContext();
 
   const destPath = profile.role === "admin" ? "/admin" : "/dashboard";
-  if (
-    publicHost.kind === "tenant" &&
-    publicHost.businessId &&
-    publicHost.businessId !== own.id
-  ) {
-    const destOrigin = getLoginRedirectOrigin(own, {
-      hostname: host,
-      origin,
-    }, { foreignTenantHost: true });
-    return NextResponse.json({ redirect: `${destOrigin}${destPath}` });
-  }
-
-  return NextResponse.json({ redirect: destPath });
+  // Already on this business's tenant host → relative path is fine.
+  // Apex / other hosts → send to canonical {slug}.shootportal.app (prompt 18 + signup).
+  const onOwnTenant =
+    publicHost.kind === "tenant" && publicHost.businessId === own.id;
+  const destOrigin = getLoginRedirectOrigin(
+    own,
+    { hostname: host, origin },
+    { foreignTenantHost: !onOwnTenant }
+  );
+  const redirect = joinPortalPath(destOrigin, destPath);
+  return NextResponse.json({ redirect });
 }

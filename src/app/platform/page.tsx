@@ -70,10 +70,11 @@ export default async function PlatformHomePage({
           <CardTitle>All businesses</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
-          <table className="w-full min-w-[880px] text-left text-sm">
+          <table className="w-full min-w-[960px] text-left text-sm">
             <thead>
               <tr className="border-b border-border text-muted">
                 <th className="py-2 pr-3 font-medium">Business</th>
+                <th className="py-2 pr-3 font-medium">Source</th>
                 <th className="py-2 pr-3 font-medium">Status</th>
                 <th className="py-2 pr-3 font-medium">Subscription</th>
                 <th className="py-2 pr-3 font-medium">Plan</th>
@@ -96,6 +97,11 @@ export default async function PlatformHomePage({
                     <div className="text-xs text-muted">{b.slug}</div>
                   </td>
                   <td className="py-3 pr-3">
+                    <Badge variant={b.created_via === "signup" ? "warning" : "default"}>
+                      {b.created_via === "signup" ? "signup" : "platform"}
+                    </Badge>
+                  </td>
+                  <td className="py-3 pr-3">
                     <Badge variant={b.deleted_at ? "default" : b.status === "active" ? "success" : "warning"}>
                       {b.deleted_at ? "deleted" : b.status}
                     </Badge>
@@ -115,9 +121,18 @@ export default async function PlatformHomePage({
                               : ""}
                         </span>
                       )}
-                      {b.daysLeftInTrial != null && !b.requiresPayment && !b.isComped && (
-                        <span className="text-xs text-muted">{b.daysLeftInTrial}d left</span>
+                      {b.subscription_status === "trialing" && b.trial_ends_at && (
+                        <span className="text-xs text-muted">
+                          ends {formatDate(b.trial_ends_at)}
+                          {b.daysLeftInTrial != null ? ` · ${b.daysLeftInTrial}d left` : ""}
+                        </span>
                       )}
+                      {b.daysLeftInTrial != null &&
+                        b.subscription_status !== "trialing" &&
+                        !b.requiresPayment &&
+                        !b.isComped && (
+                          <span className="text-xs text-muted">{b.daysLeftInTrial}d left</span>
+                        )}
                       {b.requiresPayment && <span className="text-xs text-amber-700">paywalled</span>}
                     </div>
                   </td>

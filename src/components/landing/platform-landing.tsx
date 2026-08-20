@@ -19,9 +19,18 @@ export function PlatformLanding() {
             />
             <span className="text-lg font-semibold text-slate-900">{SITE.name}</span>
           </div>
-          <Link href="/login">
-            <Button className="min-h-11 bg-[#4F46E5] px-4 text-white hover:bg-[#4338CA]">Sign In</Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/login">
+              <Button variant="ghost" className="min-h-11 px-4 text-slate-800">
+                Log in
+              </Button>
+            </Link>
+            <Link href="/signup">
+              <Button className="min-h-11 bg-[#4F46E5] px-4 text-white hover:bg-[#4338CA]">
+                Start free trial
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center px-4 py-20 sm:px-6">
@@ -30,11 +39,19 @@ export function PlatformLanding() {
           {SITE.tagline}
         </h1>
         <p className="mt-6 max-w-xl text-lg text-slate-600">{SITE.description}</p>
-        <div className="mt-10">
+        <div className="mt-10 flex flex-wrap gap-3">
+          <Link href="/signup">
+            <Button className="min-h-11 bg-[#4F46E5] px-6 text-white hover:bg-[#4338CA]">
+              Start free trial
+            </Button>
+          </Link>
           <Link href="/login">
-            <Button className="min-h-11 bg-[#4F46E5] px-6 text-white hover:bg-[#4338CA]">Sign In</Button>
+            <Button variant="outline" className="min-h-11 border-slate-300 bg-white px-6 text-slate-900">
+              Log in
+            </Button>
           </Link>
         </div>
+        <p className="mt-4 text-sm text-slate-500">30-day Studio trial. No credit card required.</p>
       </main>
     </div>
   );

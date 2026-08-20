@@ -92,6 +92,25 @@ export async function updateSession(request: NextRequest) {
   const protectedPaths = ["/dashboard", "/admin", "/platform", "/billing"];
   const isProtected = protectedPaths.some((p) => path.startsWith(p));
 
+  // Self-serve signup is platform-apex only — never on a tenant host.
+  if (
+    (path === "/signup" || path.startsWith("/signup/") || path === "/api/signup" || path.startsWith("/api/signup/")) &&
+    resolution.kind === "tenant"
+  ) {
+    if (isApi) {
+      return applyPathCookie(
+        NextResponse.json(
+          { error: "Sign up is only available on shootportal.app." },
+          { status: 403 }
+        ),
+        resolution
+      );
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = `${resolution.pathPrefix}/`;
+    return applyPathCookie(NextResponse.redirect(url), resolution);
+  }
+
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     const prefix = resolution.pathPrefix;
@@ -140,19 +159,37 @@ export async function updateSession(request: NextRequest) {
     }
 
     if (user && (path === "/login" || path === "/signup") && !businessUnavailable) {
-      const url = request.nextUrl.clone();
+      if (profile?.role === "super_admin") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/platform";
+        return applyPathCookie(NextResponse.redirect(url), resolution);
+      }
+
       const adminPaywalled =
         profile?.role === "admin" &&
         ownBusiness &&
         getSubscriptionState(ownBusiness).requiresPayment;
-      url.pathname =
-        profile?.role === "super_admin"
-          ? "/platform"
-          : adminPaywalled
-            ? `${resolution.pathPrefix}/billing`
-            : profile?.role === "admin"
-              ? `${resolution.pathPrefix}/admin`
-              : `${resolution.pathPrefix}/dashboard`;
+      const destPath = adminPaywalled
+        ? "/billing"
+        : profile?.role === "admin"
+          ? "/admin"
+          : "/dashboard";
+
+      if (ownBusiness) {
+        const onOwnTenant =
+          resolution.kind === "tenant" &&
+          resolution.business?.id === ownBusiness.id;
+        const destOrigin = getLoginRedirectOrigin(
+          ownBusiness,
+          { hostname: inboundHost(request), origin: request.nextUrl.origin },
+          { foreignTenantHost: !onOwnTenant }
+        );
+        const dest = new URL(`${destOrigin}${destPath}`);
+        return applyPathCookie(NextResponse.redirect(dest), resolution);
+      }
+
+      const url = request.nextUrl.clone();
+      url.pathname = `${resolution.pathPrefix}${destPath}`;
       return applyPathCookie(NextResponse.redirect(url), resolution);
     }
 

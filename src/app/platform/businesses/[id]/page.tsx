@@ -59,10 +59,18 @@ export default async function PlatformBusinessDetailPage({
         </div>
       )}
       <p className="mb-6 text-sm text-muted">
+        Source{" "}
+        <span className="font-medium text-heading">
+          {detail.business.created_via === "signup" ? "self-serve signup" : "platform console"}
+        </span>
+        {" · "}
         Plan <span className="font-medium text-heading">{detail.business.plan}</span>
         {" · "}
         Subscription{" "}
         <span className="font-medium text-heading">{detail.business.subscription_status}</span>
+        {detail.business.subscription_status === "trialing" && detail.business.trial_ends_at
+          ? ` · trial ends ${formatDate(detail.business.trial_ends_at)}`
+          : ""}
         {detail.stats?.isComped
           ? ` · ${detail.business.comped_reason || "comped"}${
               detail.business.comped_until == null

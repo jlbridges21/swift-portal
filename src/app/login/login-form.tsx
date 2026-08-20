@@ -73,9 +73,9 @@ export function LoginForm({ showRequestLink }: { showRequestLink: boolean }) {
       <main className="flex-1 flex items-center justify-center px-4 py-16">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <CardTitle>Client Login</CardTitle>
+            <CardTitle>Sign in</CardTitle>
             <CardDescription>
-              Sign in to access your projects and deliverables
+              Access your ShootPortal admin or client portal
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -114,6 +114,14 @@ export function LoginForm({ showRequestLink }: { showRequestLink: boolean }) {
                 Need aerial media?{" "}
                 <Link href="/request" className="text-accent hover:underline">
                   Request a shoot
+                </Link>
+              </p>
+            )}
+            {!showRequestLink && (
+              <p className="mt-6 text-center text-sm text-muted">
+                New studio?{" "}
+                <Link href="/signup" className="text-accent hover:underline">
+                  Start a free trial
                 </Link>
               </p>
             )}

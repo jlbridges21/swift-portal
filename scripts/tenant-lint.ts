@@ -96,6 +96,8 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/platform-comp.ts",
   "src/app/api/platform/impersonate/route.ts",
   "src/app/api/platform/plans/[id]/route.ts",
+  "src/app/api/signup/route.ts",
+  "src/app/api/signup/availability/route.ts",
 ]);
 
 /**
@@ -132,6 +134,8 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/lib/platform-comp.ts",
   "src/app/api/platform/impersonate/route.ts",
   "src/app/api/platform/plans/[id]/route.ts",
+  "src/app/api/signup/route.ts",
+  "src/app/api/signup/availability/route.ts",
 ]);
 
 const MODULE_LET_ALLOWLIST = new Set([

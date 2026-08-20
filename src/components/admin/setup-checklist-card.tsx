@@ -8,19 +8,36 @@ import type { AppSettings } from "@/lib/app-settings";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { BRAND } from "@/lib/brand";
 
+/** Starter catalog from createBusinessForPlatform — not "set up" yet. */
+const STARTER_SERVICE_SLUGS = new Set([
+  "aerial_photography",
+  "aerial_videography",
+  "drone_mapping",
+  "custom_project",
+]);
+
 interface SetupChecklistCardProps {
   settings: AppSettings;
+  /** When true, deep-link into /admin/settings (admin home). */
+  linkToSettings?: boolean;
 }
 
 function isDone(value: boolean) {
   return value;
 }
 
-export function SetupChecklistCard({ settings }: SetupChecklistCardProps) {
+function settingsHref(hash: string, linkToSettings: boolean) {
+  return linkToSettings ? `/admin/settings#${hash}` : `#${hash}`;
+}
+
+export function SetupChecklistCard({
+  settings,
+  linkToSettings = false,
+}: SetupChecklistCardProps) {
   const [ready, setReady] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [stripeOk, setStripeOk] = useState<boolean | null>(null);
-  const [hasServices, setHasServices] = useState<boolean | null>(null);
+  const [servicesCustomized, setServicesCustomized] = useState<boolean | null>(null);
 
   useEffect(() => {
     setDismissed(window.localStorage.getItem("portal-setup-dismissed") === "1");
@@ -34,9 +51,19 @@ export function SetupChecklistCard({ settings }: SetupChecklistCardProps) {
     fetch("/api/admin/services", { credentials: "include" })
       .then((r) => r.json())
       .then((data) => {
-        setHasServices(Array.isArray(data.services) && data.services.length > 0);
+        const list = Array.isArray(data.services) ? data.services : [];
+        if (list.length === 0) {
+          setServicesCustomized(false);
+          return;
+        }
+        const onlyStarters =
+          list.length === STARTER_SERVICE_SLUGS.size &&
+          list.every(
+            (s: { slug?: string }) => typeof s.slug === "string" && STARTER_SERVICE_SLUGS.has(s.slug)
+          );
+        setServicesCustomized(!onlyStarters);
       })
-      .catch(() => setHasServices(false));
+      .catch(() => setServicesCustomized(false));
   }, []);
 
   const b = settings.business;
@@ -44,19 +71,19 @@ export function SetupChecklistCard({ settings }: SetupChecklistCardProps) {
     {
       id: "name",
       label: "Business name",
-      href: "#settings-business-name",
+      href: settingsHref("settings-business-name", linkToSettings),
       done: Boolean(b.businessName.trim()) && b.businessName !== PLATFORM_BUSINESS_DEFAULTS.businessName,
     },
     {
       id: "logo",
       label: "Logo",
-      href: "#settings-logo",
+      href: settingsHref("settings-logo", linkToSettings),
       done: Boolean(b.logoUrl) && b.logoUrl !== PLATFORM_BUSINESS_DEFAULTS.logoUrl && b.logoUrl !== BRAND.logoUrl,
     },
     {
       id: "colors",
       label: "Brand colors",
-      href: "#settings-colors",
+      href: settingsHref("settings-colors", linkToSettings),
       done:
         b.brandPrimaryColor !== PLATFORM_BUSINESS_DEFAULTS.brandPrimaryColor ||
         b.brandAccentColor !== PLATFORM_BUSINESS_DEFAULTS.brandAccentColor,
@@ -64,29 +91,29 @@ export function SetupChecklistCard({ settings }: SetupChecklistCardProps) {
     {
       id: "contact",
       label: "Contact info",
-      href: "#settings-contact",
+      href: settingsHref("settings-contact", linkToSettings),
       done: Boolean(b.primaryContactEmail.trim() || b.phoneNumber.trim()),
     },
     {
       id: "email",
       label: "Email sender",
-      href: "#settings-email",
+      href: settingsHref("settings-email", linkToSettings),
+      // Platform default sender is not "set up" — custom domain must be verified.
       done:
-        settings.email.senderMode === "platform" ||
-        (settings.email.senderMode === "custom_domain" &&
-          settings.email.domainVerificationStatus === "verified"),
+        settings.email.senderMode === "custom_domain" &&
+        settings.email.domainVerificationStatus === "verified",
     },
     {
       id: "stripe",
       label: "Stripe connection",
-      href: "#settings-payments",
+      href: settingsHref("settings-payments", linkToSettings),
       done: stripeOk === true,
     },
     {
       id: "services",
       label: "Services",
-      href: "#settings-services",
-      done: hasServices === true,
+      href: settingsHref("settings-services", linkToSettings),
+      done: servicesCustomized === true,
     },
   ];
 
