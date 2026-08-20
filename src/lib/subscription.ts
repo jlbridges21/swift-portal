@@ -26,6 +26,9 @@ export type SubscriptionBusinessFields = {
   trial_ends_at?: string | null;
   comped_until?: string | null;
   comped_reason?: string | null;
+  /** When set and still in the future, canceled access continues until this time. */
+  subscription_current_period_end?: string | null;
+  subscription_cancel_at_period_end?: boolean | null;
 };
 
 export type SubscriptionState = {
@@ -103,7 +106,9 @@ export function getSubscriptionState(
       daysLeftInComp: null,
       requiresPayment: false,
       isComped: false,
-      reason: null,
+      reason: business.subscription_cancel_at_period_end
+        ? "Subscription cancels at period end — access continues until then."
+        : null,
     };
   }
 
@@ -147,6 +152,24 @@ export function getSubscriptionState(
   }
 
   if (status === "canceled") {
+    const periodEnd = business.subscription_current_period_end ?? null;
+    const cancelAtPeriodEnd = Boolean(business.subscription_cancel_at_period_end);
+    const periodLive =
+      Boolean(periodEnd) &&
+      Number.isFinite(new Date(periodEnd!).getTime()) &&
+      new Date(periodEnd!).getTime() > nowMs;
+    // Access continues only when cancel was scheduled for period end and the period is still open.
+    if (cancelAtPeriodEnd && periodLive) {
+      return {
+        status,
+        isExpired: false,
+        daysLeftInTrial: null,
+        daysLeftInComp: null,
+        requiresPayment: false,
+        isComped: false,
+        reason: "Subscription cancels at period end — access continues until then.",
+      };
+    }
     return {
       status,
       isExpired: true,
@@ -183,14 +206,13 @@ export function paywallApiBody(state: SubscriptionState) {
 }
 
 /**
- * FORWARD GUARD for prompt 3 (Stripe billing webhooks).
+ * Guard for Stripe billing webhooks.
  *
  * A Stripe webhook must NEVER overwrite `subscription_status` when the current
  * value is `comped`. Comped access is a platform grant (beta / owner / partner),
  * not a Stripe subscription state. Billing sync must skip or no-op those rows.
  *
- * Call this before applying any webhook-driven status change. Nothing calls it
- * yet — implement callers in prompt 3.
+ * Call this before applying any webhook-driven status change.
  */
 export function shouldApplyStripeSubscriptionUpdate(currentStatus: string | null | undefined): boolean {
   // Never let Stripe clobber an active or expired-stored comp flag; operators

@@ -52,6 +52,9 @@ export type PlanRow = {
   is_public: boolean;
   created_at: string;
   updated_at: string;
+  stripe_product_id?: string | null;
+  stripe_price_monthly_id?: string | null;
+  stripe_price_annual_id?: string | null;
 };
 
 export function isEnforcedEntitlement(key: string): key is EnforcedEntitlement {

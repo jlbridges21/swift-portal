@@ -143,6 +143,21 @@ export default async function PlatformHomePage({
                           {b.daysLeftInTrial != null ? ` · ${b.daysLeftInTrial}d left` : ""}
                         </span>
                       )}
+                      {b.subscription_cancel_at_period_end && (
+                        <span className="text-xs text-muted">
+                          cancel at period end
+                          {b.subscription_current_period_end
+                            ? ` · ${formatDate(b.subscription_current_period_end)}`
+                            : ""}
+                        </span>
+                      )}
+                      {!b.subscription_cancel_at_period_end &&
+                        b.subscription_current_period_end &&
+                        b.subscription_status === "active" && (
+                          <span className="text-xs text-muted">
+                            period end {formatDate(b.subscription_current_period_end)}
+                          </span>
+                        )}
                       {b.daysLeftInTrial != null &&
                         b.subscription_status !== "trialing" &&
                         !b.requiresPayment &&

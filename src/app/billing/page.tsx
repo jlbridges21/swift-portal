@@ -14,6 +14,8 @@ import { Logo } from "@/components/brand/logo";
 import { metadataFromBusiness } from "@/lib/site-metadata";
 import type { Metadata } from "next";
 import { getTenantContext } from "@/lib/tenant";
+import { ManageBillingButton, SubscribeButton } from "@/components/billing/billing-actions";
+import { loadBillingBusiness } from "@/lib/stripe-billing";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +46,7 @@ async function loadBillingData(businessId: string, planKey: string | undefined) 
     plans = [];
   }
   const currentPlan = planKey ? plans.find((p) => p.key === planKey) ?? null : null;
-  const publicPlans = plans.filter((p) => p.is_public);
+  const publicPlans = plans.filter((p) => p.is_public && p.key !== "founding");
   return { settings, plans, currentPlan, publicPlans };
 }
 
@@ -61,7 +63,6 @@ export default async function BillingPage() {
     publicPlans = loaded.publicPlans;
   } catch (err) {
     console.error("[billing] page load failed", err);
-    // Last resort: still render a usable shell so lapsed customers are not stuck.
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
         <h1 className="text-2xl font-bold text-heading">Billing</h1>
@@ -82,8 +83,14 @@ export default async function BillingPage() {
   }
 
   const brand = getPortalBrandFromSettings(settings);
-  const sub = getSubscriptionState(tenant.business);
+  const billingRow = await loadBillingBusiness(tenant.businessId);
+  const sub = getSubscriptionState({
+    ...tenant.business,
+    subscription_current_period_end: billingRow?.subscription_current_period_end,
+    subscription_cancel_at_period_end: billingRow?.subscription_cancel_at_period_end,
+  });
   const planLabel = currentPlan?.name || tenant.business.plan || "Unknown plan";
+  const hasStripeCustomer = Boolean(billingRow?.stripe_customer_id);
 
   const headline = sub.isComped
     ? "You’re covered"
@@ -100,10 +107,10 @@ export default async function BillingPage() {
     : sub.requiresPayment
       ? sub.reason || "Subscribe to restore full admin access."
       : sub.status === "trialing" && sub.daysLeftInTrial != null
-        ? `${sub.daysLeftInTrial} day${sub.daysLeftInTrial === 1 ? "" : "s"} left on your trial.`
+        ? `${sub.daysLeftInTrial} day${sub.daysLeftInTrial === 1 ? "" : "s"} left on your trial. Subscribe anytime — you won’t be charged until the trial ends.`
         : sub.status === "past_due"
-          ? "Your account stays open while payment is retried. Update billing when checkout is available."
-          : "Your ShootPortal subscription is active.";
+          ? "Your account stays open while payment is retried. Update your card in Manage billing."
+          : sub.reason || "Your ShootPortal subscription is active.";
 
   return (
     <BrandProvider brand={brand}>
@@ -162,6 +169,9 @@ export default async function BillingPage() {
                 {sub.status === "trialing" && sub.daysLeftInTrial != null && !sub.isExpired && (
                   <Badge variant="default">{sub.daysLeftInTrial} days left</Badge>
                 )}
+                {billingRow?.subscription_cancel_at_period_end && (
+                  <Badge variant="warning">Cancels at period end</Badge>
+                )}
               </div>
               {sub.isComped && (
                 <div className="space-y-1 pt-1 text-muted">
@@ -183,13 +193,20 @@ export default async function BillingPage() {
                   Trial ends {new Date(tenant.business.trial_ends_at).toLocaleString()}
                 </p>
               )}
-              {!sub.requiresPayment && (
-                <p className="pt-2">
+              {!sub.isComped && billingRow?.subscription_current_period_end && (
+                <p className="text-muted">
+                  Current period ends{" "}
+                  {new Date(billingRow.subscription_current_period_end).toLocaleString()}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                {!sub.requiresPayment && (
                   <Link href="/admin" className="text-accent underline underline-offset-2">
                     Back to admin
                   </Link>
-                </p>
-              )}
+                )}
+                {!sub.isComped && hasStripeCustomer && <ManageBillingButton />}
+              </div>
             </CardContent>
           </Card>
 
@@ -205,6 +222,7 @@ export default async function BillingPage() {
                 <div className="mb-8 grid gap-4 sm:grid-cols-2">
                   {publicPlans.map((plan) => {
                     const isCurrent = plan.key === tenant.business.plan;
+                    const canSubscribe = Boolean(plan.stripe_price_monthly_id);
                     return (
                       <Card key={plan.id} className={isCurrent ? "border-accent" : undefined}>
                         <CardHeader className="pb-2">
@@ -226,19 +244,23 @@ export default async function BillingPage() {
                           {plan.description && (
                             <p className="text-sm text-muted">{plan.description}</p>
                           )}
-                          <Button type="button" className="w-full" disabled>
-                            Subscribe — Coming soon
-                          </Button>
+                          <SubscribeButton
+                            planKey={plan.key}
+                            label={
+                              canSubscribe
+                                ? isCurrent && sub.status === "active"
+                                  ? "Current plan"
+                                  : "Subscribe"
+                                : "Unavailable"
+                            }
+                            disabled={!canSubscribe || (isCurrent && sub.status === "active")}
+                          />
                         </CardContent>
                       </Card>
                     );
                   })}
                 </div>
               )}
-              <p className="text-sm text-muted">
-                Self-serve checkout ships next. Until then, contact ShootPortal support if you need
-                your access restored.
-              </p>
             </>
           )}
         </main>

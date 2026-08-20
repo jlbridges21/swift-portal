@@ -14,6 +14,8 @@ export type PlatformBusinessRow = {
   trial_ends_at: string | null;
   comped_until: string | null;
   comped_reason: string | null;
+  subscription_current_period_end: string | null;
+  subscription_cancel_at_period_end: boolean;
   created_via: "platform" | "signup" | string;
   created_at: string;
   deleted_at: string | null;
@@ -44,7 +46,7 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
   const { data: businesses, error } = await raw
     .from("businesses")
     .select(
-      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, created_via, created_at, deleted_at"
+      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end, created_via, created_at, deleted_at"
     )
     .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
@@ -81,10 +83,14 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
         trial_ends_at: b.trial_ends_at,
         comped_until: b.comped_until,
         comped_reason: b.comped_reason,
+        subscription_current_period_end: b.subscription_current_period_end,
+        subscription_cancel_at_period_end: b.subscription_cancel_at_period_end,
       });
 
       return {
         ...b,
+        subscription_cancel_at_period_end: Boolean(b.subscription_cancel_at_period_end),
+        subscription_current_period_end: b.subscription_current_period_end ?? null,
         clientCount,
         projectCount,
         mediaCount,
@@ -156,7 +162,7 @@ export async function loadBusinessDetail(id: string) {
   const { data: business, error } = await raw
     .from("businesses")
     .select(
-      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, created_via, created_at, deleted_at, updated_at"
+      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end, created_via, created_at, deleted_at, updated_at"
     )
     .eq("id", id)
     .maybeSingle();

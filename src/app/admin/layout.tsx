@@ -38,6 +38,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         subscriptionStatus={tenant.business.subscription_status}
         trialEndsAt={tenant.business.trial_ends_at}
         compedUntil={tenant.business.comped_until}
+        subscriptionCurrentPeriodEnd={tenant.business.subscription_current_period_end}
+        subscriptionCancelAtPeriodEnd={tenant.business.subscription_cancel_at_period_end}
       />
       <AdminShell>{children}</AdminShell>
     </BrandProvider>

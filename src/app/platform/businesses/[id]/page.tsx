@@ -71,6 +71,10 @@ export default async function PlatformBusinessDetailPage({
         {detail.business.subscription_status === "trialing" && detail.business.trial_ends_at
           ? ` · trial ends ${formatDate(detail.business.trial_ends_at)}`
           : ""}
+        {detail.business.subscription_current_period_end
+          ? ` · period end ${formatDate(detail.business.subscription_current_period_end)}`
+          : ""}
+        {detail.business.subscription_cancel_at_period_end ? " · cancel at period end" : ""}
         {detail.stats?.isComped
           ? ` · ${detail.business.comped_reason || "comped"}${
               detail.business.comped_until == null

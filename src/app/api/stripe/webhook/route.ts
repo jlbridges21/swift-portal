@@ -12,6 +12,7 @@ import {
 } from "@/lib/stripe-payments";
 import { sanitizeMetadataForLog } from "@/lib/stripe-metadata";
 import { isStripeEventProcessed, markStripeEventProcessed } from "@/lib/stripe-webhook-events";
+import { shouldSkipInvoiceAsShootPortalBilling } from "@/lib/stripe-billing";
 import Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -129,6 +130,19 @@ export async function POST(request: Request) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        // Flow A (ShootPortal SaaS) must never touch payment records — billing webhook owns it.
+        if (session.mode === "subscription") {
+          logWebhook("checkout session skipped — ShootPortal subscription (billing webhook)", {
+            eventType: event.type,
+            sessionId: session.id,
+            mode: session.mode,
+            metadata: sanitizeMetadataForLog(session.metadata),
+          });
+          // Do NOT mark processed — billing endpoint may share this evt_ id.
+          break;
+        }
+
         if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
           logWebhook("checkout session skipped — unpaid", {
             eventType: event.type,
@@ -236,6 +250,17 @@ export async function POST(request: Request) {
 
       case "invoice.paid": {
         const invoice = event.data.object as Stripe.Invoice;
+        const skip = await shouldSkipInvoiceAsShootPortalBilling(invoice);
+        if (skip.skip) {
+          logWebhook("invoice.paid skipped — ShootPortal subscription billing", {
+            eventType: event.type,
+            invoiceId: invoice.id,
+            reason: skip.reason,
+          });
+          // Do NOT mark processed — billing webhook owns this event.
+          break;
+        }
+
         const payment = await findPaymentFromStripe({
           metadata: invoice.metadata,
         });
@@ -249,6 +274,16 @@ export async function POST(request: Request) {
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
+        const skip = await shouldSkipInvoiceAsShootPortalBilling(invoice);
+        if (skip.skip) {
+          logWebhook("invoice.payment_failed skipped — ShootPortal subscription billing", {
+            eventType: event.type,
+            invoiceId: invoice.id,
+            reason: skip.reason,
+          });
+          break;
+        }
+
         const payment = await findPaymentFromStripe({
           metadata: invoice.metadata,
         });

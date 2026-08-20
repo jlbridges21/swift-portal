@@ -58,7 +58,7 @@ async function loadPlanByKey(key: string): Promise<PlanRow | null> {
   const { data } = await raw
     .from("plans")
     .select(
-      "id, key, name, description, price_monthly_cents, price_annual_cents, entitlements, limits, display_order, is_active, is_public, created_at, updated_at"
+      "id, key, name, description, price_monthly_cents, price_annual_cents, entitlements, limits, display_order, is_active, is_public, created_at, updated_at, stripe_product_id, stripe_price_monthly_id, stripe_price_annual_id"
     )
     .eq("key", key)
     .maybeSingle();
@@ -123,7 +123,7 @@ export async function listActivePlans(): Promise<PlanRow[]> {
   const { data, error } = await raw
     .from("plans")
     .select(
-      "id, key, name, description, price_monthly_cents, price_annual_cents, entitlements, limits, display_order, is_active, is_public, created_at, updated_at"
+      "id, key, name, description, price_monthly_cents, price_annual_cents, entitlements, limits, display_order, is_active, is_public, created_at, updated_at, stripe_product_id, stripe_price_monthly_id, stripe_price_annual_id"
     )
     .eq("is_active", true)
     .order("display_order", { ascending: true });
@@ -136,7 +136,7 @@ export async function listAllPlans(): Promise<PlanRow[]> {
   const { data, error } = await raw
     .from("plans")
     .select(
-      "id, key, name, description, price_monthly_cents, price_annual_cents, entitlements, limits, display_order, is_active, is_public, created_at, updated_at"
+      "id, key, name, description, price_monthly_cents, price_annual_cents, entitlements, limits, display_order, is_active, is_public, created_at, updated_at, stripe_product_id, stripe_price_monthly_id, stripe_price_annual_id"
     )
     .order("display_order", { ascending: true });
   if (error) throw new Error(error.message);
