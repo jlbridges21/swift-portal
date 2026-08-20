@@ -209,7 +209,7 @@ BEGIN
 
   -- slug must not be a reserved platform subdomain (v41)
   INSERT INTO businesses (id, slug, name, status, plan)
-  VALUES (v_business, 'test-tenant-b', 'Test Tenant B', 'active', 'standard')
+  VALUES (v_business, 'test-tenant-b', 'Test Tenant B', 'active', 'studio')
   ON CONFLICT (id) DO UPDATE SET slug = EXCLUDED.slug, name = EXCLUDED.name, status = EXCLUDED.status;
 
   INSERT INTO business_settings (business_id, settings)
