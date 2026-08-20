@@ -12,9 +12,14 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ portalUrl: string; adminEmail: string; stagesNote: string } | null>(
-    null
-  );
+  const [result, setResult] = useState<{
+    portalUrl: string;
+    adminEmail: string;
+    stagesNote: string;
+    businessId?: string;
+    inviteSent?: boolean;
+    inviteError?: string | null;
+  } | null>(null);
 
   const defaultPlan = plans.find((p) => p.key === "studio")?.key ?? plans[0]?.key ?? "studio";
 
@@ -43,12 +48,17 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
         adminEmail?: string;
         stagesNote?: string;
         businessId?: string;
+        inviteSent?: boolean;
+        inviteError?: string | null;
       };
       if (!res.ok) throw new Error(data.error || "Failed to create business");
       setResult({
         portalUrl: data.portalUrl || "",
         adminEmail: data.adminEmail || "",
         stagesNote: data.stagesNote || "",
+        businessId: data.businessId,
+        inviteSent: data.inviteSent,
+        inviteError: data.inviteError,
       });
       if (data.businessId) {
         router.refresh();
@@ -67,6 +77,13 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
           <CardTitle>Business created</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
+          {result.inviteSent === false && (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-950">
+              Business created, but the invite email failed to send — resend it from the business
+              page.
+              {result.inviteError ? ` (${result.inviteError})` : ""}
+            </p>
+          )}
           <p>
             Send this portal URL to the pilot:{" "}
             <a className="font-medium text-accent underline" href={result.portalUrl}>
@@ -75,9 +92,16 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
           </p>
           <p>Admin invite: {result.adminEmail}</p>
           <p className="text-muted">{result.stagesNote}</p>
-          <Button type="button" onClick={() => router.push("/platform")}>
-            Back to dashboard
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {result.businessId && (
+              <Button type="button" onClick={() => router.push(`/platform/businesses/${result.businessId}`)}>
+                Open business
+              </Button>
+            )}
+            <Button type="button" variant="outline" onClick={() => router.push("/platform")}>
+              Back to dashboard
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );

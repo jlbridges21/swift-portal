@@ -11,13 +11,14 @@ export const dynamic = "force-dynamic";
 export default async function PlatformHomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ notice?: string }>;
+  searchParams: Promise<{ notice?: string; name?: string }>;
 }) {
   await requireSuperAdminPage();
-  const { notice } = await searchParams;
+  const { notice, name } = await searchParams;
   const businesses = await loadPlatformBusinesses();
   const totals = platformTotals(businesses);
   const recent = await loadPlatformAudit({ limit: 12 });
+  const named = name?.trim() || "Business";
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -25,6 +26,21 @@ export default async function PlatformHomePage({
         <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-slate-900">
           Super-admins have no business of their own. Use <strong>View as</strong> on a business
           before opening /admin.
+        </div>
+      )}
+      {notice === "deleted" && (
+        <div className="mb-6 rounded-lg border border-teal-300 bg-teal-50 px-4 py-3 text-sm text-slate-900">
+          Hard-deleted <strong>{named}</strong>. It no longer appears in the list.
+        </div>
+      )}
+      {notice === "soft_deleted" && (
+        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-slate-900">
+          Soft-deleted <strong>{named}</strong>. Login is blocked; data is retained.
+        </div>
+      )}
+      {notice === "suspended" && (
+        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-slate-900">
+          Suspended <strong>{named}</strong>. Admins and clients cannot sign in until reactivated.
         </div>
       )}
 

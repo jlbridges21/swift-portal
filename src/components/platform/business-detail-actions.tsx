@@ -20,7 +20,13 @@ import {
   SWIFT_COMP_REVOKE_CONFIRM,
 } from "@/lib/platform-session";
 
-type Admin = { id: string; email: string; full_name: string | null };
+type Admin = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  emailConfirmed?: boolean;
+  emailConfirmedAt?: string | null;
+};
 
 const MANUAL_STATUSES = SUBSCRIPTION_STATUSES.filter((s) => s !== "comped");
 
@@ -31,6 +37,7 @@ export function BusinessDetailActions({
   isProtected,
   plans,
   currentPlan,
+  inviteNeedsAttention = false,
 }: {
   business: {
     id: string;
@@ -50,10 +57,12 @@ export function BusinessDetailActions({
   isProtected: boolean;
   plans: PlanRow[];
   currentPlan: PlanRow | null;
+  inviteNeedsAttention?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const protectedBiz = isProtected;
   const sub = getSubscriptionState(business);
   const isSwiftComp = business.id === SWIFT_COMP_PROTECTED_BUSINESS_ID;
@@ -61,6 +70,7 @@ export function BusinessDetailActions({
   async function post(path: string, body?: unknown) {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const res = await fetch(path, {
         method: "POST",
@@ -68,12 +78,32 @@ export function BusinessDetailActions({
         headers: { "Content-Type": "application/json" },
         body: body ? JSON.stringify(body) : "{}",
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string; redirect?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        redirect?: string;
+        inviteSent?: boolean;
+        inviteError?: string | null;
+        alreadyExists?: boolean;
+      };
       if (!res.ok) throw new Error(data.error || "Request failed");
       if (data.redirect) {
         router.push(data.redirect);
         router.refresh();
         return data;
+      }
+      if (typeof data.inviteSent === "boolean") {
+        if (data.inviteSent) {
+          setNotice(
+            data.alreadyExists
+              ? "Invite re-sent. An account already existed for that email."
+              : "Invite email sent."
+          );
+        } else {
+          setError(
+            data.inviteError ||
+              "Business updated, but the invite email failed to send — try Resend invite."
+          );
+        }
       }
       router.refresh();
       return data;
@@ -215,6 +245,12 @@ export function BusinessDetailActions({
   return (
     <div className="space-y-6">
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {notice && <p className="text-sm text-teal-700">{notice}</p>}
+      {inviteNeedsAttention && !error && (
+        <p className="text-sm text-amber-800">
+          Invite attention needed — an admin has not confirmed email, or no admin exists yet.
+        </p>
+      )}
 
       <Card>
         <CardHeader>
@@ -540,23 +576,30 @@ export function BusinessDetailActions({
             {admins.map((admin) => (
               <li key={admin.id} className="flex flex-wrap items-center justify-between gap-2">
                 <span>
-                  {admin.full_name || "Admin"} — {admin.email}
+                  {admin.full_name || "Admin"} — {admin.email}{" "}
+                  {admin.emailConfirmed === false ? (
+                    <Badge variant="warning">unconfirmed</Badge>
+                  ) : admin.emailConfirmed ? (
+                    <Badge variant="success">confirmed</Badge>
+                  ) : null}
                 </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() =>
-                    void post(`/api/platform/businesses/${business.id}/invite`, {
-                      email: admin.email,
-                      fullName: admin.full_name,
-                      resend: true,
-                    })
-                  }
-                >
-                  Resend invite
-                </Button>
+                {admin.emailConfirmed === false && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() =>
+                      void post(`/api/platform/businesses/${business.id}/invite`, {
+                        email: admin.email,
+                        fullName: admin.full_name,
+                        resend: true,
+                      })
+                    }
+                  >
+                    Resend invite
+                  </Button>
+                )}
               </li>
             ))}
           </ul>

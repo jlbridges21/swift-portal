@@ -175,12 +175,29 @@ export async function loadBusinessDetail(id: string) {
     loadPlatformBusinesses().then((rows) => rows.find((r) => r.id === id) ?? null),
   ]);
 
+  const adminRows = admins.data ?? [];
+  const adminsWithAuth = await Promise.all(
+    adminRows.map(async (admin) => {
+      const { data } = await raw.auth.admin.getUserById(admin.id);
+      const confirmedAt = data.user?.email_confirmed_at ?? null;
+      return {
+        ...admin,
+        emailConfirmed: Boolean(confirmedAt),
+        emailConfirmedAt: confirmedAt,
+      };
+    })
+  );
+
+  const hasUnconfirmedAdmin = adminsWithAuth.some((a) => !a.emailConfirmed);
+  const hasNoAdmins = adminsWithAuth.length === 0;
+
   return {
     business,
-    admins: admins.data ?? [],
+    admins: adminsWithAuth,
     settings,
     integrations: integ.data,
     stats: listRow,
+    inviteNeedsAttention: hasNoAdmins || hasUnconfirmedAdmin,
     portalUrl: getBusinessPortalOrigin({
       slug: business.slug,
       custom_domain: business.custom_domain,

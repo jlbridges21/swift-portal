@@ -87,6 +87,14 @@ export default async function PlatformBusinessDetailPage({
         Created {formatDate(detail.business.created_at)}
       </p>
 
+      {detail.inviteNeedsAttention && (
+        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          {detail.admins.length === 0
+            ? "No admin profile is attached yet. Invite an admin below — without one, nobody can log into this portal."
+            : "At least one admin has not confirmed their email. Use Resend invite so they can sign in."}
+        </div>
+      )}
+
       <BusinessDetailActions
         business={detail.business}
         admins={detail.admins}
@@ -94,6 +102,7 @@ export default async function PlatformBusinessDetailPage({
         isProtected={PROTECTED_PRODUCTION_BUSINESS_IDS.has(detail.business.id)}
         plans={plans}
         currentPlan={currentPlan}
+        inviteNeedsAttention={detail.inviteNeedsAttention}
       />
     </main>
   );

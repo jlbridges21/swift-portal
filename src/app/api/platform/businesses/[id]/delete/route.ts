@@ -7,8 +7,9 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
   if (!auth.ok) return auth.response;
   const { id } = await context.params;
   try {
-    await softDeleteBusiness(id, { id: auth.profile.id, email: auth.profile.email });
-    return NextResponse.json({ ok: true });
+    const { name } = await softDeleteBusiness(id, { id: auth.profile.id, email: auth.profile.email });
+    const q = new URLSearchParams({ notice: "soft_deleted", name });
+    return NextResponse.json({ ok: true, redirect: `/platform?${q.toString()}` });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to delete" },

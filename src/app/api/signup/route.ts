@@ -2,18 +2,23 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getPublicHostContext } from "@/lib/host-resolution";
-import { validateBusinessSlug } from "@/lib/reserved-subdomains";
+import { validateBusinessSlug, isReservedPlatformSubdomain } from "@/lib/reserved-subdomains";
 import { createBusinessForPlatform, SYSTEM_SIGNUP_ACTOR } from "@/lib/platform-onboard";
 import { allowSignupAttempt, allowSignupSuccess } from "@/lib/signup-rate-limit";
 import {
+  isDisposableEmail,
   isPlausibleEmail,
   isValidSignupPassword,
   nextSlugSuggestion,
   suggestSlugFromName,
 } from "@/lib/signup-validation";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
-
-const GENERIC_ERROR = "We couldn’t create your account. Check your details and try again.";
+import {
+  newSignupRequestId,
+  signupErrorResponse,
+  SIGNUP_GENERIC_ERROR,
+  logSignupFailure,
+} from "@/lib/signup-errors";
 
 function clientIp(h: Headers): string {
   return (
@@ -28,21 +33,22 @@ function clientIp(h: Headers): string {
  * Creates business first, then password user with business_id in metadata.
  */
 export async function POST(request: Request) {
+  const requestId = newSignupRequestId();
   const host = await getPublicHostContext();
   if (host.kind === "tenant") {
-    return NextResponse.json(
-      { error: "Sign up is only available on shootportal.app." },
-      { status: 403 }
-    );
+    return signupErrorResponse("forbidden_host", requestId, {
+      status: 403,
+      message: "Sign up is only available on shootportal.app.",
+    });
   }
 
   const h = await headers();
   const ip = clientIp(h);
   if (!allowSignupAttempt(ip)) {
-    return NextResponse.json(
-      { error: "Too many signup attempts. Try again later." },
-      { status: 429 }
-    );
+    return signupErrorResponse("rate_limited", requestId, {
+      ip,
+      message: "Too many signup attempts. Try again later.",
+    });
   }
 
   let body: {
@@ -55,7 +61,10 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as typeof body;
   } catch {
-    return NextResponse.json({ error: GENERIC_ERROR }, { status: 400 });
+    return signupErrorResponse("validation_failed", requestId, {
+      ip,
+      detail: "invalid_json",
+    });
   }
 
   const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -71,26 +80,51 @@ export async function POST(request: Request) {
       : suggestSlugFromName(name);
 
   if (!name || name.length < 2 || name.length > 120) {
-    return NextResponse.json({ error: GENERIC_ERROR }, { status: 400 });
+    return signupErrorResponse("validation_failed", requestId, {
+      ip,
+      slug: slugRaw || null,
+      detail: "invalid_name",
+    });
+  }
+
+  if (email && isDisposableEmail(email)) {
+    return signupErrorResponse("disposable_email", requestId, {
+      ip,
+      slug: slugRaw || null,
+      detail: "disposable_domain",
+    });
   }
   if (!isPlausibleEmail(email)) {
-    return NextResponse.json({ error: GENERIC_ERROR }, { status: 400 });
+    return signupErrorResponse("validation_failed", requestId, {
+      ip,
+      slug: slugRaw || null,
+      detail: "invalid_email",
+    });
   }
   if (!isValidSignupPassword(password)) {
-    return NextResponse.json(
-      { error: "Password must be at least 8 characters." },
-      { status: 400 }
-    );
+    return signupErrorResponse("validation_failed", requestId, {
+      ip,
+      slug: slugRaw || null,
+      detail: "invalid_password",
+      message: "Password must be at least 8 characters.",
+      status: 400,
+    });
   }
 
   const slugCheck = validateBusinessSlug(slugRaw);
   if (!slugCheck.ok) {
-    return NextResponse.json({ error: slugCheck.error }, { status: 400 });
+    const reserved = isReservedPlatformSubdomain(slugRaw);
+    return signupErrorResponse(reserved ? "reserved_slug" : "validation_failed", requestId, {
+      ip,
+      slug: typeof slugRaw === "string" ? slugRaw : null,
+      detail: slugCheck.error,
+      // Reserved / format errors are safe to show (no account enumeration).
+      message: slugCheck.error,
+    });
   }
 
   const raw = await createServiceClient();
 
-  // Slug uniqueness with suggestion
   const { data: slugTaken } = await raw
     .from("businesses")
     .select("id")
@@ -108,29 +142,35 @@ export async function POST(request: Request) {
         break;
       }
     }
-    return NextResponse.json(
-      {
-        error: "That subdomain is already taken.",
+    return signupErrorResponse("slug_taken", requestId, {
+      ip,
+      slug: slugCheck.slug,
+      status: 409,
+      message: "That subdomain is already taken.",
+      extra: {
         suggestion,
         preview: `${suggestion}.${getPlatformRootDomain()}`,
       },
-      { status: 409 }
-    );
+    });
   }
 
-  // Do not reveal whether email already exists — generic failure
   const { data: list } = await raw.auth.admin.listUsers({ page: 1, perPage: 1000 });
   const emailTaken = list.users.some((u) => u.email?.toLowerCase() === email);
   if (emailTaken) {
-    return NextResponse.json({ error: GENERIC_ERROR }, { status: 400 });
+    return signupErrorResponse("email_exists", requestId, {
+      ip,
+      slug: slugCheck.slug,
+      detail: "auth_user_exists",
+    });
   }
 
-  // Soft-check success quota before create; only increment after success.
   if (!allowSignupSuccess(ip, { peek: true })) {
-    return NextResponse.json(
-      { error: "Too many accounts created from this network. Try again later." },
-      { status: 429 }
-    );
+    return signupErrorResponse("rate_limited", requestId, {
+      ip,
+      slug: slugCheck.slug,
+      message: "Too many accounts created from this network. Try again later.",
+      detail: "success_quota",
+    });
   }
 
   try {
@@ -154,11 +194,30 @@ export async function POST(request: Request) {
       slug: result.slug,
       portalUrl: result.portalUrl,
       requiresEmailConfirmation: result.requiresEmailConfirmation !== false,
+      requestId,
       message:
         "Check your email to confirm your account, then sign in to open your portal.",
     });
   } catch (error) {
-    console.error("[signup]", error instanceof Error ? error.message : error);
-    return NextResponse.json({ error: GENERIC_ERROR }, { status: 400 });
+    const msg = error instanceof Error ? error.message : String(error);
+    const authFailed =
+      /could not create account|email rate limit|signups not allowed|user already|invalid.*email/i.test(
+        msg
+      );
+    logSignupFailure({
+      reason: authFailed ? "auth_create_failed" : "provisioning_failed",
+      requestId,
+      slug: slugCheck.slug,
+      detail: msg.slice(0, 240),
+      ip,
+    });
+    return NextResponse.json(
+      {
+        error: SIGNUP_GENERIC_ERROR,
+        code: authFailed ? "auth_create_failed" : "provisioning_failed",
+        requestId,
+      },
+      { status: 400 }
+    );
   }
 }

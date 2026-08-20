@@ -70,6 +70,8 @@ export function SignupForm({ platformRootDomain }: { platformRootDomain: string 
       });
       const data = (await res.json()) as {
         error?: string;
+        code?: string;
+        requestId?: string;
         suggestion?: string;
         message?: string;
         portalUrl?: string;
@@ -79,7 +81,14 @@ export function SignupForm({ platformRootDomain }: { platformRootDomain: string 
           setSlug(data.suggestion);
           setSlugTouched(true);
         }
-        throw new Error(data.error || "Signup failed");
+        const base = data.error || "Signup failed";
+        const support =
+          data.code && data.code !== "rate_limited"
+            ? ` (code: ${data.code}${data.requestId ? ` · ${data.requestId}` : ""})`
+            : data.requestId
+              ? ` (ref: ${data.requestId})`
+              : "";
+        throw new Error(`${base}${support}`);
       }
       setDone({
         message: data.message || "Check your email to confirm your account.",

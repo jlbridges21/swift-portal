@@ -18,6 +18,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     );
     return NextResponse.json(result);
   } catch (error) {
+    console.error("[platform-invite] reason=invite_route_failed", {
+      event: "platform_invite_failure",
+      businessId: id,
+      detail: error instanceof Error ? error.message : String(error),
+    });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Invite failed" },
       { status: 400 }

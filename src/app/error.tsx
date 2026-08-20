@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
+import { SafeHomeLink } from "@/components/auth/safe-home-link";
 
 export default function Error({
   error,
@@ -18,7 +18,7 @@ export default function Error({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-50 mb-6">
+      <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
         <AlertTriangle className="h-7 w-7 text-red-500" />
       </div>
       <h1 className="text-2xl font-bold text-primary">Something went wrong</h1>
@@ -28,10 +28,10 @@ export default function Error({
           : "An unexpected error occurred. Please try again."}
       </p>
       <div className="mt-8 flex gap-3">
-        <Button variant="accent" onClick={reset}>Try again</Button>
-        <Link href="/dashboard">
-          <Button variant="outline">Back to dashboard</Button>
-        </Link>
+        <Button variant="accent" onClick={reset}>
+          Try again
+        </Button>
+        <SafeHomeLink variant="outline" />
       </div>
     </div>
   );

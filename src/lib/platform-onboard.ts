@@ -45,6 +45,8 @@ export type CreateBusinessResult = {
   portalUrl: string;
   adminEmail: string;
   inviteSent: boolean;
+  /** Set when the business was created but invite email did not send. */
+  inviteError?: string | null;
   stagesNote: string;
   /** Present for signup — user must confirm email before login. */
   requiresEmailConfirmation?: boolean;
@@ -71,18 +73,29 @@ async function rollbackBusinessProvision(
   businessId: string,
   userId?: string | null
 ) {
-  if (userId) {
-    try {
-      await raw.auth.admin.deleteUser(userId);
-    } catch {
-      /* best-effort */
+  try {
+    if (userId) {
+      try {
+        await raw.auth.admin.deleteUser(userId);
+      } catch {
+        /* best-effort */
+      }
+      await raw.from("profiles").delete().eq("id", userId);
     }
-    await raw.from("profiles").delete().eq("id", userId);
+    await raw.from("business_services").delete().eq("business_id", businessId);
+    await raw.from("business_integrations").delete().eq("business_id", businessId);
+    await raw.from("business_settings").delete().eq("business_id", businessId);
+    await raw.from("businesses").delete().eq("id", businessId);
+  } catch (err) {
+    console.error("[signup] reason=rollback_failed", {
+      event: "signup_failure",
+      reason: "rollback_failed",
+      businessId,
+      userId: userId ?? null,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
   }
-  await raw.from("business_services").delete().eq("business_id", businessId);
-  await raw.from("business_integrations").delete().eq("business_id", businessId);
-  await raw.from("business_settings").delete().eq("business_id", businessId);
-  await raw.from("businesses").delete().eq("id", businessId);
 }
 
 /**
@@ -230,6 +243,7 @@ export async function createBusinessForPlatform(
     });
 
     let inviteSent = false;
+    let inviteError: string | null = null;
     let requiresEmailConfirmation = false;
 
     // Verification hook: force failure after dependents exist, before auth user.
@@ -239,12 +253,26 @@ export async function createBusinessForPlatform(
 
     if (source === "platform") {
       if (!actor.id) throw new Error("Platform create requires a super_admin actor.");
-      const invite = await inviteBusinessAdmin(businessId, adminEmail, adminName, {
-        id: actor.id,
-        email: actor.email,
-      }, { isCreate: true });
+      // Invite failure must NOT roll back the business — surface for Resend invite.
+      const invite = await inviteBusinessAdmin(
+        businessId,
+        adminEmail,
+        adminName,
+        { id: actor.id, email: actor.email },
+        { isCreate: true }
+      );
       inviteSent = invite.inviteSent;
+      inviteError = invite.inviteError ?? null;
       createdUserId = invite.userId;
+      if (!inviteSent) {
+        console.error("[platform-invite] reason=invite_failed_on_create", {
+          event: "platform_invite_failure",
+          businessId,
+          slug: slugCheck.slug,
+          adminEmail,
+          detail: inviteError,
+        });
+      }
 
       await writePlatformAudit({
         actorUserId: actor.id,
@@ -259,6 +287,7 @@ export async function createBusinessForPlatform(
           name,
           adminEmail,
           inviteSent,
+          inviteError,
           plan,
         },
       });
@@ -354,6 +383,7 @@ export async function createBusinessForPlatform(
       portalUrl,
       adminEmail,
       inviteSent,
+      inviteError,
       requiresEmailConfirmation,
       stagesNote:
         "business_stages does not exist yet — stage automation is still workflow settings JSON, not a table.",
@@ -371,7 +401,7 @@ export async function inviteBusinessAdmin(
   fullName: string,
   actor: { id: string; email: string | null },
   options?: { isCreate?: boolean; resend?: boolean }
-): Promise<{ inviteSent: boolean; userId: string | null }> {
+): Promise<{ inviteSent: boolean; userId: string | null; inviteError?: string | null; alreadyExists?: boolean }> {
   const raw = await createServiceClient();
   const { data: business } = await raw
     .from("businesses")
@@ -385,33 +415,113 @@ export async function inviteBusinessAdmin(
     custom_domain: business.custom_domain,
   });
   const redirectTo = `${portalUrl}/login`;
+  const normalizedEmail = email.trim().toLowerCase();
 
-  const invited = await raw.auth.admin.inviteUserByEmail(email, {
-    data: {
-      role: "admin",
-      business_id: businessId,
-      full_name: fullName,
-    },
-    redirectTo,
-  });
+  const invited =
+    process.env.PLATFORM_FORCE_INVITE_FAIL === "1"
+      ? {
+          data: { user: null },
+          error: { message: "Forced invite failure (verification)" },
+        }
+      : await raw.auth.admin.inviteUserByEmail(normalizedEmail, {
+          data: {
+            role: "admin",
+            business_id: businessId,
+            full_name: fullName,
+          },
+          redirectTo,
+        });
 
   let userId = invited.data.user?.id ?? null;
   let inviteSent = !invited.error;
+  let inviteError: string | null = invited.error?.message ?? null;
+  let alreadyExists = false;
 
   if (invited.error) {
-    const users = await raw.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    const existing = users.data.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-    if (!existing) throw new Error(invited.error.message);
-    userId = existing.id;
-    await raw.auth.admin.updateUserById(existing.id, {
-      user_metadata: {
-        ...existing.user_metadata,
-        role: "admin",
-        business_id: businessId,
-        full_name: fullName,
-      },
+    console.error("[platform-invite] reason=invite_email_failed", {
+      event: "platform_invite_failure",
+      businessId,
+      slug: business.slug,
+      email: normalizedEmail,
+      resend: Boolean(options?.resend),
+      isCreate: Boolean(options?.isCreate),
+      detail: invited.error.message,
     });
-    inviteSent = false;
+
+    const users = await raw.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const existing = users.data.users.find((u) => u.email?.toLowerCase() === normalizedEmail);
+    alreadyExists = Boolean(existing);
+
+    if (existing) {
+      userId = existing.id;
+      await raw.auth.admin.updateUserById(existing.id, {
+        user_metadata: {
+          ...existing.user_metadata,
+          role: "admin",
+          business_id: businessId,
+          full_name: fullName,
+        },
+      });
+
+      // Existing user: try signup-resend (works for unconfirmed) so Resend invite is real.
+      const anon = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { auth: { persistSession: false, autoRefreshToken: false } }
+      );
+      const { error: resendErr } = await anon.auth.resend({
+        type: "signup",
+        email: normalizedEmail,
+        options: { emailRedirectTo: redirectTo },
+      });
+      if (!resendErr) {
+        inviteSent = true;
+        inviteError = null;
+      } else {
+        inviteSent = false;
+        inviteError =
+          invited.error.message ||
+          resendErr.message ||
+          "Invite email failed to send. Use Resend invite.";
+        console.error("[platform-invite] reason=resend_failed", {
+          event: "platform_invite_failure",
+          businessId,
+          email: normalizedEmail,
+          detail: resendErr.message,
+        });
+      }
+    } else {
+      // No auth user yet — create unconfirmed so the business is not orphaned without an admin.
+      const { data: created, error: createErr } = await raw.auth.admin.createUser({
+        email: normalizedEmail,
+        email_confirm: false,
+        user_metadata: {
+          role: "admin",
+          business_id: businessId,
+          full_name: fullName,
+        },
+      });
+      if (createErr || !created.user) {
+        // During create: keep business, report invite failure (no rollback).
+        // During standalone invite: surface the error.
+        inviteSent = false;
+        inviteError = invited.error.message || createErr?.message || "Invite email failed.";
+        if (!options?.isCreate) {
+          throw new Error(inviteError);
+        }
+        console.error("[platform-invite] reason=user_create_after_invite_failed", {
+          event: "platform_invite_failure",
+          businessId,
+          detail: inviteError,
+        });
+      } else {
+        userId = created.user.id;
+        inviteSent = false;
+        inviteError =
+          invited.error.message ||
+          "Business created, but the invite email failed to send — resend it.";
+      }
+    }
   }
 
   if (userId) {
@@ -422,6 +532,7 @@ export async function inviteBusinessAdmin(
         business_id: businessId,
         client_id: null,
         full_name: fullName,
+        email: normalizedEmail,
       })
       .eq("id", userId);
   }
@@ -434,21 +545,28 @@ export async function inviteBusinessAdmin(
       targetBusinessId: businessId,
       targetType: "profile",
       targetId: userId,
-      metadata: { email, inviteSent },
+      metadata: { email: normalizedEmail, inviteSent, inviteError, alreadyExists },
     });
   }
 
-  return { inviteSent, userId };
+  return { inviteSent, userId, inviteError, alreadyExists };
 }
 
 export async function hardDeleteBusiness(
   businessId: string,
   actor: { id: string; email: string | null }
-): Promise<void> {
+): Promise<{ name: string }> {
   if (PROTECTED_PRODUCTION_BUSINESS_IDS.has(businessId)) {
     throw new Error("Protected production businesses cannot be hard-deleted.");
   }
   const raw = await createServiceClient();
+  const { data: existing } = await raw
+    .from("businesses")
+    .select("id, name")
+    .eq("id", businessId)
+    .maybeSingle();
+  if (!existing) throw new Error("Business not found.");
+  const name = existing.name as string;
   const { data: biz } = await raw.from("businesses").select("id, slug").eq("id", businessId).maybeSingle();
   if (!biz) throw new Error("Business not found.");
 
@@ -508,9 +626,10 @@ export async function hardDeleteBusiness(
     targetBusinessId: null,
     targetType: "business",
     targetId: businessId,
-    metadata: { slug: biz.slug },
+    metadata: { slug: biz.slug, name },
   });
   invalidateHostLookupCache();
+  return { name };
 }
 
 export type UpdateBusinessInput = {
@@ -661,11 +780,11 @@ export async function setBusinessStatus(
   businessId: string,
   status: "active" | "suspended",
   actor: { id: string; email: string | null }
-) {
+): Promise<{ name: string }> {
   const raw = await createServiceClient();
   const { data: existing } = await raw
     .from("businesses")
-    .select("id, status, deleted_at")
+    .select("id, name, status, deleted_at")
     .eq("id", businessId)
     .maybeSingle();
   if (!existing) throw new Error("Business not found.");
@@ -684,17 +803,22 @@ export async function setBusinessStatus(
     metadata: { previousStatus: existing.status, status },
   });
   invalidateHostLookupCache();
+  return { name: existing.name as string };
 }
 
 export async function softDeleteBusiness(
   businessId: string,
   actor: { id: string; email: string | null }
-) {
+): Promise<{ name: string }> {
   if (PROTECTED_PRODUCTION_BUSINESS_IDS.has(businessId)) {
     throw new Error("Protected production businesses cannot be deleted from the console.");
   }
   const raw = await createServiceClient();
-  const { data: existing } = await raw.from("businesses").select("id, deleted_at").eq("id", businessId).maybeSingle();
+  const { data: existing } = await raw
+    .from("businesses")
+    .select("id, name, deleted_at")
+    .eq("id", businessId)
+    .maybeSingle();
   if (!existing) throw new Error("Business not found.");
   if (existing.deleted_at) throw new Error("Business is already deleted.");
 
@@ -711,6 +835,8 @@ export async function softDeleteBusiness(
     targetBusinessId: businessId,
     targetType: "business",
     targetId: businessId,
+    metadata: { name: existing.name },
   });
   invalidateHostLookupCache();
+  return { name: existing.name as string };
 }
