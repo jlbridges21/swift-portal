@@ -22,7 +22,7 @@ export const SITE_ICONS = {
   icon512: "/icons/sp-icon-512.png",
   icon512Maskable: "/icons/sp-icon-512-maskable.png",
   ogBrand: "/icons/og-brand.png",
-  logoPrimary: "/icons/sp-logo-primary.png",
+  logoPrimary: "/icons/sp-app-icon.png",
   logoWhite: "/icons/sp-logo-white.png",
   appIcon: "/icons/sp-app-icon.png",
 } as const;

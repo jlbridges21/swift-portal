@@ -89,7 +89,7 @@ expect("sanitize drops injection", sanitizeCssColor(injection, "#3B82F6") === "#
 expect("theme CSS never includes raw injection", !brandThemeCss("#0F172A", injection).includes("display:none"));
 
 expect("https logo URL is allowed", isSafeBrandAssetUrl("https://cdn.example.com/logo.png"));
-expect("relative logo path is allowed", isSafeBrandAssetUrl("/icons/sp-logo-primary.png"));
+expect("relative logo path is allowed", isSafeBrandAssetUrl("/icons/sp-app-icon.png"));
 expect("javascript: logo URL is rejected", !isSafeBrandAssetUrl("javascript:alert(1)"));
 expect("quoted/CSS logo URL is rejected", !isSafeBrandAssetUrl(`https://x.com/x.png" onerror="alert(1)`));
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPublicHostContext } from "@/lib/host-resolution";
 import { allowSignupAttempt } from "@/lib/signup-rate-limit";
-import { resendTenantAdminAuthLink } from "@/lib/auth-resend-link";
+import { resendAuthLinkForEmail } from "@/lib/auth-resend-link";
 
 function clientIp(request: Request): string {
   return (
@@ -11,14 +11,14 @@ function clientIp(request: Request): string {
   );
 }
 
-/** Tenant-scoped "send me a new link" for expired invite/recovery hashes. */
+/**
+ * "Send me a new link" for expired invite/recovery.
+ * Works on tenant hosts (scoped) and platform apex (lookup by email → their portal).
+ */
 export async function POST(request: Request) {
   const host = await getPublicHostContext();
-  if (host.kind !== "tenant" || !host.businessId) {
-    return NextResponse.json(
-      { error: "Open this page on your studio’s portal (your subdomain) to request a new link." },
-      { status: 400 }
-    );
+  if (host.kind === "unmatched") {
+    return NextResponse.json({ error: "Unknown host." }, { status: 400 });
   }
 
   const ip = clientIp(request);
@@ -37,9 +37,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   }
 
-  const result = await resendTenantAdminAuthLink({
-    businessId: host.businessId,
-    email,
-  });
+  const businessId = host.kind === "tenant" ? host.businessId : null;
+  const result = await resendAuthLinkForEmail({ email, businessId });
   return NextResponse.json(result);
 }

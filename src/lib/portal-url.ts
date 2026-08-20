@@ -68,6 +68,16 @@ export function getDeploymentOrigin(): string {
   return "http://localhost:3000";
 }
 
+/** Platform marketing apex (Site URL) — e.g. https://shootportal.app */
+export function getPlatformApexOrigin(): string {
+  if (process.env.NODE_ENV === "production") {
+    return assertPublicPortalOrigin(`https://${getPlatformRootDomain()}`, "getPlatformApexOrigin");
+  }
+  const raw = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+  if (raw) return assertPublicPortalOrigin(raw, "getPlatformApexOrigin.dev");
+  return "http://localhost:3000";
+}
+
 /**
  * Canonical public origin for a business (emails, push, Stripe customer redirects).
  * Prefer `custom_domain`; otherwise `{slug}.{PLATFORM_ROOT_DOMAIN}`.

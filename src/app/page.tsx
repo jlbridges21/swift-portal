@@ -3,6 +3,7 @@ import { LandingPage } from "@/components/landing/landing-page";
 import { PlatformLanding } from "@/components/landing/platform-landing";
 import { BrandProvider } from "@/components/brand/brand-provider";
 import { TenantUnavailable } from "@/components/public/tenant-unavailable";
+import { AuthFragmentHandler } from "@/components/auth/auth-fragment-handler";
 import { getAppSettings } from "@/lib/app-settings";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
@@ -22,6 +23,7 @@ export default async function HomePage() {
     const { brand } = await publicHostBrand();
     return (
       <BrandProvider brand={brand}>
+        <AuthFragmentHandler />
         <TenantUnavailable />
       </BrandProvider>
     );
@@ -32,6 +34,7 @@ export default async function HomePage() {
     const brand = getPortalBrandFromSettings(settings);
     return (
       <BrandProvider brand={brand}>
+        <AuthFragmentHandler />
         <LandingPage brand={brand} landing={settings.landing} />
       </BrandProvider>
     );
@@ -39,6 +42,7 @@ export default async function HomePage() {
 
   return (
     <BrandProvider brand={platformPortalBrand()}>
+      <AuthFragmentHandler />
       <PlatformLanding />
     </BrandProvider>
   );
