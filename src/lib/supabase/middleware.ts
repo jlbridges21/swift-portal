@@ -133,6 +133,7 @@ export async function updateSession(request: NextRequest) {
       user.user_metadata?.must_change_password === true;
     const passwordSetupExempt =
       path.startsWith("/auth/update-password") ||
+      path.startsWith("/auth/confirm") ||
       path.startsWith("/api/auth/") ||
       path.startsWith("/_next") ||
       path === "/favicon.ico";

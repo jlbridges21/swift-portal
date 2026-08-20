@@ -7,6 +7,7 @@ import { validateBusinessSlug } from "@/lib/reserved-subdomains";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { getBusinessPortalOrigin } from "@/lib/portal-url";
+import { authConfirmUrl } from "@/lib/auth-confirm";
 import { FALLBACK_SERVICE_TEMPLATES } from "@/lib/service-templates";
 import { invalidateHostLookupCache } from "@/lib/host-resolution";
 import {
@@ -336,7 +337,7 @@ export async function createBusinessForPlatform(
               business_id: businessId,
               full_name: adminName,
             },
-            emailRedirectTo: `${portalUrl}/auth/callback?next=${encodeURIComponent("/admin")}`,
+            emailRedirectTo: authConfirmUrl(portalUrl),
           },
         });
         if (signErr || !signedUp.user) {
@@ -430,8 +431,8 @@ export async function inviteBusinessAdmin(
     slug: business.slug,
     custom_domain: business.custom_domain,
   });
-  // Invite users have no password — land on update-password (sp_flow survives PKCE redirect).
-  const redirectTo = `${portalUrl}/auth/callback?next=${encodeURIComponent("/auth/update-password")}&sp_flow=invite`;
+  // Invite: RedirectTo = tenant /auth/confirm (TokenHash templates append ?token_hash=&type=invite).
+  const redirectTo = authConfirmUrl(portalUrl);
   const normalizedEmail = email.trim().toLowerCase();
 
   // Look up existing auth user first so we can distinguish "already registered"

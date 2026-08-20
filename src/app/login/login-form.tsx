@@ -144,7 +144,7 @@ export function LoginForm({ showRequestLink }: { showRequestLink: boolean }) {
     setError("");
     setNotice("");
     const supabase = createClient();
-    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent("/auth/update-password")}&sp_flow=recovery`;
+    const redirectTo = `${window.location.origin}/auth/confirm`;
     const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo,
     });

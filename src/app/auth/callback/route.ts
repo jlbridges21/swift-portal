@@ -16,18 +16,12 @@ const EMAIL_OTP_TYPES = new Set<string>([
 ]);
 
 /**
- * Verified against current Supabase Auth docs (Email Templates + Passwords):
+ * Legacy / in-flight PKCE + ConfirmationURL redirects land here with ?code=.
+ * New TokenHash emails use GET /auth/confirm (interstitial) → POST /auth/confirm/verify.
+ * Dashboard implicit-flow emails still use hash fragments (AuthFragmentHandler).
  *
- * - ConfirmationURL is `…/auth/v1/verify?token=…&type=<EmailOtpType>&redirect_to=…`
- *   where type is invite | recovery | signup (email) | magiclink | email_change | …
- * - With PKCE + our redirectTo, after verify the browser lands on redirectTo with
- *   `?code=` — the `type` query param is often NOT preserved on that final URL.
- * - Docs' recommended SSR pattern passes `token_hash` + `type` into a server
- *   confirm route and calls verifyOtp({ token_hash, type }).
- * - Therefore we (1) put `sp_flow=invite|recovery` on redirectTo we control for
- *   inviteUserByEmail / resetPasswordForEmail, (2) honor `type` when present,
- *   and (3) treat next=/auth/update-password as a password-setup destination.
- * - Signup confirmation keeps next=/admin because the user already chose a password.
+ * This route still accepts token_hash on GET for any old links; prefer the confirm
+ * interstitial for new mail so scanners cannot consume the OTP.
  */
 function needsPasswordSetup(url: URL): { needed: boolean; reason: "invite" | "recovery" | "setup" } {
   const type = url.searchParams.get("type");

@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getBusinessPortalOrigin } from "@/lib/portal-url";
 import { writePlatformAudit } from "@/lib/platform-audit";
+import { authConfirmUrl } from "@/lib/auth-confirm";
 
 function generateTempPassword(): string {
   // Strong random; shown once to super_admin. User must change on next login.
@@ -41,7 +42,7 @@ export async function sendBusinessAdminPasswordReset(
     slug: business.slug,
     custom_domain: business.custom_domain,
   });
-  const redirectTo = `${portalUrl}/auth/callback?next=${encodeURIComponent("/auth/update-password")}&sp_flow=recovery`;
+  const redirectTo = authConfirmUrl(portalUrl);
 
   const anon = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

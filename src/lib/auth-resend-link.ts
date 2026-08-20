@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getBusinessPortalOrigin, getPlatformApexOrigin } from "@/lib/portal-url";
+import { authConfirmUrl } from "@/lib/auth-confirm";
 
 const GENERIC = {
   ok: true as const,
@@ -12,6 +13,8 @@ const GENERIC = {
  * - Tenant host: only that business's admin.
  * - Platform apex: look up email globally; send to their own portal (or apex for super_admin).
  * Never enumerates accounts.
+ *
+ * RedirectTo is `{portal}/auth/confirm` so TokenHash email templates land on the interstitial.
  */
 export async function resendAuthLinkForEmail(options: {
   email: string;
@@ -38,7 +41,6 @@ export async function resendAuthLinkForEmail(options: {
       return GENERIC;
     }
   } else {
-    // Apex: allow admin (any business) or super_admin.
     if (profile.role !== "admin" && profile.role !== "super_admin") {
       return GENERIC;
     }
@@ -60,11 +62,8 @@ export async function resendAuthLinkForEmail(options: {
     });
   }
 
-  const inviteRedirect = `${portalUrl}/auth/callback?next=${encodeURIComponent("/auth/update-password")}&sp_flow=invite`;
-  const recoveryRedirect = `${portalUrl}/auth/callback?next=${encodeURIComponent("/auth/update-password")}&sp_flow=recovery`;
+  const confirmRedirect = authConfirmUrl(portalUrl);
 
-  // Dashboard-style recoveries that bounce to apex: prefer recovery to their portal.
-  // Unconfirmed → invite/resend.
   if (!user.email_confirmed_at && profile.role === "admin") {
     const invited = await raw.auth.admin.inviteUserByEmail(email, {
       data: {
@@ -72,7 +71,7 @@ export async function resendAuthLinkForEmail(options: {
         business_id: profile.business_id,
         full_name: user.user_metadata?.full_name,
       },
-      redirectTo: inviteRedirect,
+      redirectTo: confirmRedirect,
     });
     if (invited.error) {
       const anon = createClient(
@@ -83,7 +82,7 @@ export async function resendAuthLinkForEmail(options: {
       await anon.auth.resend({
         type: "signup",
         email,
-        options: { emailRedirectTo: inviteRedirect },
+        options: { emailRedirectTo: confirmRedirect },
       });
     }
   } else {
@@ -92,18 +91,13 @@ export async function resendAuthLinkForEmail(options: {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
-    // Apex destination for super_admin; tenant portal for business admins.
-    const redirectTo =
-      profile.role === "super_admin"
-        ? `${portalUrl}/auth/callback?next=${encodeURIComponent("/auth/update-password")}&sp_flow=recovery`
-        : recoveryRedirect;
-    await anon.auth.resetPasswordForEmail(email, { redirectTo });
+    await anon.auth.resetPasswordForEmail(email, { redirectTo: confirmRedirect });
   }
 
   return GENERIC;
 }
 
-/** @deprecated Prefer resendAuthLinkForEmail — kept for call-site clarity. */
+/** @deprecated Prefer resendAuthLinkForEmail */
 export async function resendTenantAdminAuthLink(options: {
   businessId: string;
   email: string;
