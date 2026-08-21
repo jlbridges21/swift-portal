@@ -206,6 +206,33 @@ export function paywallApiBody(state: SubscriptionState) {
 }
 
 /**
+ * APIs a paywalled admin may still call — the escape hatch to pay / sign out.
+ *
+ * INTENTIONALLY NARROW. Do not add projects, clients, media, messages, payments,
+ * quotes, services, or settings. Those are operating the business; a paywalled
+ * studio must be blocked from them. Only payment + auth escape paths belong here.
+ *
+ * Adding a new endpoint? Ask: “Does this exist solely so they can pay or leave?”
+ * If not, keep it behind the 402.
+ */
+export const PAYWALL_API_EXEMPT_PREFIXES = [
+  /** Sign out, session refresh, password setup — must never trap the user. */
+  "/api/auth",
+  /** Start Stripe Checkout to restore access. */
+  "/api/billing/checkout",
+  /** Customer Portal: update card, invoices, resubscribe, cancel. */
+  "/api/billing/portal",
+] as const;
+
+/** True when pathname is (or is under) a paywall-exempt API. */
+export function isPaywallApiExempt(pathname: string): boolean {
+  const path = pathname.split("?")[0] || pathname;
+  return PAYWALL_API_EXEMPT_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`)
+  );
+}
+
+/**
  * Guard for Stripe billing webhooks.
  *
  * A Stripe webhook must NEVER overwrite `subscription_status` when the current

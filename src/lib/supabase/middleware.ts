@@ -13,6 +13,7 @@ import { writePlatformAudit } from "@/lib/platform-audit";
 import {
   getSubscriptionState,
   isClientMutatingApi,
+  isPaywallApiExempt,
   paywallApiBody,
 } from "@/lib/subscription";
 import { NEEDS_PASSWORD_COOKIE } from "@/lib/auth-password-gate";
@@ -267,8 +268,8 @@ export async function updateSession(request: NextRequest) {
       const sub = getSubscriptionState(ownBusiness);
       if (sub.requiresPayment) {
         if (profile.role === "admin") {
-          const authExempt = path.startsWith("/api/auth");
-          if (isApi && !authExempt) {
+          // Escape hatch only — see PAYWALL_API_EXEMPT_PREFIXES in subscription.ts.
+          if (isApi && !isPaywallApiExempt(path)) {
             return applyPathCookie(
               NextResponse.json(paywallApiBody(sub), { status: 402 }),
               resolution

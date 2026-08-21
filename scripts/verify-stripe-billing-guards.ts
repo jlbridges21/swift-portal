@@ -6,6 +6,7 @@
 import {
   getSubscriptionState,
   shouldApplyStripeSubscriptionUpdate,
+  isPaywallApiExempt,
 } from "../src/lib/subscription";
 import {
   isShootPortalBillingInvoiceSignals,
@@ -125,5 +126,11 @@ assert(
   !activeCancelScheduled.requiresPayment && activeCancelScheduled.reason != null,
   "active cancel-at-period-end still has access + reason"
 );
+
+assert(isPaywallApiExempt("/api/auth/signout"), "paywall exempt: auth");
+assert(isPaywallApiExempt("/api/billing/checkout"), "paywall exempt: checkout");
+assert(isPaywallApiExempt("/api/billing/portal"), "paywall exempt: portal");
+assert(!isPaywallApiExempt("/api/projects"), "paywall NOT exempt: projects");
+assert(!isPaywallApiExempt("/api/admin/settings"), "paywall NOT exempt: settings");
 
 console.log("verify-stripe-billing-guards: all passed");

@@ -26,6 +26,8 @@ export type BillingBusinessRow = {
   plan: string;
   subscription_status: string;
   trial_ends_at: string | null;
+  comped_until: string | null;
+  comped_reason: string | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   stripe_customer_id_test: string | null;
@@ -191,7 +193,7 @@ export async function loadBillingBusiness(
   const { data, error } = await supabase
     .from("businesses")
     .select(
-      "id, name, slug, custom_domain, plan, subscription_status, trial_ends_at, stripe_customer_id, stripe_subscription_id, stripe_customer_id_test, stripe_customer_id_live, stripe_subscription_id_test, stripe_subscription_id_live, billing_email, subscription_current_period_end, subscription_cancel_at_period_end"
+      "id, name, slug, custom_domain, plan, subscription_status, trial_ends_at, comped_until, comped_reason, stripe_customer_id, stripe_subscription_id, stripe_customer_id_test, stripe_customer_id_live, stripe_subscription_id_test, stripe_subscription_id_live, billing_email, subscription_current_period_end, subscription_cancel_at_period_end"
     )
     .eq("id", businessId)
     .is("deleted_at", null)

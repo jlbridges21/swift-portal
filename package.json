@@ -15,6 +15,7 @@
     "test:brand-theme": "npx tsx scripts/verify-brand-theme.ts",
     "test:comped-access": "npx tsx scripts/verify-comped-access.ts",
     "test:stripe-billing-guards": "npx tsx scripts/verify-stripe-billing-guards.ts",
+    "test:paywall-checkout-http": "npx tsx scripts/verify-paywall-checkout-http.ts",
     "setup:stripe-billing": "npx tsx scripts/setup-stripe-billing.ts",
     "tenant-lint": "npx tsx scripts/tenant-lint.ts",
     "tenant-pentest": "npx tsx scripts/tenant-pentest.ts"
