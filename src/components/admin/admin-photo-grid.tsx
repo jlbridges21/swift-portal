@@ -54,6 +54,7 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { toast } from "sonner";
+import { createThumbRequestQueue } from "@/lib/media-thumb-client";
 
 type FolderFilter = "all" | "unfiled" | string;
 
@@ -121,22 +122,34 @@ function useCoarsePointer() {
   return coarse;
 }
 
-function PhotoThumb({ assetId, selected }: { assetId: string; selected: boolean }) {
-  const [url, setUrl] = useState<string | null>(null);
+function PhotoThumb({
+  assetId,
+  selected,
+  url,
+  onVisible,
+}: {
+  assetId: string;
+  selected: boolean;
+  url: string | null;
+  onVisible: (id: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/media/download/${assetId}?thumb=1`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => {
-        if (!cancelled) setUrl(d.url ?? null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [assetId]);
+    const el = ref.current;
+    if (!el || url) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onVisible(assetId);
+      },
+      { rootMargin: "120px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [assetId, onVisible, url]);
 
   return (
-    <div className="relative aspect-square w-full bg-slate-100">
+    <div ref={ref} className="relative aspect-square w-full bg-slate-100">
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -175,6 +188,8 @@ function SortablePhotoCard({
   selectMode,
   placementMode,
   showHandle,
+  thumbUrl,
+  onThumbVisible,
   onActivate,
   onOpen,
   onSetHero,
@@ -195,6 +210,8 @@ function SortablePhotoCard({
   selectMode: boolean;
   placementMode: boolean;
   showHandle: boolean;
+  thumbUrl: string | null;
+  onThumbVisible: (id: string) => void;
   onActivate: (e: ReactMouseEvent, id: string, index: number) => void;
   onOpen: () => void;
   onSetHero: () => void;
@@ -373,7 +390,12 @@ function SortablePhotoCard({
         </button>
       )}
 
-      <PhotoThumb assetId={photo.id} selected={selected} />
+      <PhotoThumb
+        assetId={photo.id}
+        selected={selected}
+        url={thumbUrl}
+        onVisible={onThumbVisible}
+      />
       <div className="space-y-2 p-2">
         <p className="line-clamp-2 text-xs text-foreground">{mediaDisplayName(photo)}</p>
         <div className="flex flex-wrap gap-1">
@@ -475,6 +497,15 @@ export function AdminPhotoGrid({
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [placementMode, setPlacementMode] = useState(false);
+  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
+  const thumbQueueRef = useRef(
+    createThumbRequestQueue((urls) => {
+      setThumbUrls((prev) => ({ ...prev, ...urls }));
+    })
+  );
+  const onThumbVisible = useCallback((id: string) => {
+    thumbQueueRef.current.request(id);
+  }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const marqueeStart = useRef<{ x: number; y: number; additive: boolean } | null>(null);
@@ -1198,6 +1229,8 @@ export function AdminPhotoGrid({
                       selectMode={Boolean(coarsePointer && selectMode)}
                       placementMode={placementMode}
                       showHandle
+                      thumbUrl={thumbUrls[p.id] ?? null}
+                      onThumbVisible={onThumbVisible}
                       onActivate={handleActivate}
                       onOpen={() => {
                         if (placementMode) return;

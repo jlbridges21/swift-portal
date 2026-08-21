@@ -70,10 +70,14 @@ export function isTenantPrefixedStoragePath(filePath: string, businessId: string
   return Boolean(businessId) && filePath.startsWith(`${businessId}/`);
 }
 
-export function buildThumbnailStoragePath(videoFilePath: string): string {
-  const dot = videoFilePath.lastIndexOf(".");
-  const base = dot > 0 ? videoFilePath.slice(0, dot) : videoFilePath;
-  return `${base}-thumb.jpg`;
+/** Sibling object key for a derived thumbnail (same tenant prefix as the original). */
+export function buildThumbnailStoragePath(
+  filePath: string,
+  ext: "jpg" | "webp" = "jpg"
+): string {
+  const dot = filePath.lastIndexOf(".");
+  const base = dot > 0 ? filePath.slice(0, dot) : filePath;
+  return `${base}-thumb.${ext}`;
 }
 
 export function getAllowedTypes(mediaType: string): readonly string[] {

@@ -13,6 +13,7 @@ import { Check, X, MessageSquare, Images, Clapperboard, Globe, FileText } from "
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { mediaDisplayName } from "@/lib/media-display-name";
+import { fetchThumbUrls } from "@/lib/media-thumb-client";
 
 interface DeliverableReviewProps {
   projectId: string;
@@ -31,36 +32,25 @@ function isJpgOrPng(asset: MediaAsset): boolean {
   return ext === "jpg" || ext === "jpeg" || ext === "png";
 }
 
-function PhotoReviewThumb({ assetId, fileName }: { assetId: string; fileName: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/media/download/${assetId}?thumb=1`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => {
-        if (!cancelled && d.url) setUrl(d.url);
-        else if (!cancelled) setFailed(true);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [assetId]);
-
+function PhotoReviewThumb({
+  fileName,
+  url,
+  loading,
+}: {
+  fileName: string;
+  url: string | null;
+  loading: boolean;
+}) {
   return (
     <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-black/5">
       {url && isOptimizableImageUrl(url) ? (
         <RemoteImage src={url} alt={fileName} fill className="object-cover" sizes="64px" />
-      ) : failed ? (
+      ) : loading ? (
+        <div className="h-full w-full animate-pulse bg-slate-200" />
+      ) : (
         <div className="flex h-full items-center justify-center">
           <Images className="h-5 w-5 text-muted" />
         </div>
-      ) : (
-        <div className="h-full w-full animate-pulse bg-slate-200" />
       )}
     </div>
   );
@@ -80,6 +70,30 @@ export function DeliverableReview({
   const [feedbackMap, setFeedbackMap] = useState<Record<string, string>>({});
   const [expandedFeedback, setExpandedFeedback] = useState<string | null>(null);
   const [reviewingKey, setReviewingKey] = useState<string | null>(null);
+  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
+  const [thumbsLoading, setThumbsLoading] = useState(true);
+
+  useEffect(() => {
+    const ids = photos.map((p) => p.id);
+    if (!ids.length) {
+      setThumbsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setThumbsLoading(true);
+    void fetchThumbUrls(ids).then((urls) => {
+      if (cancelled) return;
+      const found: Record<string, string> = {};
+      for (const [id, url] of Object.entries(urls)) {
+        if (url) found[id] = url;
+      }
+      setThumbUrls(found);
+      setThumbsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [photos]);
 
   const allItems = [
     ...photos.map((p) => ({
@@ -181,7 +195,11 @@ export function DeliverableReview({
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   {showPhotoThumb ? (
-                    <PhotoReviewThumb assetId={item.id} fileName={item.name} />
+                    <PhotoReviewThumb
+                      fileName={item.name}
+                      url={thumbUrls[item.id] ?? null}
+                      loading={thumbsLoading && !thumbUrls[item.id]}
+                    />
                   ) : (
                     <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-slate-100 ring-1 ring-black/5">
                       <Icon className={cn("h-6 w-6", isRejected ? "text-red-500" : "text-muted")} />

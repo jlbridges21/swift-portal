@@ -18,7 +18,8 @@
     "test:paywall-checkout-http": "npx tsx scripts/verify-paywall-checkout-http.ts",
     "setup:stripe-billing": "npx tsx scripts/setup-stripe-billing.ts",
     "tenant-lint": "npx tsx scripts/tenant-lint.ts",
-    "tenant-pentest": "npx tsx scripts/tenant-pentest.ts"
+    "tenant-pentest": "npx tsx scripts/tenant-pentest.ts",
+    "backfill:photo-thumbs": "npx tsx scripts/backfill-photo-thumbnails.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

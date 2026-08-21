@@ -32,6 +32,11 @@ import {
 import { useRouter } from "next/navigation";
 import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
 import { mediaDisplayName } from "@/lib/media-display-name";
+import {
+  createThumbRequestQueue,
+  fetchThumbUrls,
+  invalidateThumbUrl,
+} from "@/lib/media-thumb-client";
 
 interface FilterOptions {
   clients: { id: string; name: string; full_name: string | null; company: string | null }[];
@@ -122,6 +127,11 @@ export function MediaLibraryClient({
   const [drawerAsset, setDrawerAsset] = useState<LibraryAsset | null>(null);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   const loaderRef = useRef<HTMLDivElement>(null);
+  const thumbQueueRef = useRef(
+    createThumbRequestQueue((urls) => {
+      setThumbUrls((prev) => ({ ...prev, ...urls }));
+    })
+  );
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 300);
@@ -187,23 +197,27 @@ export function MediaLibraryClient({
 
   async function loadThumb(asset: LibraryAsset) {
     if (thumbUrls[asset.id] || !shouldFetchLibraryThumbnail(asset)) return;
-    await refreshThumbForAsset(asset.id);
+    thumbQueueRef.current.request(asset.id);
   }
 
-  async function refreshThumbForAsset(assetId: string) {
-    try {
-      const res = await fetch(`/api/media/download/${assetId}?thumb=1`, {
-        credentials: "include",
-        cache: "no-store",
+  async function refreshThumbForAsset(assetId: string, force = true) {
+    invalidateThumbUrl(assetId);
+    if (force) {
+      setThumbUrls((prev) => {
+        const next = { ...prev };
+        delete next[assetId];
+        return next;
       });
-      const data = await res.json();
-      if (data.url && !data.mediaType) {
-        const separator = String(data.url).includes("?") ? "&" : "?";
-        const bustedUrl = `${data.url}${separator}v=${Date.now()}`;
-        setThumbUrls((prev) => ({ ...prev, [assetId]: bustedUrl }));
-      }
-    } catch {
-      // ignore
+    }
+    const urls = await fetchThumbUrls([assetId], { force: true });
+    const url = urls[assetId];
+    if (url) {
+      // Cache-bust only after an edit/replace so the browser picks up the new bytes.
+      const separator = url.includes("?") ? "&" : "?";
+      setThumbUrls((prev) => ({
+        ...prev,
+        [assetId]: force ? `${url}${separator}v=${Date.now()}` : url,
+      }));
     }
   }
 
@@ -563,9 +577,10 @@ function AssetDrawer({
       .then((d) => setDetail({ events: d.events ?? [], downloads: d.downloads ?? [] }));
     if (isVideoAsset(asset)) return;
     if (asset.kind !== "tour" && asset.media_source !== "youtube") {
-      fetch(`/api/media/download/${asset.id}?thumb=1`, { credentials: "include" })
-        .then((r) => r.json())
-        .then((d) => { if (d.url) setPreviewUrl(d.url); });
+      void fetchThumbUrls([asset.id]).then((urls) => {
+        const url = urls[asset.id];
+        if (url) setPreviewUrl(url);
+      });
     } else if (asset.embed_url || asset.kuula_url) {
       setPreviewUrl(asset.embed_url || asset.kuula_url);
     }

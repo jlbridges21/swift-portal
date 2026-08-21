@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
 import { Images } from "lucide-react";
+import { createThumbRequestQueue } from "@/lib/media-thumb-client";
 
 /** Consistent responsive grid for photo galleries */
 export const PHOTO_GRID_CLASS =
@@ -36,22 +37,21 @@ export function PhotoGallery({
   const [fullUrls, setFullUrls] = useState<Record<string, string>>({});
   const [loadErrors, setLoadErrors] = useState<Record<string, boolean>>({});
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+  const thumbQueueRef = useRef(
+    createThumbRequestQueue((urls) => {
+      setThumbUrls((prev) => ({ ...prev, ...urls }));
+      setLoadingIds((prev) => {
+        const next = new Set(prev);
+        for (const id of Object.keys(urls)) next.delete(id);
+        return next;
+      });
+    })
+  );
 
   async function loadThumb(asset: MediaAsset) {
     if (thumbUrls[asset.id] || loadErrors[asset.id] || loadingIds.has(asset.id)) return;
     setLoadingIds((prev) => new Set(prev).add(asset.id));
-    try {
-      const url = await getDownloadUrl(asset, true);
-      if (url) setThumbUrls((prev) => ({ ...prev, [asset.id]: url }));
-    } catch {
-      setLoadErrors((prev) => ({ ...prev, [asset.id]: true }));
-    } finally {
-      setLoadingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(asset.id);
-        return next;
-      });
-    }
+    thumbQueueRef.current.request(asset.id);
   }
 
   async function loadFull(asset: MediaAsset): Promise<string | null> {

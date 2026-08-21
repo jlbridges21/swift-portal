@@ -9,6 +9,10 @@ import { logMediaEvent, trackMediaDownload } from "@/lib/media-library";
 import { normalizeStatus } from "@/lib/constants";
 import { downloadFileName, mediaDisplayName } from "@/lib/media-display-name";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import {
+  signMediaThumbnailUrl,
+  THUMB_SIGNED_TTL_SECONDS,
+} from "@/lib/media-signed-thumbs";
 
 export async function GET(
   request: Request,
@@ -142,38 +146,37 @@ export async function GET(
     });
   }
 
-  if (thumb && asset.thumbnail_url) {
-    const { data: thumbData, error: thumbError } = await storageClient.storage
-      .from(bucket)
-      .createSignedUrl(asset.thumbnail_url, 3600);
-    if (!thumbError && thumbData?.signedUrl) {
+  if (thumb) {
+    if (asset.media_type !== "photo") {
       return NextResponse.json({
-        url: thumbData.signedUrl,
+        url: null,
         preview: true,
         downloadsAllowed,
+        mediaType: asset.media_type,
       });
     }
-  }
 
-  const options =
-    thumb || forcePreview
-      ? asset.media_type === "photo"
-        ? { transform: { width: 1200, height: 1200, resize: "contain" as const } }
-        : undefined
-      : undefined;
-
-  if (thumb && asset.media_type !== "photo") {
+    const signed = await signMediaThumbnailUrl(storageClient, bucket, asset);
+    if (!signed) {
+      return NextResponse.json({ error: "Failed to generate preview URL" }, { status: 500 });
+    }
     return NextResponse.json({
-      url: null,
+      url: signed,
       preview: true,
       downloadsAllowed,
-      mediaType: asset.media_type,
     });
   }
 
+  // Full / preview (non-thumb): keep a moderate transform only for locked client preview.
+  const options = forcePreview
+    ? asset.media_type === "photo"
+      ? { transform: { width: 1200, height: 1200, resize: "contain" as const } }
+      : undefined
+    : undefined;
+
   const { data, error } = await storageClient.storage
     .from(bucket)
-    .createSignedUrl(asset.file_path, 3600, options);
+    .createSignedUrl(asset.file_path, THUMB_SIGNED_TTL_SECONDS, options);
 
   if (error || !data?.signedUrl) {
     return NextResponse.json({ error: "Failed to generate preview URL" }, { status: 500 });

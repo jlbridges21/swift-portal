@@ -26,6 +26,8 @@ import {
 import type { PendingSavePayload } from "./pending-save";
 import { getTusUploadEndpoint, getTusUploadHeaders } from "./tus-config";
 import { validateMediaFileBeforeUpload } from "./validation";
+import { uploadPhotoThumbnail } from "./photo-thumbnail";
+import { uploadVideoThumbnail } from "./video-thumbnail";
 
 export interface UploadProgressUpdate {
   phase: UploadPhase;
@@ -661,6 +663,33 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
     });
     logUploadFailure(wrapped.technical);
     throw wrapped;
+  }
+
+  // Derived thumbnails (photos + videos) — same client-side pattern; never block save.
+  if (mediaType === "photo" || mediaType === "video") {
+    onProgress({
+      phase: "generating_thumbnail",
+      progress: 94,
+      bytesLoaded: file.size,
+      bytesTotal: file.size,
+    });
+    try {
+      const thumbPath =
+        mediaType === "photo"
+          ? await uploadPhotoThumbnail(sign.bucket, sign.filePath, file, {
+              fileName: file.name,
+              projectId,
+              filePath: sign.filePath,
+            })
+          : await uploadVideoThumbnail(sign.bucket, sign.filePath, file, {
+              fileName: file.name,
+              projectId,
+              filePath: sign.filePath,
+            });
+      if (thumbPath) pendingSave.thumbnailPath = thumbPath;
+    } catch {
+      // continue without thumbnail
+    }
   }
 
   if (!UPLOAD_DIAGNOSTIC_MODE) {
