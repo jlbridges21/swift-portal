@@ -1,4 +1,6 @@
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { authConfirmUrl } from "@/lib/auth-confirm";
+import { getBusinessPortalOriginById, joinPortalPath } from "@/lib/portal-url";
 
 export interface PortalLinkResult {
   linked: boolean;
@@ -249,4 +251,107 @@ export async function getClientPortalStatus(
     map.set(row.id, { hasPortal: !!row.user_id, userId: row.user_id });
   }
   return map;
+}
+
+export type ClientPortalAccessForEmail = {
+  hasPortal: boolean;
+  userId: string | null;
+  /** Absolute URL for the email CTA (project page, or invite action_link). */
+  ctaUrl: string;
+  /** Which existing mechanism produced the CTA. */
+  mechanism: "existing_portal_link" | "supabase_invite_generate_link" | "login_fallback";
+  message: string;
+};
+
+/**
+ * Ensure the client can open the portal from a branded email CTA.
+ * Reuses ensureClientPortalLink when they already have an account; otherwise
+ * uses auth.admin.generateLink({ type: "invite" }) (same invite flow as admin
+ * invites, without Supabase's own email — we put action_link in sendBrandedEmail).
+ */
+export async function ensureClientPortalAccessForEmail(
+  clientId: string,
+  businessId: string,
+  nextPath: string
+): Promise<ClientPortalAccessForEmail> {
+  const portalOrigin = await getBusinessPortalOriginById(businessId);
+  const projectUrl = joinPortalPath(portalOrigin, nextPath);
+
+  const linked = await ensureClientPortalLink(clientId, businessId);
+  if (linked.hasPortal && linked.userId) {
+    return {
+      hasPortal: true,
+      userId: linked.userId,
+      ctaUrl: projectUrl,
+      mechanism: "existing_portal_link",
+      message: linked.message,
+    };
+  }
+
+  const db = await createTenantServiceClient(businessId);
+  const { data: client } = await db
+    .from("clients")
+    .select("id, email, name, user_id")
+    .eq("id", clientId)
+    .maybeSingle();
+
+  const email = client?.email?.trim().toLowerCase();
+  if (!client || !email) {
+    return {
+      hasPortal: false,
+      userId: null,
+      ctaUrl: joinPortalPath(portalOrigin, "/login"),
+      mechanism: "login_fallback",
+      message: "Client has no email — cannot invite",
+    };
+  }
+
+  const redirectTo = authConfirmUrl(portalOrigin);
+  const { data: linkData, error: linkError } = await db.raw.auth.admin.generateLink({
+    type: "invite",
+    email,
+    options: {
+      data: {
+        role: "client",
+        business_id: businessId,
+        full_name: client.name,
+      },
+      redirectTo,
+    },
+  });
+
+  if (linkError || !linkData?.properties?.action_link) {
+    console.warn("[client-portal] invite generateLink failed:", linkError?.message);
+    return {
+      hasPortal: false,
+      userId: client.user_id,
+      ctaUrl: joinPortalPath(portalOrigin, `/login?next=${encodeURIComponent(nextPath)}`),
+      mechanism: "login_fallback",
+      message: linkError?.message || "Invite link generation failed",
+    };
+  }
+
+  const userId = linkData.user?.id ?? null;
+  if (userId) {
+    await db.from("clients").update({ user_id: userId }).eq("id", client.id);
+    await db.raw
+      .from("profiles")
+      .update({
+        client_id: client.id,
+        role: "client",
+        full_name: client.name,
+        email_notifications_enabled: true,
+        in_app_notifications_enabled: true,
+        business_id: businessId,
+      })
+      .eq("id", userId);
+  }
+
+  return {
+    hasPortal: Boolean(userId),
+    userId,
+    ctaUrl: linkData.properties.action_link,
+    mechanism: "supabase_invite_generate_link",
+    message: "Portal invite link generated for branded email",
+  };
 }

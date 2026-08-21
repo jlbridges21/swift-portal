@@ -77,22 +77,34 @@ export default async function PlatformHomePage({
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted">ShootPortal revenue</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted">
+              <Link href="/platform/revenue/subscriptions" className="hover:underline">
+                ShootPortal revenue
+              </Link>
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold">{formatCurrency(shootPortalRevenueCents)}</p>
-            <p className="mt-1 text-xs text-muted">Subscription income businesses pay you</p>
+            <Link href="/platform/revenue/subscriptions" className="block hover:opacity-90">
+              <p className="text-2xl font-semibold">{formatCurrency(shootPortalRevenueCents)}</p>
+              <p className="mt-1 text-xs text-muted">Subscription income — click to audit</p>
+            </Link>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted">Client payments processed</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted">
+              <Link href="/platform/revenue/client-payments" className="hover:underline">
+                Client payments processed
+              </Link>
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold">
-              {formatCurrency(totals.clientPaymentsProcessedCents)}
-            </p>
-            <p className="mt-1 text-xs text-muted">GMV studios collected from their clients</p>
+            <Link href="/platform/revenue/client-payments" className="block hover:opacity-90">
+              <p className="text-2xl font-semibold">
+                {formatCurrency(totals.clientPaymentsProcessedCents)}
+              </p>
+              <p className="mt-1 text-xs text-muted">GMV — click to audit by business / client</p>
+            </Link>
           </CardContent>
         </Card>
       </div>

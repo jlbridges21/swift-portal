@@ -109,8 +109,19 @@ export function ImpersonationBanner({
             disabled={busy}
             onClick={() => void post({ action: "exit" })}
           >
-            Exit to platform
+            Exit impersonation
           </Button>
+          <form action="/api/auth/signout" method="POST">
+            <Button
+              type="submit"
+              size="sm"
+              variant="outline"
+              className="border-red-800 bg-transparent text-red-950 hover:bg-red-100"
+              disabled={busy}
+            >
+              Sign out
+            </Button>
+          </form>
         </div>
       </div>
     </div>

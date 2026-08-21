@@ -13,7 +13,8 @@ export type NotificationType =
   | "deliverables_uploaded"
   | "invoice_available"
   | "payment_confirmed"
-  | "project_message";
+  | "project_message"
+  | "client_added_to_project";
 
 export type ProjectStatus =
   | "new_request"
@@ -78,6 +79,7 @@ export type ActivityType =
   | "quote_approved"
   | "quote_changes_requested"
   | "asset_reviewed"
+  | "client_added_to_project"
   | "sent_for_review"
   | "email_sent"
   | "email_delivered"

@@ -40,7 +40,8 @@ export type NotificationEventKey =
   | "payment_received"
   | "payment_failed"
   | "project_delivered"
-  | "project_message";
+  | "project_message"
+  | "client_added_to_project";
 
 export interface NotificationChannelSettings {
   inApp: boolean;
@@ -137,6 +138,12 @@ export const NOTIFICATION_EVENT_DEFINITIONS: {
   { key: "payment_failed", label: "Payment failed", description: "When a payment attempt fails.", audience: "admin" },
   { key: "project_delivered", label: "Project delivered", description: "When a project is marked complete / delivered.", audience: "client" },
   { key: "project_message", label: "Project message", description: "When a client or admin sends a portal message on a project.", audience: "both" },
+  {
+    key: "client_added_to_project",
+    label: "Added to a project",
+    description: "Notifies a client when an admin adds them to an existing project.",
+    audience: "client",
+  },
 ];
 
 function defaultChannelSettings(overrides?: Partial<NotificationChannelSettings>): NotificationChannelSettings {

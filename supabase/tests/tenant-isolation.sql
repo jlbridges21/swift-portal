@@ -88,8 +88,8 @@ $$;
 DO $$
 DECLARE
   -- >>> REPLACE these two after creating example.test users <<<
-  v_tenant_b_admin_user_id  uuid := '5448df47-b934-4313-973a-db81d0396e36';
-  v_tenant_b_client_user_id uuid := '694521a7-5660-4529-b13d-3745f0665b1e';
+  v_tenant_b_admin_user_id  uuid := 'd8dbb086-ae9d-40f5-abcc-6a36491780ca';
+  v_tenant_b_client_user_id uuid := 'bdd25ea1-18cb-4eff-bf85-a81c14417af5';
   -- Existing Swift admin (default jackson@swiftaerialmedia.com)
   v_swift_admin_user_id     uuid := '7d0957c6-6330-48ca-a530-f13d4dc15a84';
 
@@ -638,8 +638,8 @@ DO $$
 DECLARE
   v_teardown_business_id uuid := '00000000-0000-0000-0000-0000000000ff';
   v_pentest_business_id uuid := '00000000-0000-0000-0000-0000000000cc';
-  v_tenant_b_admin_user_id  uuid := '5448df47-b934-4313-973a-db81d0396e36';
-  v_tenant_b_client_user_id uuid := '694521a7-5660-4529-b13d-3745f0665b1e';
+  v_tenant_b_admin_user_id  uuid := 'd8dbb086-ae9d-40f5-abcc-6a36491780ca';
+  v_tenant_b_client_user_id uuid := 'bdd25ea1-18cb-4eff-bf85-a81c14417af5';
 BEGIN
   IF v_teardown_business_id <> '00000000-0000-0000-0000-0000000000ff'::uuid THEN
     RAISE EXCEPTION 'Teardown aborted: business id guard failed (%)', v_teardown_business_id;

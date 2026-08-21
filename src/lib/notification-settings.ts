@@ -76,6 +76,8 @@ export function resolveNotificationEventKey(ctx: NotifyContext): NotificationEve
         return "project_delivered";
       case "project_message":
         return "project_message";
+      case "client_added_to_project":
+        return "client_added_to_project";
       default:
         return null;
     }

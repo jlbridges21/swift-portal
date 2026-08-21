@@ -79,6 +79,7 @@ function resolveTemplate(
   if (eventType === "revision_requested") return "revision_response";
   if (eventType === "invoice_available") return "payment_requested";
   if (eventType === "payment_confirmed") return "payment_received";
+  if (eventType === "client_added_to_project") return "general";
 
   if (eventType === "status_changed") {
     const lower = `${title} ${message}`.toLowerCase();
@@ -203,6 +204,22 @@ export function getClientEmailPresentation(
       progressStep,
     },
   };
+
+  if (eventType === "client_added_to_project") {
+    const url = ctaUrl ?? "";
+    const isInviteCta =
+      Boolean(url) &&
+      (url.includes("type=invite") || url.includes("/auth/v1/verify") || url.includes("token="));
+    return {
+      template: "general",
+      subject: subjectOverride?.trim() || title,
+      title,
+      body: message,
+      ctaLabel: isInviteCta ? "Accept invite & open project" : "Open project",
+      ctaUrl,
+      progressStep,
+    };
+  }
 
   const preset = presets[template];
   const subject = subjectOverride?.trim() || preset.subject;

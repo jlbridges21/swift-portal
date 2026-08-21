@@ -3,6 +3,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { notifyClientAddedToProject } from "@/lib/client-added-notification";
 
 export async function GET(request: Request) {
   const auth = await requireAdminApi();
@@ -50,6 +51,21 @@ export async function POST(request: Request) {
   const businessId = tenant.businessId;
   const db = await createTenantServiceClient(businessId);
 
+  const { data: existingAssignment } = await db
+    .from("project_clients")
+    .select("id")
+    .eq("project_id", project_id)
+    .eq("client_id", client_id)
+    .maybeSingle();
+
+  const { count: existingCount } = await db
+    .from("project_clients")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", project_id);
+
+  const priorClientCount = existingCount ?? 0;
+  const wasAlreadyOnProject = Boolean(existingAssignment?.id);
+
   // Link existing portal account by email / user_id before assigning
   let portal = await ensureClientPortalLink(client_id, businessId);
 
@@ -58,12 +74,7 @@ export async function POST(request: Request) {
     portal = await enableClientPortalAccess(client_id, password, businessId);
   }
 
-  const { count: existingCount } = await db
-    .from("project_clients")
-    .select("id", { count: "exact", head: true })
-    .eq("project_id", project_id);
-
-  const makePrimary = Boolean(is_primary) || (existingCount ?? 0) === 0;
+  const makePrimary = Boolean(is_primary) || priorClientCount === 0;
 
   if (makePrimary) {
     await db
@@ -90,11 +101,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  let notifyResult: { notified: boolean; reason?: string; portalMechanism?: string } | null =
+    null;
+  try {
+    notifyResult = await notifyClientAddedToProject({
+      businessId,
+      projectId: project_id,
+      clientId: client_id,
+      wasAlreadyOnProject,
+      priorClientCount,
+    });
+  } catch (err) {
+    console.error("[project-clients] notifyClientAddedToProject failed", err);
+  }
+
   return NextResponse.json({
     ...data,
     portal_linked: portal.linked,
     portal_has_access: portal.hasPortal,
     portal_message: portal.message,
+    client_added_notified: notifyResult?.notified ?? false,
+    client_added_notify_reason: notifyResult?.reason ?? null,
+    client_added_portal_mechanism: notifyResult?.portalMechanism ?? null,
   });
 }
 

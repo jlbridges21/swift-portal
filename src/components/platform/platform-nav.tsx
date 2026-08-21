@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const links = [
@@ -21,26 +22,33 @@ export function PlatformNav() {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">ShootPortal</p>
           <p className="text-lg font-semibold text-heading">Platform console</p>
         </div>
-        <nav className="flex flex-wrap gap-1">
-          {links.map((link) => {
-            const active =
-              link.href === "/platform"
-                ? pathname === "/platform"
-                : pathname.startsWith(link.href);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  "rounded-md px-3 py-2 text-sm font-medium",
-                  active ? "bg-accent-subtle text-heading" : "text-muted hover:bg-subtle hover:text-heading"
-                )}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="flex flex-wrap items-center gap-2">
+          <nav className="flex flex-wrap gap-1">
+            {links.map((link) => {
+              const active =
+                link.href === "/platform"
+                  ? pathname === "/platform"
+                  : pathname.startsWith(link.href);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={cn(
+                    "rounded-md px-3 py-2 text-sm font-medium",
+                    active ? "bg-accent-subtle text-heading" : "text-muted hover:bg-subtle hover:text-heading"
+                  )}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+          </nav>
+          <form action="/api/auth/signout" method="POST">
+            <Button variant="ghost" size="sm" type="submit" className="min-h-11 px-3 text-muted">
+              Sign out
+            </Button>
+          </form>
+        </div>
       </div>
     </header>
   );

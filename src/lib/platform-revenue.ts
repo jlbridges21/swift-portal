@@ -78,33 +78,260 @@ export async function recordPlatformSubscriptionPayment(
  * Lifetime ShootPortal SaaS revenue from local ledger.
  * Excludes currently-comped businesses (they should not appear, but filter anyway).
  */
-export async function sumShootPortalSubscriptionRevenueCents(): Promise<number> {
-  const raw = await createServiceClient();
-  const { data: rows, error } = await raw
-    .from("platform_subscription_payments")
-    .select("amount_paid_cents, business_id");
-  if (error) {
-    console.error("[platform-revenue] sum failed", error.message);
-    return 0;
-  }
-  if (!rows?.length) return 0;
+export async function sumShootPortalSubscriptionRevenueCents(
+  filters?: PlatformRevenueFilters
+): Promise<number> {
+  const rows = await listShootPortalSubscriptionPayments(filters);
+  return rows.reduce((sum, row) => sum + row.amountPaidCents, 0);
+}
 
-  const businessIds = [...new Set(rows.map((r) => r.business_id))];
+export type PlatformRevenueFilters = {
+  businessId?: string | null;
+  from?: string | null;
+  to?: string | null;
+};
+
+export type SubscriptionPaymentRow = {
+  id: string;
+  businessId: string;
+  businessName: string;
+  plan: string;
+  amountPaidCents: number;
+  currency: string;
+  paidAt: string;
+  stripeInvoiceId: string;
+  stripeSubscriptionId: string | null;
+  stripeMode: string;
+};
+
+function parseDayBound(value: string | null | undefined, endOfDay: boolean): string | null {
+  if (!value?.trim()) return null;
+  const d = new Date(value.trim());
+  if (Number.isNaN(d.getTime())) return null;
+  if (endOfDay) {
+    d.setUTCHours(23, 59, 59, 999);
+  } else {
+    d.setUTCHours(0, 0, 0, 0);
+  }
+  return d.toISOString();
+}
+
+async function loadCompedBusinessIds(
+  raw: Awaited<ReturnType<typeof createServiceClient>>,
+  businessIds: string[]
+): Promise<Set<string>> {
+  if (!businessIds.length) return new Set();
   const { data: businesses } = await raw
     .from("businesses")
     .select(
       "id, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end"
     )
     .in("id", businessIds);
-
-  const compedIds = new Set(
+  return new Set(
     (businesses ?? [])
       .filter((b) => getSubscriptionState(b).isComped)
       .map((b) => b.id)
   );
+}
 
-  return rows.reduce((sum, row) => {
-    if (compedIds.has(row.business_id)) return sum;
-    return sum + (typeof row.amount_paid_cents === "number" ? row.amount_paid_cents : 0);
-  }, 0);
+/** Cross-tenant SaaS subscription payments for platform console (super_admin only). */
+export async function listShootPortalSubscriptionPayments(
+  filters?: PlatformRevenueFilters
+): Promise<SubscriptionPaymentRow[]> {
+  const raw = await createServiceClient();
+  let query = raw
+    .from("platform_subscription_payments")
+    .select(
+      "id, business_id, amount_paid_cents, currency, paid_at, stripe_invoice_id, stripe_subscription_id, stripe_mode"
+    )
+    .order("paid_at", { ascending: false });
+
+  if (filters?.businessId) {
+    query = query.eq("business_id", filters.businessId);
+  }
+  const fromIso = parseDayBound(filters?.from, false);
+  const toIso = parseDayBound(filters?.to, true);
+  if (fromIso) query = query.gte("paid_at", fromIso);
+  if (toIso) query = query.lte("paid_at", toIso);
+
+  const { data: rows, error } = await query;
+  if (error) {
+    console.error("[platform-revenue] list subscription payments failed", error.message);
+    throw new Error(error.message);
+  }
+  if (!rows?.length) return [];
+
+  const businessIds = [...new Set(rows.map((r) => r.business_id))];
+  const compedIds = await loadCompedBusinessIds(raw, businessIds);
+  const { data: businesses } = await raw
+    .from("businesses")
+    .select("id, name, plan")
+    .in("id", businessIds);
+  const bizMap = new Map((businesses ?? []).map((b) => [b.id, b]));
+
+  return rows
+    .filter((r) => !compedIds.has(r.business_id))
+    .map((r) => {
+      const biz = bizMap.get(r.business_id);
+      return {
+        id: r.id,
+        businessId: r.business_id,
+        businessName: biz?.name ?? "Unknown",
+        plan: biz?.plan ?? "—",
+        amountPaidCents: typeof r.amount_paid_cents === "number" ? r.amount_paid_cents : 0,
+        currency: r.currency || "usd",
+        paidAt: r.paid_at,
+        stripeInvoiceId: r.stripe_invoice_id,
+        stripeSubscriptionId: r.stripe_subscription_id,
+        stripeMode: r.stripe_mode,
+      };
+    });
+}
+
+export type ClientPaymentLine = {
+  id: string;
+  businessId: string;
+  businessName: string;
+  clientId: string | null;
+  clientName: string;
+  clientEmail: string | null;
+  amountCents: number;
+  status: string;
+  paidAt: string | null;
+  createdAt: string;
+  description: string | null;
+  projectId: string | null;
+};
+
+export type ClientPaymentsByBusiness = {
+  businessId: string;
+  businessName: string;
+  totalCents: number;
+  clients: {
+    clientId: string | null;
+    clientName: string;
+    clientEmail: string | null;
+    totalCents: number;
+    payments: ClientPaymentLine[];
+  }[];
+};
+
+/**
+ * Cross-tenant client→studio payments (Connect GMV). Headline uses status=paid only;
+ * pass status to match. Super-admin path only — never call from tenant code.
+ */
+export async function listClientPaymentsProcessed(
+  filters?: PlatformRevenueFilters & { status?: string | null }
+): Promise<{
+  totalCents: number;
+  byBusiness: ClientPaymentsByBusiness[];
+  lines: ClientPaymentLine[];
+}> {
+  const raw = await createServiceClient();
+  const status = filters?.status?.trim() || "paid";
+
+  let query = raw
+    .from("payments")
+    .select(
+      "id, business_id, client_id, project_id, amount, status, paid_at, created_at, description"
+    )
+    .order("paid_at", { ascending: false });
+
+  if (status !== "all") {
+    query = query.eq("status", status);
+  }
+  if (filters?.businessId) {
+    query = query.eq("business_id", filters.businessId);
+  }
+  const fromIso = parseDayBound(filters?.from, false);
+  const toIso = parseDayBound(filters?.to, true);
+  // Prefer paid_at for paid rows; fall back to created_at window for unpaid filters.
+  if (fromIso) {
+    if (status === "paid") query = query.gte("paid_at", fromIso);
+    else query = query.gte("created_at", fromIso);
+  }
+  if (toIso) {
+    if (status === "paid") query = query.lte("paid_at", toIso);
+    else query = query.lte("created_at", toIso);
+  }
+
+  const { data: rows, error } = await query;
+  if (error) {
+    console.error("[platform-revenue] list client payments failed", error.message);
+    throw new Error(error.message);
+  }
+  if (!rows?.length) {
+    return { totalCents: 0, byBusiness: [], lines: [] };
+  }
+
+  const businessIds = [...new Set(rows.map((r) => r.business_id).filter(Boolean))];
+  const clientIds = [...new Set(rows.map((r) => r.client_id).filter(Boolean))] as string[];
+
+  const [{ data: businesses }, { data: clients }] = await Promise.all([
+    raw.from("businesses").select("id, name").in("id", businessIds),
+    clientIds.length
+      ? raw.from("clients").select("id, name, email").in("id", clientIds)
+      : Promise.resolve({ data: [] as { id: string; name: string; email: string | null }[] }),
+  ]);
+
+  const bizMap = new Map((businesses ?? []).map((b) => [b.id, b.name as string]));
+  const clientMap = new Map(
+    (clients ?? []).map((c) => [c.id, { name: c.name as string, email: c.email as string | null }])
+  );
+
+  const lines: ClientPaymentLine[] = rows.map((r) => {
+    const client = r.client_id ? clientMap.get(r.client_id) : null;
+    return {
+      id: r.id,
+      businessId: r.business_id,
+      businessName: bizMap.get(r.business_id) ?? "Unknown",
+      clientId: r.client_id,
+      clientName: client?.name ?? (r.client_id ? "Unknown client" : "No client"),
+      clientEmail: client?.email ?? null,
+      amountCents: typeof r.amount === "number" ? r.amount : 0,
+      status: r.status,
+      paidAt: r.paid_at,
+      createdAt: r.created_at,
+      description: r.description,
+      projectId: r.project_id,
+    };
+  });
+
+  const totalCents = lines.reduce((s, l) => s + l.amountCents, 0);
+
+  const byBusinessMap = new Map<string, ClientPaymentsByBusiness>();
+  for (const line of lines) {
+    let biz = byBusinessMap.get(line.businessId);
+    if (!biz) {
+      biz = {
+        businessId: line.businessId,
+        businessName: line.businessName,
+        totalCents: 0,
+        clients: [],
+      };
+      byBusinessMap.set(line.businessId, biz);
+    }
+    biz.totalCents += line.amountCents;
+    const clientKey = line.clientId ?? "__none__";
+    let clientBucket = biz.clients.find((c) => (c.clientId ?? "__none__") === clientKey);
+    if (!clientBucket) {
+      clientBucket = {
+        clientId: line.clientId,
+        clientName: line.clientName,
+        clientEmail: line.clientEmail,
+        totalCents: 0,
+        payments: [],
+      };
+      biz.clients.push(clientBucket);
+    }
+    clientBucket.totalCents += line.amountCents;
+    clientBucket.payments.push(line);
+  }
+
+  const byBusiness = [...byBusinessMap.values()].sort((a, b) => b.totalCents - a.totalCents);
+  for (const biz of byBusiness) {
+    biz.clients.sort((a, b) => b.totalCents - a.totalCents);
+  }
+
+  return { totalCents, byBusiness, lines };
 }

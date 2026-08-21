@@ -23,6 +23,7 @@ export function ClientMessagesChat({ projectId, className, compact }: ClientMess
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const didInitialRenderRef = useRef(false);
   const markedRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -54,8 +55,16 @@ export function ClientMessagesChat({ projectId, className, compact }: ClientMess
   }, [loading, messages]);
 
   useEffect(() => {
+    // Embedded on the project page (compact), skip the initial jump: messages.length
+    // goes 0 -> N on load and scrolling then drags the viewport down past Payments.
+    // On the standalone /dashboard/messages page, starting at the newest message is
+    // the correct behavior, so only the embedded variant is guarded.
+    if (compact && !didInitialRenderRef.current) {
+      didInitialRenderRef.current = true;
+      return;
+    }
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [messages.length]);
+  }, [messages.length, compact]);
 
   async function handleSend() {
     const text = draft.trim();
