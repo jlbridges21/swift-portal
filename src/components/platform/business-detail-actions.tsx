@@ -53,6 +53,8 @@ export function BusinessDetailActions({
     trial_ends_at: string | null;
     comped_until: string | null;
     comped_reason: string | null;
+    lifecycle_emails_suppressed?: boolean | null;
+    billing_email?: string | null;
   };
   admins: Admin[];
   settingsJson: string;
@@ -406,6 +408,41 @@ export function BusinessDetailActions({
               </Button>
             </form>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Lifecycle emails</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted">
+            ShootPortal → this business (trial / billing). Recipient:{" "}
+            {business.billing_email?.trim() ? (
+              <code className="text-xs">{business.billing_email}</code>
+            ) : (
+              <span>all admins (no billing_email set)</span>
+            )}
+            . Comped businesses are always skipped by the cron.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={business.lifecycle_emails_suppressed ? "warning" : "success"}>
+              {business.lifecycle_emails_suppressed ? "Suppressed" : "Enabled"}
+            </Badge>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                void post(`/api/platform/businesses/${business.id}/lifecycle-emails`, {
+                  suppressed: !business.lifecycle_emails_suppressed,
+                })
+              }
+            >
+              {business.lifecycle_emails_suppressed ? "Enable lifecycle emails" : "Suppress lifecycle emails"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

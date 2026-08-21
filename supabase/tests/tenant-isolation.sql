@@ -437,6 +437,19 @@ BEGIN
       PERFORM _tenant_test_bump();
   END;
 
+  -- v53: business admin cannot read platform lifecycle email catalog / send log
+  SELECT count(*) INTO v_n FROM platform_email_templates;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'READ LEAK: platform_email_templates visible to Swift admin (% rows)', v_n;
+  END IF;
+  PERFORM _tenant_test_bump();
+
+  SELECT count(*) INTO v_n FROM platform_email_sends;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'READ LEAK: platform_email_sends visible to Swift admin (% rows)', v_n;
+  END IF;
+  PERFORM _tenant_test_bump();
+
   -- v36: Swift admin still sees own-business storage objects (legacy {project}/… must keep working)
   SELECT count(*) INTO v_n FROM storage.objects
     WHERE bucket_id IN ('project-media', 'project-documents');

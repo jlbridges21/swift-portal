@@ -8,6 +8,7 @@ const links = [
   { href: "/platform", label: "Dashboard" },
   { href: "/platform/businesses/new", label: "New business" },
   { href: "/platform/plans", label: "Plans" },
+  { href: "/platform/lifecycle-emails", label: "Lifecycle emails" },
   { href: "/platform/audit", label: "Audit log" },
 ];
 
