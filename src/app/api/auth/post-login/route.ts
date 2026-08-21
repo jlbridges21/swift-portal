@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { getPublicHostContext, lookupBusinessById } from "@/lib/host-resolution";
 import { getLoginRedirectOrigin, joinPortalPath } from "@/lib/portal-url";
+import { needsOnboardingRedirect } from "@/lib/onboarding";
 
 export async function POST() {
   const profile = await getProfile();
@@ -41,9 +42,14 @@ export async function POST() {
   const origin = `${proto}://${host}`;
   const publicHost = await getPublicHostContext();
 
-  const destPath = profile.role === "admin" ? "/admin" : "/dashboard";
-  // Already on this business's tenant host → relative path is fine.
-  // Apex / other hosts → send to canonical {slug}.shootportal.app (prompt 18 + signup).
+  const needsWizard = needsOnboardingRedirect({
+    onboardingCompletedAt: own.onboarding_completed_at,
+    onboardingState: own.onboarding_state,
+    role: profile.role,
+  });
+
+  const destPath =
+    profile.role === "admin" ? (needsWizard ? "/onboarding" : "/admin") : "/dashboard";
   const onOwnTenant =
     publicHost.kind === "tenant" && publicHost.businessId === own.id;
   const destOrigin = getLoginRedirectOrigin(

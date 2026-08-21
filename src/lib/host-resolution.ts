@@ -31,7 +31,7 @@ export type HostResolveSource =
 
 /** Columns middleware + isLiveBusiness need for tenant host lookups. */
 export const HOST_BUSINESS_SELECT =
-  "id, slug, name, status, custom_domain, deleted_at, subscription_status, trial_ends_at, comped_until, comped_reason, plan, subscription_current_period_end, subscription_cancel_at_period_end";
+  "id, slug, name, status, custom_domain, deleted_at, subscription_status, trial_ends_at, comped_until, comped_reason, plan, subscription_current_period_end, subscription_cancel_at_period_end, onboarding_completed_at, onboarding_state";
 
 export type HostBusinessRow = {
   id: string;
@@ -47,6 +47,8 @@ export type HostBusinessRow = {
   plan: string;
   subscription_current_period_end: string | null;
   subscription_cancel_at_period_end: boolean;
+  onboarding_completed_at: string | null;
+  onboarding_state: unknown;
 };
 
 export type HostResolution = {

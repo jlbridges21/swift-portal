@@ -120,12 +120,21 @@ export async function GET(request: Request) {
         if (!honorNext) {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("role")
+            .select("role, business_id")
             .eq("id", user.id)
             .maybeSingle();
           if (profile?.role === "super_admin") dest = "/platform";
-          else if (profile?.role === "admin") dest = "/admin";
-          else if (profile?.role === "client") dest = "/dashboard";
+          else if (profile?.role === "admin") {
+            const { adminHomePath } = await import("@/lib/onboarding");
+            const { lookupBusinessById } = await import("@/lib/host-resolution");
+            const biz = profile.business_id
+              ? await lookupBusinessById(profile.business_id)
+              : null;
+            dest = adminHomePath({
+              onboardingCompletedAt: biz?.onboarding_completed_at,
+              onboardingState: biz?.onboarding_state,
+            });
+          } else if (profile?.role === "client") dest = "/dashboard";
         } else {
           dest = next;
         }

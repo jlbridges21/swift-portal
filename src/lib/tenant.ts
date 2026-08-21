@@ -40,6 +40,8 @@ export interface TenantContext {
     plan: string;
     subscription_current_period_end: string | null;
     subscription_cancel_at_period_end: boolean;
+    onboarding_completed_at: string | null;
+    onboarding_state: unknown;
   };
   role: "super_admin" | "admin" | "client";
   isSuperAdmin: boolean;
@@ -59,7 +61,7 @@ async function loadBusiness(id: string): Promise<TenantContext["business"] | nul
   const { data } = await supabase
     .from("businesses")
     .select(
-      "id, slug, name, status, custom_domain, subscription_status, trial_ends_at, comped_until, comped_reason, plan, subscription_current_period_end, subscription_cancel_at_period_end"
+      "id, slug, name, status, custom_domain, subscription_status, trial_ends_at, comped_until, comped_reason, plan, subscription_current_period_end, subscription_cancel_at_period_end, onboarding_completed_at, onboarding_state"
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -70,6 +72,8 @@ async function loadBusiness(id: string): Promise<TenantContext["business"] | nul
     plan: typeof data.plan === "string" ? data.plan : "",
     subscription_current_period_end: data.subscription_current_period_end ?? null,
     subscription_cancel_at_period_end: Boolean(data.subscription_cancel_at_period_end),
+    onboarding_completed_at: data.onboarding_completed_at ?? null,
+    onboarding_state: data.onboarding_state ?? {},
   };
 }
 

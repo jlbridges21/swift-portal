@@ -4,9 +4,11 @@ import { BrandProvider } from "@/components/brand/brand-provider";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { SubscriptionBanner } from "@/components/admin/subscription-banner";
 import { ImpersonationBanner } from "@/components/platform/impersonation-banner";
+import { FinishSetupBanner } from "@/components/admin/finish-setup-banner";
 import { requireAdminPage } from "@/lib/admin-access";
 import { getTenantContext } from "@/lib/tenant";
 import { metadataFromBusiness } from "@/lib/site-metadata";
+import { showFinishSetupBanner } from "@/lib/onboarding";
 import type { Metadata } from "next";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -17,9 +19,15 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { tenant } = await requireAdminPage();
+  const { profile, tenant } = await requireAdminPage();
   const settings = await getAppSettings(tenant.businessId);
   const brand = getPortalBrandFromSettings(settings);
+  const finishBanner = showFinishSetupBanner({
+    onboardingCompletedAt: tenant.business.onboarding_completed_at,
+    onboardingState: tenant.business.onboarding_state,
+    role: profile.role,
+    impersonating: tenant.impersonating,
+  });
 
   return (
     <BrandProvider brand={brand}>
@@ -41,6 +49,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         subscriptionCurrentPeriodEnd={tenant.business.subscription_current_period_end}
         subscriptionCancelAtPeriodEnd={tenant.business.subscription_cancel_at_period_end}
       />
+      {finishBanner ? <FinishSetupBanner /> : null}
       <AdminShell>{children}</AdminShell>
     </BrandProvider>
   );

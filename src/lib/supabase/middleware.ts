@@ -17,6 +17,7 @@ import {
   paywallApiBody,
 } from "@/lib/subscription";
 import { NEEDS_PASSWORD_COOKIE } from "@/lib/auth-password-gate";
+import { needsOnboardingRedirect } from "@/lib/onboarding";
 
 function inboundHost(request: NextRequest): string {
   return request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
@@ -91,7 +92,7 @@ export async function updateSession(request: NextRequest) {
   const isApi = path.startsWith("/api/");
   const method = request.method.toUpperCase();
 
-  const protectedPaths = ["/dashboard", "/admin", "/platform", "/billing"];
+  const protectedPaths = ["/dashboard", "/admin", "/platform", "/billing", "/onboarding"];
   const isProtected = protectedPaths.some((p) => path.startsWith(p));
 
   // Self-serve signup is platform-apex only — never on a tenant host.
@@ -201,11 +202,21 @@ export async function updateSession(request: NextRequest) {
         profile?.role === "admin" &&
         ownBusiness &&
         getSubscriptionState(ownBusiness).requiresPayment;
+      const needsWizard =
+        profile?.role === "admin" &&
+        ownBusiness &&
+        needsOnboardingRedirect({
+          onboardingCompletedAt: ownBusiness.onboarding_completed_at,
+          onboardingState: ownBusiness.onboarding_state,
+          role: profile.role,
+        });
       const destPath = adminPaywalled
         ? "/billing"
-        : profile?.role === "admin"
-          ? "/admin"
-          : "/dashboard";
+        : needsWizard
+          ? "/onboarding"
+          : profile?.role === "admin"
+            ? "/admin"
+            : "/dashboard";
 
       if (ownBusiness) {
         const onOwnTenant =
@@ -239,6 +250,42 @@ export async function updateSession(request: NextRequest) {
           url.searchParams.set("notice", "impersonate");
           return applyPathCookie(NextResponse.redirect(url), resolution);
         }
+      }
+      // Incomplete onboarding (not deferred) → wizard, not empty dashboard.
+      if (
+        !isApi &&
+        profile?.role === "admin" &&
+        ownBusiness &&
+        needsOnboardingRedirect({
+          onboardingCompletedAt: ownBusiness.onboarding_completed_at,
+          onboardingState: ownBusiness.onboarding_state,
+          role: profile.role,
+        })
+      ) {
+        const url = request.nextUrl.clone();
+        url.pathname = `${resolution.pathPrefix}/onboarding`;
+        url.search = "";
+        return applyPathCookie(NextResponse.redirect(url), resolution);
+      }
+    }
+
+    if (path.startsWith("/onboarding")) {
+      if (profile?.role !== "admin" && profile?.role !== "super_admin") {
+        const url = request.nextUrl.clone();
+        url.pathname = `${resolution.pathPrefix}/dashboard`;
+        return applyPathCookie(NextResponse.redirect(url), resolution);
+      }
+      if (profile?.role === "super_admin" && !isApi) {
+        const claims = verifyImpersonationCookie(request.cookies.get(SA_BUSINESS_CONTEXT_COOKIE)?.value);
+        if (!claims) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/platform";
+          return applyPathCookie(NextResponse.redirect(url), resolution);
+        }
+        // Impersonating: skip wizard, go to admin.
+        const url = request.nextUrl.clone();
+        url.pathname = `${resolution.pathPrefix}/admin`;
+        return applyPathCookie(NextResponse.redirect(url), resolution);
       }
     }
 
@@ -275,7 +322,7 @@ export async function updateSession(request: NextRequest) {
               resolution
             );
           }
-          if (!isApi && path.startsWith("/admin")) {
+          if (!isApi && (path.startsWith("/admin") || path.startsWith("/onboarding"))) {
             const url = request.nextUrl.clone();
             url.pathname = `${resolution.pathPrefix}/billing`;
             url.search = "";

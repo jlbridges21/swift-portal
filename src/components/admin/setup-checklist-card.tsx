@@ -5,25 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Circle, X } from "lucide-react";
 import type { AppSettings } from "@/lib/app-settings";
-import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
-import { BRAND } from "@/lib/brand";
-
-/** Starter catalog from createBusinessForPlatform — not "set up" yet. */
-const STARTER_SERVICE_SLUGS = new Set([
-  "aerial_photography",
-  "aerial_videography",
-  "drone_mapping",
-  "custom_project",
-]);
+import { buildSetupChecklistItems, type ServiceCompletenessRow } from "@/lib/setup-completeness";
 
 interface SetupChecklistCardProps {
   settings: AppSettings;
   /** When true, deep-link into /admin/settings (admin home). */
   linkToSettings?: boolean;
-}
-
-function isDone(value: boolean) {
-  return value;
 }
 
 function settingsHref(hash: string, linkToSettings: boolean) {
@@ -37,7 +24,7 @@ export function SetupChecklistCard({
   const [ready, setReady] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [stripeOk, setStripeOk] = useState<boolean | null>(null);
-  const [servicesCustomized, setServicesCustomized] = useState<boolean | null>(null);
+  const [services, setServices] = useState<ServiceCompletenessRow[] | null>(null);
 
   useEffect(() => {
     setDismissed(window.localStorage.getItem("portal-setup-dismissed") === "1");
@@ -52,72 +39,17 @@ export function SetupChecklistCard({
       .then((r) => r.json())
       .then((data) => {
         const list = Array.isArray(data.services) ? data.services : [];
-        if (list.length === 0) {
-          setServicesCustomized(false);
-          return;
-        }
-        const onlyStarters =
-          list.length === STARTER_SERVICE_SLUGS.size &&
-          list.every(
-            (s: { slug?: string }) => typeof s.slug === "string" && STARTER_SERVICE_SLUGS.has(s.slug)
-          );
-        setServicesCustomized(!onlyStarters);
+        setServices(list as ServiceCompletenessRow[]);
       })
-      .catch(() => setServicesCustomized(false));
+      .catch(() => setServices([]));
   }, []);
 
-  const b = settings.business;
-  const items = [
-    {
-      id: "name",
-      label: "Business name",
-      href: settingsHref("settings-business-name", linkToSettings),
-      done: Boolean(b.businessName.trim()) && b.businessName !== PLATFORM_BUSINESS_DEFAULTS.businessName,
-    },
-    {
-      id: "logo",
-      label: "Logo",
-      href: settingsHref("settings-logo", linkToSettings),
-      done: Boolean(b.logoUrl) && b.logoUrl !== PLATFORM_BUSINESS_DEFAULTS.logoUrl && b.logoUrl !== BRAND.logoUrl,
-    },
-    {
-      id: "colors",
-      label: "Brand colors",
-      href: settingsHref("settings-colors", linkToSettings),
-      done:
-        b.brandPrimaryColor !== PLATFORM_BUSINESS_DEFAULTS.brandPrimaryColor ||
-        b.brandAccentColor !== PLATFORM_BUSINESS_DEFAULTS.brandAccentColor,
-    },
-    {
-      id: "contact",
-      label: "Contact info",
-      href: settingsHref("settings-contact", linkToSettings),
-      done: Boolean(b.primaryContactEmail.trim() || b.phoneNumber.trim()),
-    },
-    {
-      id: "email",
-      label: "Email sender",
-      href: settingsHref("settings-email", linkToSettings),
-      // Platform default sender is not "set up" — custom domain must be verified.
-      done:
-        settings.email.senderMode === "custom_domain" &&
-        settings.email.domainVerificationStatus === "verified",
-    },
-    {
-      id: "stripe",
-      label: "Stripe connection",
-      href: settingsHref("settings-payments", linkToSettings),
-      done: stripeOk === true,
-    },
-    {
-      id: "services",
-      label: "Services",
-      href: settingsHref("settings-services", linkToSettings),
-      done: servicesCustomized === true,
-    },
-  ];
+  const items = buildSetupChecklistItems({ settings, stripeOk, services }).map((item) => ({
+    ...item,
+    href: settingsHref(item.hash, linkToSettings),
+  }));
 
-  const incomplete = items.some((item) => !isDone(item.done));
+  const incomplete = items.some((item) => !item.done);
   if (!ready || dismissed || !incomplete) return null;
 
   return (
