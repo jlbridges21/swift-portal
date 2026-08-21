@@ -9,6 +9,7 @@ import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
 import { platformPortalBrand, publicHostBrand } from "@/lib/public-host-chrome";
 import { assertActivePlanKey, resolvePlanTrialDays } from "@/lib/entitlements";
+import { loadResolvedLandingPage } from "@/lib/resolve-landing-page";
 
 export const dynamic = "force-dynamic";
 
@@ -32,11 +33,15 @@ export default async function HomePage() {
 
   if (isActivePublicTenant(host) && host.businessId) {
     const settings = await getAppSettings(host.businessId);
-    const brand = getPortalBrandFromSettings(settings);
+    const { page, businessName } = await loadResolvedLandingPage(host.businessId, settings);
+    const brand = {
+      ...getPortalBrandFromSettings(settings),
+      name: businessName || settings.business.businessName,
+    };
     return (
       <BrandProvider brand={brand}>
         <AuthFragmentHandler />
-        <LandingPage brand={brand} landing={settings.landing} />
+        <LandingPage brand={brand} page={page} />
       </BrandProvider>
     );
   }

@@ -1,8 +1,17 @@
+/**
+ * Tenant client landing page — CONFIGURABLE TEMPLATE.
+ *
+ * Tenants deliberately cannot change: section order, layout, fonts, spacing,
+ * component structure, the ShootPortal request-form flow (/request), or inject
+ * HTML/markdown. They only fill plain-text slots and optional asset URLs defined
+ * in landing-content.ts. Every combination must still look professionally designed.
+ */
+
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import type { LandingAssets } from "@/lib/landing-assets";
 import type { PortalBrand } from "@/lib/portal-brand";
+import type { ResolvedLandingPage } from "@/lib/landing-content";
 import {
   Camera,
   Video,
@@ -15,42 +24,10 @@ import {
   ArrowRight,
   Play,
   Home,
+  ExternalLink,
 } from "lucide-react";
 
 const STEP_CARD_WIDTH = 480;
-
-function buildSteps(landing: LandingAssets, portalName: string) {
-  return [
-  {
-    step: "01",
-    title: "Request your shoot",
-    description: "Submit your property details, service type, and preferred timing in minutes.",
-    image: landing.screenshots.request,
-    alt: `${portalName} request form`,
-  },
-  {
-    step: "02",
-    title: "See a preliminary estimate",
-    description: "Get a fast ballpark estimate before final details are confirmed.",
-    image: landing.screenshots.quote,
-    alt: "Quote and estimate screen",
-  },
-  {
-    step: "03",
-    title: "Track your project",
-    description: "Follow scheduling, shoot progress, and deliverables in one organized dashboard.",
-    image: landing.screenshots.dashboard,
-    alt: "Client command center",
-  },
-  {
-    step: "04",
-    title: "Pay and download",
-    description: "Preview deliverables, complete secure payment, and access final media.",
-    image: landing.screenshots.review,
-    alt: "Review deliverables screen",
-  },
-  ];
-}
 
 const FEATURES = [
   { icon: MessageSquare, title: "Project requests", description: "Submit new shoots without email back-and-forth." },
@@ -63,38 +40,41 @@ const FEATURES = [
   { icon: CheckCircle2, title: "Project history", description: "Keep every project, update, and deliverable organized." },
 ];
 
-function buildShowcase(landing: LandingAssets) {
+function buildShowcase(landing: ResolvedLandingPage) {
   return [
-    { title: "Request form", image: landing.screenshots.request },
-    { title: "Estimate & scheduling", image: landing.screenshots.quote },
-    { title: "Property microsite", image: landing.screenshots.microsite },
-  ];
+    { title: "Request form", image: landing.assets.screenshots.request },
+    { title: "Estimate & scheduling", image: landing.assets.screenshots.quote },
+    { title: "Property microsite", image: landing.assets.screenshots.microsite },
+  ].filter((item) => Boolean(item.image));
 }
 
-function buildMediaUses(landing: LandingAssets) {
+function buildMediaUses(landing: ResolvedLandingPage) {
   return [
-  {
-    title: "Real estate listings",
-    image: landing.luxuryHome,
-    description: "Cinematic aerial photography and video that elevates listings and shows property context.",
-  },
-  {
-    title: "Golf courses",
-    image: landing.golfCourse,
-    description: "Course flyovers, clubhouse media, and marketing visuals for clubs and resorts.",
-  },
-  {
-    title: "Construction progress",
-    image: landing.construction,
-    description: "Recurring aerial progress media for builders, developers, and project teams.",
-  },
-  ];
+    {
+      title: "Real estate listings",
+      image: landing.assets.luxuryHome,
+      description:
+        "Cinematic aerial photography and video that elevates listings and shows property context.",
+    },
+    {
+      title: "Golf courses",
+      image: landing.assets.golfCourse,
+      description: "Course flyovers, clubhouse media, and marketing visuals for clubs and resorts.",
+    },
+    {
+      title: "Construction progress",
+      image: landing.assets.construction,
+      description: "Recurring aerial progress media for builders, developers, and project teams.",
+    },
+  ].filter((item) => Boolean(item.image));
 }
 
 function RequestShootButton({
+  label,
   size = "default",
   className = "",
 }: {
+  label: string;
   size?: "default" | "lg";
   className?: string;
 }) {
@@ -105,7 +85,7 @@ function RequestShootButton({
         size={size}
         className={`${size === "lg" ? "px-8 text-base" : ""} ${className}`}
       >
-        Get Instant Estimate <ArrowRight className="h-4 w-4" />
+        {label} <ArrowRight className="h-4 w-4" />
       </Button>
     </Link>
   );
@@ -130,13 +110,62 @@ function LandingLogo({
   );
 }
 
-export function LandingPage({ brand, landing }: { brand: PortalBrand; landing: LandingAssets }) {
-  const STEPS = buildSteps(landing, brand.portalName);
-  const PORTAL_SHOWCASE = buildShowcase(landing);
-  const MEDIA_USES = buildMediaUses(landing);
-  const headerLogo = landing.logoHeader || brand.logoUrl;
-  const footerLogo = landing.logoFooter || headerLogo;
-  const website = brand.websiteUrl || "/";
+function SocialLinks({ page }: { page: ResolvedLandingPage }) {
+  if (!page.showSocial) return null;
+  const items: { href: string; label: string }[] = [];
+  if (page.social.instagram) items.push({ href: page.social.instagram, label: "Instagram" });
+  if (page.social.facebook) items.push({ href: page.social.facebook, label: "Facebook" });
+  if (page.social.youtube) items.push({ href: page.social.youtube, label: "YouTube" });
+  if (page.social.linkedin) items.push({ href: page.social.linkedin, label: "LinkedIn" });
+  if (page.social.website) items.push({ href: page.social.website, label: "Website" });
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-3">
+      {items.map((item) => (
+        <a
+          key={item.label}
+          href={item.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-[#334155] transition hover:border-blue-200 hover:text-[#0F172A]"
+        >
+          <ExternalLink className="h-4 w-4" />
+          {item.label}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+export function LandingPage({
+  brand,
+  page,
+}: {
+  brand: PortalBrand;
+  page: ResolvedLandingPage;
+}) {
+  const STEPS = page.howItWorks.map((step, i) => ({
+    step: String(i + 1).padStart(2, "0"),
+    title: step.label,
+    description: step.description,
+    image: [
+      page.assets.screenshots.request,
+      page.assets.screenshots.quote,
+      page.assets.screenshots.dashboard,
+      page.assets.screenshots.review,
+    ][i],
+    alt: `${page.portalName} step ${i + 1}`,
+  }));
+  const PORTAL_SHOWCASE = buildShowcase(page);
+  const MEDIA_USES = buildMediaUses(page);
+  const headerLogo = page.assets.logoHeader || brand.logoUrl;
+  const footerLogo = page.assets.logoFooter || headerLogo;
+  const website = brand.websiteUrl || page.social.website || "/";
+  const industriesLine =
+    page.industries.length <= 1
+      ? page.industries[0] ?? ""
+      : `${page.industries.slice(0, -1).join(", ")}, and ${page.industries[page.industries.length - 1]}`;
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#334155]">
       <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0F172A]/90 backdrop-blur-xl safe-area-top safe-area-x">
@@ -145,13 +174,13 @@ export function LandingPage({ brand, landing }: { brand: PortalBrand; landing: L
 
           <nav className="flex items-center gap-2 sm:gap-3">
             {brand.websiteUrl ? (
-            <a
-              href={brand.websiteUrl}
-              className="hidden items-center gap-1 text-sm font-medium text-slate-300 transition hover:text-white sm:flex"
-            >
-              <Home className="h-4 w-4" />
-              Main Website
-            </a>
+              <a
+                href={brand.websiteUrl}
+                className="hidden items-center gap-1 text-sm font-medium text-slate-300 transition hover:text-white sm:flex"
+              >
+                <Home className="h-4 w-4" />
+                Main Website
+              </a>
             ) : null}
 
             <Link href="/request">
@@ -161,7 +190,9 @@ export function LandingPage({ brand, landing }: { brand: PortalBrand; landing: L
             </Link>
 
             <Link href="/login">
-              <Button variant="accent" size="sm">Client Login</Button>
+              <Button variant="accent" size="sm">
+                {page.ctaSecondaryLabel}
+              </Button>
             </Link>
           </nav>
         </div>
@@ -170,35 +201,42 @@ export function LandingPage({ brand, landing }: { brand: PortalBrand; landing: L
       <main>
         <section className="relative flex min-h-[92vh] items-center overflow-hidden bg-[#0F172A]">
           <div className="absolute inset-0">
-            {landing.heroVideoId ? (
-            <iframe
-              src={`https://www.youtube.com/embed/${landing.heroVideoId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${landing.heroVideoId}&showinfo=0&rel=0&modestbranding=1&playsinline=1`}
-              title={`${brand.name} showreel`}
-              className="pointer-events-none absolute inset-0 h-full w-full scale-[1.4] opacity-40"
-              allow="autoplay; encrypted-media"
-            />
+            {page.showShowreel && page.showreelVideoId ? (
+              <iframe
+                src={`https://www.youtube.com/embed/${page.showreelVideoId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${page.showreelVideoId}&showinfo=0&rel=0&modestbranding=1&playsinline=1`}
+                title={`${brand.name} showreel`}
+                className="pointer-events-none absolute inset-0 h-full w-full scale-[1.4] opacity-40"
+                allow="autoplay; encrypted-media"
+              />
             ) : null}
             <div className="absolute inset-0 bg-gradient-to-b from-[#0F172A]/80 via-[#0F172A]/70 to-[#0F172A]" />
           </div>
 
           <div className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8 lg:py-32">
             <div className="max-w-3xl">
-              <p className="mb-6 text-sm font-medium uppercase tracking-[0.2em] text-blue-300">
-                {brand.name} Client Portal
-              </p>
+              {page.eyebrow ? (
+                <p className="mb-6 text-sm font-medium uppercase tracking-[0.2em] text-blue-300">
+                  {page.eyebrow}
+                </p>
+              ) : null}
 
               <h1 className="text-4xl font-bold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl">
-                Request. Estimate. Track. Download.
-                <span className="mt-2 block text-blue-400">All in one premium portal.</span>
+                {page.headline}
+                {page.headlineAccent ? (
+                  <span className="mt-2 block text-blue-400">{page.headlineAccent}</span>
+                ) : null}
               </h1>
 
               <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-300 sm:text-xl">
-                Start a drone photo, video, or virtual tour project in minutes. Get a preliminary estimate,
-                manage project progress, download final media, and pay securely without digging through emails.
+                {page.subheadline}
               </p>
 
               <div className="mt-10 flex flex-col gap-4 sm:flex-row">
-                <RequestShootButton size="lg" className="w-full sm:w-auto" />
+                <RequestShootButton
+                  label={page.ctaPrimaryLabel}
+                  size="lg"
+                  className="w-full sm:w-auto"
+                />
 
                 <Link href="/login">
                   <Button
@@ -206,20 +244,53 @@ export function LandingPage({ brand, landing }: { brand: PortalBrand; landing: L
                     variant="outline"
                     className="w-full border-white/25 bg-white/5 px-8 text-base text-white hover:bg-white/15 sm:w-auto"
                   >
-                    Client Login
+                    {page.ctaSecondaryLabel}
                   </Button>
                 </Link>
               </div>
             </div>
 
-            <div className="mt-16 hidden lg:block">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-slate-300">
-                <Play className="h-4 w-4 text-blue-400" />
-                Built for real estate, golf courses, construction, land, and commercial properties
+            {page.showIndustries ? (
+              <div className="mt-16 hidden lg:block">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-slate-300">
+                  <Play className="h-4 w-4 text-blue-400" />
+                  Built for {industriesLine}
+                </div>
               </div>
-            </div>
+            ) : null}
           </div>
         </section>
+
+        {page.showServices ? (
+          <section className="bg-[#F8FAFC] py-20 sm:py-24">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <div className="mx-auto mb-12 max-w-2xl text-center">
+                <p className="text-sm font-semibold uppercase tracking-widest text-[#3B82F6]">
+                  Services
+                </p>
+                <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#0F172A] sm:text-4xl">
+                  What {page.businessName} offers
+                </h2>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {page.services.map((service) => (
+                  <div
+                    key={service.name}
+                    className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm shadow-slate-200/40"
+                  >
+                    <h3 className="font-semibold text-[#0F172A]">{service.name}</h3>
+                    {service.startingLabel ? (
+                      <p className="mt-1 text-sm font-medium text-[#3B82F6]">{service.startingLabel}</p>
+                    ) : null}
+                    {service.description ? (
+                      <p className="mt-2 text-sm leading-relaxed text-[#64748B]">{service.description}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <section className="overflow-hidden bg-[#F8FAFC] py-24 sm:py-32">
           <div className="mx-auto mb-12 max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -251,17 +322,19 @@ export function LandingPage({ brand, landing }: { brand: PortalBrand; landing: L
                   </p>
                 </div>
 
-                <div className="rounded-3xl bg-white p-2 shadow-xl shadow-slate-200/60 ring-1 ring-black/[0.04] sm:p-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={item.image}
-                    alt={item.alt}
-                    width={STEP_CARD_WIDTH}
-                    className="h-auto w-full rounded-2xl"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </div>
+                {item.image ? (
+                  <div className="rounded-3xl bg-white p-2 shadow-xl shadow-slate-200/60 ring-1 ring-black/[0.04] sm:p-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.image}
+                      alt={item.alt}
+                      width={STEP_CARD_WIDTH}
+                      className="h-auto w-full rounded-2xl"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>
@@ -295,107 +368,111 @@ export function LandingPage({ brand, landing }: { brand: PortalBrand; landing: L
           </div>
         </section>
 
-        <section className="overflow-hidden bg-[#0F172A] py-24 sm:py-32">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="mx-auto mb-16 max-w-3xl text-center">
-              <p className="text-sm font-semibold uppercase tracking-widest text-blue-400">
-                Inside the portal
-              </p>
-              <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                Request, schedule, estimate, review, and pay
-              </h2>
-              <p className="mt-4 text-lg leading-relaxed text-slate-400">
-                Submit project details, review preliminary pricing, track progress, preview deliverables,
-                and complete payment from a single organized portal.
-              </p>
-            </div>
+        {PORTAL_SHOWCASE.length > 0 ? (
+          <section className="overflow-hidden bg-[#0F172A] py-24 sm:py-32">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <div className="mx-auto mb-16 max-w-3xl text-center">
+                <p className="text-sm font-semibold uppercase tracking-widest text-blue-400">
+                  Inside the portal
+                </p>
+                <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+                  Request, schedule, estimate, review, and pay
+                </h2>
+                <p className="mt-4 text-lg leading-relaxed text-slate-400">
+                  Submit project details, review preliminary pricing, track progress, preview
+                  deliverables, and complete payment from a single organized portal.
+                </p>
+              </div>
 
-            <div className="flex snap-x snap-mandatory gap-6 overflow-x-auto pb-4 pl-[max(1rem,calc(50vw-210px))] pr-[max(1rem,calc(50vw-210px))]">
-              {PORTAL_SHOWCASE.map((item, i) => (
-                <div
-                  key={item.title}
-                  className="w-[85vw] shrink-0 snap-center sm:w-[420px] lg:w-[480px]"
-                  style={{ transform: `rotate(${i % 2 === 0 ? -1 : 1}deg)` }}
-                >
-                  <div className="overflow-hidden rounded-2xl bg-slate-800 shadow-2xl ring-1 ring-white/10">
-                    <div className="border-b border-white/10 px-4 py-3">
-                      <p className="text-sm font-medium text-white">{item.title}</p>
+              <div className="flex snap-x snap-mandatory gap-6 overflow-x-auto pb-4 pl-[max(1rem,calc(50vw-210px))] pr-[max(1rem,calc(50vw-210px))]">
+                {PORTAL_SHOWCASE.map((item, i) => (
+                  <div
+                    key={item.title}
+                    className="w-[85vw] shrink-0 snap-center sm:w-[420px] lg:w-[480px]"
+                    style={{ transform: `rotate(${i % 2 === 0 ? -1 : 1}deg)` }}
+                  >
+                    <div className="overflow-hidden rounded-2xl bg-slate-800 shadow-2xl ring-1 ring-white/10">
+                      <div className="border-b border-white/10 px-4 py-3">
+                        <p className="text-sm font-medium text-white">{item.title}</p>
+                      </div>
+                      <Image
+                        src={item.image}
+                        alt={item.title}
+                        width={960}
+                        height={600}
+                        className="h-auto w-full"
+                      />
                     </div>
-                    <Image
-                      src={item.image}
-                      alt={item.title}
-                      width={960}
-                      height={600}
-                      className="h-auto w-full"
-                    />
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
 
-        <section className="py-24">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="mx-auto mb-16 max-w-2xl text-center">
-              <h2 className="text-3xl font-bold tracking-tight text-[#0F172A] sm:text-4xl">
-                Built for properties that need to stand out
-              </h2>
-              <p className="mt-4 text-lg text-[#64748B]">
-                {brand.portalName} supports every type of aerial project {brand.name} delivers.
-              </p>
-            </div>
+        {MEDIA_USES.length > 0 ? (
+          <section className="py-24">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <div className="mx-auto mb-16 max-w-2xl text-center">
+                <h2 className="text-3xl font-bold tracking-tight text-[#0F172A] sm:text-4xl">
+                  Built for properties that need to stand out
+                </h2>
+                <p className="mt-4 text-lg text-[#64748B]">
+                  {page.portalName} supports every type of aerial project {page.businessName}{" "}
+                  delivers.
+                </p>
+              </div>
 
-            <div className="grid gap-8 lg:grid-cols-3">
-              {MEDIA_USES.map((item) => (
-                <div
-                  key={item.title}
-                  className="group overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/50 ring-1 ring-black/5"
-                >
-                  <div className="relative aspect-[4/3] overflow-hidden">
-                    <Image
-                      src={item.image}
-                      alt={item.title}
-                      fill
-                      className="object-cover transition-transform duration-700 group-hover:scale-105"
-                      sizes="(max-width: 1024px) 100vw, 33vw"
-                    />
+              <div className="grid gap-8 lg:grid-cols-3">
+                {MEDIA_USES.map((item) => (
+                  <div
+                    key={item.title}
+                    className="group overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/50 ring-1 ring-black/5"
+                  >
+                    <div className="relative aspect-[4/3] overflow-hidden">
+                      <Image
+                        src={item.image}
+                        alt={item.title}
+                        fill
+                        className="object-cover transition-transform duration-700 group-hover:scale-105"
+                        sizes="(max-width: 1024px) 100vw, 33vw"
+                      />
+                    </div>
+                    <div className="p-6">
+                      <h3 className="text-lg font-semibold text-[#0F172A]">{item.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-[#64748B]">{item.description}</p>
+                    </div>
                   </div>
-                  <div className="p-6">
-                    <h3 className="text-lg font-semibold text-[#0F172A]">{item.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-[#64748B]">{item.description}</p>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
 
         <section className="border-y border-slate-100 bg-white py-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid items-center gap-12 lg:grid-cols-[280px_1fr]">
-              {landing.ownerHeadshot ? (
-              <div className="mx-auto lg:mx-0">
-                <div className="relative h-56 w-56 overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/5">
-                  <Image
-                    src={landing.ownerHeadshot}
-                    alt={brand.name}
-                    fill
-                    className="object-cover"
-                    sizes="224px"
-                  />
+              {page.assets.ownerHeadshot ? (
+                <div className="mx-auto lg:mx-0">
+                  <div className="relative h-56 w-56 overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/5">
+                    <Image
+                      src={page.assets.ownerHeadshot}
+                      alt={brand.name}
+                      fill
+                      className="object-cover"
+                      sizes="224px"
+                    />
+                  </div>
                 </div>
-              </div>
               ) : null}
 
               <div>
                 <h2 className="text-3xl font-bold tracking-tight text-[#0F172A]">
-                  Built to make working with {brand.name} effortless
+                  Built to make working with {page.businessName} effortless
                 </h2>
                 <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#64748B]">
-                  {brand.portalName} keeps requests, estimates, project updates, deliverables, and payments
-                  organized in one beautiful place, so you spend less time chasing files and more time
-                  using your media.
+                  {page.customBusinessDescription ||
+                    `${page.portalName} keeps requests, estimates, project updates, deliverables, and payments organized in one beautiful place, so you spend less time chasing files and more time using your media.`}
                 </p>
 
                 <ul className="mt-8 grid gap-3 text-sm text-[#334155] sm:grid-cols-2">
@@ -417,19 +494,36 @@ export function LandingPage({ brand, landing }: { brand: PortalBrand; landing: L
           </div>
         </section>
 
+        {page.showSocial ? (
+          <section className="bg-[#F8FAFC] py-16">
+            <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
+              <h2 className="text-xl font-semibold text-[#0F172A]">Connect with {page.businessName}</h2>
+              <div className="mt-6">
+                <SocialLinks page={page} />
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         <section className="bg-gradient-to-br from-[#0F172A] to-slate-900 py-24 sm:py-32">
           <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
-            <LandingLogo className="mx-auto mb-8 h-12 w-auto opacity-95" href={website} src={landing.logoStackedWhite || headerLogo} name={brand.name} />
+            <LandingLogo
+              className="mx-auto mb-8 h-12 w-auto opacity-95"
+              href={website}
+              src={page.assets.logoStackedWhite || headerLogo}
+              name={brand.name}
+            />
 
             <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
               Ready to request your next shoot?
             </h2>
             <p className="mt-4 text-lg text-slate-300">
-              Start your project in minutes and manage everything through {brand.portalName}.
+              {page.footerTagline ||
+                `Start your project in minutes and manage everything through ${page.portalName}.`}
             </p>
 
             <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-center">
-              <RequestShootButton size="lg" />
+              <RequestShootButton label={page.ctaPrimaryLabel} size="lg" />
 
               <Link href="/login">
                 <Button
@@ -437,7 +531,7 @@ export function LandingPage({ brand, landing }: { brand: PortalBrand; landing: L
                   variant="outline"
                   className="w-full border-white/25 bg-transparent px-8 text-white hover:bg-white/10 sm:w-auto"
                 >
-                  Client Login
+                  {page.ctaSecondaryLabel}
                 </Button>
               </Link>
             </div>
@@ -445,26 +539,26 @@ export function LandingPage({ brand, landing }: { brand: PortalBrand; landing: L
         </section>
       </main>
 
-            <footer className="border-t border-slate-200 bg-white py-10">
+      <footer className="border-t border-slate-200 bg-white py-10">
         <div className="mx-auto flex max-w-7xl flex-col items-center gap-4 px-4 sm:flex-row sm:justify-between sm:px-6 lg:px-8">
           {website && website !== "/" ? (
-          <a
-            href={website}
-            aria-label={`Go to ${brand.name} website`}
-            className="inline-flex items-center"
-          >
-            {footerLogo ? (
-            <Image
-              src={footerLogo}
-              alt={brand.name}
-              width={180}
-              height={52}
-              className="h-8 w-auto opacity-90"
-            />
-            ) : (
-              <span className="text-sm font-semibold text-[#0F172A]">{brand.name}</span>
-            )}
-          </a>
+            <a
+              href={website}
+              aria-label={`Go to ${brand.name} website`}
+              className="inline-flex items-center"
+            >
+              {footerLogo ? (
+                <Image
+                  src={footerLogo}
+                  alt={brand.name}
+                  width={180}
+                  height={52}
+                  className="h-8 w-auto opacity-90"
+                />
+              ) : (
+                <span className="text-sm font-semibold text-[#0F172A]">{brand.name}</span>
+              )}
+            </a>
           ) : (
             <span className="text-sm font-semibold text-[#0F172A]">{brand.legalName}</span>
           )}
@@ -474,12 +568,12 @@ export function LandingPage({ brand, landing }: { brand: PortalBrand; landing: L
               © {new Date().getFullYear()} {brand.legalName}. All rights reserved.
             </p>
             {brand.websiteUrl ? (
-            <a
-              href={brand.websiteUrl}
-              className="text-sm font-medium text-[#3B82F6] hover:text-[#0F172A]"
-            >
-              Back to main website →
-            </a>
+              <a
+                href={brand.websiteUrl}
+                className="text-sm font-medium text-[#3B82F6] hover:text-[#0F172A]"
+              >
+                Back to main website →
+              </a>
             ) : null}
           </div>
         </div>

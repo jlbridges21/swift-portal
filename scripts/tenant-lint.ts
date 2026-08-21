@@ -81,6 +81,7 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/stripe-billing.ts",
   "src/lib/workflow.ts",
   "src/lib/business-services.ts",
+  "src/lib/resolve-landing-page.ts",
   "src/lib/message-templates.ts",
   "src/lib/preliminary-estimates.ts",
   "src/lib/status-automation.ts",

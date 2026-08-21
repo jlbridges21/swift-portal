@@ -15,6 +15,7 @@ import { SettingsTabNav } from "@/components/admin/settings-tab-nav";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
 import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
+import { LandingPageSettingsCard } from "@/components/admin/landing-page-settings-card";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
 import { brandContrastWarnings, deriveBrandTheme, sanitizeCssColor } from "@/lib/brand-color";
@@ -25,6 +26,7 @@ import type {
   NotificationChannelSettings,
   NotificationEventKey,
 } from "@/lib/app-settings";
+import type { LandingSettings } from "@/lib/landing-content";
 import type { ReactNode } from "react";
 
 interface NotificationEventDef {
@@ -40,6 +42,9 @@ interface AdminSettingsClientProps {
   payments: ReactNode;
   services: ReactNode;
   calendar: ReactNode;
+  canCustomizeLanding: boolean;
+  portalPreviewUrl: string;
+  serviceNames: string[];
 }
 
 async function parseApiResponse(res: Response): Promise<Record<string, unknown>> {
@@ -257,6 +262,9 @@ export function AdminSettingsClient({
   payments,
   services,
   calendar,
+  canCustomizeLanding,
+  portalPreviewUrl,
+  serviceNames,
 }: AdminSettingsClientProps) {
   const router = useRouter();
   const liveBrand = usePortalBrand();
@@ -386,6 +394,10 @@ export function AdminSettingsClient({
     setSettings((prev) => ({ ...prev, workflow }));
   }, []);
 
+  const patchLanding = useCallback((landing: LandingSettings) => {
+    setSettings((prev) => ({ ...prev, landing }));
+  }, []);
+
   function selectSection(id: SettingsSectionId) {
     setSection(id);
     const hash = SETTINGS_SECTIONS.find((s) => s.id === id)?.hashes[0];
@@ -510,6 +522,25 @@ export function AdminSettingsClient({
               </div>
             </CardContent>
           </Card>
+        </SettingsPanel>
+
+        <SettingsPanel id="landing" active={section}>
+          <div id="settings-landing" tabIndex={-1} className="scroll-mt-24 space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold text-primary">Client Landing Page</h2>
+              <p className="mt-1 text-sm text-muted">
+                Customize the public page at your portal URL. Plain text only — layout stays locked.
+              </p>
+            </div>
+            <LandingPageSettingsCard
+              landing={settings.landing}
+              businessName={settings.business.businessName}
+              serviceNames={serviceNames}
+              portalPreviewUrl={portalPreviewUrl}
+              canEdit={canCustomizeLanding}
+              onChange={patchLanding}
+            />
+          </div>
         </SettingsPanel>
 
         <SettingsPanel id="contact" active={section}>

@@ -1,6 +1,7 @@
 export const SETTINGS_SECTION_IDS = [
   "identity",
   "branding",
+  "landing",
   "contact",
   "email",
   "payments",
@@ -31,6 +32,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: "Branding & Colors",
     description: "Logo, favicon, and brand colors used across the portal.",
     hashes: ["settings-logo", "settings-colors", "settings-favicon", "settings-email-logo"],
+  },
+  {
+    id: "landing",
+    label: "Client Landing Page",
+    description: "Hero copy, industries, how-it-works, and social for your public portal.",
+    hashes: ["settings-landing"],
   },
   {
     id: "contact",

@@ -10,9 +10,9 @@ import {
   type EmailSenderMode,
 } from "@/lib/email-sender-policy";
 import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
-import { mergeLandingAssets, type LandingAssets } from "@/lib/landing-assets";
+import { mergeLandingSettings, type LandingSettings } from "@/lib/landing-content";
 import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
-import { brandingFieldsChanged, requireEntitlement } from "@/lib/entitlements";
+import { brandingFieldsChanged, landingSettingsChanged, requireEntitlement } from "@/lib/entitlements";
 import {
   buildDefaultWorkflowSettings,
   mergeWorkflowSettings,
@@ -109,7 +109,7 @@ export interface AppSettings {
   proposals: ProposalSettings;
   workflow: WorkflowSettings;
   integrations: IntegrationSettings;
-  landing: LandingAssets;
+  landing: LandingSettings;
 }
 
 export const NOTIFICATION_EVENT_DEFINITIONS: {
@@ -176,7 +176,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     ghlWebhookUrl: "",
     ghlLeadSource: "ShootPortal",
   },
-  landing: mergeLandingAssets(null),
+  landing: mergeLandingSettings(null),
 };
 
 function deepMerge<T extends Record<string, unknown>>(base: T, patch: Partial<T>): T {
@@ -218,7 +218,7 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
       ...DEFAULT_APP_SETTINGS.integrations,
       ...(stored.integrations ?? {}),
     },
-    landing: mergeLandingAssets(stored.landing),
+    landing: mergeLandingSettings(stored.landing as Partial<LandingSettings> | null | undefined),
   };
 }
 
@@ -306,7 +306,8 @@ export async function saveAppSettings(
     brandingFieldsChanged(
       current.business as unknown as Record<string, unknown>,
       merged.business as unknown as Record<string, unknown>
-    )
+    ) ||
+    landingSettingsChanged(current.landing, merged.landing)
   ) {
     await requireEntitlement(businessId, "custom_branding");
   }

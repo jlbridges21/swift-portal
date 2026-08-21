@@ -10,6 +10,10 @@ import {
   type PlanLimits,
   type PlanRow,
 } from "@/lib/plan-catalog";
+import {
+  landingFieldsChanged,
+  type LandingSettings,
+} from "@/lib/landing-content";
 
 export type {
   EnforcedEntitlement,
@@ -203,4 +207,11 @@ export function brandingFieldsChanged(
     if ((before?.[field] ?? "") !== (after?.[field] ?? "")) return true;
   }
   return false;
+}
+
+export function landingSettingsChanged(
+  before: LandingSettings | null | undefined,
+  after: LandingSettings | null | undefined
+): boolean {
+  return landingFieldsChanged(before, after);
 }
