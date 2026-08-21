@@ -73,6 +73,16 @@ Mode-aware price IDs live in `plan_stripe_prices` (`test` vs `live` rows). Check
 
 ‡ Required to enable workflow-reminders after reviewing the dry-run. Leave unset until then.
 
+## Custom domains (Vercel project API)
+
+| Variable | Purpose | Dev | Preview | Prod |
+|----------|---------|-----|---------|------|
+| `VERCEL_API_TOKEN` | Bearer token to add/verify/remove project domains (prefer project-scoped) | O | O | R* |
+| `VERCEL_PROJECT_ID` | Vercel project id or name | O | O | R* |
+| `VERCEL_TEAM_ID` | Team id when the project lives under a team | O | O | O |
+
+\* Required for automatic self-serve custom domains. If unset, Settings → Custom Domain degrades to manual DNS + contact support / platform admin (never a hard crash).
+
 ## Integrations (optional)
 
 | Variable | Purpose |

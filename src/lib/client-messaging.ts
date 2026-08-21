@@ -135,7 +135,8 @@ export async function getOrCreateConversationStub(
 export async function getClientMessages(
   businessId: string,
   clientId: string,
-  viewerUserId: string
+  viewerUserId: string,
+  options?: { includeAdminReadReceipts?: boolean }
 ): Promise<ClientMessage[]> {
   const db = await createTenantServiceClient(businessId);
 
@@ -164,12 +165,96 @@ export async function getClientMessages(
     : { data: [] as { message_id: string }[] };
   const readSet = new Set((reads ?? []).map((r) => r.message_id));
 
-  return (messages ?? []).map((m) => ({
+  const mapped = (messages ?? []).map((m) => ({
     ...m,
     sender_role: m.sender_role as "admin" | "client",
     sender_name: nameById.get(m.sender_user_id) ?? "User",
     is_unread: m.sender_user_id !== viewerUserId && !readSet.has(m.id),
   }));
+
+  if (options?.includeAdminReadReceipts) {
+    const receipts = await loadAdminReadReceipts(businessId, clientId, messages ?? []);
+    return mapped.map((m) => ({
+      ...m,
+      read_receipt: m.sender_role === "admin" ? receipts.get(m.id) ?? null : null,
+    })) as ClientMessage[];
+  }
+
+  return mapped;
+}
+
+/**
+ * Intended in-app readers for a client thread: portal profiles linked to that client.
+ * Threads are per client_id (not per project), so “2 of 3” only applies when a client
+ * has multiple portal users — rare, but we still report it accurately.
+ */
+async function recipientUserIdsForClient(
+  businessId: string,
+  clientId: string
+): Promise<string[]> {
+  const db = await createTenantServiceClient(businessId);
+  const ids = new Set<string>();
+
+  const { data: client } = await db
+    .from("clients")
+    .select("user_id")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (client?.user_id) ids.add(client.user_id);
+
+  const { data: profiles } = await db.raw
+    .from("profiles")
+    .select("id")
+    .eq("business_id", businessId)
+    .eq("client_id", clientId)
+    .eq("role", "client");
+  for (const p of profiles ?? []) {
+    if (p.id) ids.add(p.id);
+  }
+
+  return Array.from(ids);
+}
+
+async function loadAdminReadReceipts(
+  businessId: string,
+  clientId: string,
+  messages: { id: string; sender_role: string; sender_user_id: string }[]
+): Promise<Map<string, import("@/lib/messaging-types").MessageReadReceipt>> {
+  const adminMsgs = messages.filter((m) => m.sender_role === "admin");
+  const out = new Map<string, import("@/lib/messaging-types").MessageReadReceipt>();
+  if (!adminMsgs.length) return out;
+
+  const recipients = await recipientUserIdsForClient(businessId, clientId);
+  const messageIds = adminMsgs.map((m) => m.id);
+  const db = await createTenantServiceClient(businessId);
+
+  const { data: reads } = recipients.length
+    ? await db
+        .from("client_message_reads")
+        .select("message_id, user_id, read_at")
+        .in("message_id", messageIds)
+        .in("user_id", recipients)
+    : { data: [] as { message_id: string; user_id: string; read_at: string }[] };
+
+  const byMessage = new Map<string, { user_id: string; read_at: string }[]>();
+  for (const r of reads ?? []) {
+    const list = byMessage.get(r.message_id) ?? [];
+    list.push({ user_id: r.user_id, read_at: r.read_at });
+    byMessage.set(r.message_id, list);
+  }
+
+  for (const msg of adminMsgs) {
+    const list = byMessage.get(msg.id) ?? [];
+    const times = list.map((r) => r.read_at).sort();
+    out.set(msg.id, {
+      recipient_count: recipients.length,
+      read_count: list.length,
+      first_read_at: times[0] ?? null,
+      last_read_at: times[times.length - 1] ?? null,
+    });
+  }
+
+  return out;
 }
 
 export async function markClientMessagesRead(
@@ -207,7 +292,9 @@ export async function buildClientCrmTimeline(
   const db = await createTenantServiceClient(businessId);
   const items: CrmTimelineItem[] = [];
 
-  const messages = await getClientMessages(businessId, clientId, viewerUserId);
+  const messages = await getClientMessages(businessId, clientId, viewerUserId, {
+    includeAdminReadReceipts: true,
+  });
   for (const m of messages) {
     items.push({
       id: `msg-${m.id}`,
@@ -218,6 +305,8 @@ export async function buildClientCrmTimeline(
       sender_role: m.sender_role,
       is_unread: m.is_unread,
       project_id: m.project_id,
+      message_id: m.id,
+      read_receipt: m.sender_role === "admin" ? m.read_receipt ?? null : null,
     });
   }
 

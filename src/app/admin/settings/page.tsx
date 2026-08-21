@@ -12,17 +12,48 @@ import { hasEntitlement } from "@/lib/entitlements";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import { listBusinessServices } from "@/lib/business-services";
 import { loadSetupChecklistSnapshot } from "@/lib/setup-checklist";
+import {
+  loadBusinessDomainState,
+  toPublicDomainState,
+} from "@/lib/custom-domain";
+import { getPlatformRootDomain } from "@/lib/site-metadata";
+import { isVercelDomainApiConfigured } from "@/lib/vercel-domains";
 
 export default async function AdminSettingsPage() {
   const { tenant } = await requireAdminPage();
   const settings = await getAppSettings(tenant.businessId);
-  const [canCustomizeLanding, portalPreviewUrl, serviceRows, checklist] = await Promise.all([
+  const [
+    canCustomizeLanding,
+    canUseCustomDomain,
+    portalPreviewUrl,
+    serviceRows,
+    checklist,
+    domainRow,
+  ] = await Promise.all([
     hasEntitlement(tenant.businessId, "custom_branding"),
+    hasEntitlement(tenant.businessId, "custom_domain"),
     getBusinessPortalOriginById(tenant.businessId),
     listBusinessServices(tenant.businessId, { activeOnly: true }),
     loadSetupChecklistSnapshot(tenant.businessId, settings),
+    loadBusinessDomainState(tenant.businessId),
   ]);
   const serviceNames = serviceRows.filter((s) => s.is_active).map((s) => s.name);
+  const customDomainState = domainRow
+    ? toPublicDomainState(domainRow)
+    : {
+        domain: null,
+        status: null,
+        vercelVerified: false,
+        misconfigured: null,
+        lastCheckedAt: null,
+        error: null,
+        dnsRecords: [],
+        verification: [],
+        portalUrl: null,
+        vercelApiConfigured: isVercelDomainApiConfigured(),
+        isApex: false,
+        fallbackSubdomain: `${tenant.business.slug}.${getPlatformRootDomain()}`,
+      };
 
   return (
     <div className="min-h-screen bg-background">
@@ -40,6 +71,8 @@ export default async function AdminSettingsPage() {
           initialSettings={settings}
           notificationEvents={NOTIFICATION_EVENT_DEFINITIONS}
           canCustomizeLanding={canCustomizeLanding}
+          canUseCustomDomain={canUseCustomDomain}
+          customDomainState={customDomainState}
           portalPreviewUrl={portalPreviewUrl}
           serviceNames={serviceNames}
           payments={

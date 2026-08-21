@@ -107,6 +107,7 @@ export default async function PlatformBusinessDetailPage({
         plans={plans}
         currentPlan={currentPlan}
         inviteNeedsAttention={detail.inviteNeedsAttention}
+        domainState={detail.domainState}
       />
     </main>
   );

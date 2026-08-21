@@ -18,6 +18,8 @@ import { AcceptSetupDefaultButton } from "@/components/admin/accept-setup-defaul
 import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
 import { EmailTemplatesSettingsCard } from "@/components/admin/email-templates-settings-card";
 import { LandingPageSettingsCard } from "@/components/admin/landing-page-settings-card";
+import { CustomDomainSettingsCard } from "@/components/admin/custom-domain-settings-card";
+import type { CustomDomainPublicState } from "@/lib/custom-domain";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
 import { BRAND } from "@/lib/brand";
@@ -46,6 +48,8 @@ interface AdminSettingsClientProps {
   services: ReactNode;
   calendar: ReactNode;
   canCustomizeLanding: boolean;
+  canUseCustomDomain: boolean;
+  customDomainState: CustomDomainPublicState;
   portalPreviewUrl: string;
   serviceNames: string[];
 }
@@ -266,6 +270,8 @@ export function AdminSettingsClient({
   services,
   calendar,
   canCustomizeLanding,
+  canUseCustomDomain,
+  customDomainState,
   portalPreviewUrl,
   serviceNames,
 }: AdminSettingsClientProps) {
@@ -768,6 +774,16 @@ export function AdminSettingsClient({
             <div className="mt-4">
               <EmailDiagnosticsCard />
             </div>
+          </div>
+        </SettingsPanel>
+
+        <SettingsPanel id="custom_domain" active={section}>
+          <div id="settings-custom-domain" tabIndex={-1} className="scroll-mt-24 space-y-4">
+            <h2 className="text-lg font-semibold text-primary">Custom Domain</h2>
+            <p className="mt-1 text-sm text-muted">
+              Serve your client portal on your own hostname (recommended: portal.yourstudio.com).
+            </p>
+            <CustomDomainSettingsCard entitled={canUseCustomDomain} initialState={customDomainState} />
           </div>
         </SettingsPanel>
 

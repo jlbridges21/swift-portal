@@ -30,16 +30,47 @@ Env:
 - Resend: platform domain verified
 - Stripe Connect branding: ShootPortal
 
-## Custom domain (existing Swift pattern)
+## Custom domain (self-serve)
 
-Swift Aerial Media already has `custom_domain = 'portal.swiftaerialmedia.com'` (migration v29). That exact host is step (a) and must keep working: landing, login, dashboard, project, media download. PWA `start_url` and `scope` stay `/` on that host (`src/app/manifest.ts`); do not change them for an existing custom domain.
+Businesses with the `custom_domain` entitlement connect a hostname in **Settings → Custom Domain**.
 
-To attach another business’s own hostname:
+Flow:
 
-1. **Registrar:** CNAME (or A/ALIAS per Vercel) from the customer hostname to the Vercel target for this project.
-2. **Vercel:** Project → Domains → add the hostname (and wait for HTTPS).
-3. **Database:** set `businesses.custom_domain` to the hostname only (no scheme), unique, e.g. `portal.example.com`.
-4. Confirm step (a) resolves before cutting over email/push links.
+1. Enter a hostname (recommend `portal.yourstudio.com`; apex is supported as advanced via A record).
+2. App registers the hostname on the Vercel project via REST API (`POST /v10/projects/.../domains`).
+3. Show exact DNS records (CNAME or A, plus TXT if ownership verification is required).
+4. **Check status** polls `GET /v9/.../domains/{domain}`, `POST .../verify`, and `GET /v6/domains/{domain}/config`.
+5. On connected: `businesses.custom_domain` is already set (since claim); status columns mark `connected`. Portal URLs from `getBusinessPortalOrigin` switch automatically.
+6. Remove clears DB and `DELETE /v9/projects/.../domains/{domain}` on Vercel.
+
+### Env (required for automatic Vercel registration)
+
+| Variable | Purpose |
+|----------|---------|
+| `VERCEL_API_TOKEN` | Bearer token (prefer project-scoped) |
+| `VERCEL_PROJECT_ID` | Project id / name |
+| `VERCEL_TEAM_ID` | Team id when the project is under a team |
+
+If any are missing, the UI still shows DNS instructions and a contact-support / platform-admin path (`status=manual`) — never a broken screen.
+
+### Auth redirect allow-list (critical)
+
+`https://*.shootportal.app/**` does **not** cover a customer hostname. After connect, add to Supabase Auth → URL Configuration → Redirect URLs:
+
+```text
+https://{custom_domain}/auth/confirm
+```
+
+Also keep `https://*.shootportal.app/auth/confirm`. Without the custom entry, password reset / invite / confirm emails break for clients on that domain even though the portal loads over HTTPS. There is no safe wildcard for arbitrary customer domains; operators must add each connected hostname (or automate via Supabase Management API with a personal access token — not implemented in-app by default).
+
+### Operator / legacy manual path
+
+1. Registrar DNS → Vercel target.
+2. Vercel project Domains → add hostname (or self-serve API).
+3. `businesses.custom_domain` = hostname (unique).
+4. Supabase redirect allow-list entry as above.
+
+Swift (`portal.swiftaerialmedia.com`) already uses step (a) and must keep working; migration v55 backfills existing domains as `connected`.
 
 ## Onboard a new tenant end to end
 

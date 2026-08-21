@@ -411,6 +411,7 @@ export interface ProjectMessage {
   created_at: string;
   sender_name?: string | null;
   is_unread?: boolean;
+  read_receipt?: import("@/lib/messaging-types").MessageReadReceipt | null;
 }
 
 export type ClientMessage = ProjectMessage;

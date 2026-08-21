@@ -11,6 +11,18 @@ export interface ConversationListItem {
   unread_count: number;
 }
 
+/** Read state for admin-sent messages only (did the client open it). */
+export interface MessageReadReceipt {
+  /** Portal users who can read this client thread (excludes the admin sender). */
+  recipient_count: number;
+  /** How many of those recipients have a read row. */
+  read_count: number;
+  /** Earliest recipient read_at, if any. */
+  first_read_at: string | null;
+  /** Latest recipient read_at, if any. */
+  last_read_at: string | null;
+}
+
 export interface CrmTimelineItem {
   id: string;
   kind: "message" | "activity";
@@ -24,4 +36,7 @@ export interface CrmTimelineItem {
   is_unread?: boolean;
   project_id?: string | null;
   project_name?: string | null;
+  /** Present on admin-sent messages when loaded for an admin viewer. */
+  read_receipt?: MessageReadReceipt | null;
+  message_id?: string;
 }

@@ -15,6 +15,8 @@ import {
   type PlanRow,
 } from "@/lib/plan-catalog";
 import { SUBSCRIPTION_STATUSES, getSubscriptionState } from "@/lib/subscription";
+import { CustomDomainSettingsCard } from "@/components/admin/custom-domain-settings-card";
+import type { CustomDomainPublicState } from "@/lib/custom-domain";
 import {
   SWIFT_COMP_PROTECTED_BUSINESS_ID,
   SWIFT_COMP_REVOKE_CONFIRM,
@@ -40,6 +42,7 @@ export function BusinessDetailActions({
   plans,
   currentPlan,
   inviteNeedsAttention = false,
+  domainState,
 }: {
   business: {
     id: string;
@@ -62,6 +65,7 @@ export function BusinessDetailActions({
   plans: PlanRow[];
   currentPlan: PlanRow | null;
   inviteNeedsAttention?: boolean;
+  domainState: CustomDomainPublicState;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -279,15 +283,11 @@ export function BusinessDetailActions({
               <Label htmlFor="slug">Slug</Label>
               <Input id="slug" name="slug" defaultValue={business.slug} className="mt-1" />
             </div>
-            <div>
-              <Label htmlFor="customDomain">Custom domain</Label>
-              <Input
-                id="customDomain"
-                name="customDomain"
-                defaultValue={business.custom_domain ?? ""}
-                className="mt-1"
-              />
-            </div>
+            <p className="text-xs text-muted">
+              Custom domain is managed in the section below (Vercel registration + DNS checks). Current:{" "}
+              {business.custom_domain || "none (subdomain only)"}.
+            </p>
+            <input type="hidden" name="customDomain" value={business.custom_domain ?? ""} />
             <div>
               <Label htmlFor="plan">Plan</Label>
               <select
@@ -314,6 +314,15 @@ export function BusinessDetailActions({
           </form>
         </CardContent>
       </Card>
+
+      <div>
+        <h2 className="mb-3 text-lg font-semibold text-heading">Custom domain</h2>
+        <CustomDomainSettingsCard
+          entitled
+          initialState={domainState}
+          apiBase={`/api/platform/businesses/${business.id}/custom-domain`}
+        />
+      </div>
 
       <Card>
         <CardHeader>

@@ -3,20 +3,50 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdmin } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const profile = await requireAdmin();
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
     const db = await createTenantServiceClient(businessId);
-    const { data, error } = await db
+
+    const { searchParams } = new URL(request.url);
+    const q = (searchParams.get("q") ?? "").trim();
+    const clientId = searchParams.get("id");
+
+    if (clientId) {
+      const { data, error } = await db
+        .from("clients")
+        .select("id, name, email, company")
+        .eq("id", clientId)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(data ? [data] : []);
+    }
+
+    let query = db
       .from("clients")
-      .select("id, name, company")
+      .select("id, name, email, company")
+      .is("deleted_at", null)
       .order("name");
 
+    if (q) {
+      const safe = q.replace(/[%_,]/g, "").slice(0, 80);
+      if (safe) {
+        query = query.or(
+          `name.ilike.%${safe}%,email.ilike.%${safe}%,company.ilike.%${safe}%`
+        );
+      }
+      query = query.limit(40);
+    } else {
+      query = query.limit(100);
+    }
+
+    const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json(data);
+    return NextResponse.json(data ?? []);
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

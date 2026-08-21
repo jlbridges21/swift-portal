@@ -37,8 +37,12 @@ and installed `node_modules/@supabase/auth-js`):
 App code sets `redirectTo` / `emailRedirectTo` to `{tenantOrigin}/auth/confirm` (see
 `authConfirmUrl()`). Templates append `?token_hash=…&type=…`.
 
-Redirect URL allow list must include `https://*.shootportal.app/auth/confirm` (and custom domains
-if used).
+Redirect URL allow list must include:
+
+- `https://*.shootportal.app/auth/confirm` (and related auth paths you use)
+- **Each connected custom domain:** `https://{custom_domain}/auth/confirm`
+
+A platform wildcard does **not** cover `portal.customer.com`. After a tenant connects a custom domain, add that exact origin or auth emails (reset / invite / confirm) fail on the new host. See `docs/TENANT-DOMAINS.md` § Custom domain (self-serve).
 
 ---
 

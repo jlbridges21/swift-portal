@@ -6,8 +6,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import type { ConversationListItem, CrmTimelineItem } from "@/lib/messaging-types";
-import { ArrowLeft, Loader2, MessageSquare, Send } from "lucide-react";
+import type { ConversationListItem, CrmTimelineItem, MessageReadReceipt } from "@/lib/messaging-types";
+import { ComposeMessageModal } from "@/components/admin/compose-message-modal";
+import { ArrowLeft, Loader2, MessageSquare, PenSquare, Send } from "lucide-react";
 import { toast } from "sonner";
 
 function formatTimelineStamp(iso: string): string {
@@ -18,6 +19,54 @@ function formatTimelineStamp(iso: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatReadReceiptLabel(receipt: MessageReadReceipt): {
+  label: string;
+  title?: string;
+} {
+  const { recipient_count: n, read_count: k, first_read_at, last_read_at } = receipt;
+
+  if (n === 0) {
+    return {
+      label: "Delivered",
+      title: "No portal login yet — email may have been sent, but nothing to mark read in-app",
+    };
+  }
+
+  if (k === 0) {
+    return { label: "Delivered" };
+  }
+
+  const when = last_read_at ?? first_read_at;
+  const whenLabel = when ? formatRelativeTime(when) : null;
+  const absolute = when
+    ? new Date(when).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : undefined;
+
+  if (n === 1) {
+    return {
+      label: whenLabel ? `Read · ${whenLabel}` : "Read",
+      title: absolute ? `Read ${absolute}` : undefined,
+    };
+  }
+
+  if (k >= n) {
+    return {
+      label: whenLabel ? `Read by all · ${whenLabel}` : `Read by ${k} of ${n}`,
+      title: absolute ? `Last read ${absolute}` : undefined,
+    };
+  }
+
+  return {
+    label: `Read by ${k} of ${n}`,
+    title: absolute ? `Last read ${absolute}` : undefined,
+  };
 }
 
 export function AdminMessagesInbox() {
@@ -31,7 +80,8 @@ export function AdminMessagesInbox() {
   const [loadingThread, setLoadingThread] = useState(false);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const threadScrollRef = useRef<HTMLDivElement>(null);
 
   const selected = useMemo(
     () => conversations.find((c) => c.client_id === selectedId) ?? null,
@@ -95,9 +145,13 @@ export function AdminMessagesInbox() {
     else setTimeline([]);
   }, [selectedId, loadTimeline]);
 
+  // Scroll only the thread pane — never the page (unlike embedded compact chat).
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [timeline.length]);
+    if (!selectedId || loadingThread) return;
+    const pane = threadScrollRef.current;
+    if (!pane) return;
+    pane.scrollTop = pane.scrollHeight;
+  }, [timeline.length, selectedId, loadingThread]);
 
   function selectClient(clientId: string) {
     router.push(`/admin/messages?client=${clientId}`);
@@ -131,6 +185,12 @@ export function AdminMessagesInbox() {
     }
   }
 
+  function handleComposeSent(clientId: string) {
+    void loadConversations().then(() => {
+      selectClient(clientId);
+    });
+  }
+
   const showListOnMobile = !selectedId;
   const showThreadOnMobile = !!selectedId;
 
@@ -143,9 +203,21 @@ export function AdminMessagesInbox() {
           showListOnMobile ? "flex flex-col" : "hidden lg:flex lg:flex-col"
         )}
       >
-        <div className="border-b border-border px-4 py-3">
-          <h1 className="text-lg font-semibold text-primary">Messages</h1>
-          <p className="text-xs text-muted">Client conversations</p>
+        <div className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
+          <div>
+            <h1 className="text-lg font-semibold text-primary">Messages</h1>
+            <p className="text-xs text-muted">Client conversations</p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => setComposeOpen(true)}
+          >
+            <PenSquare className="h-4 w-4" />
+            Compose
+          </Button>
         </div>
         <div className="flex-1 overflow-y-auto">
           {loadingList ? (
@@ -154,7 +226,7 @@ export function AdminMessagesInbox() {
             </div>
           ) : conversations.length === 0 ? (
             <p className="px-4 py-12 text-center text-sm text-muted">
-              No conversations yet. Message a client from their profile or here once they write in.
+              No conversations yet. Use Compose to message a client.
             </p>
           ) : (
             conversations.map((c) => (
@@ -202,6 +274,10 @@ export function AdminMessagesInbox() {
           <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center text-muted">
             <MessageSquare className="h-10 w-10 opacity-40" />
             <p className="text-sm">Select a client conversation</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => setComposeOpen(true)}>
+              <PenSquare className="h-4 w-4" />
+              Compose
+            </Button>
           </div>
         ) : (
           <>
@@ -231,7 +307,10 @@ export function AdminMessagesInbox() {
               )}
             </div>
 
-            <div className="flex-1 space-y-2 overflow-y-auto bg-[#F2F4F7] px-3 py-4 sm:px-5">
+            <div
+              ref={threadScrollRef}
+              className="flex-1 space-y-2 overflow-y-auto bg-[#F2F4F7] px-3 py-4 sm:px-5"
+            >
               {loadingThread ? (
                 <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading timeline…
@@ -245,7 +324,6 @@ export function AdminMessagesInbox() {
                   <TimelineRow key={item.id} item={item} />
                 ))
               )}
-              <div ref={bottomRef} />
             </div>
 
             <div className="border-t border-border bg-white p-3 sm:p-4">
@@ -278,6 +356,12 @@ export function AdminMessagesInbox() {
           </>
         )}
       </section>
+
+      <ComposeMessageModal
+        open={composeOpen}
+        onClose={() => setComposeOpen(false)}
+        onSent={handleComposeSent}
+      />
     </div>
   );
 }
@@ -285,6 +369,8 @@ export function AdminMessagesInbox() {
 function TimelineRow({ item }: { item: CrmTimelineItem }) {
   if (item.kind === "message") {
     const mine = item.sender_role === "admin";
+    const receipt =
+      mine && item.read_receipt ? formatReadReceiptLabel(item.read_receipt) : null;
     return (
       <div className={cn("flex py-1", mine ? "justify-end" : "justify-start")}>
         <div
@@ -311,6 +397,14 @@ function TimelineRow({ item }: { item: CrmTimelineItem }) {
           {item.project_name && (
             <p className={cn("mt-1.5 text-[11px]", mine ? "text-white/60" : "text-slate-400")}>
               Re: {item.project_name}
+            </p>
+          )}
+          {receipt && (
+            <p
+              className="mt-1.5 text-right text-[11px] text-white/65"
+              title={receipt.title}
+            >
+              {receipt.label}
             </p>
           )}
         </div>

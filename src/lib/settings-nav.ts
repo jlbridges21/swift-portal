@@ -4,6 +4,7 @@ export const SETTINGS_SECTION_IDS = [
   "landing",
   "contact",
   "email",
+  "custom_domain",
   "automated_emails",
   "payments",
   "services",
@@ -49,8 +50,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     id: "email",
     label: "Email Sender",
-    description: "Sender identity, custom domain, and diagnostics.",
+    description: "Sender identity, Resend domain, and diagnostics.",
     hashes: ["settings-email"],
+  },
+  {
+    id: "custom_domain",
+    label: "Custom Domain",
+    description: "Connect portal.yourstudio.com for your client portal.",
+    hashes: ["settings-custom-domain"],
   },
   {
     id: "automated_emails",

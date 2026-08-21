@@ -1,5 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { getBusinessPortalOrigin } from "@/lib/portal-url";
+import { toPublicDomainState, type BusinessDomainRow } from "@/lib/custom-domain";
+import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { getAppSettings } from "@/lib/app-settings";
 import { getSubscriptionState } from "@/lib/subscription";
 
@@ -163,7 +165,7 @@ export async function loadBusinessDetail(id: string) {
   const { data: business, error } = await raw
     .from("businesses")
     .select(
-      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end, created_via, created_at, deleted_at, updated_at, lifecycle_emails_suppressed, billing_email"
+      "id, name, slug, custom_domain, custom_domain_status, custom_domain_vercel_verified, custom_domain_misconfigured, custom_domain_last_checked_at, custom_domain_error, custom_domain_verification, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end, created_via, created_at, deleted_at, updated_at, lifecycle_emails_suppressed, billing_email"
     )
     .eq("id", id)
     .maybeSingle();
@@ -201,6 +203,31 @@ export async function loadBusinessDetail(id: string) {
   const hasUnconfirmedAdmin = adminsWithAuth.some((a) => !a.emailConfirmed);
   const hasNoAdmins = adminsWithAuth.length === 0;
 
+  const domainRow: BusinessDomainRow = {
+    id: business.id,
+    slug: business.slug,
+    name: business.name,
+    custom_domain: business.custom_domain,
+    custom_domain_status: (business as { custom_domain_status?: BusinessDomainRow["custom_domain_status"] })
+      .custom_domain_status ?? null,
+    custom_domain_vercel_verified: Boolean(
+      (business as { custom_domain_vercel_verified?: boolean }).custom_domain_vercel_verified
+    ),
+    custom_domain_misconfigured:
+      (business as { custom_domain_misconfigured?: boolean | null }).custom_domain_misconfigured ??
+      null,
+    custom_domain_last_checked_at:
+      (business as { custom_domain_last_checked_at?: string | null }).custom_domain_last_checked_at ??
+      null,
+    custom_domain_error:
+      (business as { custom_domain_error?: string | null }).custom_domain_error ?? null,
+    custom_domain_verification:
+      ((business as { custom_domain_verification?: Record<string, unknown> }).custom_domain_verification as Record<
+        string,
+        unknown
+      >) ?? {},
+  };
+
   return {
     business,
     admins: adminsWithAuth,
@@ -212,5 +239,7 @@ export async function loadBusinessDetail(id: string) {
       slug: business.slug,
       custom_domain: business.custom_domain,
     }),
+    domainState: toPublicDomainState(domainRow),
+    fallbackSubdomain: `${business.slug}.${getPlatformRootDomain()}`,
   };
 }
