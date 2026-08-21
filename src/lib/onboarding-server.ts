@@ -13,6 +13,7 @@ import {
   type OnboardingState,
   type OnboardingStepId,
 } from "@/lib/onboarding";
+import { invalidateHostLookupCache } from "@/lib/host-resolution";
 
 export type BusinessOnboardingRow = {
   id: string;
@@ -75,6 +76,8 @@ async function writeOnboardingState(
 
   const { error } = await raw.from("businesses").update(patch).eq("id", businessId);
   if (error) throw new Error(error.message);
+  // Middleware host cache can otherwise bounce /admin → /onboarding for ~30s.
+  invalidateHostLookupCache();
 }
 
 export type OnboardingAction =

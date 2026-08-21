@@ -52,13 +52,22 @@ export function StripeConnectCard() {
   }
 
   useEffect(() => {
-    loadStatus();
+    void loadStatus();
     const stripe = searchParams.get("stripe");
     if (stripe === "connected") toast.success("Stripe connected");
     if (stripe === "pending") toast.message("Stripe onboarding saved — finish any remaining requirements to accept payments.");
     if (stripe === "error") toast.error("Stripe connection failed");
     if (stripe === "platform") toast.message("This business uses the platform Stripe account.");
   }, [searchParams]);
+
+  // Re-fetch live status whenever returning to this card (e.g. Stripe → onboarding).
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") void loadStatus();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
 
   async function startOnboarding() {
     setStarting(true);

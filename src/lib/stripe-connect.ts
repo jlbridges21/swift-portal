@@ -65,11 +65,12 @@ export function mapStripeAccountStatus(account: Stripe.Account): {
   const payoutsEnabled = Boolean(account.payouts_enabled);
   const disabledReason = account.requirements?.disabled_reason ?? null;
 
-  if (disabledReason) {
-    return { status: "disabled", chargesEnabled, payoutsEnabled };
-  }
+  // Charges enabled wins — disabled_reason can linger during verification.
   if (chargesEnabled) {
     return { status: "active", chargesEnabled, payoutsEnabled };
+  }
+  if (disabledReason) {
+    return { status: "restricted", chargesEnabled, payoutsEnabled };
   }
   if (account.details_submitted) {
     return { status: "restricted", chargesEnabled, payoutsEnabled };
@@ -233,4 +234,56 @@ export async function retrieveConnectedAccount(stripeAccountId: string): Promise
 export function connectEventAccountId(event: Stripe.Event): string | undefined {
   const account = (event as Stripe.Event & { account?: unknown }).account;
   return typeof account === "string" && account.startsWith("acct_") ? account : undefined;
+}
+
+/**
+ * Resolve Connect status for API responses.
+ * Always refreshes from Stripe when an account id exists — never trust stale DB alone.
+ * Settings and onboarding both call GET /api/stripe/connect which uses this.
+ */
+export async function getLiveConnectStatus(businessId: string): Promise<{
+  isPlatform: boolean;
+  status: StripeAccountStatus;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  connectedAt: string | null;
+  hasAccount: boolean;
+  dashboardUrl: string;
+}> {
+  if (isPlatformStripeBusiness(businessId)) {
+    return {
+      isPlatform: true,
+      status: "active",
+      chargesEnabled: true,
+      payoutsEnabled: true,
+      connectedAt: null,
+      hasAccount: true,
+      dashboardUrl: stripeDashboardUrl(),
+    };
+  }
+
+  let integration = await loadBusinessStripeIntegration(businessId);
+  const accountId = integration?.stripe_account_id ?? null;
+
+  if (accountId) {
+    try {
+      const account = await retrieveConnectedAccount(accountId);
+      integration = await applyStripeAccountSnapshot(businessId, account);
+    } catch (err) {
+      console.error("[stripe-connect] live status refresh failed", {
+        businessId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return {
+    isPlatform: false,
+    status: integration?.stripe_account_status ?? "not_connected",
+    chargesEnabled: Boolean(integration?.stripe_charges_enabled),
+    payoutsEnabled: Boolean(integration?.stripe_payouts_enabled),
+    connectedAt: integration?.stripe_connected_at ?? null,
+    hasAccount: Boolean(accountId),
+    dashboardUrl: stripeDashboardUrl(),
+  };
 }

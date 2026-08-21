@@ -11,7 +11,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import type { PortalBrand } from "@/lib/portal-brand";
-import type { ResolvedLandingPage } from "@/lib/landing-content";
+import type { LandingFeatureIconId, ResolvedLandingPage } from "@/lib/landing-content";
 import {
   Camera,
   Video,
@@ -25,20 +25,32 @@ import {
   Play,
   Home,
   ExternalLink,
+  Map,
+  Users,
+  Clock,
+  Image as ImageIcon,
+  Send,
+  type LucideIcon,
 } from "lucide-react";
 
 const STEP_CARD_WIDTH = 480;
 
-const FEATURES = [
-  { icon: MessageSquare, title: "Project requests", description: "Submit new shoots without email back-and-forth." },
-  { icon: FileDown, title: "Instant estimates", description: "See preliminary pricing before the project is confirmed." },
-  { icon: Calendar, title: "Scheduling", description: "Coordinate shoot dates with a clear workflow." },
-  { icon: Camera, title: "Photo delivery", description: "Access polished photo galleries after delivery." },
-  { icon: Video, title: "Video previews", description: "Review aerial videos directly inside your project." },
-  { icon: Globe, title: "360° tours", description: "Access virtual tours and links in one place." },
-  { icon: CreditCard, title: "Secure payments", description: "Pay invoices through Stripe with instant confirmation." },
-  { icon: CheckCircle2, title: "Project history", description: "Keep every project, update, and deliverable organized." },
-];
+const FEATURE_ICON_MAP: Record<LandingFeatureIconId, LucideIcon> = {
+  MessageSquare,
+  FileDown,
+  Calendar,
+  Camera,
+  Video,
+  Globe,
+  CreditCard,
+  CheckCircle2,
+  Home,
+  Map,
+  Users,
+  Clock,
+  Image: ImageIcon,
+  Send,
+};
 
 function buildShowcase(landing: ResolvedLandingPage) {
   return [
@@ -352,18 +364,21 @@ export function LandingPage({
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {FEATURES.map((feature) => (
+              {page.features.map((feature) => {
+                const Icon = FEATURE_ICON_MAP[feature.icon] ?? CheckCircle2;
+                return (
                 <div
-                  key={feature.title}
+                  key={`${feature.icon}-${feature.title}`}
                   className="group rounded-2xl border border-slate-100 bg-[#F8FAFC] p-6 transition-all hover:-translate-y-0.5 hover:border-blue-100 hover:shadow-lg hover:shadow-blue-500/5"
                 >
                   <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#3B82F6]/10 transition-colors group-hover:bg-[#3B82F6]/15">
-                    <feature.icon className="h-5 w-5 text-[#3B82F6]" />
+                    <Icon className="h-5 w-5 text-[#3B82F6]" />
                   </div>
                   <h3 className="mt-4 font-semibold text-[#0F172A]">{feature.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-[#64748B]">{feature.description}</p>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>
@@ -451,7 +466,17 @@ export function LandingPage({
 
         <section className="border-y border-slate-100 bg-white py-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid items-center gap-12 lg:grid-cols-[280px_1fr]">
+            {/*
+              When there is no headshot, a two-column `lg:grid-cols-[280px_1fr]`
+              would place the copy in the 280px track — left-hug / mobile width on desktop.
+            */}
+            <div
+              className={
+                page.assets.ownerHeadshot
+                  ? "grid items-center gap-12 lg:grid-cols-[280px_minmax(0,1fr)]"
+                  : "mx-auto max-w-3xl"
+              }
+            >
               {page.assets.ownerHeadshot ? (
                 <div className="mx-auto lg:mx-0">
                   <div className="relative h-56 w-56 overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/5">
@@ -466,16 +491,22 @@ export function LandingPage({
                 </div>
               ) : null}
 
-              <div>
+              <div className={page.assets.ownerHeadshot ? undefined : "text-center sm:text-left"}>
                 <h2 className="text-3xl font-bold tracking-tight text-[#0F172A]">
                   Built to make working with {page.businessName} effortless
                 </h2>
-                <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#64748B]">
+                <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#64748B] mx-auto sm:mx-0">
                   {page.customBusinessDescription ||
                     `${page.portalName} keeps requests, estimates, project updates, deliverables, and payments organized in one beautiful place, so you spend less time chasing files and more time using your media.`}
                 </p>
 
-                <ul className="mt-8 grid gap-3 text-sm text-[#334155] sm:grid-cols-2">
+                <ul
+                  className={
+                    page.assets.ownerHeadshot
+                      ? "mt-8 grid gap-3 text-sm text-[#334155] sm:grid-cols-2"
+                      : "mt-8 mx-auto grid max-w-2xl gap-3 text-sm text-[#334155] sm:grid-cols-2 sm:mx-0"
+                  }
+                >
                   {[
                     "Direct communication",
                     "Organized project flow",

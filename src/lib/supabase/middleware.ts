@@ -264,7 +264,10 @@ export async function updateSession(request: NextRequest) {
       ) {
         const url = request.nextUrl.clone();
         url.pathname = `${resolution.pathPrefix}/onboarding`;
+        // Preserve Stripe Connect return signal so the wizard can refresh status.
+        const stripe = request.nextUrl.searchParams.get("stripe");
         url.search = "";
+        if (stripe) url.searchParams.set("stripe", stripe);
         return applyPathCookie(NextResponse.redirect(url), resolution);
       }
     }

@@ -27,11 +27,96 @@ export const LANDING_LIMITS = {
   industriesMax: 8,
   howItWorksLabel: 60,
   howItWorksDescription: 200,
+  featureTitle: 40,
+  featureDescription: 120,
+  /** Fixed range so the feature grid cannot break (3–8). */
+  featuresMin: 3,
+  featuresMax: 8,
   footerTagline: 120,
   socialUrl: 300,
 } as const;
 
 export const HOW_IT_WORKS_STEP_COUNT = 4;
+
+/**
+ * Curated lucide-react icon names already used on the landing page.
+ * API rejects anything outside this set — no arbitrary icon strings/URLs.
+ */
+export const LANDING_FEATURE_ICON_IDS = [
+  "MessageSquare",
+  "FileDown",
+  "Calendar",
+  "Camera",
+  "Video",
+  "Globe",
+  "CreditCard",
+  "CheckCircle2",
+  "Home",
+  "Map",
+  "Users",
+  "Clock",
+  "Image",
+  "Send",
+] as const;
+
+export type LandingFeatureIconId = (typeof LANDING_FEATURE_ICON_IDS)[number];
+
+export function isLandingFeatureIconId(value: unknown): value is LandingFeatureIconId {
+  return (
+    typeof value === "string" &&
+    (LANDING_FEATURE_ICON_IDS as readonly string[]).includes(value)
+  );
+}
+
+export type LandingFeatureCard = {
+  icon: LandingFeatureIconId;
+  title: string;
+  description: string;
+};
+
+/** Current hardcoded cards — defaults so untouched tenants (incl. Swift) stay identical. */
+export const DEFAULT_FEATURE_CARDS: LandingFeatureCard[] = [
+  {
+    icon: "MessageSquare",
+    title: "Project requests",
+    description: "Submit new shoots without email back-and-forth.",
+  },
+  {
+    icon: "FileDown",
+    title: "Instant estimates",
+    description: "See preliminary pricing before the project is confirmed.",
+  },
+  {
+    icon: "Calendar",
+    title: "Scheduling",
+    description: "Coordinate shoot dates with a clear workflow.",
+  },
+  {
+    icon: "Camera",
+    title: "Photo delivery",
+    description: "Access polished photo galleries after delivery.",
+  },
+  {
+    icon: "Video",
+    title: "Video previews",
+    description: "Review aerial videos directly inside your project.",
+  },
+  {
+    icon: "Globe",
+    title: "360° tours",
+    description: "Access virtual tours and links in one place.",
+  },
+  {
+    icon: "CreditCard",
+    title: "Secure payments",
+    description: "Pay invoices through Stripe with instant confirmation.",
+  },
+  {
+    icon: "CheckCircle2",
+    title: "Project history",
+    description: "Keep every project, update, and deliverable organized.",
+  },
+];
 
 export type LandingHeroContent = {
   headline: string;
@@ -68,6 +153,8 @@ export type LandingContent = {
   intro: { businessDescription: string };
   industries: string[];
   howItWorks: LandingHowItWorksStep[];
+  /** Empty → render DEFAULT_FEATURE_CARDS. Non-empty must be 3–8 cards. */
+  features: LandingFeatureCard[];
   footer: { tagline: string };
   social: LandingSocialLinks;
   sections: LandingSectionVisibility;
@@ -143,6 +230,7 @@ export const EMPTY_LANDING_CONTENT: LandingContent = {
     { label: "", description: "" },
     { label: "", description: "" },
   ],
+  features: [],
   footer: { tagline: "" },
   social: { ...EMPTY_SOCIAL },
   sections: { ...DEFAULT_SECTIONS },
@@ -223,6 +311,46 @@ function normalizeHowItWorks(raw: unknown): LandingHowItWorksStep[] {
   return out;
 }
 
+function normalizeFeatureCard(raw: unknown): LandingFeatureCard | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const row = raw as Record<string, unknown>;
+  const iconRaw = row.icon;
+  const icon: LandingFeatureIconId = isLandingFeatureIconId(iconRaw)
+    ? iconRaw
+    : "CheckCircle2";
+  const title = sanitizePlainText(row.title, LANDING_LIMITS.featureTitle);
+  const description = sanitizePlainText(row.description, LANDING_LIMITS.featureDescription);
+  if (!title && !description) return null;
+  return {
+    icon,
+    title: title || "Feature",
+    description: description || "",
+  };
+}
+
+/**
+ * Empty / missing → [] (resolve uses DEFAULT_FEATURE_CARDS).
+ * Non-empty → clamp to 3–8; invalid icons coerced to CheckCircle2.
+ */
+function normalizeFeatures(raw: unknown): LandingFeatureCard[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const out: LandingFeatureCard[] = [];
+  for (const item of raw) {
+    const card = normalizeFeatureCard(item);
+    if (card) out.push(card);
+    if (out.length >= LANDING_LIMITS.featuresMax) break;
+  }
+  if (out.length === 0) return [];
+  if (out.length < LANDING_LIMITS.featuresMin) {
+    // Pad with defaults so a partial save cannot break the grid.
+    for (const d of DEFAULT_FEATURE_CARDS) {
+      if (out.length >= LANDING_LIMITS.featuresMin) break;
+      if (!out.some((c) => c.title === d.title)) out.push({ ...d });
+    }
+  }
+  return out.slice(0, LANDING_LIMITS.featuresMax);
+}
+
 function normalizeIndustries(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   const out: string[] = [];
@@ -271,6 +399,7 @@ export function mergeLandingContent(stored?: Partial<LandingContent> | null): La
     },
     industries: normalizeIndustries(s.industries),
     howItWorks: normalizeHowItWorks(s.howItWorks),
+    features: normalizeFeatures(s.features),
     footer: {
       tagline: sanitizePlainText(footer.tagline, LANDING_LIMITS.footerTagline),
     },
@@ -395,6 +524,7 @@ export type ResolvedLandingPage = {
   customBusinessDescription: string | null;
   industries: string[];
   howItWorks: LandingHowItWorksStep[];
+  features: LandingFeatureCard[];
   footerTagline: string;
   social: LandingSocialLinks;
   showShowreel: boolean;
@@ -449,6 +579,11 @@ export function resolveLandingPage(input: {
     description: step.description || DEFAULT_HOW_IT_WORKS[i]?.description || "",
   }));
 
+  const features =
+    landing.features.length >= LANDING_LIMITS.featuresMin
+      ? landing.features
+      : DEFAULT_FEATURE_CARDS.map((c) => ({ ...c }));
+
   const showreelVideoId = resolveShowreelVideoId(landing);
   const social = landing.social;
   const hasSocial = Object.values(social).some((v) => Boolean(v));
@@ -466,6 +601,7 @@ export function resolveLandingPage(input: {
     customBusinessDescription,
     industries,
     howItWorks,
+    features,
     footerTagline: landing.footer.tagline,
     social,
     showShowreel: landing.sections.showreel && Boolean(showreelVideoId),
@@ -501,6 +637,7 @@ export function landingContentPlaceholders(businessName: string, serviceNames: s
     businessDescription: defaultBusinessDescription(businessName, serviceNames),
     industries: [...DEFAULT_INDUSTRIES],
     howItWorks: DEFAULT_HOW_IT_WORKS.map((s) => ({ ...s })),
+    features: DEFAULT_FEATURE_CARDS.map((c) => ({ ...c })),
     footerTagline: "",
   };
 }

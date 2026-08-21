@@ -18,13 +18,14 @@ import {
   ExternalLink,
   Loader2,
   LogOut,
+  RotateCcw,
 } from "lucide-react";
 import {
   ONBOARDING_STEP_IDS,
   type OnboardingStepId,
   type OnboardingState,
 } from "@/lib/onboarding";
-import { LANDING_LIMITS } from "@/lib/landing-content";
+import { LANDING_LIMITS, DEFAULT_HOW_IT_WORKS, HOW_IT_WORKS_STEP_COUNT } from "@/lib/landing-content";
 import { cn } from "@/lib/utils";
 
 function BrandPreview({
@@ -79,6 +80,8 @@ type OnboardingPayload = {
     subheadline: string;
     headlinePlaceholder: string;
     subheadlinePlaceholder: string;
+    howItWorks: { label: string; description: string }[];
+    howItWorksPlaceholders: { label: string; description: string }[];
   };
   gates: {
     identity: { ok: boolean; reason?: string };
@@ -127,6 +130,9 @@ export function OnboardingWizard({
   const [landing, setLanding] = useState({
     headline: initial.landing.headline,
     subheadline: initial.landing.subheadline,
+    howItWorks: initial.landing.howItWorks.length
+      ? initial.landing.howItWorks
+      : DEFAULT_HOW_IT_WORKS.map((s) => ({ label: "", description: "" })),
   });
 
   const step = data.state.currentStep;
@@ -149,6 +155,9 @@ export function OnboardingWizard({
     setLanding({
       headline: next.landing.headline,
       subheadline: next.landing.subheadline,
+      howItWorks: next.landing.howItWorks?.length
+        ? next.landing.howItWorks
+        : DEFAULT_HOW_IT_WORKS.map(() => ({ label: "", description: "" })),
     });
     return next;
   }, []);
@@ -238,6 +247,7 @@ export function OnboardingWizard({
               headline: landing.headline,
               subheadline: landing.subheadline,
             },
+            howItWorks: landing.howItWorks.slice(0, HOW_IT_WORKS_STEP_COUNT),
           },
         });
       }
@@ -260,7 +270,10 @@ export function OnboardingWizard({
     const next = await runAction({ action: "finish" });
     if (next?.completedAt) {
       toast.success("Your portal is ready");
-      router.push("/admin");
+      // Brief pause so the success state registers, then hard-nav so middleware
+      // sees fresh onboarding_completed_at (in-memory host cache is invalidated server-side).
+      await new Promise((r) => setTimeout(r, 900));
+      window.location.assign("/admin");
     }
   }
 
@@ -544,6 +557,87 @@ export function OnboardingWizard({
                       onChange={(e) => setLanding((p) => ({ ...p, subheadline: e.target.value }))}
                       className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
                     />
+                  </div>
+                  <div className="space-y-3 pt-2">
+                    <div>
+                      <p className="text-sm font-medium text-heading">How it works (optional)</p>
+                      <p className="text-xs text-muted">
+                        Four steps, fixed order. Leave blank to keep the defaults.
+                      </p>
+                    </div>
+                    {Array.from({ length: HOW_IT_WORKS_STEP_COUNT }, (_, i) => {
+                      const stepRow = landing.howItWorks[i] ?? { label: "", description: "" };
+                      const ph =
+                        data.landing.howItWorksPlaceholders?.[i] ?? DEFAULT_HOW_IT_WORKS[i];
+                      return (
+                        <div key={i} className="space-y-2 rounded-lg border border-border p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                              Step {String(i + 1).padStart(2, "0")}
+                            </p>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() =>
+                                setLanding((p) => {
+                                  const howItWorks = [...p.howItWorks];
+                                  howItWorks[i] = { label: "", description: "" };
+                                  return { ...p, howItWorks };
+                                })
+                              }
+                            >
+                              <RotateCcw className="mr-1 h-3 w-3" />
+                              Reset to default
+                            </Button>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`ob-hiw-${i}-label`}>Label</Label>
+                            <Input
+                              id={`ob-hiw-${i}-label`}
+                              maxLength={LANDING_LIMITS.howItWorksLabel}
+                              value={stepRow.label}
+                              placeholder={ph?.label}
+                              onChange={(e) =>
+                                setLanding((p) => {
+                                  const howItWorks = [...p.howItWorks];
+                                  while (howItWorks.length < HOW_IT_WORKS_STEP_COUNT) {
+                                    howItWorks.push({ label: "", description: "" });
+                                  }
+                                  howItWorks[i] = { ...howItWorks[i], label: e.target.value };
+                                  return { ...p, howItWorks };
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`ob-hiw-${i}-desc`}>Description</Label>
+                            <textarea
+                              id={`ob-hiw-${i}-desc`}
+                              maxLength={LANDING_LIMITS.howItWorksDescription}
+                              rows={2}
+                              value={stepRow.description}
+                              placeholder={ph?.description}
+                              onChange={(e) =>
+                                setLanding((p) => {
+                                  const howItWorks = [...p.howItWorks];
+                                  while (howItWorks.length < HOW_IT_WORKS_STEP_COUNT) {
+                                    howItWorks.push({ label: "", description: "" });
+                                  }
+                                  howItWorks[i] = {
+                                    ...howItWorks[i],
+                                    description: e.target.value,
+                                  };
+                                  return { ...p, howItWorks };
+                                })
+                              }
+                              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </>
               )}

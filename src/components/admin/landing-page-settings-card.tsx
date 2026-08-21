@@ -7,13 +7,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   LANDING_LIMITS,
   HOW_IT_WORKS_STEP_COUNT,
+  LANDING_FEATURE_ICON_IDS,
+  DEFAULT_FEATURE_CARDS,
   landingContentPlaceholders,
   type LandingSettings,
   type LandingHowItWorksStep,
+  type LandingFeatureCard,
+  type LandingFeatureIconId,
   type LandingSocialLinks,
   type LandingSectionVisibility,
 } from "@/lib/landing-content";
-import { ExternalLink, RotateCcw } from "lucide-react";
+import { ExternalLink, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 function CharCount({ value, max }: { value: string; max: number }) {
   const n = value.length;
@@ -106,6 +110,21 @@ export function LandingPageSettingsCard({
       next.push({ label: "", description: "" });
     }
     onChange({ ...landing, howItWorks: next.slice(0, HOW_IT_WORKS_STEP_COUNT) });
+  }
+
+  function editorFeatures(): LandingFeatureCard[] {
+    return landing.features.length >= LANDING_LIMITS.featuresMin
+      ? landing.features
+      : DEFAULT_FEATURE_CARDS.map((c) => ({ ...c }));
+  }
+
+  function setFeatures(next: LandingFeatureCard[]) {
+    onChange({ ...landing, features: next });
+  }
+
+  function setFeature(index: number, patch: Partial<LandingFeatureCard>) {
+    const list = editorFeatures().map((card, i) => (i === index ? { ...card, ...patch } : card));
+    setFeatures(list);
   }
 
   function setIndustriesText(text: string) {
@@ -336,6 +355,120 @@ export function LandingPageSettingsCard({
               </div>
             );
           })}
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-sm">
+        <CardContent className="space-y-4 pt-6">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h3 className="font-semibold text-heading">Everything in one place</h3>
+              <p className="text-xs text-muted">
+                {LANDING_LIMITS.featuresMin}–{LANDING_LIMITS.featuresMax} feature cards. Icons from a
+                fixed allowlist only.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setFeatures([])}
+            >
+              <RotateCcw className="mr-1 h-3 w-3" />
+              Reset to default
+            </Button>
+          </div>
+          {editorFeatures().map((card, i) => (
+            <div key={i} className="space-y-2 rounded-lg border border-border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Card {i + 1}
+                </p>
+                {editorFeatures().length > LANDING_LIMITS.featuresMin ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-red-700"
+                    onClick={() =>
+                      setFeatures(editorFeatures().filter((_, idx) => idx !== i))
+                    }
+                  >
+                    <Trash2 className="mr-1 h-3 w-3" />
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={`landing-feature-${i}-icon`}>Icon</Label>
+                <select
+                  id={`landing-feature-${i}-icon`}
+                  value={card.icon}
+                  onChange={(e) =>
+                    setFeature(i, { icon: e.target.value as LandingFeatureIconId })
+                  }
+                  className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                >
+                  {LANDING_FEATURE_ICON_IDS.map((id) => (
+                    <option key={id} value={id}>
+                      {id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <FieldShell
+                label="Title"
+                htmlFor={`landing-feature-${i}-title`}
+                value={card.title}
+                max={LANDING_LIMITS.featureTitle}
+              >
+                <Input
+                  id={`landing-feature-${i}-title`}
+                  maxLength={LANDING_LIMITS.featureTitle}
+                  value={card.title}
+                  placeholder={placeholders.features[i]?.title}
+                  onChange={(e) => setFeature(i, { title: e.target.value })}
+                />
+              </FieldShell>
+              <FieldShell
+                label="Description"
+                htmlFor={`landing-feature-${i}-desc`}
+                value={card.description}
+                max={LANDING_LIMITS.featureDescription}
+              >
+                <textarea
+                  id={`landing-feature-${i}-desc`}
+                  maxLength={LANDING_LIMITS.featureDescription}
+                  rows={2}
+                  value={card.description}
+                  placeholder={placeholders.features[i]?.description}
+                  onChange={(e) => setFeature(i, { description: e.target.value })}
+                  className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                />
+              </FieldShell>
+            </div>
+          ))}
+          {editorFeatures().length < LANDING_LIMITS.featuresMax ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setFeatures([
+                  ...editorFeatures(),
+                  {
+                    icon: "CheckCircle2",
+                    title: "",
+                    description: "",
+                  },
+                ])
+              }
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              Add card
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 

@@ -179,7 +179,8 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
     branding: {
       portalName: appSettings.business.portalName,
       businessName: appSettings.business.businessName,
-      logoUrl: appSettings.business.emailLogoUrl || appSettings.business.logoUrl,
+      logoUrl: appSettings.business.logoUrl,
+      emailLogoUrl: appSettings.business.emailLogoUrl,
       footerText: appSettings.email.footerText,
       accentColor: appSettings.business.brandAccentColor,
       primaryColor: appSettings.business.brandPrimaryColor,

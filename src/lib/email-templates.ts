@@ -63,10 +63,29 @@ export interface EmailBrandingOptions {
   portalName?: string;
   businessName?: string;
   logoUrl?: string;
+  /** Prefer over logoUrl when set (prompt 19). Absolute https URL required for email clients. */
+  emailLogoUrl?: string;
   footerText?: string;
   accentColor?: string;
   primaryColor?: string;
   portalUrl?: string;
+}
+
+/** Pick a logo URL email clients can load anonymously (absolute https). */
+export function resolveEmailLogoSrc(branding?: EmailBrandingOptions): string {
+  const portalBase = (branding?.portalUrl ?? getSiteUrl()).replace(/\/$/, "");
+  const candidates = [branding?.emailLogoUrl, branding?.logoUrl, LOGO_URL];
+  // Prefer absolute URLs — relative platform placeholders must not shadow a real upload.
+  for (const raw of candidates) {
+    const value = (raw ?? "").trim();
+    if (value.startsWith("https://") || value.startsWith("http://")) return value;
+  }
+  for (const raw of candidates) {
+    const value = (raw ?? "").trim();
+    if (value.startsWith("/")) return `${portalBase}${value}`;
+  }
+  const fallback = LOGO_URL.startsWith("/") ? `${portalBase}${LOGO_URL}` : LOGO_URL;
+  return fallback;
 }
 
 export function buildPremiumEmailHtml(options: {
@@ -82,7 +101,7 @@ export function buildPremiumEmailHtml(options: {
   const appUrl = options.branding?.portalUrl ?? getSiteUrl();
   const portalName = options.branding?.portalName ?? BRAND.portalName;
   const businessName = options.branding?.businessName ?? BRAND.name;
-  const logoUrl = escapeHtml(options.branding?.logoUrl ?? LOGO_URL);
+  const logoUrl = escapeHtml(resolveEmailLogoSrc(options.branding));
   const footerText =
     options.branding?.footerText ??
     "You received this email because you have a project with this portal.";

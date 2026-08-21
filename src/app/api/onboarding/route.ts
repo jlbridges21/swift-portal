@@ -14,6 +14,7 @@ import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import {
   defaultHeadlineForBusiness,
   DEFAULT_HERO_SUBHEADLINE,
+  DEFAULT_HOW_IT_WORKS,
 } from "@/lib/landing-content";
 
 export async function GET() {
@@ -60,6 +61,8 @@ export async function GET() {
           snap.settings.business.businessName || tenant.business.name
         ),
         subheadlinePlaceholder: DEFAULT_HERO_SUBHEADLINE,
+        howItWorks: snap.settings.landing.howItWorks,
+        howItWorksPlaceholders: DEFAULT_HOW_IT_WORKS.map((s) => ({ ...s })),
       },
       gates: {
         identity: identityGate,

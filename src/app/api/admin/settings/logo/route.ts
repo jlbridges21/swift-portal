@@ -108,7 +108,12 @@ export async function POST(request: Request) {
   const assetUrl = `${supabaseUrl}/storage/v1/object/public/${LOGO_BUCKET}/${path}?v=${Date.now()}`;
   const current = await getAppSettings(tenant.businessId);
   const businessPatch = { ...current.business, [config.field]: assetUrl };
-  if (kind === "logo" && !current.business.emailLogoUrl) {
+  // Prefer the real upload over a relative platform placeholder for email.
+  const emailLogo = (current.business.emailLogoUrl || "").trim();
+  if (
+    kind === "logo" &&
+    (!emailLogo || emailLogo.startsWith("/") || emailLogo === current.business.logoUrl)
+  ) {
     businessPatch.emailLogoUrl = assetUrl;
   }
 

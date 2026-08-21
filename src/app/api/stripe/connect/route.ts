@@ -5,9 +5,9 @@ import { getBusinessPortalOrigin } from "@/lib/portal-url";
 import {
   createConnectAccountLink,
   createStandardConnectedAccount,
+  getLiveConnectStatus,
   isPlatformStripeBusiness,
   loadBusinessStripeIntegration,
-  stripeDashboardUrl,
   upsertPendingConnectedAccount,
 } from "@/lib/stripe-connect";
 
@@ -19,18 +19,8 @@ export async function GET() {
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
 
-    const isPlatform = isPlatformStripeBusiness(tenant.businessId);
-    const integration = await loadBusinessStripeIntegration(tenant.businessId);
-
-    return NextResponse.json({
-      isPlatform,
-      status: isPlatform ? "active" : integration?.stripe_account_status ?? "not_connected",
-      chargesEnabled: isPlatform ? true : Boolean(integration?.stripe_charges_enabled),
-      payoutsEnabled: isPlatform ? true : Boolean(integration?.stripe_payouts_enabled),
-      connectedAt: integration?.stripe_connected_at ?? null,
-      hasAccount: Boolean(integration?.stripe_account_id),
-      dashboardUrl: stripeDashboardUrl(),
-    });
+    const live = await getLiveConnectStatus(tenant.businessId);
+    return NextResponse.json(live);
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

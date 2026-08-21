@@ -55,6 +55,8 @@ export function isBrandColorsConfigured(settings: AppSettings): boolean {
 }
 
 export function isEmailSenderConfigured(settings: AppSettings): boolean {
+  // Platform sender (default) is a complete, intentional configuration.
+  if (settings.email.senderMode === "platform") return true;
   return (
     settings.email.senderMode === "custom_domain" &&
     settings.email.domainVerificationStatus === "verified"
@@ -171,7 +173,8 @@ export function buildSetupChecklistItems(input: {
       id: "services",
       label: "Services",
       hash: "settings-services",
-      done: input.services == null ? false : hasCustomizedServices(input.services),
+      // Seeded starters with prices already satisfy this — no permanent nag.
+      done: input.services == null ? false : hasActivePricedService(input.services),
     },
   ];
 }

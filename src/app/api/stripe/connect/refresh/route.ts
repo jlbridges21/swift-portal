@@ -7,11 +7,17 @@ import {
   isPlatformStripeBusiness,
   loadBusinessStripeIntegration,
 } from "@/lib/stripe-connect";
+import { needsOnboardingRedirect } from "@/lib/onboarding";
 
 export const runtime = "nodejs";
 
-function settingsRedirect(origin: string, query: string): NextResponse {
-  return NextResponse.redirect(`${origin}/admin/settings?${query}`);
+function postConnectRedirect(
+  origin: string,
+  query: string,
+  toOnboarding: boolean
+): NextResponse {
+  const path = toOnboarding ? "/onboarding" : "/admin/settings";
+  return NextResponse.redirect(`${origin}${path}?${query}`);
 }
 
 /**
@@ -26,19 +32,26 @@ export async function GET() {
     if (!tenant) return missingTenantResponse(profile.role);
 
     const origin = getBusinessPortalOrigin(tenant.business);
+    const toOnboarding =
+      profile.role === "admin" &&
+      needsOnboardingRedirect({
+        onboardingCompletedAt: tenant.business.onboarding_completed_at,
+        onboardingState: tenant.business.onboarding_state,
+        role: profile.role,
+      });
 
     if (isPlatformStripeBusiness(tenant.businessId)) {
-      return settingsRedirect(origin, "stripe=platform");
+      return postConnectRedirect(origin, "stripe=platform", toOnboarding);
     }
 
     const integration = await loadBusinessStripeIntegration(tenant.businessId);
     if (!integration?.stripe_account_id) {
-      return settingsRedirect(origin, "stripe=error");
+      return postConnectRedirect(origin, "stripe=error", toOnboarding);
     }
 
     const url = await createConnectAccountLink(integration.stripe_account_id, origin);
     return NextResponse.redirect(url);
   } catch {
-    return settingsRedirect(fallback, "stripe=error");
+    return postConnectRedirect(fallback, "stripe=error", false);
   }
 }

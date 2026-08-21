@@ -15,6 +15,7 @@ import {
 import {
   defaultHeadlineForBusiness,
   DEFAULT_HERO_SUBHEADLINE,
+  DEFAULT_HOW_IT_WORKS,
 } from "@/lib/landing-content";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,8 @@ export default async function OnboardingPage() {
         settings.business.businessName || tenant.business.name
       ),
       subheadlinePlaceholder: DEFAULT_HERO_SUBHEADLINE,
+      howItWorks: settings.landing.howItWorks,
+      howItWorksPlaceholders: DEFAULT_HOW_IT_WORKS.map((s) => ({ ...s })),
     },
     gates: {
       identity: canCompleteStep("identity", {
