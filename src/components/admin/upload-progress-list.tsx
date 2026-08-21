@@ -97,7 +97,7 @@ function TechnicalDetailsPanel({ details }: { details: UploadTechnicalDetails })
             <div><dt className="inline text-muted">method: </dt><dd className="inline">{details.uploadMethod}</dd></div>
           )}
           {details.bucket && (
-            <div><dt className="inline text-muted">bucket: </dt><dd className="inline">{details.bucket}</dd></div>
+            <div><dt className="inline text-muted">storage: </dt><dd className="inline">{details.bucket}</dd></div>
           )}
           {details.filePath && (
             <div><dt className="inline text-muted">path: </dt><dd className="inline break-all">{details.filePath}</dd></div>

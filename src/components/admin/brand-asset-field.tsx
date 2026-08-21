@@ -17,7 +17,7 @@ const KIND_UI: Record<
   logo: {
     label: "Logo",
     accept: "image/png,image/jpeg,image/webp",
-    hint: "PNG, JPEG, or WebP, under 4MB. Uploads to this business's logo bucket. Existing hosted URLs still work.",
+    hint: "PNG, JPEG, or WebP, under 4MB. You can also paste a link to a logo already hosted online.",
     types: new Set(["image/png", "image/jpeg", "image/webp"]),
     extraExt: new Set(),
   },

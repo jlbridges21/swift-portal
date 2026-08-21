@@ -5,7 +5,7 @@
  * never drifts between two implementations.
  */
 
-import type { AppSettings } from "@/lib/app-settings";
+import type { AppSettings, SetupAcceptDefaultKey } from "@/lib/app-settings";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { BRAND } from "@/lib/brand";
 
@@ -41,12 +41,18 @@ export function isContactInfoConfigured(settings: AppSettings): boolean {
   );
 }
 
+function acceptedDefault(settings: AppSettings, key: SetupAcceptDefaultKey): boolean {
+  return settings.setupAcceptedDefaults?.[key] === true;
+}
+
 export function isLogoConfigured(settings: AppSettings): boolean {
+  if (acceptedDefault(settings, "logo")) return true;
   const logo = settings.business.logoUrl;
   return Boolean(logo) && logo !== PLATFORM_BUSINESS_DEFAULTS.logoUrl && logo !== BRAND.logoUrl;
 }
 
 export function isBrandColorsConfigured(settings: AppSettings): boolean {
+  if (acceptedDefault(settings, "colors")) return true;
   const b = settings.business;
   return (
     b.brandPrimaryColor !== PLATFORM_BUSINESS_DEFAULTS.brandPrimaryColor ||
@@ -90,7 +96,11 @@ export function hasCustomizedServices(services: ServiceCompletenessRow[]): boole
   return !onlyStarters;
 }
 
-export function isStripeConnected(stripeOk: boolean | null | undefined): boolean {
+export function isStripeConnected(
+  stripeOk: boolean | null | undefined,
+  settings?: AppSettings
+): boolean {
+  if (settings && acceptedDefault(settings, "stripe")) return true;
   return stripeOk === true;
 }
 
@@ -123,6 +133,8 @@ export type ChecklistItem = {
   label: string;
   hash: string;
   done: boolean;
+  /** Optional setup — studio may acknowledge ShootPortal defaults. */
+  acceptDefaultKey?: SetupAcceptDefaultKey;
 };
 
 /** Same items the SetupChecklistCard renders — single source of truth. */
@@ -144,12 +156,14 @@ export function buildSetupChecklistItems(input: {
       label: "Logo",
       hash: "settings-logo",
       done: isLogoConfigured(settings),
+      acceptDefaultKey: "logo",
     },
     {
       id: "colors",
       label: "Brand colors",
       hash: "settings-colors",
       done: isBrandColorsConfigured(settings),
+      acceptDefaultKey: "colors",
     },
     {
       id: "contact",
@@ -165,9 +179,10 @@ export function buildSetupChecklistItems(input: {
     },
     {
       id: "stripe",
-      label: "Stripe connection",
+      label: "Client payments",
       hash: "settings-payments",
-      done: isStripeConnected(input.stripeOk),
+      done: isStripeConnected(input.stripeOk, settings),
+      acceptDefaultKey: "stripe",
     },
     {
       id: "services",

@@ -153,7 +153,7 @@ export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCar
         </div>
       </SettingsCollapsible>
 
-      <SettingsCollapsible title="Reminders" description="Timing for automated follow-ups (requires CRON_SECRET job).">
+      <SettingsCollapsible title="Reminders" description="When ShootPortal sends automated follow-up emails.">
         <div className="grid gap-4 sm:grid-cols-2">
           {(
             [

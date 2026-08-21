@@ -97,11 +97,16 @@ export interface ProposalSettings {
 }
 
 export interface IntegrationSettings {
-  /** Per-business GoHighLevel inbound webhook. Empty = skip sync (Swift falls back to env). */
+  /** Per-business GoHighLevel inbound webhook. Empty = do not sync to GHL. */
   ghlWebhookUrl: string;
   /** Value posted as the GHL `source` field. */
   ghlLeadSource: string;
 }
+
+/** Optional setup items a studio may keep as ShootPortal defaults (persisted). */
+export type SetupAcceptDefaultKey = "logo" | "colors" | "stripe";
+
+export type SetupAcceptedDefaults = Record<SetupAcceptDefaultKey, boolean>;
 
 export interface AppSettings {
   notifications: Record<NotificationEventKey, NotificationChannelSettings>;
@@ -111,6 +116,11 @@ export interface AppSettings {
   workflow: WorkflowSettings;
   integrations: IntegrationSettings;
   landing: LandingSettings;
+  /**
+   * Explicit “use ShootPortal default” acknowledgements for optional setup items.
+   * Persisted in business_settings so the checklist banner can clear across devices.
+   */
+  setupAcceptedDefaults: SetupAcceptedDefaults;
 }
 
 export const NOTIFICATION_EVENT_DEFINITIONS: {
@@ -184,6 +194,11 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     ghlLeadSource: "ShootPortal",
   },
   landing: mergeLandingSettings(null),
+  setupAcceptedDefaults: {
+    logo: false,
+    colors: false,
+    stripe: false,
+  },
 };
 
 function deepMerge<T extends Record<string, unknown>>(base: T, patch: Partial<T>): T {
@@ -226,6 +241,10 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
       ...(stored.integrations ?? {}),
     },
     landing: mergeLandingSettings(stored.landing as Partial<LandingSettings> | null | undefined),
+    setupAcceptedDefaults: {
+      ...DEFAULT_APP_SETTINGS.setupAcceptedDefaults,
+      ...(stored.setupAcceptedDefaults ?? {}),
+    },
   };
 }
 

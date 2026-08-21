@@ -14,10 +14,12 @@ import { ColorField } from "@/components/ui/color-field";
 import { SettingsTabNav } from "@/components/admin/settings-tab-nav";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
+import { AcceptSetupDefaultButton } from "@/components/admin/accept-setup-default-button";
 import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
 import { LandingPageSettingsCard } from "@/components/admin/landing-page-settings-card";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
+import { BRAND } from "@/lib/brand";
 import { brandContrastWarnings, deriveBrandTheme, sanitizeCssColor } from "@/lib/brand-color";
 import { SETTINGS_SECTIONS, sectionForHash, type SettingsSectionId } from "@/lib/settings-nav";
 import { usePortalBrand } from "@/components/brand/brand-provider";
@@ -473,7 +475,7 @@ export function AdminSettingsClient({
                 Header currently shows: {liveBrand.portalName} · {liveBrand.name}
                 {dirty ? " (save to apply changes)" : ""}
               </p>
-              <div id="settings-logo" tabIndex={-1} className="scroll-mt-24">
+              <div id="settings-logo" tabIndex={-1} className="scroll-mt-24 space-y-2">
                 <BrandAssetField
                   kind="logo"
                   inputId="logoUrl"
@@ -485,6 +487,22 @@ export function AdminSettingsClient({
                     })
                   }
                 />
+                {(() => {
+                  const logo = settings.business.logoUrl;
+                  const stillDefault =
+                    !logo ||
+                    logo === PLATFORM_BUSINESS_DEFAULTS.logoUrl ||
+                    logo === BRAND.logoUrl;
+                  if (settings.setupAcceptedDefaults?.logo) {
+                    return (
+                      <p className="text-xs text-muted">
+                        Using ShootPortal default logo until you upload your own.
+                      </p>
+                    );
+                  }
+                  if (!stillDefault) return null;
+                  return <AcceptSetupDefaultButton acceptKey="logo" />;
+                })()}
               </div>
               <div id="settings-email-logo" tabIndex={-1} className="scroll-mt-24">
                 <BrandAssetField
@@ -502,23 +520,41 @@ export function AdminSettingsClient({
                   onUrlChange={(faviconUrl) => patchBusiness({ faviconUrl })}
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <ColorField
-                  id="brandPrimaryColor"
-                  label="Brand primary color"
-                  value={settings.business.brandPrimaryColor}
-                  fallback="#0F172A"
-                  onChange={(v) => patchBusiness({ brandPrimaryColor: v })}
-                  warning={colorWarnings.find((w) => w.field === "brandPrimaryColor")?.message}
-                />
-                <ColorField
-                  id="brandAccentColor"
-                  label="Brand accent color"
-                  value={settings.business.brandAccentColor}
-                  fallback="#3B82F6"
-                  onChange={(v) => patchBusiness({ brandAccentColor: v })}
-                  warning={colorWarnings.find((w) => w.field === "brandAccentColor")?.message}
-                />
+              <div className="space-y-3">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <ColorField
+                    id="brandPrimaryColor"
+                    label="Brand primary color"
+                    value={settings.business.brandPrimaryColor}
+                    fallback="#0F172A"
+                    onChange={(v) => patchBusiness({ brandPrimaryColor: v })}
+                    warning={colorWarnings.find((w) => w.field === "brandPrimaryColor")?.message}
+                  />
+                  <ColorField
+                    id="brandAccentColor"
+                    label="Brand accent color"
+                    value={settings.business.brandAccentColor}
+                    fallback="#3B82F6"
+                    onChange={(v) => patchBusiness({ brandAccentColor: v })}
+                    warning={colorWarnings.find((w) => w.field === "brandAccentColor")?.message}
+                  />
+                </div>
+                {(() => {
+                  const stillDefault =
+                    settings.business.brandPrimaryColor ===
+                      PLATFORM_BUSINESS_DEFAULTS.brandPrimaryColor &&
+                    settings.business.brandAccentColor ===
+                      PLATFORM_BUSINESS_DEFAULTS.brandAccentColor;
+                  if (settings.setupAcceptedDefaults?.colors) {
+                    return (
+                      <p className="text-xs text-muted">
+                        Using ShootPortal default colors until you change them.
+                      </p>
+                    );
+                  }
+                  if (!stillDefault) return null;
+                  return <AcceptSetupDefaultButton acceptKey="colors" />;
+                })()}
               </div>
             </CardContent>
           </Card>
@@ -595,7 +631,9 @@ export function AdminSettingsClient({
         <SettingsPanel id="email" active={section}>
           <div id="settings-email" tabIndex={-1} className="scroll-mt-24">
             <h2 className="text-lg font-semibold text-primary">Email</h2>
-            <p className="mt-1 mb-4 text-sm text-muted">Sender identity, custom domain, and diagnostics.</p>
+            <p className="mt-1 mb-4 text-sm text-muted">
+              How client emails are sent from your portal — sender name, domain, and a quick delivery check.
+            </p>
             <Card className="shadow-sm">
               <CardContent className="grid gap-4 sm:grid-cols-2 pt-6">
                 <div className="space-y-2 sm:col-span-2">
@@ -733,10 +771,17 @@ export function AdminSettingsClient({
         </SettingsPanel>
 
         <SettingsPanel id="payments" active={section}>
-          <div id="settings-payments" tabIndex={-1} className="scroll-mt-24">
+          <div id="settings-payments" tabIndex={-1} className="scroll-mt-24 space-y-4">
             <h2 className="text-lg font-semibold text-primary">Payments</h2>
             <p className="mt-1 mb-4 text-sm text-muted">Connect your Stripe account so clients pay you directly.</p>
             {payments}
+            {!settings.setupAcceptedDefaults?.stripe ? (
+              <AcceptSetupDefaultButton acceptKey="stripe" />
+            ) : (
+              <p className="text-xs text-muted">
+                You chose to connect payments later. Client invoices stay unavailable until Stripe is connected.
+              </p>
+            )}
           </div>
         </SettingsPanel>
 
@@ -938,7 +983,7 @@ export function AdminSettingsClient({
             <Card className="shadow-sm">
               <CardContent className="space-y-4 pt-6">
                 <div className="space-y-2">
-                  <Label htmlFor="ghlWebhookUrl">GoHighLevel webhook URL</Label>
+                  <Label htmlFor="ghlWebhookUrl">GoHighLevel inbound webhook URL</Label>
                   <Input
                     id="ghlWebhookUrl"
                     value={settings.integrations?.ghlWebhookUrl ?? ""}
@@ -946,11 +991,12 @@ export function AdminSettingsClient({
                     placeholder="https://…"
                   />
                   <p className="text-xs text-muted">
-                    Leave blank to skip GHL sync for this business. Swift uses the platform env var until a URL is saved.
+                    Paste your GoHighLevel inbound webhook URL to sync new project requests into GHL.
+                    Leave blank to skip.
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="ghlLeadSource">GHL lead source</Label>
+                  <Label htmlFor="ghlLeadSource">Lead source label in GoHighLevel</Label>
                   <Input
                     id="ghlLeadSource"
                     value={settings.integrations?.ghlLeadSource ?? ""}
