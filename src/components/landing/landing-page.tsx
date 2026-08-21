@@ -11,46 +11,19 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import type { PortalBrand } from "@/lib/portal-brand";
-import type { LandingFeatureIconId, ResolvedLandingPage } from "@/lib/landing-content";
+import type { ResolvedLandingPage } from "@/lib/landing-content";
+import { LANDING_FEATURE_ICON_MAP } from "@/lib/landing-feature-icons";
 import {
-  Camera,
-  Video,
-  Globe,
-  CreditCard,
-  Calendar,
-  FileDown,
-  MessageSquare,
   CheckCircle2,
   ArrowRight,
   Play,
   Home,
   ExternalLink,
-  Map,
-  Users,
-  Clock,
-  Image as ImageIcon,
-  Send,
-  type LucideIcon,
 } from "lucide-react";
 
 const STEP_CARD_WIDTH = 480;
 
-const FEATURE_ICON_MAP: Record<LandingFeatureIconId, LucideIcon> = {
-  MessageSquare,
-  FileDown,
-  Calendar,
-  Camera,
-  Video,
-  Globe,
-  CreditCard,
-  CheckCircle2,
-  Home,
-  Map,
-  Users,
-  Clock,
-  Image: ImageIcon,
-  Send,
-};
+const FEATURE_ICON_MAP = LANDING_FEATURE_ICON_MAP;
 
 function buildShowcase(landing: ResolvedLandingPage) {
   return [
@@ -156,16 +129,17 @@ export function LandingPage({
   brand: PortalBrand;
   page: ResolvedLandingPage;
 }) {
+  const stepScreenshots = [
+    page.assets.screenshots.request,
+    page.assets.screenshots.quote,
+    page.assets.screenshots.dashboard,
+    page.assets.screenshots.review,
+  ];
   const STEPS = page.howItWorks.map((step, i) => ({
     step: String(i + 1).padStart(2, "0"),
     title: step.label,
     description: step.description,
-    image: [
-      page.assets.screenshots.request,
-      page.assets.screenshots.quote,
-      page.assets.screenshots.dashboard,
-      page.assets.screenshots.review,
-    ][i],
+    image: stepScreenshots[i % stepScreenshots.length],
     alt: `${page.portalName} step ${i + 1}`,
   }));
   const PORTAL_SHOWCASE = buildShowcase(page);

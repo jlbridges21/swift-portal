@@ -9,6 +9,7 @@ import {
 import { InvalidBrandAssetUrlError, InvalidBrandColorError } from "@/lib/brand-color";
 import { InvalidEmailSenderError } from "@/lib/email-sender-policy";
 import { EntitlementError } from "@/lib/entitlements";
+import { InvalidLandingHowItWorksError } from "@/lib/landing-content";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET() {
@@ -48,6 +49,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ settings: saved });
   } catch (error) {
     if (error instanceof InvalidBrandColorError || error instanceof InvalidBrandAssetUrlError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof InvalidLandingHowItWorksError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error instanceof InvalidEmailSenderError) {

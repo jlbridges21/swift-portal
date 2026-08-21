@@ -85,6 +85,7 @@ export type MessageTemplateKey =
   | "preliminary_estimate_ready"
   | "proposal_ready"
   | "scheduling_request"
+  | "shoot_time_declined"
   | "shoot_confirmed"
   | "deliverables_ready"
   | "payment_request"
@@ -109,7 +110,7 @@ export const MESSAGE_TEMPLATE_DEFINITIONS: {
   {
     key: "new_request_confirmation",
     label: "New request confirmation",
-    description: "Sent to the client right after they submit a project request.",
+    description: "Sent to the client right after they submit a project request (same event as the admin alert).",
     audience: "client",
     placeholders: "{{client_name}}, {{property_address}}, {{portal_link}}, {{portal_name}}, {{business_name}}",
   },
@@ -130,9 +131,17 @@ export const MESSAGE_TEMPLATE_DEFINITIONS: {
   {
     key: "scheduling_request",
     label: "Shoot time to review",
-    description: "Sent when a shoot time is proposed, declined, or rescheduled.",
+    description: "Sent when a shoot time is proposed or rescheduled.",
     audience: "client",
     placeholders: "{{client_name}}, {{shoot_date}}, {{portal_link}}",
+  },
+  {
+    key: "shoot_time_declined",
+    label: "Shoot time declined",
+    description:
+      "Sent to the client when their suggested time is declined or a proposal is withdrawn. When the client declines, only admins are notified (short admin alert, not this template).",
+    audience: "client",
+    placeholders: "{{client_name}}, {{shoot_date}}, {{portal_link}}, {{portal_name}}, {{business_name}}",
   },
   {
     key: "shoot_confirmed",
@@ -293,6 +302,10 @@ export function buildDefaultWorkflowSettings(): WorkflowSettings {
       scheduling_request: {
         subject: "Your shoot time is ready to review",
         body: "Hi {{client_name}}, please review the proposed shoot time on {{shoot_date}}. {{portal_link}}",
+      },
+      shoot_time_declined: {
+        subject: "Your shoot time was declined",
+        body: "Hi {{client_name}}, a proposed shoot time was declined. Please open {{portal_name}} to suggest another time: {{portal_link}}",
       },
       shoot_confirmed: {
         subject: "Your shoot is confirmed",

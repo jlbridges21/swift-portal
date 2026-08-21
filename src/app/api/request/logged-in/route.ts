@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
-import { notifyAdmins } from "@/lib/notifications";
+import { notifyAdmins, notifyClient } from "@/lib/notifications";
 import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
 import { defaultProjectTitle, resolveAddressFromBody } from "@/lib/address";
 import { linkProjectToProperty } from "@/lib/properties";
@@ -114,6 +114,17 @@ export async function POST(request: Request) {
     title: "New Project Request",
     body: `${person.fullName} requested ${service_requested} at ${property_address}. A preliminary estimate was generated automatically.`,
     link: `/admin/projects/${project.id}`,
+    projectId: project.id,
+    businessId,
+  });
+
+  await notifyClient({
+    clientId,
+    type: "proposal_submitted",
+    eventKey: "new_project_request",
+    title: "We received your project request",
+    body: `Thanks ${person.fullName} — we received your request for ${service_requested} at ${property_address}.`,
+    link: `/dashboard/projects/${project.id}`,
     projectId: project.id,
     businessId,
   });

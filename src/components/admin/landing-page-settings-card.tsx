@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { LandingFeatureIconPicker } from "@/components/admin/landing-feature-icon-picker";
 import {
   LANDING_LIMITS,
-  HOW_IT_WORKS_STEP_COUNT,
-  LANDING_FEATURE_ICON_IDS,
+  HOW_IT_WORKS_DEFAULT_COUNT,
+  DEFAULT_HOW_IT_WORKS,
   DEFAULT_FEATURE_CARDS,
   landingContentPlaceholders,
   type LandingSettings,
@@ -17,7 +18,7 @@ import {
   type LandingSocialLinks,
   type LandingSectionVisibility,
 } from "@/lib/landing-content";
-import { ExternalLink, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ExternalLink, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 function CharCount({ value, max }: { value: string; max: number }) {
   const n = value.length;
@@ -65,6 +66,16 @@ function FieldShell({
   );
 }
 
+function editorHowItWorks(landing: LandingSettings): LandingHowItWorksStep[] {
+  if (landing.howItWorks.length >= LANDING_LIMITS.howItWorksMin) {
+    return landing.howItWorks;
+  }
+  return Array.from({ length: HOW_IT_WORKS_DEFAULT_COUNT }, (_, i) => ({
+    label: landing.howItWorks[i]?.label ?? "",
+    description: landing.howItWorks[i]?.description ?? "",
+  }));
+}
+
 export function LandingPageSettingsCard({
   landing,
   businessName,
@@ -81,6 +92,7 @@ export function LandingPageSettingsCard({
   onChange: (next: LandingSettings) => void;
 }) {
   const placeholders = landingContentPlaceholders(businessName, serviceNames);
+  const steps = editorHowItWorks(landing);
 
   function patchHero(patch: Partial<LandingSettings["hero"]>) {
     onChange({ ...landing, hero: { ...landing.hero, ...patch } });
@@ -102,14 +114,48 @@ export function LandingPageSettingsCard({
     onChange({ ...landing, sections: { ...landing.sections, ...patch } });
   }
 
+  function setHowItWorksList(next: LandingHowItWorksStep[]) {
+    onChange({ ...landing, howItWorks: next });
+  }
+
   function setHowItWorks(index: number, patch: Partial<LandingHowItWorksStep>) {
-    const next = landing.howItWorks.map((step, i) =>
-      i === index ? { ...step, ...patch } : step
-    );
-    while (next.length < HOW_IT_WORKS_STEP_COUNT) {
-      next.push({ label: "", description: "" });
+    setHowItWorksList(steps.map((step, i) => (i === index ? { ...step, ...patch } : step)));
+  }
+
+  function addHowItWorksStep() {
+    if (steps.length >= LANDING_LIMITS.howItWorksMax) return;
+    setHowItWorksList([...steps, { label: "", description: "" }]);
+  }
+
+  function removeHowItWorksStep(index: number) {
+    if (steps.length <= LANDING_LIMITS.howItWorksMin) return;
+    const label = steps[index]?.label?.trim() || `Step ${index + 1}`;
+    if (
+      !window.confirm(
+        `Remove “${label}”? This cannot be undone (you can reset the whole section to defaults).`
+      )
+    ) {
+      return;
     }
-    onChange({ ...landing, howItWorks: next.slice(0, HOW_IT_WORKS_STEP_COUNT) });
+    setHowItWorksList(steps.filter((_, i) => i !== index));
+  }
+
+  function moveHowItWorksStep(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= steps.length) return;
+    const next = [...steps];
+    const [row] = next.splice(index, 1);
+    next.splice(target, 0, row);
+    setHowItWorksList(next);
+  }
+
+  function resetHowItWorksDefaults() {
+    setHowItWorksList(
+      Array.from({ length: HOW_IT_WORKS_DEFAULT_COUNT }, () => ({
+        label: "",
+        description: "",
+      }))
+    );
   }
 
   function editorFeatures(): LandingFeatureCard[] {
@@ -308,18 +354,70 @@ export function LandingPageSettingsCard({
 
       <Card className="shadow-sm">
         <CardContent className="space-y-4 pt-6">
-          <h3 className="font-semibold text-heading">How it works</h3>
-          <p className="text-xs text-muted">
-            Four steps, fixed order. Only labels and descriptions are editable.
-          </p>
-          {Array.from({ length: HOW_IT_WORKS_STEP_COUNT }, (_, i) => {
-            const step = landing.howItWorks[i] ?? { label: "", description: "" };
-            const ph = placeholders.howItWorks[i];
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h3 className="font-semibold text-heading">How it works</h3>
+              <p className="text-xs text-muted">
+                {LANDING_LIMITS.howItWorksMin}–{LANDING_LIMITS.howItWorksMax} steps (default{" "}
+                {HOW_IT_WORKS_DEFAULT_COUNT}). Horizontal scroll layout holds every count.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={resetHowItWorksDefaults}
+            >
+              <RotateCcw className="mr-1 h-3 w-3" />
+              Reset to default
+            </Button>
+          </div>
+          {steps.map((step, i) => {
+            const ph = placeholders.howItWorks[i] ?? DEFAULT_HOW_IT_WORKS[i];
             return (
               <div key={i} className="space-y-2 rounded-lg border border-border p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Step {String(i + 1).padStart(2, "0")}
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                    Step {String(i + 1).padStart(2, "0")}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2"
+                      aria-label={`Move step ${i + 1} up`}
+                      disabled={i === 0}
+                      onClick={() => moveHowItWorksStep(i, -1)}
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2"
+                      aria-label={`Move step ${i + 1} down`}
+                      disabled={i === steps.length - 1}
+                      onClick={() => moveHowItWorksStep(i, 1)}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                    {steps.length > LANDING_LIMITS.howItWorksMin ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-red-700"
+                        onClick={() => removeHowItWorksStep(i)}
+                      >
+                        <Trash2 className="mr-1 h-3 w-3" />
+                        Remove
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
                 <FieldShell
                   label="Label"
                   htmlFor={`landing-step-${i}-label`}
@@ -331,7 +429,7 @@ export function LandingPageSettingsCard({
                     id={`landing-step-${i}-label`}
                     maxLength={LANDING_LIMITS.howItWorksLabel}
                     value={step.label}
-                    placeholder={ph?.label}
+                    placeholder={ph?.label ?? `Step ${i + 1}`}
                     onChange={(e) => setHowItWorks(i, { label: e.target.value })}
                   />
                 </FieldShell>
@@ -355,6 +453,12 @@ export function LandingPageSettingsCard({
               </div>
             );
           })}
+          {steps.length < LANDING_LIMITS.howItWorksMax ? (
+            <Button type="button" variant="outline" size="sm" onClick={addHowItWorksStep}>
+              <Plus className="mr-1 h-4 w-4" />
+              Add step
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -401,27 +505,23 @@ export function LandingPageSettingsCard({
                 ) : null}
               </div>
               <div className="space-y-2">
-                <Label htmlFor={`landing-feature-${i}-icon`}>Icon</Label>
-                <select
+                <Label id={`landing-feature-${i}-icon-label`}>Icon</Label>
+                <LandingFeatureIconPicker
                   id={`landing-feature-${i}-icon`}
                   value={card.icon}
-                  onChange={(e) =>
-                    setFeature(i, { icon: e.target.value as LandingFeatureIconId })
-                  }
-                  className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-                >
-                  {LANDING_FEATURE_ICON_IDS.map((id) => (
-                    <option key={id} value={id}>
-                      {id}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(icon: LandingFeatureIconId) => setFeature(i, { icon })}
+                />
               </div>
               <FieldShell
                 label="Title"
                 htmlFor={`landing-feature-${i}-title`}
                 value={card.title}
                 max={LANDING_LIMITS.featureTitle}
+                onReset={
+                  DEFAULT_FEATURE_CARDS[i]
+                    ? () => setFeature(i, { title: DEFAULT_FEATURE_CARDS[i].title })
+                    : undefined
+                }
               >
                 <Input
                   id={`landing-feature-${i}-title`}
@@ -436,6 +536,14 @@ export function LandingPageSettingsCard({
                 htmlFor={`landing-feature-${i}-desc`}
                 value={card.description}
                 max={LANDING_LIMITS.featureDescription}
+                onReset={
+                  DEFAULT_FEATURE_CARDS[i]
+                    ? () =>
+                        setFeature(i, {
+                          description: DEFAULT_FEATURE_CARDS[i].description,
+                        })
+                    : undefined
+                }
               >
                 <textarea
                   id={`landing-feature-${i}-desc`}

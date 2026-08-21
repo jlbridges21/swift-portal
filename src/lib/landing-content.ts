@@ -27,6 +27,9 @@ export const LANDING_LIMITS = {
   industriesMax: 8,
   howItWorksLabel: 60,
   howItWorksDescription: 200,
+  /** Horizontal step carousel holds 3–6 without breaking layout. */
+  howItWorksMin: 3,
+  howItWorksMax: 6,
   featureTitle: 40,
   featureDescription: 120,
   /** Fixed range so the feature grid cannot break (3–8). */
@@ -36,13 +39,16 @@ export const LANDING_LIMITS = {
   socialUrl: 300,
 } as const;
 
+/** @deprecated Use LANDING_LIMITS.howItWorksMin/Max — defaults remain 4 steps. */
 export const HOW_IT_WORKS_STEP_COUNT = 4;
+export const HOW_IT_WORKS_DEFAULT_COUNT = 4;
 
 /**
- * Curated lucide-react icon names already used on the landing page.
+ * Curated lucide-react icons for photography / media businesses.
  * API rejects anything outside this set — no arbitrary icon strings/URLs.
  */
 export const LANDING_FEATURE_ICON_IDS = [
+  // Core portal / workflow (defaults)
   "MessageSquare",
   "FileDown",
   "Calendar",
@@ -51,12 +57,21 @@ export const LANDING_FEATURE_ICON_IDS = [
   "Globe",
   "CreditCard",
   "CheckCircle2",
+  // Place & people
   "Home",
   "Map",
   "Users",
+  "Building2",
+  // Time & delivery
   "Clock",
-  "Image",
   "Send",
+  // Media / production
+  "Image",
+  "ImagePlus",
+  "Aperture",
+  "Film",
+  "Clapperboard",
+  "Sun",
 ] as const;
 
 export type LandingFeatureIconId = (typeof LANDING_FEATURE_ICON_IDS)[number];
@@ -66,6 +81,26 @@ export function isLandingFeatureIconId(value: unknown): value is LandingFeatureI
     typeof value === "string" &&
     (LANDING_FEATURE_ICON_IDS as readonly string[]).includes(value)
   );
+}
+
+export class InvalidLandingHowItWorksError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidLandingHowItWorksError";
+  }
+}
+
+/** Strict count check for API saves — rejects 2 or 7 etc. */
+export function assertHowItWorksCount(raw: unknown): void {
+  if (!Array.isArray(raw)) {
+    throw new InvalidLandingHowItWorksError("howItWorks must be an array");
+  }
+  const n = raw.length;
+  if (n < LANDING_LIMITS.howItWorksMin || n > LANDING_LIMITS.howItWorksMax) {
+    throw new InvalidLandingHowItWorksError(
+      `howItWorks must have ${LANDING_LIMITS.howItWorksMin}–${LANDING_LIMITS.howItWorksMax} steps (got ${n})`
+    );
+  }
 }
 
 export type LandingFeatureCard = {
@@ -299,15 +334,29 @@ export function sanitizeSocialUrl(
 }
 
 function normalizeHowItWorks(raw: unknown): LandingHowItWorksStep[] {
-  const rows = Array.isArray(raw) ? raw : [];
-  const out: LandingHowItWorksStep[] = [];
-  for (let i = 0; i < HOW_IT_WORKS_STEP_COUNT; i += 1) {
-    const row = rows[i] as { label?: unknown; description?: unknown } | undefined;
-    out.push({
-      label: sanitizePlainText(row?.label, LANDING_LIMITS.howItWorksLabel),
-      description: sanitizePlainText(row?.description, LANDING_LIMITS.howItWorksDescription),
-    });
+  // Missing / empty → four blank steps (resolve fills DEFAULT_HOW_IT_WORKS).
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return Array.from({ length: HOW_IT_WORKS_DEFAULT_COUNT }, () => ({
+      label: "",
+      description: "",
+    }));
   }
+
+  const out: LandingHowItWorksStep[] = [];
+  for (const row of raw) {
+    const r = row as { label?: unknown; description?: unknown } | null;
+    out.push({
+      label: sanitizePlainText(r?.label, LANDING_LIMITS.howItWorksLabel),
+      description: sanitizePlainText(r?.description, LANDING_LIMITS.howItWorksDescription),
+    });
+    if (out.length >= LANDING_LIMITS.howItWorksMax) break;
+  }
+
+  // Corrupt stored data: pad to min so the public page never breaks.
+  while (out.length < LANDING_LIMITS.howItWorksMin) {
+    out.push({ label: "", description: "" });
+  }
+
   return out;
 }
 

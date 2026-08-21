@@ -13,6 +13,7 @@ import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
 import { mergeLandingSettings, type LandingSettings } from "@/lib/landing-content";
 import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { brandingFieldsChanged, landingSettingsChanged, requireEntitlement } from "@/lib/entitlements";
+import { assertHowItWorksCount } from "@/lib/landing-content";
 import {
   buildDefaultWorkflowSettings,
   mergeWorkflowSettings,
@@ -129,14 +130,14 @@ export const NOTIFICATION_EVENT_DEFINITIONS: {
   description: string;
   audience: "admin" | "client" | "both";
 }[] = [
-  { key: "new_project_request", label: "New project request submitted", description: "Notifies admins when a client submits a new project.", audience: "admin" },
+  { key: "new_project_request", label: "New project request submitted", description: "Notifies admins of a new request, and confirms receipt to the client.", audience: "both" },
   { key: "preliminary_estimate_created", label: "Preliminary estimate created", description: "Notifies clients when an automatic preliminary estimate is ready.", audience: "client" },
   { key: "official_proposal_sent", label: "Official proposal sent", description: "Notifies clients when an official proposal is sent.", audience: "client" },
   { key: "proposal_approved", label: "Proposal approved", description: "Notifies admins when a client approves a proposal.", audience: "admin" },
   { key: "proposal_changes_requested", label: "Proposal changes requested", description: "Notifies admins when a client requests proposal changes.", audience: "admin" },
   { key: "shoot_time_proposed", label: "Shoot time proposed", description: "Shoot scheduling proposals and counter-proposals.", audience: "both" },
   { key: "shoot_time_confirmed", label: "Shoot time confirmed", description: "When a shoot date is confirmed.", audience: "both" },
-  { key: "shoot_time_declined", label: "Shoot time declined", description: "When a proposed shoot time is declined.", audience: "both" },
+  { key: "shoot_time_declined", label: "Shoot time declined", description: "Client decline → admins only. Admin decline/withdraw → client (decline email template).", audience: "both" },
   { key: "shoot_scheduled", label: "Shoot scheduled", description: "Project moves to scheduled status.", audience: "client" },
   { key: "shoot_rescheduled", label: "Shoot rescheduled", description: "When a shoot is moved to a new date.", audience: "both" },
   { key: "shoot_completed", label: "Shoot completed", description: "When field work is marked complete.", audience: "client" },
@@ -314,6 +315,10 @@ export async function saveAppSettings(
   businessId: string,
   options?: { allowVerificationWrite?: boolean }
 ): Promise<AppSettings> {
+  if (patch.landing && Object.prototype.hasOwnProperty.call(patch.landing, "howItWorks")) {
+    assertHowItWorksCount(patch.landing.howItWorks);
+  }
+
   const current = await loadAppSettingsFromDb(businessId);
   const merged = mergeAppSettings(
     deepMerge(current as unknown as Record<string, unknown>, patch as unknown as Record<string, unknown>) as unknown as AppSettings

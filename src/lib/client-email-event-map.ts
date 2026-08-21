@@ -22,9 +22,9 @@ export type ClientEmailEventMapping = {
  */
 export const CLIENT_EMAIL_EVENT_MAP: Record<NotificationEventKey, ClientEmailEventMapping> = {
   new_project_request: {
-    messageKey: null,
+    messageKey: "new_request_confirmation",
     premiumTemplate: "general",
-    defaultSubjectHint: "(admin) New project request",
+    defaultSubjectHint: "We received your project request",
   },
   preliminary_estimate_created: {
     messageKey: "preliminary_estimate_ready",
@@ -57,9 +57,9 @@ export const CLIENT_EMAIL_EVENT_MAP: Record<NotificationEventKey, ClientEmailEve
     defaultSubjectHint: "Your shoot is confirmed",
   },
   shoot_time_declined: {
-    messageKey: "scheduling_request",
-    premiumTemplate: "shoot_proposed",
-    defaultSubjectHint: "Your shoot time needs another look",
+    messageKey: "shoot_time_declined",
+    premiumTemplate: "general",
+    defaultSubjectHint: "Your shoot time was declined",
   },
   shoot_scheduled: {
     messageKey: "shoot_confirmed",
