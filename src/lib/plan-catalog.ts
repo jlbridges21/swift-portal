@@ -45,6 +45,8 @@ export type PlanRow = {
   description: string | null;
   price_monthly_cents: number | null;
   price_annual_cents: number | null;
+  /** Free-trial days for NEW signups on this plan. 0 = no trial. */
+  trial_days: number;
   entitlements: Record<string, unknown>;
   limits: Record<string, unknown>;
   display_order: number;
@@ -56,6 +58,29 @@ export type PlanRow = {
   stripe_price_monthly_id?: string | null;
   stripe_price_annual_id?: string | null;
 };
+
+/** Fail-closed default when a plan row is missing or trial_days is invalid. */
+export const FALLBACK_TRIAL_DAYS = 14;
+
+/** Columns shared by plan catalog selects (keep in sync across entitlements). */
+export const PLAN_CATALOG_SELECT =
+  "id, key, name, description, price_monthly_cents, price_annual_cents, trial_days, entitlements, limits, display_order, is_active, is_public, created_at, updated_at, stripe_product_id, stripe_price_monthly_id, stripe_price_annual_id";
+
+/**
+ * Normalize trial_days from a plan row. Returns null when missing/invalid so
+ * callers can log and fall back to FALLBACK_TRIAL_DAYS.
+ */
+export function parsePlanTrialDays(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const n = Math.trunc(value);
+  if (n < 0 || n > 365) return null;
+  return n;
+}
+
+export function formatTrialDaysLabel(days: number): string {
+  if (days <= 0) return "No free trial";
+  return `${days}-day`;
+}
 
 export function isEnforcedEntitlement(key: string): key is EnforcedEntitlement {
   return (ENFORCED_ENTITLEMENTS as readonly string[]).includes(key);

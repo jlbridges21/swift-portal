@@ -2,6 +2,9 @@ import { cache } from "react";
 import { createServiceClient } from "@/lib/supabase/server";
 import {
   ENTITLEMENT_LABELS,
+  FALLBACK_TRIAL_DAYS,
+  PLAN_CATALOG_SELECT,
+  parsePlanTrialDays,
   type EnforcedEntitlement,
   type EntitlementKey,
   type PlanLimits,
@@ -19,9 +22,12 @@ export {
   ENFORCED_ENTITLEMENTS,
   FUTURE_ENTITLEMENTS,
   ENTITLEMENT_LABELS,
+  FALLBACK_TRIAL_DAYS,
   formatPlanPrice,
+  formatTrialDaysLabel,
   isEnforcedEntitlement,
   isFutureEntitlement,
+  parsePlanTrialDays,
 } from "@/lib/plan-catalog";
 
 export class EntitlementError extends Error {
@@ -57,12 +63,31 @@ async function loadPlanByKey(key: string): Promise<PlanRow | null> {
   const raw = await createServiceClient();
   const { data } = await raw
     .from("plans")
-    .select(
-      "id, key, name, description, price_monthly_cents, price_annual_cents, entitlements, limits, display_order, is_active, is_public, created_at, updated_at, stripe_product_id, stripe_price_monthly_id, stripe_price_annual_id"
-    )
+    .select(PLAN_CATALOG_SELECT)
     .eq("key", key)
     .maybeSingle();
   return (data as PlanRow | null) ?? null;
+}
+
+/**
+ * Trial length for NEW signups on this plan. Fail closed to 14 when missing/invalid —
+ * never invent a longer trial than configured.
+ */
+export function resolvePlanTrialDays(
+  plan: Pick<PlanRow, "key" | "trial_days"> | null | undefined,
+  context = "plan"
+): number {
+  const parsed = parsePlanTrialDays(plan?.trial_days);
+  if (parsed == null) {
+    console.warn("[plans] trial_days missing or invalid — using fallback", {
+      context,
+      planKey: plan?.key ?? null,
+      raw: plan?.trial_days ?? null,
+      fallback: FALLBACK_TRIAL_DAYS,
+    });
+    return FALLBACK_TRIAL_DAYS;
+  }
+  return parsed;
 }
 
 /** Fail closed for a plan key that is not yet attached to a business. */
@@ -122,9 +147,7 @@ export async function listActivePlans(): Promise<PlanRow[]> {
   const raw = await createServiceClient();
   const { data, error } = await raw
     .from("plans")
-    .select(
-      "id, key, name, description, price_monthly_cents, price_annual_cents, entitlements, limits, display_order, is_active, is_public, created_at, updated_at, stripe_product_id, stripe_price_monthly_id, stripe_price_annual_id"
-    )
+    .select(PLAN_CATALOG_SELECT)
     .eq("is_active", true)
     .order("display_order", { ascending: true });
   if (error) throw new Error(error.message);
@@ -135,9 +158,7 @@ export async function listAllPlans(): Promise<PlanRow[]> {
   const raw = await createServiceClient();
   const { data, error } = await raw
     .from("plans")
-    .select(
-      "id, key, name, description, price_monthly_cents, price_annual_cents, entitlements, limits, display_order, is_active, is_public, created_at, updated_at, stripe_product_id, stripe_price_monthly_id, stripe_price_annual_id"
-    )
+    .select(PLAN_CATALOG_SELECT)
     .order("display_order", { ascending: true });
   if (error) throw new Error(error.message);
   return (data as PlanRow[]) ?? [];

@@ -13,6 +13,7 @@ import { invalidateHostLookupCache } from "@/lib/host-resolution";
 import {
   assertActivePlanKey,
   planGrantsEntitlement,
+  resolvePlanTrialDays,
 } from "@/lib/entitlements";
 import { isSubscriptionStatus } from "@/lib/subscription";
 
@@ -60,15 +61,15 @@ export const SYSTEM_SIGNUP_ACTOR = {
   email: "system@signup.shootportal.app",
 };
 
-const TRIAL_DAYS = 30;
-
 function normalizeDomain(raw: string | null | undefined): string | null {
   const v = raw?.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "") ?? "";
   return v || null;
 }
 
-function trialEndsAtIso(from = new Date()): string {
-  return new Date(from.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+/** Compute trial_ends_at from a day count. 0 → null (no trial clock). */
+function trialEndsAtFromDays(days: number, from = new Date()): string | null {
+  if (days <= 0) return null;
+  return new Date(from.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 async function rollbackBusinessProvision(
@@ -104,7 +105,9 @@ async function rollbackBusinessProvision(
 /**
  * Shared provisioning for platform console and self-serve /signup.
  * Platform path (default) is unchanged: invite email, no trial, actor audit.
- * Signup path: trialing + 30 days, studio plan, password user, system audit.
+ * Signup path: studio plan; trial length from plans.trial_days (0 → paywalled).
+ * trial_ends_at is written only on INSERT — editing plans.trial_days later never
+ * rewrites existing businesses.
  */
 export async function createBusinessForPlatform(
   input: CreateBusinessInput,
@@ -135,8 +138,11 @@ export async function createBusinessForPlatform(
     );
   }
 
+  const trialDays = resolvePlanTrialDays(planRow, `signup_plan:${plan}`);
+  // Snapshot at create time only — never updated when plans.trial_days changes later.
+  const defaultSignupStatus = trialDays > 0 ? "trialing" : "trial_expired";
   const subscriptionStatus =
-    input.subscriptionStatus ?? (source === "signup" ? "trialing" : "active");
+    input.subscriptionStatus ?? (source === "signup" ? defaultSignupStatus : "active");
   if (!isSubscriptionStatus(subscriptionStatus)) {
     throw new Error("Invalid subscription_status.");
   }
@@ -144,7 +150,7 @@ export async function createBusinessForPlatform(
     input.trialEndsAt !== undefined
       ? input.trialEndsAt
       : source === "signup"
-        ? trialEndsAtIso()
+        ? trialEndsAtFromDays(trialDays)
         : null;
 
   const raw = await createServiceClient();

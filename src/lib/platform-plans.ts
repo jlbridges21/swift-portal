@@ -13,6 +13,7 @@ export type PlanWriteInput = {
   description?: string | null;
   price_monthly_cents?: number | null;
   price_annual_cents?: number | null;
+  trial_days?: number;
   entitlements?: Record<string, unknown>;
   limits?: Record<string, unknown>;
   display_order?: number;
@@ -21,6 +22,14 @@ export type PlanWriteInput = {
 };
 
 const PLAN_KEY_RE = /^[a-z][a-z0-9_]{1,31}$/;
+
+function normalizeTrialDays(raw: unknown): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) throw new Error("trial_days must be a number between 0 and 365.");
+  const days = Math.trunc(n);
+  if (days < 0 || days > 365) throw new Error("trial_days must be between 0 and 365.");
+  return days;
+}
 
 function normalizeEntitlements(raw: Record<string, unknown> | undefined): Record<string, boolean> {
   const out: Record<string, boolean> = {};
@@ -63,6 +72,7 @@ export async function createPlan(
       description: input.description?.trim() || null,
       price_monthly_cents: input.price_monthly_cents ?? null,
       price_annual_cents: input.price_annual_cents ?? null,
+      trial_days: input.trial_days !== undefined ? normalizeTrialDays(input.trial_days) : 14,
       entitlements: normalizeEntitlements(input.entitlements),
       limits: normalizeLimits(input.limits),
       display_order: input.display_order ?? 100,
@@ -79,7 +89,7 @@ export async function createPlan(
     action: "plan.create",
     targetType: "plan",
     targetId: data.id,
-    metadata: { key: data.key, name: data.name },
+    metadata: { key: data.key, name: data.name, trial_days: data.trial_days },
   });
   return data as PlanRow;
 }
@@ -102,6 +112,7 @@ export async function updatePlan(
   if (input.description !== undefined) patch.description = input.description?.trim() || null;
   if (input.price_monthly_cents !== undefined) patch.price_monthly_cents = input.price_monthly_cents;
   if (input.price_annual_cents !== undefined) patch.price_annual_cents = input.price_annual_cents;
+  if (input.trial_days !== undefined) patch.trial_days = normalizeTrialDays(input.trial_days);
   if (input.entitlements !== undefined) patch.entitlements = normalizeEntitlements(input.entitlements);
   if (input.limits !== undefined) patch.limits = normalizeLimits(input.limits);
   if (input.display_order !== undefined) patch.display_order = Number(input.display_order);

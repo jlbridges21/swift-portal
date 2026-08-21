@@ -46,6 +46,7 @@ export type PlanBillingRow = {
   description: string | null;
   price_monthly_cents: number | null;
   price_annual_cents: number | null;
+  trial_days: number;
   is_active: boolean;
   is_public: boolean;
 };
@@ -249,7 +250,7 @@ export async function loadPlanPriceForMode(
   const { data: plan, error } = await supabase
     .from("plans")
     .select(
-      "id, key, name, description, price_monthly_cents, price_annual_cents, is_active, is_public"
+      "id, key, name, description, price_monthly_cents, price_annual_cents, trial_days, is_active, is_public"
     )
     .eq("key", planKey)
     .maybeSingle();
@@ -280,7 +281,7 @@ export async function listPublicPlansWithModePrices(
   const { data: plans, error } = await supabase
     .from("plans")
     .select(
-      "id, key, name, description, price_monthly_cents, price_annual_cents, is_active, is_public, display_order"
+      "id, key, name, description, price_monthly_cents, price_annual_cents, trial_days, is_active, is_public, display_order"
     )
     .eq("is_active", true)
     .eq("is_public", true)

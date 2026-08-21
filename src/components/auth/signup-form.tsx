@@ -9,7 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { suggestSlugFromName } from "@/lib/signup-validation";
 
-export function SignupForm({ platformRootDomain }: { platformRootDomain: string }) {
+export function SignupForm({
+  platformRootDomain,
+  trialDays,
+}: {
+  platformRootDomain: string;
+  /** Studio plan trial_days for new signups (from plans table). */
+  trialDays: number;
+}) {
   const [name, setName] = useState("");
   const [ownerName, setOwnerName] = useState("");
   const [email, setEmail] = useState("");
@@ -142,8 +149,14 @@ export function SignupForm({ platformRootDomain }: { platformRootDomain: string 
       <main className="flex flex-1 items-center justify-center px-4 py-16">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <CardTitle>Start your free trial</CardTitle>
-            <CardDescription>30 days on Studio — no credit card required.</CardDescription>
+            <CardTitle>
+              {trialDays > 0 ? "Start your free trial" : "Create your studio"}
+            </CardTitle>
+            <CardDescription>
+              {trialDays > 0
+                ? `${trialDays} days on Studio — no credit card required.`
+                : "Studio plan — subscribe after you create your account."}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={onSubmit}>

@@ -2,8 +2,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { SITE, SITE_ICONS } from "@/lib/site-metadata";
 import { Button } from "@/components/ui/button";
+import { formatTrialDaysLabel } from "@/lib/plan-catalog";
 
-export function PlatformLanding() {
+export function PlatformLanding({ trialDays }: { trialDays: number }) {
   return (
     <div className="flex min-h-screen flex-col bg-[#F8FAFC]">
       <header className="border-b border-slate-200 bg-white">
@@ -51,7 +52,11 @@ export function PlatformLanding() {
             </Button>
           </Link>
         </div>
-        <p className="mt-4 text-sm text-slate-500">30-day Studio trial. No credit card required.</p>
+        <p className="mt-4 text-sm text-slate-500">
+          {trialDays > 0
+            ? `${formatTrialDaysLabel(trialDays)} Studio trial. No credit card required.`
+            : "Studio plan. Subscribe after signup — no free trial."}
+        </p>
       </main>
     </div>
   );

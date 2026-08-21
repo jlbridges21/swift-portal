@@ -8,6 +8,7 @@ import { getAppSettings } from "@/lib/app-settings";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
 import { platformPortalBrand, publicHostBrand } from "@/lib/public-host-chrome";
+import { assertActivePlanKey, resolvePlanTrialDays } from "@/lib/entitlements";
 
 export const dynamic = "force-dynamic";
 
@@ -40,10 +41,18 @@ export default async function HomePage() {
     );
   }
 
+  let trialDays = 14;
+  try {
+    const studio = await assertActivePlanKey("studio");
+    trialDays = resolvePlanTrialDays(studio, "platform_landing");
+  } catch (err) {
+    console.warn("[landing] could not load studio trial_days — using 14", err);
+  }
+
   return (
     <BrandProvider brand={platformPortalBrand()}>
       <AuthFragmentHandler />
-      <PlatformLanding />
+      <PlatformLanding trialDays={trialDays} />
     </BrandProvider>
   );
 }

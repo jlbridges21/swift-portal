@@ -5,7 +5,7 @@ import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { BrandProvider } from "@/components/brand/brand-provider";
 import { ImpersonationBanner } from "@/components/platform/impersonation-banner";
 import { getSubscriptionState } from "@/lib/subscription";
-import { formatPlanPrice } from "@/lib/plan-catalog";
+import { formatPlanPrice, formatTrialDaysLabel } from "@/lib/plan-catalog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -230,6 +230,11 @@ export default async function BillingPage() {
                               or {formatPlanPrice(plan.price_annual_cents)}/mo billed annually
                             </p>
                           )}
+                          <p className="text-xs text-muted">
+                            {plan.trial_days > 0
+                              ? `${formatTrialDaysLabel(plan.trial_days)} free trial for new signups`
+                              : "No free trial — subscribe to start"}
+                          </p>
                           {plan.description && (
                             <p className="text-sm text-muted">{plan.description}</p>
                           )}

@@ -170,9 +170,24 @@ async function main() {
   if (biz.created_via !== "signup") throw new Error(`created_via=${biz.created_via}`);
   if (biz.subscription_status !== "trialing") throw new Error(`status=${biz.subscription_status}`);
   if (biz.plan !== "studio") throw new Error(`plan=${biz.plan}`);
+
+  const { data: studioPlan } = await raw
+    .from("plans")
+    .select("trial_days")
+    .eq("key", "studio")
+    .maybeSingle();
+  const expectedDays =
+    typeof studioPlan?.trial_days === "number" && Number.isFinite(studioPlan.trial_days)
+      ? Math.trunc(studioPlan.trial_days)
+      : 14;
+  if (expectedDays <= 0) {
+    throw new Error("verify-signup expects studio.trial_days > 0 for this check");
+  }
   const ends = biz.trial_ends_at ? new Date(biz.trial_ends_at).getTime() : 0;
   const days = (ends - Date.now()) / (24 * 60 * 60 * 1000);
-  if (days < 29 || days > 31) throw new Error(`trial days=${days}`);
+  if (days < expectedDays - 1 || days > expectedDays + 1) {
+    throw new Error(`trial days=${days} expected≈${expectedDays}`);
+  }
 
   const kids = await countBizChildren(created.businessId);
   if (kids.settings !== 1 || kids.integ !== 1 || kids.services < 4) {

@@ -60,6 +60,7 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
       price_annual_cents: fd.get("price_annual")
         ? Math.round(Number(fd.get("price_annual")) * 100)
         : null,
+      trial_days: Number(fd.get("trial_days") ?? 14),
       display_order: Number(fd.get("display_order") ?? 100),
       is_active: fd.get("is_active") === "on",
       is_public: fd.get("is_public") === "on",
@@ -205,7 +206,7 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
             className="mt-1"
           />
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <Label htmlFor="price_monthly">Monthly ($)</Label>
             <Input
@@ -229,6 +230,23 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
               defaultValue={plan?.price_annual_cents != null ? plan.price_annual_cents / 100 : ""}
               className="mt-1"
             />
+          </div>
+          <div>
+            <Label htmlFor="trial_days">Trial days (new signups only)</Label>
+            <Input
+              id="trial_days"
+              name="trial_days"
+              type="number"
+              min={0}
+              max={365}
+              required
+              defaultValue={plan?.trial_days ?? 14}
+              className="mt-1"
+            />
+            <p className="mt-1 text-xs text-muted">
+              Applies to new signups on this plan. 0 = no trial (paywall immediately). Does not
+              change businesses already on a trial.
+            </p>
           </div>
           <div>
             <Label htmlFor="display_order">Display order</Label>
@@ -333,6 +351,10 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
                 {plan.price_annual_cents != null && (
                   <> · {formatPlanPrice(plan.price_annual_cents)}/mo annual</>
                 )}
+                {" · "}
+                {plan.trial_days > 0
+                  ? `${plan.trial_days}-day trial (new signups)`
+                  : "no trial (new signups)"}
               </p>
               {plan.description && <p className="mt-2 text-sm text-muted">{plan.description}</p>}
             </div>
