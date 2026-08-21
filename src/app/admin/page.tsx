@@ -13,6 +13,7 @@ import { PushNotificationsCard } from "@/components/admin/push-notifications-car
 import { AdminOpsDashboard } from "@/components/admin/admin-ops-dashboard";
 import { SetupChecklistCard } from "@/components/admin/setup-checklist-card";
 import { fetchAdminDashboardData } from "@/lib/admin-dashboard";
+import { loadSetupChecklistSnapshot } from "@/lib/setup-checklist";
 
 export default async function AdminDashboard() {
   const { profile, tenant } = await requireAdminPage();
@@ -20,7 +21,7 @@ export default async function AdminDashboard() {
   const supabase = await createClient();
   const bid = tenant.businessId;
 
-  const [{ data: recentProjects }, { data: recentActivity }, dashboardData, settings] =
+  const [{ data: recentProjects }, { data: recentActivity }, dashboardData, settings, checklist] =
     await Promise.all([
       supabase
         .from("projects")
@@ -37,6 +38,7 @@ export default async function AdminDashboard() {
         .limit(12),
       fetchAdminDashboardData(bid),
       getAppSettings(bid),
+      loadSetupChecklistSnapshot(bid),
     ]);
 
   return (
@@ -55,7 +57,13 @@ export default async function AdminDashboard() {
           </Link>
         </PageHeader>
 
-        <SetupChecklistCard settings={settings} linkToSettings />
+        {checklist.incomplete ? (
+          <SetupChecklistCard
+            items={checklist.items}
+            incomplete={checklist.incomplete}
+            linkToSettings
+          />
+        ) : null}
 
         <PushNotificationsCard />
 

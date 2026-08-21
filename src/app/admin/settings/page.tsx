@@ -11,13 +11,17 @@ import { HashScrollHandler } from "@/components/ui/hash-scroll-handler";
 import { hasEntitlement } from "@/lib/entitlements";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import { listBusinessServices } from "@/lib/business-services";
+import { loadSetupChecklistSnapshot } from "@/lib/setup-checklist";
 
 export default async function AdminSettingsPage() {
   const { tenant } = await requireAdminPage();
   const settings = await getAppSettings(tenant.businessId);
-  const canCustomizeLanding = await hasEntitlement(tenant.businessId, "custom_branding");
-  const portalPreviewUrl = await getBusinessPortalOriginById(tenant.businessId);
-  const serviceRows = await listBusinessServices(tenant.businessId, { activeOnly: true });
+  const [canCustomizeLanding, portalPreviewUrl, serviceRows, checklist] = await Promise.all([
+    hasEntitlement(tenant.businessId, "custom_branding"),
+    getBusinessPortalOriginById(tenant.businessId),
+    listBusinessServices(tenant.businessId, { activeOnly: true }),
+    loadSetupChecklistSnapshot(tenant.businessId, settings),
+  ]);
   const serviceNames = serviceRows.filter((s) => s.is_active).map((s) => s.name);
 
   return (
@@ -29,7 +33,9 @@ export default async function AdminSettingsPage() {
           description={`Manage global notification, email, business, and proposal settings for ${settings.business.portalName}.`}
         />
         <HashScrollHandler />
-        <SetupChecklistCard settings={settings} />
+        {checklist.incomplete ? (
+          <SetupChecklistCard items={checklist.items} incomplete={checklist.incomplete} />
+        ) : null}
         <AdminSettingsClient
           initialSettings={settings}
           notificationEvents={NOTIFICATION_EVENT_DEFINITIONS}

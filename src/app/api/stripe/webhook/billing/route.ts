@@ -163,6 +163,18 @@ export async function POST(request: Request) {
         }
 
         await handleSubscriptionObject(subscription, event.type);
+        if (event.type === "invoice.paid") {
+          const businessId = subscription.metadata.business_id ?? null;
+          if (businessId) {
+            const { recordPlatformSubscriptionPayment } = await import("@/lib/platform-revenue");
+            const recorded = await recordPlatformSubscriptionPayment(invoice, businessId);
+            logBilling("subscription payment ledger", {
+              invoiceId: invoice.id,
+              businessId,
+              ...recorded,
+            });
+          }
+        }
         recordEvent = true;
         recordBusinessId = subscription.metadata.business_id ?? null;
         break;

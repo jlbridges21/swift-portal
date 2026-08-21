@@ -50,8 +50,7 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
     for (const key of [...ENFORCED_ENTITLEMENTS, ...FUTURE_ENTITLEMENTS]) {
       entitlements[key] = fd.get(`ent_${key}`) === "on";
     }
-    const body = {
-      key: String(fd.get("key") ?? ""),
+    const body: Record<string, unknown> = {
       name: String(fd.get("name") ?? ""),
       description: String(fd.get("description") ?? ""),
       price_monthly_cents: fd.get("price_monthly")
@@ -73,6 +72,10 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
           : null,
       },
     };
+    // Only send key on create — empty key on edit tripped "cannot be changed".
+    if (id === "new") {
+      body.key = String(fd.get("key") ?? "");
+    }
     try {
       const res = await fetch(id === "new" ? "/api/platform/plans" : `/api/platform/plans/${id}`, {
         method: id === "new" ? "POST" : "PATCH",
@@ -80,8 +83,13 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; stripeRemapMessage?: string | null };
       if (!res.ok) throw new Error(data.error || "Save failed");
+      if (data.stripeRemapMessage) {
+        setError(null);
+        // Surface Stripe remap note without blocking save success.
+        window.alert(data.stripeRemapMessage);
+      }
       setEditingId(null);
       await refresh();
     } catch (err) {

@@ -47,7 +47,8 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
       credentials: "include",
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error("Failed");
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) throw new Error(data.error || "Failed to propose date");
     return res;
   });
 
@@ -84,9 +85,14 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
   async function proposeShoot(e: React.FormEvent) {
     e.preventDefault();
     try {
+      const when = new Date(proposedAt);
+      if (!Number.isFinite(when.getTime())) {
+        toast.error("Choose a valid date and time");
+        return;
+      }
       await runPropose({
         project_id: projectId,
-        proposed_at: new Date(proposedAt).toISOString(),
+        proposed_at: when.toISOString(),
         message,
       });
       toast.success(isAdmin ? "Shoot time proposed" : "Shoot time suggested");
@@ -94,8 +100,8 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
       setProposedAt("");
       setMessage("");
       onUpdate();
-    } catch {
-      toast.error("Failed to propose date");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to propose date");
     }
   }
 

@@ -120,12 +120,33 @@ export async function updatePlan(
   if (input.is_public !== undefined) patch.is_public = Boolean(input.is_public);
 
   // Key changes are rejected — businesses.plan FK depends on stable keys.
-  if (input.key !== undefined && input.key.trim() !== existing.key) {
+  // Edit form omits the key field, but still sent `key: ""` from FormData —
+  // only reject a NON-EMPTY different key.
+  if (typeof input.key === "string" && input.key.trim() !== "" && input.key.trim() !== existing.key) {
     throw new Error("Plan key cannot be changed after creation.");
   }
 
+  const priceChanged =
+    (input.price_monthly_cents !== undefined &&
+      input.price_monthly_cents !== existing.price_monthly_cents) ||
+    (input.price_annual_cents !== undefined &&
+      input.price_annual_cents !== existing.price_annual_cents);
+
   const { data, error } = await raw.from("plans").update(patch).eq("id", id).select("*").single();
   if (error || !data) throw new Error(error?.message || "Failed to update plan.");
+
+  let stripeRemapMessage: string | null = null;
+  if (priceChanged && existing.key !== "founding") {
+    try {
+      const { syncPlanStripePricesAfterCatalogChange } = await import("@/lib/sync-plan-stripe-prices");
+      const result = await syncPlanStripePricesAfterCatalogChange(id);
+      stripeRemapMessage = result.message;
+    } catch (err) {
+      console.error("[platform-plans] Stripe price remap failed", err);
+      stripeRemapMessage =
+        "Catalog price saved, but Stripe Price remap failed — re-run npm run setup:stripe-billing for the current mode.";
+    }
+  }
 
   const activated =
     existing.is_active !== data.is_active
@@ -140,9 +161,12 @@ export async function updatePlan(
     action: activated,
     targetType: "plan",
     targetId: id,
-    metadata: { key: data.key, patch },
+    metadata: { key: data.key, patch, stripeRemapMessage },
   });
-  return data as PlanRow;
+
+  return { ...(data as PlanRow), stripeRemapMessage } as PlanRow & {
+    stripeRemapMessage?: string | null;
+  };
 }
 
 export async function reorderPlans(

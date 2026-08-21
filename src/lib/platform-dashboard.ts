@@ -115,7 +115,8 @@ export function platformTotals(rows: PlatformBusinessRow[]) {
     clients: rows.reduce((s, r) => s + r.clientCount, 0),
     projects: rows.reduce((s, r) => s + r.projectCount, 0),
     media: rows.reduce((s, r) => s + r.mediaCount, 0),
-    revenueCents: rows.reduce((s, r) => s + r.lifetimeRevenueCents, 0),
+    /** Tenant→client GMV (money studios collected from their clients). */
+    clientPaymentsProcessedCents: rows.reduce((s, r) => s + r.lifetimeRevenueCents, 0),
   };
 }
 

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { loadPlatformAudit, loadPlatformBusinesses, platformTotals } from "@/lib/platform-dashboard";
+import { sumShootPortalSubscriptionRevenueCents } from "@/lib/platform-revenue";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export default async function PlatformHomePage({
   const { notice, name } = await searchParams;
   const businesses = await loadPlatformBusinesses();
   const totals = platformTotals(businesses);
+  const shootPortalRevenueCents = await sumShootPortalSubscriptionRevenueCents();
   const recent = await loadPlatformAudit({ limit: 12 });
   const named = name?.trim() || "Business";
 
@@ -54,7 +56,7 @@ export default async function PlatformHomePage({
         </Link>
       </div>
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium text-muted">Live businesses</CardTitle>
@@ -75,9 +77,23 @@ export default async function PlatformHomePage({
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted">Lifetime revenue</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted">ShootPortal revenue</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold">{formatCurrency(totals.revenueCents)}</CardContent>
+          <CardContent>
+            <p className="text-2xl font-semibold">{formatCurrency(shootPortalRevenueCents)}</p>
+            <p className="mt-1 text-xs text-muted">Subscription income businesses pay you</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted">Client payments processed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">
+              {formatCurrency(totals.clientPaymentsProcessedCents)}
+            </p>
+            <p className="mt-1 text-xs text-muted">GMV studios collected from their clients</p>
+          </CardContent>
         </Card>
       </div>
 

@@ -55,7 +55,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  const isAdmin = profile.role === "admin";
+  const proposedAtMs = Date.parse(String(body.proposed_at));
+  if (!Number.isFinite(proposedAtMs)) {
+    return NextResponse.json({ error: "Invalid proposed_at datetime" }, { status: 400 });
+  }
+  const proposedAtIso = new Date(proposedAtMs).toISOString();
+
+  // Admins and impersonating super-admins both propose as "admin".
+  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
   const proposedBy = isAdmin ? "admin" : "client";
 
   if (!isAdmin && !profile.client_id) {
@@ -70,14 +77,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // Guard: project must belong to this tenant (DB trigger also enforces).
   const db = await createTenantServiceClient(businessId);
+  const { data: projectRow } = await db
+    .from("projects")
+    .select("id")
+    .eq("id", body.project_id)
+    .maybeSingle();
+  if (!projectRow) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
 
   const { data, error } = await db
     .from("shoot_proposals")
     .insert({
       project_id: body.project_id,
       proposed_by: proposedBy,
-      proposed_at: body.proposed_at,
+      proposed_at: proposedAtIso,
       message: body.message || null,
       status: "pending",
       created_by: profile.id,
@@ -86,60 +102,81 @@ export async function POST(request: Request) {
     .single();
 
   if (error) {
+    console.error("[shoot-proposals] insert failed", {
+      businessId,
+      projectId: body.project_id,
+      error: error.message,
+      code: error.code,
+    });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const dateStr = new Date(body.proposed_at).toLocaleString();
-  const appSettings = await getAppSettings(businessId);
-  const scheduling = appSettings.workflow.scheduling;
+  const dateStr = new Date(proposedAtIso).toLocaleString();
 
-  if (scheduling.logSchedulingChanges) {
-    await logProjectActivity("shoot_proposed", `Shoot proposed for ${dateStr}`, {
-      businessId,
-      projectId: body.project_id,
-      userId: profile.id,
-      metadata: { proposed_by: proposedBy },
-    });
-  }
+  // Side effects must not fail the propose — insert already succeeded.
+  try {
+    const appSettings = await getAppSettings(businessId);
+    const scheduling = appSettings.workflow.scheduling;
 
-  if (isAdmin && scheduling.notifyClientOnPropose) {
-    await notifyProjectClients({
-      type: "shoot_proposed",
-      eventKey: "shoot_time_proposed",
-      title: "Scheduling Your Shoot",
-      body: await resolveProjectMessageTemplate(
-        appSettings.workflow,
-        "scheduling_request",
+    if (scheduling.logSchedulingChanges) {
+      await logProjectActivity("shoot_proposed", `Shoot proposed for ${dateStr}`, {
+        businessId,
+        projectId: body.project_id,
+        userId: profile.id,
+        metadata: { proposed_by: proposedBy },
+      });
+    }
+
+    if (isAdmin && scheduling.notifyClientOnPropose) {
+      await notifyProjectClients({
+        type: "shoot_proposed",
+        eventKey: "shoot_time_proposed",
+        title: "Scheduling Your Shoot",
+        body: await resolveProjectMessageTemplate(
+          appSettings.workflow,
+          "scheduling_request",
+          body.project_id,
+          {
+            shoot_date: dateStr,
+            portal_link: await portalLink(
+              `/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`,
+              businessId
+            ),
+          },
+          `${appSettings.business.businessName} proposed a shoot for ${dateStr}. Please review and confirm in your portal.`
+        ),
+        link: `/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`,
+        projectId: body.project_id,
+        businessId,
+      });
+    } else if (isAdmin) {
+      await logWorkflowSkipped(
         body.project_id,
-        { shoot_date: dateStr, portal_link: await portalLink(`/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`, businessId) },
-        `${appSettings.business.businessName} proposed a shoot for ${dateStr}. Please review and confirm in your portal.`
-      ),
-      link: `/dashboard/projects/${body.project_id}?scheduling=pending#scheduling`,
-      projectId: body.project_id,
-      businessId,
+        "Client scheduling notification skipped — disabled in Scheduling Automation settings.",
+        `workflow:scheduling-propose-skipped:${data.id}`
+      );
+    } else if (scheduling.notifyAdminOnCounter) {
+      await notifyAdmins({
+        type: "schedule_change_requested",
+        eventKey: "shoot_time_proposed",
+        title: "Client proposed a shoot date",
+        body: `A client proposed a new shoot date: ${dateStr}`,
+        link: `/admin/projects/${body.project_id}`,
+        projectId: body.project_id,
+        businessId,
+      });
+    } else {
+      await logWorkflowSkipped(
+        body.project_id,
+        "Admin counter notification skipped — disabled in Scheduling Automation settings.",
+        `workflow:scheduling-counter-skipped:${data.id}`
+      );
+    }
+  } catch (sideEffectErr) {
+    console.error("[shoot-proposals] post-insert side effects failed", {
+      proposalId: data.id,
+      error: sideEffectErr instanceof Error ? sideEffectErr.message : String(sideEffectErr),
     });
-  } else if (isAdmin) {
-    await logWorkflowSkipped(
-      body.project_id,
-      "Client scheduling notification skipped — disabled in Scheduling Automation settings.",
-      `workflow:scheduling-propose-skipped:${data.id}`
-    );
-  } else if (scheduling.notifyAdminOnCounter) {
-    await notifyAdmins({
-      type: "schedule_change_requested",
-      eventKey: "shoot_time_proposed",
-      title: "Client proposed a shoot date",
-      body: `A client proposed a new shoot date: ${dateStr}`,
-      link: `/admin/projects/${body.project_id}`,
-      projectId: body.project_id,
-      businessId,
-    });
-  } else {
-    await logWorkflowSkipped(
-      body.project_id,
-      "Admin counter notification skipped — disabled in Scheduling Automation settings.",
-      `workflow:scheduling-counter-skipped:${data.id}`
-    );
   }
 
   return NextResponse.json(data);
@@ -170,7 +207,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Missing project_id" }, { status: 400 });
   }
 
-  const isAdmin = profile.role === "admin";
+  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
   const db = await createTenantServiceClient(businessId);
 
   const { data: proposal } = id
