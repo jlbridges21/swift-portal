@@ -384,6 +384,7 @@ export async function notifyUsers(options: NotifyOptions) {
         message: options.body || options.title,
         url: options.link,
         eventType: options.type,
+        eventKey,
         projectId: options.projectId,
         projectName: projectContext?.project_name,
         projectStatus: projectContext?.status,

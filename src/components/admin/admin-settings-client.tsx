@@ -16,6 +16,7 @@ import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
 import { AcceptSetupDefaultButton } from "@/components/admin/accept-setup-default-button";
 import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
+import { EmailTemplatesSettingsCard } from "@/components/admin/email-templates-settings-card";
 import { LandingPageSettingsCard } from "@/components/admin/landing-page-settings-card";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
@@ -767,6 +768,22 @@ export function AdminSettingsClient({
             <div className="mt-4">
               <EmailDiagnosticsCard />
             </div>
+          </div>
+        </SettingsPanel>
+
+        <SettingsPanel id="automated_emails" active={section}>
+          <div id="settings-automated-emails" tabIndex={-1} className="scroll-mt-24 space-y-4">
+            <h2 className="text-lg font-semibold text-primary">Automated Emails</h2>
+            <p className="mt-1 text-sm text-muted">
+              Edit the subject and body for emails your clients receive. Timing and channel toggles stay under
+              Workflow Automation and Notifications.
+            </p>
+            <EmailTemplatesSettingsCard
+              workflow={settings.workflow}
+              onChange={patchWorkflow}
+              portalName={settings.business.portalName}
+              businessName={settings.business.businessName}
+            />
           </div>
         </SettingsPanel>
 

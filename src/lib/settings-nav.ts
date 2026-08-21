@@ -4,6 +4,7 @@ export const SETTINGS_SECTION_IDS = [
   "landing",
   "contact",
   "email",
+  "automated_emails",
   "payments",
   "services",
   "workflow",
@@ -47,9 +48,15 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   },
   {
     id: "email",
-    label: "Email",
+    label: "Email Sender",
     description: "Sender identity, custom domain, and diagnostics.",
     hashes: ["settings-email"],
+  },
+  {
+    id: "automated_emails",
+    label: "Automated Emails",
+    description: "Subject and body for client-facing workflow emails.",
+    hashes: ["settings-automated-emails"],
   },
   {
     id: "payments",

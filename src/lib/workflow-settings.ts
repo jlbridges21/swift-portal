@@ -82,6 +82,7 @@ export interface ReminderSettings {
 
 export type MessageTemplateKey =
   | "new_request_confirmation"
+  | "preliminary_estimate_ready"
   | "proposal_ready"
   | "scheduling_request"
   | "shoot_confirmed"
@@ -101,16 +102,73 @@ export type StoredMessageTemplate = string | MessageTemplateContent;
 export const MESSAGE_TEMPLATE_DEFINITIONS: {
   key: MessageTemplateKey;
   label: string;
+  description: string;
+  audience: "client" | "admin";
   placeholders: string;
 }[] = [
-  { key: "new_request_confirmation", label: "New request confirmation", placeholders: "{{client_name}}, {{property_address}}, {{portal_link}}" },
-  { key: "proposal_ready", label: "Proposal ready", placeholders: "{{client_name}}, {{project_name}}, {{portal_link}}" },
-  { key: "scheduling_request", label: "Scheduling request", placeholders: "{{client_name}}, {{shoot_date}}, {{portal_link}}" },
-  { key: "shoot_confirmed", label: "Shoot confirmed", placeholders: "{{client_name}}, {{shoot_date}}, {{property_address}}" },
-  { key: "deliverables_ready", label: "Deliverables ready", placeholders: "{{client_name}}, {{project_name}}, {{portal_link}}" },
-  { key: "payment_request", label: "Payment request", placeholders: "{{client_name}}, {{payment_amount}}, {{portal_link}}" },
-  { key: "payment_received", label: "Payment received", placeholders: "{{client_name}}, {{payment_amount}}, {{portal_link}}" },
-  { key: "project_completed", label: "Project completed", placeholders: "{{client_name}}, {{project_name}}, {{portal_link}}" },
+  {
+    key: "new_request_confirmation",
+    label: "New request confirmation",
+    description: "Sent to the client right after they submit a project request.",
+    audience: "client",
+    placeholders: "{{client_name}}, {{property_address}}, {{portal_link}}, {{portal_name}}, {{business_name}}",
+  },
+  {
+    key: "preliminary_estimate_ready",
+    label: "Preliminary estimate ready",
+    description: "Sent when an automatic preliminary estimate is created for a new project.",
+    audience: "client",
+    placeholders: "{{client_name}}, {{project_name}}, {{portal_name}}, {{portal_link}}, {{business_name}}",
+  },
+  {
+    key: "proposal_ready",
+    label: "Official proposal ready",
+    description: "Sent when you send (or re-send) an official proposal.",
+    audience: "client",
+    placeholders: "{{client_name}}, {{project_name}}, {{portal_link}}, {{business_name}}",
+  },
+  {
+    key: "scheduling_request",
+    label: "Shoot time to review",
+    description: "Sent when a shoot time is proposed, declined, or rescheduled.",
+    audience: "client",
+    placeholders: "{{client_name}}, {{shoot_date}}, {{portal_link}}",
+  },
+  {
+    key: "shoot_confirmed",
+    label: "Shoot confirmed",
+    description: "Sent when a shoot date is confirmed or marked scheduled.",
+    audience: "client",
+    placeholders: "{{client_name}}, {{shoot_date}}, {{property_address}}",
+  },
+  {
+    key: "deliverables_ready",
+    label: "Deliverables ready",
+    description: "Sent when media or a tour is ready for the client to review.",
+    audience: "client",
+    placeholders: "{{client_name}}, {{project_name}}, {{portal_link}}",
+  },
+  {
+    key: "payment_request",
+    label: "Payment request",
+    description: "Sent when a payment link is created for the client.",
+    audience: "client",
+    placeholders: "{{client_name}}, {{payment_amount}}, {{portal_link}}",
+  },
+  {
+    key: "payment_received",
+    label: "Payment received",
+    description: "Thank-you email after a successful client payment (when used).",
+    audience: "client",
+    placeholders: "{{client_name}}, {{payment_amount}}, {{portal_link}}",
+  },
+  {
+    key: "project_completed",
+    label: "Project completed",
+    description: "Sent when the project is marked delivered / complete.",
+    audience: "client",
+    placeholders: "{{client_name}}, {{project_name}}, {{portal_link}}, {{business_name}}",
+  },
 ];
 
 export function normalizeMessageTemplate(
@@ -223,6 +281,10 @@ export function buildDefaultWorkflowSettings(): WorkflowSettings {
       new_request_confirmation: {
         subject: "We received your project request",
         body: "Hi {{client_name}}, we received your request for {{property_address}}. We'll review the details and follow up shortly. View your portal: {{portal_link}}",
+      },
+      preliminary_estimate_ready: {
+        subject: "You have a new project in {{portal_name}}",
+        body: "Your automatically generated preliminary estimate is ready to review in {{portal_name}}. {{portal_link}}",
       },
       proposal_ready: {
         subject: "Your {{business_name}} proposal is ready",

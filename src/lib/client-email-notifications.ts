@@ -1,42 +1,18 @@
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { sendBrandedEmail } from "@/lib/email";
-import { getAppSettings } from "@/lib/app-settings";
+import { getAppSettings, type NotificationEventKey } from "@/lib/app-settings";
 import { getStatusOrder } from "@/lib/constants";
-import type { PremiumEmailContent } from "@/lib/email-templates";
+import type { PremiumEmailContent, PremiumEmailTemplate } from "@/lib/email-templates";
 import type { NotificationType } from "@/lib/types";
-import type { MessageTemplateKey } from "@/lib/workflow-settings";
-import { renderWorkflowTemplate } from "@/lib/message-templates";
+import { renderWorkflowTemplate } from "@/lib/workflow-template-render";
 import { businessPortalHref } from "@/lib/portal-url";
+import { resolveClientEmailMapping } from "@/lib/client-email-event-map";
 
 /** Payment-related emails always send even if the client opted out of marketing-style emails. */
 const CRITICAL_CLIENT_EMAIL_TYPES = new Set<NotificationType>([
   "invoice_available",
   "payment_confirmed",
 ]);
-
-function eventTypeToMessageKey(
-  eventType: NotificationType,
-  title: string,
-  message: string
-): MessageTemplateKey | null {
-  if (eventType === "quote_sent") return "proposal_ready";
-  if (eventType === "shoot_proposed" || eventType === "schedule_change_requested") return "scheduling_request";
-  if (eventType === "deliverables_uploaded") return "deliverables_ready";
-  if (eventType === "invoice_available") return "payment_request";
-  if (eventType === "payment_confirmed") return "payment_received";
-  if (eventType === "project_message") return null;
-
-  if (eventType === "status_changed") {
-    const lower = `${title} ${message}`.toLowerCase();
-    if (lower.includes("shoot scheduled") || lower.includes("shoot confirmed")) return "shoot_confirmed";
-    if (lower.includes("complete") || lower.includes("delivered")) return "project_completed";
-    if (lower.includes("deliverable") || lower.includes("review")) return "deliverables_ready";
-    if (lower.includes("payment")) return "payment_request";
-    if (lower.includes("preliminary") || lower.includes("request")) return "new_request_confirmation";
-  }
-
-  return null;
-}
 
 export interface ClientEmailNotificationOptions {
   businessId: string;
@@ -47,6 +23,8 @@ export interface ClientEmailNotificationOptions {
   message: string;
   url?: string;
   eventType: NotificationType;
+  /** Explicit catalog key — required for correct template selection. */
+  eventKey?: NotificationEventKey | null;
   projectId?: string | null;
   projectName?: string;
   projectStatus?: string;
@@ -67,31 +45,6 @@ async function resolvePortalUrl(businessId: string, path?: string): Promise<stri
   return businessPortalHref(businessId, path);
 }
 
-function resolveTemplate(
-  eventType: NotificationType,
-  title: string,
-  message: string
-): PremiumEmailContent["template"] {
-  if (eventType === "quote_sent") return "proposal_ready";
-  if (eventType === "proposal_changes") return "proposal_updated";
-  if (eventType === "shoot_proposed" || eventType === "schedule_change_requested") return "shoot_proposed";
-  if (eventType === "deliverables_uploaded") return "deliverables_ready";
-  if (eventType === "revision_requested") return "revision_response";
-  if (eventType === "invoice_available") return "payment_requested";
-  if (eventType === "payment_confirmed") return "payment_received";
-  if (eventType === "client_added_to_project") return "general";
-
-  if (eventType === "status_changed") {
-    const lower = `${title} ${message}`.toLowerCase();
-    if (lower.includes("shoot scheduled") || lower.includes("shoot confirmed")) return "shoot_confirmed";
-    if (lower.includes("complete") || lower.includes("delivered")) return "project_complete";
-    if (lower.includes("deliverable") || lower.includes("review")) return "deliverables_ready";
-    if (lower.includes("payment")) return "payment_requested";
-  }
-
-  return "general";
-}
-
 export function getClientEmailPresentation(
   eventType: NotificationType,
   title: string,
@@ -99,16 +52,19 @@ export function getClientEmailPresentation(
   url?: string,
   projectStatus?: string,
   brand?: { businessName: string; portalName: string },
-  subjectOverride?: string
+  subjectOverride?: string,
+  eventKey?: NotificationEventKey | null
 ): PremiumEmailContent {
   const businessName = brand?.businessName ?? "our team";
   const portalName = brand?.portalName ?? "the portal";
   const ctaUrl = url;
   const progressStep =
     projectStatus !== undefined ? getStatusOrder(projectStatus) : undefined;
-  const template = resolveTemplate(eventType, title, message);
 
-  const presets: Record<PremiumEmailContent["template"], Omit<PremiumEmailContent, "template" | "ctaUrl">> = {
+  const mapping = resolveClientEmailMapping(eventKey);
+  const template: PremiumEmailTemplate = mapping.premiumTemplate;
+
+  const presets: Record<PremiumEmailTemplate, Omit<PremiumEmailContent, "template" | "ctaUrl">> = {
     proposal_ready: {
       subject: `Your ${businessName} proposal is ready`,
       title: title || "Your proposal is ready",
@@ -205,11 +161,10 @@ export function getClientEmailPresentation(
     },
   };
 
-  if (eventType === "client_added_to_project") {
+  if (eventKey === "client_added_to_project" || eventType === "client_added_to_project") {
     const url = ctaUrl ?? "";
     const isInviteCta =
-      Boolean(url) &&
-      (url.includes("/auth/confirm") && url.includes("token_hash="));
+      Boolean(url) && url.includes("/auth/confirm") && url.includes("token_hash=");
     return {
       template: "general",
       subject: subjectOverride?.trim() || title,
@@ -218,6 +173,22 @@ export function getClientEmailPresentation(
       ctaLabel: isInviteCta ? "Accept invite & open project" : "Open project",
       ctaUrl,
       progressStep,
+    };
+  }
+
+  if (eventKey === "preliminary_estimate_created") {
+    return {
+      template: "general",
+      subject:
+        subjectOverride?.trim() ||
+        `You have a new project in ${portalName}`,
+      title: title || `You have a new project in ${portalName}`,
+      body:
+        message ||
+        `Your automatically generated preliminary estimate is ready to review in ${portalName}.`,
+      ctaLabel: "View estimate",
+      ctaUrl,
+      progressStep: progressStep ?? 1,
     };
   }
 
@@ -287,30 +258,57 @@ export async function sendClientEmailNotification(
     portalName: appSettings.business.portalName,
   };
 
+  const mapping = resolveClientEmailMapping(options.eventKey);
+
   let subjectOverride = options.subject?.trim() || undefined;
-  if (!subjectOverride) {
-    const messageKey = eventTypeToMessageKey(options.eventType, options.title, options.message);
-    const customSubject = messageKey
-      ? appSettings.workflow.messages[messageKey]?.subject?.trim()
-      : "";
+  if (!subjectOverride && mapping.messageKey) {
+    const customSubject = appSettings.workflow.messages[mapping.messageKey]?.subject?.trim();
     if (customSubject) {
-      subjectOverride = renderWorkflowTemplate(customSubject, {
-        client_name: "",
-        project_name: options.projectName ?? "",
-        property_address: "",
-        portal_link: options.url ?? "",
-      });
+      subjectOverride = renderWorkflowTemplate(
+        customSubject,
+        {
+          client_name: "",
+          project_name: options.projectName ?? "",
+          property_address: "",
+          portal_link: options.url ?? "",
+          portal_name: brandNames.portalName,
+          business_name: brandNames.businessName,
+        },
+        { workflowKey: mapping.messageKey }
+      );
+    }
+  }
+
+  // Prefer editable template body when present (still use notify title/body as fallback).
+  let body = options.message;
+  let title = options.title;
+  if (mapping.messageKey) {
+    const customBody = appSettings.workflow.messages[mapping.messageKey]?.body?.trim();
+    if (customBody) {
+      body = renderWorkflowTemplate(
+        customBody,
+        {
+          client_name: "",
+          project_name: options.projectName ?? "",
+          property_address: "",
+          portal_link: options.url ?? "",
+          portal_name: brandNames.portalName,
+          business_name: brandNames.businessName,
+        },
+        { workflowKey: mapping.messageKey }
+      );
     }
   }
 
   const presentation = getClientEmailPresentation(
     options.eventType,
-    options.title,
-    options.message,
+    title,
+    body,
     await resolvePortalUrl(options.businessId, options.url),
     options.projectStatus,
     brandNames,
-    subjectOverride
+    subjectOverride,
+    options.eventKey
   );
 
   try {
@@ -334,7 +332,12 @@ export async function sendClientEmailNotification(
     });
 
     if (result.sent) {
-      console.info("[email] client notification sent:", options.eventType, "→", recipientEmail);
+      console.info(
+        "[email] client notification sent:",
+        options.eventKey ?? options.eventType,
+        "→",
+        recipientEmail
+      );
       return { sent: true, messageId: result.messageId };
     }
 

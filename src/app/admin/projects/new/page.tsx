@@ -2,17 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { StickySaveBar } from "@/components/ui/sticky-save-bar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ServiceSelect } from "@/components/forms/service-select";
+import { CreateClientModal } from "@/components/admin/create-client-modal";
 import { PROJECT_STATUSES } from "@/lib/constants";
+import type { Client as FullClient } from "@/lib/types";
 
-interface Client {
+interface ClientOption {
   id: string;
   name: string;
   company: string | null;
@@ -22,13 +26,30 @@ export default function NewProjectPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [clientId, setClientId] = useState("");
+  const [createClientOpen, setCreateClientOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/clients")
       .then((res) => res.json())
-      .then(setClients);
+      .then((data) => {
+        if (Array.isArray(data)) setClients(data);
+      });
   }, []);
+
+  function handleClientCreated(client: FullClient) {
+    const option: ClientOption = {
+      id: client.id,
+      name: client.name,
+      company: client.company ?? null,
+    };
+    setClients((prev) => {
+      if (prev.some((c) => c.id === option.id)) return prev;
+      return [...prev, option].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    setClientId(option.id);
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -74,16 +95,32 @@ export default function NewProjectPage() {
             <form id="new-project-form" onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="client_id">Client *</Label>
-                <Select
-                  id="client_id"
-                  name="client_id"
-                  required
-                  placeholder="Select a client"
-                  options={clients.map((c) => ({
-                    value: c.id,
-                    label: c.company ? `${c.name} (${c.company})` : c.name,
-                  }))}
-                />
+                <div className="flex gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Select
+                      id="client_id"
+                      name="client_id"
+                      required
+                      value={clientId}
+                      onChange={(e) => setClientId(e.target.value)}
+                      placeholder="Select a client"
+                      options={clients.map((c) => ({
+                        value: c.id,
+                        label: c.company ? `${c.name} (${c.company})` : c.name,
+                      }))}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0 px-3"
+                    aria-label="Create new client"
+                    title="Create new client"
+                    onClick={() => setCreateClientOpen(true)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="street_address">Street Address *</Label>
@@ -137,6 +174,11 @@ export default function NewProjectPage() {
         onSave={() => (document.getElementById("new-project-form") as HTMLFormElement)?.requestSubmit()}
         saving={loading}
         label="Create Project"
+      />
+      <CreateClientModal
+        open={createClientOpen}
+        onClose={() => setCreateClientOpen(false)}
+        onCreated={handleClientCreated}
       />
     </div>
   );

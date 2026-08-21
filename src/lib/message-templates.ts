@@ -2,68 +2,21 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getAppSettings } from "@/lib/app-settings";
 import { formatDate } from "@/lib/utils";
-import type { MessageTemplateKey } from "@/lib/workflow-settings";
 import { businessPortalHref } from "@/lib/portal-url";
+import {
+  renderWorkflowTemplate,
+  WORKFLOW_VARIABLE_FALLBACKS,
+  type WorkflowMessageVariables,
+} from "@/lib/workflow-template-render";
 
-export interface WorkflowMessageVariables {
-  client_name: string;
-  project_name: string;
-  property_address: string;
-  portal_link: string;
-  payment_amount: string;
-  shoot_date: string;
-  business_name: string;
-}
-
-export const WORKFLOW_VARIABLE_FALLBACKS: WorkflowMessageVariables = {
-  client_name: "there",
-  project_name: "your project",
-  property_address: "your property",
-  portal_link: "",
-  payment_amount: "",
-  shoot_date: "",
-  business_name: "our team",
-};
-
-const REQUIRED_FOR_QUALITY: (keyof WorkflowMessageVariables)[] = [
-  "client_name",
-  "project_name",
-];
+export {
+  renderWorkflowTemplate,
+  WORKFLOW_VARIABLE_FALLBACKS,
+  type WorkflowMessageVariables,
+} from "@/lib/workflow-template-render";
 
 function trimValue(value: string | null | undefined): string {
   return (value ?? "").trim();
-}
-
-/** Replace {{variable}} placeholders with safe fallbacks and warn on missing required values. */
-export function renderWorkflowTemplate(
-  template: string,
-  variables: Partial<WorkflowMessageVariables>,
-  options?: { workflowKey?: MessageTemplateKey | string }
-): string {
-  const workflowKey = options?.workflowKey ?? "unknown";
-  const resolved: WorkflowMessageVariables = { ...WORKFLOW_VARIABLE_FALLBACKS };
-
-  for (const key of Object.keys(WORKFLOW_VARIABLE_FALLBACKS) as (keyof WorkflowMessageVariables)[]) {
-    const raw = trimValue(variables[key]);
-    if (raw) {
-      resolved[key] = raw;
-      continue;
-    }
-
-    if (REQUIRED_FOR_QUALITY.includes(key)) {
-      console.warn(
-        `[message-templates] missing ${key} for workflow "${workflowKey}" — using fallback "${resolved[key]}"`
-      );
-    }
-  }
-
-  const rendered = template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
-    const k = key as keyof WorkflowMessageVariables;
-    if (k in resolved) return resolved[k];
-    return "";
-  });
-
-  return rendered.replace(/\s{2,}/g, " ").replace(/\s+([,.!?])/g, "$1").trim();
 }
 
 function resolveClientDisplayName(client: {
@@ -109,9 +62,11 @@ export async function buildProjectMessageVariables(
     (project?.business_id ? await businessPortalHref(project.business_id, portalPath) : portalPath);
 
   let businessName = trimValue(overrides.business_name);
-  if (!businessName && project?.business_id) {
+  let portalName = trimValue(overrides.portal_name);
+  if ((!businessName || !portalName) && project?.business_id) {
     const settings = await getAppSettings(project.business_id);
-    businessName = settings.business.businessName;
+    if (!businessName) businessName = settings.business.businessName;
+    if (!portalName) portalName = settings.business.portalName || settings.business.businessName;
   }
 
   return {
@@ -119,6 +74,7 @@ export async function buildProjectMessageVariables(
     project_name: trimValue(overrides.project_name) || trimValue(project?.project_name),
     property_address: trimValue(overrides.property_address) || trimValue(project?.property_address),
     portal_link: portalLinkValue,
+    portal_name: portalName,
     payment_amount: trimValue(overrides.payment_amount),
     shoot_date:
       trimValue(overrides.shoot_date) ||
