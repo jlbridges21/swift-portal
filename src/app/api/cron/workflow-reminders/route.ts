@@ -6,10 +6,17 @@ import { reminderTimingToMs } from "@/lib/workflow-settings";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { notifyProjectClients } from "@/lib/notifications";
 import { idempotencyKey } from "@/lib/idempotency";
+import { assertCronAuthorized, cronDryRunRequested } from "@/lib/cron-auth";
 
 type ReminderType = "proposal" | "scheduling" | "review" | "payment";
 type ReminderRow = { id: string; project_name: string; client_id: string | null; anchor: string };
-type ReminderResult = { type: string; projectId: string; action: string };
+type ReminderResult = {
+  type: string;
+  projectId: string;
+  action: string;
+  businessId?: string;
+  reason?: string;
+};
 type BusinessSummary = {
   businessId: string;
   ok: boolean;
@@ -18,14 +25,43 @@ type BusinessSummary = {
 };
 
 /**
- * Workflow reminder processor — call via cron with Authorization: Bearer CRON_SECRET
+ * Backlog safety for first enable of workflow-reminders.
+ *
+ * If WORKFLOW_REMINDER_ANCHOR_NOT_BEFORE is unset, defaults to "now" so no
+ * historical project can qualify (safe no-op). Set the env to a past UTC ISO
+ * when you intentionally want reminders for recent work, e.g. 7 days ago.
+ *
+ * Idempotency: activity_logs.idempotency_key via idempotencyKey("reminder", …).
+ */
+function anchorNotBeforeMs(nowMs: number): number {
+  const raw = process.env.WORKFLOW_REMINDER_ANCHOR_NOT_BEFORE?.trim();
+  if (!raw) return nowMs;
+  const parsed = new Date(raw).getTime();
+  if (!Number.isFinite(parsed)) {
+    console.warn(
+      "[cron/workflow-reminders] WORKFLOW_REMINDER_ANCHOR_NOT_BEFORE invalid — treating as now (no backlog)"
+    );
+    return nowMs;
+  }
+  return parsed;
+}
+
+/**
+ * Workflow reminder processor — Vercel cron or Authorization: Bearer CRON_SECRET
  * GET /api/cron/workflow-reminders
+ * GET /api/cron/workflow-reminders?dryRun=1  — report without sending
  */
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const secret = process.env.CRON_SECRET;
-  if (!secret || auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const denied = assertCronAuthorized(request);
+  if (denied) return denied;
+
+  const dryRun = cronDryRunRequested(request);
+  const nowMs = Date.now();
+  const notBeforeMs = anchorNotBeforeMs(nowMs);
+  if (!process.env.WORKFLOW_REMINDER_ANCHOR_NOT_BEFORE?.trim()) {
+    console.warn(
+      "[cron/workflow-reminders] WORKFLOW_REMINDER_ANCHOR_NOT_BEFORE unset — skipping all anchors (backlog safety). Set a past UTC ISO to enable."
+    );
   }
 
   const raw = await createServiceClient();
@@ -45,7 +81,11 @@ export async function GET(request: Request) {
 
   for (const business of businesses ?? []) {
     try {
-      const processed = await sweepBusiness(business.id, results);
+      const processed = await sweepBusiness(business.id, results, {
+        dryRun,
+        nowMs,
+        notBeforeMs,
+      });
       summaries.push({ businessId: business.id, ok: true, processed });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -57,14 +97,24 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ processed: results.length, results, businesses: summaries });
+  return NextResponse.json({
+    dryRun,
+    anchorNotBefore: new Date(notBeforeMs).toISOString(),
+    anchorNotBeforeConfigured: Boolean(process.env.WORKFLOW_REMINDER_ANCHOR_NOT_BEFORE?.trim()),
+    processed: results.filter((r) => r.action === "sent" || r.action === "would_send").length,
+    results,
+    businesses: summaries,
+  });
 }
 
-async function sweepBusiness(businessId: string, results: ReminderResult[]): Promise<number> {
+async function sweepBusiness(
+  businessId: string,
+  results: ReminderResult[],
+  opts: { dryRun: boolean; nowMs: number; notBeforeMs: number }
+): Promise<number> {
   const appSettings = await getAppSettings(businessId);
   const { reminders } = appSettings.workflow;
   const db = await createTenantServiceClient(businessId);
-  const now = Date.now();
   const before = results.length;
 
   async function processReminder(
@@ -78,7 +128,18 @@ async function sweepBusiness(businessId: string, results: ReminderResult[]): Pro
     const rows = await query();
     for (const row of rows) {
       const anchorTime = new Date(row.anchor).getTime();
-      if (Number.isNaN(anchorTime) || now - anchorTime < ms) continue;
+      if (Number.isNaN(anchorTime)) continue;
+      if (anchorTime < opts.notBeforeMs) {
+        results.push({
+          type,
+          projectId: row.id,
+          businessId,
+          action: "skipped_before_cutoff",
+          reason: `anchor ${row.anchor} < notBefore`,
+        });
+        continue;
+      }
+      if (opts.nowMs - anchorTime < ms) continue;
 
       const key = idempotencyKey("reminder", type, row.id, timing);
       const existing = await db
@@ -88,7 +149,10 @@ async function sweepBusiness(businessId: string, results: ReminderResult[]): Pro
         .eq("idempotency_key", key)
         .maybeSingle();
 
-      if (existing.data) continue;
+      if (existing.data) {
+        results.push({ type, projectId: row.id, businessId, action: "already_sent" });
+        continue;
+      }
 
       const link = `/dashboard/projects/${row.id}`;
       let title = "Reminder";
@@ -139,12 +203,25 @@ async function sweepBusiness(businessId: string, results: ReminderResult[]): Pro
 
       const channel = appSettings.notifications[eventKey];
       if (!channel?.inApp && !channel?.email) {
-        await logWorkflowSkipped(
-          row.id,
-          `${title} skipped — notifications disabled for this event.`,
-          key
-        );
-        results.push({ type, projectId: row.id, action: "skipped" });
+        if (!opts.dryRun) {
+          await logWorkflowSkipped(
+            row.id,
+            `${title} skipped — notifications disabled for this event.`,
+            key
+          );
+        }
+        results.push({ type, projectId: row.id, businessId, action: "skipped" });
+        continue;
+      }
+
+      if (opts.dryRun) {
+        results.push({
+          type,
+          projectId: row.id,
+          businessId,
+          action: "would_send",
+          reason: title,
+        });
         continue;
       }
 
@@ -162,7 +239,7 @@ async function sweepBusiness(businessId: string, results: ReminderResult[]): Pro
         idempotencyKey: key,
         metadata: { reminderType: type, timing },
       });
-      results.push({ type, projectId: row.id, action: "sent" });
+      results.push({ type, projectId: row.id, businessId, action: "sent" });
     }
   }
 

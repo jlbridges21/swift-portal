@@ -44,9 +44,11 @@ export async function POST() {
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
-    console.error("[billing/portal] failed", {
-      error: err instanceof Error ? err.message : "unknown",
-    });
+    const message = err instanceof Error ? err.message : "unknown";
+    if (message === "Unauthorized" || message === "Forbidden") {
+      return NextResponse.json({ error: message }, { status: message === "Unauthorized" ? 401 : 403 });
+    }
+    console.error("[billing/portal] failed", { error: message });
     return NextResponse.json({ error: "Could not open billing portal." }, { status: 500 });
   }
 }

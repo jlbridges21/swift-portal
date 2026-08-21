@@ -5,14 +5,20 @@ export function ClientSubscriptionNotice({
   subscriptionStatus,
   trialEndsAt,
   businessName,
+  subscriptionCurrentPeriodEnd,
+  subscriptionCancelAtPeriodEnd,
 }: {
   subscriptionStatus: string;
   trialEndsAt: string | null;
   businessName: string;
+  subscriptionCurrentPeriodEnd?: string | null;
+  subscriptionCancelAtPeriodEnd?: boolean | null;
 }) {
   const sub = getSubscriptionState({
     subscription_status: subscriptionStatus,
     trial_ends_at: trialEndsAt,
+    subscription_current_period_end: subscriptionCurrentPeriodEnd ?? null,
+    subscription_cancel_at_period_end: subscriptionCancelAtPeriodEnd ?? null,
   });
   if (!sub.requiresPayment) return null;
 

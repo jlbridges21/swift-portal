@@ -595,6 +595,20 @@ export function BusinessDetailActions({
           >
             Soft-delete
           </Button>
+          {business.deleted_at && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || protectedBiz}
+              onClick={() => {
+                if (window.confirm(`Restore ${business.name}? Login will work again.`)) {
+                  void post(`/api/platform/businesses/${business.id}/restore`);
+                }
+              }}
+            >
+              Restore soft-delete
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -602,7 +616,7 @@ export function BusinessDetailActions({
             disabled={busy || protectedBiz}
             onClick={() => {
               const typed = window.prompt(
-                `Hard-delete ${business.name}? This removes CRM data. Type DELETE to confirm.`
+                `Hard-delete ${business.name}? Removes CRM data, auth users, {businessId}/ storage, and the Stripe customer for this mode. Type DELETE to confirm.`
               );
               if (typed === "DELETE") {
                 void post(`/api/platform/businesses/${business.id}/hard-delete`, { confirm: "DELETE" });

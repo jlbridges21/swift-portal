@@ -6,20 +6,23 @@ import {
   type LifecycleBusinessRow,
   type BusinessLifecycleSummary,
 } from "@/lib/platform-lifecycle";
+import { assertCronAuthorized, cronDryRunRequested } from "@/lib/cron-auth";
 
 /**
  * ShootPortal → business lifecycle emails (trial / billing).
  * Separate from /api/cron/workflow-reminders (business → client).
  *
- * Guard: Authorization: Bearer CRON_SECRET
+ * Guard: Vercel Cron sends Authorization: Bearer CRON_SECRET when that env is set.
  * GET /api/cron/platform-lifecycle
+ * GET /api/cron/platform-lifecycle?dryRun=1
+ *
+ * Idempotency: platform_email_sends unique (business_id, template_key, event_date) WHERE NOT is_test.
  */
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const secret = process.env.CRON_SECRET;
-  if (!secret || auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = assertCronAuthorized(request);
+  if (denied) return denied;
+
+  const dryRun = cronDryRunRequested(request);
 
   const supabase = await createServiceClient();
   const { data: businesses, error: businessesError } = await supabase
@@ -51,7 +54,7 @@ export async function GET(request: Request) {
   for (const row of businesses ?? []) {
     const business = row as LifecycleBusinessRow;
     try {
-      const summary = await processBusinessLifecycle({ business, templates });
+      const summary = await processBusinessLifecycle({ business, templates, dryRun });
       summaries.push(summary);
       if (summary.actions.some((a) => a.action === "skipped" && a.reason === "comped")) {
         skippedComped += 1;
@@ -74,6 +77,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
+    dryRun,
     processed: summaries.length,
     sent,
     skippedComped,

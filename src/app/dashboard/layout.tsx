@@ -25,6 +25,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
           businessName={tenant.business.name}
           subscriptionStatus={tenant.business.subscription_status}
           trialEndsAt={tenant.business.trial_ends_at}
+          subscriptionCurrentPeriodEnd={tenant.business.subscription_current_period_end}
+          subscriptionCancelAtPeriodEnd={tenant.business.subscription_cancel_at_period_end}
         />
       )}
       {children}

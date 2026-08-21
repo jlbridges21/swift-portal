@@ -674,22 +674,33 @@ export async function inviteBusinessAdmin(
 export async function hardDeleteBusiness(
   businessId: string,
   actor: { id: string; email: string | null }
-): Promise<{ name: string }> {
+): Promise<{ name: string; orphans: string[] }> {
   if (PROTECTED_PRODUCTION_BUSINESS_IDS.has(businessId)) {
     throw new Error("Protected production businesses cannot be hard-deleted.");
   }
   const raw = await createServiceClient();
   const { data: existing } = await raw
     .from("businesses")
-    .select("id, name")
+    .select(
+      "id, name, slug, stripe_customer_id, stripe_customer_id_test, stripe_customer_id_live, stripe_subscription_id, stripe_subscription_id_test, stripe_subscription_id_live"
+    )
     .eq("id", businessId)
     .maybeSingle();
   if (!existing) throw new Error("Business not found.");
   const name = existing.name as string;
-  const { data: biz } = await raw.from("businesses").select("id, slug").eq("id", businessId).maybeSingle();
-  if (!biz) throw new Error("Business not found.");
+  const slug = existing.slug as string;
+  const orphans: string[] = [];
+
+  // Storage wipe (tenant paths). Legacy non-prefixed objects may remain — reported.
+  const storageOrphans = await wipeBusinessStorage(raw, businessId);
+  orphans.push(...storageOrphans);
+
+  // Stripe Billing customer for the active mode (test or live key in this deploy).
+  const stripeOrphans = await wipeBusinessStripeCustomer(existing);
+  orphans.push(...stripeOrphans);
 
   const tables = [
+    "platform_email_sends",
     "media_asset_events",
     "media_asset_tags",
     "media_downloads",
@@ -734,8 +745,13 @@ export async function hardDeleteBusiness(
   const { error: bizErr } = await raw.from("businesses").delete().eq("id", businessId);
   if (bizErr) throw new Error(bizErr.message);
 
+  const authFailures: string[] = [];
   for (const profile of profiles ?? []) {
-    await raw.auth.admin.deleteUser(profile.id).catch(() => undefined);
+    const { error } = await raw.auth.admin.deleteUser(profile.id);
+    if (error) authFailures.push(`${profile.id}: ${error.message}`);
+  }
+  if (authFailures.length) {
+    orphans.push(`auth_users_failed:${authFailures.join("; ")}`);
   }
 
   await writePlatformAudit({
@@ -745,10 +761,93 @@ export async function hardDeleteBusiness(
     targetBusinessId: null,
     targetType: "business",
     targetId: businessId,
-    metadata: { slug: biz.slug, name },
+    metadata: { slug, name, orphans },
   });
   invalidateHostLookupCache();
-  return { name };
+  return { name, orphans };
+}
+
+const STORAGE_BUCKETS = ["project-media", "project-documents", "avatars"] as const;
+
+async function listStoragePathsRecursive(
+  raw: Awaited<ReturnType<typeof createServiceClient>>,
+  bucket: string,
+  folder: string,
+  depth = 0
+): Promise<string[]> {
+  if (depth > 12) return [];
+  const { data, error } = await raw.storage.from(bucket).list(folder, { limit: 1000 });
+  if (error || !data?.length) return [];
+  const paths: string[] = [];
+  for (const item of data) {
+    const full = folder ? `${folder}/${item.name}` : item.name;
+    // Files have an id; folders typically do not.
+    if (item.id) {
+      paths.push(full);
+    } else {
+      paths.push(...(await listStoragePathsRecursive(raw, bucket, full, depth + 1)));
+    }
+  }
+  return paths;
+}
+
+async function wipeBusinessStorage(
+  raw: Awaited<ReturnType<typeof createServiceClient>>,
+  businessId: string
+): Promise<string[]> {
+  const notes: string[] = [];
+  for (const bucket of STORAGE_BUCKETS) {
+    try {
+      const paths = await listStoragePathsRecursive(raw, bucket, businessId);
+      for (let i = 0; i < paths.length; i += 100) {
+        const chunk = paths.slice(i, i + 100);
+        const { error } = await raw.storage.from(bucket).remove(chunk);
+        if (error) notes.push(`${bucket}:remove:${error.message}`);
+      }
+    } catch (err) {
+      notes.push(`${bucket}:${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  notes.push(
+    "storage:legacy_unprefixed_objects_not_scanned — only {businessId}/… prefixes removed"
+  );
+  return notes;
+}
+
+async function wipeBusinessStripeCustomer(business: {
+  stripe_customer_id: string | null;
+  stripe_customer_id_test: string | null;
+  stripe_customer_id_live: string | null;
+}): Promise<string[]> {
+  const notes: string[] = [];
+  try {
+    const { getStripe, getStripeMode } = await import("@/lib/stripe");
+    const mode = getStripeMode();
+    const { stripe } = getStripe();
+    const customerId =
+      (mode === "live" ? business.stripe_customer_id_live : business.stripe_customer_id_test) ||
+      business.stripe_customer_id;
+    const otherModeId =
+      mode === "live" ? business.stripe_customer_id_test : business.stripe_customer_id_live;
+
+    if (customerId) {
+      try {
+        await stripe.customers.del(customerId);
+      } catch (err) {
+        notes.push(
+          `stripe_customer_delete_failed:${customerId}:${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+    if (otherModeId && otherModeId !== customerId) {
+      notes.push(
+        `stripe_customer_other_mode_orphaned:${otherModeId} — delete manually in Stripe ${mode === "live" ? "test" : "live"} Dashboard`
+      );
+    }
+  } catch (err) {
+    notes.push(`stripe_cleanup_skipped:${err instanceof Error ? err.message : String(err)}`);
+  }
+  return notes;
 }
 
 export type UpdateBusinessInput = {
@@ -955,6 +1054,42 @@ export async function softDeleteBusiness(
     targetType: "business",
     targetId: businessId,
     metadata: { name: existing.name },
+  });
+  invalidateHostLookupCache();
+  return { name: existing.name as string };
+}
+
+/** Undo soft-delete — clears deleted_at and sets status active. */
+export async function restoreSoftDeletedBusiness(
+  businessId: string,
+  actor: { id: string; email: string | null }
+): Promise<{ name: string }> {
+  if (PROTECTED_PRODUCTION_BUSINESS_IDS.has(businessId)) {
+    throw new Error("Protected production businesses cannot be restored this way.");
+  }
+  const raw = await createServiceClient();
+  const { data: existing } = await raw
+    .from("businesses")
+    .select("id, name, deleted_at, status")
+    .eq("id", businessId)
+    .maybeSingle();
+  if (!existing) throw new Error("Business not found.");
+  if (!existing.deleted_at) throw new Error("Business is not soft-deleted.");
+
+  const { error } = await raw
+    .from("businesses")
+    .update({ deleted_at: null, status: "active" })
+    .eq("id", businessId);
+  if (error) throw new Error(error.message);
+
+  await writePlatformAudit({
+    actorUserId: actor.id,
+    actorEmail: actor.email,
+    action: "business.restore",
+    targetBusinessId: businessId,
+    targetType: "business",
+    targetId: businessId,
+    metadata: { name: existing.name, previousStatus: existing.status },
   });
   invalidateHostLookupCache();
   return { name: existing.name as string };
