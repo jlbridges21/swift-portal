@@ -18,6 +18,7 @@ export default function UpdatePasswordClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const reason = searchParams.get("reason");
+  const nextParam = searchParams.get("next");
   const isInvite = reason === "invite";
   const isRecovery = reason === "recovery";
   const isForced = reason === "forced" || searchParams.get("forced") === "1";
@@ -94,13 +95,24 @@ export default function UpdatePasswordClient() {
 
     setDone(true);
     setLoading(false);
+
+    const safeNext =
+      nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") && !nextParam.includes("://")
+        ? nextParam
+        : null;
+    if (safeNext) {
+      router.replace(safeNext);
+      router.refresh();
+      return;
+    }
+
     const destRes = await fetch("/api/auth/post-login", {
       method: "POST",
       credentials: "include",
     });
     const destBody = (await destRes.json().catch(() => ({}))) as { redirect?: string };
-    const dest = destBody.redirect || "/admin";
-    router.replace(dest.startsWith("http") ? "/admin" : dest);
+    const dest = destBody.redirect || "/dashboard";
+    router.replace(dest.startsWith("http") ? "/dashboard" : dest);
     router.refresh();
   }
 
@@ -182,7 +194,7 @@ export default function UpdatePasswordClient() {
                   {loading ? "Saving…" : isInvite ? "Save password & continue" : "Update password"}
                 </Button>
                 <p className="text-xs text-muted text-center">
-                  You must set a password before opening the admin portal.
+                  You must set a password before continuing to your portal.
                 </p>
               </form>
             )}

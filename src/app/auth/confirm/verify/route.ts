@@ -5,6 +5,7 @@ import {
   isEmailOtpType,
   needsPasswordForOtpType,
   passwordSetupReason,
+  safeAuthNext,
 } from "@/lib/auth-confirm";
 import {
   NEEDS_PASSWORD_COOKIE,
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const tokenHash = String(form.get("token_hash") || "").trim();
   const typeRaw = String(form.get("type") || "").trim();
+  const next = safeAuthNext(String(form.get("next") || "").trim() || null);
 
   if (!tokenHash || !isEmailOtpType(typeRaw)) {
     return NextResponse.redirect(`${origin}/login?error=otp_expired`);
@@ -27,7 +29,7 @@ export async function POST(request: Request) {
   const type = typeRaw as EmailOtpType;
 
   const cookiesToCopy: { name: string; value: string; options?: CookieOptions }[] = [];
-  let dest = "/admin";
+  let dest = next || "/admin";
   const response = NextResponse.redirect(`${origin}${dest}`);
 
   const supabase = createServerClient(
@@ -70,10 +72,14 @@ export async function POST(request: Request) {
 
   if (needsPasswordForOtpType(type)) {
     const reason = passwordSetupReason(type);
-    dest = `/auth/update-password?reason=${reason}`;
+    const params = new URLSearchParams({ reason });
+    if (next) params.set("next", next);
+    dest = `/auth/update-password?${params.toString()}`;
     const opts = needsPasswordCookieOptions();
     response.cookies.set(NEEDS_PASSWORD_COOKIE, "1", opts);
     cookiesToCopy.push({ name: NEEDS_PASSWORD_COOKIE, value: "1", options: opts });
+  } else if (next) {
+    dest = next;
   } else {
     try {
       const {

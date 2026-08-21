@@ -23,6 +23,17 @@ There is **no** documented `{{ .EmailActionType }}` template variable. Each temp
 `verifyOtp` signature: `{ token_hash: string, type: EmailOtpType }` where types include
 `email` | `invite` | `recovery` | `signup` | `magiclink` | `email_change`.
 
+generateLink (auth-js `GenerateLinkProperties`, verified against
+[@supabase/auth-js GenerateLinkProperties](https://supabase.github.io/auth-js/v2/types/GenerateLinkProperties.html)
+and installed `node_modules/@supabase/auth-js`):
+
+| Property | Use |
+|----------|-----|
+| `properties.hashed_token` | **Required for custom emails** — build `{portal}/auth/confirm?token_hash=…&type=…` |
+| `properties.action_link` | **Forbidden in emails** — `GET /auth/v1/verify?token=…` (prefetch-consumable) |
+
+`tenant-lint` rejects `action_link` and `/auth/v1/verify` under `src/`.
+
 App code sets `redirectTo` / `emailRedirectTo` to `{tenantOrigin}/auth/confirm` (see
 `authConfirmUrl()`). Templates append `?token_hash=…&type=…`.
 

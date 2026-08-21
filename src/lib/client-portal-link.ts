@@ -1,5 +1,5 @@
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
-import { authConfirmUrl } from "@/lib/auth-confirm";
+import { authConfirmUrl, buildAuthConfirmLink } from "@/lib/auth-confirm";
 import { getBusinessPortalOriginById, joinPortalPath } from "@/lib/portal-url";
 
 export interface PortalLinkResult {
@@ -256,7 +256,7 @@ export async function getClientPortalStatus(
 export type ClientPortalAccessForEmail = {
   hasPortal: boolean;
   userId: string | null;
-  /** Absolute URL for the email CTA (project page, or invite action_link). */
+  /** Absolute URL for the email CTA (project page, or prefetch-safe /auth/confirm). */
   ctaUrl: string;
   /** Which existing mechanism produced the CTA. */
   mechanism: "existing_portal_link" | "supabase_invite_generate_link" | "login_fallback";
@@ -266,8 +266,8 @@ export type ClientPortalAccessForEmail = {
 /**
  * Ensure the client can open the portal from a branded email CTA.
  * Reuses ensureClientPortalLink when they already have an account; otherwise
- * uses auth.admin.generateLink({ type: "invite" }) (same invite flow as admin
- * invites, without Supabase's own email — we put action_link in sendBrandedEmail).
+ * uses auth.admin.generateLink({ type: "invite" }) and builds a prefetch-safe
+ * CTA with properties.hashed_token → {portal}/auth/confirm (never action_link).
  */
 export async function ensureClientPortalAccessForEmail(
   clientId: string,
@@ -320,7 +320,8 @@ export async function ensureClientPortalAccessForEmail(
     },
   });
 
-  if (linkError || !linkData?.properties?.action_link) {
+  const hashedToken = linkData?.properties?.hashed_token?.trim();
+  if (linkError || !hashedToken) {
     console.warn("[client-portal] invite generateLink failed:", linkError?.message);
     return {
       hasPortal: false,
@@ -347,11 +348,18 @@ export async function ensureClientPortalAccessForEmail(
       .eq("id", userId);
   }
 
+  const ctaUrl = buildAuthConfirmLink({
+    portalOrigin,
+    tokenHash: hashedToken,
+    type: "invite",
+    nextPath,
+  });
+
   return {
     hasPortal: Boolean(userId),
     userId,
-    ctaUrl: linkData.properties.action_link,
+    ctaUrl,
     mechanism: "supabase_invite_generate_link",
-    message: "Portal invite link generated for branded email",
+    message: "Portal invite confirm link generated for branded email",
   };
 }

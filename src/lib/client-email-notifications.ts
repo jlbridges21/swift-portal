@@ -209,7 +209,7 @@ export function getClientEmailPresentation(
     const url = ctaUrl ?? "";
     const isInviteCta =
       Boolean(url) &&
-      (url.includes("type=invite") || url.includes("/auth/v1/verify") || url.includes("token="));
+      (url.includes("/auth/confirm") && url.includes("token_hash="));
     return {
       template: "general",
       subject: subjectOverride?.trim() || title,

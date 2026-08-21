@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AuthLinkHelpCard } from "@/components/auth/auth-link-help-card";
 import { ConfirmInterstitial } from "./confirm-interstitial";
-import { isEmailOtpType } from "@/lib/auth-confirm";
+import { isEmailOtpType, safeAuthNext } from "@/lib/auth-confirm";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +19,12 @@ export default async function AuthConfirmPage({
   const tokenHashRaw = params.token_hash;
   const typeRaw = params.type;
   const errorRaw = params.error;
+  const nextRaw = params.next;
   const tokenHash = typeof tokenHashRaw === "string" ? tokenHashRaw : "";
   const type = typeof typeRaw === "string" ? typeRaw : "";
   const error = typeof errorRaw === "string" ? errorRaw : null;
+  const next =
+    typeof nextRaw === "string" ? safeAuthNext(nextRaw) : null;
 
   if (!tokenHash || !isEmailOtpType(type)) {
     return (
@@ -45,6 +48,7 @@ export default async function AuthConfirmPage({
     <ConfirmInterstitial
       tokenHash={tokenHash}
       type={type}
+      next={next}
       error={
         error === "otp_expired"
           ? "That link was already used or expired. You can request a new one from the sign-in page."

@@ -10,10 +10,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 export function ConfirmInterstitial({
   tokenHash,
   type,
+  next,
   error,
 }: {
   tokenHash: string;
   type: string;
+  next?: string | null;
   error?: string | null;
 }) {
   const title =
@@ -49,6 +51,7 @@ export function ConfirmInterstitial({
           <form method="POST" action="/auth/confirm/verify" className="space-y-3">
             <input type="hidden" name="token_hash" value={tokenHash} />
             <input type="hidden" name="type" value={type} />
+            {next ? <input type="hidden" name="next" value={next} /> : null}
             <Button
               type="submit"
               className="w-full min-h-11 bg-[#4F46E5] text-white hover:bg-[#4338CA]"

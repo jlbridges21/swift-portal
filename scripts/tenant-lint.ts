@@ -395,6 +395,40 @@ function lintFile(abs: string): Finding[] {
     }
   }
 
+  // Rule 8: never email or embed GET-consumable Supabase verify URLs (prefetch / scanners).
+  // Use properties.hashed_token → /auth/confirm?token_hash=… instead of action_link.
+  if (file.startsWith("src/")) {
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (
+        trimmed.startsWith("//") ||
+        trimmed.startsWith("*") ||
+        trimmed.startsWith("/*") ||
+        trimmed.startsWith("*/")
+      ) {
+        continue;
+      }
+      if (/\baction_link\b/.test(lines[i])) {
+        findings.push({
+          file,
+          line: i + 1,
+          rule: "8",
+          detail:
+            "action_link is GET-consumable (/auth/v1/verify). Use properties.hashed_token + /auth/confirm",
+        });
+      }
+      if (/\/auth\/v1\/verify/.test(lines[i])) {
+        findings.push({
+          file,
+          line: i + 1,
+          rule: "8",
+          detail:
+            "Hand-built /auth/v1/verify URLs are GET-consumable. Use /auth/confirm?token_hash=…",
+        });
+      }
+    }
+  }
+
   return findings;
 }
 
