@@ -22,7 +22,10 @@ export const SITE_ICONS = {
   icon512: "/icons/sp-icon-512.png",
   icon512Maskable: "/icons/sp-icon-512-maskable.png",
   ogBrand: "/icons/og-brand.png",
+  /** Rounded SP monogram — favicon / compact nav */
   logoPrimary: "/icons/sp-app-icon.png",
+  /** Full logo mark for marketing headers (light backgrounds) */
+  logoMark: "/icons/sp-logo-primary.png",
   logoWhite: "/icons/sp-logo-white.png",
   appIcon: "/icons/sp-app-icon.png",
 } as const;
@@ -32,11 +35,24 @@ export function getPlatformRootDomain(): string {
 }
 
 /**
- * Canonical site origin. `NEXT_PUBLIC_APP_URL` is unchanged (prompt 18 owns tenant hosts).
- * Fallback is the purchased platform domain, not a tenant custom domain.
+ * Canonical marketing origin.
+ * Production Vercel already 308s apex → www; we treat www as canonical so
+ * Open Graph / sitemap / canonical tags match the live host.
+ */
+export function getCanonicalSiteUrl(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "").trim();
+  if (fromEnv && !/localhost|127\.0\.0\.1/i.test(fromEnv)) {
+    return fromEnv;
+  }
+  return `https://www.${getPlatformRootDomain()}`;
+}
+
+/**
+ * App origin for absolute links in this runtime (may be localhost in dev).
+ * Prefer getCanonicalSiteUrl() for SEO metadata.
  */
 export function getSiteUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? `https://${DEFAULT_PLATFORM_ROOT_DOMAIN}`;
+  return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? getCanonicalSiteUrl();
 }
 
 /** Root-layout metadata. Platform-generic — no tenant context at `/`. */

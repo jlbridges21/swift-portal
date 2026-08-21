@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
-import { getSiteUrl, SITE, SITE_ICONS } from "@/lib/site-metadata";
+import { getCanonicalSiteUrl, SITE, SITE_ICONS } from "@/lib/site-metadata";
 import "./globals.css";
 
 const inter = Inter({
@@ -21,7 +21,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(getSiteUrl()),
+  metadataBase: new URL(getCanonicalSiteUrl()),
   title: {
     default: SITE.title,
     template: `%s | ${SITE.name}`,
@@ -53,15 +53,24 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "/",
+    url: getCanonicalSiteUrl(),
     siteName: SITE.name,
     title: SITE.title,
     description: SITE.description,
+    images: [
+      {
+        url: SITE_ICONS.ogBrand,
+        width: 1200,
+        height: 630,
+        alt: `${SITE.name} — ${SITE.tagline}`,
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: SITE.title,
     description: SITE.description,
+    images: [SITE_ICONS.ogBrand],
   },
 };
 

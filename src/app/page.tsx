@@ -1,21 +1,36 @@
 import type { Metadata } from "next";
-import { LandingPage } from "@/components/landing/landing-page";
-import { PlatformLanding } from "@/components/landing/platform-landing";
 import { BrandProvider } from "@/components/brand/brand-provider";
-import { TenantUnavailable } from "@/components/public/tenant-unavailable";
 import { AuthFragmentHandler } from "@/components/auth/auth-fragment-handler";
+import { PlatformLanding } from "@/components/landing/platform-landing";
+import { LandingPage } from "@/components/landing/landing-page";
+import { TenantUnavailable } from "@/components/public/tenant-unavailable";
 import { getAppSettings } from "@/lib/app-settings";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
 import { platformPortalBrand, publicHostBrand } from "@/lib/public-host-chrome";
-import { assertActivePlanKey, resolvePlanTrialDays } from "@/lib/entitlements";
+import {
+  assertActivePlanKey,
+  listPublicPlans,
+  resolvePlanTrialDays,
+  FALLBACK_TRIAL_DAYS,
+} from "@/lib/entitlements";
 import { loadResolvedLandingPage } from "@/lib/resolve-landing-page";
+import { marketingPageMetadata } from "@/lib/marketing";
+import { SITE } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { metadata } = await publicHostBrand();
-  return metadata;
+  const host = await getPublicHostContext();
+  if (isActivePublicTenant(host) || (host.kind === "tenant" && host.businessId)) {
+    const { metadata } = await publicHostBrand();
+    return metadata;
+  }
+  return marketingPageMetadata({
+    title: SITE.title,
+    description: SITE.description,
+    path: "/",
+  });
 }
 
 export default async function HomePage() {
@@ -46,18 +61,25 @@ export default async function HomePage() {
     );
   }
 
-  let trialDays = 14;
+  let trialDays = FALLBACK_TRIAL_DAYS;
   try {
     const studio = await assertActivePlanKey("studio");
     trialDays = resolvePlanTrialDays(studio, "platform_landing");
   } catch (err) {
-    console.warn("[landing] could not load studio trial_days — using 14", err);
+    console.warn("[landing] could not load studio trial_days — using fallback", err);
+  }
+
+  let plans: Awaited<ReturnType<typeof listPublicPlans>> = [];
+  try {
+    plans = await listPublicPlans();
+  } catch (err) {
+    console.warn("[landing] could not load public plans", err);
   }
 
   return (
     <BrandProvider brand={platformPortalBrand()}>
       <AuthFragmentHandler />
-      <PlatformLanding trialDays={trialDays} />
+      <PlatformLanding trialDays={trialDays} plans={plans} />
     </BrandProvider>
   );
 }

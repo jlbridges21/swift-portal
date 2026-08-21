@@ -10,6 +10,10 @@ const nextConfig = {
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
   },
+  /**
+   * Canonical host is www.shootportal.app (Vercel already 308s apex → www).
+   * Keep production NEXT_PUBLIC_APP_URL=https://www.shootportal.app so metadata matches.
+   */
   async headers() {
     const staticAssetCache = [
       {

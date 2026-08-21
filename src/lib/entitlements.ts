@@ -158,6 +158,19 @@ export async function listActivePlans(): Promise<PlanRow[]> {
   return (data as PlanRow[]) ?? [];
 }
 
+/** Public catalog for marketing /pricing — mirrors what customers can subscribe to. */
+export async function listPublicPlans(): Promise<PlanRow[]> {
+  const raw = await createServiceClient();
+  const { data, error } = await raw
+    .from("plans")
+    .select(PLAN_CATALOG_SELECT)
+    .eq("is_active", true)
+    .eq("is_public", true)
+    .order("display_order", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data as PlanRow[]) ?? [];
+}
+
 export async function listAllPlans(): Promise<PlanRow[]> {
   const raw = await createServiceClient();
   const { data, error } = await raw
