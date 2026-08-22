@@ -1,6 +1,11 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { formatTrialDaysLabel, formatPlanPrice } from "@/lib/plan-catalog";
+import {
+  formatAnnualSavingsLabel,
+  formatAnnualSavingsLongLabel,
+  formatTrialDaysLabel,
+  formatPlanPrice,
+} from "@/lib/plan-catalog";
 import type { PlanRow } from "@/lib/plan-catalog";
 import { Button } from "@/components/ui/button";
 import {
@@ -127,12 +132,21 @@ export function PlatformLanding({
   const studioPlan =
     plans.find((p) => p.key === "studio") ?? plans.find((p) => p.key !== "founding") ?? plans[0];
   const monthlyPriceLabel = studioPlan ? formatPlanPrice(studioPlan.price_monthly_cents) : "$29";
+  const annualPriceLabel = studioPlan?.price_annual_cents
+    ? formatPlanPrice(studioPlan.price_annual_cents)
+    : monthlyPriceLabel;
+  const annualSavingsLabel = studioPlan
+    ? formatAnnualSavingsLabel(studioPlan.price_monthly_cents, studioPlan.price_annual_cents)
+    : null;
+  const annualSavingsLongLabel = studioPlan
+    ? formatAnnualSavingsLongLabel(studioPlan.price_monthly_cents, studioPlan.price_annual_cents)
+    : null;
   const trialDaysLabel = formatTrialDaysLabel(trialDays);
 
   const trialNote =
     trialDays > 0
       ? `${trialDays} days free. No credit card required.`
-      : "Create your studio — subscribe when you are ready.";
+      : "Create your studio. Subscribe when you are ready.";
 
   const finalTrialNote =
     trialDays > 0
@@ -334,11 +348,30 @@ export function PlatformLanding({
           <div className="mx-auto max-w-2xl text-center">
             <SectionEyebrow>SIMPLE PRICING</SectionEyebrow>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl">
-              Everything included. {monthlyPriceLabel} a month.
+              Everything you need. Starting at {annualPriceLabel} a month.
             </h2>
-            <p className="mt-3 text-base text-[#475569]">
-              No tiers. No feature hunting. You get the full ShootPortal platform.
+            <p className="mt-3 text-base leading-relaxed text-[#475569]">
+              One plan with the full ShootPortal experience. Manage your clients, projects, shoots,
+              media, invoices, and payments without paying for a stack of separate tools.
             </p>
+            <ul
+              className="mx-auto mt-6 max-w-xl space-y-2 text-left text-sm text-[#475569] sm:text-center sm:space-y-1"
+              aria-label="Studio plan highlights"
+            >
+              <li>One plan with the full feature set</li>
+              <li>{monthlyPriceLabel} per month billed monthly</li>
+              {studioPlan?.price_annual_cents != null ? (
+                <li>{annualPriceLabel} per month billed annually</li>
+              ) : null}
+              {annualSavingsLongLabel ? <li>{annualSavingsLongLabel}</li> : null}
+              {trialDays > 0 ? (
+                <li>
+                  {trialDays} day free trial. No credit card required. Cancel anytime.
+                </li>
+              ) : (
+                <li>Cancel anytime</li>
+              )}
+            </ul>
           </div>
           <div className="mt-10">
             <MarketingHomePricing plan={studioPlan ?? null} trialDays={trialDays} />
@@ -353,7 +386,12 @@ export function PlatformLanding({
             Straight answers.
           </h2>
           <div className="mt-10">
-            <MarketingFaq trialDaysLabel={trialDaysLabel} monthlyPriceLabel={monthlyPriceLabel} />
+            <MarketingFaq
+              trialDaysLabel={trialDaysLabel}
+              monthlyPriceLabel={monthlyPriceLabel}
+              annualPriceLabel={annualPriceLabel}
+              annualSavingsLabel={annualSavingsLabel}
+            />
           </div>
         </div>
       </section>

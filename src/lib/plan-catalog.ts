@@ -99,3 +99,31 @@ export function formatPlanPrice(cents: number | null | undefined): string {
   if (cents == null) return "—";
   return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 }
+
+/** Annual savings when annual catalog price is monthly equivalent (see Stripe sync). */
+export function computeAnnualSavingsCents(
+  monthlyCents: number | null | undefined,
+  annualMonthlyEquivCents: number | null | undefined
+): number | null {
+  if (monthlyCents == null || annualMonthlyEquivCents == null) return null;
+  if (annualMonthlyEquivCents >= monthlyCents) return null;
+  return (monthlyCents - annualMonthlyEquivCents) * 12;
+}
+
+export function formatAnnualSavingsLabel(
+  monthlyCents: number | null | undefined,
+  annualMonthlyEquivCents: number | null | undefined
+): string | null {
+  const savingsCents = computeAnnualSavingsCents(monthlyCents, annualMonthlyEquivCents);
+  if (savingsCents == null) return null;
+  return `Save ${formatPlanPrice(savingsCents)}/year`;
+}
+
+export function formatAnnualSavingsLongLabel(
+  monthlyCents: number | null | undefined,
+  annualMonthlyEquivCents: number | null | undefined
+): string | null {
+  const savingsCents = computeAnnualSavingsCents(monthlyCents, annualMonthlyEquivCents);
+  if (savingsCents == null) return null;
+  return `Save ${formatPlanPrice(savingsCents)} per year with annual billing`;
+}

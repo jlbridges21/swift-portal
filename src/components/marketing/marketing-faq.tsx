@@ -58,18 +58,24 @@ function trialDaysPhrase(trialDaysLabel: string): string {
 export function MarketingFaq({
   trialDaysLabel,
   monthlyPriceLabel,
+  annualPriceLabel,
+  annualSavingsLabel,
 }: {
   trialDaysLabel: string;
   monthlyPriceLabel: string;
+  annualPriceLabel?: string;
+  annualSavingsLabel?: string | null;
 }) {
   const trialPhrase = trialDaysPhrase(trialDaysLabel);
   const trialDayPhrase = trialPhrase.replace(/ days$/, " day");
+  const annualLabel = annualPriceLabel ?? monthlyPriceLabel;
 
   const items = FAQ_ITEMS.map((item) => {
     if (item.q === "How much does ShootPortal cost?") {
+      const savingsNote = annualSavingsLabel ? ` ${annualSavingsLabel}.` : "";
       return {
         q: item.q,
-        a: `ShootPortal is ${monthlyPriceLabel} per month and includes the full feature set.`,
+        a: `Studio is one plan with the full feature set: ${monthlyPriceLabel} per month when billed monthly, or ${annualLabel} per month when billed annually.${savingsNote} Cancel anytime.`,
       };
     }
     if (item.q === "Is there a free trial?") {

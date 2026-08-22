@@ -272,7 +272,7 @@ export function HeroProductViz() {
             <div className="h-2.5 w-2.5 rounded-full bg-slate-300" />
             <div className="h-2.5 w-2.5 rounded-full bg-slate-300" />
             <div className="ml-2 flex h-7 flex-1 items-center rounded-md bg-white px-3 text-[11px] text-[#475569] ring-1 ring-[#E2E8F0]">
-              app.shootportal.app/admin/projects
+              shootportal.app/admin/projects
             </div>
           </div>
           <div className="grid grid-cols-[9.5rem_1fr]">
