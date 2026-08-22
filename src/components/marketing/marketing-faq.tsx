@@ -1,63 +1,91 @@
 const FAQ_ITEMS = [
   {
-    q: "What happens when the trial ends?",
-    a: "You choose a plan and subscribe with Stripe. If you do not subscribe, portal access pauses. Your data remains available so you can export or reactivate — we do not silently delete a working studio overnight. Trial length comes from the live plan catalog.",
+    q: "Who is ShootPortal for?",
+    a: "ShootPortal is built for drone pilots, real estate photographers, videographers, and real estate media businesses that want one place to manage their work and clients.",
   },
   {
-    q: "Do my clients need accounts?",
-    a: "Yes. Clients sign in to your branded portal to review estimates, confirm shoot times, message you, review media, pay, and download. That is intentional: the job stays in one place instead of email threads and shared folders.",
+    q: "What does ShootPortal replace?",
+    a: "For many businesses, ShootPortal can replace parts of your CRM, project tracker, scheduling system, file delivery workflow, invoicing process, and client portal.",
   },
   {
-    q: "Can I use my own domain?",
-    a: "Custom domains are available on plans that include that entitlement (for example Studio). You connect a domain you own; clients open your portal on that host while ShootPortal runs underneath.",
+    q: "Do my clients need an account?",
+    a: "No. Clients can interact with the parts of the project you share with them without having to learn another complicated piece of software.",
   },
   {
-    q: "How and when do I get paid?",
-    a: "You create payment requests from the project. Clients pay in the portal via Stripe. With Stripe Connect, funds route to your connected Stripe account on Stripe’s normal payout schedule — not a ShootPortal wallet.",
+    q: "Can I use my own branding?",
+    a: "ShootPortal is designed to help your business look professional to clients. Your client experience should feel like an extension of your business, not a random collection of third party links.",
   },
   {
-    q: "Does ShootPortal take a cut of my client payments?",
-    a: "No. ShootPortal does not take a percentage of what your clients pay you. You pay ShootPortal for the software subscription. Stripe’s own processing fees still apply on card payments, the same as any Stripe Checkout.",
+    q: "How much does ShootPortal cost?",
+    a: null,
   },
   {
-    q: "Can I export and leave?",
-    a: "Yes. You can export project and client records and download media you uploaded. Contact support if you need help with a full account closure. Deletion and export requests follow our Privacy Policy.",
+    q: "Is there a free trial?",
+    a: null,
   },
   {
-    q: "What happens to my media if I cancel?",
-    a: "Download what you need before you close the account. After cancellation, access pauses; we do not guarantee indefinite free hosting of cancelled tenants’ libraries. Export first if you are leaving.",
+    q: "Can I cancel anytime?",
+    a: "Yes. There are no long term contracts.",
+  },
+  {
+    q: "Does ShootPortal handle payments?",
+    a: "Yes. You can send invoices and payment links and keep payment activity connected to the project.",
+  },
+  {
+    q: "What happens to my media?",
+    a: "Your media stays organized with the project so clients can access their deliverables through one clean experience.",
   },
   {
     q: "How long does setup take?",
-    a: "Most studios can brand the portal, add services and pricing, and invite a first client in under an hour. There is an in-app setup checklist so you know what is left.",
+    a: "You can create your account and start building your first project in minutes.",
   },
   {
-    q: "Does it work for video as well as photo?",
-    a: "Yes. Projects support photo and video deliverables, media review in the portal, and delivery of finals. It is built for media businesses — not photo-only.",
+    q: "Is ShootPortal only for real estate photography?",
+    a: "No. It works especially well for real estate media, but drone pilots, photographers, videographers, and other project based media businesses can use it too.",
   },
   {
     q: "Is a credit card required to start?",
-    a: "No. Signup starts your Studio trial without a card. You add billing when you are ready to subscribe after the trial.",
+    a: null,
   },
 ] as const;
 
+function trialDaysPhrase(trialDaysLabel: string): string {
+  const n = parseInt(trialDaysLabel, 10);
+  if (!Number.isNaN(n) && n > 0) return `${n} days`;
+  return trialDaysLabel.replace(/-day$/, " days");
+}
+
 export function MarketingFaq({
   trialDaysLabel,
+  monthlyPriceLabel,
 }: {
-  /** e.g. formatTrialDaysLabel(n) — never hardcode trial length in the component */
   trialDaysLabel: string;
+  monthlyPriceLabel: string;
 }) {
-  const items = FAQ_ITEMS.map((item) =>
-    item.q.includes("trial ends")
-      ? {
-          ...item,
-          a: item.a.replace(
-            "Trial length comes from the live plan catalog.",
-            `Current Studio trial: ${trialDaysLabel}. Trial length comes from the live plan catalog.`
-          ),
-        }
-      : item
-  );
+  const trialPhrase = trialDaysPhrase(trialDaysLabel);
+  const trialDayPhrase = trialPhrase.replace(/ days$/, " day");
+
+  const items = FAQ_ITEMS.map((item) => {
+    if (item.q === "How much does ShootPortal cost?") {
+      return {
+        q: item.q,
+        a: `ShootPortal is ${monthlyPriceLabel} per month and includes the full feature set.`,
+      };
+    }
+    if (item.q === "Is there a free trial?") {
+      return {
+        q: item.q,
+        a: `Yes. You can try ShootPortal free for ${trialPhrase} with no credit card required.`,
+      };
+    }
+    if (item.q === "Is a credit card required to start?") {
+      return {
+        q: item.q,
+        a: `No. You can start your ${trialDayPhrase} trial without entering a credit card.`,
+      };
+    }
+    return { q: item.q, a: item.a as string };
+  });
 
   return (
     <div className="mx-auto max-w-3xl divide-y divide-[#E2E8F0] rounded-xl border border-[#E2E8F0] bg-white">

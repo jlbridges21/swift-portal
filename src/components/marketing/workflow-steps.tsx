@@ -8,6 +8,43 @@ import {
   PackageCheck,
 } from "lucide-react";
 
+/** Homepage workflow — 8 stages with short summaries for the marketing landing page. */
+export const HOMEPAGE_WORKFLOW_STEPS = [
+  { key: "request", title: "Request", summary: "A new job comes in." },
+  { key: "estimate", title: "Estimate", summary: "Send pricing and project details." },
+  { key: "approval", title: "Approval", summary: "The client approves the work." },
+  { key: "schedule", title: "Schedule", summary: "Set the shoot date and time." },
+  { key: "shoot", title: "Shoot", summary: "Complete the project." },
+  { key: "deliver", title: "Deliver", summary: "Send the finished media." },
+  { key: "invoice", title: "Invoice", summary: "Collect payment." },
+  { key: "done", title: "Done", summary: "Everything stays saved to the project." },
+] as const;
+
+export function HomepageWorkflowRibbon() {
+  return (
+    <ol className="relative flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 sm:gap-3 sm:overflow-visible sm:pb-0 lg:grid-cols-8">
+      {HOMEPAGE_WORKFLOW_STEPS.map((step, i) => (
+        <li
+          key={step.key}
+          className="relative flex w-[7.5rem] shrink-0 flex-col items-center text-center sm:w-auto"
+        >
+          {i < HOMEPAGE_WORKFLOW_STEPS.length - 1 ? (
+            <span
+              className="pointer-events-none absolute left-[calc(50%+1.75rem)] top-5 hidden h-px w-[calc(100%-1.5rem)] bg-[#E2E8F0] sm:block lg:left-[calc(50%+1.25rem)]"
+              aria-hidden
+            />
+          ) : null}
+          <span className="relative z-[1] flex h-10 w-10 items-center justify-center rounded-full border border-[#E2E8F0] bg-white text-sm font-bold text-[#4F46E5] shadow-sm">
+            {i + 1}
+          </span>
+          <h3 className="mt-2 text-sm font-semibold text-[#0F172A]">{step.title}</h3>
+          <p className="mt-1 text-[11px] leading-snug text-[#475569]">{step.summary}</p>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export const WORKFLOW_STEPS = [
   {
     key: "request",

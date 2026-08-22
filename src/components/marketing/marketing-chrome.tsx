@@ -195,10 +195,14 @@ export function MarketingCtaBand({
   title,
   body,
   trialLabel,
+  secondaryHref = "#product-demo",
+  secondaryLabel = "See how it works",
 }: {
   title: string;
   body: string;
   trialLabel: string;
+  secondaryHref?: string;
+  secondaryLabel?: string;
 }) {
   return (
     <section className="border-t border-[#E2E8F0] bg-white">
@@ -216,12 +220,12 @@ export function MarketingCtaBand({
               className="min-h-11 px-6 text-white"
               style={{ backgroundColor: MARKETING_BRAND.indigo }}
             >
-              Start free trial
+              Start your free trial
             </Button>
           </Link>
-          <Link href="/pricing">
+          <Link href={secondaryHref}>
             <Button variant="outline" className="min-h-11 border-[#E2E8F0] bg-white px-6 text-[#0F172A]">
-              View pricing
+              {secondaryLabel}
             </Button>
           </Link>
         </div>

@@ -256,16 +256,18 @@ export function ProductDemo() {
       aria-labelledby={`${baseId}-heading`}
     >
       <div className="mx-auto max-w-3xl text-center">
-        <p className="text-sm font-semibold uppercase tracking-wider text-[#4F46E5]">Product tour</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#4F46E5]">
+          PRODUCT TOUR
+        </p>
         <h2
           id={`${baseId}-heading`}
           className="mt-2 text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl"
         >
-          Walk the admin without signing up
+          See how ShootPortal works.
         </h2>
         <p className="mt-3 text-base leading-relaxed text-[#475569]">
-          Five surfaces from the real ShootPortal workspace — fictional studio data only. Same
-          stages, same layout patterns.
+          Take a look around the platform and see how a project moves from a new request to a
+          completed and paid job.
         </p>
       </div>
 

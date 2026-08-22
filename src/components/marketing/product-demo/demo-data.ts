@@ -196,32 +196,37 @@ export const DEMO_TABS = [
   {
     id: "projects",
     label: "Projects",
-    headline: "See every job on one board",
-    blurb: "Real pipeline stages — drag work forward as estimates, shoots, and deliveries happen.",
+    headline: "See every job in one place.",
+    blurb:
+      "Know what is new, what needs approval, what is scheduled, what is ready to deliver, and what still needs payment.",
   },
   {
     id: "calendar",
     label: "Calendar",
-    headline: "Schedule without the text chain",
-    blurb: "Propose a time, get a counter-offer, lock the shoot — all inside the portal.",
+    headline: "Keep your shoots organized.",
+    blurb:
+      "See upcoming shoots, keep project details connected to the schedule, and stop digging through texts to figure out where you need to be.",
   },
   {
     id: "messages",
     label: "Messages",
-    headline: "Talk where the work lives",
-    blurb: "Admin and client messages stay on the project thread, with read receipts.",
+    headline: "Keep conversations with the project.",
+    blurb:
+      "Client communication stays connected to the job so you can quickly see what was requested, changed, or approved.",
   },
   {
     id: "media",
     label: "Media",
-    headline: "Deliver files like a studio",
-    blurb: "Folders, selection, and review — not another Dropbox link that expires.",
+    headline: "Deliver media professionally.",
+    blurb:
+      "Upload and deliver photos, videos, and other project files through a clean client experience built around the job.",
   },
   {
     id: "clients",
     label: "Clients",
-    headline: "Know who is active (and who owes you)",
-    blurb: "Project counts and revenue beside each client — your CRM without the CRM sprawl.",
+    headline: "Keep every client organized.",
+    blurb:
+      "See contact information, project history, invoices, payments, and past work without searching through multiple apps.",
   },
 ] as const;
 
