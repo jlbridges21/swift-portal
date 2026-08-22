@@ -1,6 +1,6 @@
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { SITE } from "@/lib/site-metadata";
-import { MARKETING_BRAND } from "@/lib/marketing";
 import { formatTrialDaysLabel } from "@/lib/plan-catalog";
 import type { PlanRow } from "@/lib/plan-catalog";
 import { Button } from "@/components/ui/button";
@@ -8,64 +8,85 @@ import {
   MarketingShell,
   MarketingCtaBand,
 } from "@/components/marketing/marketing-chrome";
-import { WorkflowStepGrid } from "@/components/marketing/workflow-steps";
+import { WorkflowRibbon } from "@/components/marketing/workflow-steps";
 import { MarketingPricingGrid } from "@/components/marketing/marketing-pricing";
 import { MarketingFaq } from "@/components/marketing/marketing-faq";
 import { PortalMockup, ClientPortalMockup } from "@/components/marketing/product-mockups";
 import {
+  CalendarClock,
+  CreditCard,
   FolderKanban,
+  Globe,
+  Images,
   Link2,
   MessageSquare,
   Palette,
-  ShieldCheck,
-  Sparkles,
+  Receipt,
+  Users,
 } from "lucide-react";
 
-const PROBLEMS = [
+const ProductDemo = dynamic(
+  () =>
+    import("@/components/marketing/product-demo/product-demo").then((m) => m.ProductDemo),
   {
-    title: "Five tools for one job",
-    body: "CRM in one tab, calendar in another, Dropbox for files, a proofing link that expires, and invoices somewhere else. You are the glue.",
-  },
-  {
-    title: "Clients get lost in email",
-    body: "Estimates buried in threads. Shoot times negotiated by text. Finals sent as zip files with no context. Everyone loses the plot.",
-  },
-  {
-    title: "Your brand never shows up",
-    body: "Shared folder links look the same for every shooter. Your client portal should look like your studio — not a generic file dump.",
-  },
+    ssr: true,
+    loading: () => (
+      <div
+        className="mx-auto h-[560px] max-w-6xl animate-pulse rounded-2xl bg-[#F1F5F9]"
+        aria-hidden
+      />
+    ),
+  }
+);
+
+const REPLACES = [
+  { label: "CRM", icon: Users },
+  { label: "Scheduling", icon: CalendarClock },
+  { label: "File delivery", icon: FolderKanban },
+  { label: "Proofing", icon: Images },
+  { label: "Invoicing", icon: Receipt },
 ] as const;
 
 const FEATURES = [
   {
-    icon: FolderKanban,
-    title: "One project record",
-    body: "Request, estimate, schedule, media, messages, and payments stay attached to the same job.",
+    icon: Palette,
+    title: "Branded client portal",
+    body: "Logo, colors, and your studio name on every client touchpoint — request through delivery.",
   },
   {
-    icon: Palette,
-    title: "Your branding",
-    body: "Logo, colors, and portal name on the client experience — so the work feels like your studio.",
+    icon: FolderKanban,
+    title: "Services and pricing you define",
+    body: "Per-business catalogs so estimates match what you actually sell, not a generic template.",
+  },
+  {
+    icon: Receipt,
+    title: "Preliminary estimates",
+    body: "Send pricing from the project, get approval in-portal, and keep the paper trail with the job.",
+  },
+  {
+    icon: CalendarClock,
+    title: "Shoot scheduling with counter-proposals",
+    body: "Propose times; clients can counter. Confirmation lands on the same calendar you run.",
+  },
+  {
+    icon: Images,
+    title: "Media review and approval",
+    body: "Clients review deliverables where the project already lives — no expiring Dropbox links.",
   },
   {
     icon: MessageSquare,
     title: "In-portal messaging",
-    body: "Talk to clients where the files and approvals already live. Fewer “which Dropbox?” replies.",
+    body: "Threads stay on the client and project. Read receipts on admin messages so you know they saw it.",
   },
   {
-    icon: Link2,
+    icon: CreditCard,
+    title: "Stripe payments to your account",
+    body: "Checkout from the project via Stripe Connect. ShootPortal does not take a cut of client payments.",
+  },
+  {
+    icon: Globe,
     title: "Custom domain",
     body: "On plans that include it, clients open your portal on a domain you own.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Payments that fit the job",
-    body: "Stripe checkout from the project, with Connect so you can get paid without a separate invoicing stack.",
-  },
-  {
-    icon: Sparkles,
-    title: "Built for media work",
-    body: "Photos, video, and delivery workflows — not a generic CRM with an upload button bolted on.",
   },
 ] as const;
 
@@ -81,88 +102,115 @@ export function PlatformLanding({
       ? `${formatTrialDaysLabel(trialDays)} Studio trial. No credit card required.`
       : "Create your studio — subscribe when you are ready.";
 
+  const ctaTrial =
+    trialDays > 0
+      ? `Start your free ${formatTrialDaysLabel(trialDays)} trial`
+      : "Start your free trial";
+
   const previewPlans = plans.filter((p) => p.key !== "founding").slice(0, 3);
   const pricingPlans = previewPlans.length ? previewPlans : plans.slice(0, 3);
 
   return (
     <MarketingShell trialNote={trialLabel}>
-      {/* Hero */}
+      {/* Hero — problem-led */}
       <section className="relative overflow-hidden border-b border-[#E2E8F0]">
         <div
-          className="pointer-events-none absolute inset-0 opacity-90"
+          className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(ellipse 80% 50% at 70% -10%, rgba(79,70,229,0.14), transparent), linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%)",
+              "radial-gradient(ellipse 70% 55% at 85% 0%, rgba(79,70,229,0.16), transparent 55%), radial-gradient(ellipse 50% 40% at 10% 80%, rgba(15,23,42,0.04), transparent), linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%)",
           }}
         />
-        <div className="relative mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:items-center lg:gap-16 lg:px-8 lg:py-24">
+        <div className="relative mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-14 lg:px-8 lg:py-24">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F46E5]">
               {SITE.name}
             </p>
-            <h1 className="mt-4 text-4xl font-bold tracking-tight text-[#0F172A] sm:text-5xl lg:text-[3.5rem] lg:leading-[1.1]">
-              {MARKETING_BRAND.hero}
+            <h1 className="mt-4 text-4xl font-bold tracking-tight text-[#0F172A] sm:text-5xl lg:text-[3.25rem] lg:leading-[1.08]">
+              Stop losing hours to email, Dropbox links, and unpaid invoices.
             </h1>
             <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#475569]">
-              {MARKETING_BRAND.heroSupport}
+              ShootPortal replaces the patchwork CRM + calendar + file dump + invoicing stack with
+              one branded portal — from request to delivery.
             </p>
             <p className="mt-3 text-base font-medium text-[#0F172A]">
-              {MARKETING_BRAND.tagline}
+              From request to delivery. One portal.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/signup">
                 <Button className="min-h-11 bg-[#4F46E5] px-6 text-white hover:bg-[#4338CA]">
-                  Start free trial
+                  {ctaTrial}
                 </Button>
               </Link>
-              <Link href="/how-it-works">
+              <a href="#product-demo">
                 <Button
                   variant="outline"
                   className="min-h-11 border-[#E2E8F0] bg-white px-6 text-[#0F172A]"
                 >
-                  See how it works
+                  See the product
                 </Button>
-              </Link>
+              </a>
             </div>
             <p className="mt-4 text-sm text-[#475569]">{trialLabel}</p>
+            <p className="mt-2 text-sm text-[#64748B]">
+              Prefer the written tour?{" "}
+              <Link href="/how-it-works" className="font-medium text-[#4F46E5] hover:underline">
+                How it works
+              </Link>
+            </p>
           </div>
-          <PortalMockup />
+          <div className="relative">
+            <PortalMockup />
+          </div>
         </div>
       </section>
 
-      {/* Problem */}
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl">
-          You did not become a photographer to manage software.
-        </h2>
-        <p className="mt-4 max-w-2xl text-base leading-relaxed text-[#475569]">
-          If your week is email threads, calendar pings, and “here’s another link,” you are paying
-          for five products to do one job: run the client from request to delivery.
-        </p>
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
-          {PROBLEMS.map((item) => (
-            <div
-              key={item.title}
-              className="rounded-xl border border-[#E2E8F0] bg-white p-6 shadow-sm"
-            >
-              <h3 className="text-lg font-semibold text-[#0F172A]">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-[#475569]">{item.body}</p>
-            </div>
-          ))}
+      {/* Replaces */}
+      <section className="border-b border-[#E2E8F0] bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
+          <h2 className="text-center text-sm font-semibold uppercase tracking-[0.16em] text-[#64748B]">
+            One portal instead of
+          </h2>
+          <ul className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+            {REPLACES.map((item) => {
+              const Icon = item.icon;
+              return (
+                <li
+                  key={item.label}
+                  className="flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2 text-sm font-medium text-[#0F172A]"
+                >
+                  <Icon className="h-4 w-4 text-[#4F46E5]" aria-hidden />
+                  {item.label}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mx-auto mt-6 max-w-2xl text-center text-sm leading-relaxed text-[#475569]">
+            The point is consolidation — not another place to store files. Clients, projects,
+            schedules, media, messages, and payments stay on the same job record.
+          </p>
         </div>
       </section>
 
-      {/* Workflow */}
-      <section className="border-y border-[#E2E8F0] bg-white">
+      {/* Interactive demo — centerpiece */}
+      <section className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+          <ProductDemo />
+        </div>
+      </section>
+
+      {/* Workflow ribbon */}
+      <section className="border-b border-[#E2E8F0] bg-white">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
           <h2 className="text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl">
-            Request → Estimate → Schedule → Shoot → Review → Pay → Deliver
+            The path every job follows
           </h2>
-          <p className="mt-4 max-w-2xl text-base text-[#475569]">
-            One portal for the whole path. Your clients always know what happens next.
+          <p className="mt-3 max-w-2xl text-base text-[#475569]">
+            Request → Estimate → Schedule → Shoot → Review → Pay → Deliver — visible to you and your
+            client in the same portal.
           </p>
           <div className="mt-10">
-            <WorkflowStepGrid />
+            <WorkflowRibbon />
           </div>
           <div className="mt-8">
             <Link
@@ -177,15 +225,14 @@ export function PlatformLanding({
 
       {/* Features */}
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
+        <div className="grid gap-12 lg:grid-cols-2 lg:items-start">
           <div>
             <h2 className="text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl">
-              Replace the patchwork — not your craft.
+              What ShootPortal actually does for the business
             </h2>
             <p className="mt-4 text-base leading-relaxed text-[#475569]">
-              ShootPortal is for photographers, videographers, drone operators, real estate media
-              companies, and event shooters who want one branded client experience instead of a
-              Frankenstein stack.
+              Built for photographers, videographers, drone operators, and real estate media
+              companies — features that exist in the product today, not a roadmap slide.
             </p>
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               {FEATURES.map((f) => {
@@ -200,33 +247,52 @@ export function PlatformLanding({
               })}
             </div>
           </div>
-          <ClientPortalMockup />
+          <div className="lg:sticky lg:top-24">
+            <ClientPortalMockup />
+            <p className="mt-4 flex items-start gap-2 text-sm text-[#64748B]">
+              <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-[#4F46E5]" aria-hidden />
+              Client-facing portal mock — same branding controls you configure in admin settings.
+            </p>
+          </div>
         </div>
       </section>
 
-      {/* Social proof placeholder */}
+      {/* Social proof — intentional placeholder, no fake quotes/logos */}
       <section className="border-y border-[#E2E8F0] bg-[#0F172A]">
-        <div className="mx-auto max-w-6xl px-4 py-14 text-center sm:px-6 lg:px-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F46E5]">
-            Built with working studios
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+          <p className="text-center text-sm font-semibold uppercase tracking-[0.18em] text-[#818CF8]">
+            Studios in production
           </p>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-300">
-            ShootPortal is used by media businesses running real client work — estimates, shoots,
-            reviews, and delivery — in production today. Case studies coming soon.
+          <p className="mx-auto mt-4 max-w-2xl text-center text-lg text-slate-300">
+            Real testimonials and logos will live here. Until then we are not inventing them —
+            ShootPortal is already running live client work for media businesses.
           </p>
+          <div
+            className="mx-auto mt-8 grid max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4"
+            aria-hidden
+          >
+            {["Quote", "Logo", "Quote", "Logo"].map((label, i) => (
+              <div
+                key={`${label}-${i}`}
+                className="flex h-16 items-center justify-center rounded-lg border border-dashed border-slate-500 bg-slate-900/40 text-xs font-medium uppercase tracking-wider text-slate-400"
+              >
+                {label} soon
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Pricing summary */}
+      {/* Pricing */}
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl">
-              Simple plans for working shooters
+              Plans from the live catalog
             </h2>
             <p className="mt-3 max-w-xl text-base text-[#475569]">
-              Prices and trial length come from your live plan catalog — what you see here is what
-              billing uses.
+              Prices and trial length are read from the plans table — change them in platform admin
+              and this page follows.
             </p>
           </div>
           <Link href="/pricing" className="text-sm font-semibold text-[#4F46E5] hover:underline">
@@ -242,7 +308,7 @@ export function PlatformLanding({
       <section className="border-t border-[#E2E8F0] bg-white">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
           <h2 className="text-center text-3xl font-semibold tracking-tight text-[#0F172A]">
-            Questions photographers actually ask
+            Straight answers
           </h2>
           <div className="mt-10">
             <MarketingFaq trialDaysLabel={formatTrialDaysLabel(trialDays)} />
@@ -251,8 +317,8 @@ export function PlatformLanding({
       </section>
 
       <MarketingCtaBand
-        title="Run your next job in one portal."
-        body="Start a Studio trial, brand your client experience, and stop stitching tools together."
+        title="Put the next shoot in one portal."
+        body="Start a Studio trial, brand the client experience, and stop stitching tools together between jobs."
         trialLabel={trialLabel}
       />
     </MarketingShell>

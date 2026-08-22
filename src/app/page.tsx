@@ -18,6 +18,12 @@ import { loadResolvedLandingPage } from "@/lib/resolve-landing-page";
 import { marketingPageMetadata } from "@/lib/marketing";
 import { SITE } from "@/lib/site-metadata";
 
+/**
+ * Host resolution (`getPublicHostContext`) reads request headers, so this shared `/`
+ * route cannot be statically generated or ISR'd without splitting tenant vs platform
+ * onto different entry points. Doing that would risk serving the wrong landing.
+ * Keep force-dynamic; marketing weight is deferred via dynamic() on ProductDemo.
+ */
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {

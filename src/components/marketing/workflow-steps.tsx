@@ -97,3 +97,37 @@ export function WorkflowStepGrid({ detailed = false }: { detailed?: boolean }) {
     </ol>
   );
 }
+
+/** Compact visual path for the homepage — links to /how-it-works for depth. */
+export function WorkflowRibbon() {
+  return (
+    <ol className="relative flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-7 sm:gap-3 sm:overflow-visible sm:pb-0">
+      {WORKFLOW_STEPS.map((step, i) => {
+        const Icon = step.icon;
+        return (
+          <li
+            key={step.key}
+            className="relative flex w-[7.5rem] shrink-0 flex-col items-center text-center sm:w-auto"
+          >
+            {i < WORKFLOW_STEPS.length - 1 ? (
+              <span
+                className="pointer-events-none absolute left-[calc(50%+1.75rem)] top-5 hidden h-px w-[calc(100%-1.5rem)] bg-[#E2E8F0] sm:block"
+                aria-hidden
+              />
+            ) : null}
+            <span className="relative z-[1] flex h-10 w-10 items-center justify-center rounded-full border border-[#E2E8F0] bg-white text-[#4F46E5] shadow-sm">
+              <Icon className="h-4 w-4" aria-hidden />
+            </span>
+            <span className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+              {i + 1}
+            </span>
+            <h3 className="mt-0.5 text-sm font-semibold text-[#0F172A]">{step.title}</h3>
+            <p className="mt-1 hidden text-[11px] leading-snug text-[#64748B] lg:block">
+              {step.summary.split("—")[0]?.trim() ?? step.summary}
+            </p>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}

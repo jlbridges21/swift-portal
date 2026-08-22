@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const NAV = [
+  { href: "/#product-demo", label: "Product" },
   { href: "/how-it-works", label: "How it works" },
   { href: "/pricing", label: "Pricing" },
   { href: "/contact", label: "Contact" },
@@ -161,7 +162,7 @@ export function MarketingFooter() {
         </div>
       </div>
       <div className="border-t border-white/10">
-        <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-slate-500 sm:px-6 lg:px-8">
+        <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-slate-400 sm:px-6 lg:px-8">
           © {year} ShootPortal. All rights reserved.
         </p>
       </div>
