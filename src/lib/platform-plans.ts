@@ -136,15 +136,45 @@ export async function updatePlan(
   if (error || !data) throw new Error(error?.message || "Failed to update plan.");
 
   let stripeRemapMessage: string | null = null;
+  let stripeRemapOk: boolean | null = null;
+  let stripeRemapMonthlyPriceId: string | null = null;
+  let stripeRemapAnnualPriceId: string | null = null;
+  let stripeRemapMode: string | null = null;
+
   if (priceChanged && existing.key !== "founding") {
     try {
       const { syncPlanStripePricesAfterCatalogChange } = await import("@/lib/sync-plan-stripe-prices");
       const result = await syncPlanStripePricesAfterCatalogChange(id);
       stripeRemapMessage = result.message;
+      stripeRemapOk = result.ok;
+      stripeRemapMonthlyPriceId = result.monthlyPriceId;
+      stripeRemapAnnualPriceId = result.annualPriceId;
+      stripeRemapMode = result.mode;
+      await raw
+        .from("plans")
+        .update({
+          stripe_price_sync_ok: result.ok,
+          stripe_price_sync_message: result.message,
+          stripe_price_sync_at: new Date().toISOString(),
+          stripe_price_sync_mode: result.mode,
+        })
+        .eq("id", id);
     } catch (err) {
       console.error("[platform-plans] Stripe price remap failed", err);
+      stripeRemapOk = false;
       stripeRemapMessage =
-        "Catalog price saved, but Stripe Price remap failed — re-run npm run setup:stripe-billing for the current mode.";
+        err instanceof Error
+          ? `Catalog price saved, but Stripe Price remap failed: ${err.message}`
+          : "Catalog price saved, but Stripe Price remap failed — re-run npm run setup:stripe-billing for the current mode.";
+      await raw
+        .from("plans")
+        .update({
+          stripe_price_sync_ok: false,
+          stripe_price_sync_message: stripeRemapMessage,
+          stripe_price_sync_at: new Date().toISOString(),
+          stripe_price_sync_mode: null,
+        })
+        .eq("id", id);
     }
   }
 
@@ -161,11 +191,33 @@ export async function updatePlan(
     action: activated,
     targetType: "plan",
     targetId: id,
-    metadata: { key: data.key, patch, stripeRemapMessage },
+    metadata: {
+      key: data.key,
+      patch,
+      stripeRemapMessage,
+      stripeRemapOk,
+      stripeRemapMonthlyPriceId,
+      stripeRemapAnnualPriceId,
+      stripeRemapMode,
+    },
   });
 
-  return { ...(data as PlanRow), stripeRemapMessage } as PlanRow & {
+  const { data: refreshed } = await raw.from("plans").select("*").eq("id", id).maybeSingle();
+  const planOut = (refreshed ?? data) as PlanRow;
+
+  return {
+    ...planOut,
+    stripeRemapMessage,
+    stripeRemapOk,
+    stripeRemapMonthlyPriceId,
+    stripeRemapAnnualPriceId,
+    stripeRemapMode,
+  } as PlanRow & {
     stripeRemapMessage?: string | null;
+    stripeRemapOk?: boolean | null;
+    stripeRemapMonthlyPriceId?: string | null;
+    stripeRemapAnnualPriceId?: string | null;
+    stripeRemapMode?: string | null;
   };
 }
 

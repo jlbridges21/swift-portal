@@ -96,7 +96,10 @@ export type SubscriptionPaymentRow = {
   businessId: string;
   businessName: string;
   plan: string;
+  /** Invoice amount Stripe actually charged (not the current catalog list price). */
   amountPaidCents: number;
+  /** Current catalog monthly list price for the business's plan, if available. */
+  catalogMonthlyCents: number | null;
   currency: string;
   paidAt: string;
   stripeInvoiceId: string;
@@ -169,16 +172,24 @@ export async function listShootPortalSubscriptionPayments(
     .in("id", businessIds);
   const bizMap = new Map((businesses ?? []).map((b) => [b.id, b]));
 
+  const planKeys = [...new Set((businesses ?? []).map((b) => b.plan).filter(Boolean))] as string[];
+  const { data: planRows } = planKeys.length
+    ? await raw.from("plans").select("key, price_monthly_cents, price_annual_cents").in("key", planKeys)
+    : { data: [] as { key: string; price_monthly_cents: number | null; price_annual_cents: number | null }[] };
+  const planCatalog = new Map((planRows ?? []).map((p) => [p.key, p]));
+
   return rows
     .filter((r) => !compedIds.has(r.business_id))
     .map((r) => {
       const biz = bizMap.get(r.business_id);
+      const catalog = biz?.plan ? planCatalog.get(biz.plan) : null;
       return {
         id: r.id,
         businessId: r.business_id,
         businessName: biz?.name ?? "Unknown",
         plan: biz?.plan ?? "—",
         amountPaidCents: typeof r.amount_paid_cents === "number" ? r.amount_paid_cents : 0,
+        catalogMonthlyCents: catalog?.price_monthly_cents ?? null,
         currency: r.currency || "usd",
         paidAt: r.paid_at,
         stripeInvoiceId: r.stripe_invoice_id,

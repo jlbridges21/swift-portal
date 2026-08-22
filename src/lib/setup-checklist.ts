@@ -27,7 +27,7 @@ export async function loadSetupChecklistSnapshot(
   const [{ data: biz }, appSettings, services] = await Promise.all([
     raw
       .from("businesses")
-      .select("setup_checklist_completed_at")
+      .select("setup_checklist_completed_at, custom_domain, custom_domain_status")
       .eq("id", businessId)
       .maybeSingle(),
     settings ? Promise.resolve(settings) : getAppSettings(businessId),
@@ -58,10 +58,15 @@ export async function loadSetupChecklistSnapshot(
     preliminary_estimate_cents: s.preliminary_estimate_cents,
   }));
 
+  const customDomainConnected =
+    Boolean(biz?.custom_domain?.trim()) &&
+    (biz?.custom_domain_status === "connected" || biz?.custom_domain_status == null);
+
   const items = buildSetupChecklistItems({
     settings: appSettings,
     stripeOk,
     services: serviceRows,
+    customDomainConnected,
   });
   const incomplete = items.some((item) => !item.done);
 

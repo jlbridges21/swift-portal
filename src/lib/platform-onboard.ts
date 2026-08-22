@@ -2,7 +2,7 @@ import { DEFAULT_APP_SETTINGS } from "@/lib/app-settings";
 import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { writePlatformAudit } from "@/lib/platform-audit";
-import { PROTECTED_PRODUCTION_BUSINESS_IDS } from "@/lib/platform-session";
+import { isBusinessProtected } from "@/lib/business-protection";
 import { validateBusinessSlug } from "@/lib/reserved-subdomains";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
@@ -675,7 +675,7 @@ export async function hardDeleteBusiness(
   businessId: string,
   actor: { id: string; email: string | null }
 ): Promise<{ name: string; orphans: string[] }> {
-  if (PROTECTED_PRODUCTION_BUSINESS_IDS.has(businessId)) {
+  if (await isBusinessProtected(businessId)) {
     throw new Error("Protected production businesses cannot be hard-deleted.");
   }
   const raw = await createServiceClient();
@@ -1028,7 +1028,7 @@ export async function softDeleteBusiness(
   businessId: string,
   actor: { id: string; email: string | null }
 ): Promise<{ name: string }> {
-  if (PROTECTED_PRODUCTION_BUSINESS_IDS.has(businessId)) {
+  if (await isBusinessProtected(businessId)) {
     throw new Error("Protected production businesses cannot be deleted from the console.");
   }
   const raw = await createServiceClient();
@@ -1064,7 +1064,7 @@ export async function restoreSoftDeletedBusiness(
   businessId: string,
   actor: { id: string; email: string | null }
 ): Promise<{ name: string }> {
-  if (PROTECTED_PRODUCTION_BUSINESS_IDS.has(businessId)) {
+  if (await isBusinessProtected(businessId)) {
     throw new Error("Protected production businesses cannot be restored this way.");
   }
   const raw = await createServiceClient();

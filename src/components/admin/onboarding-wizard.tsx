@@ -509,6 +509,13 @@ export function OnboardingWizard({
                 and connect later from Settings — just know invoices will stay blocked until then.
               </div>
               <StripeConnectCard />
+              <p className="text-sm text-muted">
+                Optional later:{" "}
+                <a href="/admin/settings#settings-custom-domain" className="font-medium text-accent underline">
+                  Use your own web address
+                </a>{" "}
+                (for example portal.yourstudio.com) so clients open your portal on your brand.
+              </p>
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" disabled={busy} onClick={() => void runAction({ action: "goto", step: "services" })}>
                   <ArrowLeft className="h-4 w-4" /> Back
@@ -641,6 +648,13 @@ export function OnboardingWizard({
                   </div>
                 </>
               )}
+              <p className="text-sm text-muted">
+                Optional:{" "}
+                <a href="/admin/settings#settings-custom-domain" className="font-medium text-accent underline">
+                  Use your own web address
+                </a>{" "}
+                so clients visit portal.yourstudio.com instead of a ShootPortal subdomain.
+              </p>
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" disabled={busy} onClick={() => void runAction({ action: "goto", step: "payments" })}>
                   <ArrowLeft className="h-4 w-4" /> Back

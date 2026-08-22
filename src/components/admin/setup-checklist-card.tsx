@@ -48,6 +48,11 @@ export function SetupChecklistCard({
                 <Circle className="h-4 w-4 shrink-0 text-muted" />
               )}
               <span>{item.label}</span>
+              {item.optional ? (
+                <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800">
+                  Optional
+                </span>
+              ) : null}
               <span className="text-xs text-muted">{item.done ? "Done" : "Needs attention"}</span>
             </a>
             {!item.done && item.acceptDefaultKey ? (

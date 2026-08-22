@@ -15,6 +15,7 @@ import {
   type EntitlementKey,
   type PlanRow,
 } from "@/lib/plan-catalog";
+import type { PlanSubscriberPriceBreakdown } from "@/lib/plan-subscriber-prices";
 
 function emptyEntitlements(): Record<string, boolean> {
   const out: Record<string, boolean> = {};
@@ -22,12 +23,29 @@ function emptyEntitlements(): Record<string, boolean> {
   return out;
 }
 
-export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
+type SaveRemapPayload = {
+  stripeRemapMessage?: string | null;
+  stripeRemapOk?: boolean | null;
+  stripeRemapMonthlyPriceId?: string | null;
+  stripeRemapAnnualPriceId?: string | null;
+  stripeRemapMode?: string | null;
+};
+
+export function PlansManager({
+  initialPlans,
+  subscriberBreakdowns,
+}: {
+  initialPlans: PlanRow[];
+  subscriberBreakdowns: Record<string, PlanSubscriberPriceBreakdown>;
+}) {
   const router = useRouter();
   const [plans, setPlans] = useState(initialPlans);
+  const [breakdowns, setBreakdowns] = useState(subscriberBreakdowns);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
+  const [priceChangeAck, setPriceChangeAck] = useState(false);
 
   const editing = useMemo(
     () => (editingId && editingId !== "new" ? plans.find((p) => p.id === editingId) ?? null : null),
@@ -36,29 +54,52 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
 
   async function refresh() {
     const res = await fetch("/api/platform/plans", { credentials: "include" });
-    const data = (await res.json()) as { plans?: PlanRow[]; error?: string };
+    const data = (await res.json()) as {
+      plans?: PlanRow[];
+      breakdowns?: Record<string, PlanSubscriberPriceBreakdown>;
+      error?: string;
+    };
     if (!res.ok) throw new Error(data.error || "Failed to reload plans");
     setPlans(data.plans ?? []);
+    if (data.breakdowns) setBreakdowns(data.breakdowns);
     router.refresh();
   }
 
   async function savePlan(form: HTMLFormElement, id: string | "new") {
     setBusy(true);
     setError(null);
+    setSuccessNotice(null);
     const fd = new FormData(form);
     const entitlements: Record<string, boolean> = emptyEntitlements();
     for (const key of [...ENFORCED_ENTITLEMENTS, ...FUTURE_ENTITLEMENTS]) {
       entitlements[key] = fd.get(`ent_${key}`) === "on";
     }
+    const nextMonthly = fd.get("price_monthly")
+      ? Math.round(Number(fd.get("price_monthly")) * 100)
+      : null;
+    const nextAnnual = fd.get("price_annual")
+      ? Math.round(Number(fd.get("price_annual")) * 100)
+      : null;
+
+    if (id !== "new") {
+      const existing = plans.find((p) => p.id === id);
+      const priceChanged =
+        !!existing &&
+        (nextMonthly !== existing.price_monthly_cents || nextAnnual !== existing.price_annual_cents);
+      if (priceChanged && !priceChangeAck) {
+        setError(
+          "Acknowledge the price-change warning before saving. New catalog prices apply to new subscribers only."
+        );
+        setBusy(false);
+        return;
+      }
+    }
+
     const body: Record<string, unknown> = {
       name: String(fd.get("name") ?? ""),
       description: String(fd.get("description") ?? ""),
-      price_monthly_cents: fd.get("price_monthly")
-        ? Math.round(Number(fd.get("price_monthly")) * 100)
-        : null,
-      price_annual_cents: fd.get("price_annual")
-        ? Math.round(Number(fd.get("price_annual")) * 100)
-        : null,
+      price_monthly_cents: nextMonthly,
+      price_annual_cents: nextAnnual,
       trial_days: Number(fd.get("trial_days") ?? 14),
       display_order: Number(fd.get("display_order") ?? 100),
       is_active: fd.get("is_active") === "on",
@@ -72,7 +113,6 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
           : null,
       },
     };
-    // Only send key on create — empty key on edit tripped "cannot be changed".
     if (id === "new") {
       body.key = String(fd.get("key") ?? "");
     }
@@ -83,14 +123,30 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await res.json()) as { error?: string; stripeRemapMessage?: string | null };
+      const data = (await res.json()) as { error?: string } & SaveRemapPayload;
       if (!res.ok) throw new Error(data.error || "Save failed");
-      if (data.stripeRemapMessage) {
-        setError(null);
-        // Surface Stripe remap note without blocking save success.
-        window.alert(data.stripeRemapMessage);
+
+      if (data.stripeRemapOk === false) {
+        setError(
+          data.stripeRemapMessage ||
+            "Catalog saved, but Stripe Price remap failed. Fix before relying on Checkout."
+        );
+      } else if (data.stripeRemapMessage) {
+        const ids = [
+          data.stripeRemapMonthlyPriceId ? `monthly ${data.stripeRemapMonthlyPriceId}` : null,
+          data.stripeRemapAnnualPriceId ? `annual ${data.stripeRemapAnnualPriceId}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        setSuccessNotice(
+          `${data.stripeRemapMessage}${ids ? ` (${ids})` : ""}`
+        );
+      } else {
+        setSuccessNotice("Plan saved.");
       }
+
       setEditingId(null);
+      setPriceChangeAck(false);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -267,6 +323,31 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
             />
           </div>
         </div>
+
+        {mode === "edit" ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <p className="font-semibold">Changing the listed price</p>
+            <p className="mt-1">
+              Stripe Prices are immutable. Saving a new catalog amount creates a new Stripe Price
+              and remaps Checkout for <strong>new</strong> subscribers only. Existing subscribers
+              stay on their current Price until they change plans — their bill does not move with
+              this edit.
+            </p>
+            <label className="mt-3 flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={priceChangeAck}
+                onChange={(e) => setPriceChangeAck(e.target.checked)}
+              />
+              <span>
+                I understand this applies to new subscribers only; existing subscribers keep their
+                current price.
+              </span>
+            </label>
+          </div>
+        ) : null}
+
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <Label htmlFor="admin_seats">Admin seats</Label>
@@ -314,7 +395,15 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
           <Button type="submit" disabled={busy}>
             {busy ? "Saving…" : mode === "new" ? "Create plan" : "Save plan"}
           </Button>
-          <Button type="button" variant="outline" disabled={busy} onClick={() => setEditingId(null)}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              setEditingId(null);
+              setPriceChangeAck(false);
+            }}
+          >
             Cancel
           </Button>
         </div>
@@ -322,9 +411,58 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
     );
   }
 
+  function SubscriberGap({ planKey }: { planKey: string }) {
+    const b = breakdowns[planKey];
+    if (!b || planKey === "founding") return null;
+    const onCurrent = b.onCurrentMonthly + b.onCurrentAnnual;
+    return (
+      <div className="rounded-lg border border-border bg-slate-50 px-3 py-2 text-sm">
+        <p className="font-medium text-heading">Subscribers vs listed price ({b.mode})</p>
+        <p className="mt-1 text-muted">
+          On current Price: <span className="font-medium text-heading">{onCurrent}</span>
+          {" · "}
+          On older Price:{" "}
+          <span
+            className={
+              b.onLegacyPrice > 0 ? "font-semibold text-amber-800" : "font-medium text-heading"
+            }
+          >
+            {b.onLegacyPrice}
+          </span>
+          {b.unresolved > 0 ? ` · unresolved ${b.unresolved}` : ""}
+        </p>
+        {(b.currentMonthlyPriceId || b.currentAnnualPriceId) && (
+          <p className="mt-1 font-mono text-[11px] text-muted">
+            {b.currentMonthlyPriceId ? `monthly ${b.currentMonthlyPriceId}` : null}
+            {b.currentMonthlyPriceId && b.currentAnnualPriceId ? " · " : null}
+            {b.currentAnnualPriceId ? `annual ${b.currentAnnualPriceId}` : null}
+          </p>
+        )}
+        {b.onLegacyPrice > 0 ? (
+          <p className="mt-1 text-xs text-amber-900">
+            Listed catalog price and what some subscribers are billed can differ until they change
+            plans.
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-950"
+        >
+          {error}
+        </div>
+      )}
+      {successNotice && (
+        <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          {successNotice}
+        </div>
+      )}
 
       <div className="flex justify-end">
         <Button type="button" disabled={busy} onClick={() => setEditingId("new")}>
@@ -378,7 +516,10 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
                 size="sm"
                 variant="outline"
                 disabled={busy}
-                onClick={() => setEditingId(editingId === plan.id ? null : plan.id)}
+                onClick={() => {
+                  setEditingId(editingId === plan.id ? null : plan.id);
+                  setPriceChangeAck(false);
+                }}
               >
                 Edit
               </Button>
@@ -388,6 +529,24 @@ export function PlansManager({ initialPlans }: { initialPlans: PlanRow[] }) {
             </div>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
+            {plan.stripe_price_sync_ok === false ? (
+              <div
+                role="alert"
+                className="rounded-lg border border-red-400 bg-red-50 px-3 py-2 text-sm text-red-950"
+              >
+                <p className="font-semibold">Stripe Price remap failed — billing integrity</p>
+                <p className="mt-1">
+                  {plan.stripe_price_sync_message ||
+                    "Catalog price and Stripe Price disagree. Fix before new checkouts."}
+                </p>
+                {plan.stripe_price_sync_at ? (
+                  <p className="mt-1 text-xs text-red-800">
+                    Last attempt {new Date(plan.stripe_price_sync_at).toLocaleString()}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            <SubscriberGap planKey={plan.key} />
             <div className="flex flex-wrap gap-2">
               {ENFORCED_ENTITLEMENTS.map((key) =>
                 plan.entitlements?.[key] === true ? (

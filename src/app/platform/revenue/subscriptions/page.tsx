@@ -38,8 +38,9 @@ export default async function PlatformSubscriptionRevenuePage({
         </Link>
         <h1 className="mt-2 text-2xl font-bold text-heading">ShootPortal revenue</h1>
         <p className="text-muted">
-          Subscription payments businesses pay ShootPortal. Read-only. Totals must match the
-          dashboard headline when filters are cleared.
+          Subscription payments businesses pay ShootPortal. <strong>Charged</strong> is the Stripe
+          invoice amount (what was actually billed). Catalog list price is shown for comparison —
+          they can differ when a subscriber is still on an older Price.
         </p>
       </div>
 
@@ -49,7 +50,7 @@ export default async function PlatformSubscriptionRevenuePage({
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-sm font-medium text-muted">Filtered total</CardTitle>
+          <CardTitle className="text-sm font-medium text-muted">Filtered total (charged)</CardTitle>
         </CardHeader>
         <CardContent className="text-3xl font-semibold">{formatCurrency(totalCents)}</CardContent>
       </Card>
@@ -59,12 +60,13 @@ export default async function PlatformSubscriptionRevenuePage({
           <CardTitle>Subscription payments ({rows.length})</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
-          <table className="w-full min-w-[800px] text-left text-sm">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead>
               <tr className="border-b border-border text-muted">
                 <th className="py-2 pr-3 font-medium">Business</th>
                 <th className="py-2 pr-3 font-medium">Plan</th>
-                <th className="py-2 pr-3 font-medium">Amount</th>
+                <th className="py-2 pr-3 font-medium">Charged</th>
+                <th className="py-2 pr-3 font-medium">Catalog /mo</th>
                 <th className="py-2 pr-3 font-medium">Paid</th>
                 <th className="py-2 pr-3 font-medium">Stripe invoice</th>
                 <th className="py-2 font-medium">Mode</th>
@@ -82,7 +84,12 @@ export default async function PlatformSubscriptionRevenuePage({
                     </Link>
                   </td>
                   <td className="py-2.5 pr-3">{row.plan}</td>
-                  <td className="py-2.5 pr-3">{formatCurrency(row.amountPaidCents)}</td>
+                  <td className="py-2.5 pr-3 font-medium">{formatCurrency(row.amountPaidCents)}</td>
+                  <td className="py-2.5 pr-3 text-muted">
+                    {row.catalogMonthlyCents != null
+                      ? formatCurrency(row.catalogMonthlyCents)
+                      : "—"}
+                  </td>
                   <td className="py-2.5 pr-3">{formatDate(row.paidAt)}</td>
                   <td className="py-2.5 pr-3 font-mono text-xs">{row.stripeInvoiceId}</td>
                   <td className="py-2.5">{row.stripeMode}</td>
@@ -90,7 +97,7 @@ export default async function PlatformSubscriptionRevenuePage({
               ))}
               {!rows.length && (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-muted">
+                  <td colSpan={7} className="py-8 text-center text-muted">
                     No subscription payments in this range.
                   </td>
                 </tr>
@@ -100,10 +107,10 @@ export default async function PlatformSubscriptionRevenuePage({
               <tfoot>
                 <tr className="border-t border-border font-semibold">
                   <td className="py-3 pr-3" colSpan={2}>
-                    Sum
+                    Sum charged
                   </td>
                   <td className="py-3 pr-3">{formatCurrency(totalCents)}</td>
-                  <td colSpan={3} />
+                  <td colSpan={4} />
                 </tr>
               </tfoot>
             )}

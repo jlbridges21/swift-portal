@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { requireSuperAdminPage } from "@/lib/admin-access";
 import { loadBusinessDetail } from "@/lib/platform-dashboard";
 import { BusinessDetailActions } from "@/components/platform/business-detail-actions";
-import { PROTECTED_PRODUCTION_BUSINESS_IDS } from "@/lib/platform-session";
 import { listAllPlans, type PlanRow } from "@/lib/entitlements";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,6 +88,7 @@ export default async function PlatformBusinessDetailPage({
         {detail.stats?.requiresPayment ? " · paywalled" : ""}
         {" · "}
         Created {formatDate(detail.business.created_at)}
+        {detail.business.is_protected ? " · protected (undeletable)" : ""}
       </p>
 
       {detail.inviteNeedsAttention && (
@@ -103,7 +103,7 @@ export default async function PlatformBusinessDetailPage({
         business={detail.business}
         admins={detail.admins}
         settingsJson={JSON.stringify(detail.settings, null, 2)}
-        isProtected={PROTECTED_PRODUCTION_BUSINESS_IDS.has(detail.business.id)}
+        isProtected={detail.business.is_protected === true}
         plans={plans}
         currentPlan={currentPlan}
         inviteNeedsAttention={detail.inviteNeedsAttention}

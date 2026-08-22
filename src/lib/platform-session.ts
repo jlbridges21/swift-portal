@@ -94,10 +94,11 @@ export function impersonationCookieOptions(maxAge = IMPERSONATION_TTL_SECONDS) {
   };
 }
 
-export const PROTECTED_PRODUCTION_BUSINESS_IDS = new Set([
-  "00000000-0000-0000-0000-000000000001",
-  "00000000-0000-0000-0000-0000000000aa",
-]);
+/**
+ * Soft/hard delete protection lives on `businesses.is_protected` (DB column).
+ * Prefer that over hardcoded IDs so protection can change without a deploy.
+ * Swift remains protected via migration seed; Test Pilot is intentionally not.
+ */
 
 /** Swift Aerial Media — platform owner; revoke-comp requires typed confirm. */
 export const SWIFT_COMP_PROTECTED_BUSINESS_ID = "00000000-0000-0000-0000-000000000001";

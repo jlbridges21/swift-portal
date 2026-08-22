@@ -165,7 +165,7 @@ export async function loadBusinessDetail(id: string) {
   const { data: business, error } = await raw
     .from("businesses")
     .select(
-      "id, name, slug, custom_domain, custom_domain_status, custom_domain_vercel_verified, custom_domain_misconfigured, custom_domain_last_checked_at, custom_domain_error, custom_domain_verification, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end, created_via, created_at, deleted_at, updated_at, lifecycle_emails_suppressed, billing_email"
+      "id, name, slug, custom_domain, custom_domain_status, custom_domain_vercel_verified, custom_domain_misconfigured, custom_domain_last_checked_at, custom_domain_error, custom_domain_verification, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end, created_via, created_at, deleted_at, updated_at, lifecycle_emails_suppressed, billing_email, is_protected"
     )
     .eq("id", id)
     .maybeSingle();

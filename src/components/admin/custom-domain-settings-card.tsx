@@ -181,15 +181,17 @@ export function CustomDomainSettingsCard({
     return (
       <Card className="shadow-sm">
         <CardContent className="space-y-3 pt-6">
-          <h3 className="font-semibold text-heading">Custom domain</h3>
+          <h3 className="font-semibold text-heading">Use your own web address</h3>
           <p className="text-sm text-muted">
-            Connect <span className="font-medium text-heading">portal.yourstudio.com</span> so clients
-            open your portal on your brand. This requires a plan that includes the Custom domain
-            entitlement — upgrade to unlock setup here.
+            Clients can open your portal at something like{" "}
+            <span className="font-medium text-heading">portal.yourstudio.com</span> — a subdomain on
+            a domain you already own — instead of{" "}
+            <span className="font-medium text-heading">{state.fallbackSubdomain}</span>.
           </p>
           <p className="text-sm text-muted">
-            Meanwhile your portal stays at{" "}
-            <span className="font-medium text-heading">{state.fallbackSubdomain}</span>.
+            This is included on plans with the custom domain entitlement (for example Studio). Upgrade
+            to unlock the step-by-step DNS setup here. Until then, your portal stays on the ShootPortal
+            address above.
           </p>
         </CardContent>
       </Card>
@@ -201,8 +203,15 @@ export function CustomDomainSettingsCard({
       <Card className="shadow-sm">
         <CardContent className="space-y-4 pt-6">
           <div>
-            <h3 className="font-semibold text-heading">Custom domain</h3>
-            <p className={`mt-1 text-sm font-medium ${status.tone}`}>{status.title}</p>
+            <h3 className="font-semibold text-heading">Use your own web address</h3>
+            <p className="mt-1 text-sm text-muted">
+              A <strong className="font-medium text-heading">subdomain</strong> is a short name in
+              front of your domain (the <code className="text-xs">portal</code> in{" "}
+              <code className="text-xs">portal.yourstudio.com</code>). You will add one DNS record at
+              the company where you renew your domain (GoDaddy, Namecheap, Cloudflare, etc.). Changes
+              often show up in a few minutes and can take up to a few hours.
+            </p>
+            <p className={`mt-3 text-sm font-medium ${status.tone}`}>{status.title}</p>
             <p className="mt-1 text-sm text-muted">{status.detail}</p>
           </div>
 
@@ -228,12 +237,13 @@ export function CustomDomainSettingsCard({
           {!state.domain ? (
             <div className="space-y-3">
               <p className="text-sm text-muted">
-                <strong className="font-medium text-heading">Recommend a subdomain</strong> like{" "}
-                <code className="text-xs">portal.yourstudio.com</code> — it only needs a CNAME and
-                avoids apex-domain DNS quirks.
+                <strong className="font-medium text-heading">Start with a subdomain</strong> like{" "}
+                <code className="text-xs">portal.yourstudio.com</code>. You need login access to your
+                domain registrar (where you renew the domain). You will copy one DNS record we show
+                next — no coding required.
               </p>
               <div className="space-y-2">
-                <Label htmlFor="custom-domain-input">Your portal domain</Label>
+                <Label htmlFor="custom-domain-input">Web address for your portal</Label>
                 <Input
                   id="custom-domain-input"
                   value={domainInput}
@@ -272,10 +282,14 @@ export function CustomDomainSettingsCard({
 
               <div className="space-y-2">
                 <p className="text-sm font-medium text-heading">Add this DNS record</p>
-                <p className="text-sm text-muted">
-                  In your <strong>domain registrar&apos;s DNS settings</strong> (where you renew the
-                  domain), create the record below. Then come back and check status.
-                </p>
+                <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
+                  <li>Sign in to the site where you renew your domain (your registrar).</li>
+                  <li>Open DNS settings (sometimes labeled “DNS”, “Manage DNS”, or “Zone file”).</li>
+                  <li>Add a new record using the Type, Name, and Value below — use the copy buttons.</li>
+                  <li>
+                    Save, wait a few minutes (sometimes up to a few hours), then click Check status.
+                  </li>
+                </ol>
                 <DnsTable records={state.dnsRecords} />
                 <div className="rounded-lg border border-border bg-slate-50 px-3 py-2 text-xs text-muted">
                   <p className="font-medium text-heading">Cloudflare users</p>

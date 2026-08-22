@@ -105,7 +105,7 @@ export interface IntegrationSettings {
 }
 
 /** Optional setup items a studio may keep as ShootPortal defaults (persisted). */
-export type SetupAcceptDefaultKey = "logo" | "colors" | "stripe";
+export type SetupAcceptDefaultKey = "logo" | "colors" | "stripe" | "custom_domain";
 
 export type SetupAcceptedDefaults = Record<SetupAcceptDefaultKey, boolean>;
 
@@ -199,6 +199,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     logo: false,
     colors: false,
     stripe: false,
+    custom_domain: false,
   },
 };
 

@@ -111,6 +111,8 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/app/platform/revenue/subscriptions/page.tsx",
   "src/app/platform/revenue/client-payments/page.tsx",
   "src/lib/sync-plan-stripe-prices.ts",
+  "src/lib/plan-subscriber-prices.ts",
+  "src/lib/business-protection.ts",
   "src/lib/entitlements.ts",
   "src/lib/platform-plans.ts",
   "src/lib/platform-comp.ts",

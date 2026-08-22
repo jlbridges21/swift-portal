@@ -35,7 +35,7 @@ import {
 } from "../src/lib/platform-onboard";
 import { createServiceClient } from "../src/lib/supabase/server";
 import { getSubscriptionState } from "../src/lib/subscription";
-import { PROTECTED_PRODUCTION_BUSINESS_IDS } from "../src/lib/platform-session";
+import { SWIFT_COMP_PROTECTED_BUSINESS_ID } from "../src/lib/platform-session";
 
 function daysFromNow(iso: string | null): number {
   if (!iso) return NaN;
@@ -105,20 +105,25 @@ async function main() {
     console.log("no existing trialing business to snapshot (ok)");
   }
 
-  // Swift / Test Pilot untouched checks
-  for (const id of PROTECTED_PRODUCTION_BUSINESS_IDS) {
-    const { data: biz } = await raw
+  // Swift (is_protected) untouched checks
+  {
+    const { data: protectedRows } = await raw
       .from("businesses")
-      .select("id, slug, name, subscription_status, trial_ends_at, comped_until, plan")
-      .eq("id", id)
-      .maybeSingle();
-    if (!biz) {
-      console.log(`protected id ${id}: not found (skip)`);
-      continue;
+      .select("id, slug, name, subscription_status, trial_ends_at, comped_until, plan, is_protected")
+      .eq("is_protected", true);
+    for (const biz of protectedRows ?? []) {
+      console.log(
+        `protected ${biz.slug}: status=${biz.subscription_status} plan=${biz.plan} comped_until=${biz.comped_until}`
+      );
     }
-    console.log(
-      `protected ${biz.slug}: status=${biz.subscription_status} plan=${biz.plan} comped_until=${biz.comped_until}`
-    );
+    const { data: swift } = await raw
+      .from("businesses")
+      .select("id, is_protected")
+      .eq("id", SWIFT_COMP_PROTECTED_BUSINESS_ID)
+      .maybeSingle();
+    if (swift && !swift.is_protected) {
+      throw new Error("Swift must remain is_protected=true");
+    }
   }
 
   await setStudioTrialDays(14);

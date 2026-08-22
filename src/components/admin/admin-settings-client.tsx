@@ -779,9 +779,11 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="custom_domain" active={section}>
           <div id="settings-custom-domain" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-primary">Custom Domain</h2>
+            <h2 className="text-lg font-semibold text-primary">Use your own web address</h2>
             <p className="mt-1 text-sm text-muted">
-              Serve your client portal on your own hostname (recommended: portal.yourstudio.com).
+              Give clients a branded link like{" "}
+              <span className="font-medium text-heading">portal.yourstudio.com</span> instead of a
+              ShootPortal subdomain — so your portal feels like your business.
             </p>
             <CustomDomainSettingsCard entitled={canUseCustomDomain} initialState={customDomainState} />
           </div>

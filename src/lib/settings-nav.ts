@@ -55,8 +55,9 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   },
   {
     id: "custom_domain",
-    label: "Custom Domain",
-    description: "Connect portal.yourstudio.com for your client portal.",
+    label: "Use your own web address",
+    description:
+      "Let clients open your portal at portal.yourstudio.com instead of a ShootPortal subdomain.",
     hashes: ["settings-custom-domain"],
   },
   {

@@ -12,6 +12,15 @@ import { getStripe } from "@/lib/stripe";
 type StripeMode = "test" | "live";
 type BillingInterval = "monthly" | "annual";
 
+export type PlanStripeSyncResult = {
+  remapped: boolean;
+  ok: boolean;
+  mode: StripeMode;
+  message: string;
+  monthlyPriceId: string | null;
+  annualPriceId: string | null;
+};
+
 function detectMode(): StripeMode {
   const key = process.env.STRIPE_SECRET_KEY ?? "";
   if (key.startsWith("sk_live_")) return "live";
@@ -87,16 +96,21 @@ async function createOrReusePrice(
 
 /**
  * Remap Stripe Prices for the current mode after catalog cents change.
- * Returns a human-readable summary for the platform UI.
+ * Returns a structured summary for the platform UI (and persists via caller).
  */
-export async function syncPlanStripePricesAfterCatalogChange(planId: string): Promise<{
-  remapped: boolean;
-  mode: StripeMode;
-  message: string;
-}> {
+export async function syncPlanStripePricesAfterCatalogChange(
+  planId: string
+): Promise<PlanStripeSyncResult> {
   const mode = detectMode();
   if (planId === "founding") {
-    return { remapped: false, mode, message: "Founding plan is outside Checkout." };
+    return {
+      remapped: false,
+      ok: true,
+      mode,
+      message: "Founding plan is outside Checkout.",
+      monthlyPriceId: null,
+      annualPriceId: null,
+    };
   }
 
   const raw = await createServiceClient();
@@ -106,10 +120,24 @@ export async function syncPlanStripePricesAfterCatalogChange(planId: string): Pr
     .eq("id", planId)
     .maybeSingle();
   if (error || !plan) {
-    return { remapped: false, mode, message: "Plan not found for Stripe remap." };
+    return {
+      remapped: false,
+      ok: false,
+      mode,
+      message: "Plan not found for Stripe remap.",
+      monthlyPriceId: null,
+      annualPriceId: null,
+    };
   }
   if (plan.key === "founding") {
-    return { remapped: false, mode, message: "Founding plan is outside Checkout." };
+    return {
+      remapped: false,
+      ok: true,
+      mode,
+      message: "Founding plan is outside Checkout.",
+      monthlyPriceId: null,
+      annualPriceId: null,
+    };
   }
 
   const { stripe } = getStripe();
@@ -124,28 +152,31 @@ export async function syncPlanStripePricesAfterCatalogChange(planId: string): Pr
   );
 
   const notes: string[] = [];
+  let monthlyPriceId: string | null = null;
+  let annualPriceId: string | null = null;
 
   if (typeof plan.price_monthly_cents === "number" && plan.price_monthly_cents > 0) {
     const prior = byInterval.get("monthly");
     const productId = await ensureProduct(stripe, plan, prior?.stripe_product_id ?? null);
-    const priceId = await createOrReusePrice(stripe, {
+    monthlyPriceId = await createOrReusePrice(stripe, {
       productId,
       planKey: plan.key,
       unitAmount: plan.price_monthly_cents,
       interval: "month",
       billingInterval: "monthly",
     });
-    await raw.from("plan_stripe_prices").upsert(
+    const { error: upErr } = await raw.from("plan_stripe_prices").upsert(
       {
         plan_id: planId,
         mode,
         billing_interval: "monthly",
         stripe_product_id: productId,
-        stripe_price_id: priceId,
+        stripe_price_id: monthlyPriceId,
       },
       { onConflict: "plan_id,mode,billing_interval" }
     );
-    notes.push(`monthly→${priceId}`);
+    if (upErr) throw new Error(`plan_stripe_prices monthly upsert: ${upErr.message}`);
+    notes.push(`monthly→${monthlyPriceId}`);
   }
 
   if (typeof plan.price_annual_cents === "number" && plan.price_annual_cents > 0) {
@@ -153,37 +184,44 @@ export async function syncPlanStripePricesAfterCatalogChange(planId: string): Pr
     const productId = await ensureProduct(stripe, plan, prior?.stripe_product_id ?? null);
     // Catalog stores "annual monthly equivalent"; Checkout annual is 12× that.
     const annualUnit = plan.price_annual_cents * 12;
-    const priceId = await createOrReusePrice(stripe, {
+    annualPriceId = await createOrReusePrice(stripe, {
       productId,
       planKey: plan.key,
       unitAmount: annualUnit,
       interval: "year",
       billingInterval: "annual",
     });
-    await raw.from("plan_stripe_prices").upsert(
+    const { error: upErr } = await raw.from("plan_stripe_prices").upsert(
       {
         plan_id: planId,
         mode,
         billing_interval: "annual",
         stripe_product_id: productId,
-        stripe_price_id: priceId,
+        stripe_price_id: annualPriceId,
       },
       { onConflict: "plan_id,mode,billing_interval" }
     );
-    notes.push(`annual→${priceId}`);
+    if (upErr) throw new Error(`plan_stripe_prices annual upsert: ${upErr.message}`);
+    notes.push(`annual→${annualPriceId}`);
   }
 
   if (!notes.length) {
     return {
       remapped: false,
+      ok: true,
       mode,
       message: "No positive catalog prices to map in Stripe.",
+      monthlyPriceId: null,
+      annualPriceId: null,
     };
   }
 
   return {
     remapped: true,
+    ok: true,
     mode,
     message: `Stripe ${mode} prices remapped (${notes.join(", ")}). Existing subscribers keep prior Prices until they change plans.`,
+    monthlyPriceId,
+    annualPriceId,
   };
 }

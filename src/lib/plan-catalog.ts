@@ -57,6 +57,11 @@ export type PlanRow = {
   stripe_product_id?: string | null;
   stripe_price_monthly_id?: string | null;
   stripe_price_annual_id?: string | null;
+  /** Last catalog→Stripe Price remap — false is a billing-integrity alert. */
+  stripe_price_sync_ok?: boolean | null;
+  stripe_price_sync_message?: string | null;
+  stripe_price_sync_at?: string | null;
+  stripe_price_sync_mode?: string | null;
 };
 
 /** Fail-closed default when a plan row is missing or trial_days is invalid. */
@@ -64,7 +69,7 @@ export const FALLBACK_TRIAL_DAYS = 14;
 
 /** Columns shared by plan catalog selects (keep in sync across entitlements). */
 export const PLAN_CATALOG_SELECT =
-  "id, key, name, description, price_monthly_cents, price_annual_cents, trial_days, entitlements, limits, display_order, is_active, is_public, created_at, updated_at, stripe_product_id, stripe_price_monthly_id, stripe_price_annual_id";
+  "id, key, name, description, price_monthly_cents, price_annual_cents, trial_days, entitlements, limits, display_order, is_active, is_public, created_at, updated_at, stripe_product_id, stripe_price_monthly_id, stripe_price_annual_id, stripe_price_sync_ok, stripe_price_sync_message, stripe_price_sync_at, stripe_price_sync_mode";
 
 /**
  * Normalize trial_days from a plan row. Returns null when missing/invalid so

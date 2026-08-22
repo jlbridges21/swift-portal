@@ -21,10 +21,28 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   try {
     const body = await request.json();
     const plan = await updatePlan(id, body, { id: auth.profile.id, email: auth.profile.email });
-    const { stripeRemapMessage, ...rest } = plan as typeof plan & {
+    const {
+      stripeRemapMessage,
+      stripeRemapOk,
+      stripeRemapMonthlyPriceId,
+      stripeRemapAnnualPriceId,
+      stripeRemapMode,
+      ...rest
+    } = plan as typeof plan & {
       stripeRemapMessage?: string | null;
+      stripeRemapOk?: boolean | null;
+      stripeRemapMonthlyPriceId?: string | null;
+      stripeRemapAnnualPriceId?: string | null;
+      stripeRemapMode?: string | null;
     };
-    return NextResponse.json({ plan: rest, stripeRemapMessage: stripeRemapMessage ?? null });
+    return NextResponse.json({
+      plan: rest,
+      stripeRemapMessage: stripeRemapMessage ?? null,
+      stripeRemapOk: stripeRemapOk ?? null,
+      stripeRemapMonthlyPriceId: stripeRemapMonthlyPriceId ?? null,
+      stripeRemapAnnualPriceId: stripeRemapAnnualPriceId ?? null,
+      stripeRemapMode: stripeRemapMode ?? null,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to update plan" },

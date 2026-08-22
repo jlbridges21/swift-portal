@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/api-auth";
 import { listAllPlans, listActivePlans } from "@/lib/entitlements";
 import { createPlan } from "@/lib/platform-plans";
+import { getPlanSubscriberPriceBreakdown } from "@/lib/plan-subscriber-prices";
 
 export async function GET(request: Request) {
   const auth = await requireSuperAdminApi();
@@ -10,7 +11,15 @@ export async function GET(request: Request) {
   const activeOnly = url.searchParams.get("active") === "1";
   try {
     const plans = activeOnly ? await listActivePlans() : await listAllPlans();
-    return NextResponse.json({ plans });
+    const breakdownEntries = await Promise.all(
+      plans
+        .filter((p) => p.key !== "founding")
+        .map(async (p) => [p.key, await getPlanSubscriberPriceBreakdown(p.key)] as const)
+    );
+    return NextResponse.json({
+      plans,
+      breakdowns: Object.fromEntries(breakdownEntries),
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to list plans" },

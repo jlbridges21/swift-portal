@@ -126,7 +126,8 @@ export type ChecklistItemId =
   | "contact"
   | "email"
   | "stripe"
-  | "services";
+  | "services"
+  | "custom_domain";
 
 export type ChecklistItem = {
   id: ChecklistItemId;
@@ -135,6 +136,7 @@ export type ChecklistItem = {
   done: boolean;
   /** Optional setup — studio may acknowledge ShootPortal defaults. */
   acceptDefaultKey?: SetupAcceptDefaultKey;
+  optional?: boolean;
 };
 
 /** Same items the SetupChecklistCard renders — single source of truth. */
@@ -142,6 +144,8 @@ export function buildSetupChecklistItems(input: {
   settings: AppSettings;
   stripeOk: boolean | null;
   services: ServiceCompletenessRow[] | null;
+  /** True when businesses.custom_domain is connected/live. */
+  customDomainConnected?: boolean;
 }): ChecklistItem[] {
   const { settings } = input;
   return [
@@ -190,6 +194,15 @@ export function buildSetupChecklistItems(input: {
       hash: "settings-services",
       // Seeded starters with prices already satisfy this — no permanent nag.
       done: input.services == null ? false : hasActivePricedService(input.services),
+    },
+    {
+      id: "custom_domain",
+      label: "Use your own web address",
+      hash: "settings-custom-domain",
+      done:
+        input.customDomainConnected === true || acceptedDefault(settings, "custom_domain"),
+      acceptDefaultKey: "custom_domain",
+      optional: true,
     },
   ];
 }
