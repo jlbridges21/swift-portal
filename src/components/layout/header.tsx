@@ -9,6 +9,8 @@ import { NotificationBell } from "@/components/notifications/notification-bell";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { Menu, Plus, Settings, X, RefreshCw, Loader2 } from "lucide-react";
+import { AdminSearchTrigger } from "@/components/admin/admin-command-palette";
+import { useAdminSearch } from "@/components/admin/admin-search-context";
 
 interface HeaderProps {
   variant?: "public" | "dashboard";
@@ -162,6 +164,7 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
             </>
           ) : userRole === "admin" ? (
             <>
+              <AdminSearchTrigger />
               <div className="shrink-0">
                 <NotificationBell />
               </div>
@@ -244,6 +247,9 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
       {variant === "dashboard" && menuOpen && (
         <div className="absolute left-0 right-0 top-full z-50 border-b border-border bg-card shadow-lg lg:hidden">
           <div className="mx-auto max-w-7xl space-y-1 px-4 py-3 safe-area-x sm:px-6 lg:px-8">
+            {userRole === "admin" ? (
+              <AdminMobileMenuSearch onClose={() => setMenuOpen(false)} />
+            ) : null}
             {(userRole === "admin" ? adminMobileLinks : clientMobileLinks).map((link) => (
               <Link
                 key={link.href}
@@ -263,6 +269,22 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
         </div>
       )}
     </header>
+  );
+}
+
+function AdminMobileMenuSearch({ onClose }: { onClose: () => void }) {
+  const { openSearch } = useAdminSearch();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onClose();
+        openSearch();
+      }}
+      className="flex min-h-11 w-full items-center rounded-lg px-3 text-sm font-medium text-foreground hover:bg-slate-100"
+    >
+      Search
+    </button>
   );
 }
 

@@ -683,9 +683,13 @@ export function AdminSettingsClient({
                     </label>
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" id="settings-from-name" tabIndex={-1}>
                   <Label htmlFor="fromName">Default from name</Label>
-                  <Input id="fromName" value={settings.email.fromName} onChange={(e) => patchEmail({ fromName: e.target.value })} />
+                  <Input
+                    id="fromName"
+                    value={settings.email.fromName}
+                    onChange={(e) => patchEmail({ fromName: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="senderEmail">Notification sender email</Label>
@@ -758,7 +762,7 @@ export function AdminSettingsClient({
                   </p>
                   <DomainRecordsList refreshKey={`${settings.email.resendDomainId}:${settings.email.domainVerificationStatus}`} />
                 </div>
-                <div className="space-y-2 sm:col-span-2">
+                <div className="space-y-2 sm:col-span-2" id="settings-reply-to" tabIndex={-1}>
                   <Label htmlFor="replyTo">Reply-to email</Label>
                   <Input id="replyTo" type="email" value={settings.email.replyTo} onChange={(e) => patchEmail({ replyTo: e.target.value })} />
                   <p className="text-xs text-muted">

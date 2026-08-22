@@ -50,6 +50,7 @@ interface MediaLibraryClientProps {
   initialTotal: number;
   filterOptions: FilterOptions;
   openUploadOnMount?: boolean;
+  initialQuery?: string;
 }
 
 const TYPE_OPTIONS = [
@@ -102,6 +103,7 @@ export function MediaLibraryClient({
   initialTotal,
   filterOptions,
   openUploadOnMount = false,
+  initialQuery = "",
 }: MediaLibraryClientProps) {
   const router = useRouter();
   const [assets, setAssets] = useState(initialAssets);
@@ -110,8 +112,8 @@ export function MediaLibraryClient({
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(initialAssets.length < initialTotal);
   const [loading, setLoading] = useState(false);
-  const [q, setQ] = useState("");
-  const [debouncedQ, setDebouncedQ] = useState("");
+  const [q, setQ] = useState(initialQuery);
+  const [debouncedQ, setDebouncedQ] = useState(initialQuery);
   const [type, setType] = useState("");
   const [service, setService] = useState("");
   const [propertyType, setPropertyType] = useState("");

@@ -51,7 +51,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: "email",
     label: "Email Sender",
     description: "Sender identity, Resend domain, and diagnostics.",
-    hashes: ["settings-email"],
+    hashes: ["settings-email", "settings-reply-to", "settings-from-name"],
   },
   {
     id: "custom_domain",

@@ -12,8 +12,10 @@ import {
   FolderPlus,
   UserPlus,
   ImagePlus,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAdminSearch } from "@/components/admin/admin-search-context";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Home", icon: Home, exact: true },
@@ -31,14 +33,12 @@ function isActive(pathname: string, href: string, exact?: boolean) {
 export function AdminMobilePwaNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const { openSearch } = useAdminSearch();
   const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
     <>
-      <nav
-        aria-label="Admin mobile navigation"
-        className="admin-mobile-pwa-nav"
-      >
+      <nav aria-label="Admin mobile navigation" className="admin-mobile-pwa-nav">
         <div className="mx-auto flex h-[72px] max-w-lg items-center justify-around px-2">
           {NAV_ITEMS.map((item) => {
             if ("isAction" in item && item.isAction) {
@@ -87,8 +87,16 @@ export function AdminMobilePwaNav() {
             className="fixed inset-x-0 bottom-0 z-[96] rounded-t-2xl bg-white shadow-2xl"
             style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom, 0px))" }}
           >
-            <div className="mx-auto w-10 rounded-full bg-slate-200 py-1 mt-2 mb-4" />
+            <div className="mx-auto mt-2 mb-4 w-10 rounded-full bg-slate-200 py-1" />
             <div className="space-y-1 px-4 pb-2">
+              <ActionSheetButton
+                icon={Search}
+                label="Search"
+                onClick={() => {
+                  setSheetOpen(false);
+                  openSearch();
+                }}
+              />
               <ActionSheetButton
                 icon={FolderPlus}
                 label="Add New Project"

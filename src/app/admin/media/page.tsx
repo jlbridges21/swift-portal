@@ -4,15 +4,20 @@ import { MediaLibraryClient } from "@/components/admin/media-library-client";
 import { getLibraryFilterOptions, queryMediaLibrary } from "@/lib/media-library";
 
 interface PageProps {
-  searchParams: Promise<{ upload?: string }>;
+  searchParams: Promise<{ upload?: string; q?: string }>;
 }
 
 export default async function AdminMediaPage({ searchParams }: PageProps) {
   const { tenant } = await requireAdminPage();
   const sp = await searchParams;
+  const initialQuery = (sp.q ?? "").trim().slice(0, 80);
 
   const [result, filterOptions] = await Promise.all([
-    queryMediaLibrary(tenant.businessId, { page: 1, limit: 48 }),
+    queryMediaLibrary(tenant.businessId, {
+      page: 1,
+      limit: 48,
+      q: initialQuery || undefined,
+    }),
     getLibraryFilterOptions(tenant.businessId),
   ]);
 
@@ -29,6 +34,7 @@ export default async function AdminMediaPage({ searchParams }: PageProps) {
           initialTotal={result.total}
           filterOptions={filterOptions}
           openUploadOnMount={sp.upload === "1"}
+          initialQuery={initialQuery}
         />
       </main>
     </div>
