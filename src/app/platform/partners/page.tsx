@@ -5,7 +5,11 @@ import {
   loadPartnerProgramMetrics,
   loadPartnerTableRows,
 } from "@/lib/partner-program";
-import { loadPartnerProgramSettings } from "@/lib/partner-referral-discount";
+import {
+  loadPartnerProgramSettings,
+  loadReferralDiscountStripeCoupons,
+} from "@/lib/partner-referral-discount";
+import { getStripeMode } from "@/lib/stripe";
 import { PartnersManager } from "@/components/platform/partners-manager";
 import { PartnersPerformanceTable } from "@/components/platform/partners-performance-table";
 import { PartnerProgramCharts } from "@/components/platform/partner-program-charts";
@@ -39,14 +43,17 @@ function Metric({
 
 export default async function PlatformPartnersPage() {
   await requireSuperAdminPage();
-  const [applications, partners, metrics, charts, tableRows, discountSettings] = await Promise.all([
+  const [applications, partners, metrics, charts, tableRows, discountSettings, discountCoupons] =
+    await Promise.all([
     listPartnerApplications("all"),
     listPartners("all"),
     loadPartnerProgramMetrics(),
     loadPartnerProgramCharts(12),
     loadPartnerTableRows(),
     loadPartnerProgramSettings(),
+    loadReferralDiscountStripeCoupons(),
   ]);
+  const deployMode = getStripeMode();
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -104,7 +111,11 @@ export default async function PlatformPartnersPage() {
         <h2 className="mb-3 text-lg font-semibold text-heading">Referral signup discount</h2>
         <Card>
           <CardContent className="pt-6">
-            <PartnerReferralDiscountSettings initial={discountSettings} />
+            <PartnerReferralDiscountSettings
+              initial={discountSettings}
+              initialCoupons={discountCoupons}
+              deployMode={deployMode}
+            />
           </CardContent>
         </Card>
       </section>

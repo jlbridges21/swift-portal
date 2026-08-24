@@ -2,14 +2,23 @@ import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/api-auth";
 import {
   loadPartnerProgramSettings,
-  updatePartnerProgramSettings,
+  loadReferralDiscountStripeCoupons,
+  updatePartnerProgramSettingsWithStripeSync,
 } from "@/lib/partner-referral-discount";
+import { getStripeMode } from "@/lib/stripe";
 
 export async function GET() {
   const auth = await requireSuperAdminApi();
   if (!auth.ok) return auth.response;
-  const settings = await loadPartnerProgramSettings();
-  return NextResponse.json({ settings });
+  const [settings, coupons] = await Promise.all([
+    loadPartnerProgramSettings(),
+    loadReferralDiscountStripeCoupons(),
+  ]);
+  return NextResponse.json({
+    settings,
+    coupons,
+    deployMode: getStripeMode(),
+  });
 }
 
 export async function PATCH(request: Request) {
@@ -52,10 +61,18 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "No changes." }, { status: 400 });
     }
 
-    const settings = await updatePartnerProgramSettings(patch);
+    const result = await updatePartnerProgramSettingsWithStripeSync(patch);
+    const coupons = await loadReferralDiscountStripeCoupons();
+
     return NextResponse.json({
-      settings,
-      note: "Run scripts/setup-stripe-partner-referral-discount.ts after changing amounts or duration so Stripe coupons match.",
+      settings: result,
+      coupons,
+      deployMode: getStripeMode(),
+      stripeCouponSyncMessage: result.stripeCouponSyncMessage ?? null,
+      stripeCouponSyncOk: result.stripeCouponSyncOk ?? null,
+      stripeCouponSyncMonthlyCouponId: result.stripeCouponSyncMonthlyCouponId ?? null,
+      stripeCouponSyncAnnualCouponId: result.stripeCouponSyncAnnualCouponId ?? null,
+      stripeCouponSyncMode: result.stripeCouponSyncMode ?? null,
     });
   } catch (err) {
     return NextResponse.json(

@@ -2,9 +2,7 @@
  * Idempotent Stripe Coupon setup for partner referral signup discounts.
  * Operates on the PLATFORM account only.
  *
- * Writes into partner_referral_discount_stripe_coupons for the mode derived
- * from STRIPE_SECRET_KEY. Creates monthly coupon from program settings; optional
- * annual coupon when referral_discount_annual_enabled is true.
+ * Delegates to syncReferralDiscountCouponsAfterSettingsChange — same path as the platform UI.
  *
  *   npx tsx scripts/setup-stripe-partner-referral-discount.ts
  *   npx tsx scripts/setup-stripe-partner-referral-discount.ts --confirm-live
@@ -13,7 +11,8 @@
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { createClient } from "@supabase/supabase-js";
-import Stripe from "stripe";
+import { syncReferralDiscountCouponsAfterSettingsChange } from "../src/lib/sync-referral-discount-stripe-coupons";
+import type { PartnerProgramSettingsRow } from "../src/lib/partner-referral-discount.constants";
 
 function loadEnvLocal() {
   const p = resolve(process.cwd(), ".env.local");
@@ -35,15 +34,6 @@ function loadEnvLocal() {
 loadEnvLocal();
 
 type StripeMode = "test" | "live";
-type BillingInterval = "monthly" | "annual";
-
-type ProgramSettings = {
-  referral_discount_enabled: boolean;
-  referral_discount_amount_cents: number;
-  referral_discount_duration_months: number;
-  referral_discount_annual_enabled: boolean;
-  referral_discount_annual_amount_cents: number;
-};
 
 function detectMode(secret: string): StripeMode {
   if (secret.startsWith("sk_live")) return "live";
@@ -53,7 +43,7 @@ function detectMode(secret: string): StripeMode {
 
 async function loadProgramSettings(
   supabase: ReturnType<typeof createClient>
-): Promise<ProgramSettings> {
+): Promise<PartnerProgramSettingsRow> {
   const { data, error } = await supabase
     .from("partner_program_settings")
     .select(
@@ -63,7 +53,7 @@ async function loadProgramSettings(
     .maybeSingle();
   if (error) throw error;
   return (
-    (data as ProgramSettings | null) ?? {
+    (data as PartnerProgramSettingsRow | null) ?? {
       referral_discount_enabled: true,
       referral_discount_amount_cents: 500,
       referral_discount_duration_months: 3,
@@ -71,115 +61,6 @@ async function loadProgramSettings(
       referral_discount_annual_amount_cents: 1500,
     }
   );
-}
-
-async function loadStoredCoupon(
-  supabase: ReturnType<typeof createClient>,
-  mode: StripeMode,
-  interval: BillingInterval
-) {
-  const { data, error } = await supabase
-    .from("partner_referral_discount_stripe_coupons")
-    .select("stripe_coupon_id, amount_off_cents, duration_months")
-    .eq("mode", mode)
-    .eq("billing_interval", interval)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
-}
-
-async function upsertStoredCoupon(
-  supabase: ReturnType<typeof createClient>,
-  mode: StripeMode,
-  interval: BillingInterval,
-  couponId: string,
-  amountOffCents: number,
-  durationMonths: number
-) {
-  const { error } = await supabase.from("partner_referral_discount_stripe_coupons").upsert(
-    {
-      mode,
-      billing_interval: interval,
-      stripe_coupon_id: couponId,
-      amount_off_cents: amountOffCents,
-      duration_months: durationMonths,
-    },
-    { onConflict: "mode,billing_interval" }
-  );
-  if (error) throw error;
-}
-
-async function findCouponByMetadata(
-  stripe: Stripe,
-  interval: BillingInterval,
-  amountOffCents: number,
-  durationMonths: number
-): Promise<Stripe.Coupon | null> {
-  const listed = await stripe.coupons.list({ limit: 100 });
-  const hit = listed.data.find(
-    (c) =>
-      c.metadata?.shootportal_referral_discount === "true" &&
-      c.metadata?.shootportal_interval === interval &&
-      c.amount_off === amountOffCents &&
-      String(c.duration_in_months ?? "") === String(durationMonths) &&
-      c.duration === (durationMonths > 1 ? "repeating" : "once")
-  );
-  return hit ?? null;
-}
-
-async function ensureCoupon(
-  stripe: Stripe,
-  interval: BillingInterval,
-  amountOffCents: number,
-  durationMonths: number,
-  storedId: string | null
-): Promise<string> {
-  if (storedId) {
-    try {
-      const existing = await stripe.coupons.retrieve(storedId);
-      if (
-        existing.valid &&
-        existing.amount_off === amountOffCents &&
-        (interval === "annual"
-          ? existing.duration === "once"
-          : existing.duration === "repeating" &&
-            existing.duration_in_months === durationMonths)
-      ) {
-        console.log(`  coupon found (db): ${existing.id} ${interval}`);
-        return existing.id;
-      }
-      console.log(`  coupon ${storedId} stale — creating replacement`);
-    } catch {
-      console.log(`  coupon ${storedId} missing — creating`);
-    }
-  }
-
-  const byMeta = await findCouponByMetadata(stripe, interval, amountOffCents, durationMonths);
-  if (byMeta) {
-    console.log(`  coupon found (metadata): ${byMeta.id} ${interval}`);
-    return byMeta.id;
-  }
-
-  const name =
-    interval === "annual"
-      ? `Partner referral — ${amountOffCents / 100} off first year`
-      : `Partner referral — ${amountOffCents / 100}/mo × ${durationMonths} months`;
-
-  const created = await stripe.coupons.create({
-    name,
-    amount_off: amountOffCents,
-    currency: "usd",
-    duration: interval === "annual" ? "once" : durationMonths > 1 ? "repeating" : "once",
-    duration_in_months: interval === "annual" ? undefined : durationMonths > 1 ? durationMonths : undefined,
-    metadata: {
-      shootportal_referral_discount: "true",
-      shootportal_interval: interval,
-      shootportal_amount_off_cents: String(amountOffCents),
-      shootportal_duration_months: String(durationMonths),
-    },
-  });
-  console.log(`  coupon created: ${created.id} ${interval} ${amountOffCents}¢`);
-  return created.id;
 }
 
 async function main() {
@@ -200,11 +81,6 @@ async function main() {
     );
   }
 
-  const stripe = new Stripe(secret, {
-    apiVersion: "2026-05-27.dahlia",
-    typescript: true,
-  });
-
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -219,49 +95,20 @@ async function main() {
     return;
   }
 
-  // Monthly coupon (repeating)
-  if (program.referral_discount_amount_cents > 0 && program.referral_discount_duration_months > 0) {
-    console.log("\nMonthly coupon:");
-    const stored = await loadStoredCoupon(supabase, mode, "monthly");
-    const id = await ensureCoupon(
-      stripe,
-      "monthly",
-      program.referral_discount_amount_cents,
-      program.referral_discount_duration_months,
-      stored?.stripe_coupon_id ?? null
-    );
-    await upsertStoredCoupon(
-      supabase,
-      mode,
-      "monthly",
-      id,
-      program.referral_discount_amount_cents,
-      program.referral_discount_duration_months
-    );
-  }
+  const result = await syncReferralDiscountCouponsAfterSettingsChange(program);
+  console.log("\nResult:", result.message);
+  if (result.monthlyCouponId) console.log("  monthly:", result.monthlyCouponId);
+  if (result.annualCouponId) console.log("  annual:", result.annualCouponId);
 
-  // Annual coupon (once — flat amount off first annual invoice)
-  if (program.referral_discount_annual_enabled && program.referral_discount_annual_amount_cents > 0) {
-    console.log("\nAnnual coupon:");
-    const stored = await loadStoredCoupon(supabase, mode, "annual");
-    const id = await ensureCoupon(
-      stripe,
-      "annual",
-      program.referral_discount_annual_amount_cents,
-      1,
-      stored?.stripe_coupon_id ?? null
-    );
-    await upsertStoredCoupon(
-      supabase,
-      mode,
-      "annual",
-      id,
-      program.referral_discount_annual_amount_cents,
-      1
-    );
-  } else {
-    console.log("\nAnnual coupon: skipped (referral_discount_annual_enabled = false)");
-  }
+  await supabase
+    .from("partner_program_settings")
+    .update({
+      stripe_coupon_sync_ok: result.ok,
+      stripe_coupon_sync_message: result.message,
+      stripe_coupon_sync_at: new Date().toISOString(),
+      stripe_coupon_sync_mode: result.mode,
+    })
+    .eq("id", 1);
 
   console.log(`\nDone (${mode}). Re-run is safe — existing coupons are reused when config matches.`);
 }

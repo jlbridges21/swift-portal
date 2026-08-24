@@ -15,16 +15,20 @@ import { getStripe, getStripeMode, type StripeMode } from "@/lib/stripe";
 import type { BillingInterval } from "@/lib/stripe-billing";
 import {
   PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY,
+  PARTNER_REFERRAL_OVERRIDE_COUPON_POLICY,
   PARTNER_COMMISSION_ON_NET_COLLECTED,
   type PartnerProgramSettingsRow,
+  type ReferralDiscountStripeCouponRow,
   type ReferralDiscountWindow,
   type EffectiveReferralDiscount,
 } from "@/lib/partner-referral-discount.constants";
 
 export {
   PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY,
+  PARTNER_REFERRAL_OVERRIDE_COUPON_POLICY,
   PARTNER_COMMISSION_ON_NET_COLLECTED,
   type PartnerProgramSettingsRow,
+  type ReferralDiscountStripeCouponRow,
   type ReferralDiscountWindow,
   type EffectiveReferralDiscount,
 };
@@ -37,17 +41,29 @@ const DEFAULT_PROGRAM: PartnerProgramSettingsRow = {
   referral_discount_annual_amount_cents: 1500,
 };
 
+const PROGRAM_SETTINGS_SELECT =
+  "referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months, referral_discount_annual_enabled, referral_discount_annual_amount_cents, stripe_coupon_sync_ok, stripe_coupon_sync_message, stripe_coupon_sync_at, stripe_coupon_sync_mode";
+
 export async function loadPartnerProgramSettings(): Promise<PartnerProgramSettingsRow> {
   const raw = await createServiceClient();
   const { data, error } = await raw
     .from("partner_program_settings")
-    .select(
-      "referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months, referral_discount_annual_enabled, referral_discount_annual_amount_cents"
-    )
+    .select(PROGRAM_SETTINGS_SELECT)
     .eq("id", 1)
     .maybeSingle();
   if (error) throw new Error(error.message);
   return (data as PartnerProgramSettingsRow | null) ?? DEFAULT_PROGRAM;
+}
+
+export async function loadReferralDiscountStripeCoupons(): Promise<ReferralDiscountStripeCouponRow[]> {
+  const raw = await createServiceClient();
+  const { data, error } = await raw
+    .from("partner_referral_discount_stripe_coupons")
+    .select("mode, billing_interval, stripe_coupon_id, amount_off_cents, duration_months, updated_at")
+    .order("mode")
+    .order("billing_interval");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ReferralDiscountStripeCouponRow[];
 }
 
 export async function updatePartnerProgramSettings(
@@ -61,12 +77,96 @@ export async function updatePartnerProgramSettings(
       updated_at: new Date().toISOString(),
     })
     .eq("id", 1)
-    .select(
-      "referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months, referral_discount_annual_enabled, referral_discount_annual_amount_cents"
-    )
+    .select(PROGRAM_SETTINGS_SELECT)
     .single();
   if (error) throw new Error(error.message);
   return data as PartnerProgramSettingsRow;
+}
+
+export type PartnerProgramSettingsUpdateResult = PartnerProgramSettingsRow & {
+  stripeCouponSyncMessage?: string | null;
+  stripeCouponSyncOk?: boolean | null;
+  stripeCouponSyncMonthlyCouponId?: string | null;
+  stripeCouponSyncAnnualCouponId?: string | null;
+  stripeCouponSyncMode?: string | null;
+};
+
+/** Save program settings; remap Stripe coupons when amount/duration change. */
+export async function updatePartnerProgramSettingsWithStripeSync(
+  patch: Partial<PartnerProgramSettingsRow>
+): Promise<PartnerProgramSettingsUpdateResult> {
+  const raw = await createServiceClient();
+  const { data: existing } = await raw
+    .from("partner_program_settings")
+    .select(PROGRAM_SETTINGS_SELECT)
+    .eq("id", 1)
+    .maybeSingle();
+  if (!existing) throw new Error("Partner program settings not found.");
+
+  const prior = existing as PartnerProgramSettingsRow;
+  const { referralDiscountCouponConfigChanged, syncReferralDiscountCouponsAfterSettingsChange } =
+    await import("@/lib/sync-referral-discount-stripe-coupons");
+
+  const couponConfigChanged = referralDiscountCouponConfigChanged(prior, patch);
+
+  const settings = await updatePartnerProgramSettings(patch);
+
+  let stripeCouponSyncMessage: string | null = null;
+  let stripeCouponSyncOk: boolean | null = null;
+  let stripeCouponSyncMonthlyCouponId: string | null = null;
+  let stripeCouponSyncAnnualCouponId: string | null = null;
+  let stripeCouponSyncMode: string | null = null;
+
+  if (couponConfigChanged) {
+    try {
+      const result = await syncReferralDiscountCouponsAfterSettingsChange(settings);
+      stripeCouponSyncMessage = result.message;
+      stripeCouponSyncOk = result.ok;
+      stripeCouponSyncMonthlyCouponId = result.monthlyCouponId;
+      stripeCouponSyncAnnualCouponId = result.annualCouponId;
+      stripeCouponSyncMode = result.mode;
+      await raw
+        .from("partner_program_settings")
+        .update({
+          stripe_coupon_sync_ok: result.ok,
+          stripe_coupon_sync_message: result.message,
+          stripe_coupon_sync_at: new Date().toISOString(),
+          stripe_coupon_sync_mode: result.mode,
+        })
+        .eq("id", 1);
+    } catch (err) {
+      console.error("[partner-referral-discount] Stripe coupon remap failed", err);
+      stripeCouponSyncOk = false;
+      stripeCouponSyncMessage =
+        err instanceof Error
+          ? `Settings saved, but Stripe Coupon remap failed: ${err.message}`
+          : "Settings saved, but Stripe Coupon remap failed — run npx tsx scripts/setup-stripe-partner-referral-discount.ts for the current mode.";
+      await raw
+        .from("partner_program_settings")
+        .update({
+          stripe_coupon_sync_ok: false,
+          stripe_coupon_sync_message: stripeCouponSyncMessage,
+          stripe_coupon_sync_at: new Date().toISOString(),
+          stripe_coupon_sync_mode: null,
+        })
+        .eq("id", 1);
+    }
+  }
+
+  const { data: refreshed } = await raw
+    .from("partner_program_settings")
+    .select(PROGRAM_SETTINGS_SELECT)
+    .eq("id", 1)
+    .maybeSingle();
+
+  return {
+    ...((refreshed ?? settings) as PartnerProgramSettingsRow),
+    stripeCouponSyncMessage,
+    stripeCouponSyncOk,
+    stripeCouponSyncMonthlyCouponId,
+    stripeCouponSyncAnnualCouponId,
+    stripeCouponSyncMode,
+  };
 }
 
 type PartnerDiscountOverride = {
@@ -158,7 +258,7 @@ export async function loadStripeCouponIdForReferralDiscount(args: {
     data.amount_off_cents !== args.amountOffCents ||
     data.duration_months !== args.durationMonths
   ) {
-    console.warn("[partner-referral-discount] stored coupon config mismatch — run setup script", {
+    console.warn("[partner-referral-discount] stored coupon config mismatch — sync coupons in platform settings", {
       mode,
       interval: args.interval,
       stored: data,
