@@ -49,6 +49,50 @@ Pilot, skewing platform metrics.
 
 ---
 
+## Partner Program — verify before any partner joins
+
+### The gap that matters
+
+Phases 3, 4, and 5 built the commission ledger, dashboards, and payouts. Every verification ran
+against synthetic data that the smoke tests then deleted — `verify-partner-commissions` has
+repeatedly reported **0 ledger rows**. The logic is proven; the wiring to real Stripe events is not.
+
+The least-proven code is the refund path. `charge.invoice` is often absent in the current Stripe
+API, so reversal uses a four-hop lookup through `stripe.invoicePayments.list()`. That can only be
+validated by an actual refund. If it silently fails, refunds never reverse and partners get
+overpaid.
+
+### The end-to-end test (Stripe TEST mode)
+
+- [ ] Add `charge.refunded` and `invoice.voided` to the billing webhook endpoint — **test and live**
+- [ ] Create a partner; use their real referral link to sign up a new business
+- [ ] Subscribe it — confirm one commission at the right rate with `payable_at` 30 days out
+- [ ] Replay `invoice.paid` from the Stripe dashboard — confirm **no** second commission
+- [ ] Issue a full refund — confirm a negative row appears (validates the four-hop lookup)
+- [ ] Issue a partial refund on a second payment — confirm proportional reversal
+- [ ] Compare the partner dashboard, `/platform/partners/[id]`, and `verify-partner-commissions` —
+      all three must agree exactly
+- [ ] Record a payout; confirm all three still agree
+- [ ] Re-run `verify-partner-commissions` with real rows and paste the output
+
+### Security checks not yet run
+
+- [ ] **Cross-partner IDOR** — as partner A, call `/api/partner/referrals` and
+      `/api/partner/commissions` with B's `partner_id` in the body and query string. Must be denied.
+- [ ] Confirm a partner cannot reach a referred business's clients, projects, media, or messages
+- [ ] Confirm a business admin and a client get 404 on `/partner` while authenticated
+
+### Phase 6 browser checks
+
+- [ ] Submit the application form on `/partners`; confirm it lands in `/platform/partners`
+- [ ] Confirm the form is rejected on a tenant host
+- [ ] Visit a partner landing slug on the apex, then on `test-pilot-drones.shootportal.app` and
+      `portal.swiftaerialmedia.com` — must only resolve on the apex
+- [ ] Deactivate a landing page; confirm 404 and no referral cookie
+- [ ] Lighthouse on `/partners` against a production build
+
+---
+
 ## Verification backlog
 
 Cursor could not run these — they need a browser, a real inbox, or live hosts.
