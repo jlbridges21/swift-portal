@@ -450,6 +450,19 @@ BEGIN
   END IF;
   PERFORM _tenant_test_bump();
 
+  -- v59: business admin cannot read partner attribution rows
+  SELECT count(*) INTO v_n FROM partner_referrals;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'READ LEAK: partner_referrals visible to Swift admin (% rows)', v_n;
+  END IF;
+  PERFORM _tenant_test_bump();
+
+  SELECT count(*) INTO v_n FROM partners;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'READ LEAK: partners visible to Swift admin (% rows)', v_n;
+  END IF;
+  PERFORM _tenant_test_bump();
+
   -- v36: Swift admin still sees own-business storage objects (legacy {project}/… must keep working)
   SELECT count(*) INTO v_n FROM storage.objects
     WHERE bucket_id IN ('project-media', 'project-documents');
@@ -680,6 +693,7 @@ BEGIN
   DELETE FROM properties WHERE business_id = v_teardown_business_id;
   DELETE FROM clients WHERE business_id = v_teardown_business_id;
   DELETE FROM business_settings WHERE business_id = v_teardown_business_id;
+  DELETE FROM partner_referrals WHERE business_id = v_teardown_business_id;
   -- profiles.business_id FK: clear Tenant B test profiles before deleting the business
   UPDATE profiles SET business_id = NULL, client_id = NULL
   WHERE id IN (v_tenant_b_admin_user_id, v_tenant_b_client_user_id);
@@ -722,6 +736,7 @@ BEGIN
   DELETE FROM properties WHERE business_id = v_pentest_business_id;
   DELETE FROM clients WHERE business_id = v_pentest_business_id;
   DELETE FROM business_settings WHERE business_id = v_pentest_business_id;
+  DELETE FROM partner_referrals WHERE business_id = v_pentest_business_id;
   UPDATE profiles SET business_id = NULL, client_id = NULL
   WHERE business_id = v_pentest_business_id;
   DELETE FROM businesses WHERE id = v_pentest_business_id;

@@ -16,7 +16,8 @@ export default async function PlatformPartnersPage() {
       <h1 className="mb-2 text-2xl font-bold text-heading">Partners</h1>
       <p className="mb-8 text-muted">
         Review partner applications, invite partners, and manage referral codes and commission
-        rates. Attribution and payouts come in later phases.
+        rates. Referral attribution is inspectable here and on each business; commissions and
+        partner dashboards come later.
       </p>
       <PartnersManager initialApplications={applications} initialPartners={partners} />
     </main>

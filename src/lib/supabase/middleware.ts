@@ -9,6 +9,11 @@ import {
 } from "@/lib/host-resolution";
 import { getLoginRedirectOrigin } from "@/lib/portal-url";
 import { verifyImpersonationCookie, SA_BUSINESS_CONTEXT_COOKIE } from "@/lib/platform-session";
+import {
+  buildPartnerRefCookieValue,
+  PARTNER_REF_COOKIE,
+  partnerRefCookieOptions,
+} from "@/lib/partner-referral";
 import { writePlatformAudit } from "@/lib/platform-audit";
 import {
   getSubscriptionState,
@@ -61,6 +66,26 @@ export async function updateSession(request: NextRequest) {
 
   const requestHeaders = new Headers(request.headers);
   applyHostHeaders(requestHeaders, resolution);
+
+  // Partner referral (?ref=) — platform apex only. Never on tenant / custom domain.
+  // Last-touch: a newer valid code replaces an older cookie. Strip ?ref from the URL.
+  if (resolution.kind === "platform" && request.nextUrl.searchParams.has("ref")) {
+    const rawRef = request.nextUrl.searchParams.get("ref") ?? "";
+    const url = request.nextUrl.clone();
+    url.searchParams.delete("ref");
+    const response = NextResponse.redirect(url);
+    try {
+      const signed = await buildPartnerRefCookieValue(rawRef);
+      if (signed) {
+        response.cookies.set(PARTNER_REF_COOKIE, signed, partnerRefCookieOptions());
+      }
+    } catch (err) {
+      console.error("[partner-ref] cookie set failed", {
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return applyPathCookie(response, resolution);
+  }
 
   let supabaseResponse = buildSessionResponse(request, requestHeaders, resolution);
 

@@ -28,6 +28,7 @@ export async function POST(request: Request) {
       plan?: string;
       adminEmail?: string;
       adminName?: string;
+      referredByPartnerId?: string | null;
     };
     const result = await createBusinessForPlatform(
       {
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
         plan: body.plan,
         adminEmail: body.adminEmail ?? "",
         adminName: body.adminName,
+        referredByPartnerId: body.referredByPartnerId || null,
       },
       { id: auth.profile.id, email: auth.profile.email }
     );

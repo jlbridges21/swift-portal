@@ -50,6 +50,8 @@ export type PartnerRow = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /** Phase 2: count of attributed businesses (read-only). */
+  referred_business_count?: number;
 };
 
 export type PartnerActor = { id: string; email: string | null };
@@ -96,7 +98,45 @@ export async function listPartners(status?: PartnerStatus | "all") {
   if (status && status !== "all") q = q.eq("status", status);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  return (data ?? []) as PartnerRow[];
+  const partners = (data ?? []) as PartnerRow[];
+  if (partners.length === 0) return partners;
+
+  const { data: refs, error: refErr } = await raw
+    .from("partner_referrals")
+    .select("partner_id")
+    .in(
+      "partner_id",
+      partners.map((p) => p.id)
+    );
+  if (refErr) throw new Error(refErr.message);
+
+  const counts = new Map<string, number>();
+  for (const row of refs ?? []) {
+    const id = (row as { partner_id: string }).partner_id;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return partners.map((p) => ({
+    ...p,
+    referred_business_count: counts.get(p.id) ?? 0,
+  }));
+}
+
+export async function listActivePartnersForSelect(): Promise<
+  Array<{ id: string; brand_name: string; referral_code: string; email: string }>
+> {
+  const raw = await createServiceClient();
+  const { data, error } = await raw
+    .from("partners")
+    .select("id, brand_name, referral_code, email")
+    .eq("status", "active")
+    .order("brand_name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Array<{
+    id: string;
+    brand_name: string;
+    referral_code: string;
+    email: string;
+  }>;
 }
 
 export async function getPartnerById(id: string): Promise<PartnerRow | null> {

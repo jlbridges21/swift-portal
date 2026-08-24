@@ -165,14 +165,14 @@ export async function loadBusinessDetail(id: string) {
   const { data: business, error } = await raw
     .from("businesses")
     .select(
-      "id, name, slug, custom_domain, custom_domain_status, custom_domain_vercel_verified, custom_domain_misconfigured, custom_domain_last_checked_at, custom_domain_error, custom_domain_verification, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end, created_via, created_at, deleted_at, updated_at, lifecycle_emails_suppressed, billing_email, is_protected"
+      "id, name, slug, custom_domain, custom_domain_status, custom_domain_vercel_verified, custom_domain_misconfigured, custom_domain_last_checked_at, custom_domain_error, custom_domain_verification, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end, created_via, created_at, deleted_at, updated_at, lifecycle_emails_suppressed, billing_email, is_protected, referred_by_partner_id"
     )
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!business) return null;
 
-  const [admins, settings, integ, listRow] = await Promise.all([
+  const [admins, settings, integ, listRow, referralRow, referredPartner] = await Promise.all([
     raw
       .from("profiles")
       .select("id, email, full_name, role, created_at")
@@ -182,6 +182,18 @@ export async function loadBusinessDetail(id: string) {
     getAppSettings(id),
     raw.from("business_integrations").select("*").eq("business_id", id).maybeSingle(),
     loadPlatformBusinesses().then((rows) => rows.find((r) => r.id === id) ?? null),
+    raw
+      .from("partner_referrals")
+      .select("id, partner_id, referral_code_used, source, attributed_at")
+      .eq("business_id", id)
+      .maybeSingle(),
+    business.referred_by_partner_id
+      ? raw
+          .from("partners")
+          .select("id, brand_name, name, email, referral_code, status")
+          .eq("id", business.referred_by_partner_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   const adminRows = admins.data ?? [];
@@ -241,5 +253,24 @@ export async function loadBusinessDetail(id: string) {
     }),
     domainState: toPublicDomainState(domainRow),
     fallbackSubdomain: `${business.slug}.${getPlatformRootDomain()}`,
+    referral: referralRow.data
+      ? {
+          id: referralRow.data.id as string,
+          partnerId: referralRow.data.partner_id as string,
+          referralCodeUsed: referralRow.data.referral_code_used as string,
+          source: referralRow.data.source as string,
+          attributedAt: referralRow.data.attributed_at as string,
+          partner: referredPartner.data
+            ? {
+                id: referredPartner.data.id as string,
+                brandName: referredPartner.data.brand_name as string,
+                name: referredPartner.data.name as string,
+                email: referredPartner.data.email as string,
+                referralCode: referredPartner.data.referral_code as string,
+                status: referredPartner.data.status as string,
+              }
+            : null,
+        }
+      : null,
   };
 }

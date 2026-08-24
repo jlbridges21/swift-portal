@@ -8,7 +8,20 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPlanPrice, type PlanRow } from "@/lib/plan-catalog";
 
-export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
+type PartnerOption = {
+  id: string;
+  brand_name: string;
+  referral_code: string;
+  email: string;
+};
+
+export function NewBusinessForm({
+  plans,
+  partners,
+}: {
+  plans: PlanRow[];
+  partners: PartnerOption[];
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +42,7 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
     setBusy(true);
     setError(null);
     const form = new FormData(event.currentTarget);
+    const referredByPartnerId = String(form.get("referredByPartnerId") || "").trim() || null;
     try {
       const res = await fetch("/api/platform/businesses", {
         method: "POST",
@@ -41,6 +55,7 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
           plan: form.get("plan") || defaultPlan,
           adminEmail: form.get("adminEmail"),
           adminName: form.get("adminName") || undefined,
+          referredByPartnerId,
         }),
       });
       const data = (await res.json()) as {
@@ -96,11 +111,14 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
               {result.inviteError ? ` (${result.inviteError})` : ""}
             </p>
           )}
-          {!result.attachedExisting && result.inviteError && result.inviteSent === false && result.inviteError.includes("already belongs") && (
-            <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-950">
-              {result.inviteError}
-            </p>
-          )}
+          {!result.attachedExisting &&
+            result.inviteError &&
+            result.inviteSent === false &&
+            result.inviteError.includes("already belongs") && (
+              <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-950">
+                {result.inviteError}
+              </p>
+            )}
           <p>
             Send this portal URL to the pilot:{" "}
             <a className="font-medium text-accent underline" href={result.portalUrl}>
@@ -111,7 +129,10 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
           <p className="text-muted">{result.stagesNote}</p>
           <div className="flex flex-wrap gap-2">
             {result.businessId && (
-              <Button type="button" onClick={() => router.push(`/platform/businesses/${result.businessId}`)}>
+              <Button
+                type="button"
+                onClick={() => router.push(`/platform/businesses/${result.businessId}`)}
+              >
                 Open business
               </Button>
             )}
@@ -139,12 +160,21 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
           <div>
             <Label htmlFor="slug">Slug</Label>
             <Input id="slug" name="slug" required placeholder="acme-media" className="mt-1" />
-            <p className="mt-1 text-xs text-muted">Becomes {`{slug}.shootportal.app`}. Reserved labels are rejected.</p>
+            <p className="mt-1 text-xs text-muted">
+              Becomes {`{slug}.shootportal.app`}. Reserved labels are rejected.
+            </p>
           </div>
           <div>
             <Label htmlFor="customDomain">Custom domain (optional)</Label>
-            <Input id="customDomain" name="customDomain" placeholder="portal.example.com" className="mt-1" />
-            <p className="mt-1 text-xs text-muted">Requires a plan that includes custom domain (Studio+).</p>
+            <Input
+              id="customDomain"
+              name="customDomain"
+              placeholder="portal.example.com"
+              className="mt-1"
+            />
+            <p className="mt-1 text-xs text-muted">
+              Requires a plan that includes custom domain (Studio+).
+            </p>
           </div>
           <div>
             <Label htmlFor="plan">Plan</Label>
@@ -170,6 +200,26 @@ export function NewBusinessForm({ plans }: { plans: PlanRow[] }) {
           <div>
             <Label htmlFor="adminName">Admin display name (optional)</Label>
             <Input id="adminName" name="adminName" className="mt-1" />
+          </div>
+          <div>
+            <Label htmlFor="referredByPartnerId">Partner attribution (optional)</Label>
+            <select
+              id="referredByPartnerId"
+              name="referredByPartnerId"
+              defaultValue=""
+              className="mt-1 flex h-11 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
+            >
+              <option value="">None</option>
+              {partners.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.brand_name} ({p.referral_code}) — {p.email}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted">
+              For off-platform referrals. Written once at create with source &quot;manual&quot;; cannot be
+              changed later.
+            </p>
           </div>
           <Button type="submit" disabled={busy || plans.length === 0}>
             {busy ? "Creating…" : "Create business"}

@@ -141,11 +141,49 @@ WHERE NOT EXISTS (
   WHERE table_schema = 'public' AND table_name = 'partner_applications'
 );
 
+-- partner_referrals MUST have business_id (attribution join — not a no-business_id platform catalog)
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
+  '2c_partner_referrals_missing_business_id',
+  'partner_referrals must have business_id NOT NULL (attribution join to businesses)'
+WHERE EXISTS (
+  SELECT 1 FROM information_schema.tables
+  WHERE table_schema = 'public' AND table_name = 'partner_referrals'
+)
+AND NOT EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'partner_referrals'
+    AND column_name = 'business_id'
+    AND is_nullable = 'NO'
+);
+
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
+  '2c_partner_referrals_missing',
+  'partner_referrals table is missing'
+WHERE NOT EXISTS (
+  SELECT 1 FROM information_schema.tables
+  WHERE table_schema = 'public' AND table_name = 'partner_referrals'
+);
+
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
+  '2c_businesses_missing_referred_by_partner_id',
+  'businesses.referred_by_partner_id column is missing'
+WHERE NOT EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'businesses'
+    AND column_name = 'referred_by_partner_id'
+);
+
 -- ---------------------------------------------------------------------------
 -- 3. RLS disabled on public base tables that hold business or identity data
 --     Platform tables without business_id (plans, platform_audit_log,
 --     processed_stripe_events, platform_email_templates, partners,
 --     partner_applications) are still required to have RLS enabled.
+--     partner_referrals HAS business_id and also requires RLS (super_admin only).
 -- ---------------------------------------------------------------------------
 INSERT INTO _tenant_sql_audit (check_name, detail)
 SELECT

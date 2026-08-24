@@ -50,6 +50,7 @@ BEGIN
   DELETE FROM clients WHERE business_id = v_teardown_business_id;
   DELETE FROM business_settings WHERE business_id = v_teardown_business_id;
   DELETE FROM platform_email_sends WHERE business_id = v_teardown_business_id;
+  DELETE FROM partner_referrals WHERE business_id = v_teardown_business_id;
   -- profiles.business_id FK: clear Tenant B test profiles before deleting the business
   UPDATE profiles SET business_id = NULL, client_id = NULL
   WHERE id IN (v_tenant_b_admin_user_id, v_tenant_b_client_user_id);
@@ -93,6 +94,7 @@ BEGIN
   DELETE FROM clients WHERE business_id = v_pentest_business_id;
   DELETE FROM business_settings WHERE business_id = v_pentest_business_id;
   DELETE FROM platform_email_sends WHERE business_id = v_pentest_business_id;
+  DELETE FROM partner_referrals WHERE business_id = v_pentest_business_id;
   UPDATE profiles SET business_id = NULL, client_id = NULL
   WHERE business_id = v_pentest_business_id;
   DELETE FROM businesses WHERE id = v_pentest_business_id;

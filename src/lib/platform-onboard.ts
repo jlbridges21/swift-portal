@@ -16,6 +16,18 @@ import {
   resolvePlanTrialDays,
 } from "@/lib/entitlements";
 import { isSubscriptionStatus } from "@/lib/subscription";
+import {
+  attributeBusinessToPartner,
+  isSelfReferral,
+  PARTNER_REF_COOKIE,
+  partnerRefCookieOptions,
+  resolveActivePartnerFromRefClaims,
+  verifyPartnerRefCookie,
+  type ActivePartnerRef,
+  type PartnerReferralSource,
+} from "@/lib/partner-referral";
+import { cookies } from "next/headers";
+import { getPartnerById } from "@/lib/partners";
 
 const STARTER_SLUGS = [
   "aerial_photography",
@@ -39,6 +51,11 @@ export type CreateBusinessInput = {
   password?: string;
   subscriptionStatus?: string;
   trialEndsAt?: string | null;
+  /**
+   * Platform console only: optional partner UUID for manual attribution
+   * (source `manual`). Ignored on signup — signup uses the signed ref cookie.
+   */
+  referredByPartnerId?: string | null;
 };
 
 export type CreateBusinessResult = {
@@ -60,6 +77,94 @@ export const SYSTEM_SIGNUP_ACTOR = {
   id: null as string | null,
   email: "system@signup.shootportal.app",
 };
+
+async function clearPartnerRefCookieBestEffort() {
+  try {
+    const jar = await cookies();
+    jar.set(PARTNER_REF_COOKIE, "", { ...partnerRefCookieOptions(0), maxAge: 0 });
+  } catch {
+    /* non-mutable cookie store */
+  }
+}
+
+/**
+ * Attribution must never block business creation. Failures are logged and ignored.
+ * Returns true only when partner_referrals + referred_by_partner_id were written.
+ */
+async function tryAttributeNewBusiness(args: {
+  businessId: string;
+  source: CreateBusinessSource;
+  adminEmail: string;
+  signupUserId?: string | null;
+  referredByPartnerId?: string | null;
+}): Promise<boolean> {
+  try {
+    let partner: ActivePartnerRef | null = null;
+    let referralCodeUsed = "";
+    let attrSource: PartnerReferralSource = "link";
+
+    if (args.source === "signup") {
+      let rawCookie: string | undefined;
+      try {
+        const jar = await cookies();
+        rawCookie = jar.get(PARTNER_REF_COOKIE)?.value;
+      } catch {
+        rawCookie = undefined;
+      }
+      const claims = verifyPartnerRefCookie(rawCookie);
+      partner = await resolveActivePartnerFromRefClaims(claims);
+      if (!partner || !claims) return false;
+      referralCodeUsed = claims.code;
+      attrSource = "link";
+    } else if (args.referredByPartnerId) {
+      const row = await getPartnerById(args.referredByPartnerId);
+      if (!row || row.status !== "active") return false;
+      partner = {
+        id: row.id,
+        email: row.email,
+        user_id: row.user_id,
+        referral_code: row.referral_code,
+        status: row.status,
+      };
+      referralCodeUsed = row.referral_code;
+      attrSource = "manual";
+    } else {
+      return false;
+    }
+
+    if (
+      isSelfReferral({
+        partner,
+        signupEmail: args.adminEmail,
+        signupUserId: args.signupUserId,
+      })
+    ) {
+      console.info("[partner-ref] self-referral skipped", {
+        businessId: args.businessId,
+        partnerId: partner.id,
+      });
+      return false;
+    }
+
+    const wrote = await attributeBusinessToPartner({
+      businessId: args.businessId,
+      partnerId: partner.id,
+      referralCodeUsed,
+      source: attrSource,
+    });
+
+    if (wrote && args.source === "signup") {
+      await clearPartnerRefCookieBestEffort();
+    }
+    return wrote;
+  } catch (err) {
+    console.error("[partner-ref] attribution failed (signup continues)", {
+      businessId: args.businessId,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+}
 
 function normalizeDomain(raw: string | null | undefined): string | null {
   const v = raw?.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "") ?? "";
@@ -192,6 +297,14 @@ export async function createBusinessForPlatform(
 
   const businessId = business.id as string;
   let createdUserId: string | null = null;
+
+  // Attribution is creation-only and must never block provisioning.
+  await tryAttributeNewBusiness({
+    businessId,
+    source,
+    adminEmail,
+    referredByPartnerId: source === "platform" ? input.referredByPartnerId : null,
+  });
 
   try {
     const settings = structuredClone(DEFAULT_APP_SETTINGS);
@@ -701,6 +814,7 @@ export async function hardDeleteBusiness(
 
   const tables = [
     "platform_email_sends",
+    "partner_referrals",
     "media_asset_events",
     "media_asset_tags",
     "media_downloads",

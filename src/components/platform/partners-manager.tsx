@@ -394,6 +394,9 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
                       <p className="mt-1 text-sm text-heading">
                         Code <span className="font-mono">{p.referral_code}</span> ·{" "}
                         {p.commission_rate_pct}% · {p.status}
+                        {" · "}
+                        {p.referred_business_count ?? 0} referred{" "}
+                        {(p.referred_business_count ?? 0) === 1 ? "business" : "businesses"}
                       </p>
                     </div>
                     <Button type="button" size="sm" variant="outline" onClick={() => startEdit(p)}>

@@ -91,6 +91,33 @@ export default async function PlatformBusinessDetailPage({
         {detail.business.is_protected ? " · protected (undeletable)" : ""}
       </p>
 
+      {detail.referral ? (
+        <p className="mb-6 text-sm text-muted">
+          Referred by{" "}
+          <span className="font-medium text-heading">
+            {detail.referral.partner?.brandName ?? "Unknown partner"}
+          </span>
+          {detail.referral.partner ? (
+            <>
+              {" "}
+              (
+              <a className="underline" href="/platform/partners">
+                {detail.referral.partner.referralCode}
+              </a>
+              )
+            </>
+          ) : null}
+          {" · "}
+          code used <span className="font-mono text-heading">{detail.referral.referralCodeUsed}</span>
+          {" · "}
+          source <span className="font-medium text-heading">{detail.referral.source}</span>
+          {" · "}
+          attributed {formatDate(detail.referral.attributedAt)}
+        </p>
+      ) : (
+        <p className="mb-6 text-sm text-muted">No partner attribution.</p>
+      )}
+
       {detail.inviteNeedsAttention && (
         <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           {detail.admins.length === 0

@@ -55,7 +55,7 @@ Isolation layers:
 2. **`createTenantServiceClient(businessId)`** — service role bypasses RLS; the wrapper re-applies `business_id` on `from()`. Use `.raw` only for `profiles`, `businesses`, `processed_stripe_events`, Auth, Storage, RPC.
 3. **`enforce_same_business` triggers** (v30 + v43 `projects.service_id`) — not bypassed by the service role. NULL parents are allowed where the schema allows them (`media_assets.project_id`, etc.).
 
-Platform tables without tenant rows: `processed_stripe_events`, `platform_audit_log` (v44, super_admin SELECT only), `plans` (v45 entitlement catalog; super_admin manage + authenticated read of active plans), `platform_email_templates` (v53 lifecycle copy/timing catalog; super_admin only — no `business_id` by design), leftover singletons `app_settings` and `google_calendar_connections` (RLS on, zero policies — fail closed). Live config is `business_settings` and `google_calendar_connections_v2`. `platform_email_sends` (v53) has `business_id` but is platform operational log (super_admin SELECT only).
+Platform tables without tenant rows: `processed_stripe_events`, `platform_audit_log` (v44, super_admin SELECT only), `plans` (v45 entitlement catalog; super_admin manage + authenticated read of active plans), `platform_email_templates` (v53 lifecycle copy/timing catalog; super_admin only — no `business_id` by design), leftover singletons `app_settings` and `google_calendar_connections` (RLS on, zero policies — fail closed). Live config is `business_settings` and `google_calendar_connections_v2`. `platform_email_sends` (v53) has `business_id` but is platform operational log (super_admin SELECT only). `partners` / `partner_applications` (v58) are platform-scoped with **no** `business_id`. `partner_referrals` (v59) **has** `business_id NOT NULL` (UNIQUE) — attribution join from partner → business, written once at create; RLS super_admin only (same family as `platform_email_sends`, not in BUSINESS_OWNED_TABLES).
 
 ## Standing rule for every new table
 
@@ -67,10 +67,15 @@ Platform tables without tenant rows: `processed_stripe_events`, `platform_audit_
 6. Extend `supabase/tests/tenant-isolation.sql` with a read + write assertion.
 
 **Intentional exceptions (no `business_id`):** platform-scoped tables that are not tenant data —
-`processed_stripe_events`, `platform_audit_log`, `plans` (v45 subscription catalog), and
-`platform_email_templates` (v53 ShootPortal→business lifecycle copy). Plans are
+`processed_stripe_events`, `platform_audit_log`, `plans` (v45 subscription catalog),
+`platform_email_templates` (v53 ShootPortal→business lifecycle copy), and
+`partners` / `partner_applications` (v58 Partner Program accounts). Plans are
 shared ShootPortal product definitions; every business points at `plans.key` via `businesses.plan`.
 Lifecycle templates are platform-scoped the same way — they have no `business_id`.
+
+**Attribution join (has `business_id`, not tenant CRM):** `partner_referrals` (v59) links a
+platform partner to exactly one business (`UNIQUE(business_id)`). Written once at business
+creation via `attribute_partner_referral()`. Not added to `BUSINESS_OWNED_TABLES`.
 
 ## Plans & entitlements (v45)
 
