@@ -36,6 +36,25 @@ export async function PATCH(request: Request, { params }: RouteParams) {
               : undefined,
         status: body.status,
         notes: body.notes,
+        referralDiscountEnabled:
+          body.referralDiscountEnabled !== undefined
+            ? body.referralDiscountEnabled
+            : body.referral_discount_enabled !== undefined
+              ? body.referral_discount_enabled
+              : undefined,
+        referralDiscountAmountCents:
+          body.referralDiscountAmountCents !== undefined
+            ? body.referralDiscountAmountCents
+            : body.referral_discount_amount_cents !== undefined
+              ? body.referral_discount_amount_cents
+              : undefined,
+        referralDiscountDurationMonths:
+          body.referralDiscountDurationMonths !== undefined
+            ? body.referralDiscountDurationMonths
+            : body.referral_discount_duration_months !== undefined
+              ? body.referral_discount_duration_months
+              : undefined,
+        clearReferralDiscountOverride: Boolean(body.clearReferralDiscountOverride),
       },
       { id: auth.profile.id, email: auth.profile.email }
     );

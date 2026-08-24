@@ -48,6 +48,9 @@ export type PartnerRow = {
   approved_by: string | null;
   approved_at: string | null;
   notes: string | null;
+  referral_discount_enabled?: boolean | null;
+  referral_discount_amount_cents?: number | null;
+  referral_discount_duration_months?: number | null;
   created_at: string;
   updated_at: string;
   /** Phase 2: count of attributed businesses (read-only). */
@@ -527,13 +530,23 @@ export type UpdatePartnerInput = {
   commissionRatePct?: number;
   status?: PartnerStatus;
   notes?: string | null;
+  referralDiscountEnabled?: boolean | null;
+  referralDiscountAmountCents?: number | null;
+  referralDiscountDurationMonths?: number | null;
+  /** When true, clear all referral discount override fields. */
+  clearReferralDiscountOverride?: boolean;
+};
+
+export type UpdatePartnerResult = PartnerRow & {
+  referralDiscountCouponSyncOk?: boolean | null;
+  referralDiscountCouponSyncMessage?: string | null;
 };
 
 export async function updatePartner(
   partnerId: string,
   input: UpdatePartnerInput,
   actor: PartnerActor
-): Promise<PartnerRow> {
+): Promise<UpdatePartnerResult> {
   const existing = await getPartnerById(partnerId);
   if (!existing) throw new Error("Partner not found.");
 
@@ -579,8 +592,39 @@ export async function updatePartner(
     }
     patch.status = input.status;
   }
+  if (input.clearReferralDiscountOverride) {
+    patch.referral_discount_enabled = null;
+    patch.referral_discount_amount_cents = null;
+    patch.referral_discount_duration_months = null;
+  } else {
+    if (input.referralDiscountEnabled !== undefined) {
+      patch.referral_discount_enabled = input.referralDiscountEnabled;
+    }
+    if (input.referralDiscountAmountCents !== undefined) {
+      const n = input.referralDiscountAmountCents;
+      if (n != null && (n < 0 || !Number.isFinite(n))) {
+        throw new Error("Referral discount amount must be a non-negative number.");
+      }
+      patch.referral_discount_amount_cents = n == null ? null : Math.round(n);
+    }
+    if (input.referralDiscountDurationMonths !== undefined) {
+      const n = input.referralDiscountDurationMonths;
+      if (n != null && (n < 0 || n > 36 || !Number.isFinite(n))) {
+        throw new Error("Referral discount duration must be between 0 and 36 months.");
+      }
+      patch.referral_discount_duration_months = n == null ? null : Math.round(n);
+    }
+  }
 
-  if (!Object.keys(patch).length) return existing;
+  const discountFieldsChanging =
+    input.clearReferralDiscountOverride ||
+    input.referralDiscountEnabled !== undefined ||
+    input.referralDiscountAmountCents !== undefined ||
+    input.referralDiscountDurationMonths !== undefined;
+
+  if (!Object.keys(patch).length) {
+    return { ...existing, referralDiscountCouponSyncOk: null, referralDiscountCouponSyncMessage: null };
+  }
 
   const raw = await createServiceClient();
   const { data, error } = await raw
@@ -600,5 +644,25 @@ export async function updatePartner(
     metadata: { patch },
   });
 
-  return data as PartnerRow;
+  let referralDiscountCouponSyncOk: boolean | null = null;
+  let referralDiscountCouponSyncMessage: string | null = null;
+
+  if (discountFieldsChanging) {
+    const { ensurePartnerReferralDiscountCoupon } = await import("@/lib/partner-referral-discount");
+    const sync = await ensurePartnerReferralDiscountCoupon(partnerId);
+    referralDiscountCouponSyncOk = sync.ok;
+    referralDiscountCouponSyncMessage = sync.message ?? null;
+    if (!sync.ok) {
+      console.error("[partners] partner referral discount coupon ensure FAILED", {
+        partnerId,
+        message: sync.message,
+      });
+    }
+  }
+
+  return {
+    ...(data as PartnerRow),
+    referralDiscountCouponSyncOk,
+    referralDiscountCouponSyncMessage,
+  };
 }

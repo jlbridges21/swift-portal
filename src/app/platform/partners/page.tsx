@@ -8,12 +8,14 @@ import {
 import {
   loadPartnerProgramSettings,
   loadReferralDiscountStripeCoupons,
+  listPartnerReferralDiscountWarnings,
 } from "@/lib/partner-referral-discount";
 import { getStripeMode } from "@/lib/stripe";
 import { PartnersManager } from "@/components/platform/partners-manager";
 import { PartnersPerformanceTable } from "@/components/platform/partners-performance-table";
 import { PartnerProgramCharts } from "@/components/platform/partner-program-charts";
 import { PartnerReferralDiscountSettings } from "@/components/platform/partner-referral-discount-settings";
+import { PartnerReferralDiscountOverrideWarnings } from "@/components/platform/partner-referral-discount-override-warnings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 
@@ -43,7 +45,7 @@ function Metric({
 
 export default async function PlatformPartnersPage() {
   await requireSuperAdminPage();
-  const [applications, partners, metrics, charts, tableRows, discountSettings, discountCoupons] =
+  const [applications, partners, metrics, charts, tableRows, discountSettings, discountCoupons, discountWarnings] =
     await Promise.all([
     listPartnerApplications("all"),
     listPartners("all"),
@@ -52,6 +54,7 @@ export default async function PlatformPartnersPage() {
     loadPartnerTableRows(),
     loadPartnerProgramSettings(),
     loadReferralDiscountStripeCoupons(),
+    listPartnerReferralDiscountWarnings(),
   ]);
   const deployMode = getStripeMode();
 
@@ -109,6 +112,7 @@ export default async function PlatformPartnersPage() {
 
       <section className="mt-8">
         <h2 className="mb-3 text-lg font-semibold text-heading">Referral signup discount</h2>
+        <PartnerReferralDiscountOverrideWarnings warnings={discountWarnings} />
         <Card>
           <CardContent className="pt-6">
             <PartnerReferralDiscountSettings

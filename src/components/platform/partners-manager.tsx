@@ -53,6 +53,10 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
     commissionRatePct: "30",
     status: "active",
     notes: "",
+    useProgramDiscount: true,
+    referralDiscountEnabled: true,
+    referralDiscountAmountDollars: "5",
+    referralDiscountDurationMonths: "3",
   });
 
   const filteredApps = useMemo(
@@ -183,6 +187,10 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
   }
 
   function startEdit(p: PartnerRow) {
+    const hasOverride =
+      p.referral_discount_enabled != null ||
+      p.referral_discount_amount_cents != null ||
+      p.referral_discount_duration_months != null;
     setEditId(p.id);
     setEditForm({
       name: p.name,
@@ -193,6 +201,12 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
       commissionRatePct: String(p.commission_rate_pct),
       status: p.status,
       notes: p.notes ?? "",
+      useProgramDiscount: !hasOverride,
+      referralDiscountEnabled: p.referral_discount_enabled ?? true,
+      referralDiscountAmountDollars: String(
+        (p.referral_discount_amount_cents ?? 500) / 100
+      ),
+      referralDiscountDurationMonths: String(p.referral_discount_duration_months ?? 3),
     });
   }
 
@@ -212,13 +226,32 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
           commissionRatePct: Number(editForm.commissionRatePct),
           status: editForm.status,
           notes: editForm.notes || null,
+          clearReferralDiscountOverride: editForm.useProgramDiscount,
+          ...(editForm.useProgramDiscount
+            ? {}
+            : {
+                referralDiscountEnabled: editForm.referralDiscountEnabled,
+                referralDiscountAmountCents: Math.round(
+                  Number(editForm.referralDiscountAmountDollars) * 100
+                ),
+                referralDiscountDurationMonths: Math.round(
+                  Number(editForm.referralDiscountDurationMonths)
+                ),
+              }),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Update failed");
       setPartners((prev) => prev.map((p) => (p.id === editId ? (data.partner as PartnerRow) : p)));
       setEditId(null);
-      toast.success("Partner updated");
+      if (data.partner?.referralDiscountCouponSyncOk === false) {
+        toast.error(
+          data.partner.referralDiscountCouponSyncMessage ??
+            "Partner saved but Stripe coupon sync failed — discount will not apply until fixed."
+        );
+      } else {
+        toast.success("Partner updated");
+      }
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Update failed");
@@ -498,6 +531,71 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
                           onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
                           rows={2}
                         />
+                      </div>
+                      <div className="space-y-3 rounded-md border border-border p-3">
+                        <p className="text-sm font-medium text-heading">Referral signup discount</p>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={editForm.useProgramDiscount}
+                            onChange={(e) =>
+                              setEditForm((f) => ({ ...f, useProgramDiscount: e.target.checked }))
+                            }
+                          />
+                          Use program default discount
+                        </label>
+                        {!editForm.useProgramDiscount ? (
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <label className="flex items-center gap-2 text-sm sm:col-span-3">
+                              <input
+                                type="checkbox"
+                                checked={editForm.referralDiscountEnabled}
+                                onChange={(e) =>
+                                  setEditForm((f) => ({
+                                    ...f,
+                                    referralDiscountEnabled: e.target.checked,
+                                  }))
+                                }
+                              />
+                              Discount enabled for this partner
+                            </label>
+                            <div className="space-y-1">
+                              <Label>Amount (USD/mo)</Label>
+                              <Input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                value={editForm.referralDiscountAmountDollars}
+                                onChange={(e) =>
+                                  setEditForm((f) => ({
+                                    ...f,
+                                    referralDiscountAmountDollars: e.target.value,
+                                  }))
+                                }
+                                className="min-h-11"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label>Duration (paid months)</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={36}
+                                value={editForm.referralDiscountDurationMonths}
+                                onChange={(e) =>
+                                  setEditForm((f) => ({
+                                    ...f,
+                                    referralDiscountDurationMonths: e.target.value,
+                                  }))
+                                }
+                                className="min-h-11"
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+                        <p className="text-xs text-muted">
+                          Saving creates or reuses a Stripe coupon for this exact configuration.
+                        </p>
                       </div>
                       <div className="flex gap-2">
                         <Button

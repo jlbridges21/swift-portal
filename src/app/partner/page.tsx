@@ -11,7 +11,7 @@ import {
   resolvePartnerAccess,
 } from "@/lib/partner-dashboard";
 import {
-  loadPartnerProgramSettings,
+  resolveReferralDiscountForPartner,
   PARTNER_COMMISSION_ON_NET_COLLECTED,
   PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY,
 } from "@/lib/partner-referral-discount";
@@ -112,14 +112,14 @@ export default async function PartnerHomePage({
   const pageSize = 10;
   const historyPageSize = 20;
 
-  const [summary, referrals, history, monthly, plans, payouts, discountProgram] = await Promise.all([
+  const [summary, referrals, history, monthly, plans, payouts, referralDiscount] = await Promise.all([
     loadPartnerDashboardSummary(access.partner),
     loadPartnerReferrals(access.partner.id, { sort, dir, page, pageSize }),
     loadPartnerCommissionHistory(access.partner.id, { page: cpage, pageSize: historyPageSize }),
     loadPartnerMonthlyEarnings(access.partner.id, 12),
     loadCalculatorPlans(),
     listPartnerPayouts(access.partner.id),
-    loadPartnerProgramSettings(),
+    resolveReferralDiscountForPartner(access.partner.id),
   ]);
 
   const empty = summary.totalReferredCustomers === 0;
@@ -290,17 +290,23 @@ export default async function PartnerHomePage({
                 <p className="text-sm text-muted">
                   Business names and subscription status only — no clients, projects, or contacts.
                 </p>
-                {discountProgram.referral_discount_enabled ? (
+                {referralDiscount.eligible && referralDiscount.config ? (
                   <div className="mt-3 space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
                     <p>
                       <strong>Referral signup offer:</strong> businesses that join through your link
                       get{" "}
-                      {formatCurrency(discountProgram.referral_discount_amount_cents)}/mo off for
-                      their first {discountProgram.referral_discount_duration_months} paid months
-                      (monthly billing).
+                      {formatCurrency(referralDiscount.config.amountOffCents)}/mo off for their first{" "}
+                      {referralDiscount.config.durationMonths} paid months (monthly billing).
                     </p>
                     <p>{PARTNER_COMMISSION_ON_NET_COLLECTED}</p>
                     <p className="text-xs text-amber-900">{PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY}</p>
+                  </div>
+                ) : referralDiscount.config?.enabled ? (
+                  <div className="mt-3 rounded-lg border border-border bg-subtle/40 px-3 py-2 text-sm text-muted">
+                    <p>
+                      <strong>Referral signup offer:</strong> temporarily unavailable — your discount
+                      could not be verified. Contact ShootPortal support if this persists.
+                    </p>
                   </div>
                 ) : null}
               </CardHeader>

@@ -1,9 +1,9 @@
 export const PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY =
   "Partner referral discounts apply to monthly subscriptions only. Annual billing is charged at the full plan price.";
 
-/** Per-partner amount/duration overrides require a matching Stripe coupon row (one per mode × interval). */
+/** Per-partner overrides get their own Stripe coupon row keyed by amount × duration. */
 export const PARTNER_REFERRAL_OVERRIDE_COUPON_POLICY =
-  "Per-partner discount overrides only apply at checkout when their amount and duration match the program coupon stored in Stripe. Otherwise no discount is applied (fail-safe — never the wrong coupon).";
+  "Per-partner discount overrides create or reuse a Stripe coupon for that exact amount and duration. If coupon setup fails, no discount is advertised or applied (fail-safe — never the wrong amount).";
 
 export const PARTNER_COMMISSION_ON_NET_COLLECTED =
   "Partner commissions are calculated on subscription revenue actually collected each period. During a referred customer's discount window, their payments are lower — so your commission is lower too (same rate, smaller base).";
@@ -45,4 +45,22 @@ export type EffectiveReferralDiscount = {
   annualEnabled: boolean;
   annualAmountOffCents: number;
   source: "program" | "partner_override";
+};
+
+/** What checkout and landing both use — includes coupon verification. */
+export type AppliedReferralDiscount = {
+  eligible: boolean;
+  reason?: string;
+  couponId?: string;
+  config?: EffectiveReferralDiscount;
+  /** Monthly-billing offer copy; null when not eligible or disabled. */
+  offerText?: string | null;
+};
+
+export type PartnerReferralDiscountWarning = {
+  partnerId: string;
+  brandName: string;
+  amountOffCents: number;
+  durationMonths: number;
+  reason: string;
 };

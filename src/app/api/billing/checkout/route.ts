@@ -142,8 +142,21 @@ export async function POST(request: Request) {
             businessId: business.id,
             interval,
             mode,
+            couponId: discount.couponId,
+            amountOffCents: discount.config?.amountOffCents,
+            durationMonths: discount.config?.durationMonths,
           });
         }
+      } else if (discount.config?.enabled) {
+        console.error("[billing/checkout] referral discount NOT applied — proceeding at FULL PRICE", {
+          businessId: business.id,
+          interval,
+          mode,
+          reason: discount.reason ?? "unknown",
+          amountOffCents: discount.config.amountOffCents,
+          durationMonths: discount.config.durationMonths,
+          source: discount.config.source,
+        });
       }
     } catch (err) {
       console.error("[billing/checkout] referral discount resolution FAILED (checkout continues)", {

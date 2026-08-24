@@ -1,7 +1,7 @@
 /**
- * When referral discount amounts/duration change in partner_program_settings,
- * Stripe Coupons are immutable — create replacements and remap
- * partner_referral_discount_stripe_coupons for the current Stripe mode.
+ * Stripe Coupons for partner referral discounts — keyed by configuration
+ * (mode × interval × amount × duration). Created on demand and reused when the
+ * same configuration appears again (program default or partner override).
  */
 
 import type Stripe from "stripe";
@@ -12,6 +12,20 @@ import type { PartnerProgramSettingsRow } from "@/lib/partner-referral-discount.
 type StripeMode = "test" | "live";
 type BillingInterval = "monthly" | "annual";
 
+export type ReferralDiscountCouponConfig = {
+  mode?: StripeMode;
+  interval: BillingInterval;
+  amountOffCents: number;
+  durationMonths: number;
+};
+
+export type ReferralDiscountCouponEnsureResult = {
+  ok: boolean;
+  couponId: string | null;
+  mode: StripeMode;
+  message?: string;
+};
+
 export type ReferralDiscountCouponSyncResult = {
   remapped: boolean;
   ok: boolean;
@@ -21,22 +35,28 @@ export type ReferralDiscountCouponSyncResult = {
   annualCouponId: string | null;
 };
 
+const CONFIG_CONFLICT_KEY = "mode,billing_interval,amount_off_cents,duration_months";
+
 function detectMode(): StripeMode {
   const key = process.env.STRIPE_SECRET_KEY ?? "";
   if (key.startsWith("sk_live_")) return "live";
   return "test";
 }
 
-async function loadStoredCoupon(
+async function loadStoredCouponByConfig(
   raw: Awaited<ReturnType<typeof createServiceClient>>,
   mode: StripeMode,
-  interval: BillingInterval
+  interval: BillingInterval,
+  amountOffCents: number,
+  durationMonths: number
 ) {
   const { data, error } = await raw
     .from("partner_referral_discount_stripe_coupons")
     .select("stripe_coupon_id, amount_off_cents, duration_months")
     .eq("mode", mode)
     .eq("billing_interval", interval)
+    .eq("amount_off_cents", amountOffCents)
+    .eq("duration_months", durationMonths)
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data;
@@ -58,7 +78,7 @@ async function upsertStoredCoupon(
       amount_off_cents: amountOffCents,
       duration_months: durationMonths,
     },
-    { onConflict: "mode,billing_interval" }
+    { onConflict: CONFIG_CONFLICT_KEY }
   );
   if (error) throw new Error(error.message);
 }
@@ -132,13 +152,56 @@ async function ensureCoupon(
 }
 
 /**
+ * Ensure a Stripe coupon row exists for an exact discount configuration.
+ * Reuses existing coupons when config matches; creates in Stripe only when needed.
+ */
+export async function ensureReferralDiscountStripeCoupon(
+  config: ReferralDiscountCouponConfig
+): Promise<ReferralDiscountCouponEnsureResult> {
+  const mode = config.mode ?? detectMode();
+  const { interval, amountOffCents, durationMonths } = config;
+
+  if (amountOffCents <= 0 || durationMonths <= 0) {
+    return {
+      ok: false,
+      couponId: null,
+      mode,
+      message: "Invalid discount configuration (amount and duration must be positive).",
+    };
+  }
+
+  const raw = await createServiceClient();
+  const stored = await loadStoredCouponByConfig(
+    raw,
+    mode,
+    interval,
+    amountOffCents,
+    durationMonths
+  );
+
+  if (stored?.stripe_coupon_id) {
+    return { ok: true, couponId: stored.stripe_coupon_id as string, mode };
+  }
+
+  const { stripe } = getStripe();
+  const couponId = await ensureCoupon(
+    stripe,
+    interval,
+    amountOffCents,
+    durationMonths,
+    stored?.stripe_coupon_id ?? null
+  );
+  await upsertStoredCoupon(raw, mode, interval, couponId, amountOffCents, durationMonths);
+  return { ok: true, couponId, mode };
+}
+
+/**
  * Remap Stripe Coupons for the current mode after program discount settings change.
  */
 export async function syncReferralDiscountCouponsAfterSettingsChange(
   program: PartnerProgramSettingsRow
 ): Promise<ReferralDiscountCouponSyncResult> {
   const mode = detectMode();
-  const raw = await createServiceClient();
 
   if (!program.referral_discount_enabled) {
     return {
@@ -151,7 +214,6 @@ export async function syncReferralDiscountCouponsAfterSettingsChange(
     };
   }
 
-  const { stripe } = getStripe();
   const notes: string[] = [];
   let monthlyCouponId: string | null = null;
   let annualCouponId: string | null = null;
@@ -160,35 +222,44 @@ export async function syncReferralDiscountCouponsAfterSettingsChange(
     program.referral_discount_amount_cents > 0 &&
     program.referral_discount_duration_months > 0
   ) {
-    const stored = await loadStoredCoupon(raw, mode, "monthly");
-    monthlyCouponId = await ensureCoupon(
-      stripe,
-      "monthly",
-      program.referral_discount_amount_cents,
-      program.referral_discount_duration_months,
-      stored?.stripe_coupon_id ?? null
-    );
-    await upsertStoredCoupon(
-      raw,
+    const result = await ensureReferralDiscountStripeCoupon({
       mode,
-      "monthly",
-      monthlyCouponId,
-      program.referral_discount_amount_cents,
-      program.referral_discount_duration_months
-    );
+      interval: "monthly",
+      amountOffCents: program.referral_discount_amount_cents,
+      durationMonths: program.referral_discount_duration_months,
+    });
+    if (!result.ok || !result.couponId) {
+      return {
+        remapped: false,
+        ok: false,
+        mode,
+        message: result.message ?? "Failed to ensure monthly referral discount coupon.",
+        monthlyCouponId: null,
+        annualCouponId: null,
+      };
+    }
+    monthlyCouponId = result.couponId;
     notes.push(`monthly→${monthlyCouponId}`);
   }
 
   if (program.referral_discount_annual_enabled && program.referral_discount_annual_amount_cents > 0) {
-    const stored = await loadStoredCoupon(raw, mode, "annual");
-    annualCouponId = await ensureCoupon(
-      stripe,
-      "annual",
-      program.referral_discount_annual_amount_cents,
-      1,
-      stored?.stripe_coupon_id ?? null
-    );
-    await upsertStoredCoupon(raw, mode, "annual", annualCouponId, program.referral_discount_annual_amount_cents, 1);
+    const result = await ensureReferralDiscountStripeCoupon({
+      mode,
+      interval: "annual",
+      amountOffCents: program.referral_discount_annual_amount_cents,
+      durationMonths: 1,
+    });
+    if (!result.ok || !result.couponId) {
+      return {
+        remapped: notes.length > 0,
+        ok: false,
+        mode,
+        message: result.message ?? "Failed to ensure annual referral discount coupon.",
+        monthlyCouponId,
+        annualCouponId: null,
+      };
+    }
+    annualCouponId = result.couponId;
     notes.push(`annual→${annualCouponId}`);
   }
 
@@ -227,4 +298,20 @@ export function referralDiscountCouponConfigChanged(
     (patch.referral_discount_annual_enabled !== undefined &&
       patch.referral_discount_annual_enabled !== existing.referral_discount_annual_enabled)
   );
+}
+
+/** Look up a stored coupon id for an exact configuration (no Stripe API call). */
+export async function loadStoredReferralDiscountCouponId(
+  config: ReferralDiscountCouponConfig
+): Promise<string | null> {
+  const mode = config.mode ?? detectMode();
+  const raw = await createServiceClient();
+  const stored = await loadStoredCouponByConfig(
+    raw,
+    mode,
+    config.interval,
+    config.amountOffCents,
+    config.durationMonths
+  );
+  return stored?.stripe_coupon_id ?? null;
 }

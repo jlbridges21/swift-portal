@@ -25,10 +25,7 @@ import {
   defaultPartnerLandingHeadline,
   type PartnerLandingDefaults,
 } from "@/lib/partner-landing.constants";
-import {
-  formatPartnerReferralLandingOffer,
-  resolveReferralDiscountForPartner,
-} from "@/lib/partner-referral-discount";
+import { resolveReferralDiscountForPartner } from "@/lib/partner-referral-discount";
 
 export type PartnerLandingPageRow = {
   id: string;
@@ -217,7 +214,7 @@ export async function buildPartnerLandingDefaultsWithOffer(
   const discount = await resolveReferralDiscountForPartner(partnerId);
   return {
     ...base,
-    offerText: formatPartnerReferralLandingOffer(discount),
+    offerText: discount.eligible ? discount.offerText ?? null : null,
   };
 }
 
@@ -252,7 +249,7 @@ export async function resolvePartnerLandingContent(
   );
 
   const discount = await resolveReferralDiscountForPartner(landing.partner.id);
-  const generatedOffer = formatPartnerReferralLandingOffer(discount);
+  const generatedOffer = discount.eligible ? discount.offerText ?? null : null;
   const showOffer = landing.show_offer && Boolean(generatedOffer);
   const offerText = showOffer ? generatedOffer : null;
 

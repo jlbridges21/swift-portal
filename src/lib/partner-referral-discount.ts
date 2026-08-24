@@ -21,6 +21,8 @@ import {
   type ReferralDiscountStripeCouponRow,
   type ReferralDiscountWindow,
   type EffectiveReferralDiscount,
+  type AppliedReferralDiscount,
+  type PartnerReferralDiscountWarning,
 } from "@/lib/partner-referral-discount.constants";
 
 export {
@@ -31,6 +33,8 @@ export {
   type ReferralDiscountStripeCouponRow,
   type ReferralDiscountWindow,
   type EffectiveReferralDiscount,
+  type AppliedReferralDiscount,
+  type PartnerReferralDiscountWarning,
 };
 
 const DEFAULT_PROGRAM: PartnerProgramSettingsRow = {
@@ -61,7 +65,9 @@ export async function loadReferralDiscountStripeCoupons(): Promise<ReferralDisco
     .from("partner_referral_discount_stripe_coupons")
     .select("mode, billing_interval, stripe_coupon_id, amount_off_cents, duration_months, updated_at")
     .order("mode")
-    .order("billing_interval");
+    .order("billing_interval")
+    .order("amount_off_cents")
+    .order("duration_months");
   if (error) throw new Error(error.message);
   return (data ?? []) as ReferralDiscountStripeCouponRow[];
 }
@@ -210,24 +216,6 @@ export function resolveEffectiveReferralDiscount(
   };
 }
 
-/** Same resolver checkout uses — for partner landing offer copy (monthly billing). */
-export async function resolveReferralDiscountForPartner(
-  partnerId: string
-): Promise<EffectiveReferralDiscount> {
-  const raw = await createServiceClient();
-  const [program, { data: partner }] = await Promise.all([
-    loadPartnerProgramSettings(),
-    raw
-      .from("partners")
-      .select(
-        "referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months"
-      )
-      .eq("id", partnerId)
-      .maybeSingle(),
-  ]);
-  return resolveEffectiveReferralDiscount(program, partner);
-}
-
 /** Offer copy for co-branded landing pages — null when discount is off or invalid. */
 export function formatPartnerReferralLandingOffer(config: EffectiveReferralDiscount): string | null {
   if (!config.enabled || config.amountOffCents <= 0 || config.durationMonths <= 0) {
@@ -238,51 +226,175 @@ export function formatPartnerReferralLandingOffer(config: EffectiveReferralDisco
   return `Get ${amt}/month off your first ${months} paid month${months === 1 ? "" : "s"} when you subscribe through this page (monthly billing).`;
 }
 
+/**
+ * Single resolver for "what discount will actually be applied" — used by checkout,
+ * landing pages, partner dashboard, and platform warnings. Includes Stripe coupon lookup.
+ */
+export async function resolveAppliedReferralDiscount(args: {
+  program: PartnerProgramSettingsRow;
+  partner?: PartnerDiscountOverride | null;
+  partnerStatus?: "active" | "suspended" | null;
+  interval: BillingInterval;
+  mode?: StripeMode;
+  /** When true, create the Stripe coupon row if missing (override/program save paths). */
+  ensureCoupon?: boolean;
+}): Promise<AppliedReferralDiscount> {
+  if (process.env.PARTNER_REFERRAL_DISCOUNT_FORCE_FAIL === "1") {
+    return { eligible: false, reason: "forced_fail" };
+  }
+
+  if (args.partnerStatus != null && args.partnerStatus !== "active") {
+    return { eligible: false, reason: "partner_inactive" };
+  }
+
+  const config = resolveEffectiveReferralDiscount(args.program, args.partner);
+  if (!config.enabled || config.durationMonths <= 0 || config.amountOffCents <= 0) {
+    return { eligible: false, reason: "discount_disabled", config };
+  }
+
+  const mode = args.mode ?? getStripeMode();
+  const { ensureReferralDiscountStripeCoupon, loadStoredReferralDiscountCouponId } =
+    await import("@/lib/sync-referral-discount-stripe-coupons");
+
+  if (args.interval === "annual") {
+    if (!config.annualEnabled) {
+      return { eligible: false, reason: "annual_not_eligible", config };
+    }
+    const amountOffCents = config.annualAmountOffCents;
+    const durationMonths = 1;
+    let couponId: string | null = null;
+
+    if (args.ensureCoupon) {
+      const ensured = await ensureReferralDiscountStripeCoupon({
+        mode,
+        interval: "annual",
+        amountOffCents,
+        durationMonths,
+      });
+      couponId = ensured.couponId;
+      if (!ensured.ok || !couponId) {
+        console.error("[partner-referral-discount] FAILED to ensure annual coupon", {
+          mode,
+          amountOffCents,
+          durationMonths,
+          message: ensured.message,
+        });
+        return { eligible: false, reason: "no_annual_coupon", config };
+      }
+    } else {
+      couponId = await loadStoredReferralDiscountCouponId({
+        mode,
+        interval: "annual",
+        amountOffCents,
+        durationMonths,
+      });
+      if (!couponId) {
+        console.warn("[partner-referral-discount] no Stripe coupon for annual config — checkout at full price", {
+          mode,
+          amountOffCents,
+          durationMonths,
+          source: config.source,
+        });
+        return { eligible: false, reason: "no_annual_coupon", config };
+      }
+    }
+
+    return { eligible: true, couponId, config };
+  }
+
+  const amountOffCents = config.amountOffCents;
+  const durationMonths = config.durationMonths;
+  let couponId: string | null = null;
+
+  if (args.ensureCoupon) {
+    const ensured = await ensureReferralDiscountStripeCoupon({
+      mode,
+      interval: "monthly",
+      amountOffCents,
+      durationMonths,
+    });
+    couponId = ensured.couponId;
+    if (!ensured.ok || !couponId) {
+      console.error("[partner-referral-discount] FAILED to ensure monthly coupon", {
+        mode,
+        amountOffCents,
+        durationMonths,
+        source: config.source,
+        message: ensured.message,
+      });
+      return { eligible: false, reason: "no_monthly_coupon", config };
+    }
+  } else {
+    couponId = await loadStoredReferralDiscountCouponId({
+      mode,
+      interval: "monthly",
+      amountOffCents,
+      durationMonths,
+    });
+    if (!couponId) {
+      console.warn("[partner-referral-discount] no Stripe coupon for monthly config — checkout at full price", {
+        mode,
+        amountOffCents,
+        durationMonths,
+        source: config.source,
+      });
+      return { eligible: false, reason: "no_monthly_coupon", config };
+    }
+  }
+
+  const offerText = formatPartnerReferralLandingOffer(config);
+  return { eligible: true, couponId, config, offerText };
+}
+
+/** Landing, partner dashboard, platform preview — monthly billing, coupon required. */
+export async function resolveReferralDiscountForPartner(
+  partnerId: string
+): Promise<AppliedReferralDiscount> {
+  const raw = await createServiceClient();
+  const [program, { data: partner }] = await Promise.all([
+    loadPartnerProgramSettings(),
+    raw
+      .from("partners")
+      .select(
+        "status, referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months"
+      )
+      .eq("id", partnerId)
+      .maybeSingle(),
+  ]);
+
+  if (!partner) {
+    return { eligible: false, reason: "partner_inactive" };
+  }
+
+  return resolveAppliedReferralDiscount({
+    program,
+    partner,
+    partnerStatus: partner.status as "active" | "suspended",
+    interval: "monthly",
+  });
+}
+
 export async function loadStripeCouponIdForReferralDiscount(args: {
   mode?: StripeMode;
   interval: BillingInterval;
   amountOffCents: number;
   durationMonths: number;
 }): Promise<string | null> {
-  const mode = args.mode ?? getStripeMode();
-  const raw = await createServiceClient();
-  const { data, error } = await raw
-    .from("partner_referral_discount_stripe_coupons")
-    .select("stripe_coupon_id, amount_off_cents, duration_months")
-    .eq("mode", mode)
-    .eq("billing_interval", args.interval)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data?.stripe_coupon_id) return null;
-  if (
-    data.amount_off_cents !== args.amountOffCents ||
-    data.duration_months !== args.durationMonths
-  ) {
-    console.warn("[partner-referral-discount] stored coupon config mismatch — sync coupons in platform settings", {
-      mode,
-      interval: args.interval,
-      stored: data,
-      expected: { amountOffCents: args.amountOffCents, durationMonths: args.durationMonths },
-    });
-    return null;
-  }
-  return data.stripe_coupon_id as string;
+  const { loadStoredReferralDiscountCouponId } = await import(
+    "@/lib/sync-referral-discount-stripe-coupons"
+  );
+  return loadStoredReferralDiscountCouponId({
+    mode: args.mode,
+    interval: args.interval,
+    amountOffCents: args.amountOffCents,
+    durationMonths: args.durationMonths,
+  });
 }
 
 export async function resolveReferralDiscountForBusiness(args: {
   businessId: string;
   interval: BillingInterval;
-}): Promise<{
-  eligible: boolean;
-  reason?: string;
-  couponId?: string;
-  config?: EffectiveReferralDiscount;
-  deferUntilTrialEnds?: boolean;
-}> {
-  if (process.env.PARTNER_REFERRAL_DISCOUNT_FORCE_FAIL === "1") {
-    return { eligible: false, reason: "forced_fail" };
-  }
-
+}): Promise<AppliedReferralDiscount> {
   const raw = await createServiceClient();
   const { data: referral } = await raw
     .from("partner_referrals")
@@ -308,31 +420,96 @@ export async function resolveReferralDiscountForBusiness(args: {
     return { eligible: false, reason: "partner_inactive" };
   }
 
-  const config = resolveEffectiveReferralDiscount(program, partner);
-  if (!config.enabled || config.durationMonths <= 0 || config.amountOffCents <= 0) {
-    return { eligible: false, reason: "discount_disabled" };
-  }
-
-  if (args.interval === "annual") {
-    if (!config.annualEnabled) {
-      return { eligible: false, reason: "annual_not_eligible" };
-    }
-    const couponId = await loadStripeCouponIdForReferralDiscount({
-      interval: "annual",
-      amountOffCents: config.annualAmountOffCents,
-      durationMonths: 1,
-    });
-    if (!couponId) return { eligible: false, reason: "no_annual_coupon" };
-    return { eligible: true, couponId, config };
-  }
-
-  const couponId = await loadStripeCouponIdForReferralDiscount({
-    interval: "monthly",
-    amountOffCents: config.amountOffCents,
-    durationMonths: config.durationMonths,
+  return resolveAppliedReferralDiscount({
+    program,
+    partner,
+    partnerStatus: partner.status as "active" | "suspended",
+    interval: args.interval,
   });
-  if (!couponId) return { eligible: false, reason: "no_monthly_coupon" };
-  return { eligible: true, couponId, config };
+}
+
+/** After saving a partner override, ensure Stripe coupon exists for that configuration. */
+export async function ensurePartnerReferralDiscountCoupon(partnerId: string): Promise<{
+  ok: boolean;
+  couponId: string | null;
+  message?: string;
+}> {
+  const raw = await createServiceClient();
+  const [{ data: partner }, program] = await Promise.all([
+    raw
+      .from("partners")
+      .select(
+        "status, referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months"
+      )
+      .eq("id", partnerId)
+      .maybeSingle(),
+    loadPartnerProgramSettings(),
+  ]);
+
+  if (!partner || partner.status !== "active") {
+    return { ok: true, couponId: null, message: "Partner inactive — no coupon needed." };
+  }
+
+  const resolved = await resolveAppliedReferralDiscount({
+    program,
+    partner,
+    partnerStatus: "active",
+    interval: "monthly",
+    ensureCoupon: true,
+  });
+
+  if (!resolved.config?.enabled) {
+    return { ok: true, couponId: null, message: "Discount disabled for partner." };
+  }
+
+  if (!resolved.eligible || !resolved.couponId) {
+    return {
+      ok: false,
+      couponId: null,
+      message: `Could not create Stripe coupon for $${(resolved.config.amountOffCents / 100).toFixed(2)}/mo × ${resolved.config.durationMonths} months.`,
+    };
+  }
+
+  return { ok: true, couponId: resolved.couponId };
+}
+
+/** Partners whose effective discount has no mapped Stripe coupon (platform console warnings). */
+export async function listPartnerReferralDiscountWarnings(): Promise<PartnerReferralDiscountWarning[]> {
+  const raw = await createServiceClient();
+  const [program, { data: partners }] = await Promise.all([
+    loadPartnerProgramSettings(),
+    raw
+      .from("partners")
+      .select(
+        "id, brand_name, status, referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months"
+      )
+      .eq("status", "active"),
+  ]);
+
+  const warnings: PartnerReferralDiscountWarning[] = [];
+  for (const partner of partners ?? []) {
+    const resolved = await resolveAppliedReferralDiscount({
+      program,
+      partner,
+      partnerStatus: "active",
+      interval: "monthly",
+    });
+
+    const config = resolved.config;
+    if (!config?.enabled) continue;
+
+    if (!resolved.eligible) {
+      warnings.push({
+        partnerId: partner.id as string,
+        brandName: (partner.brand_name as string) || "Unknown",
+        amountOffCents: config.amountOffCents,
+        durationMonths: config.durationMonths,
+        reason: resolved.reason ?? "no_monthly_coupon",
+      });
+    }
+  }
+
+  return warnings;
 }
 
 /**

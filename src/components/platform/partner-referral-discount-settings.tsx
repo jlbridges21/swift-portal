@@ -64,6 +64,23 @@ export function PartnerReferralDiscountSettings({ initial, initialCoupons, deplo
   const [error, setError] = useState<string | null>(null);
   const [configChangeAck, setConfigChangeAck] = useState(false);
 
+  const sortedCoupons = useMemo(
+    () =>
+      [...coupons].sort((a, b) =>
+        `${a.mode}${a.billing_interval}${a.amount_off_cents}`.localeCompare(
+          `${b.mode}${b.billing_interval}${b.amount_off_cents}`
+        )
+      ),
+    [coupons]
+  );
+
+  const programMonthlyMapped = sortedCoupons.some(
+    (c) =>
+      c.mode === deployMode &&
+      c.billing_interval === "monthly" &&
+      couponMatchesSettings(c, settings)
+  );
+
   const draftConfigChanged = useMemo(() => {
     const amountCents = Math.round(Number(amountDollars) * 100);
     const duration = Math.round(Number(durationMonths));
@@ -145,9 +162,6 @@ export function PartnerReferralDiscountSettings({ initial, initialCoupons, deplo
       setSaving(false);
     }
   }
-
-  const modes: Array<"test" | "live"> = ["test", "live"];
-  const intervals: Array<"monthly" | "annual"> = ["monthly", "annual"];
 
   return (
     <div className="space-y-4">
@@ -269,10 +283,16 @@ export function PartnerReferralDiscountSettings({ initial, initialCoupons, deplo
       <section className="space-y-2">
         <h3 className="text-sm font-semibold text-heading">Stripe coupon mapping</h3>
         <p className="text-xs text-muted">
-          Saving with changed amounts syncs coupons for the <strong>{deployMode}</strong> mode this
-          deployment uses. The other mode stays unchanged until you save from that environment or run{" "}
-          <code className="rounded bg-subtle px-1">npx tsx scripts/setup-stripe-partner-referral-discount.ts</code>.
+          Coupons are keyed by configuration (amount × duration). Partner overrides reuse rows when
+          the config matches. Saving with changed amounts syncs coupons for the{" "}
+          <strong>{deployMode}</strong> mode this deployment uses.
         </p>
+        {!programMonthlyMapped && settings.referral_discount_enabled ? (
+          <p className="text-xs font-medium text-amber-800">
+            Program default monthly coupon not mapped in {deployMode} — re-save settings or run the
+            setup script.
+          </p>
+        ) : null}
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="min-w-full text-left text-xs">
             <thead className="bg-subtle/60 text-muted">
@@ -280,45 +300,26 @@ export function PartnerReferralDiscountSettings({ initial, initialCoupons, deplo
                 <th className="px-3 py-2 font-medium">Mode</th>
                 <th className="px-3 py-2 font-medium">Interval</th>
                 <th className="px-3 py-2 font-medium">Coupon ID</th>
-                <th className="px-3 py-2 font-medium">Mapped amount</th>
+                <th className="px-3 py-2 font-medium">Configuration</th>
                 <th className="px-3 py-2 font-medium">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {modes.flatMap((mode) =>
-                intervals.map((interval) => {
-                  if (interval === "annual" && !settings.referral_discount_annual_enabled) {
-                    return (
-                      <tr key={`${mode}-${interval}`}>
-                        <td className="px-3 py-2 font-mono uppercase">{mode}</td>
-                        <td className="px-3 py-2 capitalize">{interval}</td>
-                        <td className="px-3 py-2 text-muted" colSpan={3}>
-                          Annual discount disabled
-                        </td>
-                      </tr>
-                    );
-                  }
-                  const row = coupons.find(
-                    (c) => c.mode === mode && c.billing_interval === interval
-                  );
-                  if (!row) {
-                    return (
-                      <tr key={`${mode}-${interval}`}>
-                        <td className="px-3 py-2 font-mono uppercase">{mode}</td>
-                        <td className="px-3 py-2 capitalize">{interval}</td>
-                        <td className="px-3 py-2 text-muted" colSpan={3}>
-                          No coupon mapped
-                          {mode !== deployMode ? ` — sync from a ${mode} deploy or script` : ""}
-                        </td>
-                      </tr>
-                    );
-                  }
+              {sortedCoupons.length === 0 ? (
+                <tr>
+                  <td className="px-3 py-2 text-muted" colSpan={5}>
+                    No coupons mapped yet
+                  </td>
+                </tr>
+              ) : (
+                sortedCoupons.map((row) => {
+                  const interval = row.billing_interval;
                   const matches = couponMatchesSettings(row, settings);
                   return (
-                    <tr key={`${mode}-${interval}`}>
+                    <tr key={`${row.mode}-${interval}-${row.amount_off_cents}-${row.duration_months}`}>
                       <td className="px-3 py-2 font-mono uppercase">
-                        {mode}
-                        {mode === deployMode ? (
+                        {row.mode}
+                        {row.mode === deployMode ? (
                           <Badge variant="success" className="ml-1">
                             deploy
                           </Badge>
@@ -331,12 +332,9 @@ export function PartnerReferralDiscountSettings({ initial, initialCoupons, deplo
                       </td>
                       <td className="px-3 py-2">
                         {matches ? (
-                          <Badge variant="success">Matches settings</Badge>
+                          <Badge variant="success">Program default</Badge>
                         ) : (
-                          <Badge variant="warning">
-                            Stale
-                            {mode !== deployMode ? " — other mode" : " — re-save or run script"}
-                          </Badge>
+                          <Badge variant="default">Partner / other config</Badge>
                         )}
                       </td>
                     </tr>
