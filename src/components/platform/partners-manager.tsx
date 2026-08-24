@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -399,9 +400,22 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
                         {(p.referred_business_count ?? 0) === 1 ? "business" : "businesses"}
                       </p>
                     </div>
-                    <Button type="button" size="sm" variant="outline" onClick={() => startEdit(p)}>
-                      Edit
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Link href={`/platform/partners/${p.id}`}>
+                        <Button type="button" size="sm" variant="accent" className="min-h-11">
+                          Detail
+                        </Button>
+                      </Link>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="min-h-11"
+                        onClick={() => startEdit(p)}
+                      >
+                        Edit
+                      </Button>
+                    </div>
                   </div>
 
                   {editId === p.id ? (

@@ -55,7 +55,7 @@ Isolation layers:
 2. **`createTenantServiceClient(businessId)`** — service role bypasses RLS; the wrapper re-applies `business_id` on `from()`. Use `.raw` only for `profiles`, `businesses`, `processed_stripe_events`, Auth, Storage, RPC.
 3. **`enforce_same_business` triggers** (v30 + v43 `projects.service_id`) — not bypassed by the service role. NULL parents are allowed where the schema allows them (`media_assets.project_id`, etc.).
 
-Platform tables without tenant rows: `processed_stripe_events`, `platform_audit_log` (v44, super_admin SELECT only), `plans` (v45 entitlement catalog; super_admin manage + authenticated read of active plans), `platform_email_templates` (v53 lifecycle copy/timing catalog; super_admin only — no `business_id` by design), leftover singletons `app_settings` and `google_calendar_connections` (RLS on, zero policies — fail closed). Live config is `business_settings` and `google_calendar_connections_v2`. `platform_email_sends` (v53) has `business_id` but is platform operational log (super_admin SELECT only). `partners` / `partner_applications` (v58) are platform-scoped with **no** `business_id`. `partner_referrals` (v59) **has** `business_id NOT NULL` (UNIQUE) — attribution join from partner → business, written once at create; RLS super_admin only (same family as `platform_email_sends`, not in BUSINESS_OWNED_TABLES). `partner_commissions` (v60) is an append-only platform ledger with **nullable** `business_id` (ON DELETE SET NULL so history survives tenant delete — intentional SQL-audit exception) and FK to `platform_subscription_payments`; RLS super_admin + partner-own SELECT.
+Platform tables without tenant rows: `processed_stripe_events`, `platform_audit_log` (v44, super_admin SELECT only), `plans` (v45 entitlement catalog; super_admin manage + authenticated read of active plans), `platform_email_templates` (v53 lifecycle copy/timing catalog; super_admin only — no `business_id` by design), leftover singletons `app_settings` and `google_calendar_connections` (RLS on, zero policies — fail closed). Live config is `business_settings` and `google_calendar_connections_v2`. `platform_email_sends` (v53) has `business_id` but is platform operational log (super_admin SELECT only). `partners` / `partner_applications` (v58) are platform-scoped with **no** `business_id`. `partner_referrals` (v59) **has** `business_id NOT NULL` (UNIQUE) — attribution join from partner → business, written once at create; RLS super_admin only (same family as `platform_email_sends`, not in BUSINESS_OWNED_TABLES). `partner_commissions` (v60) is an append-only platform ledger with **nullable** `business_id` (ON DELETE SET NULL so history survives tenant delete — intentional SQL-audit exception) and FK to `platform_subscription_payments`; RLS super_admin + partner-own SELECT. `partner_payouts` (v61) is platform-scoped with **no** `business_id` (manual payouts; partners SELECT own; super_admin manage).
 
 ## Standing rule for every new table
 
@@ -72,6 +72,7 @@ Platform tables without tenant rows: `processed_stripe_events`, `platform_audit_
 `partners` / `partner_applications` (v58 Partner Program accounts). Plans are
 shared ShootPortal product definitions; every business points at `plans.key` via `businesses.plan`.
 Lifecycle templates are platform-scoped the same way — they have no `business_id`.
+`partner_payouts` (v61) is also platform-scoped with no `business_id`.
 
 **Attribution join (has `business_id`, not tenant CRM):** `partner_referrals` (v59) links a
 platform partner to exactly one business (`UNIQUE(business_id)`). Written once at business
@@ -80,6 +81,8 @@ creation via `attribute_partner_referral()`. Not added to `BUSINESS_OWNED_TABLES
 **Commission ledger (nullable `business_id`):** `partner_commissions` (v60) is append-only.
 Reversals are new negative rows. `business_id` may be NULL after tenant delete. Idempotency:
 one `commission` per `subscription_payment_id`; one `reversal` per `stripe_refund_id`.
+Manual `adjustment` rows (v61) may omit `subscription_payment_id` but require `note` + `created_by`.
+`partner_payouts` (v61) stamps `payout_id` onto all currently-payable ledger rows in one transaction.
 
 ## Plans & entitlements (v45)
 

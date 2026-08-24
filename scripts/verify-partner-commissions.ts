@@ -1,5 +1,5 @@
 /**
- * Reconcile partner commission ledger integrity.
+ * Reconcile partner commission ledger + payout integrity.
  * Usage: npx tsx scripts/verify-partner-commissions.ts
  * Exit 1 on any discrepancy.
  */
@@ -38,19 +38,37 @@ async function main() {
   if (error) throw new Error(error.message);
   const rows = commissions ?? [];
 
-  const paymentIds = [...new Set(rows.map((r) => r.subscription_payment_id))];
+  const paymentIds = [
+    ...new Set(
+      rows
+        .map((r) => r.subscription_payment_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
   const { data: payments } = paymentIds.length
     ? await raw
         .from("platform_subscription_payments")
         .select("id, business_id, amount_paid_cents, stripe_mode, stripe_invoice_id")
         .in("id", paymentIds)
-    : { data: [] as { id: string; business_id: string; amount_paid_cents: number; stripe_mode: string; stripe_invoice_id: string }[] };
+    : {
+        data: [] as {
+          id: string;
+          business_id: string;
+          amount_paid_cents: number;
+          stripe_mode: string;
+          stripe_invoice_id: string;
+        }[],
+      };
   const paymentMap = new Map((payments ?? []).map((p) => [p.id, p]));
 
   const { data: referrals } = await raw.from("partner_referrals").select("business_id, partner_id");
   const referralByBusiness = new Map(
     (referrals ?? []).map((r) => [r.business_id as string, r.partner_id as string])
   );
+
+  const { data: payouts, error: payoutErr } = await raw.from("partner_payouts").select("*");
+  if (payoutErr) throw new Error(payoutErr.message);
+  const payoutRows = payouts ?? [];
 
   // every commission traces to exactly one subscription payment
   for (const row of rows) {
@@ -87,7 +105,6 @@ async function main() {
     if (row.kind !== "commission" && row.kind !== "reversal") continue;
     const expected = roundCommission(row.source_amount_cents, Number(row.commission_rate_pct));
     const actual = Math.abs(row.amount_cents as number);
-    // Reversals may be capped below expected when prior partials exist — allow <= expected
     if (row.kind === "commission" && actual !== expected) {
       findings.push({
         check: "amount_rate_mismatch",
@@ -133,7 +150,7 @@ async function main() {
   // no commission without a referral (at create time — business_id may later be null)
   for (const row of rows) {
     if (row.kind !== "commission") continue;
-    if (!row.business_id) continue; // deleted business — skip referral check
+    if (!row.business_id) continue;
     const refPartner = referralByBusiness.get(row.business_id as string);
     if (!refPartner) {
       findings.push({
@@ -150,6 +167,7 @@ async function main() {
 
   // test and live never mix on a row vs its payment
   for (const row of rows) {
+    if (!row.subscription_payment_id) continue;
     const pay = paymentMap.get(row.subscription_payment_id);
     if (pay && pay.stripe_mode !== row.stripe_mode) {
       findings.push({
@@ -159,8 +177,60 @@ async function main() {
     }
   }
 
-  // per-partner balances reconcile to sum of rows
-  const partnerIds = [...new Set(rows.map((r) => r.partner_id as string))];
+  // adjustments carry a note and a creator
+  for (const row of rows) {
+    if (row.kind !== "adjustment") continue;
+    const note = typeof row.note === "string" ? row.note.trim() : "";
+    if (!note) {
+      findings.push({
+        check: "adjustment_missing_note",
+        detail: `adjustment ${row.id}`,
+      });
+    }
+    if (!row.created_by) {
+      findings.push({
+        check: "adjustment_missing_created_by",
+        detail: `adjustment ${row.id}`,
+      });
+    }
+  }
+
+  // every payout's amount equals the sum of the commissions it covers
+  for (const payout of payoutRows) {
+    const covered = rows.filter((r) => r.payout_id === payout.id);
+    const sum = covered.reduce((s, r) => s + (r.amount_cents as number), 0);
+    if (sum !== (payout.amount_cents as number)) {
+      findings.push({
+        check: "payout_amount_mismatch",
+        detail: `payout ${payout.id}: amount ${payout.amount_cents} != sum stamped ${sum} (${covered.length} rows)`,
+      });
+    }
+  }
+
+  // no commission belongs to more than one payout (payout_id is singular — check orphans / dangling)
+  for (const row of rows) {
+    if (!row.payout_id) continue;
+    const payout = payoutRows.find((p) => p.id === row.payout_id);
+    if (!payout) {
+      findings.push({
+        check: "payout_id_orphan",
+        detail: `row ${row.id} → missing payout ${row.payout_id}`,
+      });
+    } else if (payout.partner_id !== row.partner_id) {
+      findings.push({
+        check: "payout_partner_mismatch",
+        detail: `row ${row.id} partner ${row.partner_id} vs payout ${payout.partner_id}`,
+      });
+    }
+  }
+
+  // paid totals reconcile per partner (sum of payouts === balance.paidCents for deploy mode)
+  const partnerIds = [
+    ...new Set([
+      ...rows.map((r) => r.partner_id as string),
+      ...payoutRows.map((p) => p.partner_id as string),
+    ]),
+  ];
   for (const partnerId of partnerIds) {
     const partnerRows = rows.filter((r) => r.partner_id === partnerId && r.stripe_mode === mode);
     const sumNet = partnerRows.reduce((s, r) => s + (r.amount_cents as number), 0);
@@ -171,9 +241,31 @@ async function main() {
         detail: `partner ${partnerId}: balance.net=${bal.netCents} sum=${sumNet}`,
       });
     }
+
+    const stampedPaid = partnerRows
+      .filter((r) => r.payout_id)
+      .reduce((s, r) => s + (r.amount_cents as number), 0);
+    if (bal.paidCents !== stampedPaid) {
+      findings.push({
+        check: "balance_paid_mismatch",
+        detail: `partner ${partnerId}: balance.paid=${bal.paidCents} stamped=${stampedPaid}`,
+      });
+    }
+
+    const payoutSum = payoutRows
+      .filter((p) => p.partner_id === partnerId && p.stripe_mode === mode)
+      .reduce((s, p) => s + (p.amount_cents as number), 0);
+    if (payoutSum !== stampedPaid) {
+      findings.push({
+        check: "partner_paid_totals_mismatch",
+        detail: `partner ${partnerId}: payouts sum ${payoutSum} != stamped ledger ${stampedPaid}`,
+      });
+    }
   }
 
-  console.log(`verify-partner-commissions: scanned ${rows.length} ledger rows (deploy mode=${mode})`);
+  console.log(
+    `verify-partner-commissions: scanned ${rows.length} ledger rows, ${payoutRows.length} payouts (deploy mode=${mode})`
+  );
   if (findings.length) {
     console.error("DISCREPANCIES:");
     for (const f of findings) {
@@ -188,6 +280,10 @@ async function main() {
   console.log("ok — commissions have matching referrals");
   console.log("ok — test/live modes do not mix");
   console.log("ok — partner balances reconcile to ledger sums");
+  console.log("ok — every payout amount equals sum of stamped rows");
+  console.log("ok — no commission belongs to more than one payout");
+  console.log("ok — paid totals reconcile per partner");
+  console.log("ok — adjustments carry note and created_by");
   console.log("\nPartner commission ledger reconciliation passed.");
 }
 

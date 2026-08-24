@@ -107,6 +107,17 @@ WHERE EXISTS (
 
 INSERT INTO _tenant_sql_audit (check_name, detail)
 SELECT
+  '2b_partner_payouts_has_business_id',
+  'partner_payouts must remain platform-scoped without business_id'
+WHERE EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'partner_payouts'
+    AND column_name = 'business_id'
+);
+
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
   '2b_plans_missing',
   'plans table is missing'
 WHERE NOT EXISTS (
@@ -139,6 +150,15 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM information_schema.tables
   WHERE table_schema = 'public' AND table_name = 'partner_applications'
+);
+
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
+  '2b_partner_payouts_missing',
+  'partner_payouts table is missing'
+WHERE NOT EXISTS (
+  SELECT 1 FROM information_schema.tables
+  WHERE table_schema = 'public' AND table_name = 'partner_payouts'
 );
 
 -- partner_referrals MUST have business_id (attribution join — not a no-business_id platform catalog)
@@ -208,6 +228,7 @@ AND NOT EXISTS (
 --     Platform tables without business_id (plans, platform_audit_log,
 --     processed_stripe_events, platform_email_templates, partners,
 --     partner_applications) are still required to have RLS enabled.
+--     partner_payouts (v61) is platform-scoped without business_id + RLS.
 --     partner_referrals HAS business_id and also requires RLS (super_admin only).
 --     partner_commissions has nullable business_id + RLS (super_admin + own partner).
 -- ---------------------------------------------------------------------------

@@ -29,7 +29,9 @@ export type PlatformAuditAction =
   | "partner.update"
   | "partner.invite"
   | "partner.application_approve"
-  | "partner.application_decline";
+  | "partner.application_decline"
+  | "partner.payout"
+  | "partner.adjustment";
 
 export async function requestIpAddress(): Promise<string | null> {
   try {

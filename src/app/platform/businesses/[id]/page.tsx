@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { requireSuperAdminPage } from "@/lib/admin-access";
 import { loadBusinessDetail } from "@/lib/platform-dashboard";
 import { BusinessDetailActions } from "@/components/platform/business-detail-actions";
@@ -101,9 +102,16 @@ export default async function PlatformBusinessDetailPage({
             <>
               {" "}
               (
-              <a className="underline" href="/platform/partners">
+              <Link
+                className="underline"
+                href={
+                  detail.referral.partner?.id
+                    ? `/platform/partners/${detail.referral.partner.id}`
+                    : "/platform/partners"
+                }
+              >
                 {detail.referral.partner.referralCode}
-              </a>
+              </Link>
               )
             </>
           ) : null}

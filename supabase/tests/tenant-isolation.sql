@@ -469,6 +469,12 @@ BEGIN
   END IF;
   PERFORM _tenant_test_bump();
 
+  SELECT count(*) INTO v_n FROM partner_payouts;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'READ LEAK: partner_payouts visible to Swift admin (% rows)', v_n;
+  END IF;
+  PERFORM _tenant_test_bump();
+
   -- v36: Swift admin still sees own-business storage objects (legacy {project}/… must keep working)
   SELECT count(*) INTO v_n FROM storage.objects
     WHERE bucket_id IN ('project-media', 'project-documents');

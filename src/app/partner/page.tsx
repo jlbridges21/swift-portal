@@ -21,6 +21,8 @@ import { PartnerEarningsChart } from "@/components/partner/partner-earnings-char
 import { PartnerReferralsTable } from "@/components/partner/partner-referrals-table";
 import { PartnerCommissionHistory } from "@/components/partner/partner-commission-history";
 import { PartnerEarningsCalculator } from "@/components/partner/partner-earnings-calculator";
+import { PartnerPayoutHistory } from "@/components/partner/partner-payout-history";
+import { listPartnerPayouts } from "@/lib/partner-payouts";
 
 export const dynamic = "force-dynamic";
 
@@ -105,12 +107,13 @@ export default async function PartnerHomePage({
   const pageSize = 10;
   const historyPageSize = 20;
 
-  const [summary, referrals, history, monthly, plans] = await Promise.all([
+  const [summary, referrals, history, monthly, plans, payouts] = await Promise.all([
     loadPartnerDashboardSummary(access.partner),
     loadPartnerReferrals(access.partner.id, { sort, dir, page, pageSize }),
     loadPartnerCommissionHistory(access.partner.id, { page: cpage, pageSize: historyPageSize }),
     loadPartnerMonthlyEarnings(access.partner.id, 12),
     loadCalculatorPlans(),
+    listPartnerPayouts(access.partner.id),
   ]);
 
   const empty = summary.totalReferredCustomers === 0;
@@ -228,7 +231,7 @@ export default async function PartnerHomePage({
             <Metric
               label="Total paid"
               value={formatCurrency(summary.balance.paidCents)}
-              hint="Payouts appear in a later phase"
+              hint="Sum of ledger rows included in recorded payouts"
             />
           </section>
 
@@ -238,6 +241,21 @@ export default async function PartnerHomePage({
             earned but not yet past that hold. Payable means past the hold and waiting for the next
             payout.
           </p>
+
+          <section className="mt-10">
+            <Card>
+              <CardHeader>
+                <CardTitle>Payout history</CardTitle>
+                <p className="text-sm text-muted">
+                  Manual payouts recorded by ShootPortal. Amounts match the payable balance at the
+                  time of each payout.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <PartnerPayoutHistory payouts={payouts} />
+              </CardContent>
+            </Card>
+          </section>
 
           <section className="mt-10">
             <Card>

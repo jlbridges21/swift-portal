@@ -21,7 +21,7 @@ export type PartnerCommissionRow = {
   id: string;
   partner_id: string;
   business_id: string | null;
-  subscription_payment_id: string;
+  subscription_payment_id: string | null;
   kind: PartnerCommissionKind;
   commission_rate_pct: number;
   source_amount_cents: number;
@@ -46,6 +46,12 @@ export type PartnerBalance = {
   /** Net of earned + reversals + adjustments (all modes filtered by stripeMode). */
   netCents: number;
   pendingCents: number;
+  /**
+   * Unpaid open balance past the hold (commissions past payable_at + unpaid
+   * reversals/adjustments). May be NEGATIVE when refunds exceed new earnings.
+   */
+  openNetCents: number;
+  /** max(0, openNetCents) — amount available to pay out. */
   payableCents: number;
   paidCents: number;
   /** Sum of commissions on the most recent payment per active referred business. */
@@ -407,8 +413,9 @@ export async function handleChargeRefundedCommission(
 /**
  * Ledger-derived partner balance. Never cached.
  * pending = unpaid commissions with payable_at > now
- * payable = unpaid commissions with payable_at <= now
- * paid = rows with payout_id set (phase 5; currently usually 0)
+ * openNet = unpaid commissions past hold + unpaid reversals/adjustments (may be negative)
+ * payable = max(0, openNet)
+ * paid = sum of all ledger rows stamped with payout_id (matches payout totals)
  */
 export async function computePartnerBalance(
   partnerId: string,
@@ -429,27 +436,22 @@ export async function computePartnerBalance(
   let reversedCents = 0;
   let netCents = 0;
   let pendingCents = 0;
-  let payableCents = 0;
   let paidCents = 0;
   let currency = "usd";
 
   for (const row of list) {
     currency = row.currency || currency;
     netCents += row.amount_cents;
+    // Paid = sum of every ledger row stamped onto a payout (matches payout totals).
+    if (row.payout_id) paidCents += row.amount_cents;
     if (row.kind === "commission") {
       lifetimeEarnedCents += row.amount_cents;
-      if (row.payout_id) {
-        paidCents += row.amount_cents;
-      } else {
+      if (!row.payout_id) {
         const payableAt = row.payable_at ? new Date(row.payable_at).getTime() : 0;
         if (payableAt > now) pendingCents += row.amount_cents;
-        else payableCents += row.amount_cents;
       }
     } else if (row.kind === "reversal") {
       reversedCents += Math.abs(row.amount_cents);
-      // Reversals reduce payable/pending pools via net; if unpaid commission pool,
-      // apply against payable first conceptually by leaving payable as commission-only
-      // and exposing reversedCents + netCents for reconciliation.
     }
   }
 
@@ -485,18 +487,18 @@ export async function computePartnerBalance(
   }
 
   // Net payable after reversals: sum of unpaid commission amounts + unpaid reversals
-  // (reversals have payout_id null). This is the true next-payout figure.
-  let openNet = 0;
+  // (reversals have payout_id null). This is the true next-payout figure (may be negative).
+  let openNetCents = 0;
   for (const row of list) {
     if (row.payout_id) continue;
     if (row.kind === "commission") {
       const payableAt = row.payable_at ? new Date(row.payable_at).getTime() : 0;
-      if (payableAt <= now) openNet += row.amount_cents;
+      if (payableAt <= now) openNetCents += row.amount_cents;
     } else if (row.kind === "reversal" || row.kind === "adjustment") {
-      openNet += row.amount_cents;
+      openNetCents += row.amount_cents;
     }
   }
-  payableCents = Math.max(0, openNet);
+  const payableCents = Math.max(0, openNetCents);
 
   return {
     partnerId,
@@ -504,6 +506,7 @@ export async function computePartnerBalance(
     reversedCents,
     netCents,
     pendingCents,
+    openNetCents,
     payableCents,
     paidCents,
     recurringMonthlyEstimateCents,

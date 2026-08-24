@@ -176,7 +176,7 @@ export async function loadPartnerReferrals(
   const mode = getStripeMode();
   const raw = await createServiceClient();
   const page = Math.max(1, options?.page ?? 1);
-  const pageSize = Math.min(50, Math.max(1, options?.pageSize ?? 10));
+  const pageSize = Math.min(100, Math.max(1, options?.pageSize ?? 10));
 
   const { data: referrals } = await raw
     .from("partner_referrals")
@@ -274,7 +274,7 @@ export async function loadPartnerCommissionHistory(
   const mode = getStripeMode();
   const raw = await createServiceClient();
   const page = Math.max(1, options?.page ?? 1);
-  const pageSize = Math.min(50, Math.max(1, options?.pageSize ?? 20));
+  const pageSize = Math.min(100, Math.max(1, options?.pageSize ?? 20));
   const now = Date.now();
 
   const { data: all, error, count } = await raw
