@@ -167,7 +167,9 @@ export async function POST(request: Request) {
           const businessId = subscription.metadata.business_id ?? null;
           if (businessId) {
             const { recordPlatformSubscriptionPayment } = await import("@/lib/platform-revenue");
-            const recorded = await recordPlatformSubscriptionPayment(invoice, businessId);
+            const recorded = await recordPlatformSubscriptionPayment(invoice, businessId, {
+              stripeEventId: event.id,
+            });
             logBilling("subscription payment ledger", {
               invoiceId: invoice.id,
               businessId,
@@ -177,6 +179,55 @@ export async function POST(request: Request) {
         }
         recordEvent = true;
         recordBusinessId = subscription.metadata.business_id ?? null;
+        break;
+      }
+
+      case "charge.refunded": {
+        // Subscription refunds: Charge → PaymentIntent → invoicePayments → invoice.
+        // charge.invoice is often absent on API 2025-03-31.basil+.
+        // Chargebacks (charge.dispute.*) intentionally NOT handled in V1 — disputes
+        // are provisional; lost disputes usually surface as refunds. Avoid double
+        // accounting until payout clawback exists (phase 5).
+        const charge = event.data.object as Stripe.Charge;
+        try {
+          const { handleChargeRefundedCommission } = await import("@/lib/partner-commissions");
+          const result = await handleChargeRefundedCommission(charge, event.id);
+          logBilling("partner commission refund reversal", {
+            chargeId: charge.id,
+            ...result,
+          });
+        } catch (err) {
+          console.error("[stripe-billing-webhook] partner refund reversal FAILED (returning 200)", {
+            chargeId: charge.id,
+            eventId: event.id,
+            detail: err instanceof Error ? err.message : String(err),
+          });
+        }
+        recordEvent = true;
+        break;
+      }
+
+      case "invoice.voided": {
+        const invoice = event.data.object as Stripe.Invoice;
+        if (!invoice.id) break;
+        try {
+          const { maybeReverseCommissionForVoid } = await import("@/lib/partner-commissions");
+          const result = await maybeReverseCommissionForVoid({
+            stripeInvoiceId: invoice.id,
+            stripeEventId: event.id,
+          });
+          logBilling("partner commission void reversal", {
+            invoiceId: invoice.id,
+            ...result,
+          });
+        } catch (err) {
+          console.error("[stripe-billing-webhook] partner void reversal FAILED (returning 200)", {
+            invoiceId: invoice.id,
+            eventId: event.id,
+            detail: err instanceof Error ? err.message : String(err),
+          });
+        }
+        recordEvent = true;
         break;
       }
 

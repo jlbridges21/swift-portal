@@ -57,7 +57,7 @@ FROM information_schema.columns
 WHERE table_schema = 'public'
   AND column_name = 'business_id'
   AND is_nullable = 'YES'
-  AND table_name NOT IN ('profiles', 'processed_stripe_events');
+  AND table_name NOT IN ('profiles', 'processed_stripe_events', 'partner_commissions');
 
 -- plans / platform_email_templates / partners tables must NOT have business_id
 -- (platform catalog / partner-program exceptions)
@@ -178,12 +178,38 @@ WHERE NOT EXISTS (
     AND column_name = 'referred_by_partner_id'
 );
 
+-- partner_commissions: platform ledger with nullable business_id (ON DELETE SET NULL)
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
+  '2d_partner_commissions_missing',
+  'partner_commissions table is missing'
+WHERE NOT EXISTS (
+  SELECT 1 FROM information_schema.tables
+  WHERE table_schema = 'public' AND table_name = 'partner_commissions'
+);
+
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
+  '2d_partner_commissions_missing_business_id',
+  'partner_commissions must have business_id column (nullable — history survives tenant delete)'
+WHERE EXISTS (
+  SELECT 1 FROM information_schema.tables
+  WHERE table_schema = 'public' AND table_name = 'partner_commissions'
+)
+AND NOT EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'partner_commissions'
+    AND column_name = 'business_id'
+);
+
 -- ---------------------------------------------------------------------------
 -- 3. RLS disabled on public base tables that hold business or identity data
 --     Platform tables without business_id (plans, platform_audit_log,
 --     processed_stripe_events, platform_email_templates, partners,
 --     partner_applications) are still required to have RLS enabled.
 --     partner_referrals HAS business_id and also requires RLS (super_admin only).
+--     partner_commissions has nullable business_id + RLS (super_admin + own partner).
 -- ---------------------------------------------------------------------------
 INSERT INTO _tenant_sql_audit (check_name, detail)
 SELECT

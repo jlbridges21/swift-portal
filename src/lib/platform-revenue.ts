@@ -1,21 +1,24 @@
 import type Stripe from "stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getSubscriptionState } from "@/lib/subscription";
-
-function detectStripeMode(): "test" | "live" {
-  const key = process.env.STRIPE_SECRET_KEY ?? "";
-  return key.startsWith("sk_live_") ? "live" : "test";
-}
+import { getStripeMode } from "@/lib/stripe";
 
 /**
  * Persist a paid ShootPortal SaaS invoice locally so /platform revenue does not
  * depend on a live Stripe list call. Idempotent on stripe_invoice_id.
- * Comped businesses are skipped (they pay nothing).
+ *
+ * Insert detection: upsert with ignoreDuplicates + .select('id'). On conflict the
+ * row is not returned — recorded=false. Commission creation only runs when a NEW
+ * payment id is returned. The DB unique on partner_commissions(subscription_payment_id)
+ * WHERE kind='commission' is the hard guarantee if this ever races.
+ *
+ * Comped businesses are skipped (they pay nothing → no payment → no commission).
  */
 export async function recordPlatformSubscriptionPayment(
   invoice: Stripe.Invoice,
-  businessId: string
-): Promise<{ recorded: boolean; reason?: string }> {
+  businessId: string,
+  options?: { stripeEventId?: string | null }
+): Promise<{ recorded: boolean; reason?: string; paymentId?: string }> {
   if (invoice.status !== "paid") {
     return { recorded: false, reason: "invoice_not_paid" };
   }
@@ -36,6 +39,7 @@ export async function recordPlatformSubscriptionPayment(
     .eq("id", businessId)
     .maybeSingle();
 
+  // Comped → no revenue collected → no payment row → no commission.
   if (biz) {
     const sub = getSubscriptionState(biz);
     if (sub.isComped) {
@@ -49,19 +53,24 @@ export async function recordPlatformSubscriptionPayment(
 
   const { invoiceSubscriptionId } = await import("@/lib/stripe-billing");
   const subId = invoiceSubscriptionId(invoice);
+  const stripeMode = getStripeMode();
 
-  const { error } = await raw.from("platform_subscription_payments").upsert(
-    {
-      business_id: businessId,
-      stripe_invoice_id: invoice.id,
-      stripe_subscription_id: subId,
-      amount_paid_cents: amount,
-      currency: (invoice.currency || "usd").toLowerCase(),
-      paid_at: paidAt,
-      stripe_mode: detectStripeMode(),
-    },
-    { onConflict: "stripe_invoice_id", ignoreDuplicates: true }
-  );
+  const { data: inserted, error } = await raw
+    .from("platform_subscription_payments")
+    .upsert(
+      {
+        business_id: businessId,
+        stripe_invoice_id: invoice.id,
+        stripe_subscription_id: subId,
+        amount_paid_cents: amount,
+        currency: (invoice.currency || "usd").toLowerCase(),
+        paid_at: paidAt,
+        stripe_mode: stripeMode,
+      },
+      { onConflict: "stripe_invoice_id", ignoreDuplicates: true }
+    )
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     console.error("[platform-revenue] failed to record invoice", {
@@ -71,7 +80,49 @@ export async function recordPlatformSubscriptionPayment(
     });
     return { recorded: false, reason: error.message };
   }
-  return { recorded: true };
+
+  // ignoreDuplicates: conflicting rows are not returned → treat as already recorded.
+  if (!inserted?.id) {
+    return { recorded: false, reason: "duplicate_invoice" };
+  }
+
+  const paymentId = inserted.id as string;
+
+  // Commission must never break payment recording or the webhook.
+  try {
+    const { maybeCreateCommissionForPayment } = await import("@/lib/partner-commissions");
+    const commission = await maybeCreateCommissionForPayment({
+      paymentId,
+      businessId,
+      amountPaidCents: amount,
+      currency: (invoice.currency || "usd").toLowerCase(),
+      stripeMode,
+      paidAt,
+      stripeEventId: options?.stripeEventId ?? null,
+    });
+    if (commission.created) {
+      console.info("[platform-revenue] partner commission created", {
+        paymentId,
+        businessId,
+        commissionId: commission.commissionId,
+      });
+    } else {
+      console.info("[platform-revenue] partner commission skipped", {
+        paymentId,
+        businessId,
+        reason: commission.reason,
+      });
+    }
+  } catch (err) {
+    console.error("[platform-revenue] partner commission FAILED (payment kept)", {
+      paymentId,
+      businessId,
+      invoiceId: invoice.id,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return { recorded: true, paymentId };
 }
 
 /**

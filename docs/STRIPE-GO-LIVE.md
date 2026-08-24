@@ -21,7 +21,9 @@ npx tsx scripts/setup-stripe-billing.ts --confirm-live
 
 1. Stripe Dashboard → Developers → Webhooks → Add endpoint  
    URL: `https://<production-host>/api/stripe/webhook/billing`
-2. Events: `customer.subscription.*`, `invoice.paid`, `invoice.payment_failed`, `checkout.session.completed`
+2. Events (test **and** live destinations): `customer.subscription.*`, `invoice.paid`,
+   `invoice.payment_failed`, `checkout.session.completed`, **`charge.refunded`**,
+   **`invoice.voided`**. Do **not** add `charge.dispute.*` in V1 (see partner commissions).
 3. Copy signing secret → Vercel Production `STRIPE_BILLING_WEBHOOK_SECRET`
 
 **Verify:** Stripe “Send test webhook” → function logs 200; `processed_stripe_events` gains a row. Unsigned request → 400.

@@ -804,6 +804,18 @@ export async function hardDeleteBusiness(
   const slug = existing.slug as string;
   const orphans: string[] = [];
 
+  // partner_commissions.subscription_payment_id ON DELETE RESTRICT — ledger rows are
+  // append-only and must survive. Hard-delete is blocked while commissions exist.
+  const { count: commissionCount } = await raw
+    .from("partner_commissions")
+    .select("id", { count: "exact", head: true })
+    .eq("business_id", businessId);
+  if ((commissionCount ?? 0) > 0) {
+    throw new Error(
+      "Cannot hard-delete a business with partner commission history. Soft-delete instead; the ledger must remain reconstructable."
+    );
+  }
+
   // Storage wipe (tenant paths). Legacy non-prefixed objects may remain — reported.
   const storageOrphans = await wipeBusinessStorage(raw, businessId);
   orphans.push(...storageOrphans);
