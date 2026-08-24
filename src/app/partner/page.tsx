@@ -10,6 +10,11 @@ import {
   loadPartnerReferrals,
   resolvePartnerAccess,
 } from "@/lib/partner-dashboard";
+import {
+  loadPartnerProgramSettings,
+  PARTNER_COMMISSION_ON_NET_COLLECTED,
+  PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY,
+} from "@/lib/partner-referral-discount";
 import { BrandProvider } from "@/components/brand/brand-provider";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { DEFAULT_APP_SETTINGS } from "@/lib/app-settings";
@@ -107,13 +112,14 @@ export default async function PartnerHomePage({
   const pageSize = 10;
   const historyPageSize = 20;
 
-  const [summary, referrals, history, monthly, plans, payouts] = await Promise.all([
+  const [summary, referrals, history, monthly, plans, payouts, discountProgram] = await Promise.all([
     loadPartnerDashboardSummary(access.partner),
     loadPartnerReferrals(access.partner.id, { sort, dir, page, pageSize }),
     loadPartnerCommissionHistory(access.partner.id, { page: cpage, pageSize: historyPageSize }),
     loadPartnerMonthlyEarnings(access.partner.id, 12),
     loadCalculatorPlans(),
     listPartnerPayouts(access.partner.id),
+    loadPartnerProgramSettings(),
   ]);
 
   const empty = summary.totalReferredCustomers === 0;
@@ -279,6 +285,19 @@ export default async function PartnerHomePage({
                 <p className="text-sm text-muted">
                   Business names and subscription status only — no clients, projects, or contacts.
                 </p>
+                {discountProgram.referral_discount_enabled ? (
+                  <div className="mt-3 space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                    <p>
+                      <strong>Referral signup offer:</strong> businesses that join through your link
+                      get{" "}
+                      {formatCurrency(discountProgram.referral_discount_amount_cents)}/mo off for
+                      their first {discountProgram.referral_discount_duration_months} paid months
+                      (monthly billing).
+                    </p>
+                    <p>{PARTNER_COMMISSION_ON_NET_COLLECTED}</p>
+                    <p className="text-xs text-amber-900">{PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY}</p>
+                  </div>
+                ) : null}
               </CardHeader>
               <CardContent>
                 <Suspense fallback={null}>

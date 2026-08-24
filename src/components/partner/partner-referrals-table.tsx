@@ -100,6 +100,9 @@ export function PartnerReferralsTable({
             <p className="mt-1 text-xs text-muted">
               {r.isGeneratingRecurring ? "Generating recurring commission" : "Not currently recurring"}
             </p>
+            {r.discountLabel ? (
+              <p className="mt-1 text-xs text-amber-800">{r.discountLabel}</p>
+            ) : null}
           </div>
         ))}
       </div>
@@ -116,6 +119,7 @@ export function PartnerReferralsTable({
               <th className="py-2 pr-3 font-medium">Revenue</th>
               <th className="py-2 pr-3 font-medium">Commission</th>
               <th className="py-2 font-medium">Recurring</th>
+              <th className="py-2 font-medium">Referral discount</th>
             </tr>
           </thead>
           <tbody>
@@ -127,7 +131,8 @@ export function PartnerReferralsTable({
                 <td className="py-2.5 pr-3">{r.plan}</td>
                 <td className="py-2.5 pr-3">{formatCurrency(r.revenueGeneratedCents)}</td>
                 <td className="py-2.5 pr-3">{formatCurrency(r.commissionEarnedCents)}</td>
-                <td className="py-2.5">{r.isGeneratingRecurring ? "Yes" : "No"}</td>
+                <td className="py-2.5 pr-3">{r.isGeneratingRecurring ? "Yes" : "No"}</td>
+                <td className="py-2.5 text-xs text-muted">{r.discountLabel ?? "—"}</td>
               </tr>
             ))}
           </tbody>

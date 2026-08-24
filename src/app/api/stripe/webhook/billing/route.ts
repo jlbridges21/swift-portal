@@ -28,6 +28,29 @@ async function handleSubscriptionObject(
     applied: result.applied,
     reason: result.reason,
   });
+
+  try {
+    const { maybeApplyPendingReferralDiscountFromSubscription } = await import(
+      "@/lib/partner-referral-discount"
+    );
+    const discount = await maybeApplyPendingReferralDiscountFromSubscription(
+      subscription,
+      source
+    );
+    if (discount.applied || discount.reason !== "not_pending") {
+      logBilling("referral discount apply", {
+        source,
+        subscriptionId: subscription.id,
+        ...discount,
+      });
+    }
+  } catch (err) {
+    console.error("[stripe-billing-webhook] referral discount apply FAILED (non-fatal)", {
+      source,
+      subscriptionId: subscription.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 export async function POST(request: Request) {

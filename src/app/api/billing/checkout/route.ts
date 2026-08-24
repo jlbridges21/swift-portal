@@ -80,20 +80,23 @@ export async function POST(request: Request) {
       trial_end?: number;
     } = { metadata: meta };
 
+    const hasTrialHandoff =
+      business.subscription_status === "trialing" &&
+      business.trial_ends_at &&
+      Number.isFinite(new Date(business.trial_ends_at).getTime());
+
     // Trial handoff: keep remaining trial so mid-trial subscribe does not charge early.
     // Stripe requires trial_end to be at least 2 days in the future — if fewer than
     // 48h remain, omit trial_end (subscription starts without an extended trial).
     // Expired / trial_expired customers must never get trial_end.
-    if (
-      business.subscription_status === "trialing" &&
-      business.trial_ends_at &&
-      Number.isFinite(new Date(business.trial_ends_at).getTime())
-    ) {
+    let trialEndApplied = false;
+    if (hasTrialHandoff && business.trial_ends_at) {
       const trialEndSec = Math.floor(new Date(business.trial_ends_at).getTime() / 1000);
       const nowSec = Math.floor(Date.now() / 1000);
       const minTrialLeadSec = 2 * 24 * 60 * 60 + 60; // Stripe minimum + 1 minute buffer
       if (trialEndSec > nowSec + minTrialLeadSec) {
         subscriptionData.trial_end = trialEndSec;
+        trialEndApplied = true;
       } else {
         console.info("[billing/checkout] omitting trial_end — less than 2 days remaining", {
           businessId: business.id,
@@ -104,6 +107,53 @@ export async function POST(request: Request) {
     }
 
     const { stripe } = getStripe();
+
+    // Partner referral discount — never block checkout on failure.
+    let checkoutDiscounts: { coupon: string }[] | undefined;
+    let allowPromotionCodes = true;
+    try {
+      const { resolveReferralDiscountForBusiness } = await import(
+        "@/lib/partner-referral-discount"
+      );
+      const discount = await resolveReferralDiscountForBusiness({
+        businessId: business.id,
+        interval,
+      });
+      if (discount.eligible && discount.couponId) {
+        if (trialEndApplied) {
+          // Defer coupon until trial ends — Stripe counts coupon duration from application;
+          // applying during trial risks burning months on $0 trial invoices.
+          subscriptionData.metadata = {
+            ...subscriptionData.metadata,
+            shootportal_referral_discount_pending: "true",
+            shootportal_referral_discount_interval: interval,
+          };
+          console.info("[billing/checkout] referral discount deferred until trial ends", {
+            businessId: business.id,
+            interval,
+            mode,
+          });
+        } else {
+          checkoutDiscounts = [{ coupon: discount.couponId }];
+          // Stripe Checkout allows one discount total — pre-applied referral coupon
+          // replaces the promotion-code field for referred signups.
+          allowPromotionCodes = false;
+          console.info("[billing/checkout] referral discount attached", {
+            businessId: business.id,
+            interval,
+            mode,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[billing/checkout] referral discount resolution FAILED (checkout continues)", {
+        businessId: business.id,
+        interval,
+        mode,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     // Platform account only — never pass stripeAccount / requestOptions.
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -114,7 +164,8 @@ export async function POST(request: Request) {
       success_url: `${origin}/billing?checkout=success`,
       cancel_url: `${origin}/billing?checkout=cancelled`,
       client_reference_id: business.id,
-      allow_promotion_codes: true,
+      allow_promotion_codes: allowPromotionCodes,
+      ...(checkoutDiscounts ? { discounts: checkoutDiscounts } : {}),
     });
 
     if (!session.url) {

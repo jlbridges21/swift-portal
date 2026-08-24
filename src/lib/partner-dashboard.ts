@@ -50,6 +50,8 @@ export type PartnerReferralRow = {
   revenueGeneratedCents: number;
   commissionEarnedCents: number;
   isGeneratingRecurring: boolean;
+  discountLabel: string | null;
+  discountInWindow: boolean;
 };
 
 export type PartnerCommissionHistoryRow = {
@@ -233,25 +235,37 @@ export async function loadPartnerReferrals(
     }
   }
 
-  let rows: PartnerReferralRow[] = list.map((r) => {
-    const bid = r.business_id as string;
-    const biz = bizMap.get(bid);
-    const status = biz?.deleted_at
-      ? "canceled"
-      : ((biz?.subscription_status as string) ?? "unknown");
-    const isGeneratingRecurring =
-      !biz?.deleted_at && biz?.subscription_status === "active" && latestCommissionByBiz.has(bid);
-    return {
-      businessId: bid,
-      displayName: (biz?.name as string) || "Unknown business",
-      joinedAt: r.attributed_at as string,
-      status,
-      plan: (biz?.plan as string) || "—",
-      revenueGeneratedCents: revenueByBiz.get(bid) ?? 0,
-      commissionEarnedCents: commissionByBiz.get(bid) ?? 0,
-      isGeneratingRecurring,
-    };
-  });
+  let rows: PartnerReferralRow[] = await Promise.all(
+    list.map(async (r) => {
+      const bid = r.business_id as string;
+      const biz = bizMap.get(bid);
+      const status = biz?.deleted_at
+        ? "canceled"
+        : ((biz?.subscription_status as string) ?? "unknown");
+      const isGeneratingRecurring =
+        !biz?.deleted_at && biz?.subscription_status === "active" && latestCommissionByBiz.has(bid);
+
+      const { computeReferralDiscountWindow } = await import("@/lib/partner-referral-discount");
+      const discount = await computeReferralDiscountWindow({
+        businessId: bid,
+        partnerId,
+        stripeMode: mode,
+      });
+
+      return {
+        businessId: bid,
+        displayName: (biz?.name as string) || "Unknown business",
+        joinedAt: r.attributed_at as string,
+        status,
+        plan: (biz?.plan as string) || "—",
+        revenueGeneratedCents: revenueByBiz.get(bid) ?? 0,
+        commissionEarnedCents: commissionByBiz.get(bid) ?? 0,
+        isGeneratingRecurring,
+        discountLabel: discount?.label ?? null,
+        discountInWindow: discount?.inWindow ?? false,
+      };
+    })
+  );
 
   const sort = options?.sort ?? "joinedAt";
   const dir = options?.dir === "asc" ? 1 : -1;

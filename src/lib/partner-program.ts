@@ -20,7 +20,7 @@ import { listPartnerPayouts, type PartnerPayoutRow } from "@/lib/partner-payouts
 import { PLAN_CATALOG_SELECT, type PlanRow } from "@/lib/plan-catalog";
 
 export const PARTNER_GENERATED_MRR_DEFINITION =
-  "Partner-generated MRR: for each actively subscribed business attributed to a partner, take the most recent ShootPortal subscription payment (deploy Stripe mode), then normalize to a monthly amount — annual invoices ÷ 12, monthly invoices as-is. Sum across those businesses.";
+  "Partner-generated MRR (net): for each actively subscribed partner-referred business, take the most recent ShootPortal subscription payment actually collected (deploy Stripe mode), then normalize to a monthly amount — annual invoices ÷ 12, monthly invoices as-is. Discounted referral periods count at the net collected amount, not list price. Sum across those businesses.";
 
 export type PartnerProgramMetrics = {
   totalPartners: number;
@@ -34,6 +34,8 @@ export type PartnerProgramMetrics = {
   totalCommissionsPaidCents: number;
   partnerGeneratedMrrCents: number;
   mrrDefinition: string;
+  activeDiscountedReferrals: number;
+  totalReferralDiscountGivenCents: number;
 };
 
 export type PartnerTableRow = {
@@ -238,6 +240,9 @@ export async function loadPartnerProgramMetrics(): Promise<PartnerProgramMetrics
 
   const partnerGeneratedMrrCents = await computePartnerGeneratedMrrCents(mode);
 
+  const { loadPartnerReferralDiscountMetrics } = await import("@/lib/partner-referral-discount");
+  const discountMetrics = await loadPartnerReferralDiscountMetrics(mode);
+
   return {
     totalPartners: partners.length,
     pendingApplications,
@@ -250,6 +255,8 @@ export async function loadPartnerProgramMetrics(): Promise<PartnerProgramMetrics
     totalCommissionsPaidCents,
     partnerGeneratedMrrCents,
     mrrDefinition: PARTNER_GENERATED_MRR_DEFINITION,
+    activeDiscountedReferrals: discountMetrics.activeDiscountedReferrals,
+    totalReferralDiscountGivenCents: discountMetrics.totalDiscountGivenCents,
   };
 }
 

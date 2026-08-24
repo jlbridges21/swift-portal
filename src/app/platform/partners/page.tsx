@@ -5,9 +5,11 @@ import {
   loadPartnerProgramMetrics,
   loadPartnerTableRows,
 } from "@/lib/partner-program";
+import { loadPartnerProgramSettings } from "@/lib/partner-referral-discount";
 import { PartnersManager } from "@/components/platform/partners-manager";
 import { PartnersPerformanceTable } from "@/components/platform/partners-performance-table";
 import { PartnerProgramCharts } from "@/components/platform/partner-program-charts";
+import { PartnerReferralDiscountSettings } from "@/components/platform/partner-referral-discount-settings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 
@@ -37,12 +39,13 @@ function Metric({
 
 export default async function PlatformPartnersPage() {
   await requireSuperAdminPage();
-  const [applications, partners, metrics, charts, tableRows] = await Promise.all([
+  const [applications, partners, metrics, charts, tableRows, discountSettings] = await Promise.all([
     listPartnerApplications("all"),
     listPartners("all"),
     loadPartnerProgramMetrics(),
     loadPartnerProgramCharts(12),
     loadPartnerTableRows(),
+    loadPartnerProgramSettings(),
   ]);
 
   return (
@@ -85,6 +88,25 @@ export default async function PlatformPartnersPage() {
           value={formatCurrency(metrics.partnerGeneratedMrrCents)}
           hint={metrics.mrrDefinition}
         />
+        <Metric
+          label="Active referral discounts"
+          value={String(metrics.activeDiscountedReferrals)}
+          hint="Referred businesses still in their configured discount window"
+        />
+        <Metric
+          label="Referral discount given"
+          value={formatCurrency(metrics.totalReferralDiscountGivenCents)}
+          hint="Estimated list price minus collected on discounted invoices (deploy mode)"
+        />
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-3 text-lg font-semibold text-heading">Referral signup discount</h2>
+        <Card>
+          <CardContent className="pt-6">
+            <PartnerReferralDiscountSettings initial={discountSettings} />
+          </CardContent>
+        </Card>
       </section>
 
       <section className="mt-8">
