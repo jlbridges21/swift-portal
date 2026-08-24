@@ -38,8 +38,34 @@ const HORIZON_OPTIONS = [
 ] as const;
 
 const DEFAULT_HORIZON = "5y";
-const DEFAULT_CHURN_PCT = 4;
+/** Workflow SaaS with high switching costs — lower than generic low-touch tools. */
+const DEFAULT_CHURN_PCT = 3;
 const PORTAL_INDIGO = MARKETING_BRAND.indigo;
+
+const METRIC_OPTIONS = [
+  { id: "cumulative", label: "Total earned" },
+  { id: "monthly", label: "Monthly recurring" },
+] as const;
+
+type ChartMetric = (typeof METRIC_OPTIONS)[number]["id"];
+
+function chartValue(point: TimePoint, metric: ChartMetric): number {
+  return metric === "cumulative" ? point.cumulativeEarnedCents : point.monthlyCommissionCents;
+}
+
+/** Abbreviated axis labels — headline keeps full precision via formatCurrency. */
+function formatAxisCurrency(cents: number): string {
+  const dollars = cents / 100;
+  if (dollars >= 1_000_000) {
+    const m = dollars / 1_000_000;
+    return `$${m >= 10 ? Math.round(m) : m.toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (dollars >= 1_000) {
+    const k = dollars / 1_000;
+    return `$${Math.round(k)}K`;
+  }
+  return `$${Math.round(dollars)}`;
+}
 
 /** Simulate month-by-month with optional churn (monthly rate 0–1). */
 export function simulateCommissionSeries(args: {
@@ -143,6 +169,7 @@ export function PartnerEarningsCalculator({
   const [planBilling, setPlanBilling] = useState<"monthly" | "annual">("monthly");
   const [referralsPerMonth, setReferralsPerMonth] = useState(10);
   const [churnPct, setChurnPct] = useState(DEFAULT_CHURN_PCT);
+  const [chartMetric, setChartMetric] = useState<ChartMetric>("cumulative");
   const [timeAxis, setTimeAxis] = useState<"months" | "years">("years");
   const [horizonId, setHorizonId] = useState<string>(DEFAULT_HORIZON);
   const [scrubT, setScrubT] = useState<number | null>(null);
@@ -180,7 +207,7 @@ export function PartnerEarningsCalculator({
 
   useEffect(() => {
     setChartGen((g) => g + 1);
-  }, [series]);
+  }, [series, chartMetric]);
 
   const endPoint = series[series.length - 1];
   const displayPoint = useMemo(() => {
@@ -197,7 +224,7 @@ export function PartnerEarningsCalculator({
       if (!svg || series.length < 2) return 0;
       const rect = svg.getBoundingClientRect();
       const W = 640;
-      const padL = 8;
+      const padL = 52;
       const padR = 8;
       const plotW = W - padL - padR;
       const xSvg = ((clientX - rect.left) / rect.width) * W;
@@ -282,21 +309,21 @@ export function PartnerEarningsCalculator({
 
   const W = 640;
   const H = 260;
-  const padL = 8;
+  const padL = 52;
   const padR = 8;
   const padT = 12;
   const padB = 28;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
 
-  const maxMonthly = Math.max(1, ...series.map((p) => p.monthlyCommissionCents));
+  const maxChartValue = Math.max(1, ...series.map((p) => chartValue(p, chartMetric)));
   const xAt = (t: number) => padL + t * plotW;
-  const yAt = (cents: number) => padT + plotH - (cents / maxMonthly) * plotH;
+  const yAt = (cents: number) => padT + plotH - (cents / maxChartValue) * plotH;
 
   const linePath = series
     .map((p, i) => {
       const t = series.length <= 1 ? 0.5 : i / (series.length - 1);
-      return `${i === 0 ? "M" : "L"} ${xAt(t)} ${yAt(p.monthlyCommissionCents)}`;
+      return `${i === 0 ? "M" : "L"} ${xAt(t)} ${yAt(chartValue(p, chartMetric))}`;
     })
     .join(" ");
 
@@ -305,10 +332,29 @@ export function PartnerEarningsCalculator({
       ? ""
       : `${linePath} L ${xAt(1)} ${padT + plotH} L ${xAt(0)} ${padT + plotH} Z`;
 
+  const yTicks = [0, 0.5, 1].map((frac) => ({
+    frac,
+    cents: Math.round(maxChartValue * frac),
+    y: yAt(maxChartValue * frac),
+  }));
+
   const scrubFraction = scrubT ?? 1;
   const crossX = xAt(scrubFraction);
-  const crossY = yAt(displayPoint.monthlyCommissionCents);
+  const crossY = yAt(chartValue(displayPoint, chartMetric));
   const showCrosshair = scrubT != null && series.length > 1;
+
+  const headlineCents =
+    chartMetric === "cumulative"
+      ? displayPoint.cumulativeEarnedCents
+      : displayPoint.monthlyCommissionCents;
+  const sublineCents =
+    chartMetric === "cumulative"
+      ? displayPoint.monthlyCommissionCents
+      : displayPoint.cumulativeEarnedCents;
+  const headlineLabel =
+    chartMetric === "cumulative" ? "Total earned" : "Monthly recurring commission";
+  const sublineMetricLabel =
+    chartMetric === "cumulative" ? "Monthly recurring" : "Total earned";
 
   return (
     <div className="space-y-6">
@@ -417,6 +463,27 @@ export function PartnerEarningsCalculator({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">Chart</span>
+        {METRIC_OPTIONS.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => {
+              setChartMetric(m.id);
+              setScrubT(null);
+            }}
+            className={`min-h-11 rounded-full px-4 text-sm font-medium transition-colors ${
+              chartMetric === m.id
+                ? "bg-[#4F46E5] text-white"
+                : "border border-border bg-white text-heading hover:bg-subtle/80"
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium uppercase tracking-wide text-muted">Horizon</span>
         {HORIZON_OPTIONS.map((h) => (
           <button
@@ -477,17 +544,17 @@ export function PartnerEarningsCalculator({
           aria-atomic="true"
         >
           <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
-            Monthly recurring commission
+            {headlineLabel}
           </p>
           <p className="mt-1 text-4xl font-semibold tracking-tight text-heading sm:text-5xl">
-            {formatCurrency(displayPoint.monthlyCommissionCents)}
+            {formatCurrency(headlineCents)}
           </p>
           <p className="mt-2 text-sm text-muted">
             {displayPoint.label}
             {" · "}
             {Math.round(displayPoint.activeReferrals)} active referrals
             {" · "}
-            {formatCurrency(displayPoint.cumulativeEarnedCents)} earned to date
+            {sublineMetricLabel} {formatCurrency(sublineCents)}
           </p>
         </div>
 
@@ -515,7 +582,9 @@ export function PartnerEarningsCalculator({
             onKeyDown={onChartKeyDown}
           >
             <title id={`${chartId}-title`}>
-              Estimated monthly recurring commission projection
+              {chartMetric === "cumulative"
+                ? "Estimated cumulative commission projection"
+                : "Estimated monthly recurring commission projection"}
             </title>
             <defs>
               <linearGradient id={`${chartId}-fill`} x1="0" y1="0" x2="0" y2="1">
@@ -563,6 +632,18 @@ export function PartnerEarningsCalculator({
                 />
               </g>
             ) : null}
+
+            {yTicks.map((tick) => (
+              <text
+                key={tick.frac}
+                x={padL - 6}
+                y={tick.y + 4}
+                textAnchor="end"
+                className="fill-[#64748B] text-[10px] sm:text-[11px]"
+              >
+                {formatAxisCurrency(tick.cents)}
+              </text>
+            ))}
 
             {xLabels.map((l) => (
               <text
