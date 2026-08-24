@@ -9,7 +9,7 @@ export interface PortalLinkResult {
   message: string;
 }
 
-function profileBelongsToBusiness(
+export function profileBelongsToBusiness(
   profile: { business_id?: string | null; role?: string | null },
   businessId: string
 ): boolean {

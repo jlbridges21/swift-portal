@@ -3,6 +3,10 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import type { Client, Communication, Payment, Project, Property } from "@/lib/types";
 import { normalizeStatus } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
+import {
+  getClientPortalAccountStatus,
+  type ClientPortalAccountStatus,
+} from "@/lib/client-portal-recovery";
 
 export interface ClientFinancialStats {
   lifetime_revenue: number;
@@ -68,6 +72,7 @@ export interface ClientCrmProfile {
     visibility?: string;
   }[];
   lastLogin: string | null;
+  portalStatus: ClientPortalAccountStatus | null;
 }
 
 const EMPTY_FINANCIAL: ClientFinancialStats = {
@@ -294,6 +299,8 @@ export async function getClientCrmProfile(
     lastLogin = authData?.user?.last_sign_in_at ?? null;
   }
 
+  const portalStatus = await getClientPortalAccountStatus(clientId, businessId);
+
   const noteAuthorIds = [...new Set((notes ?? []).map((n) => n.user_id).filter(Boolean))] as string[];
   const authorMap = new Map<string, string>();
   if (noteAuthorIds.length) {
@@ -324,6 +331,7 @@ export async function getClientCrmProfile(
       visibility: a.visibility,
     })),
     lastLogin,
+    portalStatus,
   };
 }
 

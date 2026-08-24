@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
+import { ClientPortalRecoveryCard } from "@/components/admin/client-portal-recovery-card";
 import type { Payment } from "@/lib/types";
 
 export type { ClientListRow } from "@/lib/clients-crm";
@@ -330,7 +331,7 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
     referral_source: initialData.client.referral_source || "",
   });
 
-  const { client, stats, properties, projects, communications, recentActivities, lastLogin } = data;
+  const { client, stats, properties, projects, communications, recentActivities, lastLogin, portalStatus } = data;
   const [payments, setPayments] = useState(initialData.payments);
   const displayName = client.full_name || client.name;
 
@@ -515,6 +516,14 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
           </div>
         ))}
       </div>
+
+      {portalStatus && client.email ? (
+        <ClientPortalRecoveryCard
+          clientId={client.id}
+          clientEmail={client.email}
+          initialStatus={portalStatus}
+        />
+      ) : null}
 
       {/* Properties */}
       {properties.length > 0 && (

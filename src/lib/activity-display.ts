@@ -41,6 +41,8 @@ export const ACTIVITY_CONFIG: Record<string, ActivityConfig> = {
   preliminary_estimate_created: { icon: "📄", label: "Preliminary estimate created" },
   official_proposal_sent: { icon: "📄", label: "Official proposal sent" },
   workflow_automation: { icon: "⚙️", label: "Workflow automation" },
+  client_portal_password_reset: { icon: "🔑", label: "Portal password reset sent" },
+  client_portal_temp_password: { icon: "🔑", label: "Temporary portal password set" },
 };
 
 export function getActivityDisplay(type: string, description: string) {
