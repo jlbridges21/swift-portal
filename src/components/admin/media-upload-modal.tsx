@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { UploadProgressList } from "@/components/admin/upload-progress-list";
-import { useMediaUploadQueue } from "@/hooks/use-media-upload-queue";
+import { useUploadManager } from "@/components/admin/upload-manager";
 import { formatFileSize } from "@/lib/upload/validation";
 import { Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -41,11 +40,7 @@ export function MediaUploadModal({
   const [tags, setTags] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
-  const { uploadItems, processFiles, handleRetrySave, handleRetryUpload, isUploading } = useMediaUploadQueue({
-    onUploaded: () => {
-      onUploaded?.();
-    },
-  });
+  const { enqueueUploads, isUploading } = useUploadManager();
 
   function resetForm() {
     setTitle("");
@@ -56,10 +51,6 @@ export function MediaUploadModal({
   }
 
   function handleClose() {
-    if (isUploading) {
-      toast.error("Wait for uploads to finish.");
-      return;
-    }
     resetForm();
     onClose();
   }
@@ -72,7 +63,7 @@ export function MediaUploadModal({
     }
   }
 
-  async function startUpload() {
+  function startUpload() {
     if (!pendingFiles.length) {
       toast.error("Choose at least one photo or video.");
       return;
@@ -88,14 +79,23 @@ export function MediaUploadModal({
         .filter(Boolean),
     };
 
-    const { uploaded, errors } = await processFiles(pendingFiles, selectedProject, meta);
+    const files = [...pendingFiles];
+    resetForm();
+    onClose();
 
-    if (uploaded.length) {
-      toast.success(`${uploaded.length} file(s) uploaded`);
-      resetForm();
-    }
-    if (errors.length && !uploaded.length) toast.error(errors[0]);
-    else if (errors.length) toast.warning(errors.join("; "));
+    enqueueUploads({
+      files,
+      projectId: selectedProject,
+      metadata: meta,
+      onBatchComplete: ({ uploaded, errors }) => {
+        if (uploaded.length) {
+          toast.success(`${uploaded.length} file${uploaded.length === 1 ? "" : "s"} uploaded`);
+          onUploaded?.();
+        }
+        if (errors.length && !uploaded.length) toast.error(errors[0]);
+        else if (errors.length) toast.warning(`${errors.length} file${errors.length === 1 ? "" : "s"} failed`);
+      },
+    });
   }
 
   return (
@@ -106,13 +106,13 @@ export function MediaUploadModal({
           <Select
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
-            placeholder="Unassigned — add to library only"
+            placeholder="Unassigned - add to library only"
             options={[
               { value: "", label: "Unassigned" },
               ...projects.map((p) => ({
                 value: p.id,
                 label: p.property_address
-                  ? `${p.project_name} — ${p.property_address}`
+                  ? `${p.project_name} - ${p.property_address}`
                   : p.project_name,
               })),
             ]}
@@ -131,7 +131,6 @@ export function MediaUploadModal({
               accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/x-m4v,video/m4v,.mp4,.MP4,.mov,.MOV,.m4v"
               className="hidden"
               onChange={onFileChange}
-              disabled={isUploading}
             />
           </label>
           {pendingFiles.length > 0 && (
@@ -181,26 +180,18 @@ export function MediaUploadModal({
           />
         </div>
 
-        {uploadItems.length > 0 && (
-          <UploadProgressList
-            items={uploadItems}
-            onRetrySave={handleRetrySave}
-            onRetry={handleRetryUpload}
-          />
-        )}
-
         <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="outline" onClick={handleClose} disabled={isUploading} className="min-h-11">
+          <Button type="button" variant="outline" onClick={handleClose} className="min-h-11">
             Cancel
           </Button>
           <Button
             type="button"
             variant="accent"
             onClick={startUpload}
-            disabled={isUploading || pendingFiles.length === 0}
+            disabled={pendingFiles.length === 0}
             className="min-h-11"
           >
-            {isUploading ? "Uploading…" : "Upload"}
+            {isUploading ? "Add to queue" : "Upload"}
           </Button>
         </div>
       </div>

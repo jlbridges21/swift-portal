@@ -3,6 +3,16 @@ export const MAX_VIDEO_FILE_SIZE_BYTES = 5 * 1024 * 1024 * 1024; // 5GB
 export const MAX_PHOTO_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
 export const MAX_DOCUMENT_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
 
+/**
+ * Max files uploading binary/signing/saving at once.
+ * Tune here: higher saturates bandwidth more; lower is gentler on browser/Supabase.
+ */
+export const MAX_CONCURRENT_UPLOADS = 5;
+
+/** Automatic retries for transient binary/network failures (not validation errors). */
+export const UPLOAD_AUTO_RETRY_LIMIT = 2;
+export const UPLOAD_AUTO_RETRY_BASE_MS = 1000;
+
 /** TUS chunk size — Supabase recommends 6MB for resumable uploads. */
 export const UPLOAD_CHUNK_SIZE_BYTES = 6 * 1024 * 1024;
 

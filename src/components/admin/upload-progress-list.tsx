@@ -12,7 +12,7 @@ import type { UploadTechnicalDetails } from "@/lib/upload/upload-errors";
 import { SHOW_UPLOAD_TECHNICAL_DETAILS } from "@/lib/upload/diagnostic";
 import { shouldUseTusUpload } from "@/lib/upload/constants";
 import { formatFileSize } from "@/lib/upload/validation";
-import type { UploadRetryContext } from "@/hooks/use-media-upload-queue";
+import type { UploadRetryContext } from "@/components/admin/upload-manager/types";
 
 export interface UploadProgressItem {
   id: string;

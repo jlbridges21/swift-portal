@@ -665,37 +665,8 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
     throw wrapped;
   }
 
-  // Derived thumbnails (photos + videos) — same client-side pattern; never block save.
-  if (mediaType === "photo" || mediaType === "video") {
-    onProgress({
-      phase: "generating_thumbnail",
-      progress: 94,
-      bytesLoaded: file.size,
-      bytesTotal: file.size,
-    });
-    try {
-      const thumbPath =
-        mediaType === "photo"
-          ? await uploadPhotoThumbnail(sign.bucket, sign.filePath, file, {
-              fileName: file.name,
-              projectId,
-              filePath: sign.filePath,
-            })
-          : await uploadVideoThumbnail(sign.bucket, sign.filePath, file, {
-              fileName: file.name,
-              projectId,
-              filePath: sign.filePath,
-            });
-      if (thumbPath) pendingSave.thumbnailPath = thumbPath;
-    } catch {
-      // continue without thumbnail
-    }
-  }
-
-  if (!UPLOAD_DIAGNOSTIC_MODE) {
-    await new Promise((r) => setTimeout(r, mediaType === "video" ? 800 : 200));
-  }
-
+  // Derived thumbnails run after metadata save so they never block the next file
+  // in the concurrent upload queue. Gallery can fall back to the original until then.
   onProgress({ phase: "saving", progress: 96, bytesLoaded: file.size, bytesTotal: file.size });
 
   try {
@@ -703,6 +674,21 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
     onProgress({ phase: "uploaded", progress: 100, bytesLoaded: file.size, bytesTotal: file.size });
     logUploadTimeline("ui_complete");
     dumpUploadTimeline();
+
+    if (mediaType === "photo" || mediaType === "video") {
+      const assetId = typeof (asset as { id?: unknown }).id === "string" ? (asset as { id: string }).id : null;
+      if (assetId) {
+        void attachDeferredThumbnail({
+          assetId,
+          mediaType,
+          bucket: sign.bucket,
+          filePath: sign.filePath,
+          file,
+          projectId,
+        });
+      }
+    }
+
     return { asset };
   } catch (err) {
     if (err instanceof UploadSaveError) {
@@ -716,6 +702,40 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
     );
     logUploadFailure(wrapped.technical);
     throw wrapped;
+  }
+}
+
+async function attachDeferredThumbnail(args: {
+  assetId: string;
+  mediaType: "photo" | "video";
+  bucket: string;
+  filePath: string;
+  file: File;
+  projectId: string | null;
+}): Promise<void> {
+  try {
+    const thumbPath =
+      args.mediaType === "photo"
+        ? await uploadPhotoThumbnail(args.bucket, args.filePath, args.file, {
+            fileName: args.file.name,
+            projectId: args.projectId,
+            filePath: args.filePath,
+          })
+        : await uploadVideoThumbnail(args.bucket, args.filePath, args.file, {
+            fileName: args.file.name,
+            projectId: args.projectId,
+            filePath: args.filePath,
+          });
+    if (!thumbPath) return;
+
+    await fetch("/api/media/" + args.assetId, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id: args.assetId, thumbnail_url: thumbPath }),
+    });
+  } catch {
+    // Thumbnail is best-effort; original remains available for display.
   }
 }
 

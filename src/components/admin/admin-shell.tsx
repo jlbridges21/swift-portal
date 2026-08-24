@@ -6,6 +6,7 @@ import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
 import { AdminMobilePwaNav } from "@/components/admin/admin-mobile-pwa-nav";
 import { AdminCommandPalette } from "@/components/admin/admin-command-palette";
 import { AdminSearchContext } from "@/components/admin/admin-search-context";
+import { UploadManagerProvider } from "@/components/admin/upload-manager";
 import { cn } from "@/lib/utils";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -40,9 +41,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AdminSearchContext.Provider value={value}>
-      <div className={cn(showPwaNav && "admin-pwa-content-pad")}>{children}</div>
-      {mounted && showPwaNav && createPortal(<AdminMobilePwaNav />, document.body)}
-      <AdminCommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
+      <UploadManagerProvider>
+        <div className={cn(showPwaNav && "admin-pwa-content-pad")}>{children}</div>
+        {mounted && showPwaNav && createPortal(<AdminMobilePwaNav />, document.body)}
+        <AdminCommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
+      </UploadManagerProvider>
     </AdminSearchContext.Provider>
   );
 }

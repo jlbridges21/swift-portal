@@ -30,11 +30,9 @@ import {
   Upload, CreditCard, Globe, Trash2, ChevronUp, ChevronDown,
   ExternalLink, Check, Video, ImageIcon, Eye, EyeOff, Link2, Pencil, Users, Plus, MapPin,
 } from "lucide-react";
-import { UploadProgressList, type UploadProgressItem } from "@/components/admin/upload-progress-list";
 import { CreateClientModal } from "@/components/admin/create-client-modal";
+import { useUploadManager } from "@/components/admin/upload-manager";
 import { cn, defaultProjectName } from "@/lib/utils";
-import { uploadMediaFile, retryMediaSave, validateMediaFileBeforeUpload, UploadSaveError, UploadBinaryError } from "@/lib/upload";
-import { userFacingUploadError } from "@/lib/upload/upload-errors";
 import { ALLOWED_VIDEO_MIME_TYPES } from "@/lib/upload/constants";
 import { toast } from "sonner";
 import { useAsyncAction } from "@/lib/use-async-action";
@@ -80,8 +78,8 @@ export function AdminProjectDetail({
   portalUrl,
 }: AdminProjectDetailProps) {
   const router = useRouter();
+  const { enqueueUploads } = useUploadManager();
   const [saving, setSaving] = useState(false);
-  const [uploadItems, setUploadItems] = useState<UploadProgressItem[]>([]);
   const [copied, setCopied] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [showTourForm, setShowTourForm] = useState(false);
@@ -204,150 +202,34 @@ export function AdminProjectDetail({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  function patchUploadItem(id: string, patch: Partial<UploadProgressItem>) {
-    setUploadItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
-  }
-
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>, mediaType: "photo" | "video" | "document") {
+  function handleUpload(e: React.ChangeEvent<HTMLInputElement>, mediaType: "photo" | "video" | "document") {
     const files = e.target.files;
     if (!files?.length) return;
 
     const fileList = Array.from(files);
-    const newItems: UploadProgressItem[] = [];
-    const validFiles: File[] = [];
-
-    for (const file of fileList) {
-      const uploadId = `${file.name}-${Date.now()}-${Math.random()}`;
-      const validation = validateMediaFileBeforeUpload(file, mediaType);
-      if (!validation.ok) {
-        newItems.push({
-          id: uploadId,
-          fileName: file.name,
-          progress: 0,
-          phase: "failed",
-          status: "error",
-          error: validation.error,
-        });
-        continue;
-      }
-      validFiles.push(file);
-      newItems.push({
-        id: uploadId,
-        fileName: file.name,
-        progress: 0,
-        phase: "queued",
-        status: "uploading",
-        bytesTotal: file.size,
-        mimeType: validation.mimeType,
-        startedAt: Date.now(),
-      });
-    }
-
-    if (newItems.length) setUploadItems((prev) => [...prev, ...newItems]);
-
-    const uploaded: MediaAsset[] = [];
-    const errors: string[] = newItems.filter((i) => i.status === "error").map((i) => `${i.fileName}: ${i.error}`);
-
-    let validIndex = 0;
-    for (const item of newItems) {
-      if (item.status === "error") continue;
-      const file = validFiles[validIndex++];
-      const uploadId = item.id;
-      try {
-        const { asset } = await uploadMediaFile({
-          projectId: initialProject.id,
-          file,
-          mediaType,
-          onProgress: ({ phase, progress, bytesLoaded, bytesTotal, resuming }) => {
-            patchUploadItem(uploadId, {
-              phase,
-              progress,
-              bytesLoaded,
-              bytesTotal,
-              resuming,
-              status: phase === "failed" ? "error" : "uploading",
-            });
-          },
-        });
-        uploaded.push(asset as unknown as MediaAsset);
-        patchUploadItem(uploadId, { progress: 100, phase: "uploaded", status: "success" });
-      } catch (err) {
-        if (err instanceof UploadSaveError) {
-          const msg = userFacingUploadError(err.technical);
-          errors.push(`${file.name}: ${msg}`);
-          patchUploadItem(uploadId, {
-            status: "save_failed",
-            phase: "failed",
-            progress: 95,
-            error: msg,
-            technicalDetails: err.technical,
-            pendingSave: { ...err.pendingSave, failedStep: err.step },
-          });
-        } else if (err instanceof UploadBinaryError) {
-          const msg = userFacingUploadError(err.technical);
-          errors.push(`${file.name}: ${msg}`);
-          patchUploadItem(uploadId, {
-            status: "error",
-            phase: "failed",
-            error: msg,
-            technicalDetails: err.technical,
-          });
-        } else {
-          const msg = err instanceof Error ? err.message : "Upload failed";
-          errors.push(`${file.name}: ${msg}`);
-          patchUploadItem(uploadId, { status: "error", phase: "failed", error: msg });
-        }
-      }
-    }
-
-    if (uploaded.length) {
-      setMedia((prev) => dedupeMedia([...prev, ...uploaded]));
-      if (mediaType === "photo") {
-        setPendingNewPhotoIds((prev) => [...prev, ...uploaded.map((u) => u.id)]);
-      }
-      toast.success(`${uploaded.length} file(s) uploaded`);
-      router.refresh();
-    }
-    if (errors.length) {
-      if (!uploaded.length) toast.error(errors[0]);
-      else toast.warning(errors.join("; "));
-    }
-
-    setTimeout(() => {
-      setUploadItems((prev) => prev.filter((item) => item.status === "uploading" || item.status === "save_failed"));
-    }, 8000);
     e.target.value = "";
-  }
 
-  async function handleRetrySave(uploadId: string) {
-    const item = uploadItems.find((i) => i.id === uploadId);
-    if (!item?.pendingSave) return;
-
-    patchUploadItem(uploadId, { status: "uploading", phase: "saving", progress: 96, error: undefined });
-    try {
-      const retryPayload = {
-        ...item.pendingSave,
-        skipStorageVerify: item.pendingSave.failedStep === "storage_verify",
-      };
-      const { asset } = await retryMediaSave(retryPayload, ({ phase, progress }) => {
-        patchUploadItem(uploadId, { phase, progress, status: "uploading" });
-      });
-      const saved = asset as unknown as MediaAsset;
-      setMedia((prev) => dedupeMedia([...prev, saved]));
-      patchUploadItem(uploadId, { progress: 100, phase: "uploaded", status: "success", pendingSave: undefined });
-      toast.success(`${item.fileName} saved`);
-      router.refresh();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Save failed";
-      const failedStep = err instanceof UploadSaveError ? err.step : item.pendingSave.failedStep;
-      patchUploadItem(uploadId, {
-        status: "save_failed",
-        phase: "failed",
-        error: msg,
-        pendingSave: { ...item.pendingSave, failedStep },
-      });
-      toast.error(msg);
-    }
+    enqueueUploads({
+      files: fileList,
+      projectId: initialProject.id,
+      mediaType,
+      onAsset: (asset) => {
+        setMedia((prev) => dedupeMedia([...prev, asset]));
+        if (mediaType === "photo") {
+          setPendingNewPhotoIds((prev) => [...prev, asset.id]);
+        }
+      },
+      onBatchComplete: ({ uploaded, errors }) => {
+        if (uploaded.length) {
+          toast.success(`${uploaded.length} file${uploaded.length === 1 ? "" : "s"} uploaded`);
+          router.refresh();
+        }
+        if (errors.length) {
+          if (!uploaded.length) toast.error(errors[0]);
+          else toast.warning(`${errors.length} file${errors.length === 1 ? "" : "s"} failed`);
+        }
+      },
+    });
   }
 
   async function handleClientCreated(client: Client) {
@@ -753,7 +635,6 @@ export function AdminProjectDetail({
 
   const adminStep = getAdminNextStep({ ...initialProject, status: form.status as Project["status"] }, shootProposals);
 
-  const isUploading = uploadItems.some((i) => i.status === "uploading");
   const displayName = form.project_name.trim() || defaultProjectName(form.property_address, form.service_type);
 
   return (
@@ -903,7 +784,7 @@ export function AdminProjectDetail({
             <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-medium hover:bg-slate-50">
               <Upload className="h-4 w-4" /> Upload Photos
             </span>
-            <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleUpload(e, "photo")} disabled={isUploading} />
+            <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleUpload(e, "photo")} />
           </label>
         </CardHeader>
         <CardContent>
@@ -956,7 +837,7 @@ export function AdminProjectDetail({
               <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-medium hover:bg-slate-50">
                 <Upload className="h-4 w-4" /> Upload Video
               </span>
-              <input type="file" multiple accept={ALLOWED_VIDEO_MIME_TYPES.join(",")} className="hidden" onChange={(e) => handleUpload(e, "video")} disabled={isUploading} />
+              <input type="file" multiple accept={ALLOWED_VIDEO_MIME_TYPES.join(",")} className="hidden" onChange={(e) => handleUpload(e, "video")} />
             </label>
           </div>
         </CardHeader>
@@ -1224,16 +1105,6 @@ export function AdminProjectDetail({
         onClose={() => setShowCreateClient(false)}
         onCreated={handleClientCreated}
       />
-
-      {uploadItems.length > 0 && (
-        <div className="fixed z-50 mx-auto max-w-md left-4 right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] md:bottom-20">
-          <UploadProgressList
-            items={uploadItems}
-            className="shadow-xl bg-white"
-            onRetrySave={handleRetrySave}
-          />
-        </div>
-      )}
 
       <StickySaveBar onSave={saveProject} saving={saving} />
     </div>
