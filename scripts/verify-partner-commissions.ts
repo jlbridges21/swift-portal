@@ -266,13 +266,6 @@ async function main() {
   console.log(
     `verify-partner-commissions: scanned ${rows.length} ledger rows, ${payoutRows.length} payouts (deploy mode=${mode})`
   );
-  if (findings.length) {
-    console.error("DISCREPANCIES:");
-    for (const f of findings) {
-      console.error(`  [${f.check}] ${f.detail}`);
-    }
-    process.exit(1);
-  }
   console.log("ok — every commission traces to one payment");
   console.log("ok — no duplicate commission per payment");
   console.log("ok — amounts match snapshotted rate (reversals ≤ expected)");
@@ -284,6 +277,39 @@ async function main() {
   console.log("ok — no commission belongs to more than one payout");
   console.log("ok — paid totals reconcile per partner");
   console.log("ok — adjustments carry note and created_by");
+
+  // Catalog ↔ Stripe charge amount (sibling integrity check)
+  try {
+    const { checkPlanStripePriceConsistency } = await import(
+      "../src/lib/sync-plan-stripe-prices"
+    );
+    const priceReport = await checkPlanStripePriceConsistency();
+    if (priceReport.mismatches.length) {
+      for (const m of priceReport.mismatches) {
+        findings.push({
+          check: "plan_stripe_price_mismatch",
+          detail: `${m.planKey} ${m.billingInterval}: catalog ${m.catalogCents}¢ vs Stripe ${m.stripeUnitAmountCents ?? "n/a"}¢ (${m.reason})`,
+        });
+      }
+    } else {
+      console.log(
+        `ok — plan catalog matches Stripe unit_amounts (${priceReport.rowsChecked} rows, ${priceReport.modeChecked})`
+      );
+    }
+  } catch (err) {
+    findings.push({
+      check: "plan_stripe_price_check_failed",
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  if (findings.length) {
+    console.error("DISCREPANCIES:");
+    for (const f of findings) {
+      console.error(`  [${f.check}] ${f.detail}`);
+    }
+    process.exit(1);
+  }
   console.log("\nPartner commission ledger reconciliation passed.");
 }
 

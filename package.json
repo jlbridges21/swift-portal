@@ -16,6 +16,8 @@
     "test:comped-access": "npx tsx scripts/verify-comped-access.ts",
     "test:stripe-billing-guards": "npx tsx scripts/verify-stripe-billing-guards.ts",
     "test:paywall-checkout-http": "npx tsx scripts/verify-paywall-checkout-http.ts",
+    "test:partner-lifecycle-e2e": "npx tsx scripts/verify-partner-lifecycle-e2e.ts",
+    "test:plan-stripe-prices": "npx tsx scripts/verify-plan-stripe-price-consistency.ts",
     "setup:stripe-billing": "npx tsx scripts/setup-stripe-billing.ts",
     "tenant-lint": "npx tsx scripts/tenant-lint.ts",
     "tenant-pentest": "npx tsx scripts/tenant-pentest.ts",

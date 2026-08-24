@@ -109,6 +109,10 @@ export async function POST(request: Request) {
     const { stripe } = getStripe();
 
     // Partner referral discount — never block checkout on failure.
+    // Apply at Checkout (not deferred). Stripe repeating coupons use calendar
+    // months from application — a $0 trial invoice does not consume billing
+    // periods. Deferring until after trial raced Stripe invoice finalization
+    // and charged the first paid month at list price.
     let checkoutDiscounts: { coupon: string }[] | undefined;
     let allowPromotionCodes = true;
     try {
@@ -120,33 +124,19 @@ export async function POST(request: Request) {
         interval,
       });
       if (discount.eligible && discount.couponId) {
-        if (trialEndApplied) {
-          // Defer coupon until trial ends — Stripe counts coupon duration from application;
-          // applying during trial risks burning months on $0 trial invoices.
-          subscriptionData.metadata = {
-            ...subscriptionData.metadata,
-            shootportal_referral_discount_pending: "true",
-            shootportal_referral_discount_interval: interval,
-          };
-          console.info("[billing/checkout] referral discount deferred until trial ends", {
-            businessId: business.id,
-            interval,
-            mode,
-          });
-        } else {
-          checkoutDiscounts = [{ coupon: discount.couponId }];
-          // Stripe Checkout allows one discount total — pre-applied referral coupon
-          // replaces the promotion-code field for referred signups.
-          allowPromotionCodes = false;
-          console.info("[billing/checkout] referral discount attached", {
-            businessId: business.id,
-            interval,
-            mode,
-            couponId: discount.couponId,
-            amountOffCents: discount.config?.amountOffCents,
-            durationMonths: discount.config?.durationMonths,
-          });
-        }
+        checkoutDiscounts = [{ coupon: discount.couponId }];
+        // Stripe Checkout allows one discount total — pre-applied referral coupon
+        // replaces the promotion-code field for referred signups.
+        allowPromotionCodes = false;
+        console.info("[billing/checkout] referral discount attached", {
+          businessId: business.id,
+          interval,
+          mode,
+          couponId: discount.couponId,
+          amountOffCents: discount.config?.amountOffCents,
+          durationMonths: discount.config?.durationMonths,
+          trialEndApplied,
+        });
       } else if (discount.config?.enabled) {
         console.error("[billing/checkout] referral discount NOT applied — proceeding at FULL PRICE", {
           businessId: business.id,

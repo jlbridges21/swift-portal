@@ -540,6 +540,12 @@ export async function applyReferralDiscountToSubscription(args: {
 
     await stripe.subscriptions.update(args.subscriptionId, {
       discounts: [{ coupon: resolved.couponId }],
+      metadata: {
+        ...sub.metadata,
+        // Clear legacy deferred flag so expiry cannot trigger a re-apply.
+        shootportal_referral_discount_pending: "",
+        shootportal_referral_discount_applied: "true",
+      },
     });
 
     console.info("[partner-referral-discount] coupon applied to subscription", {
@@ -712,7 +718,13 @@ export async function loadPartnerReferralDiscountMetrics(stripeMode?: StripeMode
 
 export { inferIntervalFromSubscriptionPrice };
 
-/** Apply deferred partner referral discount after trial ends (webhook path). */
+/** Apply deferred partner referral discount (webhook safety net).
+ *
+ * New checkouts attach the coupon at Session create. This path remains for
+ * in-flight subscriptions that still have shootportal_referral_discount_pending
+ * metadata from the old deferred flow. It applies while trialing so the first
+ * paid invoice is covered — never re-applies after a coupon naturally expires.
+ */
 export async function maybeApplyPendingReferralDiscountFromSubscription(
   subscription: import("stripe").Stripe.Subscription,
   source: string
@@ -720,8 +732,9 @@ export async function maybeApplyPendingReferralDiscountFromSubscription(
   const businessId = subscription.metadata?.business_id?.trim();
   if (!businessId) return { applied: false, reason: "no_business_id" };
 
-  if (subscription.status === "trialing") {
-    return { applied: false, reason: "still_trialing" };
+  const pending = subscription.metadata?.shootportal_referral_discount_pending === "true";
+  if (!pending) {
+    return { applied: false, reason: "not_pending" };
   }
 
   const hasDiscount = (subscription.discounts?.length ?? 0) > 0;
@@ -729,17 +742,12 @@ export async function maybeApplyPendingReferralDiscountFromSubscription(
     return { applied: false, reason: "already_discounted" };
   }
 
-  const pending = subscription.metadata?.shootportal_referral_discount_pending === "true";
   const intervalMeta = subscription.metadata?.shootportal_referral_discount_interval;
   const interval: BillingInterval = intervalMeta === "annual" ? "annual" : "monthly";
 
   const resolved = await resolveReferralDiscountForBusiness({ businessId, interval });
   if (!resolved.eligible || !resolved.couponId) {
     return { applied: false, reason: resolved.reason ?? "not_eligible" };
-  }
-
-  if (!pending && subscription.status !== "active") {
-    return { applied: false, reason: "not_pending" };
   }
 
   return applyReferralDiscountToSubscription({
