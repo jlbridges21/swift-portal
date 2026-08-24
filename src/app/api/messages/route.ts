@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const timeline = searchParams.get("timeline") === "1";
   const unreadOnly = searchParams.get("unread_count") === "1";
 
-  if (profile.role === "admin") {
+  if (profile.role === "admin" || profile.role === "super_admin") {
     if (unreadOnly) {
       const list = await listAdminConversations(businessId, profile.id);
       const count = list.reduce((s, c) => s + c.unread_count, 0);
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Message is too long" }, { status: 400 });
   }
 
-  const isAdmin = profile.role === "admin";
+  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
   let clientId = typeof body.client_id === "string" ? body.client_id : null;
 
   if (isAdmin) {

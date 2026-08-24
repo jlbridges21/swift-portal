@@ -33,6 +33,7 @@ import {
 import { CreateClientModal } from "@/components/admin/create-client-modal";
 import { useUploadManager } from "@/components/admin/upload-manager";
 import { cn, defaultProjectName } from "@/lib/utils";
+import { isClientVisibleMedia } from "@/lib/client-media";
 import { ALLOWED_VIDEO_MIME_TYPES } from "@/lib/upload/constants";
 import { toast } from "sonner";
 import { useAsyncAction } from "@/lib/use-async-action";
@@ -356,10 +357,6 @@ export function AdminProjectDetail({
     } else {
       toast.error("Failed to update tour visibility");
     }
-  }
-
-  function isClientVisibleMedia(asset: MediaAsset) {
-    return asset.visibility !== "admin";
   }
 
   async function handleYoutube(e: React.FormEvent<HTMLFormElement>) {

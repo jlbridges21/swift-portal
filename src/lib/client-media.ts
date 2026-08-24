@@ -2,8 +2,10 @@ import type { MediaAsset, Tour } from "@/lib/types";
 
 /** Media the client portal should display (photos, videos, docs, YouTube). */
 export function isClientVisibleMedia(asset: Pick<MediaAsset, "visibility">): boolean {
-  const v = asset.visibility ?? "client";
-  return v !== "admin";
+  // Fail closed when visibility is missing (do not treat undefined as client-visible).
+  // "both" remains client-visible; only explicit "admin" is hidden.
+  if (asset.visibility == null) return false;
+  return asset.visibility !== "admin";
 }
 
 /** 360 tours visible on the client project page. */

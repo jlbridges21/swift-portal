@@ -53,7 +53,7 @@ export async function GET(
     return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
   }
 
-  const isAdmin = profile.role === "admin";
+  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
 
   if (!asset.project_id) {
     if (!isAdmin) {

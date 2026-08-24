@@ -139,7 +139,7 @@ export async function PATCH(request: Request) {
   }
 
   const db = await createTenantServiceClient(businessId);
-  const cookie = profile.role === "admin" ? null : await createClient();
+  const cookie = (profile.role === "admin" || profile.role === "super_admin") ? null : await createClient();
 
   const { data: quote } = cookie
     ? await cookie.from("project_quotes").select("*").eq("id", id).eq("business_id", businessId).single()
@@ -149,7 +149,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (action === "send" && profile.role === "admin") {
+  if (action === "send" && (profile.role === "admin" || profile.role === "super_admin")) {
     if (quote.quote_kind === "preliminary") {
       return NextResponse.json(
         { error: "Use Convert to Official Proposal for preliminary estimates." },
@@ -218,7 +218,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json(updated);
   }
 
-  if (action === "convert_to_official" && profile.role === "admin") {
+  if (action === "convert_to_official" && (profile.role === "admin" || profile.role === "super_admin")) {
     if (quote.quote_kind !== "preliminary") {
       return NextResponse.json({ error: "Only preliminary estimates can be converted." }, { status: 400 });
     }
@@ -394,7 +394,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json(updated);
   }
 
-  if (action === "update" && profile.role === "admin") {
+  if (action === "update" && (profile.role === "admin" || profile.role === "super_admin")) {
     const isPreliminary = quote.quote_kind === "preliminary";
     if (!isPreliminary && quote.status !== "draft") {
       return NextResponse.json(
@@ -431,7 +431,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json(updated);
   }
 
-  if (action === "duplicate" && profile.role === "admin") {
+  if (action === "duplicate" && (profile.role === "admin" || profile.role === "super_admin")) {
     const revisionNumber = body.revision_label || "Revised";
     const { data: newQuote, error } = await db
       .from("project_quotes")

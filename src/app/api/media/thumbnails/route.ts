@@ -39,13 +39,13 @@ export async function POST(request: Request) {
 
   const db = await createTenantServiceClient(tenant.businessId);
   const cookieClient = await createClient();
-  const isAdmin = profile.role === "admin";
+  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
   const storageClient = isAdmin ? db.raw : cookieClient;
 
   const { data: rows, error } = await db
     .from("media_assets")
     .select(
-      "id, file_path, thumbnail_url, media_type, media_source, mime_type, file_name, file_size, business_id, project_id, visibility, client_visible"
+      "id, file_path, thumbnail_url, media_type, media_source, mime_type, file_name, file_size, business_id, project_id, visibility"
     )
     .in("id", ids);
 

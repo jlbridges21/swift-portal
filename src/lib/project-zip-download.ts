@@ -437,7 +437,7 @@ export async function authorizeProjectZipDownload(
     }
   | { ok: false; status: number; error: string; details: string }
 > {
-  const isAdmin = profile.role === "admin";
+  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
 
   const { data: project, error: projectError } = await supabase
     .from("projects")

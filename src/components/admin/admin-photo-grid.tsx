@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { createThumbRequestQueue } from "@/lib/media-thumb-client";
+import { isClientVisibleMedia } from "@/lib/client-media";
 
 type FolderFilter = "all" | "unfiled" | string;
 
@@ -73,7 +74,7 @@ interface AdminPhotoGridProps {
 }
 
 function isClientVisible(asset: MediaAsset) {
-  return asset.visibility !== "admin";
+  return isClientVisibleMedia(asset);
 }
 
 /** Project-wide photo order — folders are a filter, not a sort key. */

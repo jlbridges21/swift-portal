@@ -33,7 +33,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Project not found or access denied" }, { status: 404 });
   }
 
-  if (profile.role === "admin") {
+  if (profile.role === "admin" || profile.role === "super_admin") {
     return NextResponse.json(
       {
         error: "Use /api/messages?client_id=… for admin messaging",
@@ -77,7 +77,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Message is too long (max 5000 characters)" }, { status: 400 });
   }
 
-  const isAdmin = profile.role === "admin";
+  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
   let clientId: string | null =
     typeof body.client_id === "string" ? body.client_id : null;
 
@@ -195,7 +195,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if (!tenant) return missingTenantResponse(profile.role);
   const businessId = tenant.businessId;
 
-  if (profile.role === "admin") {
+  if (profile.role === "admin" || profile.role === "super_admin") {
     const body = await request.json().catch(() => ({}));
     const clientId = typeof body.client_id === "string" ? body.client_id : null;
     if (!clientId) {
