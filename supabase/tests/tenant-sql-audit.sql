@@ -8,7 +8,8 @@
 --   2. business_id nullable (profiles + processed_stripe_events excepted)
 --   3. business-data base tables with RLS disabled
 --      (platform exceptions without business_id: processed_stripe_events,
---       platform_audit_log, plans, platform_email_templates — still must have RLS enabled)
+--       platform_audit_log, plans, platform_email_templates, partners,
+--       partner_applications — still must have RLS enabled)
 --   4. business_id column_default (v35 dropped these)
 --   5. SECURITY DEFINER functions/views readable by authenticated — must be
 --      in the justified set below
@@ -58,7 +59,8 @@ WHERE table_schema = 'public'
   AND is_nullable = 'YES'
   AND table_name NOT IN ('profiles', 'processed_stripe_events');
 
--- plans / platform_email_templates must NOT have business_id (platform catalog exception)
+-- plans / platform_email_templates / partners tables must NOT have business_id
+-- (platform catalog / partner-program exceptions)
 INSERT INTO _tenant_sql_audit (check_name, detail)
 SELECT
   '2b_plans_has_business_id',
@@ -83,6 +85,28 @@ WHERE EXISTS (
 
 INSERT INTO _tenant_sql_audit (check_name, detail)
 SELECT
+  '2b_partners_has_business_id',
+  'partners must remain platform-scoped without business_id'
+WHERE EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'partners'
+    AND column_name = 'business_id'
+);
+
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
+  '2b_partner_applications_has_business_id',
+  'partner_applications must remain platform-scoped without business_id'
+WHERE EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'partner_applications'
+    AND column_name = 'business_id'
+);
+
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
   '2b_plans_missing',
   'plans table is missing'
 WHERE NOT EXISTS (
@@ -99,10 +123,29 @@ WHERE NOT EXISTS (
   WHERE table_schema = 'public' AND table_name = 'platform_email_templates'
 );
 
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
+  '2b_partners_missing',
+  'partners table is missing'
+WHERE NOT EXISTS (
+  SELECT 1 FROM information_schema.tables
+  WHERE table_schema = 'public' AND table_name = 'partners'
+);
+
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
+  '2b_partner_applications_missing',
+  'partner_applications table is missing'
+WHERE NOT EXISTS (
+  SELECT 1 FROM information_schema.tables
+  WHERE table_schema = 'public' AND table_name = 'partner_applications'
+);
+
 -- ---------------------------------------------------------------------------
 -- 3. RLS disabled on public base tables that hold business or identity data
 --     Platform tables without business_id (plans, platform_audit_log,
---     processed_stripe_events, platform_email_templates) are still required to have RLS enabled.
+--     processed_stripe_events, platform_email_templates, partners,
+--     partner_applications) are still required to have RLS enabled.
 -- ---------------------------------------------------------------------------
 INSERT INTO _tenant_sql_audit (check_name, detail)
 SELECT

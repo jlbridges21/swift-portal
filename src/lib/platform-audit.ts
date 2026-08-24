@@ -24,7 +24,12 @@ export type PlatformAuditAction =
   | "plan.update"
   | "plan.activate"
   | "plan.deactivate"
-  | "plan.reorder";
+  | "plan.reorder"
+  | "partner.create"
+  | "partner.update"
+  | "partner.invite"
+  | "partner.application_approve"
+  | "partner.application_decline";
 
 export async function requestIpAddress(): Promise<string | null> {
   try {

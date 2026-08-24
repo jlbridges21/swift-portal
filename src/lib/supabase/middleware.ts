@@ -92,7 +92,7 @@ export async function updateSession(request: NextRequest) {
   const isApi = path.startsWith("/api/");
   const method = request.method.toUpperCase();
 
-  const protectedPaths = ["/dashboard", "/admin", "/platform", "/billing", "/onboarding"];
+  const protectedPaths = ["/dashboard", "/admin", "/platform", "/billing", "/onboarding", "/partner"];
   const isProtected = protectedPaths.some((p) => path.startsWith(p));
 
   // Self-serve signup is platform-apex only — never on a tenant host.
@@ -112,6 +112,20 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = `${resolution.pathPrefix}/`;
     return applyPathCookie(NextResponse.redirect(url), resolution);
+  }
+
+  // Partner applications are platform-apex only — never on a tenant host.
+  if (
+    (path === "/api/partners/apply" || path.startsWith("/api/partners/apply/")) &&
+    resolution.kind === "tenant"
+  ) {
+    return applyPathCookie(
+      NextResponse.json(
+        { error: "Partner applications are only available on shootportal.app." },
+        { status: 403 }
+      ),
+      resolution
+    );
   }
 
   if (isProtected && !user) {
