@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
-import { getActivePartnerByUserId } from "@/lib/partners";
+import {
+  loadPartnerDashboardSummary,
+  resolvePartnerAccess,
+} from "@/lib/partner-dashboard";
 
 /**
- * Partner-only endpoint (placeholder for phase 4 dashboard data).
- * Requires an active partners row for the signed-in user.
+ * Partner summary for the signed-in user only.
+ * Never accepts partner_id from the client.
  */
 export async function GET() {
   const profile = await getProfile();
@@ -12,19 +15,24 @@ export async function GET() {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const partner = await getActivePartnerByUserId(profile.id);
-  if (!partner) {
+  const access = await resolvePartnerAccess(profile.id);
+  if (access.kind === "none") {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  if (access.kind === "suspended") {
+    return NextResponse.json(
+      {
+        suspended: true,
+        partner: {
+          id: access.partner.id,
+          brand_name: access.partner.brand_name,
+          status: access.partner.status,
+        },
+      },
+      { status: 403 }
+    );
+  }
 
-  return NextResponse.json({
-    partner: {
-      id: partner.id,
-      name: partner.name,
-      brand_name: partner.brand_name,
-      referral_code: partner.referral_code,
-      commission_rate_pct: partner.commission_rate_pct,
-      status: partner.status,
-    },
-  });
+  const summary = await loadPartnerDashboardSummary(access.partner);
+  return NextResponse.json({ summary });
 }
