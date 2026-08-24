@@ -110,6 +110,34 @@ export function resolveEffectiveReferralDiscount(
   };
 }
 
+/** Same resolver checkout uses — for partner landing offer copy (monthly billing). */
+export async function resolveReferralDiscountForPartner(
+  partnerId: string
+): Promise<EffectiveReferralDiscount> {
+  const raw = await createServiceClient();
+  const [program, { data: partner }] = await Promise.all([
+    loadPartnerProgramSettings(),
+    raw
+      .from("partners")
+      .select(
+        "referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months"
+      )
+      .eq("id", partnerId)
+      .maybeSingle(),
+  ]);
+  return resolveEffectiveReferralDiscount(program, partner);
+}
+
+/** Offer copy for co-branded landing pages — null when discount is off or invalid. */
+export function formatPartnerReferralLandingOffer(config: EffectiveReferralDiscount): string | null {
+  if (!config.enabled || config.amountOffCents <= 0 || config.durationMonths <= 0) {
+    return null;
+  }
+  const amt = formatCents(config.amountOffCents);
+  const months = config.durationMonths;
+  return `Get ${amt}/month off your first ${months} paid month${months === 1 ? "" : "s"} when you subscribe through this page (monthly billing).`;
+}
+
 export async function loadStripeCouponIdForReferralDiscount(args: {
   mode?: StripeMode;
   interval: BillingInterval;

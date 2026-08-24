@@ -12,7 +12,11 @@ import { PartnerReferralsTable } from "@/components/partner/partner-referrals-ta
 import { PartnerCommissionHistory } from "@/components/partner/partner-commission-history";
 import { PartnerEarningsChart } from "@/components/partner/partner-earnings-chart";
 import { PartnerLandingEditor } from "@/components/platform/partner-landing-editor";
-import { getPartnerLandingByPartnerId } from "@/lib/partner-landing";
+import {
+  buildPartnerLandingDefaultsWithOffer,
+  getPartnerLandingByPartnerId,
+  getPartnerLandingUpdatedByLabel,
+} from "@/lib/partner-landing";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +53,10 @@ export default async function PlatformPartnerDetailPage({
   if (!detail) notFound();
 
   const landing = await getPartnerLandingByPartnerId(id);
+  const landingDefaults = await buildPartnerLandingDefaultsWithOffer(id, detail.partner.brand_name);
+  const landingUpdatedByLabel = landing?.updated_by
+    ? await getPartnerLandingUpdatedByLabel(landing.updated_by)
+    : null;
   const { partner, balance } = detail;
 
   return (
@@ -124,8 +132,12 @@ export default async function PlatformPartnerDetailPage({
         <h2 className="text-lg font-semibold text-heading">Custom landing page</h2>
         <PartnerLandingEditor
           partnerId={partner.id}
+          brandName={partner.brand_name}
           initial={landing}
+          defaults={landingDefaults}
           suggestedSlug={partner.referral_code}
+          updatedAt={landing?.updated_at ?? null}
+          updatedByLabel={landingUpdatedByLabel}
         />
       </section>
 

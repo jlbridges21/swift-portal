@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/api-auth";
 import {
+  buildPartnerLandingDefaultsWithOffer,
   getPartnerLandingByPartnerId,
+  getPartnerLandingUpdatedByLabel,
   setPartnerLandingActive,
   upsertPartnerLandingPage,
 } from "@/lib/partner-landing";
@@ -16,7 +18,12 @@ export async function GET(_request: Request, { params }: RouteParams) {
   const partner = await getPartnerById(id);
   if (!partner) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const landing = await getPartnerLandingByPartnerId(id);
-  return NextResponse.json({ landing });
+  const defaults = await buildPartnerLandingDefaultsWithOffer(id, partner.brand_name);
+  let updatedByLabel: string | null = null;
+  if (landing?.updated_by) {
+    updatedByLabel = await getPartnerLandingUpdatedByLabel(landing.updated_by);
+  }
+  return NextResponse.json({ landing, defaults, updatedByLabel });
 }
 
 export async function PUT(request: Request, { params }: RouteParams) {
@@ -31,10 +38,17 @@ export async function PUT(request: Request, { params }: RouteParams) {
       {
         slug: body.slug,
         headline: body.headline,
+        subheadline: body.subheadline,
         description: body.description,
+        benefits: body.benefits,
         photoUrl: body.photoUrl ?? body.photo_url,
+        logoUrl: body.logoUrl ?? body.logo_url,
+        brandPrimaryColor: body.brandPrimaryColor ?? body.brand_primary_color,
+        brandAccentColor: body.brandAccentColor ?? body.brand_accent_color,
+        testimonialQuote: body.testimonialQuote ?? body.testimonial_quote,
+        testimonialAttribution: body.testimonialAttribution ?? body.testimonial_attribution,
+        showOffer: body.showOffer ?? body.show_offer,
         ctaLabel: body.ctaLabel ?? body.cta_label,
-        offerText: body.offerText ?? body.offer_text,
         isActive: body.isActive ?? body.is_active,
       },
       { id: auth.profile.id, email: auth.profile.email }

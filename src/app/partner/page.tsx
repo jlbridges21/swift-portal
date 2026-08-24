@@ -136,6 +136,11 @@ export default async function PartnerHomePage({
               <p className="text-sm font-medium text-heading">{summary.partner.brandName}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <Link href="/partner/landing">
+                <Button type="button" variant="outline" size="sm" className="min-h-11">
+                  Landing page
+                </Button>
+              </Link>
               {isBusinessAdmin ? (
                 <Link href="/admin">
                   <Button type="button" variant="outline" size="sm" className="min-h-11">
