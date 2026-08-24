@@ -115,7 +115,7 @@ async function tryAttributeNewBusiness(args: {
       partner = await resolveActivePartnerFromRefClaims(claims);
       if (!partner || !claims) return false;
       referralCodeUsed = claims.code;
-      attrSource = "link";
+      attrSource = claims.source === "landing_page" ? "landing_page" : "link";
     } else if (args.referredByPartnerId) {
       const row = await getPartnerById(args.referredByPartnerId);
       if (!row || row.status !== "active") return false;

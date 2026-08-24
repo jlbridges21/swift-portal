@@ -114,6 +114,11 @@ export function MarketingFooter() {
               </Link>
             </li>
             <li>
+              <Link href="/partners" className="hover:text-white">
+                Partner Program
+              </Link>
+            </li>
+            <li>
               <Link href="/signup" className="hover:text-white">
                 Start free trial
               </Link>

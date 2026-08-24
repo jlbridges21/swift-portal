@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -511,9 +512,9 @@ export function OnboardingWizard({
               <StripeConnectCard />
               <p className="text-sm text-muted">
                 Optional later:{" "}
-                <a href="/admin/settings#settings-custom-domain" className="font-medium text-accent underline">
+                <Link href="/admin/settings#settings-custom-domain" className="font-medium text-accent underline">
                   Use your own web address
-                </a>{" "}
+                </Link>{" "}
                 (for example portal.yourstudio.com) so clients open your portal on your brand.
               </p>
               <div className="flex flex-wrap gap-2">
@@ -650,9 +651,9 @@ export function OnboardingWizard({
               )}
               <p className="text-sm text-muted">
                 Optional:{" "}
-                <a href="/admin/settings#settings-custom-domain" className="font-medium text-accent underline">
+                <Link href="/admin/settings#settings-custom-domain" className="font-medium text-accent underline">
                   Use your own web address
-                </a>{" "}
+                </Link>{" "}
                 so clients visit portal.yourstudio.com instead of a ShootPortal subdomain.
               </p>
               <div className="flex flex-wrap gap-2">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getSubscriptionState } from "@/lib/subscription";
 
 export function SubscriptionBanner({
@@ -32,9 +33,9 @@ export function SubscriptionBanner({
           <p>
             Trial: <strong>{days}</strong> day{days === 1 ? "" : "s"} remaining.
           </p>
-          <a href="/billing" className="font-medium underline underline-offset-2">
+          <Link href="/billing" className="font-medium underline underline-offset-2">
             View plans
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -48,9 +49,9 @@ export function SubscriptionBanner({
             Payment past due — your portal stays open while billing is retried. Update payment
             details soon.
           </p>
-          <a href="/billing" className="font-medium underline underline-offset-2">
+          <Link href="/billing" className="font-medium underline underline-offset-2">
             Billing
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -70,9 +71,9 @@ export function SubscriptionBanner({
             {new Date(subscriptionCurrentPeriodEnd).toLocaleDateString()}). Access continues until
             then.
           </p>
-          <a href="/billing" className="font-medium underline underline-offset-2">
+          <Link href="/billing" className="font-medium underline underline-offset-2">
             Billing
-          </a>
+          </Link>
         </div>
       </div>
     );

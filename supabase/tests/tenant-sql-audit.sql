@@ -118,6 +118,17 @@ WHERE EXISTS (
 
 INSERT INTO _tenant_sql_audit (check_name, detail)
 SELECT
+  '2b_partner_landing_pages_has_business_id',
+  'partner_landing_pages must remain platform-scoped without business_id'
+WHERE EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'partner_landing_pages'
+    AND column_name = 'business_id'
+);
+
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
   '2b_plans_missing',
   'plans table is missing'
 WHERE NOT EXISTS (
@@ -159,6 +170,15 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM information_schema.tables
   WHERE table_schema = 'public' AND table_name = 'partner_payouts'
+);
+
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
+  '2b_partner_landing_pages_missing',
+  'partner_landing_pages table is missing'
+WHERE NOT EXISTS (
+  SELECT 1 FROM information_schema.tables
+  WHERE table_schema = 'public' AND table_name = 'partner_landing_pages'
 );
 
 -- partner_referrals MUST have business_id (attribution join — not a no-business_id platform catalog)

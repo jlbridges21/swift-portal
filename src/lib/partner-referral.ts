@@ -7,7 +7,7 @@
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { validateReferralCode } from "@/lib/reserved-subdomains";
+import { validateLandingSlug, validateReferralCode } from "@/lib/reserved-subdomains";
 
 export const PARTNER_REF_COOKIE = "sp_partner_ref";
 export const PARTNER_REF_TTL_SECONDS = 90 * 24 * 60 * 60;
@@ -19,6 +19,8 @@ export type PartnerRefClaims = {
   /** Unix seconds when the cookie was set (last-touch). */
   ts: number;
   exp: number;
+  /** How the visitor got the cookie. Missing on legacy cookies → treated as link. */
+  source?: PartnerReferralSource;
 };
 
 export type ActivePartnerRef = {
@@ -66,11 +68,14 @@ export function signPartnerRefCookie(claims: PartnerRefClaims): string | null {
   if (!secret) return null;
   const validated = validateReferralCode(claims.code);
   if (!validated.ok) return null;
+  const source: PartnerReferralSource =
+    claims.source === "landing_page" ? "landing_page" : "link";
   const body = b64url(
     JSON.stringify({
       code: validated.code,
       ts: claims.ts,
       exp: claims.exp,
+      source,
     })
   );
   const payload = `v1.${body}`;
@@ -95,13 +100,16 @@ export function verifyPartnerRefCookie(raw: string | undefined | null): PartnerR
       code?: unknown;
       ts?: unknown;
       exp?: unknown;
+      source?: unknown;
     };
     if (typeof parsed.code !== "string") return null;
     const validated = validateReferralCode(parsed.code);
     if (!validated.ok) return null;
     if (typeof parsed.ts !== "number" || typeof parsed.exp !== "number") return null;
     if (parsed.exp * 1000 < Date.now()) return null;
-    return { code: validated.code, ts: parsed.ts, exp: parsed.exp };
+    const source: PartnerReferralSource =
+      parsed.source === "landing_page" ? "landing_page" : "link";
+    return { code: validated.code, ts: parsed.ts, exp: parsed.exp, source };
   } catch {
     return null;
   }
@@ -138,15 +146,19 @@ export async function lookupActivePartnerByReferralCode(
  * Unknown / suspended / malformed / missing secret → null (silent).
  */
 export async function buildPartnerRefCookieValue(
-  rawCode: string
+  rawCode: string,
+  source: PartnerReferralSource = "link"
 ): Promise<string | null> {
   const partner = await lookupActivePartnerByReferralCode(rawCode);
   if (!partner) return null;
   const now = Math.floor(Date.now() / 1000);
+  const cookieSource: PartnerReferralSource =
+    source === "landing_page" ? "landing_page" : "link";
   return signPartnerRefCookie({
     code: partner.referral_code,
     ts: now,
     exp: now + PARTNER_REF_TTL_SECONDS,
+    source: cookieSource,
   });
 }
 
@@ -198,4 +210,30 @@ export async function resolveActivePartnerFromRefClaims(
 ): Promise<ActivePartnerRef | null> {
   if (!claims) return null;
   return lookupActivePartnerByReferralCode(claims.code);
+}
+
+/**
+ * Middleware/edge: active partner landing at /{slug} → referral code.
+ * Unknown / inactive / reserved → null (no cookie).
+ */
+export async function lookupActiveLandingReferralCode(
+  rawSlug: string
+): Promise<string | null> {
+  const validated = validateLandingSlug(rawSlug);
+  if (!validated.ok) return null;
+  const supabase = serviceClient();
+  const { data: landing } = await supabase
+    .from("partner_landing_pages")
+    .select("partner_id")
+    .eq("slug", validated.slug)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!landing?.partner_id) return null;
+  const { data: partner } = await supabase
+    .from("partners")
+    .select("referral_code, status")
+    .eq("id", landing.partner_id as string)
+    .eq("status", "active")
+    .maybeSingle();
+  return (partner?.referral_code as string | undefined) ?? null;
 }

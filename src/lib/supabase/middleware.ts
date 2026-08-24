@@ -11,9 +11,11 @@ import { getLoginRedirectOrigin } from "@/lib/portal-url";
 import { verifyImpersonationCookie, SA_BUSINESS_CONTEXT_COOKIE } from "@/lib/platform-session";
 import {
   buildPartnerRefCookieValue,
+  lookupActiveLandingReferralCode,
   PARTNER_REF_COOKIE,
   partnerRefCookieOptions,
 } from "@/lib/partner-referral";
+import { isReservedAppRouteSlug } from "@/lib/reserved-subdomains";
 import { writePlatformAudit } from "@/lib/platform-audit";
 import {
   getSubscriptionState,
@@ -75,7 +77,7 @@ export async function updateSession(request: NextRequest) {
     url.searchParams.delete("ref");
     const response = NextResponse.redirect(url);
     try {
-      const signed = await buildPartnerRefCookieValue(rawRef);
+      const signed = await buildPartnerRefCookieValue(rawRef, "link");
       if (signed) {
         response.cookies.set(PARTNER_REF_COOKIE, signed, partnerRefCookieOptions());
       }
@@ -87,7 +89,34 @@ export async function updateSession(request: NextRequest) {
     return applyPathCookie(response, resolution);
   }
 
+  // Partner landing /{slug} cookie — platform apex only. Source = landing_page.
+  // Static routes are reserved and skipped; inactive/unknown slugs set nothing (page 404s).
+  let partnerLandingCookie: string | null = null;
+  if (resolution.kind === "platform") {
+    const path = request.nextUrl.pathname;
+    const m = path.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/i);
+    if (m && !isReservedAppRouteSlug(m[1])) {
+      try {
+        const code = await lookupActiveLandingReferralCode(m[1]);
+        if (code) {
+          partnerLandingCookie = await buildPartnerRefCookieValue(code, "landing_page");
+        }
+      } catch (err) {
+        console.error("[partner-landing] cookie lookup failed", {
+          detail: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
   let supabaseResponse = buildSessionResponse(request, requestHeaders, resolution);
+  if (partnerLandingCookie) {
+    supabaseResponse.cookies.set(
+      PARTNER_REF_COOKIE,
+      partnerLandingCookie,
+      partnerRefCookieOptions()
+    );
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -103,6 +132,13 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
+          if (partnerLandingCookie) {
+            supabaseResponse.cookies.set(
+              PARTNER_REF_COOKIE,
+              partnerLandingCookie,
+              partnerRefCookieOptions()
+            );
+          }
           applyPathCookie(supabaseResponse, resolution);
         },
       },

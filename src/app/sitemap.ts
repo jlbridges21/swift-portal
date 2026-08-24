@@ -10,7 +10,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const base = getCanonicalSiteUrl();
   const lastModified = new Date();
 
-  const paths = ["", "/how-it-works", "/pricing", "/contact", "/privacy", "/terms", "/signup"];
+  const paths = [
+    "",
+    "/how-it-works",
+    "/pricing",
+    "/partners",
+    "/contact",
+    "/privacy",
+    "/terms",
+    "/signup",
+  ];
 
   return paths.map((path) => ({
     url: `${base}${path || "/"}`,

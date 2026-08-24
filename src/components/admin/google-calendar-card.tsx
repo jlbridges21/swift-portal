@@ -92,6 +92,8 @@ export function GoogleCalendarCard() {
             <code className="text-xs">GOOGLE_CLIENT_SECRET</code> to your environment to enable sync.
           </p>
         ) : !connected ? (
+          // External OAuth start — full navigation to API, not a Next.js page.
+          // eslint-disable-next-line @next/next/no-html-link-for-pages -- /api OAuth entry
           <a href="/api/google-calendar/connect">
             <Button variant="accent" size="sm">
               <Link2 className="h-4 w-4" /> Connect Google Calendar

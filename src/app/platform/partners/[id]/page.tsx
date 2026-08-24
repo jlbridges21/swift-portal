@@ -11,6 +11,8 @@ import { PartnerPayoutHistory } from "@/components/partner/partner-payout-histor
 import { PartnerReferralsTable } from "@/components/partner/partner-referrals-table";
 import { PartnerCommissionHistory } from "@/components/partner/partner-commission-history";
 import { PartnerEarningsChart } from "@/components/partner/partner-earnings-chart";
+import { PartnerLandingEditor } from "@/components/platform/partner-landing-editor";
+import { getPartnerLandingByPartnerId } from "@/lib/partner-landing";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +48,7 @@ export default async function PlatformPartnerDetailPage({
   const detail = await loadPlatformPartnerDetail(id);
   if (!detail) notFound();
 
+  const landing = await getPartnerLandingByPartnerId(id);
   const { partner, balance } = detail;
 
   return (
@@ -115,6 +118,15 @@ export default async function PlatformPartnerDetailPage({
             <PartnerEarningsChart buckets={detail.monthly} />
           </CardContent>
         </Card>
+      </section>
+
+      <section className="mt-8 space-y-3">
+        <h2 className="text-lg font-semibold text-heading">Custom landing page</h2>
+        <PartnerLandingEditor
+          partnerId={partner.id}
+          initial={landing}
+          suggestedSlug={partner.referral_code}
+        />
       </section>
 
       <section className="mt-8 space-y-3">
