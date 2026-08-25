@@ -7,7 +7,7 @@ import { SubscriptionBanner } from "@/components/admin/subscription-banner";
 import { ImpersonationBanner } from "@/components/platform/impersonation-banner";
 import { FinishSetupBanner } from "@/components/admin/finish-setup-banner";
 import { requireAdminPage } from "@/lib/admin-access";
-import { getCapabilities, showPartnerNavItem } from "@/lib/capabilities";
+import { getCapabilities, partnerNavHref, partnerNavLabel, showPartnerNavItem } from "@/lib/capabilities";
 import { getTenantContext } from "@/lib/tenant";
 import { metadataFromBusiness } from "@/lib/site-metadata";
 import { showFinishSetupBanner } from "@/lib/onboarding";
@@ -26,6 +26,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const brand = getPortalBrandFromSettings(settings);
   const caps = await getCapabilities();
   const showPartner = showPartnerNavItem(caps);
+  const navPartnerLabel = partnerNavLabel(caps);
+  const navPartnerHref = partnerNavHref(caps);
   const finishBanner = showFinishSetupBanner({
     onboardingCompletedAt: tenant.business.onboarding_completed_at,
     onboardingState: tenant.business.onboarding_state,
@@ -35,7 +37,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <BrandProvider brand={brand}>
-      <AdminCapabilitiesProvider showPartner={showPartner}>
+      <AdminCapabilitiesProvider
+        showPartner={showPartner}
+        partnerNavLabel={navPartnerLabel}
+        partnerNavHref={navPartnerHref}
+      >
         {tenant.impersonating && (
           <ImpersonationBanner
             businessName={tenant.business.name}
@@ -55,7 +61,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           subscriptionCancelAtPeriodEnd={tenant.business.subscription_cancel_at_period_end}
         />
         {finishBanner ? <FinishSetupBanner /> : null}
-        <AdminShell showPartner={showPartner}>{children}</AdminShell>
+        <AdminShell
+          showPartner={showPartner}
+          partnerNavLabel={navPartnerLabel}
+          partnerNavHref={navPartnerHref}
+        >
+          {children}
+        </AdminShell>
       </AdminCapabilitiesProvider>
     </BrandProvider>
   );

@@ -12,9 +12,13 @@ import { cn } from "@/lib/utils";
 export function AdminShell({
   children,
   showPartner = false,
+  partnerNavLabel = "Partner Program",
+  partnerNavHref = "/partner",
 }: {
   children: React.ReactNode;
   showPartner?: boolean;
+  partnerNavLabel?: string;
+  partnerNavHref?: string;
 }) {
   const showPwaNav = useIsStandalonePwaMobile();
   const [mounted, setMounted] = useState(false);
@@ -50,7 +54,14 @@ export function AdminShell({
       <UploadManagerProvider>
         <div className={cn(showPwaNav && "admin-pwa-content-pad")}>{children}</div>
         {mounted && showPwaNav &&
-          createPortal(<AdminMobilePwaNav showPartner={showPartner} />, document.body)}
+          createPortal(
+            <AdminMobilePwaNav
+              showPartner={showPartner}
+              partnerNavLabel={partnerNavLabel}
+              partnerNavHref={partnerNavHref}
+            />,
+            document.body
+          )}
         <AdminCommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       </UploadManagerProvider>
     </AdminSearchContext.Provider>

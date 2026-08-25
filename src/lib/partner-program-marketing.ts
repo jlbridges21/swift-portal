@@ -8,6 +8,7 @@ import { listPublicPlans } from "@/lib/entitlements";
 import { formatPlanPrice } from "@/lib/plan-catalog";
 import { PARTNER_COMMISSION_HOLD_DAYS } from "@/lib/partner-commissions";
 import { loadCalculatorPlans } from "@/lib/partner-dashboard";
+import { loadPartnerProgramSettings } from "@/lib/partner-referral-discount";
 
 export async function getPartnerProgramDefaultCommissionRatePct(): Promise<number> {
   const raw = await createServiceClient();
@@ -20,10 +21,18 @@ export async function getPartnerProgramDefaultCommissionRatePct(): Promise<numbe
   return n;
 }
 
+export type PartnerReferralDiscountPitch = {
+  enabled: boolean;
+  amountCents: number;
+  durationMonths: number;
+  amountLabel: string;
+};
+
 export type PartnerProgramMarketingData = {
   commissionRatePct: number;
   holdDays: number;
   plans: Awaited<ReturnType<typeof loadCalculatorPlans>>;
+  referralDiscount: PartnerReferralDiscountPitch;
   /** Primary public plan used for example arithmetic (usually studio). */
   examplePlan: {
     key: string;
@@ -37,10 +46,11 @@ export type PartnerProgramMarketingData = {
 };
 
 export async function loadPartnerProgramMarketingData(): Promise<PartnerProgramMarketingData> {
-  const [commissionRatePct, plans, publicPlans] = await Promise.all([
+  const [commissionRatePct, plans, publicPlans, programSettings] = await Promise.all([
     getPartnerProgramDefaultCommissionRatePct(),
     loadCalculatorPlans(),
     listPublicPlans(),
+    loadPartnerProgramSettings(),
   ]);
 
   const studio =
@@ -59,10 +69,18 @@ export async function loadPartnerProgramMarketingData(): Promise<PartnerProgramM
     (priceMonthlyCents * commissionRatePct) / 100
   ) * exampleReferrals;
 
+  const referralDiscount: PartnerReferralDiscountPitch = {
+    enabled: programSettings.referral_discount_enabled,
+    amountCents: programSettings.referral_discount_amount_cents,
+    durationMonths: programSettings.referral_discount_duration_months,
+    amountLabel: formatPlanPrice(programSettings.referral_discount_amount_cents),
+  };
+
   return {
     commissionRatePct,
     holdDays: PARTNER_COMMISSION_HOLD_DAYS,
     plans,
+    referralDiscount,
     examplePlan: studio
       ? {
           key: studio.key,

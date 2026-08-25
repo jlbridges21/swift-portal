@@ -195,6 +195,24 @@ export type SubmitApplicationInput = {
 };
 
 /**
+ * Authenticated in-app application. Email must match the signed-in profile.
+ * Duplicate pending rows are suppressed (idempotent success).
+ */
+export async function submitAuthenticatedPartnerApplication(
+  userId: string,
+  profileEmail: string,
+  input: SubmitApplicationInput
+): Promise<void> {
+  const email = normalizePartnerEmail(input.email);
+  const authEmail = normalizePartnerEmail(profileEmail);
+  if (!email || email !== authEmail) {
+    throw new Error("Invalid application.");
+  }
+  await submitPartnerApplication({ ...input, email });
+  void userId;
+}
+
+/**
  * Public application insert. Always returns a generic success shape to callers —
  * do not reveal whether the email already applied.
  */

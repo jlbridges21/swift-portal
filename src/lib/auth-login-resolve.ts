@@ -247,7 +247,10 @@ export async function resolveLoginDestination(
     await linkPartnerByEmailIfNeeded(user.id, email);
   }
   const partnerAccess = await resolvePartnerAccess(user.id);
-  if (partnerAccess.kind === "active" || partnerAccess.kind === "suspended") {
+  if (partnerAccess.kind === "active") {
+    return { kind: "redirect", redirect: "/partner/dashboard" };
+  }
+  if (partnerAccess.kind === "suspended") {
     return { kind: "redirect", redirect: "/partner" };
   }
 

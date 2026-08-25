@@ -132,7 +132,35 @@ export async function requirePartnerCapability(): Promise<PartnerCapabilityResul
   };
 }
 
-/** Nav UX only — never a security boundary. */
+/**
+ * Nav UX only — never a security boundary.
+ * Business admins and partners see the item; client-only portal users do not.
+ */
 export function showPartnerNavItem(caps: Capabilities): boolean {
-  return caps.partner.active || caps.partner.suspended;
+  const isBusinessAdmin = caps.business.active && caps.business.role === "admin";
+  return isBusinessAdmin || caps.partner.active || caps.partner.suspended;
+}
+
+/** Desktop / mobile nav label — works for both partner and non-partner states. */
+export function partnerNavLabel(caps: Capabilities): string {
+  return caps.partner.active ? "Partner" : "Partner Program";
+}
+
+/** Active partners land on the guarded dashboard; everyone else on the entry pitch. */
+export function partnerNavHref(caps: Capabilities): string {
+  return caps.partner.active ? "/partner/dashboard" : "/partner";
+}
+
+/**
+ * Who may view /partner entry (pitch, application states, suspended message).
+ * Client-only users and platform-only super admins are excluded.
+ */
+export function canAccessPartnerEntry(caps: Capabilities): boolean {
+  if (caps.client.active && caps.business.role === "client" && !caps.partner.active && !caps.partner.suspended) {
+    return false;
+  }
+  if (caps.platform.active && !caps.business.active && !caps.partner.active && !caps.partner.suspended) {
+    return false;
+  }
+  return showPartnerNavItem(caps);
 }

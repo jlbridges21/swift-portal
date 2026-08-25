@@ -31,7 +31,15 @@ function isActive(pathname: string, href: string, exact?: boolean) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AdminMobilePwaNav({ showPartner = false }: { showPartner?: boolean }) {
+export function AdminMobilePwaNav({
+  showPartner = false,
+  partnerNavLabel = "Partner Program",
+  partnerNavHref = "/partner",
+}: {
+  showPartner?: boolean;
+  partnerNavLabel?: string;
+  partnerNavHref?: string;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const { openSearch } = useAdminSearch();
@@ -40,7 +48,7 @@ export function AdminMobilePwaNav({ showPartner = false }: { showPartner?: boole
   const navItems = showPartner
     ? [
         ...BASE_NAV.slice(0, 4),
-        { href: "/partner", label: "Partner", icon: Handshake },
+        { href: partnerNavHref, label: partnerNavLabel, icon: Handshake },
         BASE_NAV[4],
       ]
     : [...BASE_NAV];
@@ -113,10 +121,10 @@ export function AdminMobilePwaNav({ showPartner = false }: { showPartner?: boole
               {showPartner ? (
                 <ActionSheetButton
                   icon={Handshake}
-                  label="Partner dashboard"
+                  label={partnerNavLabel}
                   onClick={() => {
                     setSheetOpen(false);
-                    router.push("/partner");
+                    router.push(partnerNavHref);
                   }}
                 />
               ) : null}

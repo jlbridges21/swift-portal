@@ -20,6 +20,8 @@ interface HeaderProps {
   userAvatar?: string | null;
   /** Prefer layout-provided capability; falls back to AdminCapabilitiesContext. */
   showPartner?: boolean;
+  partnerNavLabel?: string;
+  partnerNavHref?: string;
 }
 
 const adminLinks = [
@@ -76,6 +78,8 @@ export function Header({
   userName,
   userAvatar,
   showPartner: showPartnerProp,
+  partnerNavLabel: partnerNavLabelProp,
+  partnerNavHref: partnerNavHrefProp,
 }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -84,6 +88,8 @@ export function Header({
   const [messagesUnread, setMessagesUnread] = useState(0);
   const caps = useAdminCapabilities();
   const showPartnerLink = showPartnerProp ?? caps.showPartner;
+  const partnerLabel = partnerNavLabelProp ?? caps.partnerNavLabel;
+  const partnerHref = partnerNavHrefProp ?? caps.partnerNavHref;
   const homeHref =
     variant === "public" ? "/" : userRole === "admin" ? "/admin" : "/dashboard";
 
@@ -96,7 +102,7 @@ export function Header({
 
   const adminMobileLinks = [
     ...adminLinks,
-    ...(showPartnerLink ? [{ href: "/partner", label: "Partner" }] : []),
+    ...(showPartnerLink ? [{ href: partnerHref, label: partnerLabel }] : []),
     { href: "/admin/settings", label: "Settings" },
   ];
 
@@ -164,7 +170,7 @@ export function Header({
             })}
             {showPartnerLink && (
               <Link
-                href="/partner"
+                href={partnerHref}
                 aria-current={pathname.startsWith("/partner") ? "page" : undefined}
                 className={cn(
                   "relative rounded-md px-2.5 py-1.5 text-sm transition-colors xl:px-3",
@@ -173,7 +179,7 @@ export function Header({
                     : "text-muted hover:bg-accent-subtle hover:text-foreground"
                 )}
               >
-                Partner
+                {partnerLabel}
               </Link>
             )}
           </nav>

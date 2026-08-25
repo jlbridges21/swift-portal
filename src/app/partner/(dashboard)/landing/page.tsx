@@ -41,7 +41,7 @@ export default async function PartnerLandingEditorPage() {
             <p className="text-sm font-medium text-heading">{access.partner.brand_name}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link href="/partner">
+            <Link href="/partner/dashboard">
               <Button type="button" variant="outline" size="sm" className="min-h-11">
                 Dashboard
               </Button>
