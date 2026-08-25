@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   PARTNER_LANDING_UPLOAD_MAX_BYTES,
-  uploadPartnerLandingAsset,
+  uploadPartnerLandingAssetForAccess,
 } from "@/lib/partner-landing";
 import { getProfile } from "@/lib/auth";
 import { resolvePartnerAccess } from "@/lib/partner-dashboard";
@@ -32,6 +32,10 @@ export async function POST(request: Request) {
   const file = formData.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
 
+  // Ignore attacker-supplied partner_id in the form.
+  void formData.get("partner_id");
+  void formData.get("partnerId");
+
   const kind = parseKind(formData.get("kind"));
   if (!kind) return NextResponse.json({ error: "kind must be logo or photo" }, { status: 400 });
 
@@ -52,8 +56,7 @@ export async function POST(request: Request) {
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
-    const url = await uploadPartnerLandingAsset({
-      partnerId: access.partner.id,
+    const url = await uploadPartnerLandingAssetForAccess(access, {
       kind,
       buffer,
       contentType: file.type || "application/octet-stream",

@@ -33,6 +33,6 @@ export async function GET() {
     );
   }
 
-  const summary = await loadPartnerDashboardSummary(access.partner);
+  const summary = await loadPartnerDashboardSummary(access);
   return NextResponse.json({ summary });
 }

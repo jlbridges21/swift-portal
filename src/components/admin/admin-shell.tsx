@@ -9,7 +9,13 @@ import { AdminSearchContext } from "@/components/admin/admin-search-context";
 import { UploadManagerProvider } from "@/components/admin/upload-manager";
 import { cn } from "@/lib/utils";
 
-export function AdminShell({ children }: { children: React.ReactNode }) {
+export function AdminShell({
+  children,
+  showPartner = false,
+}: {
+  children: React.ReactNode;
+  showPartner?: boolean;
+}) {
   const showPwaNav = useIsStandalonePwaMobile();
   const [mounted, setMounted] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -43,7 +49,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <AdminSearchContext.Provider value={value}>
       <UploadManagerProvider>
         <div className={cn(showPwaNav && "admin-pwa-content-pad")}>{children}</div>
-        {mounted && showPwaNav && createPortal(<AdminMobilePwaNav />, document.body)}
+        {mounted && showPwaNav &&
+          createPortal(<AdminMobilePwaNav showPartner={showPartner} />, document.body)}
         <AdminCommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       </UploadManagerProvider>
     </AdminSearchContext.Provider>

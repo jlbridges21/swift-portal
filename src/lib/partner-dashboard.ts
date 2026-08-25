@@ -36,6 +36,17 @@ export async function resolvePartnerAccess(userId: string): Promise<PartnerAcces
   return { kind: "none" };
 }
 
+/**
+ * Structural ownership: partner-facing loaders must receive active PartnerAccess.
+ * A bare partnerId from a request cannot be passed without going through this check.
+ */
+export function requireActivePartnerAccess(access: PartnerAccess): PartnerRow {
+  if (access.kind !== "active") {
+    throw new Error("Active partner access required");
+  }
+  return access.partner;
+}
+
 export function partnerReferralLink(referralCode: string): string {
   const apex = getPlatformApexOrigin().replace(/\/$/, "");
   return `${apex}/?ref=${encodeURIComponent(referralCode)}`;
@@ -112,6 +123,14 @@ function monthLabel(key: string): string {
 }
 
 export async function loadPartnerDashboardSummary(
+  access: PartnerAccess
+): Promise<PartnerDashboardSummary> {
+  const partner = requireActivePartnerAccess(access);
+  return loadPartnerDashboardSummaryAsPlatform(partner);
+}
+
+/** Super-admin / platform reports only — caller must already be authorized. */
+export async function loadPartnerDashboardSummaryAsPlatform(
   partner: PartnerRow
 ): Promise<PartnerDashboardSummary> {
   const mode = getStripeMode();
@@ -167,6 +186,20 @@ export async function loadPartnerDashboardSummary(
 }
 
 export async function loadPartnerReferrals(
+  access: PartnerAccess,
+  options?: {
+    sort?: string;
+    dir?: "asc" | "desc";
+    page?: number;
+    pageSize?: number;
+  }
+): Promise<{ rows: PartnerReferralRow[]; total: number }> {
+  const partner = requireActivePartnerAccess(access);
+  return loadPartnerReferralsAsPlatform(partner.id, options);
+}
+
+/** Super-admin / platform reports only — caller must already be authorized. */
+export async function loadPartnerReferralsAsPlatform(
   partnerId: string,
   options?: {
     sort?: string;
@@ -282,6 +315,15 @@ export async function loadPartnerReferrals(
 }
 
 export async function loadPartnerCommissionHistory(
+  access: PartnerAccess,
+  options?: { page?: number; pageSize?: number }
+): Promise<{ rows: PartnerCommissionHistoryRow[]; total: number }> {
+  const partner = requireActivePartnerAccess(access);
+  return loadPartnerCommissionHistoryAsPlatform(partner.id, options);
+}
+
+/** Super-admin / platform reports only — caller must already be authorized. */
+export async function loadPartnerCommissionHistoryAsPlatform(
   partnerId: string,
   options?: { page?: number; pageSize?: number }
 ): Promise<{ rows: PartnerCommissionHistoryRow[]; total: number }> {
@@ -337,6 +379,15 @@ export async function loadPartnerCommissionHistory(
 
 /** Monthly buckets from the ledger — commissions and reversals both visible. */
 export async function loadPartnerMonthlyEarnings(
+  access: PartnerAccess,
+  months = 12
+): Promise<MonthlyEarningsBucket[]> {
+  const partner = requireActivePartnerAccess(access);
+  return loadPartnerMonthlyEarningsAsPlatform(partner.id, months);
+}
+
+/** Super-admin / platform reports only — caller must already be authorized. */
+export async function loadPartnerMonthlyEarningsAsPlatform(
   partnerId: string,
   months = 12
 ): Promise<MonthlyEarningsBucket[]> {

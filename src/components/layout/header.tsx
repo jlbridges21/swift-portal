@@ -11,12 +11,15 @@ import { cn } from "@/lib/utils";
 import { Menu, Plus, Settings, X, RefreshCw, Loader2 } from "lucide-react";
 import { AdminSearchTrigger } from "@/components/admin/admin-command-palette";
 import { useAdminSearch } from "@/components/admin/admin-search-context";
+import { useAdminCapabilities } from "@/components/admin/admin-capabilities-context";
 
 interface HeaderProps {
   variant?: "public" | "dashboard";
   userRole?: "admin" | "client";
   userName?: string | null;
   userAvatar?: string | null;
+  /** Prefer layout-provided capability; falls back to AdminCapabilitiesContext. */
+  showPartner?: boolean;
 }
 
 const adminLinks = [
@@ -67,13 +70,20 @@ function ClientProfileNav({
   );
 }
 
-export function Header({ variant = "public", userRole, userName, userAvatar }: HeaderProps) {
+export function Header({
+  variant = "public",
+  userRole,
+  userName,
+  userAvatar,
+  showPartner: showPartnerProp,
+}: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [messagesUnread, setMessagesUnread] = useState(0);
-  const [showPartnerLink, setShowPartnerLink] = useState(false);
+  const caps = useAdminCapabilities();
+  const showPartnerLink = showPartnerProp ?? caps.showPartner;
   const homeHref =
     variant === "public" ? "/" : userRole === "admin" ? "/admin" : "/dashboard";
 
@@ -99,24 +109,6 @@ export function Header({ variant = "public", userRole, userName, userAvatar }: H
         if (!res.ok || cancelled) return;
         const data = await res.json();
         if (!cancelled) setMessagesUnread(Number(data.count) || 0);
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [variant, userRole]);
-
-  useEffect(() => {
-    if (variant !== "dashboard" || userRole !== "admin") return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/partner/me", { credentials: "include" });
-        if (cancelled) return;
-        // 200 = active partner; 403 = suspended (still show link to see message)
-        setShowPartnerLink(res.ok || res.status === 403);
       } catch {
         /* ignore */
       }

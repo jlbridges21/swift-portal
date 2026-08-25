@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/api-auth";
 import {
   PARTNER_PAYOUT_DISCREPANCY_ACK,
-  listPartnerPayouts,
+  listPartnerPayoutsAsPlatform,
   recordPartnerPayout,
 } from "@/lib/partner-payouts";
 import { getPartnerById } from "@/lib/partners";
@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
   const { id } = await params;
   const partner = await getPartnerById(id);
   if (!partner) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const payouts = await listPartnerPayouts(id);
+  const payouts = await listPartnerPayoutsAsPlatform(id);
   return NextResponse.json({ payouts });
 }
 

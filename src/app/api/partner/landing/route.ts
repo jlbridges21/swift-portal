@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import {
   buildPartnerLandingDefaultsWithOffer,
-  getPartnerLandingByPartnerId,
+  getPartnerLandingForAccess,
   getPartnerLandingUpdatedByLabel,
-  updatePartnerLandingContent,
+  updatePartnerLandingContentForAccess,
 } from "@/lib/partner-landing";
 import { getProfile } from "@/lib/auth";
 import { resolvePartnerAccess } from "@/lib/partner-dashboard";
@@ -23,7 +23,7 @@ export async function GET() {
     return NextResponse.json({ error: "Partner suspended", suspended: true }, { status: 403 });
   }
 
-  const landing = await getPartnerLandingByPartnerId(access.partner.id);
+  const landing = await getPartnerLandingForAccess(access);
   const defaults = await buildPartnerLandingDefaultsWithOffer(
     access.partner.id,
     access.partner.brand_name
@@ -68,9 +68,12 @@ export async function PATCH(request: Request) {
         { status: 403 }
       );
     }
+    // Ignore any attacker-supplied partner_id in the body.
+    void body.partner_id;
+    void body.partnerId;
 
-    const landing = await updatePartnerLandingContent(
-      access.partner.id,
+    const landing = await updatePartnerLandingContentForAccess(
+      access,
       {
         headline: body.headline,
         subheadline: body.subheadline,

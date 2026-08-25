@@ -9,14 +9,14 @@ import { getStripeMode } from "@/lib/stripe";
 import { computePartnerBalance, type PartnerBalance } from "@/lib/partner-commissions";
 import { listPartnerApplications, listPartners, type PartnerRow } from "@/lib/partners";
 import {
-  loadPartnerCommissionHistory,
-  loadPartnerMonthlyEarnings,
-  loadPartnerReferrals,
+  loadPartnerCommissionHistoryAsPlatform,
+  loadPartnerMonthlyEarningsAsPlatform,
+  loadPartnerReferralsAsPlatform,
   type MonthlyEarningsBucket,
   type PartnerCommissionHistoryRow,
   type PartnerReferralRow,
 } from "@/lib/partner-dashboard";
-import { listPartnerPayouts, type PartnerPayoutRow } from "@/lib/partner-payouts";
+import { listPartnerPayoutsAsPlatform, type PartnerPayoutRow } from "@/lib/partner-payouts";
 import { PLAN_CATALOG_SELECT, type PlanRow } from "@/lib/plan-catalog";
 
 export const PARTNER_GENERATED_MRR_DEFINITION =
@@ -470,10 +470,10 @@ async function loadPlatformPartnerDetailFromRow(
   }
 
   const [referrals, commissions, payouts, monthly] = await Promise.all([
-    loadPartnerReferrals(partner.id, { page: 1, pageSize: 100 }),
-    loadPartnerCommissionHistory(partner.id, { page: 1, pageSize: 100 }),
-    listPartnerPayouts(partner.id),
-    loadPartnerMonthlyEarnings(partner.id, 12),
+    loadPartnerReferralsAsPlatform(partner.id, { page: 1, pageSize: 100 }),
+    loadPartnerCommissionHistoryAsPlatform(partner.id, { page: 1, pageSize: 100 }),
+    listPartnerPayoutsAsPlatform(partner.id),
+    loadPartnerMonthlyEarningsAsPlatform(partner.id, 12),
   ]);
 
   return {

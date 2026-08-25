@@ -8,6 +8,7 @@ import { getStripeMode } from "@/lib/stripe";
 import { writePlatformAudit } from "@/lib/platform-audit";
 import { computePartnerBalance } from "@/lib/partner-commissions";
 import { getPartnerById } from "@/lib/partners";
+import type { PartnerAccess } from "@/lib/partner-dashboard";
 import {
   PARTNER_ADJUST_DEBIT_CONFIRM,
   PARTNER_PAYOUT_DISCREPANCY_ACK,
@@ -35,7 +36,15 @@ export type PartnerPayoutRow = {
 
 export type PartnerActor = { id: string; email: string | null };
 
-export async function listPartnerPayouts(partnerId: string): Promise<PartnerPayoutRow[]> {
+export async function listPartnerPayouts(access: PartnerAccess): Promise<PartnerPayoutRow[]> {
+  if (access.kind !== "active") {
+    throw new Error("Active partner access required");
+  }
+  return listPartnerPayoutsAsPlatform(access.partner.id);
+}
+
+/** Super-admin / platform only — caller must already be authorized. */
+export async function listPartnerPayoutsAsPlatform(partnerId: string): Promise<PartnerPayoutRow[]> {
   const raw = await createServiceClient();
   const mode = getStripeMode();
   const { data, error } = await raw

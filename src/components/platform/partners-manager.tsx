@@ -132,9 +132,11 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
       );
       if (data.partner) setPartners((prev) => [data.partner as PartnerRow, ...prev]);
       toast.success(
-        data.inviteSent
-          ? "Partner approved and invite sent"
-          : `Partner approved${data.inviteError ? ` (invite: ${data.inviteError})` : ""}`
+        data.linkedExistingUser
+          ? "Partner approved and linked to existing account (no invite)"
+          : data.inviteSent
+            ? "Partner approved and invite sent"
+            : `Partner approved${data.inviteError ? ` (invite: ${data.inviteError})` : ""}`
       );
       if (data.inviteUrl) {
         console.info("[partner-invite] confirm URL (redact token in logs):", String(data.inviteUrl).replace(/token_hash=[^&]+/, "token_hash=REDACTED"));
@@ -177,7 +179,13 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
         commissionRatePct: "30",
         notes: "",
       });
-      toast.success(data.inviteSent ? "Partner created and invited" : "Partner created");
+      toast.success(
+        data.linkedExistingUser
+          ? "Partner linked to existing account (no invite)"
+          : data.inviteSent
+            ? "Partner created and invited"
+            : "Partner created"
+      );
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Create failed");

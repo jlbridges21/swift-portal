@@ -13,14 +13,15 @@ import {
   UserPlus,
   ImagePlus,
   Search,
+  Handshake,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminSearch } from "@/components/admin/admin-search-context";
 
-const NAV_ITEMS = [
+const BASE_NAV = [
   { href: "/admin", label: "Home", icon: Home, exact: true },
   { href: "/admin/projects", label: "Projects", icon: FolderKanban },
-  { href: "__action__", label: "Add", icon: Plus, isAction: true },
+  { href: "__action__", label: "Add", icon: Plus, isAction: true as const },
   { href: "/admin/messages", label: "Messages", icon: MessageSquare },
   { href: "/admin/clients", label: "Clients", icon: Users },
 ] as const;
@@ -30,17 +31,25 @@ function isActive(pathname: string, href: string, exact?: boolean) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AdminMobilePwaNav() {
+export function AdminMobilePwaNav({ showPartner = false }: { showPartner?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const { openSearch } = useAdminSearch();
   const [sheetOpen, setSheetOpen] = useState(false);
 
+  const navItems = showPartner
+    ? [
+        ...BASE_NAV.slice(0, 4),
+        { href: "/partner", label: "Partner", icon: Handshake },
+        BASE_NAV[4],
+      ]
+    : [...BASE_NAV];
+
   return (
     <>
       <nav aria-label="Admin mobile navigation" className="admin-mobile-pwa-nav">
-        <div className="mx-auto flex h-[72px] max-w-lg items-center justify-around px-2">
-          {NAV_ITEMS.map((item) => {
+        <div className="mx-auto flex h-[72px] max-w-lg items-center justify-around px-1">
+          {navItems.map((item) => {
             if ("isAction" in item && item.isAction) {
               return (
                 <button
@@ -56,19 +65,23 @@ export function AdminMobilePwaNav() {
             }
 
             const Icon = item.icon;
-            const active = isActive(pathname, item.href, "exact" in item ? item.exact : false);
+            const active = isActive(
+              pathname,
+              item.href,
+              "exact" in item ? Boolean(item.exact) : false
+            );
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-lg px-2 text-[10px] font-medium transition",
+                  "flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-medium transition",
                   active ? "text-accent" : "text-muted hover:text-primary"
                 )}
               >
                 <Icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
-                <span>{item.label}</span>
+                <span className="truncate">{item.label}</span>
               </Link>
             );
           })}
@@ -97,6 +110,16 @@ export function AdminMobilePwaNav() {
                   openSearch();
                 }}
               />
+              {showPartner ? (
+                <ActionSheetButton
+                  icon={Handshake}
+                  label="Partner dashboard"
+                  onClick={() => {
+                    setSheetOpen(false);
+                    router.push("/partner");
+                  }}
+                />
+              ) : null}
               <ActionSheetButton
                 icon={FolderPlus}
                 label="Add New Project"

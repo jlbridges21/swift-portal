@@ -340,6 +340,16 @@ export async function getPartnerLandingByPartnerId(
   return data ? normalizeRow(data as Record<string, unknown>) : null;
 }
 
+/** Partner-facing: requires active PartnerAccess (structural ownership). */
+export async function getPartnerLandingForAccess(
+  access: import("@/lib/partner-dashboard").PartnerAccess
+): Promise<PartnerLandingPageRow | null> {
+  if (access.kind !== "active") {
+    throw new Error("Active partner access required");
+  }
+  return getPartnerLandingByPartnerId(access.partner.id);
+}
+
 /** Active landing for apex /{slug}. Null → caller should 404. */
 export async function getActivePartnerLandingBySlug(
   slug: string
@@ -422,6 +432,18 @@ export async function updatePartnerLandingContent(
   });
 
   return row;
+}
+
+/** Partner-facing: requires active PartnerAccess. */
+export async function updatePartnerLandingContentForAccess(
+  access: import("@/lib/partner-dashboard").PartnerAccess,
+  input: PartnerLandingContentInput,
+  actor: { id: string; email: string | null }
+): Promise<PartnerLandingPageRow> {
+  if (access.kind !== "active") {
+    throw new Error("Active partner access required");
+  }
+  return updatePartnerLandingContent(access.partner.id, input, actor);
 }
 
 export async function upsertPartnerLandingPage(
@@ -552,4 +574,15 @@ export async function uploadPartnerLandingAsset(args: {
   if (uploadError) throw new Error(uploadError.message);
 
   return `${supabaseUrl}/storage/v1/object/public/${PARTNER_LANDING_UPLOAD_BUCKET}/${path}?v=${Date.now()}`;
+}
+
+/** Partner-facing upload — requires active PartnerAccess (ignores any other partnerId). */
+export async function uploadPartnerLandingAssetForAccess(
+  access: import("@/lib/partner-dashboard").PartnerAccess,
+  args: Omit<Parameters<typeof uploadPartnerLandingAsset>[0], "partnerId">
+): Promise<string> {
+  if (access.kind !== "active") {
+    throw new Error("Active partner access required");
+  }
+  return uploadPartnerLandingAsset({ ...args, partnerId: access.partner.id });
 }

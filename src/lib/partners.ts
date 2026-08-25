@@ -264,6 +264,8 @@ export type CreatePartnerResult = {
   inviteSent: boolean;
   inviteUrl: string | null;
   inviteError: string | null;
+  /** True when an existing profile was linked — no invite / no password reset. */
+  linkedExistingUser: boolean;
 };
 
 function parseCommissionRate(raw: unknown): number {
@@ -275,14 +277,73 @@ function parseCommissionRate(raw: unknown): number {
 }
 
 /**
- * Invite (or notify) a partner using generateLink hashed_token → /auth/confirm.
- * Never uses action_link.
+ * Case-insensitive profile lookup by email. Used before any invite so we never
+ * call generateLink({ type: "invite" }) against an existing auth user
+ * (Supabase returns email_exists / 422 and partners.user_id would never be set).
+ */
+export async function findProfileIdByEmail(email: string): Promise<string | null> {
+  const raw = await createServiceClient();
+  const normalized = normalizePartnerEmail(email);
+  if (!normalized) return null;
+  const { data } = await raw.from("profiles").select("id, email").ilike("email", normalized);
+  const match = (data ?? []).find(
+    (row) => normalizePartnerEmail(String(row.email || "")) === normalized
+  );
+  return match?.id ?? null;
+}
+
+/**
+ * Link partners.user_id to an existing profile and send a plain approval notice.
+ * Does not touch password, session, or auth users.
+ */
+export async function linkPartnerToExistingUser(options: {
+  partnerId: string;
+  userId: string;
+  email: string;
+  fullName: string;
+}): Promise<{ notified: boolean; notifyError: string | null }> {
+  const raw = await createServiceClient();
+  const { error } = await raw
+    .from("partners")
+    .update({ user_id: options.userId })
+    .eq("id", options.partnerId);
+  if (error) throw new Error(error.message || "Could not link partner to existing user.");
+
+  const apex = getPlatformApexOrigin().replace(/\/$/, "");
+  const emailResult = await sendPlatformEmail({
+    to: normalizePartnerEmail(options.email),
+    subject: "You're approved for the ShootPortal Partner Program",
+    title: "Partner program approved",
+    body: `Hi ${options.fullName},\n\nYou've been approved as a ShootPortal partner. Sign in with your existing ShootPortal account — no new password needed — and open Partner from your portal navigation, or visit ${apex}/partner.`,
+    ctaLabel: "Open partner home",
+    ctaUrl: `${apex}/partner`,
+  });
+
+  return {
+    notified: Boolean(emailResult.sent),
+    notifyError: emailResult.sent
+      ? null
+      : emailResult.error || emailResult.skipReason || null,
+  };
+}
+
+/**
+ * Invite a NEW auth user into the partner program (no existing profile).
+ * Never call this when findProfileIdByEmail returns a match — generateLink
+ * type=invite fails with email_exists for registered users.
  */
 export async function invitePartnerUser(options: {
   email: string;
   fullName: string;
   partnerId: string;
 }): Promise<{ userId: string | null; inviteSent: boolean; inviteUrl: string | null; inviteError: string | null }> {
+  const existingProfileId = await findProfileIdByEmail(options.email);
+  if (existingProfileId) {
+    throw new Error(
+      "Refusing generateLink invite: a profile already exists for this email. Link partners.user_id instead."
+    );
+  }
+
   const raw = await createServiceClient();
   const email = normalizePartnerEmail(options.email);
   const apex = getPlatformApexOrigin();
@@ -338,6 +399,52 @@ export async function invitePartnerUser(options: {
     inviteUrl,
     inviteError: emailResult.sent ? null : emailResult.error || emailResult.skipReason || null,
   };
+}
+
+/**
+ * Repair partners.user_id when NULL but email matches a profile (case-insensitive).
+ * Returns how many rows were updated.
+ */
+export async function repairPartnerUserIdLinks(): Promise<{
+  before: number;
+  repaired: number;
+  after: number;
+}> {
+  const raw = await createServiceClient();
+  const { data: orphans } = await raw
+    .from("partners")
+    .select("id, email, user_id")
+    .is("user_id", null);
+
+  const candidates: { id: string; email: string; profileId: string }[] = [];
+  for (const row of orphans ?? []) {
+    const profileId = await findProfileIdByEmail(String(row.email || ""));
+    if (profileId) {
+      candidates.push({ id: row.id as string, email: String(row.email), profileId });
+    }
+  }
+  const before = candidates.length;
+  let repaired = 0;
+  for (const c of candidates) {
+    const { error } = await raw
+      .from("partners")
+      .update({ user_id: c.profileId })
+      .eq("id", c.id)
+      .is("user_id", null);
+    if (!error) repaired += 1;
+    else console.error("[partners] repair user_id failed", { partnerId: c.id, error: error.message });
+  }
+
+  const { data: stillOrphan } = await raw
+    .from("partners")
+    .select("id, email")
+    .is("user_id", null);
+  let after = 0;
+  for (const row of stillOrphan ?? []) {
+    if (await findProfileIdByEmail(String(row.email || ""))) after += 1;
+  }
+
+  return { before, repaired, after };
 }
 
 export async function createPartner(
@@ -406,34 +513,63 @@ export async function createPartner(
   let inviteSent = false;
   let inviteUrl: string | null = null;
   let inviteError: string | null = null;
+  let linkedExistingUser = false;
 
   if (input.sendInvite !== false) {
-    const invite = await invitePartnerUser({
-      email,
-      fullName: name,
-      partnerId: partner.id,
-    });
-    inviteSent = invite.inviteSent;
-    inviteUrl = invite.inviteUrl;
-    inviteError = invite.inviteError;
-
-    await writePlatformAudit({
-      actorUserId: actor.id,
-      actorEmail: actor.email,
-      action: "partner.invite",
-      targetType: "partner",
-      targetId: partner.id,
-      metadata: {
+    const existingUserId = await findProfileIdByEmail(email);
+    if (existingUserId) {
+      const link = await linkPartnerToExistingUser({
+        partnerId: partner.id,
+        userId: existingUserId,
         email,
-        inviteSent,
-        inviteError,
-        userId: invite.userId,
-      },
-    });
+        fullName: name,
+      });
+      linkedExistingUser = true;
+      inviteSent = false;
+      inviteUrl = null;
+      inviteError = link.notifyError;
+
+      await writePlatformAudit({
+        actorUserId: actor.id,
+        actorEmail: actor.email,
+        action: "partner.link_existing_user",
+        targetType: "partner",
+        targetId: partner.id,
+        metadata: {
+          email,
+          userId: existingUserId,
+          notified: link.notified,
+          notifyError: link.notifyError,
+        },
+      });
+    } else {
+      const invite = await invitePartnerUser({
+        email,
+        fullName: name,
+        partnerId: partner.id,
+      });
+      inviteSent = invite.inviteSent;
+      inviteUrl = invite.inviteUrl;
+      inviteError = invite.inviteError;
+
+      await writePlatformAudit({
+        actorUserId: actor.id,
+        actorEmail: actor.email,
+        action: "partner.invite",
+        targetType: "partner",
+        targetId: partner.id,
+        metadata: {
+          email,
+          inviteSent,
+          inviteError,
+          userId: invite.userId,
+        },
+      });
+    }
   }
 
   const refreshed = (await getPartnerById(partner.id)) ?? (partner as PartnerRow);
-  return { partner: refreshed, inviteSent, inviteUrl, inviteError };
+  return { partner: refreshed, inviteSent, inviteUrl, inviteError, linkedExistingUser };
 }
 
 export async function approvePartnerApplication(

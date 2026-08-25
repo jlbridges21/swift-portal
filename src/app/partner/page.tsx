@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
 import { getProfile } from "@/lib/auth";
@@ -15,9 +15,6 @@ import {
   PARTNER_COMMISSION_ON_NET_COLLECTED,
   PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY,
 } from "@/lib/partner-referral-discount";
-import { BrandProvider } from "@/components/brand/brand-provider";
-import { getPortalBrandFromSettings } from "@/lib/portal-brand";
-import { DEFAULT_APP_SETTINGS } from "@/lib/app-settings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
@@ -63,46 +60,17 @@ export default async function PartnerHomePage({
     cpage?: string;
   }>;
 }) {
+  // Layout already enforced partner capability (404 / suspended). Re-resolve for loaders.
   const profile = await getProfile();
   if (!profile) redirect("/login?redirect=/partner");
 
   const access = await resolvePartnerAccess(profile.id);
-  if (access.kind === "none") notFound();
-
-  const brand = getPortalBrandFromSettings(DEFAULT_APP_SETTINGS);
-  const isBusinessAdmin = profile.role === "admin" || profile.role === "super_admin";
-
-  if (access.kind === "suspended") {
-    return (
-      <BrandProvider brand={brand}>
-        <main className="mx-auto max-w-lg px-4 py-12 sm:px-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-            ShootPortal Partners
-          </p>
-          <h1 className="mt-2 text-2xl font-bold text-heading">Partner account suspended</h1>
-          <p className="mt-3 text-sm text-muted">
-            Your partner account for <strong>{access.partner.brand_name}</strong> is suspended.
-            Existing commission history is retained, but new referrals will not earn commissions
-            until the account is reactivated. Contact ShootPortal support if you have questions.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            {isBusinessAdmin ? (
-              <Link href="/admin">
-                <Button type="button" variant="accent" className="min-h-11">
-                  Go to business admin
-                </Button>
-              </Link>
-            ) : null}
-            <form action="/api/auth/signout" method="POST">
-              <Button type="submit" variant="outline" className="min-h-11">
-                Sign out
-              </Button>
-            </form>
-          </div>
-        </main>
-      </BrandProvider>
-    );
+  if (access.kind !== "active") {
+    // Suspended is rendered by layout; none is 404'd there.
+    return null;
   }
+
+  const isBusinessAdmin = profile.role === "admin" || profile.role === "super_admin";
 
   const params = await searchParams;
   const sort = params.sort || "joinedAt";
@@ -113,20 +81,19 @@ export default async function PartnerHomePage({
   const historyPageSize = 20;
 
   const [summary, referrals, history, monthly, plans, payouts, referralDiscount] = await Promise.all([
-    loadPartnerDashboardSummary(access.partner),
-    loadPartnerReferrals(access.partner.id, { sort, dir, page, pageSize }),
-    loadPartnerCommissionHistory(access.partner.id, { page: cpage, pageSize: historyPageSize }),
-    loadPartnerMonthlyEarnings(access.partner.id, 12),
+    loadPartnerDashboardSummary(access),
+    loadPartnerReferrals(access, { sort, dir, page, pageSize }),
+    loadPartnerCommissionHistory(access, { page: cpage, pageSize: historyPageSize }),
+    loadPartnerMonthlyEarnings(access, 12),
     loadCalculatorPlans(),
-    listPartnerPayouts(access.partner.id),
+    listPartnerPayouts(access),
     resolveReferralDiscountForPartner(access.partner.id),
   ]);
 
   const empty = summary.totalReferredCustomers === 0;
 
   return (
-    <BrandProvider brand={brand}>
-      <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background">
         <header className="border-b border-border bg-white">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
             <div>
@@ -364,7 +331,6 @@ export default async function PartnerHomePage({
             </Card>
           </section>
         </main>
-      </div>
-    </BrandProvider>
+    </div>
   );
 }

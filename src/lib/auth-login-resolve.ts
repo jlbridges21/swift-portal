@@ -14,7 +14,7 @@
 import type { User } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getPublicHostContext, lookupBusinessById } from "@/lib/host-resolution";
-import { getLoginRedirectOrigin, getPlatformApexOrigin, joinPortalPath } from "@/lib/portal-url";
+import { getLoginRedirectOrigin, joinPortalPath } from "@/lib/portal-url";
 import { needsOnboardingRedirect } from "@/lib/onboarding";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import { resolvePartnerAccess } from "@/lib/partner-dashboard";
@@ -238,15 +238,17 @@ export async function resolveLoginDestination(
     return { kind: "redirect", redirect: joinPortalPath(destOrigin, "/dashboard") };
   }
 
-  // (c) Partner
+  // (c) Partner — serve /partner on the CURRENT auth origin (relative path).
+  // Partner-only users have no tenant host; relative /partner keeps them where they signed in.
+  // Business+Partner never reach here (branch a returns first). Never force apex —
+  // that would cross origins and drop the session cookie.
   const email = (user.email || profile.email || "").trim();
   if (email) {
     await linkPartnerByEmailIfNeeded(user.id, email);
   }
   const partnerAccess = await resolvePartnerAccess(user.id);
   if (partnerAccess.kind === "active" || partnerAccess.kind === "suspended") {
-    const apex = getPlatformApexOrigin();
-    return { kind: "redirect", redirect: joinPortalPath(apex, "/partner") };
+    return { kind: "redirect", redirect: "/partner" };
   }
 
   // Failed automatic identity linking (unverified password email → second auth user)

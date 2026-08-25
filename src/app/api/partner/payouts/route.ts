@@ -4,7 +4,7 @@ import { resolvePartnerAccess } from "@/lib/partner-dashboard";
 import { listPartnerPayouts } from "@/lib/partner-payouts";
 
 /** Partner-facing payout history. Session partner only — never trusts client partner_id. */
-export async function GET() {
+export async function GET(request: Request) {
   const profile = await getProfile();
   if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,6 +17,9 @@ export async function GET() {
     return NextResponse.json({ error: "Partner suspended", suspended: true }, { status: 403 });
   }
 
-  const payouts = await listPartnerPayouts(access.partner.id);
+  const url = new URL(request.url);
+  void url.searchParams.get("partner_id");
+
+  const payouts = await listPartnerPayouts(access);
   return NextResponse.json({ payouts });
 }

@@ -26,6 +26,6 @@ export async function GET(request: Request) {
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
   const pageSize = Math.min(50, Math.max(1, Number(url.searchParams.get("pageSize")) || 10));
 
-  const result = await loadPartnerReferrals(access.partner.id, { sort, dir, page, pageSize });
+  const result = await loadPartnerReferrals(access, { sort, dir, page, pageSize });
   return NextResponse.json(result);
 }
