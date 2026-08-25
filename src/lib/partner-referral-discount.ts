@@ -38,6 +38,7 @@ export {
 };
 
 const DEFAULT_PROGRAM: PartnerProgramSettingsRow = {
+  default_commission_rate_pct: 30,
   referral_discount_enabled: true,
   referral_discount_amount_cents: 500,
   referral_discount_duration_months: 3,
@@ -46,7 +47,7 @@ const DEFAULT_PROGRAM: PartnerProgramSettingsRow = {
 };
 
 const PROGRAM_SETTINGS_SELECT =
-  "referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months, referral_discount_annual_enabled, referral_discount_annual_amount_cents, stripe_coupon_sync_ok, stripe_coupon_sync_message, stripe_coupon_sync_at, stripe_coupon_sync_mode";
+  "default_commission_rate_pct, referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months, referral_discount_annual_enabled, referral_discount_annual_amount_cents, stripe_coupon_sync_ok, stripe_coupon_sync_message, stripe_coupon_sync_at, stripe_coupon_sync_mode";
 
 export async function loadPartnerProgramSettings(): Promise<PartnerProgramSettingsRow> {
   const raw = await createServiceClient();
@@ -117,13 +118,18 @@ export async function updatePartnerProgramSettingsWithStripeSync(
 
   const settings = await updatePartnerProgramSettings(patch);
 
+  const shouldSyncCoupons =
+    settings.referral_discount_enabled &&
+    (couponConfigChanged ||
+      (prior.referral_discount_enabled === false && patch.referral_discount_enabled === true));
+
   let stripeCouponSyncMessage: string | null = null;
   let stripeCouponSyncOk: boolean | null = null;
   let stripeCouponSyncMonthlyCouponId: string | null = null;
   let stripeCouponSyncAnnualCouponId: string | null = null;
   let stripeCouponSyncMode: string | null = null;
 
-  if (couponConfigChanged) {
+  if (shouldSyncCoupons) {
     try {
       const result = await syncReferralDiscountCouponsAfterSettingsChange(settings);
       stripeCouponSyncMessage = result.message;

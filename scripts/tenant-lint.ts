@@ -118,6 +118,7 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/entitlements.ts",
   "src/lib/platform-plans.ts",
   "src/lib/partners.ts",
+  "src/lib/partner-lifecycle-email.ts",
   "src/lib/partner-referral.ts",
   "src/lib/partner-commissions.ts",
   "src/lib/partner-dashboard.ts",

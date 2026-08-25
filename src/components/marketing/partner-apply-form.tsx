@@ -34,8 +34,8 @@ export function PartnerApplyForm() {
     if (!name.trim()) next.name = "Name is required.";
     if (!email.trim() || !isEmail(email)) next.email = "Enter a valid email.";
     if (!brandName.trim()) next.brandName = "Brand or business name is required.";
-    if (!promotionPlan.trim() || promotionPlan.trim().length < 20) {
-      next.promotionPlan = "Tell us briefly how you plan to promote (at least a sentence).";
+    if (!promotionPlan.trim()) {
+      next.promotionPlan = "Tell us how you plan to promote ShootPortal.";
     }
     return next;
   }
@@ -210,11 +210,12 @@ export function PartnerApplyForm() {
         <Label htmlFor="pa-promo">How do you plan to promote ShootPortal?</Label>
         <Textarea
           id="pa-promo"
-          rows={4}
+          rows={3}
           value={promotionPlan}
           onChange={(e) => setPromotionPlan(e.target.value)}
-          placeholder="Courses, community, YouTube, client referrals…"
+          placeholder="YouTube, newsletter, client referrals…"
         />
+        <p className="text-xs text-[#64748B]">Required — a short phrase is fine.</p>
         {errors.promotionPlan ? (
           <p className="text-sm text-red-600">{errors.promotionPlan}</p>
         ) : null}

@@ -222,17 +222,36 @@ export async function lookupActiveLandingReferralCode(
   const validated = validateLandingSlug(rawSlug);
   if (!validated.ok) return null;
   const supabase = serviceClient();
+
   const { data: landing } = await supabase
     .from("partner_landing_pages")
     .select("partner_id")
     .eq("slug", validated.slug)
     .eq("is_active", true)
     .maybeSingle();
-  if (!landing?.partner_id) return null;
+
+  let partnerId = landing?.partner_id as string | undefined;
+  if (!partnerId) {
+    const { data: alias } = await supabase
+      .from("partner_landing_slug_aliases")
+      .select("landing_id")
+      .eq("slug", validated.slug)
+      .maybeSingle();
+    if (!alias?.landing_id) return null;
+    const { data: aliasLanding } = await supabase
+      .from("partner_landing_pages")
+      .select("partner_id")
+      .eq("id", alias.landing_id as string)
+      .eq("is_active", true)
+      .maybeSingle();
+    partnerId = aliasLanding?.partner_id as string | undefined;
+  }
+  if (!partnerId) return null;
+
   const { data: partner } = await supabase
     .from("partners")
     .select("referral_code, status")
-    .eq("id", landing.partner_id as string)
+    .eq("id", partnerId)
     .eq("status", "active")
     .maybeSingle();
   return (partner?.referral_code as string | undefined) ?? null;

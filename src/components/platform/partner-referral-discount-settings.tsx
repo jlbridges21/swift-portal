@@ -13,11 +13,15 @@ import {
   PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY,
   PARTNER_REFERRAL_OVERRIDE_COUPON_POLICY,
 } from "@/lib/partner-referral-discount.constants";
+import { referralDiscountTrialDurationWarning } from "@/lib/partner-referral-discount-trial-guard";
 
 type Props = {
   initial: PartnerProgramSettingsRow;
   initialCoupons: ReferralDiscountStripeCouponRow[];
   deployMode: "test" | "live";
+  /** Primary plan trial length used for duration guard (days). */
+  planTrialDays: number;
+  planTrialName?: string;
 };
 
 function couponMatchesSettings(
@@ -45,7 +49,13 @@ function formatCouponAmount(cents: number, interval: string, durationMonths: num
   return `$${(cents / 100).toFixed(2)}/mo × ${durationMonths} mo`;
 }
 
-export function PartnerReferralDiscountSettings({ initial, initialCoupons, deployMode }: Props) {
+export function PartnerReferralDiscountSettings({
+  initial,
+  initialCoupons,
+  deployMode,
+  planTrialDays,
+  planTrialName,
+}: Props) {
   const [settings, setSettings] = useState(initial);
   const [coupons, setCoupons] = useState(initialCoupons);
   const [enabled, setEnabled] = useState(initial.referral_discount_enabled);
@@ -105,6 +115,16 @@ export function PartnerReferralDiscountSettings({ initial, initialCoupons, deplo
       annualCents !== settings.referral_discount_annual_amount_cents
     );
   }, [amountDollars, durationMonths, annualEnabled, annualDollars, settings]);
+
+  const trialDurationWarning = useMemo(() => {
+    const duration = Math.round(Number(durationMonths));
+    if (!Number.isFinite(duration) || duration <= 0) return null;
+    return referralDiscountTrialDurationWarning({
+      trialDays: planTrialDays,
+      durationMonths: duration,
+      planName: planTrialName,
+    });
+  }, [durationMonths, planTrialDays, planTrialName]);
 
   async function save() {
     if (couponConfigChanged && !configChangeAck) {
@@ -222,6 +242,16 @@ export function PartnerReferralDiscountSettings({ initial, initialCoupons, deplo
           />
         </div>
       </div>
+
+      {trialDurationWarning ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+        >
+          <p className="font-semibold">Trial / duration mismatch</p>
+          <p className="mt-1">{trialDurationWarning}</p>
+        </div>
+      ) : null}
 
       {couponConfigChanged ? (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">

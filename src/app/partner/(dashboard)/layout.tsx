@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import { requirePartnerCapability } from "@/lib/capabilities";
+import { PartnerDashboardShell } from "@/components/partner/partner-dashboard-shell";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Guarded partner dashboard routes (/partner/dashboard, /partner/landing, …).
- * requirePartnerCapability stays on the layout — do not re-gate page by page.
+ * Guarded partner dashboard routes. requirePartnerCapability stays on the layout —
+ * do not re-gate page by page.
  */
 export default async function PartnerDashboardLayout({
   children,
@@ -16,5 +17,10 @@ export default async function PartnerDashboardLayout({
   if (capability.kind === "suspended") {
     redirect("/partner");
   }
-  return children;
+
+  return (
+    <PartnerDashboardShell brandName={capability.partner.brand_name}>
+      {children}
+    </PartnerDashboardShell>
+  );
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   buildPartnerLandingDefaultsWithOffer,
+  createPartnerLandingPageForAccess,
   getPartnerLandingForAccess,
   getPartnerLandingUpdatedByLabel,
   updatePartnerLandingContentForAccess,
@@ -94,6 +95,36 @@ export async function PATCH(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to save landing page" },
+      { status: 400 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  const profile = await getProfile();
+  if (!profile) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const access = await resolvePartnerAccess(profile.id);
+  if (access.kind === "none") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (access.kind === "suspended") {
+    return NextResponse.json({ error: "Partner suspended", suspended: true }, { status: 403 });
+  }
+
+  try {
+    const body = (await request.json()) as { slug?: string };
+    const slug = typeof body.slug === "string" ? body.slug : "";
+    const landing = await createPartnerLandingPageForAccess(access, slug, {
+      id: profile.id,
+      email: profile.email,
+    });
+    return NextResponse.json({ landing });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to create landing page" },
       { status: 400 }
     );
   }

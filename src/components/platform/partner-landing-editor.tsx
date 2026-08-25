@@ -10,6 +10,7 @@ type Props = {
   initial: PartnerLandingPageRow | null;
   defaults: PartnerLandingDefaults;
   suggestedSlug?: string;
+  previewUrl?: string | null;
   updatedAt?: string | null;
   updatedByLabel?: string | null;
 };
@@ -21,6 +22,7 @@ export function PartnerLandingEditor({
   initial,
   defaults,
   suggestedSlug,
+  previewUrl,
   updatedAt,
   updatedByLabel,
 }: Props) {
@@ -32,7 +34,7 @@ export function PartnerLandingEditor({
       initial={initial}
       defaults={defaults}
       suggestedSlug={suggestedSlug}
-      previewPath={initial?.slug ? `/${initial.slug}` : null}
+      previewUrl={previewUrl ?? null}
       updatedAt={updatedAt ?? initial?.updated_at ?? null}
       updatedByLabel={updatedByLabel}
     />

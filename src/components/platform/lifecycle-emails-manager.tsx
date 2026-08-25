@@ -194,6 +194,7 @@ export function LifecycleEmailsManager({
           Variables:{" "}
           <code className="text-xs">
             {"{{businessName}} {{daysRemaining}} {{trialEndDate}} {{planName}} {{planPrice}} {{billingUrl}} {{ownerName}}"}
+            {" · Partner: {{partnerName}} {{commissionRatePct}} {{referralLink}} {{landingPageUrl}} {{partnerDashboardUrl}} {{inviteUrl}}"}
           </code>
         </p>
       </div>

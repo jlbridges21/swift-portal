@@ -13,6 +13,8 @@ import {
   type PartnerLandingDefaults,
 } from "@/lib/partner-landing.constants";
 import type { PartnerLandingPageRow } from "@/lib/partner-landing";
+import { validateLandingSlug } from "@/lib/reserved-subdomains";
+import { partnerLandingPublicUrl } from "@/lib/partner-urls";
 
 type Mode = "partner" | "admin";
 
@@ -24,9 +26,21 @@ type Props = {
   defaults: PartnerLandingDefaults;
   suggestedSlug?: string;
   previewPath?: string | null;
+  /** Absolute apex URL for preview (preferred over previewPath). */
+  previewUrl?: string | null;
   updatedAt?: string | null;
   updatedByLabel?: string | null;
 };
+
+function FieldHelp({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs text-muted">{children}</p>;
+}
+
+function slugValidationMessage(raw: string): string | null {
+  if (!raw.trim()) return "Choose a URL slug for your page.";
+  const result = validateLandingSlug(raw);
+  return result.ok ? null : result.error;
+}
 
 function Counter({ value, max }: { value: number; max: number }) {
   return (
@@ -63,6 +77,7 @@ export function PartnerLandingEditorForm({
   defaults,
   suggestedSlug,
   previewPath,
+  previewUrl,
   updatedAt,
   updatedByLabel,
 }: Props) {
@@ -109,9 +124,50 @@ export function PartnerLandingEditorForm({
       ? `/api/platform/partners/${partnerId}/landing/upload`
       : "/api/partner/landing/upload";
 
-  const previewHref = previewPath ?? (slug ? `/${slug}` : null);
+  const previewHref =
+    previewUrl ??
+    previewPath ??
+    (slug ? partnerLandingPublicUrl(slug.trim()) : null);
+  const slugError = slugValidationMessage(slug);
+  const initialSlug = initial?.slug ?? "";
+
+  async function createLanding() {
+    const err = slugValidationMessage(slug);
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/partner/landing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: slug.trim() }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Could not create landing page.");
+      toast.success("Landing page created");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create landing page.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function save() {
+    if (mode === "admin" && slugError) {
+      toast.error(slugError);
+      return;
+    }
+    if (mode === "admin" && initial && slug.trim() !== initialSlug) {
+      const ok = window.confirm(
+        `Change landing URL from /${initialSlug} to /${slug}?\n\n` +
+          `The new URL will go live immediately. The old URL (/${initialSlug}) will keep working ` +
+          `as an alias so links you already posted are not lost — but update your materials when you can.`
+      );
+      if (!ok) return;
+    }
     setBusy(true);
     try {
       const cleanedBenefits = benefitFields.map((b) => b.trim()).filter(Boolean);
@@ -179,11 +235,40 @@ export function PartnerLandingEditorForm({
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Custom landing page</CardTitle>
+          <CardTitle className="text-base">Create your landing page</CardTitle>
+          <p className="text-sm text-muted">
+            A landing page is a co-branded ShootPortal page at{" "}
+            <strong>shootportal.app/your-name</strong> with your photo, headline, and offer. It
+            converts better than a bare referral link for course pages, YouTube descriptions, and
+            website resources — and it earns the <strong>same commission</strong> as your{" "}
+            <code className="text-xs">?ref=</code> link.
+          </p>
         </CardHeader>
-        <CardContent className="text-sm text-muted">
-          Your custom landing page has not been activated yet. Contact ShootPortal support to set
-          up your URL — then you can customize messaging and branding here.
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="create-slug">Choose your URL</Label>
+            <Input
+              id="create-slug"
+              className="min-h-11 font-mono"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder={suggestedSlug ?? "your-brand"}
+            />
+            <FieldHelp>
+              Lowercase letters, numbers, and hyphens only (2–48 characters). Must be unique and
+              cannot match reserved paths like /pricing or /signup.
+            </FieldHelp>
+            {slugError ? <p className="text-sm text-red-600">{slugError}</p> : null}
+          </div>
+          <Button
+            type="button"
+            variant="accent"
+            className="min-h-11"
+            disabled={busy || Boolean(slugError)}
+            onClick={() => void createLanding()}
+          >
+            {busy ? "Creating…" : "Create landing page"}
+          </Button>
         </CardContent>
       </Card>
     );
@@ -192,16 +277,22 @@ export function PartnerLandingEditorForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Custom landing page</CardTitle>
+        <CardTitle className="text-base">Customize your landing page</CardTitle>
         <p className="text-sm text-muted">
-          Plain text only — no HTML. Empty fields use strong ShootPortal defaults at render time.
+          Plain text only — no HTML. Empty fields use ShootPortal defaults when your page renders.
           {mode === "admin" ? (
             <>
               {" "}
               Apex at <code className="text-xs">/{slug || "slug"}</code>. Sets referral cookie with
               source <code className="text-xs">landing_page</code>.
             </>
-          ) : null}
+          ) : (
+            <>
+              {" "}
+              Changing your slug after launch requires ShootPortal support — old URLs are kept as
+              aliases so posted links keep working.
+            </>
+          )}
         </p>
         {previewHref ? (
           <p className="text-sm">
@@ -209,9 +300,9 @@ export function PartnerLandingEditorForm({
               href={previewHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-accent hover:underline"
+              className="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
             >
-              Preview your page ↗
+              View your live page ↗
             </a>
           </p>
         ) : null}
@@ -227,7 +318,7 @@ export function PartnerLandingEditorForm({
           <div className="flex items-center justify-between gap-2">
             <Label>URL slug</Label>
             {mode === "partner" ? (
-              <span className="text-xs text-muted">Contact support to change</span>
+              <span className="text-xs text-muted">Set at creation — contact support to change</span>
             ) : null}
           </div>
           <Input
@@ -238,6 +329,15 @@ export function PartnerLandingEditorForm({
             readOnly={mode === "partner"}
             disabled={mode === "partner"}
           />
+          {mode === "admin" ? (
+            <>
+              <FieldHelp>
+                Lowercase letters, numbers, hyphens (2–48 chars). Reserved paths like /pricing are
+                blocked. Renaming keeps the old slug working as an alias.
+              </FieldHelp>
+              {slugError ? <p className="text-sm text-red-600">{slugError}</p> : null}
+            </>
+          ) : null}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -252,6 +352,7 @@ export function PartnerLandingEditorForm({
               onChange={(e) => setBrandPrimary(e.target.value)}
               placeholder={defaults.brandPrimaryColor}
             />
+            <FieldHelp>Primary button and heading color on your landing page.</FieldHelp>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
@@ -264,6 +365,7 @@ export function PartnerLandingEditorForm({
               onChange={(e) => setBrandAccent(e.target.value)}
               placeholder={defaults.brandAccentColor}
             />
+            <FieldHelp>Secondary highlights and links.</FieldHelp>
           </div>
         </div>
 

@@ -6,7 +6,10 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStripeMode } from "@/lib/stripe";
-import { getPlatformApexOrigin } from "@/lib/portal-url";
+import {
+  partnerLandingPublicUrl,
+  partnerReferralLink,
+} from "@/lib/partner-urls";
 import {
   computePartnerBalance,
   PARTNER_COMMISSION_HOLD_DAYS,
@@ -47,10 +50,7 @@ export function requireActivePartnerAccess(access: PartnerAccess): PartnerRow {
   return access.partner;
 }
 
-export function partnerReferralLink(referralCode: string): string {
-  const apex = getPlatformApexOrigin().replace(/\/$/, "");
-  return `${apex}/?ref=${encodeURIComponent(referralCode)}`;
-}
+export { partnerReferralLink, partnerLandingPublicUrl } from "@/lib/partner-urls";
 
 export type PartnerReferralRow = {
   businessId: string;

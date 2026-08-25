@@ -26,6 +26,7 @@ import {
   type PartnerLandingDefaults,
 } from "@/lib/partner-landing.constants";
 import { resolveReferralDiscountForPartner } from "@/lib/partner-referral-discount";
+import { getPlatformApexOrigin } from "@/lib/portal-url";
 
 export type PartnerLandingPageRow = {
   id: string;
@@ -350,6 +351,70 @@ export async function getPartnerLandingForAccess(
   return getPartnerLandingByPartnerId(access.partner.id);
 }
 
+/**
+ * Resolve landing row id from slug (primary or former alias). Null if unknown/inactive path.
+ */
+async function resolveActiveLandingIdBySlug(
+  slug: string
+): Promise<{ landingId: string; partnerId: string } | null> {
+  const validated = validateLandingSlug(slug);
+  if (!validated.ok) return null;
+
+  const raw = await createServiceClient();
+  const { data: landing } = await raw
+    .from("partner_landing_pages")
+    .select("id, partner_id")
+    .eq("slug", validated.slug)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (landing?.id && landing.partner_id) {
+    return { landingId: landing.id as string, partnerId: landing.partner_id as string };
+  }
+
+  const { data: alias } = await raw
+    .from("partner_landing_slug_aliases")
+    .select("landing_id, partner_id")
+    .eq("slug", validated.slug)
+    .maybeSingle();
+  if (!alias?.landing_id) return null;
+
+  const { data: aliasLanding } = await raw
+    .from("partner_landing_pages")
+    .select("id, partner_id")
+    .eq("id", alias.landing_id as string)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!aliasLanding?.id) return null;
+  return {
+    landingId: aliasLanding.id as string,
+    partnerId: aliasLanding.partner_id as string,
+  };
+}
+
+async function recordLandingSlugAlias(args: {
+  slug: string;
+  landingId: string;
+  partnerId: string;
+}): Promise<void> {
+  const validated = validateLandingSlug(args.slug);
+  if (!validated.ok) return;
+  const raw = await createServiceClient();
+  const { error } = await raw.from("partner_landing_slug_aliases").upsert(
+    {
+      slug: validated.slug,
+      landing_id: args.landingId,
+      partner_id: args.partnerId,
+    },
+    { onConflict: "slug" }
+  );
+  if (error) throw new Error(error.message);
+}
+
+export function partnerLandingApexUrl(slug: string): string {
+  const apex = getPlatformApexOrigin().replace(/\/$/, "");
+  return `${apex}/${slug}`;
+}
+
 /** Active landing for apex /{slug}. Null → caller should 404. */
 export async function getActivePartnerLandingBySlug(
   slug: string
@@ -357,11 +422,14 @@ export async function getActivePartnerLandingBySlug(
   const validated = validateLandingSlug(slug);
   if (!validated.ok) return null;
 
+  const resolved = await resolveActiveLandingIdBySlug(validated.slug);
+  if (!resolved) return null;
+
   const raw = await createServiceClient();
   const { data, error } = await raw
     .from("partner_landing_pages")
     .select("*")
-    .eq("slug", validated.slug)
+    .eq("id", resolved.landingId)
     .eq("is_active", true)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -446,6 +514,30 @@ export async function updatePartnerLandingContentForAccess(
   return updatePartnerLandingContent(access.partner.id, input, actor);
 }
 
+/** Partner creates their first landing page (slug is permanent — aliases preserve old URLs if changed later by support). */
+export async function createPartnerLandingPageForAccess(
+  access: import("@/lib/partner-dashboard").PartnerAccess,
+  slug: string,
+  actor: { id: string; email: string | null }
+): Promise<PartnerLandingPageRow> {
+  if (access.kind !== "active") {
+    throw new Error("Active partner access required");
+  }
+  const existing = await getPartnerLandingByPartnerId(access.partner.id);
+  if (existing) throw new Error("You already have a landing page.");
+
+  return upsertPartnerLandingPage(
+    access.partner.id,
+    {
+      slug,
+      headline: "",
+      description: "",
+      isActive: true,
+    },
+    actor
+  );
+}
+
 export async function upsertPartnerLandingPage(
   partnerId: string,
   input: PartnerLandingAdminInput,
@@ -482,6 +574,13 @@ export async function upsertPartnerLandingPage(
 
   let row: PartnerLandingPageRow;
   if (existing) {
+    if (existing.slug !== slugResult.slug) {
+      await recordLandingSlugAlias({
+        slug: existing.slug,
+        landingId: existing.id,
+        partnerId,
+      });
+    }
     const { data, error } = await raw
       .from("partner_landing_pages")
       .update(payload)

@@ -56,6 +56,13 @@ export async function PATCH(request: Request) {
       }
       patch.referral_discount_annual_amount_cents = Math.round(n);
     }
+    if (body.default_commission_rate_pct != null) {
+      const n = Number(body.default_commission_rate_pct);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        return NextResponse.json({ error: "Commission rate must be 0–100." }, { status: 400 });
+      }
+      patch.default_commission_rate_pct = Math.round(n * 100) / 100;
+    }
 
     if (!Object.keys(patch).length) {
       return NextResponse.json({ error: "No changes." }, { status: 400 });

@@ -9,6 +9,7 @@ export const PARTNER_COMMISSION_ON_NET_COLLECTED =
   "Partner commissions are calculated on subscription revenue actually collected each period. During a referred customer's discount window, their payments are lower — so your commission is lower too (same rate, smaller base).";
 
 export type PartnerProgramSettingsRow = {
+  default_commission_rate_pct?: number;
   referral_discount_enabled: boolean;
   referral_discount_amount_cents: number;
   referral_discount_duration_months: number;

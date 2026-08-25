@@ -7,7 +7,12 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { writePlatformAudit } from "@/lib/platform-audit";
 import { authConfirmUrl, buildAuthConfirmLink } from "@/lib/auth-confirm";
 import { getPlatformApexOrigin } from "@/lib/portal-url";
-import { sendPlatformEmail } from "@/lib/platform-email";
+import {
+  sendPartnerApprovedExistingEmail,
+  sendPartnerApprovedInviteEmail,
+  sendPartnerApplicationDeclinedEmail,
+} from "@/lib/partner-lifecycle-email";
+import { loadPartnerProgramSettings } from "@/lib/partner-referral-discount";
 import {
   suggestReferralCodeFromBrand,
   validateReferralCode,
@@ -229,8 +234,9 @@ export async function submitPartnerApplication(input: SubmitApplicationInput): P
 
   const audienceSize = input.audienceSize?.trim() || null;
   const promotionPlan = input.promotionPlan?.trim() || null;
+  if (!promotionPlan) throw new Error("Invalid application.");
   if (audienceSize && audienceSize.length > 200) throw new Error("Invalid application.");
-  if (promotionPlan && promotionPlan.length > 5000) throw new Error("Invalid application.");
+  if (promotionPlan.length > 5000) throw new Error("Invalid application.");
 
   const socialLinks =
     input.socialLinks && typeof input.socialLinks === "object" && !Array.isArray(input.socialLinks)
@@ -327,14 +333,17 @@ export async function linkPartnerToExistingUser(options: {
     .eq("id", options.partnerId);
   if (error) throw new Error(error.message || "Could not link partner to existing user.");
 
-  const apex = getPlatformApexOrigin().replace(/\/$/, "");
-  const emailResult = await sendPlatformEmail({
-    to: normalizePartnerEmail(options.email),
-    subject: "You're approved for the ShootPortal Partner Program",
-    title: "Partner program approved",
-    body: `Hi ${options.fullName},\n\nYou've been approved as a ShootPortal partner. Sign in with your existing ShootPortal account — no new password needed — and open Partner from your portal navigation, or visit ${apex}/partner.`,
-    ctaLabel: "Open partner home",
-    ctaUrl: `${apex}/partner`,
+  const linkedPartner = await getPartnerById(options.partnerId);
+  if (!linkedPartner) {
+    return { notified: false, notifyError: "Partner row missing after link." };
+  }
+
+  const emailResult = await sendPartnerApprovedExistingEmail({
+    partnerId: options.partnerId,
+    email: normalizePartnerEmail(options.email),
+    partnerName: options.fullName,
+    commissionRatePct: linkedPartner.commission_rate_pct,
+    referralCode: linkedPartner.referral_code,
   });
 
   return {
@@ -399,23 +408,26 @@ export async function invitePartnerUser(options: {
     portalOrigin: apex,
     tokenHash: hashedToken,
     type: "invite",
-    nextPath: "/partner",
+    nextPath: "/partner/dashboard",
   });
 
-  const emailResult = await sendPlatformEmail({
-    to: email,
-    subject: "You're invited to the ShootPortal Partner Program",
-    title: "Welcome to the Partner Program",
-    body: `Hi ${options.fullName},\n\nYou've been approved as a ShootPortal partner. Click below to set your password and open your partner home.`,
-    ctaLabel: "Accept invite",
-    ctaUrl: inviteUrl,
-  });
+  const linkedPartner = await getPartnerById(options.partnerId);
+  const emailResult = linkedPartner
+    ? await sendPartnerApprovedInviteEmail({
+        partnerId: options.partnerId,
+        email,
+        partnerName: options.fullName,
+        commissionRatePct: linkedPartner.commission_rate_pct,
+        referralCode: linkedPartner.referral_code,
+        inviteUrl,
+      })
+    : { sent: false, error: "Partner row missing after invite." };
 
   return {
     userId,
     inviteSent: Boolean(emailResult.sent),
     inviteUrl,
-    inviteError: emailResult.sent ? null : emailResult.error || emailResult.skipReason || null,
+    inviteError: emailResult.sent ? null : emailResult.error || null,
   };
 }
 
@@ -477,8 +489,12 @@ export async function createPartner(
   if (!brandName) throw new Error("Brand name is required.");
 
   const referralCode = await assertUniqueReferralCode(input.referralCode);
+  const programSettings = await loadPartnerProgramSettings();
+  const defaultRate = programSettings.default_commission_rate_pct ?? 30;
   const commissionRatePct =
-    input.commissionRatePct == null ? 30 : parseCommissionRate(input.commissionRatePct);
+    input.commissionRatePct == null
+      ? defaultRate
+      : parseCommissionRate(input.commissionRatePct);
 
   const raw = await createServiceClient();
   const { data: existingEmail } = await raw
@@ -671,6 +687,19 @@ export async function declinePartnerApplication(
     targetId: applicationId,
     metadata: { email: app.email, review_note: reviewNote?.trim() || null },
   });
+
+  const declineEmail = await sendPartnerApplicationDeclinedEmail({
+    applicationId,
+    email: app.email,
+    partnerName: app.name,
+  });
+
+  if (!declineEmail.sent && !declineEmail.skipped) {
+    console.warn("[partners] decline email failed", {
+      applicationId,
+      error: declineEmail.error,
+    });
+  }
 
   return data as PartnerApplicationRow;
 }

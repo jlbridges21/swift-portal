@@ -17,6 +17,7 @@ import {
   getPartnerLandingByPartnerId,
   getPartnerLandingUpdatedByLabel,
 } from "@/lib/partner-landing";
+import { partnerLandingPublicUrl } from "@/lib/partner-urls";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +137,7 @@ export default async function PlatformPartnerDetailPage({
           initial={landing}
           defaults={landingDefaults}
           suggestedSlug={partner.referral_code}
+          previewUrl={landing?.slug ? partnerLandingPublicUrl(landing.slug) : null}
           updatedAt={landing?.updated_at ?? null}
           updatedByLabel={landingUpdatedByLabel}
         />
