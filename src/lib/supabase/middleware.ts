@@ -154,7 +154,9 @@ export async function updateSession(request: NextRequest) {
   const method = request.method.toUpperCase();
 
   const protectedPaths = ["/dashboard", "/admin", "/platform", "/billing", "/onboarding", "/partner"];
-  const isProtected = protectedPaths.some((p) => path.startsWith(p));
+  // Segment-boundary match: bare startsWith would make the public /partners
+  // marketing page match the protected /partner dashboard prefix.
+  const isProtected = protectedPaths.some((p) => path === p || path.startsWith(`${p}/`));
 
   // Self-serve signup is platform-apex only — never on a tenant host.
   if (

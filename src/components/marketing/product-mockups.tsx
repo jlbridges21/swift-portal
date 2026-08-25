@@ -37,7 +37,7 @@ export function PortalMockup() {
             <div>
               <p className="text-xs font-medium text-[#4F46E5]">In progress</p>
               <p className="mt-1 text-lg font-semibold text-[#0F172A]">
-                214 Oak Street — Listing Media
+                214 Oak Street · Listing Media
               </p>
               <p className="mt-1 text-sm text-[#475569]">Avery Chen · Northside Realty</p>
             </div>
@@ -56,7 +56,7 @@ export function PortalMockup() {
           <div className="mt-4 space-y-2 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
             <p className="text-xs font-medium text-[#475569]">Client message</p>
             <p className="text-sm text-[#0F172A]">
-              “Looks great — please keep the dusk exterior and swap photo 3.”
+              “Looks great. Please keep the dusk exterior and swap photo 3.”
             </p>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
@@ -91,7 +91,7 @@ export function ClientPortalMockup() {
       <div className="space-y-3 p-5">
         {[
           { label: "Estimate approved", done: true },
-          { label: "Shoot confirmed — Sat 10:00 AM", done: true },
+          { label: "Shoot confirmed · Sat 10:00 AM", done: true },
           { label: "Media ready for review", done: false },
           { label: "Final payment", done: false },
         ].map((row) => (
