@@ -7,41 +7,57 @@ export function PartnerProgramFaq({
   holdDays: number;
   monthlyPriceLabel: string;
 }) {
+  const priceNote = monthlyPriceLabel
+    ? ` For reference, the current public Studio monthly price is ${monthlyPriceLabel}.`
+    : "";
+
   const items = [
     {
-      q: "When are commissions paid?",
-      a: `Commissions are paid manually by ShootPortal after they clear a ${holdDays}-day hold. Your partner dashboard shows pending vs payable balances. There is no automated payout in this program version.`,
+      q: "How much commission do partners earn?",
+      a: `Partners earn ${commissionRatePct}% of eligible ShootPortal subscription payments from customers they refer.${priceNote} Your rate is set when you join and applies to each payment that earns a commission.`,
     },
     {
-      q: `What is the ${holdDays}-day hold?`,
-      a: `Each commission becomes payable ${holdDays} days after the referred business’s ShootPortal subscription payment. The hold covers refunds and payment reverses before we mark earnings ready to pay.`,
+      q: "How long do commissions last?",
+      a: `As long as the referred customer keeps paying ShootPortal and your partner account stays active, you keep earning ${commissionRatePct}% on their subscription payments. This is not a one-time referral bonus.`,
     },
     {
-      q: "What happens on refunds or cancellations?",
-      a: "If ShootPortal refunds a subscription payment that already earned you a commission, we add a negative ledger row (a reversal). That reduces your net balance and can make the next payable amount smaller — or temporarily negative until new earnings catch up. Cancellation alone does not reverse past paid periods; only refunded payments do.",
+      q: "When do commissions become payable?",
+      a: `Each commission becomes payable ${holdDays} days after the referred customer's ShootPortal subscription payment clears. The hold helps cover refunds and payment reverses before earnings are marked ready to pay.`,
     },
     {
-      q: "Do I need to be a ShootPortal customer?",
-      a: "No. Partners do not need an active ShootPortal subscription. You promote the product; referred studios subscribe on their own.",
+      q: "Do I need to use ShootPortal myself?",
+      a: "No. You do not need a ShootPortal subscription to become a partner or to earn commissions.",
     },
     {
-      q: "Are commissions truly lifetime?",
-      a: `Yes for as long as the referred business keeps paying ShootPortal and your partner account remains active. You earn ${commissionRatePct}% of their ShootPortal subscription payments (the rate snapshotted when each commission is earned). If your account is suspended, new payments stop earning; existing history is kept.`,
+      q: "How are referrals tracked?",
+      a: "After approval you get a partner link and referral code. When someone signs up through your link and creates a ShootPortal business, that referral is attributed to you.",
+    },
+    {
+      q: "What happens if a customer cancels?",
+      a: "If a customer stops paying ShootPortal, new commissions from that customer stop. Past commissions for periods they already paid stay on your history. If ShootPortal refunds a payment that already earned you a commission, that commission can be reversed so your balance stays accurate.",
+    },
+    {
+      q: "Can I promote ShootPortal in a course or community?",
+      a: "Yes. Many partners share ShootPortal inside courses, communities, YouTube descriptions, newsletters, resource pages, and social content. Tell us how you plan to introduce it when you apply.",
+    },
+    {
+      q: "Do I need a large audience?",
+      a: "No. You need the right people paying attention. A smaller audience of photographers, drone pilots, or media professionals can be more valuable than a huge unrelated following.",
     },
     {
       q: "How do I get paid?",
-      a: "ShootPortal records manual payouts (for example PayPal, Wise, ACH, or check). You will see payout history in your partner dashboard. We do not use Stripe Connect for partner payouts.",
+      a: "ShootPortal pays partners manually after commissions clear the hold period (for example PayPal, Wise, ACH, or check). You can see payout history in your partner dashboard.",
     },
     {
-      q: "What if a referred customer downgrades?",
-      a: `Your commission is a percentage of what they actually pay ShootPortal. If they move to a lower-priced plan, future commissions follow the new payment amounts at your snapshotted rate — for example ${commissionRatePct}% of ${monthlyPriceLabel}/mo on the public Studio monthly price today.`,
+      q: "Can I see my referrals and commissions?",
+      a: "Yes. Your partner dashboard shows referred customers, commission activity, and payout history in one place.",
     },
   ];
 
   return (
-    <div className="mx-auto max-w-3xl divide-y divide-[#E2E8F0] rounded-xl border border-[#E2E8F0] bg-white">
+    <div className="mx-auto max-w-3xl divide-y divide-[#E2E8F0] rounded-2xl border border-[#E2E8F0] bg-white shadow-sm">
       {items.map((item) => (
-        <details key={item.q} className="group px-5 py-4">
+        <details key={item.q} className="group px-5 py-4 sm:px-6">
           <summary className="cursor-pointer list-none text-left text-base font-semibold text-[#0F172A] marker:content-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
             <span className="flex items-center justify-between gap-4">
               {item.q}

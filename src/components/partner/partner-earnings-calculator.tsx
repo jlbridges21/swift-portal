@@ -124,7 +124,7 @@ function interpolateAt(series: TimePoint[], t: number): TimePoint {
   if (!series.length) {
     return {
       month: 0,
-      label: "—",
+      label: "",
       activeReferrals: 0,
       monthlyCommissionCents: 0,
       cumulativeEarnedCents: 0,
@@ -359,9 +359,8 @@ export function PartnerEarningsCalculator({
   return (
     <div className="space-y-6">
       <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-        Estimate only — not ledger data. Uses commission rate{" "}
-        <strong>{commissionRatePct}%</strong> and live plan prices from ShootPortal. This is a
-        what-if projection, not a forecast or guarantee.
+        This calculator shows simple math based on the current ShootPortal plan price and partner
+        commission rate (<strong>{commissionRatePct}%</strong>). It is not an earnings guarantee.
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -384,7 +383,7 @@ export function PartnerEarningsCalculator({
         ) : null}
 
         <div className="space-y-1.5">
-          <Label htmlFor={`${chartId}-billing`}>Plan billing (price source)</Label>
+          <Label htmlFor={`${chartId}-billing`}>Billing interval</Label>
           <select
             id={`${chartId}-billing`}
             className="flex h-11 w-full rounded-lg border border-border bg-white px-3 text-sm"
@@ -546,7 +545,7 @@ export function PartnerEarningsCalculator({
           <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
             {headlineLabel}
           </p>
-          <p className="mt-1 text-4xl font-semibold tracking-tight text-heading sm:text-5xl">
+          <p className="mt-1 text-4xl font-semibold tracking-tight text-[#0F172A] sm:text-5xl lg:text-6xl">
             {formatCurrency(headlineCents)}
           </p>
           <p className="mt-2 text-sm text-muted">
@@ -677,7 +676,7 @@ export function PartnerEarningsCalculator({
         <p className="mt-3 text-xs leading-relaxed text-muted">
           Assumptions: {referralsPerMonth} new referral{referralsPerMonth === 1 ? "" : "s"} per
           month, {churnPct}% assumed monthly churn
-          {churnPct === 0 ? " (theoretical ceiling — no attrition)" : ""}, and every active
+          {churnPct === 0 ? " (theoretical ceiling with no attrition)" : ""}, and every active
           referral pays the selected plan price. Drag across the chart to scrub; use arrow keys when
           the chart is focused. Not a forecast.
         </p>

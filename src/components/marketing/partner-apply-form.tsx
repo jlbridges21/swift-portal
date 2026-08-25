@@ -83,14 +83,14 @@ export function PartnerApplyForm() {
 
   if (success) {
     return (
-      <div className="rounded-xl border border-[#E2E8F0] bg-white p-6 sm:p-8">
+      <div className="p-6 sm:p-8">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F46E5]">
           Application received
         </p>
-        <h3 className="mt-2 text-2xl font-semibold text-[#0F172A]">Thanks — we got it.</h3>
+        <h3 className="mt-2 text-2xl font-semibold text-[#0F172A]">Thanks, we got it.</h3>
         <p className="mt-3 text-base leading-relaxed text-[#475569]">
           Our team reviews partner applications in the order they arrive. You should hear back
-          within about <strong>5–7 business days</strong>. If approved, we will email you an invite
+          within about <strong>5 to 7 business days</strong>. If approved, we will email you an invite
           to claim your partner account and referral link.
         </p>
         <p className="mt-3 text-sm text-[#475569]">
@@ -105,7 +105,7 @@ export function PartnerApplyForm() {
   }
 
   return (
-    <form onSubmit={(e) => void onSubmit(e)} className="space-y-4 rounded-xl border border-[#E2E8F0] bg-white p-6 sm:p-8">
+    <form onSubmit={(e) => void onSubmit(e)} className="space-y-4 p-6 sm:p-8">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="pa-name">Name</Label>
