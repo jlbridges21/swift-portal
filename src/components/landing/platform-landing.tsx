@@ -19,7 +19,6 @@ import { HomepageWorkflowMarquee } from "@/components/marketing/home/workflow-ma
 import { ConsolidationPills } from "@/components/marketing/home/consolidation-pills";
 import { HomePainConverge } from "@/components/marketing/home/pain-converge";
 import { HomeSocialProgression } from "@/components/marketing/home/social-progression";
-import { HomeStackCollapse } from "@/components/marketing/home/stack-collapse";
 import {
   CalendarClock,
   CheckCircle2,
@@ -352,13 +351,6 @@ export function PlatformLanding({
             </div>
             <HomeSocialProgression />
           </div>
-        </div>
-      </section>
-
-      {/* Pre-pricing collapse */}
-      <section className="border-b border-[#E2E8F0] bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-          <HomeStackCollapse priceLabel={annualPriceLabel} />
         </div>
       </section>
 
