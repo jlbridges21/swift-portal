@@ -31,6 +31,28 @@ export function isLocalOrRelativeOrigin(origin: string): boolean {
 }
 
 /**
+ * Canonical platform apex hostname (www).
+ * Vercel already 308s bare apex → www; we match that so PKCE cookies, Site URL,
+ * and OAuth redirectTo never disagree about the host.
+ */
+export function getPlatformApexHostname(): string {
+  return `www.${getPlatformRootDomain()}`;
+}
+
+/** True for bare apex or www (platform marketing hosts). */
+export function isPlatformApexHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().split(":")[0]?.trim() ?? "";
+  const root = getPlatformRootDomain().toLowerCase();
+  return host === root || host === `www.${root}`;
+}
+
+/** Bare apex (no www) — must redirect to www before starting OAuth. */
+export function isBarePlatformApexHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().split(":")[0]?.trim() ?? "";
+  return host === getPlatformRootDomain().toLowerCase();
+}
+
+/**
  * Never return localhost or a relative URL in production. Callers pass the
  * candidate origin; we log and fall back to the platform apex if it is unsafe.
  */
@@ -44,7 +66,7 @@ export function assertPublicPortalOrigin(
   const missingHttps = production && !trimmed.toLowerCase().startsWith("https://");
 
   if (production && (local || missingHttps)) {
-    const fallback = `https://${getPlatformRootDomain()}`;
+    const fallback = `https://${getPlatformApexHostname()}`;
     console.error("[portal-url] refused non-public origin in production", {
       context,
       origin: trimmed || "(empty)",
@@ -63,15 +85,18 @@ export function getDeploymentOrigin(): string {
   const raw = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
   if (raw) return assertPublicPortalOrigin(raw, "NEXT_PUBLIC_APP_URL");
   if (process.env.NODE_ENV === "production") {
-    return `https://${getPlatformRootDomain()}`;
+    return `https://${getPlatformApexHostname()}`;
   }
   return "http://localhost:3000";
 }
 
-/** Platform marketing apex (Site URL) — e.g. https://shootportal.app */
+/**
+ * Platform marketing apex (Site URL) — https://www.shootportal.app in production.
+ * Always www so PKCE verifier cookies and Supabase Site URL stay on one host.
+ */
 export function getPlatformApexOrigin(): string {
   if (process.env.NODE_ENV === "production") {
-    return assertPublicPortalOrigin(`https://${getPlatformRootDomain()}`, "getPlatformApexOrigin");
+    return assertPublicPortalOrigin(`https://${getPlatformApexHostname()}`, "getPlatformApexOrigin");
   }
   const raw = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
   if (raw) return assertPublicPortalOrigin(raw, "getPlatformApexOrigin.dev");
@@ -90,7 +115,7 @@ export function getBusinessPortalOrigin(business: PortalUrlBusiness): string {
   const slug = business.slug?.trim().toLowerCase() ?? "";
   if (!slug) {
     console.error("[portal-url] getBusinessPortalOrigin: business has no slug or custom_domain", business);
-    return assertPublicPortalOrigin(`https://${getPlatformRootDomain()}`, "getBusinessPortalOrigin.unresolved");
+    return assertPublicPortalOrigin(`https://${getPlatformApexHostname()}`, "getBusinessPortalOrigin.unresolved");
   }
   return assertPublicPortalOrigin(
     `https://${slug}.${getPlatformRootDomain()}`,
@@ -108,7 +133,7 @@ export async function getBusinessPortalOriginById(businessId: string): Promise<s
     .maybeSingle();
   if (!data?.slug) {
     console.error("[portal-url] getBusinessPortalOriginById: business not resolved", { businessId });
-    return assertPublicPortalOrigin(`https://${getPlatformRootDomain()}`, "getBusinessPortalOriginById.unresolved");
+    return assertPublicPortalOrigin(`https://${getPlatformApexHostname()}`, "getBusinessPortalOriginById.unresolved");
   }
   return getBusinessPortalOrigin(data);
 }
@@ -129,6 +154,10 @@ export async function businessPortalHref(businessId: string, path: string): Prom
  * Where to send a logged-in user after auth, given the current request host.
  * Unmatched hosts (Vercel previews, bare localhost) stay on this origin.
  * Local `/b/{slug}` uses the same origin with the path prefix.
+ *
+ * Platform apex (www or bare): always send the user to their business portal
+ * (custom domain or `{slug}.{root}`). The apex is only a destination when the
+ * business has no resolvable portal host (handled inside getBusinessPortalOrigin).
  *
  * `foreignTenantHost`: the Host already resolved to a *different* business
  * (middleware / post-login). Always send the user to their canonical origin.
@@ -158,7 +187,11 @@ export function getLoginRedirectOrigin(
   if (onOwnCustom || onOwnSubdomain) {
     return current.origin.replace(/\/$/, "");
   }
-  if (vercelPreview || isApex || (!custom && !host.endsWith(`.${root}`))) {
+  // Apex login must never strand tenants on the marketing host.
+  if (isApex) {
+    return getBusinessPortalOrigin(business);
+  }
+  if (vercelPreview || (!custom && !host.endsWith(`.${root}`))) {
     return current.origin.replace(/\/$/, "");
   }
   return getBusinessPortalOrigin(business);

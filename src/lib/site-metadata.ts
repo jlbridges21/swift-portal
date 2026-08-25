@@ -38,11 +38,21 @@ export function getPlatformRootDomain(): string {
  * Canonical marketing origin.
  * Production Vercel already 308s apex → www; we treat www as canonical so
  * Open Graph / sitemap / canonical tags match the live host.
+ * If NEXT_PUBLIC_APP_URL is the bare apex, normalize to www.
  */
 export function getCanonicalSiteUrl(): string {
   const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "").trim();
   if (fromEnv && !/localhost|127\.0\.0\.1/i.test(fromEnv)) {
-    return fromEnv;
+    try {
+      const u = new URL(fromEnv);
+      const root = getPlatformRootDomain().toLowerCase();
+      if (u.hostname.toLowerCase() === root) {
+        u.hostname = `www.${root}`;
+      }
+      return u.origin;
+    } catch {
+      return fromEnv;
+    }
   }
   return `https://www.${getPlatformRootDomain()}`;
 }

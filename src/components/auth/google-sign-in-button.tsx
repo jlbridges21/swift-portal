@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { isOAuthAllowedOnCurrentHost } from "@/lib/oauth-origins";
+import { getPlatformRootDomain } from "@/lib/site-metadata";
 
 function GoogleMark({ className }: { className?: string }) {
   return (
@@ -32,30 +33,51 @@ function GoogleMark({ className }: { className?: string }) {
  * Google OAuth button. Hidden when the current host is not an allowlisted OAuth
  * origin (custom domains missing from NEXT_PUBLIC_OAUTH_ALLOWED_CUSTOM_HOSTS).
  * Password sign-in remains available.
+ *
+ * Never starts OAuth on the bare apex (shootportal.app) — navigates to www first
+ * so the PKCE verifier cookie and /auth/callback stay on the same host.
  */
 export function GoogleSignInButton({
   label = "Continue with Google",
   nextPath = "/auth/callback",
   disabled,
+  allowed: allowedProp,
 }: {
   label?: string;
   /** Path appended to current origin for redirectTo (must be allowlisted). */
   nextPath?: string;
   disabled?: boolean;
+  /** Server-computed allowlist result (preferred; avoids silent client build-time miss). */
+  allowed?: boolean;
 }) {
-  const [allowed, setAllowed] = useState(false);
+  const [allowed, setAllowed] = useState(allowedProp ?? false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (typeof allowedProp === "boolean") {
+      setAllowed(allowedProp);
+      return;
+    }
     setAllowed(isOAuthAllowedOnCurrentHost());
-  }, []);
+  }, [allowedProp]);
 
   if (!allowed) return null;
 
   async function onClick() {
     setLoading(true);
     setError("");
+
+    const host = window.location.hostname.toLowerCase();
+    const root = getPlatformRootDomain().toLowerCase();
+    // Never begin OAuth on bare apex — Vercel 308 mid-flow would drop the PKCE cookie.
+    if (host === root) {
+      const www = new URL(window.location.href);
+      www.hostname = `www.${root}`;
+      window.location.assign(www.toString());
+      return;
+    }
+
     const supabase = createClient();
     const redirectTo = `${window.location.origin}${nextPath.startsWith("/") ? nextPath : `/${nextPath}`}`;
     const { error: oauthError } = await supabase.auth.signInWithOAuth({

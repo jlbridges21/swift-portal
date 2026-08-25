@@ -87,9 +87,13 @@ Mode-aware price IDs live in `plan_stripe_prices` (`test` vs `live` rows). Check
 
 | Variable | Purpose |
 |----------|---------|
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | Admin Google Calendar sync |
 | `NEXT_PUBLIC_ONESIGNAL_APP_ID` / `ONESIGNAL_REST_API_KEY` | Admin web push |
 | `GHL_PORTAL_LEAD_WEBHOOK_URL` | Swift-only fallback for GHL; other tenants use settings |
+
+> **2026-08-25:** Google Calendar admin sync was removed (`migration-v67-drop-google-calendar.sql`).
+> `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` are no longer used by the app.
+> Supabase Auth Google sign-in (if enabled) stores its own OAuth client credentials in the Supabase
+> Dashboard, not in these env vars.
 
 ## Upload / debug (optional)
 

@@ -933,7 +933,6 @@ export async function hardDeleteBusiness(
     "business_services",
     "business_settings",
     "business_integrations",
-    "google_calendar_connections_v2",
   ];
 
   const { data: profiles } = await raw.from("profiles").select("id").eq("business_id", businessId);

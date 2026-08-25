@@ -4,7 +4,6 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
-import { loadShootSyncContext, syncShootToGoogleCalendar } from "@/lib/google-calendar";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
@@ -276,21 +275,6 @@ export async function PATCH(request: Request) {
       businessId,
     });
 
-    const syncCtx = await loadShootSyncContext(id, businessId);
-    const appSettings = await getAppSettings(businessId);
-    if (syncCtx && appSettings.workflow.scheduling.syncGoogleCalendar) {
-      void syncShootToGoogleCalendar(syncCtx, businessId);
-      await logWorkflowAudit(proposal.project_id, "Google Calendar updated after shoot confirmation.", {
-        idempotencyKey: idempotencyKey("workflow", "gcal", id, "accept"),
-      });
-    } else if (syncCtx) {
-      await logWorkflowSkipped(
-        proposal.project_id,
-        "Google Calendar sync skipped — disabled in Scheduling Automation settings.",
-        idempotencyKey("workflow", "gcal-skipped", id, "accept")
-      );
-    }
-
     return NextResponse.json({ success: true, status: "confirmed" });
   }
 
@@ -352,14 +336,6 @@ export async function PATCH(request: Request) {
         "Client reschedule notification skipped — disabled in Scheduling Automation settings.",
         idempotencyKey("workflow", "reschedule-skipped", id, proposed_at)
       );
-    }
-
-    const syncCtx = await loadShootSyncContext(id, businessId);
-    if (syncCtx && scheduling.syncGoogleCalendar) {
-      void syncShootToGoogleCalendar({ ...syncCtx, proposedAt: proposed_at }, businessId);
-      await logWorkflowAudit(shoot.project_id, "Google Calendar updated after reschedule.", {
-        idempotencyKey: idempotencyKey("workflow", "gcal", id, proposed_at),
-      });
     }
 
     return NextResponse.json({ success: true, proposed_at });

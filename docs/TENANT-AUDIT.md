@@ -1,5 +1,9 @@
 # Swift Portal — Multi-Tenant Tenant Audit
 
+> **2026-08-25:** Google Calendar was removed (`migration-v67-drop-google-calendar.sql`). Audit
+> sections that inventory `google_calendar_connections` / Calendar OAuth describe the pre-removal
+> codebase.
+
 Investigation only. Effective schema is `supabase/schema.sql` plus `migration-v2.sql` … `migration-v28-project-wide-photo-order.sql` and `fix-auth-trigger.sql`, applied in numeric order (v5 before v5b, v7 before v7b). There is **no `business_id` / tenant column anywhere**. `is_admin()` is global: any `profiles.role = 'admin'` row can read/write every business-owned table through RLS and through the service role.
 
 Auth path: `src/proxy.ts` → `updateSession` in `src/lib/supabase/middleware.ts` (anon-key session refresh, `/dashboard`+`/admin` login gate, `/admin` role check). `src/lib/api-auth.ts` `requireAdminApi()` uses the anon client + `profiles.role === "admin"`. `src/lib/project-access.ts` `canAccessProject()` returns **true for every admin**; clients are checked via RLS `select` on `projects`. `src/lib/supabase/server.ts` `createServiceClient()` uses `SUPABASE_SERVICE_ROLE_KEY` and **bypasses RLS**.

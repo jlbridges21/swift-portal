@@ -46,7 +46,6 @@ interface AdminSettingsClientProps {
   notificationEvents: NotificationEventDef[];
   payments: ReactNode;
   services: ReactNode;
-  calendar: ReactNode;
   canCustomizeLanding: boolean;
   canUseCustomDomain: boolean;
   customDomainState: CustomDomainPublicState;
@@ -268,7 +267,6 @@ export function AdminSettingsClient({
   notificationEvents,
   payments,
   services,
-  calendar,
   canCustomizeLanding,
   canUseCustomDomain,
   customDomainState,
@@ -1017,8 +1015,7 @@ export function AdminSettingsClient({
         <SettingsPanel id="integrations" active={section}>
           <div id="settings-integrations" tabIndex={-1} className="scroll-mt-24 space-y-4">
             <h2 className="text-lg font-semibold text-primary">Integrations</h2>
-            <p className="mt-1 text-sm text-muted">Google Calendar and GoHighLevel.</p>
-            {calendar}
+            <p className="mt-1 text-sm text-muted">GoHighLevel.</p>
             <Card className="shadow-sm">
               <CardContent className="space-y-4 pt-6">
                 <div className="space-y-2">

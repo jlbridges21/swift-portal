@@ -93,7 +93,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     id: "integrations",
     label: "Integrations",
-    description: "Google Calendar and GoHighLevel.",
+    description: "GoHighLevel.",
     hashes: ["settings-integrations"],
   },
 ];

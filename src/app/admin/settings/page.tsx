@@ -3,7 +3,6 @@ import { Header, PageHeader } from "@/components/layout/header";
 import { requireAdminPage } from "@/lib/admin-access";
 import { getAppSettings, NOTIFICATION_EVENT_DEFINITIONS } from "@/lib/app-settings";
 import { AdminSettingsClient } from "@/components/admin/admin-settings-client";
-import { GoogleCalendarCard } from "@/components/admin/google-calendar-card";
 import { StripeConnectCard } from "@/components/admin/stripe-connect-card";
 import { SetupChecklistCard } from "@/components/admin/setup-checklist-card";
 import { ServicesSettingsCard } from "@/components/admin/services-settings-card";
@@ -81,11 +80,6 @@ export default async function AdminSettingsPage() {
             </Suspense>
           }
           services={<ServicesSettingsCard />}
-          calendar={
-            <Suspense fallback={null}>
-              <GoogleCalendarCard />
-            </Suspense>
-          }
         />
       </main>
     </div>

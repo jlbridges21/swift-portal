@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth-password-gate";
 import { createServiceClient } from "@/lib/supabase/server";
 import { resolveLoginDestination } from "@/lib/auth-login-resolve";
+import { resolveCrossOriginRedirect } from "@/lib/auth-session-handoff";
 import type { Profile } from "@/lib/types";
 
 const EMAIL_OTP_TYPES = new Set<string>([
@@ -43,6 +44,21 @@ function safeNext(raw: string | null): string {
   return raw;
 }
 
+function copyCookies(
+  target: NextResponse,
+  cookiesToCopy: { name: string; value: string; options?: CookieOptions }[],
+  source?: NextResponse
+) {
+  cookiesToCopy.forEach(({ name, value, options }) => {
+    target.cookies.set(name, value, options);
+  });
+  source?.cookies.getAll().forEach((c) => {
+    if (!cookiesToCopy.some((x) => x.name === c.name)) {
+      target.cookies.set(c);
+    }
+  });
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -51,6 +67,7 @@ export async function GET(request: Request) {
   const next = safeNext(url.searchParams.get("next"));
   const origin = url.origin;
   const passwordGate = needsPasswordSetup(url);
+  const isOAuthCodeFlow = Boolean(code) && !tokenHash;
 
   let dest = passwordGate.needed
     ? `/auth/update-password?reason=${passwordGate.reason}`
@@ -104,6 +121,13 @@ export async function GET(request: Request) {
 
   if (exchangeError) {
     console.error("[auth/callback] exchange failed", exchangeError);
+    // OAuth PKCE failures must not use invite/reset "email scanner" copy.
+    if (isOAuthCodeFlow) {
+      const fail = new URL(`${origin}/login`);
+      fail.searchParams.set("error", "oauth_exchange");
+      fail.searchParams.set("message", exchangeError.slice(0, 200));
+      return NextResponse.redirect(fail.toString());
+    }
     return NextResponse.redirect(`${origin}/login?error=otp_expired`);
   }
 
@@ -116,6 +140,9 @@ export async function GET(request: Request) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (user) {
         const honorNext =
           next.startsWith("/auth/") ||
@@ -142,28 +169,27 @@ export async function GET(request: Request) {
               fail.searchParams.set("error", resolved.code || "unavailable");
               fail.searchParams.set("code", resolved.code || "unavailable");
               const failRedirect = NextResponse.redirect(fail.toString());
-              cookiesToCopy.forEach(({ name, value, options }) => {
-                failRedirect.cookies.set(name, value, options);
-              });
-              // Clear session cookies from signOut if present on response
-              response.cookies.getAll().forEach((c) => {
-                if (!cookiesToCopy.some((x) => x.name === c.name)) {
-                  failRedirect.cookies.set(c);
-                }
-              });
+              copyCookies(failRedirect, cookiesToCopy, response);
               return failRedirect;
             }
             dest = resolved.redirect;
             if (dest.startsWith("http://") || dest.startsWith("https://")) {
-              const absolute = NextResponse.redirect(dest);
-              cookiesToCopy.forEach(({ name, value, options }) => {
-                absolute.cookies.set(name, value, options);
-              });
-              response.cookies.getAll().forEach((c) => {
-                if (!cookiesToCopy.some((x) => x.name === c.name)) {
-                  absolute.cookies.set(c);
+              let finalUrl = dest;
+              if (session?.access_token && session.refresh_token) {
+                try {
+                  finalUrl = await resolveCrossOriginRedirect({
+                    currentOrigin: origin,
+                    redirect: dest,
+                    userId: user.id,
+                    accessToken: session.access_token,
+                    refreshToken: session.refresh_token,
+                  });
+                } catch (err) {
+                  console.error("[auth/callback] handoff mint failed", err);
                 }
-              });
+              }
+              const absolute = NextResponse.redirect(finalUrl);
+              copyCookies(absolute, cookiesToCopy, response);
               return absolute;
             }
           }
@@ -176,18 +202,34 @@ export async function GET(request: Request) {
     }
   }
 
-  const finalDest =
+  let finalDest =
     dest.startsWith("http://") || dest.startsWith("https://")
       ? dest
       : `${origin}${dest.startsWith("/") ? dest : `/${dest}`}`;
-  const finalRedirect = NextResponse.redirect(finalDest);
-  cookiesToCopy.forEach(({ name, value, options }) => {
-    finalRedirect.cookies.set(name, value, options);
-  });
-  response.cookies.getAll().forEach((c) => {
-    if (!cookiesToCopy.some((x) => x.name === c.name)) {
-      finalRedirect.cookies.set(c);
+
+  if (finalDest.startsWith("http://") || finalDest.startsWith("https://")) {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (user && session?.access_token && session.refresh_token) {
+        finalDest = await resolveCrossOriginRedirect({
+          currentOrigin: origin,
+          redirect: finalDest,
+          userId: user.id,
+          accessToken: session.access_token,
+          refreshToken: session.refresh_token,
+        });
+      }
+    } catch (err) {
+      console.error("[auth/callback] handoff mint failed (final)", err);
     }
-  });
+  }
+
+  const finalRedirect = NextResponse.redirect(finalDest);
+  copyCookies(finalRedirect, cookiesToCopy, response);
   return finalRedirect;
 }

@@ -62,7 +62,7 @@ const FEATURES = [
   {
     icon: CalendarClock,
     title: "Scheduling",
-    body: "Keep shoot dates connected to the project so you are not updating Google Calendar in a separate tab.",
+    body: "Keep shoot dates connected to the project so scheduling stays with the job, not in a separate calendar tab.",
   },
   {
     icon: MessageSquare,
@@ -302,7 +302,7 @@ export function PlatformLanding({
                 Your business should not feel held together with duct tape.
               </h2>
               <p className="mt-4 text-base leading-relaxed text-[#475569]">
-                A lot of media businesses start with texts, Google Calendar, Dropbox, Stripe,
+                A lot of media businesses start with texts, calendar apps, Dropbox, Stripe,
                 spreadsheets, and whatever else gets the job done. That works until the business gets
                 busy.
               </p>

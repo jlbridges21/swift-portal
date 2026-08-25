@@ -1,5 +1,9 @@
 # Service-role migration
 
+> **2026-08-25:** `src/lib/google-calendar.ts` and the Calendar connection tables were removed
+> (`migration-v67-drop-google-calendar.sql`). Rows below that mention Google Calendar describe the
+> pre-removal state.
+
 `createServiceClient()` uses `SUPABASE_SERVICE_ROLE_KEY` and **bypasses RLS**. Tenant isolation for those paths is application-level: `createTenantServiceClient(businessId)` in `src/lib/supabase/tenant-service.ts`.
 
 **Wrapper approach:** a thin `from()` facade (not a Proxy over the query builder). `select` / `update` / `delete` immediately append `.eq("business_id", businessId)` and return the native supabase-js builder. `insert` / `upsert` inject `business_id` into every row (throw if an explicit value differs). Auth, Storage, RPC, and unscoped tables use `.raw`.

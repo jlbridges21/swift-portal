@@ -98,7 +98,9 @@ Keep `src/lib/reserved-subdomains.ts` and `supabase/migration-v41-reserved-subdo
 
 Used for notification email CTAs, OneSignal URLs, GHL portal links, Stripe Checkout success/cancel (customer-facing), and workflow `portal_link` variables.
 
-`NEXT_PUBLIC_APP_URL` remains the **deployment** origin (this Vercel preview/production URL). It is still used for OAuth-style callbacks that must return to the running app: Stripe Connect onboarding, Google Calendar OAuth, sign-out fallback, and `getSiteUrl()` / root `metadataBase` (platform chrome).
+`NEXT_PUBLIC_APP_URL` remains the **deployment** origin (this Vercel preview/production URL). It is still used for OAuth-style callbacks that must return to the running app: Stripe Connect onboarding, sign-out fallback, and `getSiteUrl()` / root `metadataBase` (platform chrome).
+
+> **2026-08-25:** Google Calendar OAuth callbacks were removed with the Calendar integration. Supabase Auth Google sign-in uses `/auth/callback` on allowlisted origins instead.
 
 ## Next.js 16 notes verified in `node_modules/next/dist/docs`
 

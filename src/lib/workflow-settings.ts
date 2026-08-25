@@ -52,7 +52,6 @@ export interface ProposalAutomationSettings {
 export interface SchedulingAutomationSettings {
   notifyClientOnPropose: boolean;
   notifyAdminOnCounter: boolean;
-  syncGoogleCalendar: boolean;
   notifyClientOnReschedule: boolean;
   logSchedulingChanges: boolean;
 }
@@ -270,7 +269,6 @@ export function buildDefaultWorkflowSettings(): WorkflowSettings {
     scheduling: {
       notifyClientOnPropose: true,
       notifyAdminOnCounter: true,
-      syncGoogleCalendar: true,
       notifyClientOnReschedule: true,
       logSchedulingChanges: true,
     },
@@ -368,11 +366,25 @@ export function mergeWorkflowSettings(
     stages,
     payments: { ...defaults.payments, ...(stored.payments ?? {}) },
     proposals: { ...defaults.proposals, ...(stored.proposals ?? {}) },
-    scheduling: { ...defaults.scheduling, ...(stored.scheduling ?? {}) },
+    scheduling: mergeSchedulingSettings(stored.scheduling),
     deliverables: { ...defaults.deliverables, ...(stored.deliverables ?? {}) },
     reminders: { ...defaults.reminders, ...(stored.reminders ?? {}) },
     messages,
     businessDefaults: { ...defaults.businessDefaults, ...(stored.businessDefaults ?? {}) },
+  };
+}
+
+/** Only known scheduling keys are kept — obsolete flags in stored JSON are ignored. */
+function mergeSchedulingSettings(
+  stored: Partial<SchedulingAutomationSettings> | Record<string, unknown> | undefined
+): SchedulingAutomationSettings {
+  const defaults = buildDefaultWorkflowSettings().scheduling;
+  const s = (stored ?? {}) as Partial<SchedulingAutomationSettings>;
+  return {
+    notifyClientOnPropose: s.notifyClientOnPropose ?? defaults.notifyClientOnPropose,
+    notifyAdminOnCounter: s.notifyAdminOnCounter ?? defaults.notifyAdminOnCounter,
+    notifyClientOnReschedule: s.notifyClientOnReschedule ?? defaults.notifyClientOnReschedule,
+    logSchedulingChanges: s.logSchedulingChanges ?? defaults.logSchedulingChanges,
   };
 }
 

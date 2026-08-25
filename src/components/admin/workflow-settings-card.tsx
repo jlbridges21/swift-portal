@@ -115,11 +115,10 @@ export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCar
         </div>
       </SettingsCollapsible>
 
-      <SettingsCollapsible title="Scheduling" description="Shoot proposals, reschedules, and Google Calendar sync.">
+      <SettingsCollapsible title="Scheduling" description="Shoot proposals and reschedules.">
         <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
           <RowToggle id="sched-propose" label="Notify client when shoot time is proposed" checked={workflow.scheduling.notifyClientOnPropose} onChange={(v) => onChange({ ...workflow, scheduling: { ...workflow.scheduling, notifyClientOnPropose: v } })} />
           <RowToggle id="sched-counter" label="Notify admin when client counters a date" checked={workflow.scheduling.notifyAdminOnCounter} onChange={(v) => onChange({ ...workflow, scheduling: { ...workflow.scheduling, notifyAdminOnCounter: v } })} />
-          <RowToggle id="sched-gcal" label="Sync Google Calendar after scheduling changes" checked={workflow.scheduling.syncGoogleCalendar} onChange={(v) => onChange({ ...workflow, scheduling: { ...workflow.scheduling, syncGoogleCalendar: v } })} />
           <RowToggle id="sched-resched" label="Notify client after reschedule" checked={workflow.scheduling.notifyClientOnReschedule} onChange={(v) => onChange({ ...workflow, scheduling: { ...workflow.scheduling, notifyClientOnReschedule: v } })} />
           <RowToggle id="sched-log" label="Log scheduling changes to project activity" checked={workflow.scheduling.logSchedulingChanges} onChange={(v) => onChange({ ...workflow, scheduling: { ...workflow.scheduling, logSchedulingChanges: v } })} />
         </div>

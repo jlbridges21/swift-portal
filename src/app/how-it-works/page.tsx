@@ -158,7 +158,7 @@ export default async function HowItWorksPage() {
                 Stop running every job through five different apps.
               </h2>
               <p className="mt-3 text-base leading-relaxed text-[#475569]">
-                A lot of media businesses start with texts, Google Calendar, Dropbox, Stripe,
+                A lot of media businesses start with texts, calendar apps, Dropbox, Stripe,
                 spreadsheets, and whatever else gets the job done. It works until the volume picks
                 up.
               </p>

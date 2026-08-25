@@ -1,5 +1,10 @@
 # ShootPortal tenant architecture
 
+> **2026-08-25:** Google Calendar sync was removed. `google_calendar_connections` /
+> `google_calendar_connections_v2` and `shoot_proposals.google_calendar_event_id` were dropped in
+> `migration-v67-drop-google-calendar.sql`. Historical mentions of those tables below describe the
+> pre-removal model.
+
 Final model after prompts 1–19 plus this hardening pass. Production hosts:
 
 | Host | Kind | Business |

@@ -30,7 +30,29 @@ expect("relative is local", isLocalOrRelativeOrigin("/dashboard"));
 expect("custom domain is public", !isLocalOrRelativeOrigin("https://portal.swiftaerialmedia.com"));
 
 const guarded = assertPublicPortalOrigin("http://localhost:3000", "test", true);
-expect("production localhost falls back to platform apex", guarded === "https://shootportal.app");
+expect("production localhost falls back to platform apex", guarded === "https://www.shootportal.app");
+
+expect(
+  "apex login sends custom-domain business home",
+  getLoginRedirectOrigin(
+    SWIFT,
+    { hostname: "www.shootportal.app", origin: "https://www.shootportal.app" }
+  ) === "https://portal.swiftaerialmedia.com"
+);
+expect(
+  "apex login sends subdomain-only business home",
+  getLoginRedirectOrigin(
+    PILOT,
+    { hostname: "www.shootportal.app", origin: "https://www.shootportal.app" }
+  ) === "https://test-pilot-drones.shootportal.app"
+);
+expect(
+  "bare apex login also sends custom-domain business home",
+  getLoginRedirectOrigin(
+    SWIFT,
+    { hostname: "shootportal.app", origin: "https://shootportal.app" }
+  ) === "https://portal.swiftaerialmedia.com"
+);
 
 expect(
   "foreign custom-domain host sends slug-only tenant home",

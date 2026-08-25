@@ -7,7 +7,11 @@ import {
   resolveRequestHost,
   type HostResolution,
 } from "@/lib/host-resolution";
-import { getLoginRedirectOrigin } from "@/lib/portal-url";
+import {
+  getLoginRedirectOrigin,
+  getPlatformApexHostname,
+  isBarePlatformApexHostname,
+} from "@/lib/portal-url";
 import { verifyImpersonationCookie, SA_BUSINESS_CONTEXT_COOKIE } from "@/lib/platform-session";
 import {
   buildPartnerRefCookieValue,
@@ -59,9 +63,48 @@ function applyPathCookie(response: NextResponse, resolution: HostResolution) {
   return response;
 }
 
+/**
+ * Cross-origin middleware redirects must not mint handoff tokens here (Edge has no
+ * node:crypto / service-role path). Bounce through a Node route that holds the
+ * session cookie and issues the handoff.
+ */
+function redirectViaSessionContinue(request: NextRequest, destAbsolute: string): NextResponse {
+  try {
+    const dest = new URL(destAbsolute);
+    const currentHost = (inboundHost(request).split(":")[0] || "").toLowerCase();
+    if (dest.hostname.toLowerCase() === currentHost) {
+      return NextResponse.redirect(destAbsolute);
+    }
+  } catch {
+    return NextResponse.redirect(destAbsolute);
+  }
+  const bridge = request.nextUrl.clone();
+  bridge.pathname = "/api/auth/session-continue";
+  bridge.search = "";
+  bridge.searchParams.set("next", destAbsolute);
+  return NextResponse.redirect(bridge);
+}
+
 export async function updateSession(request: NextRequest) {
+  const inbound = inboundHost(request);
+  const inboundHostname = inbound.split(":")[0]?.toLowerCase() ?? "";
+
+  // Canonicalize bare apex → www before any OAuth / session work so PKCE cookies
+  // are never set on shootportal.app while callback lands on www (or vice versa).
+  if (
+    process.env.NODE_ENV === "production" &&
+    isBarePlatformApexHostname(inboundHostname) &&
+    request.method === "GET"
+  ) {
+    const url = request.nextUrl.clone();
+    url.protocol = "https:";
+    url.hostname = getPlatformApexHostname();
+    url.port = "";
+    return NextResponse.redirect(url, 308);
+  }
+
   const resolution = await resolveRequestHost({
-    hostname: inboundHost(request),
+    hostname: inbound,
     pathname: request.nextUrl.pathname,
     pathCookie: request.cookies.get(PATH_TENANT_COOKIE)?.value ?? null,
   });
@@ -266,6 +309,34 @@ export async function updateSession(request: NextRequest) {
       return applyPathCookie(NextResponse.redirect(url), resolution);
     }
 
+    // Authenticated tenant users on the platform apex must not stay on /dashboard|/admin —
+    // there is no tenant context on the marketing host (would throw a generic error page).
+    if (
+      !isApi &&
+      resolution.kind === "platform" &&
+      ownBusiness &&
+      profile?.role !== "super_admin" &&
+      (path === "/dashboard" ||
+        path.startsWith("/dashboard/") ||
+        path === "/admin" ||
+        path.startsWith("/admin/") ||
+        path === "/billing" ||
+        path.startsWith("/billing/") ||
+        path === "/onboarding" ||
+        path.startsWith("/onboarding/"))
+    ) {
+      const destPath =
+        path.startsWith("/admin") || path.startsWith("/billing") || path.startsWith("/onboarding")
+          ? path
+          : "/dashboard";
+      const destOrigin = getLoginRedirectOrigin(
+        ownBusiness,
+        { hostname: inboundHost(request), origin: request.nextUrl.origin }
+      );
+      const dest = `${destOrigin}${destPath}${request.nextUrl.search}`;
+      return applyPathCookie(redirectViaSessionContinue(request, dest), resolution);
+    }
+
     if (
       !isApi &&
       resolution.kind === "tenant" &&
@@ -279,8 +350,8 @@ export async function updateSession(request: NextRequest) {
         hostname: inboundHost(request),
         origin: request.nextUrl.origin,
       }, { foreignTenantHost: true });
-      const dest = new URL(`${destOrigin}${path}${request.nextUrl.search}`);
-      return applyPathCookie(NextResponse.redirect(dest), resolution);
+      const dest = `${destOrigin}${path}${request.nextUrl.search}`;
+      return applyPathCookie(redirectViaSessionContinue(request, dest), resolution);
     }
 
     if (user && (path === "/login" || path === "/signup") && !businessUnavailable) {
@@ -319,8 +390,8 @@ export async function updateSession(request: NextRequest) {
           { hostname: inboundHost(request), origin: request.nextUrl.origin },
           { foreignTenantHost: !onOwnTenant }
         );
-        const dest = new URL(`${destOrigin}${destPath}`);
-        return applyPathCookie(NextResponse.redirect(dest), resolution);
+        const dest = `${destOrigin}${destPath}`;
+        return applyPathCookie(redirectViaSessionContinue(request, dest), resolution);
       }
 
       // No business_id: partners go to /partner; OAuth unfinished on apex → finish-setup.

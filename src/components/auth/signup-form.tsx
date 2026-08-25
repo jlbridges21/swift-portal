@@ -13,10 +13,12 @@ import { AuthDivider, GoogleSignInButton } from "@/components/auth/google-sign-i
 export function SignupForm({
   platformRootDomain,
   trialDays,
+  oauthAllowed,
 }: {
   platformRootDomain: string;
   /** Studio plan trial_days for new signups (from plans table). */
   trialDays: number;
+  oauthAllowed?: boolean;
 }) {
   const [name, setName] = useState("");
   const [ownerName, setOwnerName] = useState("");
@@ -161,8 +163,16 @@ export function SignupForm({
           </CardHeader>
           <CardContent>
             <div className="mb-2 space-y-4">
-              <GoogleSignInButton label="Continue with Google" disabled={busy} />
-              <AuthDivider label="or use email" />
+              {oauthAllowed !== false && (
+                <>
+                  <GoogleSignInButton
+                    label="Continue with Google"
+                    disabled={busy}
+                    allowed={oauthAllowed}
+                  />
+                  <AuthDivider label="or use email" />
+                </>
+              )}
             </div>
             <form className="space-y-4" onSubmit={onSubmit}>
               <div className="space-y-2">

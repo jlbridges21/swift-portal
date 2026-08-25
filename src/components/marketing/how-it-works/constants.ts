@@ -79,7 +79,7 @@ export const HERO_PROJECT_STAGES = [
 export const BEFORE_TOOLS = [
   "Text messages",
   "Email threads",
-  "Google Calendar",
+  "Calendar apps",
   "Dropbox or Drive",
   "Separate invoices",
   "Payment links",

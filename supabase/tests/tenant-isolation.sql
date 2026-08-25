@@ -184,7 +184,6 @@ BEGIN
   DELETE FROM media_folders WHERE business_id = v_business;
   DELETE FROM project_clients WHERE business_id = v_business;
   DELETE FROM leads WHERE business_id = v_business;
-  DELETE FROM google_calendar_connections_v2 WHERE business_id = v_business;
   DELETE FROM business_integrations WHERE business_id = v_business;
   -- storage.objects has protect_objects_delete ("Use the Storage API instead").
   -- SQL Editor / MCP cannot set session_replication_role. Best-effort SQL
@@ -271,13 +270,6 @@ BEGIN
   INSERT INTO shoot_proposals (id, business_id, project_id, proposed_by, proposed_at, status)
   VALUES (v_shoot, v_business, v_project, 'admin', now(), 'pending');
 
-  INSERT INTO google_calendar_connections_v2 (
-    business_id, access_token, refresh_token, token_expires_at, connected_email
-  ) VALUES (
-    v_business, 'tenant-b-test-token', 'tenant-b-test-refresh', now() + interval '1 hour',
-    'tenant-b@example.test'
-  );
-
   INSERT INTO business_integrations (
     business_id, stripe_account_id, stripe_account_status
   ) VALUES (
@@ -363,13 +355,6 @@ BEGIN
   PERFORM _tenant_test_assert_read_hidden('tours', v_tour);
   PERFORM _tenant_test_assert_read_hidden('revisions', v_revision);
   PERFORM _tenant_test_assert_read_hidden('shoot_proposals', v_shoot);
-
-  -- Prompt 12b: Tenant B google_calendar_connections_v2 is invisible to Swift admin
-  SELECT count(*) INTO v_n FROM google_calendar_connections_v2 WHERE business_id = v_business;
-  IF v_n > 0 THEN
-    RAISE EXCEPTION 'READ LEAK: google_calendar_connections_v2 Tenant B row visible (% rows)', v_n;
-  END IF;
-  PERFORM _tenant_test_bump();
 
   -- v37: Tenant B business_integrations is invisible to Swift admin
   SELECT count(*) INTO v_n FROM business_integrations WHERE business_id = v_business;
@@ -600,7 +585,6 @@ BEGIN
   PERFORM _tenant_test_assert_swift_hidden('tours', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('revisions', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('shoot_proposals', v_swift_bid);
-  PERFORM _tenant_test_assert_swift_hidden('google_calendar_connections_v2', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('business_integrations', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('business_services', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('client_messages', v_swift_bid);
@@ -695,7 +679,6 @@ BEGIN
   DELETE FROM media_folders WHERE business_id = v_teardown_business_id;
   DELETE FROM project_clients WHERE business_id = v_teardown_business_id;
   DELETE FROM leads WHERE business_id = v_teardown_business_id;
-  DELETE FROM google_calendar_connections_v2 WHERE business_id = v_teardown_business_id;
   DELETE FROM business_integrations WHERE business_id = v_teardown_business_id;
   -- protect_objects_delete blocks SQL DELETE. Wrap so CRM teardown still runs.
   -- Then Storage API: DELETE /storage/v1/object/project-media/{id}/library/tenant-b-isolation.bin
@@ -741,7 +724,6 @@ BEGIN
   DELETE FROM media_folders WHERE business_id = v_pentest_business_id;
   DELETE FROM project_clients WHERE business_id = v_pentest_business_id;
   DELETE FROM leads WHERE business_id = v_pentest_business_id;
-  DELETE FROM google_calendar_connections_v2 WHERE business_id = v_pentest_business_id;
   DELETE FROM business_integrations WHERE business_id = v_pentest_business_id;
   BEGIN
     DELETE FROM storage.objects

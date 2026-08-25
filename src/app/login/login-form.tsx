@@ -17,20 +17,27 @@ import {
 } from "@/lib/auth-fragment";
 import { AuthDivider, GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 
-export function LoginForm({ showRequestLink }: { showRequestLink: boolean }) {
+export function LoginForm({
+  showRequestLink,
+  oauthAllowed,
+}: {
+  showRequestLink: boolean;
+  oauthAllowed?: boolean;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<"login" | "forgot" | "link_help">("login");
+  const [mode, setMode] = useState<"login" | "forgot" | "link_help" | "oauth_error">("login");
   const [resetSent, setResetSent] = useState(false);
   const [linkErrorKind, setLinkErrorKind] = useState<AuthLinkErrorKind>("generic");
   const [linkDescription, setLinkDescription] = useState<string | null>(null);
 
   const queryError = searchParams.get("error");
   const queryCode = searchParams.get("code");
+  const queryMessage = searchParams.get("message");
   const queryUnavailable =
     queryError === "unavailable"
       ? "This portal is unavailable. Your business is suspended or no longer active."
@@ -38,10 +45,17 @@ export function LoginForm({ showRequestLink }: { showRequestLink: boolean }) {
         ? "An account already exists for this email. Sign in with your password and verify your email before connecting Google."
         : queryError === "tenant_no_match" || queryCode === "tenant_no_match"
           ? "No portal account was found for this email on this business. Ask your studio to invite you, or sign in on shootportal.app if you are starting a new studio."
-          : "";
+          : queryError === "no_portal"
+            ? queryMessage ||
+              "This host has no portal for your account. Open your studio’s portal URL to continue."
+            : queryError === "handoff_failed"
+              ? queryMessage ||
+                "Could not finish signing you into this portal. Try signing in again here."
+              : "";
 
   const [error, setError] = useState(queryUnavailable);
   const [notice, setNotice] = useState("");
+  const [oauthDetail, setOauthDetail] = useState<string | null>(null);
 
   useEffect(() => {
     const fromHash = parseAuthFragment(window.location.hash, window.location.search);
@@ -84,6 +98,11 @@ export function LoginForm({ showRequestLink }: { showRequestLink: boolean }) {
       window.location.replace(next.toString());
       return;
     }
+    if (queryError === "oauth_exchange") {
+      setOauthDetail(queryMessage);
+      setMode("oauth_error");
+      return;
+    }
     if (queryError === "otp_expired") {
       setLinkErrorKind("otp_expired");
       setLinkDescription(null);
@@ -97,7 +116,7 @@ export function LoginForm({ showRequestLink }: { showRequestLink: boolean }) {
       setLinkDescription(null);
       setMode("link_help");
     }
-  }, [queryError]);
+  }, [queryError, queryMessage]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -163,6 +182,50 @@ export function LoginForm({ showRequestLink }: { showRequestLink: boolean }) {
     setNotice("If an account exists for that email, a reset link was sent. It returns to this portal.");
   }
 
+  if (mode === "oauth_error") {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Header />
+        <main className="flex-1 flex items-center justify-center px-4 py-16">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <CardTitle>Google sign-in didn’t finish</CardTitle>
+              <CardDescription>
+                The sign-in session expired or couldn’t be verified on this host. This is not an
+                invite or password-reset link — try Google again from this page.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {oauthDetail && (
+                <p className="text-sm text-muted" role="status">
+                  {oauthDetail}
+                </p>
+              )}
+              <GoogleSignInButton
+                label="Try Google again"
+                disabled={loading}
+                allowed={oauthAllowed}
+              />
+              <p className="text-center text-sm">
+                <button
+                  type="button"
+                  className="text-accent hover:underline"
+                  onClick={() => {
+                    setMode("login");
+                    setError("");
+                    setOauthDetail(null);
+                  }}
+                >
+                  Sign in with email instead
+                </button>
+              </p>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
   if (mode === "link_help") {
     return (
       <div className="min-h-screen flex flex-col bg-background">
@@ -199,8 +262,16 @@ export function LoginForm({ showRequestLink }: { showRequestLink: boolean }) {
           <CardContent>
             {mode === "login" ? (
               <form onSubmit={handleLogin} className="space-y-4">
-                <GoogleSignInButton label="Continue with Google" disabled={loading} />
-                <AuthDivider />
+                {oauthAllowed !== false && (
+                  <>
+                    <GoogleSignInButton
+                      label="Continue with Google"
+                      disabled={loading}
+                      allowed={oauthAllowed}
+                    />
+                    <AuthDivider />
+                  </>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input

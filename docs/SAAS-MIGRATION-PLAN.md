@@ -1,5 +1,9 @@
 # Swift Portal → Multi-Tenant SaaS: Architecture & Cursor Prompt Series
 
+> **2026-08-25:** Google Calendar admin sync was removed from the live app
+> (`migration-v67-drop-google-calendar.sql`). Mentions of Calendar OAuth / `google_calendar_connections*`
+> in this plan describe the historical migration target, not current product scope.
+
 > **Directory note:** You invoked me in `~/Desktop/coding/Swift Portal`, which is an empty
 > Create Next App scaffold (one commit, `src/app/page.tsx` is still the Next.js starter, empty
 > `supabase/migrations/`). The **real working app is `~/Desktop/coding/swift portal v2`**
