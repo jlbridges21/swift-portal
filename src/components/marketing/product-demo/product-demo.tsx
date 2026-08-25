@@ -306,7 +306,7 @@ export function ProductDemo() {
           <h3 className="text-xl font-semibold text-[#0F172A]">{tab.headline}</h3>
           <p className="mx-auto mt-1 max-w-xl text-sm text-[#64748B]">{tab.blurb}</p>
           <p className="mt-2 text-xs font-medium text-[#4F46E5] md:hidden">
-            Swipe the panel to browse — animation runs without a cursor
+            Swipe the panel to browse. Animation runs without a cursor.
           </p>
         </div>
 
@@ -320,7 +320,10 @@ export function ProductDemo() {
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
-          <div className="absolute inset-0 p-2 sm:p-3">
+          <div
+            key={tabId}
+            className="absolute inset-0 p-2 sm:p-3 demo-panel-enter"
+          >
             {tabId === "projects" ? (
               <DemoProjectsPanel highlightId={projectHighlight} />
             ) : null}
@@ -331,6 +334,19 @@ export function ProductDemo() {
               <DemoClientsPanel highlightIndex={clientHighlight} />
             ) : null}
           </div>
+
+          <style>{`
+            @keyframes demo-panel-enter {
+              from { opacity: 0; transform: translate3d(0, 8px, 0); }
+              to { opacity: 1; transform: translate3d(0, 0, 0); }
+            }
+            .demo-panel-enter {
+              animation: demo-panel-enter 0.35s ease-out;
+            }
+            @media (prefers-reduced-motion: reduce) {
+              .demo-panel-enter { animation: none !important; }
+            }
+          `}</style>
 
           {!reducedMotion && finePointer ? (
             <DemoCursor
@@ -354,7 +370,7 @@ export function ProductDemo() {
         </div>
         {manual ? (
           <p className="mt-2 text-center text-xs text-[#94A3B8]">
-            Auto-advance paused — you are in control
+            Auto-advance paused. You are in control.
           </p>
         ) : null}
       </div>

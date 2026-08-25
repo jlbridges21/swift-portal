@@ -12,17 +12,23 @@ import {
   MarketingShell,
   MarketingCtaBand,
 } from "@/components/marketing/marketing-chrome";
-import { HomepageWorkflowRibbon } from "@/components/marketing/workflow-steps";
 import { MarketingHomePricing } from "@/components/marketing/marketing-home-pricing";
 import { MarketingFaq } from "@/components/marketing/marketing-faq";
 import { HeroProductVizLazy } from "@/components/marketing/hero-viz-lazy";
+import { HomepageWorkflowMarquee } from "@/components/marketing/home/workflow-marquee";
+import { ConsolidationPills } from "@/components/marketing/home/consolidation-pills";
+import { HomePainConverge } from "@/components/marketing/home/pain-converge";
+import { HomeSocialProgression } from "@/components/marketing/home/social-progression";
+import { HomeStackCollapse } from "@/components/marketing/home/stack-collapse";
 import {
   CalendarClock,
+  CheckCircle2,
   CreditCard,
   FolderKanban,
   Images,
   Link2,
   MessageSquare,
+  Paintbrush,
   Palette,
   Receipt,
   Users,
@@ -67,27 +73,27 @@ const FEATURES = [
   {
     icon: CalendarClock,
     title: "Scheduling",
-    body: "Keep shoot dates and project information connected so your calendar is always tied to the actual job.",
+    body: "Keep shoot dates connected to the project so you are not updating Google Calendar in a separate tab.",
   },
   {
     icon: MessageSquare,
     title: "Client communication",
-    body: "Keep important conversations attached to the project instead of scattered across texts, emails, and DMs.",
+    body: "Stop searching old texts and emails for what the client asked for. Keep the conversation on the job.",
   },
   {
     icon: Images,
     title: "Media delivery",
-    body: "Deliver photos, videos, and project files through a clean client experience instead of sending another random file link.",
+    body: "Give clients one clean place to get their photos and videos instead of sending another random download link.",
   },
   {
     icon: FolderKanban,
     title: "Project management",
-    body: "See every active job, where it stands, and what needs to happen next.",
+    body: "Open the project and see exactly what needs to happen next.",
   },
   {
     icon: CreditCard,
     title: "Invoices and payments",
-    body: "Send invoices, create payment links, and keep payment status connected to the project.",
+    body: "Send the invoice from the project and know what has been paid without another follow-up chase.",
   },
   {
     icon: Users,
@@ -104,10 +110,20 @@ const FEATURES = [
     title: "One record for every job",
     body: "Scheduling, messages, files, approvals, invoices, and payments stay connected to the same project.",
   },
+  {
+    icon: CheckCircle2,
+    title: "Client approvals",
+    body: "Let clients approve estimates, shoot details, and project decisions without chasing another text or email.",
+  },
+  {
+    icon: Paintbrush,
+    title: "Business branding",
+    body: "Customize the client experience with your logo, colors, services, and branded communication.",
+  },
 ] as const;
 
 const PAIN_POINTS = [
-  "No more hunting through old texts and emails.",
+  "No more hunting through old texts and emails for project details.",
   "No more wondering which jobs still need payment.",
   "No more sending clients five different links.",
   "No more keeping your calendar separate from your projects.",
@@ -215,20 +231,7 @@ export function PlatformLanding({
           <h2 className="text-center text-sm font-semibold uppercase tracking-[0.16em] text-[#64748B]">
             ONE PORTAL INSTEAD OF
           </h2>
-          <ul className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
-            {REPLACES.map((item) => {
-              const Icon = item.icon;
-              return (
-                <li
-                  key={item.label}
-                  className="flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2 text-sm font-medium text-[#0F172A]"
-                >
-                  <Icon className="h-4 w-4 text-[#4F46E5]" aria-hidden />
-                  {item.label}
-                </li>
-              );
-            })}
-          </ul>
+          <ConsolidationPills items={[...REPLACES]} />
           <p className="mx-auto mt-6 max-w-2xl text-center text-sm leading-relaxed text-[#475569]">
             Your clients, projects, schedule, media, messages, invoices, and payments all stay
             connected to the same job.
@@ -251,10 +254,11 @@ export function PlatformLanding({
             The path every job follows.
           </h2>
           <p className="mt-3 max-w-2xl text-base text-[#475569]">
-            From the first request to the final payment, everyone knows what happens next.
+            From the first request to final delivery and payment, every step stays connected to the
+            same project.
           </p>
           <div className="mt-10">
-            <HomepageWorkflowRibbon />
+            <HomepageWorkflowMarquee />
           </div>
           <div className="mt-8">
             <Link
@@ -278,12 +282,18 @@ export function PlatformLanding({
             The tools you need to handle the work around the shoot, without building your own system
             out of five different apps.
           </p>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {FEATURES.map((f) => {
               const Icon = f.icon;
               return (
-                <div key={f.title} className="rounded-xl border border-[#E2E8F0] bg-white p-5">
-                  <Icon className="h-5 w-5 text-[#4F46E5]" aria-hidden />
+                <div
+                  key={f.title}
+                  className="group rounded-xl border border-[#E2E8F0] bg-white p-5 transition hover:-translate-y-0.5 hover:border-[#C7D2FE] hover:bg-[#FAFBFF] hover:shadow-md"
+                >
+                  <Icon
+                    className="h-5 w-5 text-[#4F46E5] transition group-hover:scale-110"
+                    aria-hidden
+                  />
                   <h3 className="mt-3 text-sm font-semibold text-[#0F172A]">{f.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-[#475569]">{f.body}</p>
                 </div>
@@ -296,29 +306,37 @@ export function PlatformLanding({
       {/* Pain */}
       <section className="border-b border-[#E2E8F0] bg-white">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-          <SectionEyebrow>LESS ADMIN. MORE SHOOTING.</SectionEyebrow>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl">
-            Your business should not feel held together with duct tape.
-          </h2>
-          <p className="mt-4 max-w-3xl text-base leading-relaxed text-[#475569]">
-            A lot of media businesses start with texts, Google Calendar, Dropbox, Stripe,
-            spreadsheets, and whatever else gets the job done. That works until the business gets
-            busy.
-          </p>
-          <p className="mt-4 max-w-3xl text-base leading-relaxed text-[#475569]">
-            ShootPortal gives you one system for the entire job so you spend less time searching for
-            information, following up on payments, sending links, and trying to remember what
-            happens next.
-          </p>
-          <ul className="mt-8 space-y-3">
-            {PAIN_POINTS.map((point) => (
-              <li key={point} className="flex gap-3 text-base text-[#0F172A]">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#4F46E5]" aria-hidden />
-                {point}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-8 text-lg font-semibold text-[#0F172A]">Shoot more. Manage less.</p>
+          <div className="grid gap-10 lg:grid-cols-2 lg:items-center lg:gap-12">
+            <div>
+              <SectionEyebrow>LESS ADMIN. MORE SHOOTING.</SectionEyebrow>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl">
+                Your business should not feel held together with duct tape.
+              </h2>
+              <p className="mt-4 text-base leading-relaxed text-[#475569]">
+                A lot of media businesses start with texts, Google Calendar, Dropbox, Stripe,
+                spreadsheets, and whatever else gets the job done. That works until the business gets
+                busy.
+              </p>
+              <p className="mt-4 text-base leading-relaxed text-[#475569]">
+                ShootPortal gives you one system for the entire job so you spend less time searching
+                for information, following up on payments, sending links, and trying to remember what
+                happens next.
+              </p>
+              <ul className="mt-8 space-y-3">
+                {PAIN_POINTS.map((point) => (
+                  <li key={point} className="flex gap-3 text-base text-[#0F172A]">
+                    <span
+                      className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#4F46E5]"
+                      aria-hidden
+                    />
+                    {point}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-8 text-lg font-semibold text-[#0F172A]">Shoot more. Manage less.</p>
+            </div>
+            <HomePainConverge />
+          </div>
         </div>
       </section>
 
@@ -331,14 +349,26 @@ export function PlatformLanding({
           <h2 className="mx-auto mt-4 max-w-2xl text-center text-2xl font-semibold tracking-tight text-white sm:text-3xl">
             A better experience for you and your clients.
           </h2>
-          <blockquote className="mx-auto mt-8 max-w-3xl text-center text-lg leading-relaxed text-slate-200">
-            &ldquo;I want clients to feel like they are working with a real company, even when I
-            am running the entire business myself. ShootPortal gives me one place to keep the job
-            organized from the first request through delivery and payment.&rdquo;
-          </blockquote>
-          <p className="mt-6 text-center text-sm font-medium text-slate-400">
-            Real estate media professional
-          </p>
+          <div className="mx-auto mt-8 grid max-w-4xl gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+            <div>
+              <blockquote className="text-center text-lg leading-relaxed text-slate-200 lg:text-left">
+                &ldquo;I want clients to feel like they are working with a real company, even when I
+                am running the entire business myself. ShootPortal gives me one place to keep the job
+                organized from the first request through delivery and payment.&rdquo;
+              </blockquote>
+              <p className="mt-6 text-center text-sm font-medium text-slate-400 lg:text-left">
+                Real estate media professional
+              </p>
+            </div>
+            <HomeSocialProgression />
+          </div>
+        </div>
+      </section>
+
+      {/* Pre-pricing collapse */}
+      <section className="border-b border-[#E2E8F0] bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
+          <HomeStackCollapse priceLabel={annualPriceLabel} />
         </div>
       </section>
 
@@ -348,11 +378,11 @@ export function PlatformLanding({
           <div className="mx-auto max-w-2xl text-center">
             <SectionEyebrow>SIMPLE PRICING</SectionEyebrow>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl">
-              Everything you need. Starting at {annualPriceLabel} a month.
+              Everything you need to run the business. Starting at {annualPriceLabel} a month.
             </h2>
             <p className="mt-3 text-base leading-relaxed text-[#475569]">
-              One plan with the full ShootPortal experience. Manage your clients, projects, shoots,
-              media, invoices, and payments without paying for a stack of separate tools.
+              One plan with the full ShootPortal experience. Manage clients, projects, scheduling,
+              media delivery, invoices, and payments without paying for a stack of separate tools.
             </p>
             <ul
               className="mx-auto mt-6 max-w-xl space-y-2 text-left text-sm text-[#475569] sm:text-center sm:space-y-1"

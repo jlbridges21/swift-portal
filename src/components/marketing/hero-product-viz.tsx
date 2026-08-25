@@ -2,7 +2,7 @@
 
 /**
  * Marketing hero product visualization.
- * Fictional content only — mirrors admin pipeline / inbox / media / clients tokens.
+ * Fictional content only. Mirrors admin pipeline / inbox / media / clients tokens.
  * Decorative (aria-hidden). Animates transform + opacity; pauses off-screen.
  */
 
@@ -121,29 +121,23 @@ export function HeroProductViz() {
         .hero-product-viz .hv-card-leave { opacity: 0; }
         .hero-product-viz--live .hv-card-leave { opacity: 1; }
         .hero-product-viz .hv-card-enter { opacity: 1; }
-        .hero-product-viz .hv-toast { opacity: 1; }
+        .hero-product-viz .hv-toast { opacity: 0; }
         .hero-product-viz .hv-thumb { opacity: 1; }
         .hero-product-viz .hv-cal { opacity: 1; }
+        .hero-product-viz .hv-status { opacity: 1; }
 
         @keyframes hv-card-advance {
-          0%, 12% { transform: translate3d(0, 0, 0); }
-          22%, 100% { transform: translate3d(120%, -6px, 0); }
-        }
-          18%, 55% { opacity: 0; transform: translate3d(12px, -4px, 0) scale(0.98); }
-          56%, 100% { opacity: 0; transform: translate3d(12px, -4px, 0); }
+          0%, 14% { opacity: 1; transform: translate3d(0, 0, 0); }
+          26%, 100% { opacity: 0; transform: translate3d(120%, -6px, 0); }
         }
         @keyframes hv-card-arrive {
-          0%, 12% { transform: translate3d(-110%, 8px, 0); }
-          22%, 100% { transform: translate3d(0, 0, 0); }
-        }
-          22%, 100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+          0%, 14% { opacity: 0; transform: translate3d(-110%, 8px, 0) scale(0.98); }
+          26%, 100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
         }
         @keyframes hv-toast-in {
-          0%, 28% { transform: translate3d(24px, 0, 0); }
-          34%, 100% { transform: translate3d(0, 0, 0); }
-        }
-          34%, 62% { opacity: 1; transform: translate3d(0, 0, 0); }
-          72%, 100% { opacity: 0; transform: translate3d(8px, -4px, 0); }
+          0%, 32% { opacity: 0; transform: translate3d(24px, 0, 0); }
+          40%, 62% { opacity: 1; transform: translate3d(0, 0, 0); }
+          74%, 100% { opacity: 0; transform: translate3d(8px, -4px, 0); }
         }
         @keyframes hv-badge-pop {
           0%, 40% { transform: scale(1); }
@@ -155,13 +149,37 @@ export function HeroProductViz() {
           18%, 100% { opacity: 1; transform: translate3d(0, 0, 0); }
         }
         @keyframes hv-cal-drop {
-          0%, 50% { opacity: 0; transform: translate3d(0, -10px, 0); }
-          58%, 88% { opacity: 1; transform: translate3d(0, 0, 0); }
+          0%, 48% { opacity: 0; transform: translate3d(0, -10px, 0); }
+          56%, 88% { opacity: 1; transform: translate3d(0, 0, 0); }
           95%, 100% { opacity: 0.85; transform: translate3d(0, 0, 0); }
         }
         @keyframes hv-float {
           0%, 100% { transform: translate3d(0, 0, 0); }
           50% { transform: translate3d(0, -4px, 0); }
+        }
+        @keyframes hv-status-cycle {
+          0%, 18% { opacity: 1; }
+          22%, 38% { opacity: 0; }
+          42%, 100% { opacity: 0; }
+        }
+        @keyframes hv-status-cycle-b {
+          0%, 18% { opacity: 0; }
+          22%, 48% { opacity: 1; }
+          52%, 100% { opacity: 0; }
+        }
+        @keyframes hv-status-cycle-c {
+          0%, 48% { opacity: 0; }
+          52%, 78% { opacity: 1; }
+          82%, 100% { opacity: 0; }
+        }
+        @keyframes hv-status-cycle-d {
+          0%, 78% { opacity: 0; }
+          82%, 100% { opacity: 1; }
+        }
+        @keyframes hv-request-in {
+          0%, 5% { opacity: 0; transform: translate3d(-12px, 0, 0); }
+          12%, 55% { opacity: 1; transform: translate3d(0, 0, 0); }
+          65%, 100% { opacity: 0; transform: translate3d(0, -6px, 0); }
         }
 
         .hero-product-viz--live .hv-card-leave { animation: hv-card-advance 14s ease-in-out infinite; }
@@ -175,6 +193,11 @@ export function HeroProductViz() {
         .hero-product-viz--live .hv-cal { animation: hv-cal-drop 14s ease-out infinite; }
         .hero-product-viz--live .hv-float-a { animation: hv-float 7s ease-in-out infinite; }
         .hero-product-viz--live .hv-float-b { animation: hv-float 8.5s ease-in-out infinite reverse; }
+        .hero-product-viz--live .hv-status-a { animation: hv-status-cycle 14s ease-in-out infinite; }
+        .hero-product-viz--live .hv-status-b { animation: hv-status-cycle-b 14s ease-in-out infinite; }
+        .hero-product-viz--live .hv-status-c { animation: hv-status-cycle-c 14s ease-in-out infinite; }
+        .hero-product-viz--live .hv-status-d { animation: hv-status-cycle-d 14s ease-in-out infinite; }
+        .hero-product-viz--live .hv-request { animation: hv-request-in 14s ease-in-out infinite; }
 
         @media (prefers-reduced-motion: reduce) {
           .hero-product-viz .hv-card-leave { opacity: 0 !important; }
@@ -183,11 +206,23 @@ export function HeroProductViz() {
           .hero-product-viz .hv-thumb,
           .hero-product-viz .hv-cal,
           .hero-product-viz .hv-float-a,
-          .hero-product-viz .hv-float-b {
+          .hero-product-viz .hv-float-b,
+          .hero-product-viz .hv-request,
+          .hero-product-viz .hv-status-a,
+          .hero-product-viz .hv-status-b,
+          .hero-product-viz .hv-status-c,
+          .hero-product-viz .hv-status-d {
             animation: none !important;
             opacity: 1 !important;
             transform: none !important;
           }
+          .hero-product-viz .hv-status-b,
+          .hero-product-viz .hv-status-c,
+          .hero-product-viz .hv-status-d,
+          .hero-product-viz .hv-request {
+            opacity: 0 !important;
+          }
+          .hero-product-viz .hv-status-a { opacity: 1 !important; }
         }
       `}</style>
 
@@ -259,6 +294,21 @@ export function HeroProductViz() {
               <p className="text-xs font-semibold text-[#0F172A]">Payment received · $1,250</p>
               <p className="truncate text-[10px] text-[#475569]">Westfield Commercial Exterior</p>
             </div>
+          </div>
+          <div className="relative mx-3 mb-3 h-8 overflow-hidden">
+            <div className="hv-beat hv-request absolute inset-0 flex items-center gap-2 rounded-lg border border-[#4F46E5]/25 bg-[#EEF2FF] px-3">
+              <span className="text-[10px] font-semibold text-[#4F46E5]">New request</span>
+              <span className="truncate text-[10px] text-[#475569]">214 Oak Street · Avery Chen</span>
+            </div>
+            <span className="hv-beat hv-status-b absolute inset-0 flex items-center rounded-lg border border-[#4F46E5]/25 bg-[#EEF2FF] px-3 text-[10px] font-semibold text-[#4F46E5]">
+              Estimate approved
+            </span>
+            <span className="hv-beat hv-status-c absolute inset-0 flex items-center rounded-lg border border-[#4F46E5]/25 bg-[#EEF2FF] px-3 text-[10px] font-semibold text-[#4F46E5]">
+              Shoot scheduled
+            </span>
+            <span className="hv-beat hv-status-d absolute inset-0 flex items-center rounded-lg border border-[#16A34A]/25 bg-[#F0FDF4] px-3 text-[10px] font-semibold text-[#15803D]">
+              Delivered
+            </span>
           </div>
         </div>
       </div>
@@ -407,6 +457,28 @@ export function HeroProductViz() {
           <p className="text-[9px] font-semibold uppercase tracking-wide text-[#4F46E5]">Calendar</p>
           <p className="mt-0.5 text-xs font-semibold text-[#0F172A]">Sat · 9:00 AM</p>
           <p className="text-[10px] text-[#475569]">Riverbend Listing Package</p>
+        </div>
+
+        {/* Status story chip — mid-right */}
+        <div className="absolute right-8 top-[10.5rem] z-20 h-8 w-[9.5rem]">
+          <span className="hv-beat hv-status-a absolute inset-0 flex items-center justify-center rounded-lg border border-[#E2E8F0] bg-white text-[11px] font-semibold text-[#475569] shadow-md">
+            Estimate sent
+          </span>
+          <span className="hv-beat hv-status-b absolute inset-0 flex items-center justify-center rounded-lg border border-[#4F46E5]/30 bg-[#EEF2FF] text-[11px] font-semibold text-[#4F46E5] shadow-md">
+            Estimate approved
+          </span>
+          <span className="hv-beat hv-status-c absolute inset-0 flex items-center justify-center rounded-lg border border-[#4F46E5]/30 bg-[#EEF2FF] text-[11px] font-semibold text-[#4F46E5] shadow-md">
+            Shoot scheduled
+          </span>
+          <span className="hv-beat hv-status-d absolute inset-0 flex items-center justify-center rounded-lg border border-[#16A34A]/30 bg-[#F0FDF4] text-[11px] font-semibold text-[#15803D] shadow-md">
+            Delivered
+          </span>
+        </div>
+
+        {/* New request chip */}
+        <div className="hv-beat hv-request absolute left-8 top-16 z-30 flex items-center gap-2 rounded-lg border border-[#4F46E5]/25 bg-white px-3 py-2 shadow-md">
+          <span className="text-[10px] font-semibold text-[#4F46E5]">New request</span>
+          <span className="text-[10px] text-[#475569]">214 Oak Street</span>
         </div>
 
         {/* Clients strip peek — bottom center behind */}

@@ -8,21 +8,23 @@ import {
   PackageCheck,
 } from "lucide-react";
 
-/** Homepage workflow — 8 stages with short summaries for the marketing landing page. */
+/** Homepage workflow stages with short summaries for the marketing landing page. */
 export const HOMEPAGE_WORKFLOW_STEPS = [
   { key: "request", title: "Request", summary: "A new job comes in." },
   { key: "estimate", title: "Estimate", summary: "Send pricing and project details." },
   { key: "approval", title: "Approval", summary: "The client approves the work." },
   { key: "schedule", title: "Schedule", summary: "Set the shoot date and time." },
   { key: "shoot", title: "Shoot", summary: "Complete the project." },
-  { key: "deliver", title: "Deliver", summary: "Send the finished media." },
-  { key: "invoice", title: "Invoice", summary: "Collect payment." },
-  { key: "done", title: "Done", summary: "Everything stays saved to the project." },
+  { key: "review", title: "Review", summary: "Client feedback stays on the job." },
+  { key: "invoice", title: "Invoice", summary: "Send the invoice from the project." },
+  { key: "payment", title: "Payment", summary: "Collect payment in the portal." },
+  { key: "deliver", title: "Deliver", summary: "Hand off finals in one place." },
 ] as const;
 
+/** @deprecated Prefer HomepageWorkflowMarquee on the homepage for motion. */
 export function HomepageWorkflowRibbon() {
   return (
-    <ol className="relative flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 sm:gap-3 sm:overflow-visible sm:pb-0 lg:grid-cols-8">
+    <ol className="relative flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible sm:pb-0 lg:grid-cols-9">
       {HOMEPAGE_WORKFLOW_STEPS.map((step, i) => (
         <li
           key={step.key}
@@ -50,7 +52,7 @@ export const WORKFLOW_STEPS = [
     key: "request",
     title: "Request",
     icon: ClipboardList,
-    summary: "Clients submit a project request from your branded portal — no email scavenger hunt.",
+    summary: "Clients submit a project request from your branded portal. No email scavenger hunt.",
     detail:
       "Publish a request form under your business branding. Capture property details, services, and notes in one place so every job starts clean.",
   },
@@ -74,7 +76,7 @@ export const WORKFLOW_STEPS = [
     key: "shoot",
     title: "Shoot",
     icon: Camera,
-    summary: "Show up prepared — the project already has the brief, estimate, and schedule.",
+    summary: "Show up prepared. The project already has the brief, estimate, and schedule.",
     detail:
       "Your team opens one project record with everything attached: address, services, approvals, and messages. Less prep, fewer surprises.",
   },
@@ -135,7 +137,7 @@ export function WorkflowStepGrid({ detailed = false }: { detailed?: boolean }) {
   );
 }
 
-/** Compact visual path for the homepage — links to /how-it-works for depth. */
+/** Compact visual path for the homepage. Links to /how-it-works for depth. */
 export function WorkflowRibbon() {
   return (
     <ol className="relative flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-7 sm:gap-3 sm:overflow-visible sm:pb-0">
@@ -160,7 +162,7 @@ export function WorkflowRibbon() {
             </span>
             <h3 className="mt-0.5 text-sm font-semibold text-[#0F172A]">{step.title}</h3>
             <p className="mt-1 hidden text-[11px] leading-snug text-[#64748B] lg:block">
-              {step.summary.split("—")[0]?.trim() ?? step.summary}
+              {step.summary}
             </p>
           </li>
         );
