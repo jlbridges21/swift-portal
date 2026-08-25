@@ -47,8 +47,13 @@ export type CreateBusinessInput = {
   adminName?: string;
   /** Defaults to platform (super_admin console). */
   source?: CreateBusinessSource;
-  /** Required when source is signup — password auth, not invite. */
+  /** Required when source is signup without existingUserId — password auth. */
   password?: string;
+  /**
+   * OAuth finish-setup: attach this already-authenticated user as admin instead
+   * of creating a password account. Uses signup trial + sp_partner_ref attribution.
+   */
+  existingUserId?: string;
   subscriptionStatus?: string;
   trialEndsAt?: string | null;
   /**
@@ -232,9 +237,13 @@ export async function createBusinessForPlatform(
   if (!adminEmail || !adminEmail.includes("@")) throw new Error("A valid admin email is required.");
   const adminName = (input.adminName || name).trim() || name;
 
-  if (source === "signup") {
+  if (source === "signup" && !input.existingUserId) {
     const password = input.password ?? "";
     if (password.length < 8) throw new Error("Password must be at least 8 characters.");
+  }
+  if (source === "signup" && input.existingUserId) {
+    const id = input.existingUserId.trim();
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("Invalid existing user.");
   }
 
   if (customDomain && !(await planGrantsEntitlement(plan, "custom_domain"))) {
@@ -272,10 +281,32 @@ export async function createBusinessForPlatform(
   }
 
   // 1–2. Create business + dependents BEFORE auth user (signup needs business_id in metadata)
-  if (source === "signup") {
+  if (source === "signup" && !input.existingUserId) {
     const { data: listed } = await raw.auth.admin.listUsers({ page: 1, perPage: 1000 });
     if (listed.users.some((u) => u.email?.toLowerCase() === adminEmail)) {
       throw new Error("Could not create account.");
+    }
+  }
+  if (source === "signup" && input.existingUserId) {
+    const { data: existingAuth, error: existingErr } = await raw.auth.admin.getUserById(
+      input.existingUserId
+    );
+    if (existingErr || !existingAuth.user) {
+      throw new Error("Signed-in user was not found.");
+    }
+    if ((existingAuth.user.email || "").toLowerCase() !== adminEmail) {
+      throw new Error("Signed-in email does not match.");
+    }
+    const { data: existingProfile } = await raw
+      .from("profiles")
+      .select("id, role, business_id")
+      .eq("id", input.existingUserId)
+      .maybeSingle();
+    if (existingProfile?.role === "super_admin") {
+      throw new Error("Super-admin accounts cannot create a studio this way.");
+    }
+    if (existingProfile?.business_id) {
+      throw new Error("This account already belongs to a business.");
     }
   }
 
@@ -303,6 +334,7 @@ export async function createBusinessForPlatform(
     businessId,
     source,
     adminEmail,
+    signupUserId: input.existingUserId ?? null,
     referredByPartnerId: source === "platform" ? input.referredByPartnerId : null,
   });
 
@@ -418,6 +450,52 @@ export async function createBusinessForPlatform(
           inviteError,
           attachedExisting,
           plan,
+        },
+      });
+    } else if (input.existingUserId) {
+      // OAuth finish-setup: attach the already-authenticated user as admin.
+      const existingUserId = input.existingUserId;
+      createdUserId = existingUserId;
+
+      const { error: metaErr } = await raw.auth.admin.updateUserById(existingUserId, {
+        user_metadata: {
+          role: "admin",
+          business_id: businessId,
+          full_name: adminName,
+        },
+      });
+      if (metaErr) throw new Error(metaErr.message || "Could not attach account.");
+
+      const { error: profileErr } = await raw
+        .from("profiles")
+        .update({
+          role: "admin",
+          business_id: businessId,
+          client_id: null,
+          full_name: adminName,
+          email: adminEmail,
+        })
+        .eq("id", existingUserId);
+      if (profileErr) throw new Error(profileErr.message);
+
+      requiresEmailConfirmation = false;
+
+      await writePlatformAudit({
+        actorUserId: existingUserId,
+        actorEmail: adminEmail,
+        action: "business.create",
+        targetBusinessId: businessId,
+        targetType: "business",
+        targetId: businessId,
+        metadata: {
+          source: "oauth_signup",
+          slug: slugCheck.slug,
+          name,
+          adminEmail,
+          plan,
+          subscription_status: subscriptionStatus,
+          trial_ends_at: trialEndsAt,
+          existingUserId,
         },
       });
     } else {

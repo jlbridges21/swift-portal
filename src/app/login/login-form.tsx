@@ -15,6 +15,7 @@ import {
   parseAuthFragment,
   type AuthLinkErrorKind,
 } from "@/lib/auth-fragment";
+import { AuthDivider, GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 
 export function LoginForm({ showRequestLink }: { showRequestLink: boolean }) {
   const router = useRouter();
@@ -29,10 +30,15 @@ export function LoginForm({ showRequestLink }: { showRequestLink: boolean }) {
   const [linkDescription, setLinkDescription] = useState<string | null>(null);
 
   const queryError = searchParams.get("error");
+  const queryCode = searchParams.get("code");
   const queryUnavailable =
     queryError === "unavailable"
       ? "This portal is unavailable. Your business is suspended or no longer active."
-      : "";
+      : queryError === "oauth_link_conflict" || queryCode === "oauth_link_conflict"
+        ? "An account already exists for this email. Sign in with your password and verify your email before connecting Google."
+        : queryError === "tenant_no_match" || queryCode === "tenant_no_match"
+          ? "No portal account was found for this email on this business. Ask your studio to invite you, or sign in on shootportal.app if you are starting a new studio."
+          : "";
 
   const [error, setError] = useState(queryUnavailable);
   const [notice, setNotice] = useState("");
@@ -193,6 +199,8 @@ export function LoginForm({ showRequestLink }: { showRequestLink: boolean }) {
           <CardContent>
             {mode === "login" ? (
               <form onSubmit={handleLogin} className="space-y-4">
+                <GoogleSignInButton label="Continue with Google" disabled={loading} />
+                <AuthDivider />
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { suggestSlugFromName } from "@/lib/signup-validation";
+import { AuthDivider, GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 
 export function SignupForm({
   platformRootDomain,
@@ -159,6 +160,10 @@ export function SignupForm({
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mb-2 space-y-4">
+              <GoogleSignInButton label="Continue with Google" disabled={busy} />
+              <AuthDivider label="or use email" />
+            </div>
             <form className="space-y-4" onSubmit={onSubmit}>
               <div className="space-y-2">
                 <Label htmlFor="name">Business name</Label>

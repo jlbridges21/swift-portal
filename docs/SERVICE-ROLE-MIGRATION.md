@@ -30,6 +30,9 @@ Status key: **done** = converted this batch; **pending** = still raw service rol
 | `src/app/api/projects/[id]/route.ts` | **done** (prompt 9) — no direct service client; passes `businessId` into `soft-delete` |
 | `src/app/api/project-clients/route.ts` | **done** (prompt 9) |
 | `src/lib/auth.ts` | pending |
+| `src/lib/auth-login-resolve.ts` | Post-login / OAuth destination resolver (cross-tenant identity: client email uniqueness, partner link, finish-setup gate) |
+| `src/app/api/auth/finish-setup/route.ts` | OAuth studio provisioning (reuses createBusinessForPlatform) |
+| `src/app/auth/callback/route.ts` | PKCE exchange + login resolver |
 | `src/lib/tenant.ts` | pending |
 | `src/lib/app-settings.ts` | pending |
 | `src/lib/notifications.ts` | **done** (prompt 11). Admin recipients are `role = 'admin' AND business_id = <id>` — `super_admin` is excluded. `notify*` resolve `businessId` from the arg, else `projects.business_id` / `clients.business_id`; if unresolvable they log and return (no LEGACY). Profiles via `.raw`. |

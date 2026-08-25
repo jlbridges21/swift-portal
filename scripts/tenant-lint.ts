@@ -140,6 +140,9 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/app/api/platform/plans/[id]/route.ts",
   "src/app/api/signup/route.ts",
   "src/app/api/signup/availability/route.ts",
+  "src/lib/auth-login-resolve.ts",
+  "src/app/api/auth/finish-setup/route.ts",
+  "src/app/auth/callback/route.ts",
 ]);
 
 /**
@@ -155,6 +158,7 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/app/api/resend/webhook/route.ts",
   "src/app/api/request/route.ts",
   "src/lib/auth.ts",
+  "src/lib/auth-login-resolve.ts",
   "src/lib/tenant.ts",
   "src/lib/app-settings.ts",
   "src/lib/host-resolution.ts",
@@ -199,6 +203,8 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/app/api/platform/plans/[id]/route.ts",
   "src/app/api/signup/route.ts",
   "src/app/api/signup/availability/route.ts",
+  "src/app/api/auth/finish-setup/route.ts",
+  "src/app/auth/callback/route.ts",
 ]);
 
 const MODULE_LET_ALLOWLIST = new Set([

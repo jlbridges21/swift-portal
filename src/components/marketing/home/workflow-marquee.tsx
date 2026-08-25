@@ -195,7 +195,7 @@ export function HomepageWorkflowMarquee() {
       <p className="mt-3 text-center text-xs text-[#94A3B8]">
         {reduced
           ? "Swipe or drag to browse every stage."
-          : "Auto-scrolling slowly. Hover, tap, or drag to pause and explore."}
+          : "Swipe or drag to browse every stage."}
       </p>
     </div>
   );

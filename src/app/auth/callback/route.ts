@@ -5,6 +5,9 @@ import {
   NEEDS_PASSWORD_COOKIE,
   needsPasswordCookieOptions,
 } from "@/lib/auth-password-gate";
+import { createServiceClient } from "@/lib/supabase/server";
+import { resolveLoginDestination } from "@/lib/auth-login-resolve";
+import type { Profile } from "@/lib/types";
 
 const EMAIL_OTP_TYPES = new Set<string>([
   "signup",
@@ -20,8 +23,9 @@ const EMAIL_OTP_TYPES = new Set<string>([
  * New TokenHash emails use GET /auth/confirm (interstitial) → POST /auth/confirm/verify.
  * Dashboard implicit-flow emails still use hash fragments (AuthFragmentHandler).
  *
- * This route still accepts token_hash on GET for any old links; prefer the confirm
- * interstitial for new mail so scanners cannot consume the OTP.
+ * OAuth (Google) also returns here with ?code= after signInWithOAuth PKCE.
+ * Destination is resolved via resolveLoginDestination (business / client / partner /
+ * finish-setup / reject) — not a naive role dump to /dashboard.
  */
 function needsPasswordSetup(url: URL): { needed: boolean; reason: "invite" | "recovery" | "setup" } {
   const type = url.searchParams.get("type");
@@ -118,23 +122,51 @@ export async function GET(request: Request) {
           next.startsWith("/dashboard/settings") ||
           next.startsWith("/login");
         if (!honorNext) {
-          const { data: profile } = await supabase
+          const service = await createServiceClient();
+          const { data: profileRow } = await service
             .from("profiles")
-            .select("role, business_id")
+            .select("*")
             .eq("id", user.id)
             .maybeSingle();
-          if (profile?.role === "super_admin") dest = "/platform";
-          else if (profile?.role === "admin") {
-            const { adminHomePath } = await import("@/lib/onboarding");
-            const { lookupBusinessById } = await import("@/lib/host-resolution");
-            const biz = profile.business_id
-              ? await lookupBusinessById(profile.business_id)
-              : null;
-            dest = adminHomePath({
-              onboardingCompletedAt: biz?.onboarding_completed_at,
-              onboardingState: biz?.onboarding_state,
+
+          if (profileRow) {
+            const resolved = await resolveLoginDestination(profileRow as Profile, user, {
+              requestHost: url.host,
+              requestOrigin: origin,
             });
-          } else if (profile?.role === "client") dest = "/dashboard";
+            if (resolved.kind === "error") {
+              if (resolved.signOut) {
+                await supabase.auth.signOut();
+              }
+              const fail = new URL(`${origin}/login`);
+              fail.searchParams.set("error", resolved.code || "unavailable");
+              fail.searchParams.set("code", resolved.code || "unavailable");
+              const failRedirect = NextResponse.redirect(fail.toString());
+              cookiesToCopy.forEach(({ name, value, options }) => {
+                failRedirect.cookies.set(name, value, options);
+              });
+              // Clear session cookies from signOut if present on response
+              response.cookies.getAll().forEach((c) => {
+                if (!cookiesToCopy.some((x) => x.name === c.name)) {
+                  failRedirect.cookies.set(c);
+                }
+              });
+              return failRedirect;
+            }
+            dest = resolved.redirect;
+            if (dest.startsWith("http://") || dest.startsWith("https://")) {
+              const absolute = NextResponse.redirect(dest);
+              cookiesToCopy.forEach(({ name, value, options }) => {
+                absolute.cookies.set(name, value, options);
+              });
+              response.cookies.getAll().forEach((c) => {
+                if (!cookiesToCopy.some((x) => x.name === c.name)) {
+                  absolute.cookies.set(c);
+                }
+              });
+              return absolute;
+            }
+          }
         } else {
           dest = next;
         }
@@ -144,7 +176,11 @@ export async function GET(request: Request) {
     }
   }
 
-  const finalRedirect = NextResponse.redirect(`${origin}${dest}`);
+  const finalDest =
+    dest.startsWith("http://") || dest.startsWith("https://")
+      ? dest
+      : `${origin}${dest.startsWith("/") ? dest : `/${dest}`}`;
+  const finalRedirect = NextResponse.redirect(finalDest);
   cookiesToCopy.forEach(({ name, value, options }) => {
     finalRedirect.cookies.set(name, value, options);
   });

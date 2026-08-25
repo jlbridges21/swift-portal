@@ -48,6 +48,7 @@ export const RESERVED_APP_ROUTE_SLUGS = [
   "privacy",
   "request",
   "signup",
+  "finish-setup",
   "terms",
   // Next.js / metadata / asset path segments that must not be shadowed
   "robots",

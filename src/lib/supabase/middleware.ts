@@ -153,14 +153,29 @@ export async function updateSession(request: NextRequest) {
   const isApi = path.startsWith("/api/");
   const method = request.method.toUpperCase();
 
-  const protectedPaths = ["/dashboard", "/admin", "/platform", "/billing", "/onboarding", "/partner"];
+  const protectedPaths = [
+    "/dashboard",
+    "/admin",
+    "/platform",
+    "/billing",
+    "/onboarding",
+    "/partner",
+    "/finish-setup",
+  ];
   // Segment-boundary match: bare startsWith would make the public /partners
   // marketing page match the protected /partner dashboard prefix.
   const isProtected = protectedPaths.some((p) => path === p || path.startsWith(`${p}/`));
 
-  // Self-serve signup is platform-apex only — never on a tenant host.
+  // Self-serve signup / OAuth finish-setup are platform-apex only — never on a tenant host.
   if (
-    (path === "/signup" || path.startsWith("/signup/") || path === "/api/signup" || path.startsWith("/api/signup/")) &&
+    (path === "/signup" ||
+      path.startsWith("/signup/") ||
+      path === "/api/signup" ||
+      path.startsWith("/api/signup/") ||
+      path === "/finish-setup" ||
+      path.startsWith("/finish-setup/") ||
+      path === "/api/auth/finish-setup" ||
+      path.startsWith("/api/auth/finish-setup/")) &&
     resolution.kind === "tenant"
   ) {
     if (isApi) {
@@ -308,9 +323,30 @@ export async function updateSession(request: NextRequest) {
         return applyPathCookie(NextResponse.redirect(dest), resolution);
       }
 
-      const url = request.nextUrl.clone();
-      url.pathname = `${resolution.pathPrefix}${destPath}`;
-      return applyPathCookie(NextResponse.redirect(url), resolution);
+      // No business_id: partners go to /partner; OAuth unfinished on apex → finish-setup.
+      // Do not dump unresolved users onto /dashboard.
+      const { resolvePartnerAccess } = await import("@/lib/partner-dashboard");
+      const partnerAccess = await resolvePartnerAccess(user.id);
+      if (partnerAccess.kind === "active" || partnerAccess.kind === "suspended") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/partner";
+        url.search = "";
+        return applyPathCookie(NextResponse.redirect(url), resolution);
+      }
+
+      const providers = user.app_metadata?.providers;
+      const hasOauth =
+        (Array.isArray(providers) && providers.some((p) => p && p !== "email")) ||
+        (typeof user.app_metadata?.provider === "string" &&
+          user.app_metadata.provider !== "email") ||
+        (Array.isArray(user.identities) &&
+          user.identities.some((i) => i.provider && i.provider !== "email"));
+      if (hasOauth && resolution.kind !== "tenant") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/finish-setup";
+        url.search = "";
+        return applyPathCookie(NextResponse.redirect(url), resolution);
+      }
     }
 
     if (path.startsWith("/admin")) {
