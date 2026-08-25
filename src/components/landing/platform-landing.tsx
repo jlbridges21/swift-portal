@@ -30,7 +30,6 @@ import {
   MessageSquare,
   Paintbrush,
   Palette,
-  Receipt,
   Users,
   FileText,
   UserPlus,
@@ -49,15 +48,6 @@ const ProductDemo = dynamic(
     ),
   }
 );
-
-const REPLACES = [
-  { label: "CRM", icon: Users },
-  { label: "Scheduling", icon: CalendarClock },
-  { label: "File delivery", icon: FolderKanban },
-  { label: "Proofing", icon: Images },
-  { label: "Invoicing", icon: Receipt },
-  { label: "Payments", icon: CreditCard },
-] as const;
 
 const FEATURES = [
   {
@@ -231,7 +221,7 @@ export function PlatformLanding({
           <h2 className="text-center text-sm font-semibold uppercase tracking-[0.16em] text-[#64748B]">
             ONE PORTAL INSTEAD OF
           </h2>
-          <ConsolidationPills items={[...REPLACES]} />
+          <ConsolidationPills />
           <p className="mx-auto mt-6 max-w-2xl text-center text-sm leading-relaxed text-[#475569]">
             Your clients, projects, schedule, media, messages, invoices, and payments all stay
             connected to the same job.

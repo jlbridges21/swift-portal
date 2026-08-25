@@ -1,21 +1,35 @@
 "use client";
 
 import { useRef } from "react";
+import {
+  CalendarClock,
+  CreditCard,
+  FolderKanban,
+  Images,
+  Receipt,
+  Users,
+} from "lucide-react";
 import { useInViewOnce, usePrefersReducedMotion } from "./motion";
 import { cn } from "@/lib/utils";
 
-export function ConsolidationPills({
-  items,
-}: {
-  items: ReadonlyArray<{ label: string; icon: React.ComponentType<{ className?: string }> }>;
-}) {
+/** Icons live in this client module so they are never passed across the RSC boundary. */
+const ITEMS = [
+  { label: "CRM", icon: Users },
+  { label: "Scheduling", icon: CalendarClock },
+  { label: "File delivery", icon: FolderKanban },
+  { label: "Proofing", icon: Images },
+  { label: "Invoicing", icon: Receipt },
+  { label: "Payments", icon: CreditCard },
+] as const;
+
+export function ConsolidationPills() {
   const ref = useRef<HTMLUListElement>(null);
   const reduced = usePrefersReducedMotion();
   const inView = useInViewOnce(ref, 0.2);
 
   return (
     <ul ref={ref} className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
-      {items.map((item, i) => {
+      {ITEMS.map((item, i) => {
         const Icon = item.icon;
         return (
           <li
