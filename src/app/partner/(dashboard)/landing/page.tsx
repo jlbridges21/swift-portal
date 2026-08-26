@@ -41,23 +41,25 @@ export default async function PartnerLandingEditorPage() {
 
   return (
     <>
-      <h1 className="text-2xl font-bold text-heading">Landing page</h1>
-      <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted">
-        A landing page is your co-branded ShootPortal pitch at{" "}
-        <strong>shootportal.app/your-slug</strong> — photo, headline, benefits, and signup CTA.
-        Use it when you want more context than a bare <code className="text-xs">?ref=</code> link.
-        Both URLs track the same way and pay the same commission.
-      </p>
+      <div className="lg:hidden">
+        <h1 className="text-2xl font-bold text-heading">Landing page</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted">
+          A landing page is your co-branded ShootPortal pitch at{" "}
+          <strong>shootportal.app/your-slug</strong> — photo, headline, benefits, and signup CTA.
+          Use it when you want more context than a bare <code className="text-xs">?ref=</code> link.
+          Both URLs track the same way and pay the same commission.
+        </p>
 
-      <div className="mt-6">
-        <PartnerShareLinks
-          referralLink={referralLink}
-          landingUrl={landingUrl}
-          referralCode={access.partner.referral_code}
-        />
+        <div className="mt-6">
+          <PartnerShareLinks
+            referralLink={referralLink}
+            landingUrl={landingUrl}
+            referralCode={access.partner.referral_code}
+          />
+        </div>
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 lg:mt-0">
         <PartnerLandingEditorForm
           mode="partner"
           partnerId={access.partner.id}

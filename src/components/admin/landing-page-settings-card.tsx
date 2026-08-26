@@ -11,6 +11,7 @@ import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { PartnerBrandColorField } from "@/components/partner/partner-brand-color-field";
 import { LandingPage } from "@/components/landing/landing-page";
 import { LandingEditorPreviewFrame } from "@/components/landing/landing-editor-preview-frame";
+import { LandingEditorShell } from "@/components/landing/landing-editor-shell";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { PortalBrand } from "@/lib/portal-brand";
 import {
@@ -103,6 +104,8 @@ export function LandingPageSettingsCard({
   canEdit,
   brand,
   onChange,
+  shellNav,
+  shellFooter,
 }: {
   landing: LandingSettings;
   /** Last-saved landing — used for per-section Unsaved badges. */
@@ -113,6 +116,10 @@ export function LandingPageSettingsCard({
   canEdit: boolean;
   brand: PortalBrand;
   onChange: (next: LandingSettings) => void;
+  /** Left rail for the desktop editor shell (settings section nav). */
+  shellNav: React.ReactNode;
+  /** Optional sticky save controls in the form pane. */
+  shellFooter?: React.ReactNode;
 }) {
   const placeholders = landingContentPlaceholders(businessName, serviceNames);
   const steps = editorHowItWorks(landing);
@@ -272,36 +279,59 @@ export function LandingPageSettingsCard({
 
   if (!canEdit) {
     return (
-      <Card className="shadow-sm">
-        <CardContent className="space-y-4 pt-6">
-          <p className="text-sm text-muted">
-            Customizing the client landing page requires the{" "}
-            <span className="font-medium text-heading">Custom branding</span> entitlement. Your
-            portal still shows a polished page derived from your business name and services.
-          </p>
-          <a
-            href={portalPreviewUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm font-medium text-accent underline underline-offset-2"
-          >
-            Preview your client portal <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        </CardContent>
-      </Card>
+      <LandingEditorShell
+        nav={shellNav}
+        formFooter={shellFooter}
+        form={
+          <Card className="shadow-sm">
+            <CardContent className="space-y-4 pt-6">
+              <div>
+                <h2 className="text-lg font-semibold text-primary">Client Landing Page</h2>
+                <p className="mt-1 text-sm text-muted">
+                  Customize the public page at your portal URL. Plain text only — layout stays locked.
+                </p>
+              </div>
+              <p className="text-sm text-muted">
+                Customizing the client landing page requires the{" "}
+                <span className="font-medium text-heading">Custom branding</span> entitlement. Your
+                portal still shows a polished page derived from your business name and services.
+              </p>
+              <a
+                href={portalPreviewUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm font-medium text-accent underline underline-offset-2"
+              >
+                Preview your client portal <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </CardContent>
+          </Card>
+        }
+        canvas={
+          <LandingEditorPreviewFrame>
+            <LandingPage brand={brand} page={previewPage} />
+          </LandingEditorPreviewFrame>
+        }
+      />
     );
   }
 
   return (
     /*
-      Break out of admin settings max-w-6xl so the sticky preview sits flush
-      to the viewport’s right edge (right-only margin — avoids w-screen overflow
-      that would break position:sticky). Defaults: Hero open (primary edit surface);
-      other sections closed to keep the form short — expansion remembered in sessionStorage.
+      Defaults: Hero open (primary edit surface); other sections closed.
+      Expansion remembered in sessionStorage. Layout is LandingEditorShell only.
     */
-    <div className="lg:mr-[calc(50%-50vw)]">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-5">
-        <div className="min-w-0 flex-1 space-y-4 lg:max-w-xl xl:max-w-2xl">
+    <LandingEditorShell
+      nav={shellNav}
+      formFooter={shellFooter}
+      form={
+        <div id="settings-landing" tabIndex={-1} className="min-w-0 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-primary">Client Landing Page</h2>
+            <p className="mt-1 text-sm text-muted">
+              Customize the public page at your portal URL. Plain text only — layout stays locked.
+            </p>
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/20 bg-accent/5 px-4 py-3">
             <p className="text-sm text-heading">
               Changes apply to your public client portal. Layout, fonts, and section order stay locked.
@@ -855,11 +885,12 @@ export function LandingPageSettingsCard({
             </div>
           </SettingsCollapsible>
         </div>
-
-        <LandingEditorPreviewFrame wide>
+      }
+      canvas={
+        <LandingEditorPreviewFrame>
           <LandingPage brand={brand} page={previewPage} />
         </LandingEditorPreviewFrame>
-      </div>
-    </div>
+      }
+    />
   );
 }

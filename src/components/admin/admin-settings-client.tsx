@@ -411,6 +411,72 @@ export function AdminSettingsClient({
     if (hash) window.history.replaceState(null, "", `#${hash}`);
   }
 
+  const isLandingEditor = section === "landing";
+
+  const saveFooter = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="text-sm text-muted">
+        {dirty ? "You have unsaved changes." : "All changes saved."}
+      </p>
+      <Button
+        variant="accent"
+        onClick={() => saveSettings()}
+        disabled={saving || !dirty}
+        className="min-h-11 min-w-[140px]"
+      >
+        {saving ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" /> Saving...
+          </>
+        ) : (
+          <>
+            <Save className="h-4 w-4" /> Save Settings
+          </>
+        )}
+      </Button>
+    </div>
+  );
+
+  if (isLandingEditor) {
+    return (
+      <>
+        <LandingPageSettingsCard
+          landing={settings.landing}
+          baselineLanding={(JSON.parse(baseline) as AppSettings).landing ?? settings.landing}
+          businessName={settings.business.businessName}
+          serviceNames={serviceNames}
+          portalPreviewUrl={portalPreviewUrl}
+          canEdit={canCustomizeLanding}
+          brand={liveBrand}
+          onChange={patchLanding}
+          shellNav={
+            <SettingsTabNav active={section} onChange={selectSection} accentColor={tabAccent} />
+          }
+          shellFooter={saveFooter}
+        />
+        {restoreOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-primary">Restore platform defaults?</h3>
+              <p className="mt-2 text-sm text-muted">
+                This resets business name, portal name, contact info, logo URL, and brand colors to generic
+                platform defaults and saves immediately.
+              </p>
+              <div className="mt-6 flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setRestoreOpen(false)} disabled={restoring}>
+                  Cancel
+                </Button>
+                <Button type="button" variant="accent" onClick={restorePlatformDefaults} disabled={restoring}>
+                  {restoring ? <Loader2 className="h-4 w-4 animate-spin" /> : "Restore & Save"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6 md:flex-row md:items-start">
       <aside className="w-full shrink-0 md:sticky md:top-20 md:w-56">
@@ -563,29 +629,6 @@ export function AdminSettingsClient({
               </div>
             </CardContent>
           </Card>
-        </SettingsPanel>
-
-        <SettingsPanel id="landing" active={section}>
-          <div id="settings-landing" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold text-primary">Client Landing Page</h2>
-              <p className="mt-1 text-sm text-muted">
-                Customize the public page at your portal URL. Plain text only — layout stays locked.
-              </p>
-            </div>
-            <LandingPageSettingsCard
-              landing={settings.landing}
-              baselineLanding={
-                (JSON.parse(baseline) as AppSettings).landing ?? settings.landing
-              }
-              businessName={settings.business.businessName}
-              serviceNames={serviceNames}
-              portalPreviewUrl={portalPreviewUrl}
-              canEdit={canCustomizeLanding}
-              brand={liveBrand}
-              onChange={patchLanding}
-            />
-          </div>
         </SettingsPanel>
 
         <SettingsPanel id="contact" active={section}>
@@ -1070,22 +1113,7 @@ export function AdminSettingsClient({
         )}
 
         <div className="sticky bottom-0 z-30 -mx-4 border-t border-border bg-card/95 px-4 py-4 backdrop-blur-md sm:-mx-6 sm:px-6 md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-muted">
-              {dirty ? "You have unsaved changes." : "All changes saved."}
-            </p>
-            <Button variant="accent" onClick={() => saveSettings()} disabled={saving || !dirty} className="min-h-11 min-w-[140px]">
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" /> Save Settings
-                </>
-              )}
-            </Button>
-          </div>
+          {saveFooter}
         </div>
       </div>
     </div>

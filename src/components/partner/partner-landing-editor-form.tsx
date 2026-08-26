@@ -11,6 +11,8 @@ import { PartnerBrandColorField } from "@/components/partner/partner-brand-color
 import { PartnerLandingPhoto } from "@/components/partner/partner-landing-photo";
 import { PartnerLandingPublicView } from "@/components/partner/partner-landing-public-view";
 import { LandingEditorPreviewFrame } from "@/components/landing/landing-editor-preview-frame";
+import { LandingEditorShell } from "@/components/landing/landing-editor-shell";
+import { PartnerTabNav } from "@/components/partner/partner-tab-nav";
 import { SafeBrandImage } from "@/components/partner/safe-brand-image";
 import { toast } from "sonner";
 import { isSafeBrandAssetUrl } from "@/lib/brand-color";
@@ -373,8 +375,22 @@ export function PartnerLandingEditorForm({
   }
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-    <Card className="min-w-0 flex-1">
+    <LandingEditorShell
+      hideNavBelowLg={mode === "partner"}
+      nav={
+        mode === "partner" ? (
+          <>
+            <p className="mb-3 hidden text-xs font-semibold uppercase tracking-[0.18em] text-accent lg:block">
+              Partner program
+            </p>
+            <PartnerTabNav />
+          </>
+        ) : (
+          <p className="px-1 text-sm font-medium text-heading">Partner landing editor</p>
+        )
+      }
+      form={
+    <Card className="min-w-0 border-0 shadow-none lg:border lg:shadow-sm">
       <CardHeader>
         <CardTitle className="text-base">Customize your landing page</CardTitle>
         <p className="text-sm text-muted">
@@ -736,21 +752,25 @@ export function PartnerLandingEditorForm({
             Active (inactive landings 404 and set no cookie)
           </label>
         ) : null}
-
+      </CardContent>
+    </Card>
+      }
+      formFooter={
         <Button
           type="button"
           variant="accent"
-          className="min-h-11"
+          className="min-h-11 w-full sm:w-auto"
           disabled={busy}
           onClick={() => void save()}
         >
           {busy ? "Saving…" : "Save landing page"}
         </Button>
-      </CardContent>
-    </Card>
-    <LandingEditorPreviewFrame>
-      <PartnerLandingPublicView content={previewContent} />
-    </LandingEditorPreviewFrame>
-    </div>
+      }
+      canvas={
+        <LandingEditorPreviewFrame>
+          <PartnerLandingPublicView content={previewContent} />
+        </LandingEditorPreviewFrame>
+      }
+    />
   );
 }
