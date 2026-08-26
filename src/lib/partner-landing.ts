@@ -23,6 +23,7 @@ import {
   SHOOTPORTAL_LANDING_ACCENT,
   SHOOTPORTAL_LANDING_PRIMARY,
   defaultPartnerLandingHeadline,
+  resolvePartnerLandingPhotoUrl,
   type PartnerLandingDefaults,
 } from "@/lib/partner-landing.constants";
 import { resolveReferralDiscountForPartner } from "@/lib/partner-referral-discount";
@@ -73,7 +74,8 @@ export type ResolvedPartnerLandingContent = {
   offerText: string | null;
   showOffer: boolean;
   logoUrl: string | null;
-  photoUrl: string | null;
+  /** Always a renderable URL; defaults to PARTNER_DEFAULT_PHOTO_PATH when unset. */
+  photoUrl: string;
   testimonialQuote: string | null;
   testimonialAttribution: string | null;
   accentColor: string;
@@ -104,6 +106,8 @@ export type PartnerLandingAdminInput = PartnerLandingContentInput & {
 
 export const PARTNER_LANDING_UPLOAD_BUCKET = "business-logos";
 export const PARTNER_LANDING_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
+
+export { resolvePartnerLandingPhotoUrl, PARTNER_DEFAULT_PHOTO_PATH } from "@/lib/partner-landing.constants";
 
 function rowBenefits(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -256,8 +260,8 @@ export async function resolvePartnerLandingContent(
 
   const logoUrl =
     landing.logo_url && isSafeBrandAssetUrl(landing.logo_url) ? landing.logo_url.trim() : null;
-  const photoUrl =
-    landing.photo_url && isSafeBrandAssetUrl(landing.photo_url) ? landing.photo_url.trim() : null;
+  // Render-time fallback only — never persist PARTNER_DEFAULT_PHOTO_PATH into photo_url.
+  const photoUrl = resolvePartnerLandingPhotoUrl(landing.photo_url);
 
   const testimonialQuote = landing.testimonial_quote
     ? sanitizeMultilinePlain(landing.testimonial_quote, PARTNER_LANDING_LIMITS.testimonialQuote)

@@ -3,6 +3,8 @@ import { MarketingShell } from "@/components/marketing/marketing-chrome";
 import { Button } from "@/components/ui/button";
 import { platformPortalBrand } from "@/lib/public-host-chrome";
 import { BrandProvider } from "@/components/brand/brand-provider";
+import { SafeBrandImage } from "@/components/partner/safe-brand-image";
+import { PARTNER_DEFAULT_PHOTO_PATH } from "@/lib/partner-landing.constants";
 import type { ResolvedPartnerLandingContent } from "@/lib/partner-landing";
 
 type Props = {
@@ -11,6 +13,7 @@ type Props = {
 
 export function PartnerLandingPublicView({ content }: Props) {
   const brand = platformPortalBrand();
+  const photoSrc = content.photoUrl || PARTNER_DEFAULT_PHOTO_PATH;
 
   return (
     <BrandProvider brand={brand}>
@@ -20,8 +23,7 @@ export function PartnerLandingPublicView({ content }: Props) {
             <div>
               <div className="flex flex-wrap items-center gap-3">
                 {content.logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- partner https asset
-                  <img
+                  <SafeBrandImage
                     src={content.logoUrl}
                     alt=""
                     className="h-10 max-w-[160px] object-contain object-left"
@@ -34,7 +36,10 @@ export function PartnerLandingPublicView({ content }: Props) {
                   {content.brandName} × ShootPortal
                 </p>
               </div>
-              <h1 className="mt-4 text-4xl font-bold tracking-tight text-heading sm:text-5xl">
+              <h1
+                className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl"
+                style={{ color: content.primaryColor }}
+              >
                 {content.headline}
               </h1>
               <p className="mt-4 text-lg leading-relaxed text-muted">{content.subheadline}</p>
@@ -97,15 +102,14 @@ export function PartnerLandingPublicView({ content }: Props) {
               ) : null}
             </div>
             <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-border bg-subtle">
-              {content.photoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- partner https asset
-                <img src={content.photoUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted">
-                  <p className="font-medium text-heading">ShootPortal</p>
-                  <p>Client portal for photographers &amp; drone professionals</p>
-                </div>
-              )}
+              <SafeBrandImage
+                src={photoSrc}
+                fallbackSrc={
+                  photoSrc !== PARTNER_DEFAULT_PHOTO_PATH ? PARTNER_DEFAULT_PHOTO_PATH : undefined
+                }
+                alt=""
+                className="h-full w-full object-cover"
+              />
             </div>
           </div>
         </section>
