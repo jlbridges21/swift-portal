@@ -180,7 +180,23 @@ export async function ensureReferralDiscountStripeCoupon(
   );
 
   if (stored?.stripe_coupon_id) {
-    return { ok: true, couponId: stored.stripe_coupon_id as string, mode };
+    // Verify the stored id still exists and matches config in this Stripe mode.
+    try {
+      const { stripe } = getStripe();
+      const existing = await stripe.coupons.retrieve(stored.stripe_coupon_id as string);
+      if (
+        existing.valid &&
+        existing.amount_off === amountOffCents &&
+        (interval === "annual"
+          ? existing.duration === "once"
+          : existing.duration === "repeating" &&
+            existing.duration_in_months === durationMonths)
+      ) {
+        return { ok: true, couponId: existing.id, mode };
+      }
+    } catch {
+      /* fall through to recreate */
+    }
   }
 
   const { stripe } = getStripe();

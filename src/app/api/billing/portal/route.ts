@@ -5,6 +5,7 @@ import { getBusinessPortalOrigin } from "@/lib/portal-url";
 import { getStripe } from "@/lib/stripe";
 import { getSubscriptionState } from "@/lib/subscription";
 import { ensureStripeCustomer, loadBillingBusiness } from "@/lib/stripe-billing";
+import { clientMessageForStripeError, logStripeError } from "@/lib/stripe-errors";
 
 export const runtime = "nodejs";
 
@@ -48,7 +49,17 @@ export async function POST() {
     if (message === "Unauthorized" || message === "Forbidden") {
       return NextResponse.json({ error: message }, { status: message === "Unauthorized" ? 401 : 403 });
     }
-    console.error("[billing/portal] failed", { error: message });
-    return NextResponse.json({ error: "Could not open billing portal." }, { status: 500 });
+    logStripeError("billing/portal", err);
+    const client = clientMessageForStripeError(err);
+    return NextResponse.json(
+      {
+        error:
+          client.code === "customer_missing"
+            ? client.error
+            : "Could not open billing portal. If this continues, contact support.",
+        ...(client.code ? { code: client.code } : {}),
+      },
+      { status: client.status === 400 ? 400 : 500 }
+    );
   }
 }

@@ -12,8 +12,16 @@ import {
   resolvePriceIdForCheckout,
   type BillingInterval,
 } from "@/lib/stripe-billing";
+import {
+  clientMessageForStripeError,
+  isStripeDiscountApplyError,
+  logStripeError,
+} from "@/lib/stripe-errors";
+import type Stripe from "stripe";
 
 export const runtime = "nodejs";
+
+type CheckoutSessionParams = Stripe.Checkout.SessionCreateParams;
 
 export async function POST(request: Request) {
   try {
@@ -62,7 +70,7 @@ export async function POST(request: Request) {
     } catch (err) {
       if (err instanceof BillingConfigError) {
         console.error("[billing/checkout] missing price for mode", err.details);
-        return NextResponse.json({ error: err.message }, { status: 400 });
+        return NextResponse.json({ error: err.message, code: "plan_misconfigured" }, { status: 400 });
       }
       throw err;
     }
@@ -108,13 +116,9 @@ export async function POST(request: Request) {
 
     const { stripe } = getStripe();
 
-    // Partner referral discount — never block checkout on failure.
-    // Apply at Checkout (not deferred). Stripe repeating coupons use calendar
-    // months from application — a $0 trial invoice does not consume billing
-    // periods. Deferring until after trial raced Stripe invoice finalization
-    // and charged the first paid month at list price.
+    // Partner referral discount — apply at Checkout (not deferred). Never block payment
+    // if the coupon cannot be applied; fall back to list price.
     let checkoutDiscounts: { coupon: string }[] | undefined;
-    let allowPromotionCodes = true;
     try {
       const { resolveReferralDiscountForBusiness } = await import(
         "@/lib/partner-referral-discount"
@@ -124,19 +128,43 @@ export async function POST(request: Request) {
         interval,
       });
       if (discount.eligible && discount.couponId) {
-        checkoutDiscounts = [{ coupon: discount.couponId }];
-        // Stripe Checkout allows one discount total — pre-applied referral coupon
-        // replaces the promotion-code field for referred signups.
-        allowPromotionCodes = false;
-        console.info("[billing/checkout] referral discount attached", {
-          businessId: business.id,
-          interval,
-          mode,
-          couponId: discount.couponId,
-          amountOffCents: discount.config?.amountOffCents,
-          durationMonths: discount.config?.durationMonths,
-          trialEndApplied,
-        });
+        // Verify the coupon still exists in this Stripe mode before attaching.
+        try {
+          const coupon = await stripe.coupons.retrieve(discount.couponId);
+          if (coupon.valid) {
+            checkoutDiscounts = [{ coupon: discount.couponId }];
+            console.info("[billing/checkout] referral discount attached", {
+              businessId: business.id,
+              interval,
+              mode,
+              couponId: discount.couponId,
+              amountOffCents: discount.config?.amountOffCents,
+              durationMonths: discount.config?.durationMonths,
+              trialEndApplied,
+            });
+          } else {
+            console.error(
+              "[billing/checkout] referral coupon INVALID — proceeding at FULL PRICE",
+              {
+                businessId: business.id,
+                interval,
+                mode,
+                couponId: discount.couponId,
+              }
+            );
+          }
+        } catch (couponErr) {
+          console.error(
+            "[billing/checkout] referral coupon retrieve FAILED — proceeding at FULL PRICE",
+            {
+              businessId: business.id,
+              interval,
+              mode,
+              couponId: discount.couponId,
+              error: couponErr instanceof Error ? couponErr.message : String(couponErr),
+            }
+          );
+        }
       } else if (discount.config?.enabled) {
         console.error("[billing/checkout] referral discount NOT applied — proceeding at FULL PRICE", {
           businessId: business.id,
@@ -157,19 +185,55 @@ export async function POST(request: Request) {
       });
     }
 
+    const buildParams = (discounts: { coupon: string }[] | undefined): CheckoutSessionParams => {
+      // Stripe rejects sessions that pass BOTH `discounts` and `allow_promotion_codes`
+      // (even when allow_promotion_codes is false). Omit the promo flag when a coupon
+      // is pre-applied; otherwise allow customer promo codes.
+      const params: CheckoutSessionParams = {
+        mode: "subscription",
+        customer: customerId,
+        line_items: [{ price: priceId, quantity: 1 }],
+        metadata: meta,
+        subscription_data: subscriptionData,
+        success_url: `${origin}/billing?checkout=success`,
+        cancel_url: `${origin}/billing?checkout=cancelled`,
+        client_reference_id: business.id,
+      };
+      if (discounts?.length) {
+        params.discounts = discounts;
+      } else {
+        params.allow_promotion_codes = true;
+      }
+      return params;
+    };
+
     // Platform account only — never pass stripeAccount / requestOptions.
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      customer: customerId,
-      line_items: [{ price: priceId, quantity: 1 }],
-      metadata: meta,
-      subscription_data: subscriptionData,
-      success_url: `${origin}/billing?checkout=success`,
-      cancel_url: `${origin}/billing?checkout=cancelled`,
-      client_reference_id: business.id,
-      allow_promotion_codes: allowPromotionCodes,
-      ...(checkoutDiscounts ? { discounts: checkoutDiscounts } : {}),
-    });
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe.checkout.sessions.create(buildParams(checkoutDiscounts));
+    } catch (createErr) {
+      if (checkoutDiscounts && isStripeDiscountApplyError(createErr)) {
+        logStripeError("billing/checkout", createErr, {
+          businessId: business.id,
+          interval,
+          mode,
+          couponId: checkoutDiscounts[0]?.coupon,
+          recovery: "retry_at_list_price",
+        });
+        console.error(
+          "[billing/checkout] ALERT referral coupon rejected by Stripe — retrying checkout at FULL PRICE",
+          {
+            businessId: business.id,
+            interval,
+            mode,
+            couponId: checkoutDiscounts[0]?.coupon,
+          }
+        );
+        session = await stripe.checkout.sessions.create(buildParams(undefined));
+      } else {
+        throw createErr;
+      }
+    }
 
     if (!session.url) {
       return NextResponse.json({ error: "Checkout session missing URL." }, { status: 500 });
@@ -181,16 +245,18 @@ export async function POST(request: Request) {
     if (message === "Unauthorized" || message === "Forbidden") {
       return NextResponse.json({ error: message }, { status: message === "Unauthorized" ? 401 : 403 });
     }
-    console.error("[billing/checkout] failed", {
-      error: message,
-      mode: (() => {
-        try {
-          return getStripeMode();
-        } catch {
-          return "unknown";
-        }
-      })(),
-    });
-    return NextResponse.json({ error: "Could not start checkout." }, { status: 500 });
+    const mode = (() => {
+      try {
+        return getStripeMode();
+      } catch {
+        return "unknown";
+      }
+    })();
+    logStripeError("billing/checkout", err, { mode });
+    const client = clientMessageForStripeError(err);
+    return NextResponse.json(
+      { error: client.error, ...(client.code ? { code: client.code } : {}) },
+      { status: client.status }
+    );
   }
 }

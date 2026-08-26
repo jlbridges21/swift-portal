@@ -6,6 +6,10 @@ import { BrandProvider } from "@/components/brand/brand-provider";
 import { ImpersonationBanner } from "@/components/platform/impersonation-banner";
 import { getSubscriptionState } from "@/lib/subscription";
 import { formatPlanPrice, formatTrialDaysLabel } from "@/lib/plan-catalog";
+import {
+  formatReferralPlanPriceDisplay,
+  resolveReferralDiscountForBusiness,
+} from "@/lib/partner-referral-discount";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +71,30 @@ export default async function BillingPage() {
   const publicPlans = await listPublicPlansWithModePrices(stripeMode);
   const currentPlan = publicPlans.find((p) => p.key === tenant.business.plan) ?? null;
   const anyModePriceConfigured = publicPlans.some((p) => Boolean(p.stripe_price_monthly_id));
+
+  // Same resolver as checkout — display and charge cannot diverge.
+  let monthlyReferralDiscount = null as Awaited<
+    ReturnType<typeof resolveReferralDiscountForBusiness>
+  > | null;
+  let annualReferralDiscount = null as Awaited<
+    ReturnType<typeof resolveReferralDiscountForBusiness>
+  > | null;
+  try {
+    const [monthly, annual] = await Promise.all([
+      resolveReferralDiscountForBusiness({
+        businessId: tenant.businessId,
+        interval: "monthly",
+      }),
+      resolveReferralDiscountForBusiness({
+        businessId: tenant.businessId,
+        interval: "annual",
+      }),
+    ]);
+    monthlyReferralDiscount = monthly;
+    annualReferralDiscount = annual;
+  } catch (err) {
+    console.error("[billing] referral discount display resolve failed — showing list prices", err);
+  }
 
   const sub = getSubscriptionState({
     ...tenant.business,
@@ -212,6 +240,22 @@ export default async function BillingPage() {
                     const canSubscribe = Boolean(plan.stripe_price_monthly_id);
                     // Expired / canceled / past_due must always be able to (re)subscribe.
                     const alreadyOnPaidPlan = isCurrent && sub.status === "active" && !sub.requiresPayment;
+                    const monthlyDisplay =
+                      monthlyReferralDiscount?.eligible && plan.price_monthly_cents != null
+                        ? formatReferralPlanPriceDisplay({
+                            listPriceCents: plan.price_monthly_cents,
+                            discount: monthlyReferralDiscount,
+                            interval: "monthly",
+                          })
+                        : null;
+                    const annualDisplay =
+                      plan.price_annual_cents != null && annualReferralDiscount?.eligible
+                        ? formatReferralPlanPriceDisplay({
+                            listPriceCents: plan.price_annual_cents,
+                            discount: annualReferralDiscount,
+                            interval: "annual",
+                          })
+                        : null;
                     return (
                       <Card key={plan.id} className={isCurrent ? "border-accent" : undefined}>
                         <CardHeader className="pb-2">
@@ -221,14 +265,40 @@ export default async function BillingPage() {
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                          <p className="text-2xl font-semibold text-heading">
-                            {formatPlanPrice(plan.price_monthly_cents)}
-                            <span className="text-sm font-normal text-muted">/mo</span>
-                          </p>
-                          {plan.price_annual_cents != null && (
-                            <p className="text-xs text-muted">
-                              or {formatPlanPrice(plan.price_annual_cents)}/mo billed annually
+                          {monthlyDisplay ? (
+                            <div className="space-y-1">
+                              <p className="text-2xl font-semibold text-heading">
+                                <span className="mr-2 text-base font-normal text-muted line-through">
+                                  {formatPlanPrice(monthlyDisplay.listPriceCents)}/mo
+                                </span>
+                                {formatPlanPrice(monthlyDisplay.discountedPriceCents)}
+                                <span className="text-sm font-normal text-muted">/mo</span>
+                              </p>
+                              <p className="text-xs text-muted">{monthlyDisplay.headline}</p>
+                            </div>
+                          ) : (
+                            <p className="text-2xl font-semibold text-heading">
+                              {formatPlanPrice(plan.price_monthly_cents)}
+                              <span className="text-sm font-normal text-muted">/mo</span>
                             </p>
+                          )}
+                          {plan.price_annual_cents != null && (
+                            annualDisplay ? (
+                              <p className="text-xs text-muted">
+                                <span className="line-through">
+                                  {formatPlanPrice(annualDisplay.listPriceCents)}/mo billed annually
+                                </span>
+                                {" · "}
+                                {annualDisplay.headline}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-muted">
+                                or {formatPlanPrice(plan.price_annual_cents)}/mo billed annually
+                                {monthlyDisplay
+                                  ? " (referral discount applies to monthly billing)"
+                                  : ""}
+                              </p>
+                            )
                           )}
                           <p className="text-xs text-muted">
                             {plan.trial_days > 0

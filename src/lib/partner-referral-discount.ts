@@ -234,6 +234,63 @@ export function formatPartnerReferralLandingOffer(config: EffectiveReferralDisco
 }
 
 /**
+ * Display copy for /billing plan cards — uses the same AppliedReferralDiscount
+ * resolver as checkout so shown price and charged price cannot diverge.
+ * Returns null when the discount is not eligible for this interval (show list price).
+ */
+export function formatReferralPlanPriceDisplay(args: {
+  listPriceCents: number;
+  discount: AppliedReferralDiscount;
+  interval: BillingInterval;
+}): {
+  listPriceCents: number;
+  discountedPriceCents: number;
+  amountOffCents: number;
+  durationMonths: number;
+  /** e.g. "$24/mo for your first 3 months, then $29/mo" */
+  headline: string;
+} | null {
+  const { listPriceCents, discount, interval } = args;
+  if (!discount.eligible || !discount.config) return null;
+
+  if (interval === "monthly") {
+    const amountOff = discount.config.amountOffCents;
+    if (amountOff <= 0 || listPriceCents <= 0) return null;
+    const discounted = Math.max(0, listPriceCents - amountOff);
+    const months = discount.config.durationMonths;
+    if (months <= 0) return null;
+    return {
+      listPriceCents,
+      discountedPriceCents: discounted,
+      amountOffCents: amountOff,
+      durationMonths: months,
+      headline: `${formatCents(discounted)}/mo for your first ${months} month${months === 1 ? "" : "s"}, then ${formatCents(listPriceCents)}/mo`,
+    };
+  }
+
+  // Annual: Stripe applies annualAmountOffCents once against the yearly invoice
+  // (price_annual_cents × 12). listPriceCents here is the monthly-equivalent shown
+  // elsewhere on /billing ("$24/mo billed annually").
+  if (!discount.config.annualEnabled) return null;
+  const amountOff = discount.config.annualAmountOffCents;
+  if (amountOff <= 0 || listPriceCents <= 0) return null;
+  const yearlyList = listPriceCents * 12;
+  const yearlyDiscounted = Math.max(0, yearlyList - amountOff);
+  const discountedMonthlyEquiv = Math.round(yearlyDiscounted / 12);
+  return {
+    listPriceCents,
+    discountedPriceCents: discountedMonthlyEquiv,
+    amountOffCents: amountOff,
+    durationMonths: 1,
+    headline: `${formatCents(discountedMonthlyEquiv)}/mo billed annually for the first year (${formatCents(amountOff)} off the annual bill), then ${formatCents(listPriceCents)}/mo billed annually`,
+  };
+}
+
+function formatCents(cents: number): string {
+  return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+}
+
+/**
  * Single resolver for "what discount will actually be applied" — used by checkout,
  * landing pages, partner dashboard, and platform warnings. Includes Stripe coupon lookup.
  */
@@ -641,10 +698,6 @@ export async function computeReferralDiscountWindow(args: {
       ? `${paidPeriods} of ${config.durationMonths} discount months used · ${formatCents(config.amountOffCents)}/mo off`
       : `Discount ended after ${config.durationMonths} months`,
   };
-}
-
-function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 }
 
 export async function loadPartnerReferralDiscountMetrics(stripeMode?: StripeMode): Promise<{
