@@ -36,6 +36,8 @@ export async function PartnerDashboardShell({ children, brandName }: Props) {
     <BrandProvider brand={brand}>
       <AdminCapabilitiesProvider
         showPartner={showPartner}
+        partnerActive={caps.partner.active}
+        partnerSuspended={caps.partner.suspended}
         partnerNavLabel={navPartnerLabel}
         partnerNavHref={navPartnerHref}
       >

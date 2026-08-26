@@ -39,6 +39,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <BrandProvider brand={brand}>
       <AdminCapabilitiesProvider
         showPartner={showPartner}
+        partnerActive={caps.partner.active}
+        partnerSuspended={caps.partner.suspended}
         partnerNavLabel={navPartnerLabel}
         partnerNavHref={navPartnerHref}
       >

@@ -1,4 +1,4 @@
--- ShootPortal V71 — Partner program auto-approve applications toggle
+-- ShootPortal V72 — Partner program auto-approve applications toggle
 --
 -- Super-admins can turn instant partner approval on/off from /platform/partners.
 -- Default true (current product behavior). When false, applications stay pending

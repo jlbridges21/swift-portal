@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import {
   Building2,
   FolderKanban,
+  Handshake,
   ImageIcon,
   Loader2,
   Search,
@@ -24,10 +25,16 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminSearch } from "@/components/admin/admin-search-context";
+import { useAdminCapabilities } from "@/components/admin/admin-capabilities-context";
 import {
   searchSettingsIndex,
   type SettingsSearchEntry,
 } from "@/lib/settings-search-index";
+import {
+  resolvePartnerSearchMode,
+  searchPartnerIndex,
+  type PartnerSearchEntry,
+} from "@/lib/partner-search-index";
 import {
   ADMIN_SEARCH_MIN_CHARS,
   type AdminSearchHit,
@@ -38,6 +45,7 @@ type FlatItem =
   | { kind: "header"; id: string; label: string; count: number }
   | { kind: "hit"; id: string; hit: AdminSearchHit; group: string }
   | { kind: "settings"; id: string; entry: SettingsSearchEntry }
+  | { kind: "partner"; id: string; entry: PartnerSearchEntry }
   | { kind: "see-all"; id: string; label: string; href: string };
 
 type SearchResponse = {
@@ -71,6 +79,11 @@ export function AdminCommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const mobile = useIsMobileViewport();
+  const caps = useAdminCapabilities();
+  const partnerMode = resolvePartnerSearchMode({
+    showPartner: caps.showPartner,
+    partnerActive: caps.partnerActive,
+  });
 
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -96,6 +109,14 @@ export function AdminCommandPalette({
   const settingsHits = useMemo(
     () => (query.trim().length >= ADMIN_SEARCH_MIN_CHARS ? searchSettingsIndex(query, 8) : []),
     [query]
+  );
+
+  const partnerHits = useMemo(
+    () =>
+      query.trim().length >= ADMIN_SEARCH_MIN_CHARS
+        ? searchPartnerIndex(query, partnerMode, 8)
+        : [],
+    [query, partnerMode]
   );
 
   // Debounced server search
@@ -194,8 +215,20 @@ export function AdminCommandPalette({
       }
     }
 
+    if (partnerHits.length) {
+      items.push({
+        kind: "header",
+        id: "h-partner",
+        label: "Partner",
+        count: partnerHits.length,
+      });
+      for (const entry of partnerHits) {
+        items.push({ kind: "partner", id: `partner-${entry.id}`, entry });
+      }
+    }
+
     return items;
-  }, [query, serverResults, settingsHits, seeAll]);
+  }, [query, serverResults, settingsHits, partnerHits, seeAll]);
 
   const selectableIndexes = useMemo(
     () =>
@@ -207,7 +240,7 @@ export function AdminCommandPalette({
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [query, serverResults, settingsHits]);
+  }, [query, serverResults, settingsHits, partnerHits]);
 
   const activeSelectable = selectableIndexes[activeIndex] ?? selectableIndexes[0] ?? -1;
 
@@ -226,6 +259,7 @@ export function AdminCommandPalette({
       if (!item || item.kind === "header") return;
       if (item.kind === "hit") navigateTo(item.hit.href);
       else if (item.kind === "settings") navigateTo(item.entry.href);
+      else if (item.kind === "partner") navigateTo(item.entry.href);
       else if (item.kind === "see-all") navigateTo(item.href);
     },
     [navigateTo]
@@ -329,6 +363,7 @@ export function AdminCommandPalette({
                 <li>Leads — name, email, phone</li>
                 <li>Media — title and file name</li>
                 <li>Settings — try “domain”, “stripe”, “reply-to”</li>
+                <li>Partner — try “partner”, “referral”, “commission”</li>
               </ul>
               <p className="text-xs">
                 Message threads are not searched. Type at least {ADMIN_SEARCH_MIN_CHARS} characters.
@@ -366,6 +401,8 @@ export function AdminCommandPalette({
             const icon =
               item.kind === "settings" ? (
                 <Settings className="h-4 w-4 shrink-0 text-muted" />
+              ) : item.kind === "partner" ? (
+                <Handshake className="h-4 w-4 shrink-0 text-muted" />
               ) : item.kind === "see-all" ? (
                 <Search className="h-4 w-4 shrink-0 text-muted" />
               ) : item.hit.type === "client" ? (
@@ -383,13 +420,13 @@ export function AdminCommandPalette({
             const title =
               item.kind === "hit"
                 ? item.hit.title
-                : item.kind === "settings"
+                : item.kind === "settings" || item.kind === "partner"
                   ? item.entry.label
                   : item.label;
             const subtitle =
               item.kind === "hit"
                 ? item.hit.subtitle
-                : item.kind === "settings"
+                : item.kind === "settings" || item.kind === "partner"
                   ? item.entry.description
                   : null;
 

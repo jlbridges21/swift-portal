@@ -95,7 +95,16 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
     sectionId: "landing",
     label: "Client Landing Page",
     description: "Hero copy, industries, how-it-works, and social.",
-    keywords: ["landing", "homepage", "public page", "hero", "home page", "marketing"],
+    keywords: [
+      "landing",
+      "landing page",
+      "homepage",
+      "public page",
+      "hero",
+      "home page",
+      "marketing",
+      "client landing",
+    ],
   },
   {
     id: "services",
