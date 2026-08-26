@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,10 @@ import { ColorField } from "@/components/ui/color-field";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { ServicesSettingsCard } from "@/components/admin/services-settings-card";
 import { StripeConnectCard } from "@/components/admin/stripe-connect-card";
+import { LandingPage } from "@/components/landing/landing-page";
+import { LandingEditorPreviewFrame } from "@/components/landing/landing-editor-preview-frame";
+import { usePortalBrand } from "@/components/brand/brand-provider";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -26,7 +30,14 @@ import {
   type OnboardingStepId,
   type OnboardingState,
 } from "@/lib/onboarding";
-import { LANDING_LIMITS, DEFAULT_HOW_IT_WORKS, HOW_IT_WORKS_STEP_COUNT } from "@/lib/landing-content";
+import {
+  LANDING_LIMITS,
+  DEFAULT_HOW_IT_WORKS,
+  HOW_IT_WORKS_STEP_COUNT,
+  mergeLandingSettings,
+  resolveLandingPage,
+  type LandingSettings,
+} from "@/lib/landing-content";
 import { cn } from "@/lib/utils";
 
 function BrandPreview({
@@ -138,6 +149,33 @@ export function OnboardingWizard({
 
   const step = data.state.currentStep;
   const stepIdx = ONBOARDING_STEP_IDS.indexOf(step);
+  const brand = usePortalBrand();
+
+  const draftLandingPage = useMemo(() => {
+    const name = identity.businessName.trim() || businessDisplayName;
+    const merged = mergeLandingSettings({
+      hero: {
+        headline: landing.headline,
+        subheadline: landing.subheadline,
+      },
+      howItWorks: landing.howItWorks.slice(0, HOW_IT_WORKS_STEP_COUNT),
+    } as Partial<LandingSettings>);
+    return resolveLandingPage({
+      landing: merged,
+      businessName: name,
+      portalName: brand.portalName || name,
+      serviceNames: [],
+      services: [],
+    });
+  }, [
+    landing.headline,
+    landing.subheadline,
+    landing.howItWorks,
+    identity.businessName,
+    businessDisplayName,
+    brand.portalName,
+  ]);
+  const previewLandingPage = useDebouncedValue(draftLandingPage, 200);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/onboarding", { credentials: "include" });
@@ -260,10 +298,21 @@ export function OnboardingWizard({
   }
 
   async function defer() {
-    const next = await runAction({ action: "defer" });
-    if (next) {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/onboarding", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "defer" }),
+      });
+      await parseJson(res);
       toast.message("You can finish setup anytime from the banner on your dashboard.");
-      router.push("/admin");
+      // Hard nav so middleware sees deferred state (and fresh DB if cache was stale).
+      window.location.assign("/admin");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not leave setup");
+      setBusy(false);
     }
   }
 
@@ -279,7 +328,12 @@ export function OnboardingWizard({
   }
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 py-6 sm:px-6 sm:py-10">
+    <div
+      className={cn(
+        "mx-auto flex min-h-screen w-full flex-col px-4 py-6 sm:px-6 sm:py-10",
+        step === "landing" ? "max-w-6xl" : "max-w-3xl"
+      )}
+    >
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-accent">
@@ -532,7 +586,8 @@ export function OnboardingWizard({
           )}
 
           {step === "landing" && (
-            <div className="space-y-4">
+            <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+            <div className="min-w-0 space-y-4">
               {!data.canCustomizeBranding ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
                   Landing customization needs Custom branding on your plan. Your portal already
@@ -667,6 +722,12 @@ export function OnboardingWizard({
                   Continue
                 </Button>
               </div>
+            </div>
+            <div className="min-w-0 lg:sticky lg:top-6 lg:h-[min(70dvh,40rem)]">
+              <LandingEditorPreviewFrame title="Landing preview">
+                <LandingPage brand={brand} page={previewLandingPage} />
+              </LandingEditorPreviewFrame>
+            </div>
             </div>
           )}
 

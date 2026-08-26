@@ -34,6 +34,7 @@ export const LANDING_LIMITS = {
   industriesMax: 8,
   howItWorksLabel: 60,
   howItWorksDescription: 200,
+  howItWorksImageUrl: 500,
   /** Horizontal step carousel holds 3–6 without breaking layout. */
   howItWorksMin: 3,
   howItWorksMax: 6,
@@ -199,6 +200,8 @@ export type LandingHeroContent = {
 export type LandingHowItWorksStep = {
   label: string;
   description: string;
+  /** Optional step image (https or same-origin). Empty → public page keeps default screenshots. */
+  imageUrl?: string;
 };
 
 export type LandingSocialLinks = {
@@ -377,22 +380,29 @@ function normalizeHowItWorks(raw: unknown): LandingHowItWorksStep[] {
     return Array.from({ length: HOW_IT_WORKS_DEFAULT_COUNT }, () => ({
       label: "",
       description: "",
+      imageUrl: "",
     }));
   }
 
   const out: LandingHowItWorksStep[] = [];
   for (const row of raw) {
-    const r = row as { label?: unknown; description?: unknown } | null;
+    const r = row as { label?: unknown; description?: unknown; imageUrl?: unknown } | null;
+    const imageRaw = typeof r?.imageUrl === "string" ? r.imageUrl.trim() : "";
+    const imageUrl =
+      imageRaw && isSafeBrandAssetUrl(imageRaw)
+        ? sanitizePlainText(imageRaw, LANDING_LIMITS.howItWorksImageUrl)
+        : "";
     out.push({
       label: sanitizePlainText(r?.label, LANDING_LIMITS.howItWorksLabel),
       description: sanitizePlainText(r?.description, LANDING_LIMITS.howItWorksDescription),
+      imageUrl,
     });
     if (out.length >= LANDING_LIMITS.howItWorksMax) break;
   }
 
   // Corrupt stored data: pad to min so the public page never breaks.
   while (out.length < LANDING_LIMITS.howItWorksMin) {
-    out.push({ label: "", description: "" });
+    out.push({ label: "", description: "", imageUrl: "" });
   }
 
   return out;
@@ -763,6 +773,7 @@ export function resolveLandingPage(input: {
   const howItWorks = landing.howItWorks.map((step, i) => ({
     label: step.label || DEFAULT_HOW_IT_WORKS[i]?.label || `Step ${i + 1}`,
     description: step.description || DEFAULT_HOW_IT_WORKS[i]?.description || "",
+    imageUrl: step.imageUrl?.trim() && isSafeBrandAssetUrl(step.imageUrl) ? step.imageUrl.trim() : "",
   }));
 
   const features =

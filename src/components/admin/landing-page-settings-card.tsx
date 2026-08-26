@@ -92,6 +92,7 @@ function editorHowItWorks(landing: LandingSettings): LandingHowItWorksStep[] {
   return Array.from({ length: HOW_IT_WORKS_DEFAULT_COUNT }, (_, i) => ({
     label: landing.howItWorks[i]?.label ?? "",
     description: landing.howItWorks[i]?.description ?? "",
+    imageUrl: landing.howItWorks[i]?.imageUrl ?? "",
   }));
 }
 
@@ -218,7 +219,7 @@ export function LandingPageSettingsCard({
 
   function addHowItWorksStep() {
     if (steps.length >= LANDING_LIMITS.howItWorksMax) return;
-    setHowItWorksList([...steps, { label: "", description: "" }]);
+    setHowItWorksList([...steps, { label: "", description: "", imageUrl: "" }]);
   }
 
   function removeHowItWorksStep(index: number) {
@@ -248,6 +249,7 @@ export function LandingPageSettingsCard({
       Array.from({ length: HOW_IT_WORKS_DEFAULT_COUNT }, () => ({
         label: "",
         description: "",
+        imageUrl: "",
       }))
     );
   }
@@ -669,7 +671,13 @@ export function LandingPageSettingsCard({
                       htmlFor={`landing-step-${i}-desc`}
                       value={step.description}
                       max={LANDING_LIMITS.howItWorksDescription}
-                      onReset={() => setHowItWorks(i, { description: "", label: step.label })}
+                      onReset={() =>
+                        setHowItWorks(i, {
+                          description: "",
+                          label: step.label,
+                          imageUrl: step.imageUrl,
+                        })
+                      }
                     >
                       <textarea
                         id={`landing-step-${i}-desc`}
@@ -681,6 +689,12 @@ export function LandingPageSettingsCard({
                         className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
                       />
                     </FieldShell>
+                    <BrandAssetField
+                      kind="howItWorksImage"
+                      inputId={`landing-step-${i}-image`}
+                      value={step.imageUrl ?? ""}
+                      onUrlChange={(imageUrl) => setHowItWorks(i, { imageUrl })}
+                    />
                   </div>
                 );
               })}

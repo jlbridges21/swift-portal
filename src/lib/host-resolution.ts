@@ -122,18 +122,33 @@ async function lookupByCustomDomain(host: string): Promise<HostBusinessRow | nul
   return (data as HostBusinessRow | null) ?? null;
 }
 
-export async function lookupBusinessById(id: string): Promise<HostBusinessRow | null> {
+export function lookupBusinessById(id: string): Promise<HostBusinessRow | null> {
+  return lookupBusinessByIdCached(id, false);
+}
+
+/** Fresh DB read — used when a cached row would trap the user in onboarding. */
+export async function lookupBusinessByIdFresh(id: string): Promise<HostBusinessRow | null> {
+  return lookupBusinessByIdCached(id, true);
+}
+
+async function lookupBusinessByIdCached(
+  id: string,
+  bypassCache: boolean
+): Promise<HostBusinessRow | null> {
   const key = `id:${id}`;
-  const cached = cacheGet(key);
-  if (cached !== undefined) return cached;
+  if (!bypassCache) {
+    const cached = cacheGet(key);
+    if (cached !== undefined) return cached;
+  }
   const supabase = serviceClient();
   const { data } = await supabase
     .from("businesses")
     .select(HOST_BUSINESS_SELECT)
     .eq("id", id)
     .maybeSingle();
-  cacheSet(key, (data as HostBusinessRow | null) ?? null);
-  return (data as HostBusinessRow | null) ?? null;
+  const row = (data as HostBusinessRow | null) ?? null;
+  cacheSet(key, row);
+  return row;
 }
 
 async function lookupBySlug(slug: string): Promise<HostBusinessRow | null> {

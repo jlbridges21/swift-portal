@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-export type BrandAssetKind = "logo" | "emailLogo" | "favicon" | "heroImage";
+export type BrandAssetKind = "logo" | "emailLogo" | "favicon" | "heroImage" | "howItWorksImage";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
@@ -42,6 +42,13 @@ const KIND_UI: Record<
     types: new Set(["image/png", "image/jpeg", "image/webp"]),
     extraExt: new Set(),
   },
+  howItWorksImage: {
+    label: "Step image",
+    accept: "image/png,image/jpeg,image/webp",
+    hint: "Optional. PNG, JPEG, or WebP, under 4MB. Oversized images are resized. Paste an https URL or upload.",
+    types: new Set(["image/png", "image/jpeg", "image/webp"]),
+    extraExt: new Set(),
+  },
 };
 
 async function parseApiResponse(res: Response): Promise<Record<string, unknown>> {
@@ -68,22 +75,33 @@ async function parseApiResponse(res: Response): Promise<Record<string, unknown>>
   );
 }
 
+/**
+ * Upload / paste URL control for brand assets.
+ *
+ * refreshOnUpload defaults OFF: callers inside draft forms (settings, landing,
+ * onboarding) must not router.refresh() — that re-fetches server props and
+ * wipes unsaved local state (e.g. hero mediaType flipping back to none).
+ */
 export function BrandAssetField({
   kind,
   value,
   inputId,
   onUrlChange,
   onUploaded,
+  refreshOnUpload = false,
 }: {
   kind: BrandAssetKind;
   value: string;
   inputId: string;
   onUrlChange: (url: string) => void;
   onUploaded?: (url: string) => void;
+  /** Opt-in. Default false so draft forms keep unsaved state. */
+  refreshOnUpload?: boolean;
 }) {
   const router = useRouter();
   const ui = KIND_UI[kind];
   const fileInputId = `${inputId}-file`;
+  const showPreview = Boolean(value.trim());
 
   return (
     <div className="space-y-2 sm:col-span-2">
@@ -135,13 +153,37 @@ export function BrandAssetField({
               onUrlChange(url);
               onUploaded?.(url);
               toast.success(`${ui.label} uploaded`);
-              router.refresh();
+              if (refreshOnUpload) router.refresh();
             } catch (error) {
               toast.error(error instanceof Error ? error.message : "Upload failed");
             }
           }}
         />
       </div>
+      {showPreview ? (
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="relative h-20 w-32 overflow-hidden rounded-lg border border-border bg-subtle">
+            {/* eslint-disable-next-line @next/next/no-img-element -- tenant URL; domain allowlist unknown */}
+            <img
+              src={value}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-xs text-red-700"
+            onClick={() => onUrlChange("")}
+          >
+            Remove image
+          </Button>
+        </div>
+      ) : null}
       <p className="text-xs text-muted">{ui.hint}</p>
     </div>
   );

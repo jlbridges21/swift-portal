@@ -161,7 +161,10 @@ export function LandingPage({
     step: String(i + 1).padStart(2, "0"),
     title: step.label,
     description: step.description,
-    image: stepScreenshots[i % stepScreenshots.length],
+    image:
+      step.imageUrl && step.imageUrl.trim()
+        ? step.imageUrl.trim()
+        : stepScreenshots[i % stepScreenshots.length],
     alt: `${page.portalName} step ${i + 1}`,
   }));
   const PORTAL_SHOWCASE = buildShowcase(page);

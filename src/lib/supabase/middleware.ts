@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   applyHostHeaders,
   lookupBusinessById,
+  lookupBusinessByIdFresh,
   PATH_TENANT_COOKIE,
   resolveRequestHost,
   type HostResolution,
@@ -436,23 +437,35 @@ export async function updateSession(request: NextRequest) {
         }
       }
       // Incomplete onboarding (not deferred) → wizard, not empty dashboard.
-      if (
-        !isApi &&
-        profile?.role === "admin" &&
-        ownBusiness &&
-        needsOnboardingRedirect({
-          onboardingCompletedAt: ownBusiness.onboarding_completed_at,
-          onboardingState: ownBusiness.onboarding_state,
-          role: profile.role,
-        })
-      ) {
-        const url = request.nextUrl.clone();
-        url.pathname = `${resolution.pathPrefix}/onboarding`;
-        // Preserve Stripe Connect return signal so the wizard can refresh status.
-        const stripe = request.nextUrl.searchParams.get("stripe");
-        url.search = "";
-        if (stripe) url.searchParams.set("stripe", stripe);
-        return applyPathCookie(NextResponse.redirect(url), resolution);
+      // Re-fetch when cache says "needs wizard" so a just-deferred write is visible
+      // (Edge middleware cache is not shared with the Node API isolate).
+      if (!isApi && profile?.role === "admin" && ownBusiness) {
+        let obBusiness = ownBusiness;
+        if (
+          needsOnboardingRedirect({
+            onboardingCompletedAt: obBusiness.onboarding_completed_at,
+            onboardingState: obBusiness.onboarding_state,
+            role: profile.role,
+          })
+        ) {
+          const fresh = await lookupBusinessByIdFresh(obBusiness.id);
+          if (fresh) obBusiness = fresh;
+        }
+        if (
+          needsOnboardingRedirect({
+            onboardingCompletedAt: obBusiness.onboarding_completed_at,
+            onboardingState: obBusiness.onboarding_state,
+            role: profile.role,
+          })
+        ) {
+          const url = request.nextUrl.clone();
+          url.pathname = `${resolution.pathPrefix}/onboarding`;
+          // Preserve Stripe Connect return signal so the wizard can refresh status.
+          const stripe = request.nextUrl.searchParams.get("stripe");
+          url.search = "";
+          if (stripe) url.searchParams.set("stripe", stripe);
+          return applyPathCookie(NextResponse.redirect(url), resolution);
+        }
       }
     }
 

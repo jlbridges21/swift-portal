@@ -10,7 +10,7 @@ const LOGO_BUCKET = "business-logos";
 /** Stay under Vercel’s 4.5MB serverless body cap so the route actually runs. */
 const MAX_BYTES = 4 * 1024 * 1024;
 
-export const BRAND_ASSET_KINDS = ["logo", "emailLogo", "favicon", "heroImage"] as const;
+export const BRAND_ASSET_KINDS = ["logo", "emailLogo", "favicon", "heroImage", "howItWorksImage"] as const;
 export type BrandAssetKind = (typeof BRAND_ASSET_KINDS)[number];
 
 const KIND_CONFIG: Record<
@@ -21,6 +21,8 @@ const KIND_CONFIG: Record<
     types: Set<string>;
     exts: string[];
     resize: boolean;
+    /** When true, path includes a unique segment so repeated uploads do not clobber. */
+    uniquePath?: boolean;
   }
 > = {
   logo: {
@@ -57,10 +59,24 @@ const KIND_CONFIG: Record<
     exts: ["jpg", "jpeg", "png", "webp"],
     resize: true,
   },
+  howItWorksImage: {
+    pathBase: "landing-how-it-works",
+    field: null,
+    types: new Set(["image/png", "image/jpeg", "image/webp"]),
+    exts: ["jpg", "jpeg", "png", "webp"],
+    resize: true,
+    uniquePath: true,
+  },
 };
 
 function parseKind(value: FormDataEntryValue | null): BrandAssetKind {
-  if (value === "emailLogo" || value === "favicon" || value === "logo" || value === "heroImage") {
+  if (
+    value === "emailLogo" ||
+    value === "favicon" ||
+    value === "logo" ||
+    value === "heroImage" ||
+    value === "howItWorksImage"
+  ) {
     return value;
   }
   return "logo";
@@ -129,7 +145,9 @@ export async function POST(request: Request) {
     }
   }
 
-  const path = `${tenant.businessId}/${config.pathBase}.${safeExt}`;
+  const path = config.uniquePath
+    ? `${tenant.businessId}/${config.pathBase}/${crypto.randomUUID()}.${safeExt}`
+    : `${tenant.businessId}/${config.pathBase}.${safeExt}`;
   const { error: uploadError } = await db.raw.storage
     .from(LOGO_BUCKET)
     .upload(path, buffer, { upsert: true, contentType });
@@ -146,8 +164,8 @@ export async function POST(request: Request) {
 
   const assetUrl = `${supabaseUrl}/storage/v1/object/public/${LOGO_BUCKET}/${path}?v=${Date.now()}`;
 
-  // Hero image: upload only — caller stores URL on landing.hero.heroImageUrl.
-  if (kind === "heroImage" || !config.field) {
+  // Hero / how-it-works images: upload only — caller stores URL in draft settings JSON.
+  if (kind === "heroImage" || kind === "howItWorksImage" || !config.field) {
     return NextResponse.json({ kind, url: assetUrl });
   }
 

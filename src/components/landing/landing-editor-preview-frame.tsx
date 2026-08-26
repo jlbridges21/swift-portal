@@ -3,22 +3,14 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Monitor, Smartphone } from "lucide-react";
 
 const DESKTOP_WIDTH = 1280;
-const MOBILE_WIDTH = 390;
-/** Artboard padding inside the canvas measure area (Fit mode). */
+/** Artboard padding inside the canvas measure area. */
 const CANVAS_PAD = 24;
 
-type ViewportMode = "desktop" | "mobile";
-type ZoomMode = "fit" | "100";
-
 /**
- * Landing preview canvas. Renders children at a fixed desktop/mobile width, then scales
- * from the measured pane — so CSS breakpoints match the live page.
- *
- * Shell mode fills a flex parent; stack mode is document-flow with a show/hide toggle below lg.
- * No vw units — the canvas takes the flex remainder from LandingEditorShell.
+ * Landing preview canvas. Always renders at desktop width (1280px), then Fit-scales
+ * from the measured pane so CSS breakpoints match the live page.
  */
 export function LandingEditorPreviewFrame({
   title = "Live preview",
@@ -30,8 +22,6 @@ export function LandingEditorPreviewFrame({
   className?: string;
 }) {
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
-  const [viewport, setViewport] = useState<ViewportMode>("desktop");
-  const [zoom, setZoom] = useState<ZoomMode>("fit");
   const measureRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
@@ -41,7 +31,6 @@ export function LandingEditorPreviewFrame({
     const el = measureRef.current;
     if (!el) return;
     const measure = () => {
-      // clientWidth excludes scrollbar — never use vw.
       const w = Math.max(0, el.clientWidth - CANVAS_PAD * 2);
       setAvailableWidth(w);
     };
@@ -63,123 +52,11 @@ export function LandingEditorPreviewFrame({
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [children, viewport]);
+  }, [children]);
 
-  const fixedWidth = viewport === "desktop" ? DESKTOP_WIDTH : MOBILE_WIDTH;
-  const fitScale = availableWidth > 0 ? availableWidth / fixedWidth : 0;
-  const scale = zoom === "100" ? 1 : fitScale;
-  const scaledWidth = fixedWidth * (scale || 0.01);
+  const scale = availableWidth > 0 ? availableWidth / DESKTOP_WIDTH : 0;
+  const scaledWidth = DESKTOP_WIDTH * (scale || 0.01);
   const scaledHeight = Math.max(1, contentHeight * (scale || 0.01));
-
-  const toolbar = (
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-subtle px-3 py-2">
-      <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted">{title}</p>
-        <p className="text-[11px] text-muted">
-          {viewport === "desktop" ? `${DESKTOP_WIDTH}px` : `${MOBILE_WIDTH}px`}
-          {zoom === "fit" && fitScale > 0 ? ` · ${Math.round(fitScale * 100)}%` : " · 100%"}
-        </p>
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <div className="flex items-center gap-0.5 rounded-lg border border-border bg-white p-0.5">
-          <button
-            type="button"
-            className={cn(
-              "inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium",
-              viewport === "desktop" ? "bg-accent text-white" : "text-muted hover:text-heading"
-            )}
-            aria-pressed={viewport === "desktop"}
-            onClick={() => setViewport("desktop")}
-          >
-            <Monitor className="h-3.5 w-3.5" aria-hidden />
-            Desktop
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium",
-              viewport === "mobile" ? "bg-accent text-white" : "text-muted hover:text-heading"
-            )}
-            aria-pressed={viewport === "mobile"}
-            onClick={() => setViewport("mobile")}
-          >
-            <Smartphone className="h-3.5 w-3.5" aria-hidden />
-            Mobile
-          </button>
-        </div>
-        <div className="flex items-center gap-0.5 rounded-lg border border-border bg-white p-0.5">
-          <button
-            type="button"
-            className={cn(
-              "inline-flex min-h-9 items-center rounded-md px-2.5 text-xs font-medium",
-              zoom === "fit" ? "bg-accent text-white" : "text-muted hover:text-heading"
-            )}
-            aria-pressed={zoom === "fit"}
-            onClick={() => setZoom("fit")}
-          >
-            Fit
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "inline-flex min-h-9 items-center rounded-md px-2.5 text-xs font-medium",
-              zoom === "100" ? "bg-accent text-white" : "text-muted hover:text-heading"
-            )}
-            aria-pressed={zoom === "100"}
-            onClick={() => setZoom("100")}
-          >
-            100%
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const chrome = (
-    <div className="flex shrink-0 items-center gap-2 border-b border-border bg-[#F1F5F9] px-3 py-2">
-      <div className="flex gap-1.5" aria-hidden>
-        <span className="h-2.5 w-2.5 rounded-full bg-[#F87171]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#FBBF24]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#34D399]" />
-      </div>
-      <div className="min-w-0 flex-1 truncate rounded-md border border-border bg-white px-2 py-1 text-[10px] text-muted">
-        {viewport === "desktop" ? "Desktop preview" : "Mobile preview"}
-      </div>
-    </div>
-  );
-
-  const artboard = (
-    <div
-      ref={measureRef}
-      className={cn(
-        "min-h-0 min-w-0 flex-1 overflow-auto bg-[#E2E8F0]",
-        zoom === "fit" ? "p-6" : "p-4"
-      )}
-    >
-      <div
-        className={cn(
-          "overflow-hidden rounded-md border border-border bg-white shadow-md",
-          zoom === "fit" && "mx-auto"
-        )}
-        style={{
-          width: scaledWidth,
-          height: scaledHeight,
-        }}
-      >
-        <div
-          ref={contentRef}
-          className="pointer-events-none origin-top-left select-none"
-          style={{
-            width: fixedWidth,
-            transform: scale > 0 ? `scale(${scale})` : undefined,
-            transformOrigin: "top left",
-          }}
-        >
-          {children}
-        </div>
-      </div>
-    </div>
-  );
 
   const frame = (
     <div
@@ -189,9 +66,48 @@ export function LandingEditorPreviewFrame({
         "max-lg:h-[min(70dvh,40rem)] max-lg:rounded-xl max-lg:border"
       )}
     >
-      {toolbar}
-      {chrome}
-      {artboard}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-subtle px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted">{title}</p>
+          <p className="text-[11px] text-muted">
+            {DESKTOP_WIDTH}px
+            {scale > 0 ? ` · ${Math.round(scale * 100)}%` : ""}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-[#F1F5F9] px-3 py-2">
+        <div className="flex gap-1.5" aria-hidden>
+          <span className="h-2.5 w-2.5 rounded-full bg-[#F87171]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#FBBF24]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#34D399]" />
+        </div>
+        <div className="min-w-0 flex-1 truncate rounded-md border border-border bg-white px-2 py-1 text-[10px] text-muted">
+          Desktop preview
+        </div>
+      </div>
+
+      <div ref={measureRef} className="min-h-0 min-w-0 flex-1 overflow-auto bg-[#E2E8F0] p-6">
+        <div
+          className="mx-auto overflow-hidden rounded-md border border-border bg-white shadow-md"
+          style={{
+            width: scaledWidth,
+            height: scaledHeight,
+          }}
+        >
+          <div
+            ref={contentRef}
+            className="pointer-events-none origin-top-left select-none"
+            style={{
+              width: DESKTOP_WIDTH,
+              transform: scale > 0 ? `scale(${scale})` : undefined,
+              transformOrigin: "top left",
+            }}
+          >
+            {children}
+          </div>
+        </div>
+      </div>
     </div>
   );
 
@@ -216,6 +132,4 @@ export function LandingEditorPreviewFrame({
   );
 }
 
-/** Stable ids for tests / docs. */
 export const LANDING_PREVIEW_DESKTOP_WIDTH = DESKTOP_WIDTH;
-export const LANDING_PREVIEW_MOBILE_WIDTH = MOBILE_WIDTH;
