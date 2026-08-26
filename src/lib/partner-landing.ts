@@ -23,9 +23,13 @@ import {
   SHOOTPORTAL_LANDING_ACCENT,
   SHOOTPORTAL_LANDING_PRIMARY,
   defaultPartnerLandingHeadline,
-  resolvePartnerLandingPhotoUrl,
+  resolvePartnerLandingPhotoLayout,
   type PartnerLandingDefaults,
 } from "@/lib/partner-landing.constants";
+import {
+  PARTNER_LANDING_UPLOAD_MAX_BYTES,
+  preparePartnerLandingImage,
+} from "@/lib/partner-landing-image";
 import { resolveReferralDiscountForPartner } from "@/lib/partner-referral-discount";
 import { getPlatformApexOrigin } from "@/lib/portal-url";
 
@@ -36,6 +40,8 @@ export type PartnerLandingPageRow = {
   headline: string;
   description: string;
   photo_url: string | null;
+  photo_width: number | null;
+  photo_height: number | null;
   logo_url: string | null;
   brand_primary_color: string | null;
   brand_accent_color: string | null;
@@ -76,6 +82,9 @@ export type ResolvedPartnerLandingContent = {
   logoUrl: string | null;
   /** Always a renderable URL; defaults to PARTNER_DEFAULT_PHOTO_PATH when unset. */
   photoUrl: string;
+  /** Null when legacy custom photo has no stored dims (letterbox fallback). */
+  photoWidth: number | null;
+  photoHeight: number | null;
   testimonialQuote: string | null;
   testimonialAttribution: string | null;
   accentColor: string;
@@ -91,6 +100,8 @@ export type PartnerLandingContentInput = {
   benefits?: string[] | null;
   ctaLabel?: string | null;
   photoUrl?: string | null;
+  photoWidth?: number | null;
+  photoHeight?: number | null;
   logoUrl?: string | null;
   brandPrimaryColor?: string | null;
   brandAccentColor?: string | null;
@@ -105,7 +116,7 @@ export type PartnerLandingAdminInput = PartnerLandingContentInput & {
 };
 
 export const PARTNER_LANDING_UPLOAD_BUCKET = "business-logos";
-export const PARTNER_LANDING_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
+export { PARTNER_LANDING_UPLOAD_MAX_BYTES };
 
 export { resolvePartnerLandingPhotoUrl, PARTNER_DEFAULT_PHOTO_PATH } from "@/lib/partner-landing.constants";
 
@@ -181,6 +192,14 @@ function normalizeRow(data: Record<string, unknown>): PartnerLandingPageRow {
     headline: (data.headline as string) ?? "",
     description: (data.description as string) ?? "",
     photo_url: (data.photo_url as string | null) ?? null,
+    photo_width:
+      typeof data.photo_width === "number" && data.photo_width > 0
+        ? Math.round(data.photo_width)
+        : null,
+    photo_height:
+      typeof data.photo_height === "number" && data.photo_height > 0
+        ? Math.round(data.photo_height)
+        : null,
     logo_url: (data.logo_url as string | null) ?? null,
     brand_primary_color: (data.brand_primary_color as string | null) ?? null,
     brand_accent_color: (data.brand_accent_color as string | null) ?? null,
@@ -261,7 +280,11 @@ export async function resolvePartnerLandingContent(
   const logoUrl =
     landing.logo_url && isSafeBrandAssetUrl(landing.logo_url) ? landing.logo_url.trim() : null;
   // Render-time fallback only — never persist PARTNER_DEFAULT_PHOTO_PATH into photo_url.
-  const photoUrl = resolvePartnerLandingPhotoUrl(landing.photo_url);
+  const photoLayout = resolvePartnerLandingPhotoLayout(
+    landing.photo_url,
+    landing.photo_width,
+    landing.photo_height
+  );
 
   const testimonialQuote = landing.testimonial_quote
     ? sanitizeMultilinePlain(landing.testimonial_quote, PARTNER_LANDING_LIMITS.testimonialQuote)
@@ -284,7 +307,9 @@ export async function resolvePartnerLandingContent(
     offerText,
     showOffer,
     logoUrl,
-    photoUrl,
+    photoUrl: photoLayout.src,
+    photoWidth: photoLayout.width,
+    photoHeight: photoLayout.height,
     testimonialQuote: testimonialQuote || null,
     testimonialAttribution: testimonialAttribution || null,
     accentColor: theme.accent,
@@ -294,7 +319,31 @@ export async function resolvePartnerLandingContent(
   };
 }
 
+function sanitizePhotoDimension(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n) || n < 1 || n > 10000) {
+    throw new Error("Invalid photo dimensions.");
+  }
+  return Math.round(n);
+}
+
 function buildContentPayload(input: PartnerLandingContentInput) {
+  const photoUrl =
+    input.photoUrl === null || input.photoUrl === ""
+      ? null
+      : sanitizeHttpsUrl(input.photoUrl);
+
+  let photoWidth: number | null = null;
+  let photoHeight: number | null = null;
+  if (photoUrl) {
+    photoWidth = sanitizePhotoDimension(input.photoWidth ?? null);
+    photoHeight = sanitizePhotoDimension(input.photoHeight ?? null);
+    if ((photoWidth == null) !== (photoHeight == null)) {
+      throw new Error("photoWidth and photoHeight must both be set or both be empty.");
+    }
+  }
+
   return {
     headline: sanitizePlainText(input.headline ?? "", PARTNER_LANDING_LIMITS.headline),
     subheadline: (() => {
@@ -304,10 +353,9 @@ function buildContentPayload(input: PartnerLandingContentInput) {
     description: sanitizeMultilinePlain(input.description ?? "", PARTNER_LANDING_LIMITS.description),
     benefits: sanitizeBenefits(input.benefits ?? []),
     cta_label: sanitizePlainText(input.ctaLabel ?? "", PARTNER_LANDING_LIMITS.ctaLabel),
-    photo_url:
-      input.photoUrl === null || input.photoUrl === ""
-        ? null
-        : sanitizeHttpsUrl(input.photoUrl),
+    photo_url: photoUrl,
+    photo_width: photoWidth,
+    photo_height: photoHeight,
     logo_url:
       input.logoUrl === null || input.logoUrl === ""
         ? null
@@ -662,28 +710,86 @@ export async function uploadPartnerLandingAsset(args: {
   buffer: Buffer;
   contentType: string;
   ext: string;
-}): Promise<string> {
+}): Promise<{ url: string; width: number; height: number }> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) throw new Error("Storage URL not configured.");
 
-  const path = partnerLandingStoragePath(args.partnerId, args.kind, args.ext);
+  const prepared = await preparePartnerLandingImage({
+    kind: args.kind,
+    buffer: args.buffer,
+    contentType: args.contentType,
+    ext: args.ext,
+  });
+
+  const path = partnerLandingStoragePath(args.partnerId, args.kind, prepared.ext);
   const raw = await createServiceClient();
   const { error: uploadError } = await raw.storage
     .from(PARTNER_LANDING_UPLOAD_BUCKET)
-    .upload(path, args.buffer, {
+    .upload(path, prepared.buffer, {
       upsert: true,
-      contentType: args.contentType || "application/octet-stream",
+      contentType: prepared.contentType,
     });
   if (uploadError) throw new Error(uploadError.message);
 
-  return `${supabaseUrl}/storage/v1/object/public/${PARTNER_LANDING_UPLOAD_BUCKET}/${path}?v=${Date.now()}`;
+  const url = `${supabaseUrl}/storage/v1/object/public/${PARTNER_LANDING_UPLOAD_BUCKET}/${path}?v=${Date.now()}`;
+
+  // Store photo URL + intrinsic dims at upload time (eliminates CLS on the public page).
+  if (args.kind === "photo") {
+    const { error: updateError } = await raw
+      .from("partner_landing_pages")
+      .update({
+        photo_url: url,
+        photo_width: prepared.width,
+        photo_height: prepared.height,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("partner_id", args.partnerId);
+    if (updateError) throw new Error(updateError.message);
+  }
+
+  return { url, width: prepared.width, height: prepared.height };
+}
+
+/** Clear personal photo + dims (settings Remove). Logo untouched. */
+export async function clearPartnerLandingPhoto(
+  partnerId: string,
+  actor: { id: string; email: string | null }
+): Promise<PartnerLandingPageRow> {
+  const existing = await getPartnerLandingByPartnerId(partnerId);
+  if (!existing) throw new Error("Landing page not found.");
+
+  const raw = await createServiceClient();
+  const { data, error } = await raw
+    .from("partner_landing_pages")
+    .update({
+      photo_url: null,
+      photo_width: null,
+      photo_height: null,
+      updated_by: actor.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", existing.id)
+    .select("*")
+    .single();
+  if (error || !data) throw new Error(error?.message || "Could not clear photo.");
+
+  await writePlatformAudit({
+    actorUserId: actor.id,
+    actorEmail: actor.email,
+    action: "partner.landing_photo_clear",
+    targetType: "partner",
+    targetId: partnerId,
+    metadata: { landingId: existing.id },
+  });
+
+  return normalizeRow(data as Record<string, unknown>);
 }
 
 /** Partner-facing upload — requires active PartnerAccess (ignores any other partnerId). */
 export async function uploadPartnerLandingAssetForAccess(
   access: import("@/lib/partner-dashboard").PartnerAccess,
   args: Omit<Parameters<typeof uploadPartnerLandingAsset>[0], "partnerId">
-): Promise<string> {
+): Promise<{ url: string; width: number; height: number }> {
   if (access.kind !== "active") {
     throw new Error("Active partner access required");
   }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/api-auth";
 import {
   buildPartnerLandingDefaultsWithOffer,
+  clearPartnerLandingPhoto,
   getPartnerLandingByPartnerId,
   getPartnerLandingUpdatedByLabel,
   setPartnerLandingActive,
@@ -33,6 +34,13 @@ export async function PUT(request: Request, { params }: RouteParams) {
 
   try {
     const body = await request.json();
+    if (body.clearPhoto === true) {
+      const landing = await clearPartnerLandingPhoto(id, {
+        id: auth.profile.id,
+        email: auth.profile.email,
+      });
+      return NextResponse.json({ landing });
+    }
     const landing = await upsertPartnerLandingPage(
       id,
       {
@@ -42,6 +50,8 @@ export async function PUT(request: Request, { params }: RouteParams) {
         description: body.description,
         benefits: body.benefits,
         photoUrl: body.photoUrl ?? body.photo_url,
+        photoWidth: body.photoWidth ?? body.photo_width,
+        photoHeight: body.photoHeight ?? body.photo_height,
         logoUrl: body.logoUrl ?? body.logo_url,
         brandPrimaryColor: body.brandPrimaryColor ?? body.brand_primary_color,
         brandAccentColor: body.brandAccentColor ?? body.brand_accent_color,

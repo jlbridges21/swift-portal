@@ -8,13 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PartnerBrandColorField } from "@/components/partner/partner-brand-color-field";
+import { PartnerLandingPhoto } from "@/components/partner/partner-landing-photo";
 import { SafeBrandImage } from "@/components/partner/safe-brand-image";
 import { toast } from "sonner";
 import { isSafeBrandAssetUrl } from "@/lib/brand-color";
 import {
-  PARTNER_DEFAULT_PHOTO_PATH,
   PARTNER_LANDING_LIMITS,
-  resolvePartnerLandingPhotoUrl,
+  resolvePartnerLandingPhotoLayout,
   type PartnerLandingDefaults,
 } from "@/lib/partner-landing.constants";
 import type { PartnerLandingPageRow } from "@/lib/partner-landing";
@@ -102,6 +102,8 @@ export function PartnerLandingEditorForm({
   const [ctaLabel, setCtaLabel] = useState(initial?.cta_label ?? "");
   const [logoUrl, setLogoUrl] = useState(initial?.logo_url ?? "");
   const [photoUrl, setPhotoUrl] = useState(initial?.photo_url ?? "");
+  const [photoWidth, setPhotoWidth] = useState<number | null>(initial?.photo_width ?? null);
+  const [photoHeight, setPhotoHeight] = useState<number | null>(initial?.photo_height ?? null);
   const [brandPrimary, setBrandPrimary] = useState(initial?.brand_primary_color ?? "");
   const [brandAccent, setBrandAccent] = useState(initial?.brand_accent_color ?? "");
   const [testimonialQuote, setTestimonialQuote] = useState(initial?.testimonial_quote ?? "");
@@ -138,10 +140,11 @@ export function PartnerLandingEditorForm({
 
   const safeLogoUrl =
     logoUrl.trim() && isSafeBrandAssetUrl(logoUrl.trim()) ? logoUrl.trim() : "";
-  const photoPreviewSrc = resolvePartnerLandingPhotoUrl(
-    photoUrl.trim() && isSafeBrandAssetUrl(photoUrl.trim()) ? photoUrl.trim() : null
+  const photoLayout = resolvePartnerLandingPhotoLayout(
+    photoUrl.trim() && isSafeBrandAssetUrl(photoUrl.trim()) ? photoUrl.trim() : null,
+    photoWidth,
+    photoHeight
   );
-  const usingDefaultPhoto = !photoUrl.trim();
 
   async function createLanding() {
     const err = slugValidationMessage(slug);
@@ -191,6 +194,8 @@ export function PartnerLandingEditorForm({
         ctaLabel,
         logoUrl: logoUrl || null,
         photoUrl: photoUrl || null,
+        photoWidth: photoUrl ? photoWidth : null,
+        photoHeight: photoUrl ? photoHeight : null,
         brandPrimaryColor: brandPrimary || null,
         brandAccentColor: brandAccent || null,
         testimonialQuote: testimonialQuote || null,
@@ -226,20 +231,53 @@ export function PartnerLandingEditorForm({
       form.set("kind", kind);
       const res = await fetch(uploadUrl, { method: "POST", body: form });
       const text = await res.text();
-      let data: { error?: string; url?: string };
+      let data: { error?: string; url?: string; width?: number; height?: number };
       try {
-        data = JSON.parse(text) as { error?: string; url?: string };
+        data = JSON.parse(text) as {
+          error?: string;
+          url?: string;
+          width?: number;
+          height?: number;
+        };
       } catch {
         throw new Error(text || "Upload failed");
       }
       if (!res.ok) throw new Error(data.error || "Upload failed");
-      if (kind === "logo") setLogoUrl(data.url ?? "");
-      else setPhotoUrl(data.url ?? "");
+      if (kind === "logo") {
+        setLogoUrl(data.url ?? "");
+      } else {
+        setPhotoUrl(data.url ?? "");
+        setPhotoWidth(typeof data.width === "number" ? data.width : null);
+        setPhotoHeight(typeof data.height === "number" ? data.height : null);
+      }
       toast.success(kind === "logo" ? "Logo uploaded" : "Photo uploaded");
+      if (kind === "photo") router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(null);
+    }
+  }
+
+  async function removePhoto() {
+    setBusy(true);
+    try {
+      const res = await fetch(saveUrl, {
+        method: mode === "admin" ? "PUT" : "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clearPhoto: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not remove photo");
+      setPhotoUrl("");
+      setPhotoWidth(null);
+      setPhotoHeight(null);
+      toast.success("Photo removed");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove photo");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -423,25 +461,28 @@ export function PartnerLandingEditorForm({
           <div className="space-y-2">
             <Label>Personal photo</Label>
             <FieldHelp>
-              Large image on the right side of the landing page (4:3 crop, covers the frame). When
-              empty, visitors see the ShootPortal default photo — nothing is saved until you upload.
+              Large image on the right side of the landing page. Shown in full (never cropped) at
+              the photo’s own aspect ratio, with a max height so tall portraits stay readable. PNG,
+              JPEG, or WebP under 15MB — oversized dimensions are resized automatically.
             </FieldHelp>
-            <div className="relative aspect-[4/3] max-w-sm overflow-hidden rounded-2xl border border-border bg-subtle">
-              <SafeBrandImage
-                key={photoPreviewSrc}
-                src={photoPreviewSrc}
-                fallbackSrc={
-                  photoPreviewSrc !== PARTNER_DEFAULT_PHOTO_PATH
-                    ? PARTNER_DEFAULT_PHOTO_PATH
-                    : undefined
-                }
-                alt="Personal photo preview"
-                className="h-full w-full object-cover"
-              />
-            </div>
-            {usingDefaultPhoto ? (
+            <PartnerLandingPhoto
+              key={`${photoLayout.src}-${photoLayout.width}x${photoLayout.height}`}
+              src={photoLayout.src}
+              width={photoLayout.width}
+              height={photoLayout.height}
+              alt="Personal photo preview"
+            />
+            {photoLayout.isDefault ? (
               <p className="text-xs text-muted">Showing default photo (not stored on your page).</p>
-            ) : null}
+            ) : photoLayout.width == null ? (
+              <p className="text-xs text-muted">
+                Legacy photo — shown in full with letterboxing until you re-upload.
+              </p>
+            ) : (
+              <p className="text-xs text-muted">
+                {photoLayout.width}×{photoLayout.height}px — same framing as your live page.
+              </p>
+            )}
             <input
               ref={photoInputRef}
               type="file"
@@ -465,7 +506,13 @@ export function PartnerLandingEditorForm({
                 {uploading === "photo" ? "Uploading…" : "Upload photo"}
               </Button>
               {photoUrl ? (
-                <Button type="button" variant="ghost" size="sm" onClick={() => setPhotoUrl("")}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void removePhoto()}
+                >
                   Remove
                 </Button>
               ) : null}

@@ -32,8 +32,12 @@ export const SHOOTPORTAL_LANDING_ACCENT = "#4F46E5";
 /**
  * Render-time-only personal photo when a partner has not uploaded one.
  * Never write this path into `partner_landing_pages.photo_url` — NULL means unset.
+ * Uncropped compressed variant of og-brand.png (same aspect ratio).
  */
 export const PARTNER_DEFAULT_PHOTO_PATH = "/icons/partner-default-photo.jpg";
+/** Intrinsic size of PARTNER_DEFAULT_PHOTO_PATH (after compression, uncropped). */
+export const PARTNER_DEFAULT_PHOTO_WIDTH = 1400;
+export const PARTNER_DEFAULT_PHOTO_HEIGHT = 735;
 
 /**
  * Resolve the personal photo shown on partner landings.
@@ -44,6 +48,48 @@ export function resolvePartnerLandingPhotoUrl(photoUrl: string | null | undefine
   const trimmed = photoUrl?.trim() ?? "";
   if (trimmed && isSafeBrandAssetUrl(trimmed)) return trimmed;
   return PARTNER_DEFAULT_PHOTO_PATH;
+}
+
+export type PartnerLandingPhotoLayout = {
+  src: string;
+  /** Null when legacy upload has no stored dims — use object-contain letterbox. */
+  width: number | null;
+  height: number | null;
+  /** True when showing the shared default (not a partner upload). */
+  isDefault: boolean;
+};
+
+/**
+ * Resolve photo URL + layout dims for settings preview and the public page.
+ * Custom uploads without stored dims → null width/height (contain fallback).
+ * Default asset always uses known intrinsic size.
+ */
+export function resolvePartnerLandingPhotoLayout(
+  photoUrl: string | null | undefined,
+  photoWidth?: number | null,
+  photoHeight?: number | null
+): PartnerLandingPhotoLayout {
+  const trimmed = photoUrl?.trim() ?? "";
+  const hasCustom = Boolean(trimmed && isSafeBrandAssetUrl(trimmed));
+  if (!hasCustom) {
+    return {
+      src: PARTNER_DEFAULT_PHOTO_PATH,
+      width: PARTNER_DEFAULT_PHOTO_WIDTH,
+      height: PARTNER_DEFAULT_PHOTO_HEIGHT,
+      isDefault: true,
+    };
+  }
+  const w =
+    typeof photoWidth === "number" && photoWidth > 0 ? Math.round(photoWidth) : null;
+  const h =
+    typeof photoHeight === "number" && photoHeight > 0 ? Math.round(photoHeight) : null;
+  const hasDims = w != null && h != null;
+  return {
+    src: trimmed,
+    width: hasDims ? w : null,
+    height: hasDims ? h : null,
+    isDefault: false,
+  };
 }
 
 export function defaultPartnerLandingHeadline(brandName: string): string {

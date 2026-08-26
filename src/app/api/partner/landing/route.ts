@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   buildPartnerLandingDefaultsWithOffer,
+  clearPartnerLandingPhoto,
   createPartnerLandingPageForAccess,
   getPartnerLandingForAccess,
   getPartnerLandingUpdatedByLabel,
@@ -73,6 +74,14 @@ export async function PATCH(request: Request) {
     void body.partner_id;
     void body.partnerId;
 
+    if (body.clearPhoto === true) {
+      const landing = await clearPartnerLandingPhoto(access.partner.id, {
+        id: profile.id,
+        email: profile.email,
+      });
+      return NextResponse.json({ landing });
+    }
+
     const landing = await updatePartnerLandingContentForAccess(
       access,
       {
@@ -82,6 +91,8 @@ export async function PATCH(request: Request) {
         benefits: body.benefits,
         ctaLabel: body.ctaLabel ?? body.cta_label,
         photoUrl: body.photoUrl ?? body.photo_url,
+        photoWidth: body.photoWidth ?? body.photo_width,
+        photoHeight: body.photoHeight ?? body.photo_height,
         logoUrl: body.logoUrl ?? body.logo_url,
         brandPrimaryColor: body.brandPrimaryColor ?? body.brand_primary_color,
         brandAccentColor: body.brandAccentColor ?? body.brand_accent_color,

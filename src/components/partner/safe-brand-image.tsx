@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 
 type Props = {
   src: string;
   alt?: string;
   className?: string;
+  style?: CSSProperties;
+  width?: number;
+  height?: number;
   /** When the primary src fails, try this once (e.g. default partner photo). */
   fallbackSrc?: string;
   /** Called when both src and fallback fail (or src alone with no fallback). */
@@ -20,6 +23,9 @@ export function SafeBrandImage({
   src,
   alt = "",
   className,
+  style,
+  width,
+  height,
   fallbackSrc,
   onUnavailable,
 }: Props) {
@@ -38,7 +44,10 @@ export function SafeBrandImage({
     <img
       src={current}
       alt={alt}
+      width={width}
+      height={height}
       className={cn(className)}
+      style={style}
       onError={() => {
         if (fallbackSrc && current !== fallbackSrc) {
           setCurrent(fallbackSrc);
