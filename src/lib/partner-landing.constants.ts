@@ -32,12 +32,12 @@ export const SHOOTPORTAL_LANDING_ACCENT = "#4F46E5";
 /**
  * Render-time-only personal photo when a partner has not uploaded one.
  * Never write this path into `partner_landing_pages.photo_url` — NULL means unset.
- * Uncropped compressed variant of og-brand.png (same aspect ratio).
+ * Purpose-built centered ShootPortal mark on brand navy — nothing cropped at edges.
  */
 export const PARTNER_DEFAULT_PHOTO_PATH = "/icons/partner-default-photo.jpg";
-/** Intrinsic size of PARTNER_DEFAULT_PHOTO_PATH (after compression, uncropped). */
+/** Intrinsic size of PARTNER_DEFAULT_PHOTO_PATH. */
 export const PARTNER_DEFAULT_PHOTO_WIDTH = 1400;
-export const PARTNER_DEFAULT_PHOTO_HEIGHT = 735;
+export const PARTNER_DEFAULT_PHOTO_HEIGHT = 1050;
 
 /**
  * Resolve the personal photo shown on partner landings.
@@ -107,3 +107,17 @@ export type PartnerLandingDefaults = {
   brandPrimaryColor: string;
   brandAccentColor: string;
 };
+
+/** Pure defaults — safe for client bundles (no DB). */
+export function buildPartnerLandingDefaultsFromConstants(brandName: string): PartnerLandingDefaults {
+  return {
+    headline: defaultPartnerLandingHeadline(brandName),
+    subheadline: DEFAULT_PARTNER_SUBHEADLINE,
+    description: "",
+    benefits: [...DEFAULT_PARTNER_LANDING_BENEFITS],
+    ctaLabel: DEFAULT_PARTNER_CTA_LABEL,
+    offerText: null,
+    brandPrimaryColor: SHOOTPORTAL_LANDING_PRIMARY,
+    brandAccentColor: SHOOTPORTAL_LANDING_ACCENT,
+  };
+}

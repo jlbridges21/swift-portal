@@ -1,22 +1,35 @@
 "use client";
 
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { LandingFeatureIconPicker } from "@/components/admin/landing-feature-icon-picker";
+import { BrandAssetField } from "@/components/admin/brand-asset-field";
+import { PartnerBrandColorField } from "@/components/partner/partner-brand-color-field";
+import { LandingPage } from "@/components/landing/landing-page";
+import { LandingEditorPreviewFrame } from "@/components/landing/landing-editor-preview-frame";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import type { PortalBrand } from "@/lib/portal-brand";
 import {
   LANDING_LIMITS,
   HOW_IT_WORKS_DEFAULT_COUNT,
   DEFAULT_HOW_IT_WORKS,
   DEFAULT_FEATURE_CARDS,
   landingContentPlaceholders,
+  mergeLandingSettings,
+  resolveLandingPage,
+  resolveHeroMediaKind,
+  heroOverlayLeavesHeadlineUnreadable,
+  HERO_OVERLAY_CONTRAST_MIN,
   type LandingSettings,
   type LandingHowItWorksStep,
   type LandingFeatureCard,
   type LandingFeatureIconId,
   type LandingSocialLinks,
   type LandingSectionVisibility,
+  type LandingHeroMediaType,
 } from "@/lib/landing-content";
 import { ChevronDown, ChevronUp, ExternalLink, Plus, RotateCcw, Trash2 } from "lucide-react";
 
@@ -82,6 +95,7 @@ export function LandingPageSettingsCard({
   serviceNames,
   portalPreviewUrl,
   canEdit,
+  brand,
   onChange,
 }: {
   landing: LandingSettings;
@@ -89,13 +103,54 @@ export function LandingPageSettingsCard({
   serviceNames: string[];
   portalPreviewUrl: string;
   canEdit: boolean;
+  brand: PortalBrand;
   onChange: (next: LandingSettings) => void;
 }) {
   const placeholders = landingContentPlaceholders(businessName, serviceNames);
   const steps = editorHowItWorks(landing);
 
+  const resolvedMediaType: LandingHeroMediaType =
+    landing.hero.mediaType || resolveHeroMediaKind(landing);
+
+  const overlayColorForEditor =
+    landing.hero.overlayColor.trim() || brand.primaryColor || "#0F172A";
+  const overlayOpacityForEditor =
+    landing.hero.overlayOpacity == null ? 80 : landing.hero.overlayOpacity;
+
+  const contrastWarn = heroOverlayLeavesHeadlineUnreadable({
+    overlayColor: overlayColorForEditor,
+    overlayOpacity: overlayOpacityForEditor,
+  });
+
+  const draftPage = useMemo(() => {
+    const merged = mergeLandingSettings(landing);
+    return resolveLandingPage({
+      landing: merged,
+      businessName,
+      portalName: brand.portalName || businessName,
+      serviceNames,
+      services: serviceNames.map((name) => ({
+        name,
+        startingLabel: "",
+        description: "",
+      })),
+    });
+  }, [landing, businessName, brand.portalName, serviceNames]);
+  const previewPage = useDebouncedValue(draftPage, 200);
+
   function patchHero(patch: Partial<LandingSettings["hero"]>) {
     onChange({ ...landing, hero: { ...landing.hero, ...patch } });
+  }
+
+  function setMediaType(next: LandingHeroMediaType) {
+    onChange({
+      ...landing,
+      hero: { ...landing.hero, mediaType: next },
+      sections: {
+        ...landing.sections,
+        showreel: next === "showreel",
+      },
+    });
   }
 
   function patchIntro(businessDescription: string) {
@@ -206,7 +261,8 @@ export function LandingPageSettingsCard({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+    <div className="min-w-0 flex-1 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/20 bg-accent/5 px-4 py-3">
         <p className="text-sm text-heading">
           Changes apply to your public client portal. Layout, fonts, and section order stay locked.
@@ -273,38 +329,123 @@ export function LandingPageSettingsCard({
                 onChange={(e) => patchHero({ ctaPrimaryLabel: e.target.value })}
               />
             </FieldShell>
-            <FieldShell
-              label="Secondary CTA"
-              htmlFor="landing-cta-secondary"
-              value={landing.hero.ctaSecondaryLabel}
-              max={LANDING_LIMITS.ctaLabel}
-              onReset={() => patchHero({ ctaSecondaryLabel: "" })}
-            >
-              <Input
-                id="landing-cta-secondary"
-                maxLength={LANDING_LIMITS.ctaLabel}
-                value={landing.hero.ctaSecondaryLabel}
-                placeholder={placeholders.ctaSecondaryLabel}
-                onChange={(e) => patchHero({ ctaSecondaryLabel: e.target.value })}
-              />
-            </FieldShell>
-          </div>
           <FieldShell
-            label="Showreel (YouTube URL)"
-            htmlFor="landing-showreel"
-            value={landing.hero.showreelUrl}
-            max={LANDING_LIMITS.showreelUrl}
-            hint="Optional. Leave blank to hide the hero video."
-            onReset={() => patchHero({ showreelUrl: "" })}
+            label="Secondary CTA"
+            htmlFor="landing-cta-secondary"
+            value={landing.hero.ctaSecondaryLabel}
+            max={LANDING_LIMITS.ctaLabel}
+            onReset={() => patchHero({ ctaSecondaryLabel: "" })}
           >
             <Input
-              id="landing-showreel"
-              maxLength={LANDING_LIMITS.showreelUrl}
-              value={landing.hero.showreelUrl}
-              placeholder="https://www.youtube.com/watch?v=…"
-              onChange={(e) => patchHero({ showreelUrl: e.target.value })}
+              id="landing-cta-secondary"
+              maxLength={LANDING_LIMITS.ctaLabel}
+              value={landing.hero.ctaSecondaryLabel}
+              placeholder={placeholders.ctaSecondaryLabel}
+              onChange={(e) => patchHero({ ctaSecondaryLabel: e.target.value })}
             />
           </FieldShell>
+          </div>
+
+          <div className="space-y-3">
+            <Label>Hero media</Label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              {(
+                [
+                  ["showreel", "Showreel video"],
+                  ["image", "Hero image"],
+                  ["none", "None"],
+                ] as const
+              ).map(([value, label]) => (
+                <label
+                  key={value}
+                  className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-sm"
+                >
+                  <input
+                    type="radio"
+                    name="landing-hero-media"
+                    checked={resolvedMediaType === value}
+                    onChange={() => setMediaType(value)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {resolvedMediaType === "showreel" ? (
+            <FieldShell
+              label="Showreel (YouTube URL)"
+              htmlFor="landing-showreel"
+              value={landing.hero.showreelUrl}
+              max={LANDING_LIMITS.showreelUrl}
+              hint="Optional. Leave blank to hide the hero video."
+              onReset={() => patchHero({ showreelUrl: "" })}
+            >
+              <Input
+                id="landing-showreel"
+                maxLength={LANDING_LIMITS.showreelUrl}
+                value={landing.hero.showreelUrl}
+                placeholder="https://www.youtube.com/watch?v=…"
+                onChange={(e) => patchHero({ showreelUrl: e.target.value })}
+              />
+            </FieldShell>
+          ) : null}
+
+          {resolvedMediaType === "image" ? (
+            <BrandAssetField
+              kind="heroImage"
+              value={landing.hero.heroImageUrl}
+              inputId="landing-hero-image"
+              onUrlChange={(url) => patchHero({ heroImageUrl: url, mediaType: "image" })}
+            />
+          ) : null}
+
+          {resolvedMediaType !== "none" ? (
+            <div className="space-y-4 rounded-lg border border-border bg-subtle/40 p-4">
+              <p className="text-sm font-medium text-heading">Media overlay</p>
+              <p className="text-xs text-muted">
+                Darkens video or image so the white headline stays readable. Defaults to your brand
+                primary; leave unset to keep the classic ShootPortal gradient.
+              </p>
+              <PartnerBrandColorField
+                id="landing-overlay-color"
+                label="Overlay color"
+                value={landing.hero.overlayColor}
+                fallback={brand.primaryColor || "#0F172A"}
+                help="Applied over showreel and hero image."
+                onChange={(v) => patchHero({ overlayColor: v })}
+                onReset={() => patchHero({ overlayColor: "", overlayOpacity: null })}
+              />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="landing-overlay-opacity">Overlay intensity</Label>
+                  <span className="text-xs text-muted">{overlayOpacityForEditor}%</span>
+                </div>
+                <input
+                  id="landing-overlay-opacity"
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={overlayOpacityForEditor}
+                  onChange={(e) =>
+                    patchHero({
+                      overlayOpacity: Number(e.target.value),
+                      // Persist color when adjusting intensity so we leave legacy mode.
+                      overlayColor: landing.hero.overlayColor.trim() || overlayColorForEditor,
+                    })
+                  }
+                  className="w-full"
+                />
+              </div>
+              {contrastWarn ? (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  Headline may be hard to read: white text vs this overlay is below{" "}
+                  {HERO_OVERLAY_CONTRAST_MIN}:1 contrast (WCAG AA) when the media behind is bright.
+                  Darken the overlay or raise intensity.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -652,6 +793,16 @@ export function LandingPageSettingsCard({
           ))}
         </CardContent>
       </Card>
+    </div>
+    <LandingEditorPreviewFrame>
+      <div className="h-[min(70vh,48rem)] overflow-auto bg-white">
+        <div
+          style={{ width: "200%", transform: "scale(0.5)", transformOrigin: "top left" }}
+        >
+          <LandingPage brand={brand} page={previewPage} />
+        </div>
+      </div>
+    </LandingEditorPreviewFrame>
     </div>
   );
 }

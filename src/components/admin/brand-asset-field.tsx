@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-export type BrandAssetKind = "logo" | "emailLogo" | "favicon";
+export type BrandAssetKind = "logo" | "emailLogo" | "favicon" | "heroImage";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
@@ -34,6 +34,13 @@ const KIND_UI: Record<
     hint: "Browser tab icon. PNG, ICO, or SVG, under 4MB. Square 32×32 or 48×48 recommended (192×192 also works).",
     types: new Set(["image/png", "image/x-icon", "image/vnd.microsoft.icon", "image/svg+xml", "image/webp"]),
     extraExt: new Set(["ico", "svg", "png", "webp"]),
+  },
+  heroImage: {
+    label: "Hero image",
+    accept: "image/png,image/jpeg,image/webp",
+    hint: "PNG, JPEG, or WebP, under 4MB. Oversized images are resized. You can also paste an https URL.",
+    types: new Set(["image/png", "image/jpeg", "image/webp"]),
+    extraExt: new Set(),
   },
 };
 

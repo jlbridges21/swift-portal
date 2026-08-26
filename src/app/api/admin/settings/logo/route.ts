@@ -4,29 +4,38 @@ import { getProfile } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getAppSettings, saveAppSettings } from "@/lib/app-settings";
 import { EntitlementError, requireEntitlement } from "@/lib/entitlements";
+import { preparePartnerLandingImage } from "@/lib/partner-landing-image";
 
 const LOGO_BUCKET = "business-logos";
 /** Stay under Vercel’s 4.5MB serverless body cap so the route actually runs. */
 const MAX_BYTES = 4 * 1024 * 1024;
 
-export const BRAND_ASSET_KINDS = ["logo", "emailLogo", "favicon"] as const;
+export const BRAND_ASSET_KINDS = ["logo", "emailLogo", "favicon", "heroImage"] as const;
 export type BrandAssetKind = (typeof BRAND_ASSET_KINDS)[number];
 
 const KIND_CONFIG: Record<
   BrandAssetKind,
-  { pathBase: string; field: "logoUrl" | "emailLogoUrl" | "faviconUrl"; types: Set<string>; exts: string[] }
+  {
+    pathBase: string;
+    field: "logoUrl" | "emailLogoUrl" | "faviconUrl" | null;
+    types: Set<string>;
+    exts: string[];
+    resize: boolean;
+  }
 > = {
   logo: {
     pathBase: "logo",
     field: "logoUrl",
     types: new Set(["image/png", "image/jpeg", "image/webp"]),
     exts: ["jpg", "jpeg", "png", "webp"],
+    resize: false,
   },
   emailLogo: {
     pathBase: "email-logo",
     field: "emailLogoUrl",
     types: new Set(["image/png", "image/jpeg", "image/webp"]),
     exts: ["jpg", "jpeg", "png", "webp"],
+    resize: false,
   },
   favicon: {
     pathBase: "favicon",
@@ -39,11 +48,21 @@ const KIND_CONFIG: Record<
       "image/webp",
     ]),
     exts: ["png", "ico", "svg", "webp"],
+    resize: false,
+  },
+  heroImage: {
+    pathBase: "landing-hero",
+    field: null,
+    types: new Set(["image/png", "image/jpeg", "image/webp"]),
+    exts: ["jpg", "jpeg", "png", "webp"],
+    resize: true,
   },
 };
 
 function parseKind(value: FormDataEntryValue | null): BrandAssetKind {
-  if (value === "emailLogo" || value === "favicon" || value === "logo") return value;
+  if (value === "emailLogo" || value === "favicon" || value === "logo" || value === "heroImage") {
+    return value;
+  }
   return "logo";
 }
 
@@ -86,14 +105,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  const safeExt = config.exts.includes(ext) ? ext : kind === "favicon" ? "png" : "png";
-  const path = `${tenant.businessId}/${config.pathBase}.${safeExt}`;
-
   const db = await createTenantServiceClient(tenant.businessId);
-  const buffer = Buffer.from(await file.arrayBuffer());
+  let buffer: Buffer = Buffer.from(await file.arrayBuffer());
+  let contentType = file.type || "application/octet-stream";
+  let safeExt = config.exts.includes(ext) ? ext : kind === "favicon" ? "png" : "png";
+
+  if (config.resize) {
+    try {
+      const prepared = await preparePartnerLandingImage({
+        kind: "photo",
+        buffer,
+        contentType,
+        ext: safeExt,
+      });
+      buffer = Buffer.from(prepared.buffer);
+      contentType = prepared.contentType;
+      safeExt = prepared.ext;
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Invalid image" },
+        { status: 400 }
+      );
+    }
+  }
+
+  const path = `${tenant.businessId}/${config.pathBase}.${safeExt}`;
   const { error: uploadError } = await db.raw.storage
     .from(LOGO_BUCKET)
-    .upload(path, buffer, { upsert: true, contentType: file.type || "application/octet-stream" });
+    .upload(path, buffer, { upsert: true, contentType });
 
   if (uploadError) {
     console.error("[business-logo] upload failed:", uploadError.message);
@@ -106,9 +145,14 @@ export async function POST(request: Request) {
   }
 
   const assetUrl = `${supabaseUrl}/storage/v1/object/public/${LOGO_BUCKET}/${path}?v=${Date.now()}`;
+
+  // Hero image: upload only — caller stores URL on landing.hero.heroImageUrl.
+  if (kind === "heroImage" || !config.field) {
+    return NextResponse.json({ kind, url: assetUrl });
+  }
+
   const current = await getAppSettings(tenant.businessId);
   const businessPatch = { ...current.business, [config.field]: assetUrl };
-  // Prefer the real upload over a relative platform placeholder for email.
   const emailLogo = (current.business.emailLogoUrl || "").trim();
   if (
     kind === "logo" &&

@@ -1,18 +1,50 @@
+"use client";
+
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing/marketing-chrome";
 import { Button } from "@/components/ui/button";
-import { platformPortalBrand } from "@/lib/public-host-chrome";
 import { BrandProvider } from "@/components/brand/brand-provider";
 import { SafeBrandImage } from "@/components/partner/safe-brand-image";
 import { PartnerLandingPhoto } from "@/components/partner/partner-landing-photo";
-import type { ResolvedPartnerLandingContent } from "@/lib/partner-landing";
+import { PLATFORM_BUSINESS_DEFAULTS, type PortalBrand } from "@/lib/portal-brand";
+import type { ResolvedPartnerLandingContent } from "@/lib/partner-landing-resolve";
+
+/** ShootPortal chrome for partner landings — client-safe (no host/headers). */
+function shootPortalBrand(): PortalBrand {
+  const b = PLATFORM_BUSINESS_DEFAULTS;
+  return {
+    name: b.businessName,
+    portalName: b.portalName,
+    logoUrl: b.logoUrl,
+    primaryColor: b.brandPrimaryColor,
+    accentColor: b.brandAccentColor,
+    websiteUrl: b.websiteUrl,
+    contactEmail: b.primaryContactEmail,
+    phoneNumber: b.phoneNumber,
+    adminDisplayName: b.adminDisplayName,
+    supportEmail: b.supportEmail,
+    addressLine1: b.addressLine1,
+    addressLine2: b.addressLine2,
+    city: b.city,
+    state: b.state,
+    postalCode: b.postalCode,
+    country: b.country,
+    legalName: b.legalName,
+    tagline: b.tagline,
+    faviconUrl: b.faviconUrl,
+    emailLogoUrl: b.emailLogoUrl,
+    termsUrl: b.termsUrl,
+    privacyUrl: b.privacyUrl,
+    preliminaryDisclaimer: "",
+  };
+}
 
 type Props = {
   content: ResolvedPartnerLandingContent;
 };
 
 export function PartnerLandingPublicView({ content }: Props) {
-  const brand = platformPortalBrand();
+  const brand = shootPortalBrand();
 
   return (
     <BrandProvider brand={brand}>

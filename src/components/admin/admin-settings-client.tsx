@@ -579,6 +579,7 @@ export function AdminSettingsClient({
               serviceNames={serviceNames}
               portalPreviewUrl={portalPreviewUrl}
               canEdit={canCustomizeLanding}
+              brand={liveBrand}
               onChange={patchLanding}
             />
           </div>

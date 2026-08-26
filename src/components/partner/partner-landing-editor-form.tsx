@@ -9,14 +9,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PartnerBrandColorField } from "@/components/partner/partner-brand-color-field";
 import { PartnerLandingPhoto } from "@/components/partner/partner-landing-photo";
+import { PartnerLandingPublicView } from "@/components/partner/partner-landing-public-view";
+import { LandingEditorPreviewFrame } from "@/components/landing/landing-editor-preview-frame";
 import { SafeBrandImage } from "@/components/partner/safe-brand-image";
 import { toast } from "sonner";
 import { isSafeBrandAssetUrl } from "@/lib/brand-color";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
   PARTNER_LANDING_LIMITS,
   resolvePartnerLandingPhotoLayout,
   type PartnerLandingDefaults,
 } from "@/lib/partner-landing.constants";
+import { resolvePartnerLandingContentSync } from "@/lib/partner-landing-resolve";
 import type { PartnerLandingPageRow } from "@/lib/partner-landing";
 import { validateLandingSlug } from "@/lib/reserved-subdomains";
 import { partnerLandingPublicUrl } from "@/lib/partner-urls";
@@ -145,6 +149,50 @@ export function PartnerLandingEditorForm({
     photoWidth,
     photoHeight
   );
+
+  const draftContent = useMemo(
+    () =>
+      resolvePartnerLandingContentSync({
+        brandName,
+        slug: slug.trim() || "preview",
+        headline,
+        subheadline,
+        description,
+        benefits: benefitFields,
+        ctaLabel,
+        logoUrl: safeLogoUrl || null,
+        photoUrl: photoUrl.trim() || null,
+        photoWidth,
+        photoHeight,
+        brandPrimaryColor: brandPrimary.trim() || null,
+        brandAccentColor: brandAccent.trim() || null,
+        testimonialQuote,
+        testimonialAttribution,
+        showOffer,
+        offerText: defaults.offerText,
+        defaults,
+      }),
+    [
+      brandName,
+      slug,
+      headline,
+      subheadline,
+      description,
+      benefitFields,
+      ctaLabel,
+      safeLogoUrl,
+      photoUrl,
+      photoWidth,
+      photoHeight,
+      brandPrimary,
+      brandAccent,
+      testimonialQuote,
+      testimonialAttribution,
+      showOffer,
+      defaults,
+    ]
+  );
+  const previewContent = useDebouncedValue(draftContent, 200);
 
   async function createLanding() {
     const err = slugValidationMessage(slug);
@@ -325,7 +373,8 @@ export function PartnerLandingEditorForm({
   }
 
   return (
-    <Card>
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+    <Card className="min-w-0 flex-1">
       <CardHeader>
         <CardTitle className="text-base">Customize your landing page</CardTitle>
         <p className="text-sm text-muted">
@@ -699,5 +748,16 @@ export function PartnerLandingEditorForm({
         </Button>
       </CardContent>
     </Card>
+    <LandingEditorPreviewFrame>
+      <div className="h-[min(70vh,48rem)] overflow-auto bg-white">
+        <div
+          className="origin-top-left"
+          style={{ width: "200%", transform: "scale(0.5)", transformOrigin: "top left" }}
+        >
+          <PartnerLandingPublicView content={previewContent} />
+        </div>
+      </div>
+    </LandingEditorPreviewFrame>
+    </div>
   );
 }

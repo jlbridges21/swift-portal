@@ -10,20 +10,13 @@ import { sanitizePlainText } from "@/lib/landing-content";
 import { validateLandingSlug } from "@/lib/reserved-subdomains";
 import { getPartnerById } from "@/lib/partners";
 import {
-  deriveBrandTheme,
   isSafeBrandAssetUrl,
   isSafeCssColor,
-  sanitizeCssColor,
 } from "@/lib/brand-color";
 import {
-  DEFAULT_PARTNER_CTA_LABEL,
   DEFAULT_PARTNER_LANDING_BENEFITS,
-  DEFAULT_PARTNER_SUBHEADLINE,
   PARTNER_LANDING_LIMITS,
-  SHOOTPORTAL_LANDING_ACCENT,
-  SHOOTPORTAL_LANDING_PRIMARY,
-  defaultPartnerLandingHeadline,
-  resolvePartnerLandingPhotoLayout,
+  buildPartnerLandingDefaultsFromConstants,
   type PartnerLandingDefaults,
 } from "@/lib/partner-landing.constants";
 import {
@@ -32,6 +25,13 @@ import {
 } from "@/lib/partner-landing-image";
 import { resolveReferralDiscountForPartner } from "@/lib/partner-referral-discount";
 import { getPlatformApexOrigin } from "@/lib/portal-url";
+import {
+  resolvePartnerLandingContentSync,
+  type ResolvedPartnerLandingContent,
+} from "@/lib/partner-landing-resolve";
+
+export type { ResolvedPartnerLandingContent };
+export { resolvePartnerLandingContentSync };
 
 export type PartnerLandingPageRow = {
   id: string;
@@ -68,30 +68,6 @@ export type PartnerLandingPublic = PartnerLandingPageRow & {
 };
 
 export type { PartnerLandingDefaults } from "@/lib/partner-landing.constants";
-
-export type ResolvedPartnerLandingContent = {
-  brandName: string;
-  slug: string;
-  headline: string;
-  subheadline: string;
-  description: string;
-  benefits: string[];
-  ctaLabel: string;
-  offerText: string | null;
-  showOffer: boolean;
-  logoUrl: string | null;
-  /** Always a renderable URL; defaults to PARTNER_DEFAULT_PHOTO_PATH when unset. */
-  photoUrl: string;
-  /** Null when legacy custom photo has no stored dims (letterbox fallback). */
-  photoWidth: number | null;
-  photoHeight: number | null;
-  testimonialQuote: string | null;
-  testimonialAttribution: string | null;
-  accentColor: string;
-  accentForeground: string;
-  accentHover: string;
-  primaryColor: string;
-};
 
 export type PartnerLandingContentInput = {
   headline?: string | null;
@@ -218,16 +194,7 @@ function normalizeRow(data: Record<string, unknown>): PartnerLandingPageRow {
 }
 
 export function buildPartnerLandingDefaults(brandName: string): PartnerLandingDefaults {
-  return {
-    headline: defaultPartnerLandingHeadline(brandName),
-    subheadline: DEFAULT_PARTNER_SUBHEADLINE,
-    description: "",
-    benefits: [...DEFAULT_PARTNER_LANDING_BENEFITS],
-    ctaLabel: DEFAULT_PARTNER_CTA_LABEL,
-    offerText: null,
-    brandPrimaryColor: SHOOTPORTAL_LANDING_PRIMARY,
-    brandAccentColor: SHOOTPORTAL_LANDING_ACCENT,
-  };
+  return buildPartnerLandingDefaultsFromConstants(brandName);
 }
 
 export async function buildPartnerLandingDefaultsWithOffer(
@@ -251,72 +218,28 @@ export async function resolvePartnerLandingContent(
   landing: PartnerLandingPublic
 ): Promise<ResolvedPartnerLandingContent> {
   const brandName = landing.partner.brand_name.trim() || "Our studio";
-  const defaults = buildPartnerLandingDefaults(brandName);
-
-  const headline = sanitizePlainText(landing.headline, PARTNER_LANDING_LIMITS.headline) || defaults.headline;
-  const subheadline =
-    sanitizePlainText(landing.subheadline ?? "", PARTNER_LANDING_LIMITS.subheadline) ||
-    defaults.subheadline;
-  const description =
-    sanitizeMultilinePlain(landing.description, PARTNER_LANDING_LIMITS.description) ||
-    defaults.description;
-  const benefits = resolveStoredBenefits(rowBenefits(landing.benefits));
-  const ctaLabel =
-    sanitizePlainText(landing.cta_label, PARTNER_LANDING_LIMITS.ctaLabel) || defaults.ctaLabel;
-
-  const primaryRaw =
-    landing.brand_primary_color?.trim() || defaults.brandPrimaryColor;
-  const accentRaw = landing.brand_accent_color?.trim() || defaults.brandAccentColor;
-  const theme = deriveBrandTheme(
-    sanitizeCssColor(primaryRaw, SHOOTPORTAL_LANDING_PRIMARY),
-    sanitizeCssColor(accentRaw, SHOOTPORTAL_LANDING_ACCENT)
-  );
-
   const discount = await resolveReferralDiscountForPartner(landing.partner.id);
   const generatedOffer = discount.eligible ? discount.offerText ?? null : null;
-  const showOffer = landing.show_offer && Boolean(generatedOffer);
-  const offerText = showOffer ? generatedOffer : null;
 
-  const logoUrl =
-    landing.logo_url && isSafeBrandAssetUrl(landing.logo_url) ? landing.logo_url.trim() : null;
-  // Render-time fallback only — never persist PARTNER_DEFAULT_PHOTO_PATH into photo_url.
-  const photoLayout = resolvePartnerLandingPhotoLayout(
-    landing.photo_url,
-    landing.photo_width,
-    landing.photo_height
-  );
-
-  const testimonialQuote = landing.testimonial_quote
-    ? sanitizeMultilinePlain(landing.testimonial_quote, PARTNER_LANDING_LIMITS.testimonialQuote)
-    : null;
-  const testimonialAttribution = landing.testimonial_attribution
-    ? sanitizePlainText(
-        landing.testimonial_attribution,
-        PARTNER_LANDING_LIMITS.testimonialAttribution
-      )
-    : null;
-
-  return {
+  return resolvePartnerLandingContentSync({
     brandName,
     slug: landing.slug,
-    headline,
-    subheadline,
-    description,
-    benefits,
-    ctaLabel,
-    offerText,
-    showOffer,
-    logoUrl,
-    photoUrl: photoLayout.src,
-    photoWidth: photoLayout.width,
-    photoHeight: photoLayout.height,
-    testimonialQuote: testimonialQuote || null,
-    testimonialAttribution: testimonialAttribution || null,
-    accentColor: theme.accent,
-    accentForeground: theme.accentForeground,
-    accentHover: theme.accentHover,
-    primaryColor: theme.primary,
-  };
+    headline: landing.headline,
+    subheadline: landing.subheadline,
+    description: landing.description,
+    benefits: landing.benefits,
+    ctaLabel: landing.cta_label,
+    logoUrl: landing.logo_url,
+    photoUrl: landing.photo_url,
+    photoWidth: landing.photo_width,
+    photoHeight: landing.photo_height,
+    brandPrimaryColor: landing.brand_primary_color,
+    brandAccentColor: landing.brand_accent_color,
+    testimonialQuote: landing.testimonial_quote,
+    testimonialAttribution: landing.testimonial_attribution,
+    showOffer: landing.show_offer,
+    offerText: generatedOffer,
+  });
 }
 
 function sanitizePhotoDimension(raw: unknown): number | null {

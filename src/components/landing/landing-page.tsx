@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Tenant client landing page — CONFIGURABLE TEMPLATE.
  *
@@ -24,6 +26,26 @@ import {
 const STEP_CARD_WIDTH = 480;
 
 const FEATURE_ICON_MAP = LANDING_FEATURE_ICON_MAP;
+
+function overlayRgba(color: string, alpha: number): string {
+  const v = color.trim();
+  const hex = v.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  const rgb = v.match(
+    /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0|1|0?\.\d+))?\s*\)$/
+  );
+  if (rgb) {
+    return `rgba(${Number(rgb[1])}, ${Number(rgb[2])}, ${Number(rgb[3])}, ${alpha})`;
+  }
+  return `rgba(15, 23, 42, ${alpha})`;
+}
 
 function buildShowcase(landing: ResolvedLandingPage) {
   return [
@@ -187,7 +209,7 @@ export function LandingPage({
       <main>
         <section className="relative flex min-h-[92vh] items-center overflow-hidden bg-[#0F172A]">
           <div className="absolute inset-0">
-            {page.showShowreel && page.showreelVideoId ? (
+            {page.heroMediaKind === "showreel" && page.showreelVideoId ? (
               <iframe
                 src={`https://www.youtube.com/embed/${page.showreelVideoId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${page.showreelVideoId}&showinfo=0&rel=0&modestbranding=1&playsinline=1`}
                 title={`${brand.name} showreel`}
@@ -195,7 +217,24 @@ export function LandingPage({
                 allow="autoplay; encrypted-media"
               />
             ) : null}
-            <div className="absolute inset-0 bg-gradient-to-b from-[#0F172A]/80 via-[#0F172A]/70 to-[#0F172A]" />
+            {page.heroMediaKind === "image" && page.heroImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- tenant-supplied URL; next/image domain allowlist unknown
+              <img
+                src={page.heroImageUrl}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : null}
+            {page.heroOverlayLegacy ? (
+              <div className="absolute inset-0 bg-gradient-to-b from-[#0F172A]/80 via-[#0F172A]/70 to-[#0F172A]" />
+            ) : (
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `linear-gradient(to bottom, ${overlayRgba(page.heroOverlayColor, page.heroOverlayOpacity / 100)}, ${overlayRgba(page.heroOverlayColor, Math.min(1, page.heroOverlayOpacity / 100 * 0.875))}, ${overlayRgba(page.heroOverlayColor, 1)})`,
+                }}
+              />
+            )}
           </div>
 
           <div className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8 lg:py-32">
