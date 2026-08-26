@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { platformPortalBrand } from "@/lib/public-host-chrome";
 import { BrandProvider } from "@/components/brand/brand-provider";
 import { SafeBrandImage } from "@/components/partner/safe-brand-image";
-import { PARTNER_DEFAULT_PHOTO_PATH } from "@/lib/partner-landing.constants";
+import { PartnerLandingPhoto } from "@/components/partner/partner-landing-photo";
 import type { ResolvedPartnerLandingContent } from "@/lib/partner-landing";
 
 type Props = {
@@ -13,7 +13,6 @@ type Props = {
 
 export function PartnerLandingPublicView({ content }: Props) {
   const brand = platformPortalBrand();
-  const photoSrc = content.photoUrl || PARTNER_DEFAULT_PHOTO_PATH;
 
   return (
     <BrandProvider brand={brand}>
@@ -101,16 +100,12 @@ export function PartnerLandingPublicView({ content }: Props) {
                 </figure>
               ) : null}
             </div>
-            <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-border bg-subtle">
-              <SafeBrandImage
-                src={photoSrc}
-                fallbackSrc={
-                  photoSrc !== PARTNER_DEFAULT_PHOTO_PATH ? PARTNER_DEFAULT_PHOTO_PATH : undefined
-                }
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            </div>
+            <PartnerLandingPhoto
+              src={content.photoUrl}
+              width={content.photoWidth}
+              height={content.photoHeight}
+              alt=""
+            />
           </div>
         </section>
       </MarketingShell>
