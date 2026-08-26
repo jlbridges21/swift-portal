@@ -7,9 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PartnerBrandColorField } from "@/components/partner/partner-brand-color-field";
+import { SafeBrandImage } from "@/components/partner/safe-brand-image";
 import { toast } from "sonner";
+import { isSafeBrandAssetUrl } from "@/lib/brand-color";
 import {
+  PARTNER_DEFAULT_PHOTO_PATH,
   PARTNER_LANDING_LIMITS,
+  resolvePartnerLandingPhotoUrl,
   type PartnerLandingDefaults,
 } from "@/lib/partner-landing.constants";
 import type { PartnerLandingPageRow } from "@/lib/partner-landing";
@@ -130,6 +135,13 @@ export function PartnerLandingEditorForm({
     (slug ? partnerLandingPublicUrl(slug.trim()) : null);
   const slugError = slugValidationMessage(slug);
   const initialSlug = initial?.slug ?? "";
+
+  const safeLogoUrl =
+    logoUrl.trim() && isSafeBrandAssetUrl(logoUrl.trim()) ? logoUrl.trim() : "";
+  const photoPreviewSrc = resolvePartnerLandingPhotoUrl(
+    photoUrl.trim() && isSafeBrandAssetUrl(photoUrl.trim()) ? photoUrl.trim() : null
+  );
+  const usingDefaultPhoto = !photoUrl.trim();
 
   async function createLanding() {
     const err = slugValidationMessage(slug);
@@ -341,37 +353,44 @@ export function PartnerLandingEditorForm({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label>Brand primary color</Label>
-              <FieldReset onReset={() => setBrandPrimary("")} disabled={!brandPrimary} />
-            </div>
-            <Input
-              className="min-h-11 font-mono"
-              value={brandPrimary}
-              onChange={(e) => setBrandPrimary(e.target.value)}
-              placeholder={defaults.brandPrimaryColor}
-            />
-            <FieldHelp>Primary button and heading color on your landing page.</FieldHelp>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label>Brand accent color</Label>
-              <FieldReset onReset={() => setBrandAccent("")} disabled={!brandAccent} />
-            </div>
-            <Input
-              className="min-h-11 font-mono"
-              value={brandAccent}
-              onChange={(e) => setBrandAccent(e.target.value)}
-              placeholder={defaults.brandAccentColor}
-            />
-            <FieldHelp>Secondary highlights and links.</FieldHelp>
-          </div>
+          <PartnerBrandColorField
+            id="brand-primary"
+            label="Brand primary color"
+            value={brandPrimary}
+            fallback={defaults.brandPrimaryColor}
+            onChange={setBrandPrimary}
+            onReset={() => setBrandPrimary("")}
+            help="Colors the main headline on your public landing page (left column)."
+          />
+          <PartnerBrandColorField
+            id="brand-accent"
+            label="Brand accent color"
+            value={brandAccent}
+            fallback={defaults.brandAccentColor}
+            onChange={setBrandAccent}
+            onReset={() => setBrandAccent("")}
+            help="Colors the “Brand × ShootPortal” eyebrow, benefit dots, offer border, and primary signup button."
+          />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-6 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Logo</Label>
+            <FieldHelp>
+              Optional mark next to the co-brand eyebrow at the top of the left column (about 40px
+              tall). PNG, JPEG, or WebP.
+            </FieldHelp>
+            <div className="flex h-14 max-w-[200px] items-center rounded-lg border border-dashed border-border bg-subtle px-3">
+              {safeLogoUrl ? (
+                <SafeBrandImage
+                  src={safeLogoUrl}
+                  alt="Logo preview"
+                  className="h-10 max-w-[160px] object-contain object-left"
+                />
+              ) : (
+                <span className="text-xs text-muted">No logo — eyebrow text only</span>
+              )}
+            </div>
             <input
               ref={logoInputRef}
               type="file"
@@ -403,6 +422,26 @@ export function PartnerLandingEditorForm({
           </div>
           <div className="space-y-2">
             <Label>Personal photo</Label>
+            <FieldHelp>
+              Large image on the right side of the landing page (4:3 crop, covers the frame). When
+              empty, visitors see the ShootPortal default photo — nothing is saved until you upload.
+            </FieldHelp>
+            <div className="relative aspect-[4/3] max-w-sm overflow-hidden rounded-2xl border border-border bg-subtle">
+              <SafeBrandImage
+                key={photoPreviewSrc}
+                src={photoPreviewSrc}
+                fallbackSrc={
+                  photoPreviewSrc !== PARTNER_DEFAULT_PHOTO_PATH
+                    ? PARTNER_DEFAULT_PHOTO_PATH
+                    : undefined
+                }
+                alt="Personal photo preview"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            {usingDefaultPhoto ? (
+              <p className="text-xs text-muted">Showing default photo (not stored on your page).</p>
+            ) : null}
             <input
               ref={photoInputRef}
               type="file"
@@ -449,6 +488,7 @@ export function PartnerLandingEditorForm({
             placeholder={defaults.headline}
             maxLength={PARTNER_LANDING_LIMITS.headline}
           />
+          <FieldHelp>Large title at the top of the left column (colored with brand primary).</FieldHelp>
         </div>
 
         <div className="space-y-2">
@@ -466,6 +506,7 @@ export function PartnerLandingEditorForm({
             placeholder={defaults.subheadline}
             maxLength={PARTNER_LANDING_LIMITS.subheadline}
           />
+          <FieldHelp>Supporting sentence directly under the headline.</FieldHelp>
         </div>
 
         <div className="space-y-2">
@@ -483,6 +524,7 @@ export function PartnerLandingEditorForm({
             placeholder="Additional context about why you recommend ShootPortal"
             maxLength={PARTNER_LANDING_LIMITS.description}
           />
+          <FieldHelp>Optional longer paragraph under the subheadline. Leave blank to hide it.</FieldHelp>
         </div>
 
         <div className="space-y-2">
@@ -493,10 +535,11 @@ export function PartnerLandingEditorForm({
               disabled={benefits.every((b) => !b.trim())}
             />
           </div>
-          <p className="text-xs text-muted">
-            Leave all empty for defaults, or enter {PARTNER_LANDING_LIMITS.benefitsMin}–
+          <FieldHelp>
+            Bullet list under the description (accent-colored dots). Leave all empty for ShootPortal
+            defaults, or enter {PARTNER_LANDING_LIMITS.benefitsMin}–
             {PARTNER_LANDING_LIMITS.benefitsMax} bullets.
-          </p>
+          </FieldHelp>
           {benefitFields.map((value, index) => (
             <Input
               key={index}
@@ -528,6 +571,7 @@ export function PartnerLandingEditorForm({
             placeholder={defaults.ctaLabel}
             maxLength={PARTNER_LANDING_LIMITS.ctaLabel}
           />
+          <FieldHelp>Label on the accent-colored signup button that links to /signup.</FieldHelp>
         </div>
 
         <div className="space-y-2 rounded-lg border border-border bg-subtle p-3">
@@ -547,10 +591,10 @@ export function PartnerLandingEditorForm({
               ? defaults.offerText
               : "No active referral discount for your account — the offer block stays hidden even when enabled."}
           </p>
-          <p className="text-xs text-muted">
-            Offer copy is generated from your live referral discount settings and cannot be edited
-            here.
-          </p>
+          <FieldHelp>
+            Highlight box above the signup button (accent border). Copy comes from your live referral
+            discount settings and cannot be edited here.
+          </FieldHelp>
         </div>
 
         <div className="space-y-2">
@@ -565,6 +609,7 @@ export function PartnerLandingEditorForm({
             placeholder={`Why ${brandName} recommends ShootPortal`}
             maxLength={PARTNER_LANDING_LIMITS.testimonialQuote}
           />
+          <FieldHelp>Optional quote block at the bottom of the left column. Leave blank to hide.</FieldHelp>
         </div>
 
         <div className="space-y-2">
@@ -582,6 +627,7 @@ export function PartnerLandingEditorForm({
             placeholder={brandName}
             maxLength={PARTNER_LANDING_LIMITS.testimonialAttribution}
           />
+          <FieldHelp>Name shown under the testimonial quote (e.g. your studio).</FieldHelp>
         </div>
 
         {mode === "admin" ? (

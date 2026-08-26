@@ -1,5 +1,7 @@
 /** Limits and render-time defaults for partner co-branded landing pages. */
 
+import { isSafeBrandAssetUrl } from "@/lib/brand-color";
+
 export const PARTNER_LANDING_LIMITS = {
   headline: 120,
   subheadline: 280,
@@ -26,6 +28,23 @@ export const DEFAULT_PARTNER_LANDING_BENEFITS = [
 
 export const SHOOTPORTAL_LANDING_PRIMARY = "#0F172A";
 export const SHOOTPORTAL_LANDING_ACCENT = "#4F46E5";
+
+/**
+ * Render-time-only personal photo when a partner has not uploaded one.
+ * Never write this path into `partner_landing_pages.photo_url` — NULL means unset.
+ */
+export const PARTNER_DEFAULT_PHOTO_PATH = "/icons/partner-default-photo.jpg";
+
+/**
+ * Resolve the personal photo shown on partner landings.
+ * Unset / unsafe URLs fall back to the shared default asset at render time only —
+ * callers must not write PARTNER_DEFAULT_PHOTO_PATH into the database.
+ */
+export function resolvePartnerLandingPhotoUrl(photoUrl: string | null | undefined): string {
+  const trimmed = photoUrl?.trim() ?? "";
+  if (trimmed && isSafeBrandAssetUrl(trimmed)) return trimmed;
+  return PARTNER_DEFAULT_PHOTO_PATH;
+}
 
 export function defaultPartnerLandingHeadline(brandName: string): string {
   const name = brandName.trim() || "Our studio";

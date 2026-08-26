@@ -126,6 +126,17 @@ function parseRgb(value: string): Rgb | null {
   return [r, g, b];
 }
 
+/**
+ * Convert a CSS color to `#rrggbb` for `<input type="color">`.
+ * Native color inputs have no empty state — callers must pass a display fallback
+ * when the stored value is unset, without writing that fallback to storage.
+ */
+export function toNativeColorInputValue(value: string, fallback: string): string {
+  const fromValue = parseRgb(value);
+  const rgb = fromValue ?? parseRgb(fallback) ?? [0, 0, 0];
+  return `#${rgb.map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+}
+
 function channelToLinear(c: number): number {
   const s = c / 255;
   return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
