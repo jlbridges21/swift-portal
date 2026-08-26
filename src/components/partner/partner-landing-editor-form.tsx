@@ -749,14 +749,7 @@ export function PartnerLandingEditorForm({
       </CardContent>
     </Card>
     <LandingEditorPreviewFrame>
-      <div className="h-[min(70vh,48rem)] overflow-auto bg-white">
-        <div
-          className="origin-top-left"
-          style={{ width: "200%", transform: "scale(0.5)", transformOrigin: "top left" }}
-        >
-          <PartnerLandingPublicView content={previewContent} />
-        </div>
-      </div>
+      <PartnerLandingPublicView content={previewContent} />
     </LandingEditorPreviewFrame>
     </div>
   );

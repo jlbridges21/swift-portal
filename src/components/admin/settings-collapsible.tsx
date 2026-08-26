@@ -11,6 +11,10 @@ interface SettingsCollapsibleProps {
   children: React.ReactNode;
   className?: string;
   id?: string;
+  /** sessionStorage key — remembers open/closed for this browser tab session. */
+  storageKey?: string;
+  /** When true, show an “Unsaved” cue on the header (collapsed sections can hide edits). */
+  dirty?: boolean;
 }
 
 function hashTargetsThisSection(hash: string, sectionId?: string): boolean {
@@ -28,8 +32,32 @@ export function SettingsCollapsible({
   children,
   className,
   id,
+  storageKey,
+  dirty = false,
 }: SettingsCollapsibleProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const [storageReady, setStorageReady] = useState(!storageKey);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      const stored = sessionStorage.getItem(storageKey);
+      if (stored === "1") setOpen(true);
+      else if (stored === "0") setOpen(false);
+    } catch {
+      /* private mode */
+    }
+    setStorageReady(true);
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!storageKey || !storageReady) return;
+    try {
+      sessionStorage.setItem(storageKey, open ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [storageKey, open, storageReady]);
 
   useEffect(() => {
     const syncFromHash = () => {
@@ -57,18 +85,34 @@ export function SettingsCollapsible({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start justify-between gap-3 px-5 py-4 text-left hover:bg-accent-subtle/60 transition-colors"
+        className="flex w-full items-start justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-accent-subtle/60"
         aria-expanded={open}
+        aria-controls={id ? `${id}-panel` : undefined}
       >
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-primary">{title}</h2>
-          {description && <p className="mt-1 text-sm text-muted">{description}</p>}
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold text-primary">{title}</h2>
+            {dirty ? (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
+                Unsaved
+              </span>
+            ) : null}
+          </div>
+          {description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
         </div>
         <ChevronDown
-          className={cn("mt-1 h-5 w-5 shrink-0 text-muted transition-transform", open && "rotate-180")}
+          className={cn(
+            "mt-1 h-5 w-5 shrink-0 text-muted transition-transform",
+            open && "rotate-180"
+          )}
+          aria-hidden
         />
       </button>
-      {open && <div className="border-t border-border px-5 py-5">{children}</div>}
+      {open ? (
+        <div id={id ? `${id}-panel` : undefined} className="border-t border-border px-5 py-5" role="region" aria-label={title}>
+          {children}
+        </div>
+      ) : null}
     </section>
   );
 }

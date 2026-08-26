@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { LandingFeatureIconPicker } from "@/components/admin/landing-feature-icon-picker";
+import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { PartnerBrandColorField } from "@/components/partner/partner-brand-color-field";
 import { LandingPage } from "@/components/landing/landing-page";
@@ -32,6 +33,10 @@ import {
   type LandingHeroMediaType,
 } from "@/lib/landing-content";
 import { ChevronDown, ChevronUp, ExternalLink, Plus, RotateCcw, Trash2 } from "lucide-react";
+
+function sliceDirty(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) !== JSON.stringify(b);
+}
 
 function CharCount({ value, max }: { value: string; max: number }) {
   const n = value.length;
@@ -91,6 +96,7 @@ function editorHowItWorks(landing: LandingSettings): LandingHowItWorksStep[] {
 
 export function LandingPageSettingsCard({
   landing,
+  baselineLanding,
   businessName,
   serviceNames,
   portalPreviewUrl,
@@ -99,6 +105,8 @@ export function LandingPageSettingsCard({
   onChange,
 }: {
   landing: LandingSettings;
+  /** Last-saved landing — used for per-section Unsaved badges. */
+  baselineLanding?: LandingSettings;
   businessName: string;
   serviceNames: string[];
   portalPreviewUrl: string;
@@ -108,6 +116,30 @@ export function LandingPageSettingsCard({
 }) {
   const placeholders = landingContentPlaceholders(businessName, serviceNames);
   const steps = editorHowItWorks(landing);
+  const saved = baselineLanding ?? landing;
+
+  const dirtyHero = sliceDirty(landing.hero, saved.hero);
+  const dirtyAbout = sliceDirty(landing.intro, saved.intro);
+  const dirtyIndustries =
+    sliceDirty(landing.industries, saved.industries) ||
+    sliceDirty(landing.sections.industries, saved.sections.industries);
+  const dirtyHowItWorks = sliceDirty(landing.howItWorks, saved.howItWorks);
+  const dirtyFeatures = sliceDirty(landing.features, saved.features);
+  const dirtyFooter =
+    sliceDirty(landing.footer, saved.footer) ||
+    sliceDirty(landing.social, saved.social) ||
+    sliceDirty(
+      {
+        showreel: landing.sections.showreel,
+        services: landing.sections.services,
+        social: landing.sections.social,
+      },
+      {
+        showreel: saved.sections.showreel,
+        services: saved.sections.services,
+        social: saved.sections.social,
+      }
+    );
 
   const resolvedMediaType: LandingHeroMediaType =
     landing.hero.mediaType || resolveHeroMediaKind(landing);
@@ -261,548 +293,573 @@ export function LandingPageSettingsCard({
   }
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-    <div className="min-w-0 flex-1 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/20 bg-accent/5 px-4 py-3">
-        <p className="text-sm text-heading">
-          Changes apply to your public client portal. Layout, fonts, and section order stay locked.
-        </p>
-        <a
-          href={portalPreviewUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white"
-        >
-          Preview your client portal <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      </div>
-
-      <Card className="shadow-sm">
-        <CardContent className="space-y-4 pt-6">
-          <h3 className="font-semibold text-heading">Hero</h3>
-          <FieldShell
-            label="Headline"
-            htmlFor="landing-headline"
-            value={landing.hero.headline}
-            max={LANDING_LIMITS.headline}
-            hint={`Default: ${placeholders.headline}`}
-            onReset={() => patchHero({ headline: "" })}
-          >
-            <Input
-              id="landing-headline"
-              maxLength={LANDING_LIMITS.headline}
-              value={landing.hero.headline}
-              placeholder={placeholders.headline}
-              onChange={(e) => patchHero({ headline: e.target.value })}
-            />
-          </FieldShell>
-          <FieldShell
-            label="Subheadline"
-            htmlFor="landing-subheadline"
-            value={landing.hero.subheadline}
-            max={LANDING_LIMITS.subheadline}
-            onReset={() => patchHero({ subheadline: "" })}
-          >
-            <textarea
-              id="landing-subheadline"
-              maxLength={LANDING_LIMITS.subheadline}
-              rows={3}
-              value={landing.hero.subheadline}
-              placeholder={placeholders.subheadline}
-              onChange={(e) => patchHero({ subheadline: e.target.value })}
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-            />
-          </FieldShell>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FieldShell
-              label="Primary CTA"
-              htmlFor="landing-cta-primary"
-              value={landing.hero.ctaPrimaryLabel}
-              max={LANDING_LIMITS.ctaLabel}
-              onReset={() => patchHero({ ctaPrimaryLabel: "" })}
+    /*
+      Break out of admin settings max-w-6xl so the sticky preview sits flush
+      to the viewport’s right edge (right-only margin — avoids w-screen overflow
+      that would break position:sticky). Defaults: Hero open (primary edit surface);
+      other sections closed to keep the form short — expansion remembered in sessionStorage.
+    */
+    <div className="lg:mr-[calc(50%-50vw)]">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-5">
+        <div className="min-w-0 flex-1 space-y-4 lg:max-w-xl xl:max-w-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/20 bg-accent/5 px-4 py-3">
+            <p className="text-sm text-heading">
+              Changes apply to your public client portal. Layout, fonts, and section order stay locked.
+            </p>
+            <a
+              href={portalPreviewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white"
             >
-              <Input
-                id="landing-cta-primary"
-                maxLength={LANDING_LIMITS.ctaLabel}
-                value={landing.hero.ctaPrimaryLabel}
-                placeholder={placeholders.ctaPrimaryLabel}
-                onChange={(e) => patchHero({ ctaPrimaryLabel: e.target.value })}
-              />
-            </FieldShell>
-          <FieldShell
-            label="Secondary CTA"
-            htmlFor="landing-cta-secondary"
-            value={landing.hero.ctaSecondaryLabel}
-            max={LANDING_LIMITS.ctaLabel}
-            onReset={() => patchHero({ ctaSecondaryLabel: "" })}
-          >
-            <Input
-              id="landing-cta-secondary"
-              maxLength={LANDING_LIMITS.ctaLabel}
-              value={landing.hero.ctaSecondaryLabel}
-              placeholder={placeholders.ctaSecondaryLabel}
-              onChange={(e) => patchHero({ ctaSecondaryLabel: e.target.value })}
-            />
-          </FieldShell>
+              Preview your client portal <ExternalLink className="h-3.5 w-3.5" />
+            </a>
           </div>
 
-          <div className="space-y-3">
-            <Label>Hero media</Label>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              {(
-                [
-                  ["showreel", "Showreel video"],
-                  ["image", "Hero image"],
-                  ["none", "None"],
-                ] as const
-              ).map(([value, label]) => (
-                <label
-                  key={value}
-                  className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-sm"
-                >
-                  <input
-                    type="radio"
-                    name="landing-hero-media"
-                    checked={resolvedMediaType === value}
-                    onChange={() => setMediaType(value)}
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {resolvedMediaType === "showreel" ? (
-            <FieldShell
-              label="Showreel (YouTube URL)"
-              htmlFor="landing-showreel"
-              value={landing.hero.showreelUrl}
-              max={LANDING_LIMITS.showreelUrl}
-              hint="Optional. Leave blank to hide the hero video."
-              onReset={() => patchHero({ showreelUrl: "" })}
-            >
-              <Input
-                id="landing-showreel"
-                maxLength={LANDING_LIMITS.showreelUrl}
-                value={landing.hero.showreelUrl}
-                placeholder="https://www.youtube.com/watch?v=…"
-                onChange={(e) => patchHero({ showreelUrl: e.target.value })}
-              />
-            </FieldShell>
-          ) : null}
-
-          {resolvedMediaType === "image" ? (
-            <BrandAssetField
-              kind="heroImage"
-              value={landing.hero.heroImageUrl}
-              inputId="landing-hero-image"
-              onUrlChange={(url) => patchHero({ heroImageUrl: url, mediaType: "image" })}
-            />
-          ) : null}
-
-          {resolvedMediaType !== "none" ? (
-            <div className="space-y-4 rounded-lg border border-border bg-subtle/40 p-4">
-              <p className="text-sm font-medium text-heading">Media overlay</p>
-              <p className="text-xs text-muted">
-                Darkens video or image so the white headline stays readable. Defaults to your brand
-                primary; leave unset to keep the classic ShootPortal gradient.
-              </p>
-              <PartnerBrandColorField
-                id="landing-overlay-color"
-                label="Overlay color"
-                value={landing.hero.overlayColor}
-                fallback={brand.primaryColor || "#0F172A"}
-                help="Applied over showreel and hero image."
-                onChange={(v) => patchHero({ overlayColor: v })}
-                onReset={() => patchHero({ overlayColor: "", overlayOpacity: null })}
-              />
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="landing-overlay-opacity">Overlay intensity</Label>
-                  <span className="text-xs text-muted">{overlayOpacityForEditor}%</span>
-                </div>
-                <input
-                  id="landing-overlay-opacity"
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={overlayOpacityForEditor}
-                  onChange={(e) =>
-                    patchHero({
-                      overlayOpacity: Number(e.target.value),
-                      // Persist color when adjusting intensity so we leave legacy mode.
-                      overlayColor: landing.hero.overlayColor.trim() || overlayColorForEditor,
-                    })
-                  }
-                  className="w-full"
+          <SettingsCollapsible
+            id="landing-section-hero"
+            title="Hero"
+            description="Headline, CTAs, and hero media."
+            defaultOpen
+            storageKey="admin-settings-landing-hero"
+            dirty={dirtyHero}
+          >
+            <div className="space-y-4">
+              <FieldShell
+                label="Headline"
+                htmlFor="landing-headline"
+                value={landing.hero.headline}
+                max={LANDING_LIMITS.headline}
+                hint={`Default: ${placeholders.headline}`}
+                onReset={() => patchHero({ headline: "" })}
+              >
+                <Input
+                  id="landing-headline"
+                  maxLength={LANDING_LIMITS.headline}
+                  value={landing.hero.headline}
+                  placeholder={placeholders.headline}
+                  onChange={(e) => patchHero({ headline: e.target.value })}
                 />
+              </FieldShell>
+              <FieldShell
+                label="Subheadline"
+                htmlFor="landing-subheadline"
+                value={landing.hero.subheadline}
+                max={LANDING_LIMITS.subheadline}
+                onReset={() => patchHero({ subheadline: "" })}
+              >
+                <textarea
+                  id="landing-subheadline"
+                  maxLength={LANDING_LIMITS.subheadline}
+                  rows={3}
+                  value={landing.hero.subheadline}
+                  placeholder={placeholders.subheadline}
+                  onChange={(e) => patchHero({ subheadline: e.target.value })}
+                  className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                />
+              </FieldShell>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FieldShell
+                  label="Primary CTA"
+                  htmlFor="landing-cta-primary"
+                  value={landing.hero.ctaPrimaryLabel}
+                  max={LANDING_LIMITS.ctaLabel}
+                  onReset={() => patchHero({ ctaPrimaryLabel: "" })}
+                >
+                  <Input
+                    id="landing-cta-primary"
+                    maxLength={LANDING_LIMITS.ctaLabel}
+                    value={landing.hero.ctaPrimaryLabel}
+                    placeholder={placeholders.ctaPrimaryLabel}
+                    onChange={(e) => patchHero({ ctaPrimaryLabel: e.target.value })}
+                  />
+                </FieldShell>
+                <FieldShell
+                  label="Secondary CTA"
+                  htmlFor="landing-cta-secondary"
+                  value={landing.hero.ctaSecondaryLabel}
+                  max={LANDING_LIMITS.ctaLabel}
+                  onReset={() => patchHero({ ctaSecondaryLabel: "" })}
+                >
+                  <Input
+                    id="landing-cta-secondary"
+                    maxLength={LANDING_LIMITS.ctaLabel}
+                    value={landing.hero.ctaSecondaryLabel}
+                    placeholder={placeholders.ctaSecondaryLabel}
+                    onChange={(e) => patchHero({ ctaSecondaryLabel: e.target.value })}
+                  />
+                </FieldShell>
               </div>
-              {contrastWarn ? (
-                <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  Headline may be hard to read: white text vs this overlay is below{" "}
-                  {HERO_OVERLAY_CONTRAST_MIN}:1 contrast (WCAG AA) when the media behind is bright.
-                  Darken the overlay or raise intensity.
-                </p>
+
+              <div className="space-y-3">
+                <Label>Hero media</Label>
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  {(
+                    [
+                      ["showreel", "Showreel video"],
+                      ["image", "Hero image"],
+                      ["none", "None"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <label
+                      key={value}
+                      className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-sm"
+                    >
+                      <input
+                        type="radio"
+                        name="landing-hero-media"
+                        checked={resolvedMediaType === value}
+                        onChange={() => setMediaType(value)}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {resolvedMediaType === "showreel" ? (
+                <FieldShell
+                  label="Showreel (YouTube URL)"
+                  htmlFor="landing-showreel"
+                  value={landing.hero.showreelUrl}
+                  max={LANDING_LIMITS.showreelUrl}
+                  hint="Optional. Leave blank to hide the hero video."
+                  onReset={() => patchHero({ showreelUrl: "" })}
+                >
+                  <Input
+                    id="landing-showreel"
+                    maxLength={LANDING_LIMITS.showreelUrl}
+                    value={landing.hero.showreelUrl}
+                    placeholder="https://www.youtube.com/watch?v=…"
+                    onChange={(e) => patchHero({ showreelUrl: e.target.value })}
+                  />
+                </FieldShell>
+              ) : null}
+
+              {resolvedMediaType === "image" ? (
+                <BrandAssetField
+                  kind="heroImage"
+                  value={landing.hero.heroImageUrl}
+                  inputId="landing-hero-image"
+                  onUrlChange={(url) => patchHero({ heroImageUrl: url, mediaType: "image" })}
+                />
+              ) : null}
+
+              {resolvedMediaType !== "none" ? (
+                <div className="space-y-4 rounded-lg border border-border bg-subtle/40 p-4">
+                  <p className="text-sm font-medium text-heading">Media overlay</p>
+                  <p className="text-xs text-muted">
+                    Darkens video or image so the white headline stays readable. Defaults to your brand
+                    primary; leave unset to keep the classic ShootPortal gradient.
+                  </p>
+                  <PartnerBrandColorField
+                    id="landing-overlay-color"
+                    label="Overlay color"
+                    value={landing.hero.overlayColor}
+                    fallback={brand.primaryColor || "#0F172A"}
+                    help="Applied over showreel and hero image."
+                    onChange={(v) => patchHero({ overlayColor: v })}
+                    onReset={() => patchHero({ overlayColor: "", overlayOpacity: null })}
+                  />
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="landing-overlay-opacity">Overlay intensity</Label>
+                      <span className="text-xs text-muted">{overlayOpacityForEditor}%</span>
+                    </div>
+                    <input
+                      id="landing-overlay-opacity"
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={overlayOpacityForEditor}
+                      onChange={(e) =>
+                        patchHero({
+                          overlayOpacity: Number(e.target.value),
+                          overlayColor: landing.hero.overlayColor.trim() || overlayColorForEditor,
+                        })
+                      }
+                      className="w-full"
+                    />
+                  </div>
+                  {contrastWarn ? (
+                    <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      Headline may be hard to read: white text vs this overlay is below{" "}
+                      {HERO_OVERLAY_CONTRAST_MIN}:1 contrast (WCAG AA) when the media behind is bright.
+                      Darken the overlay or raise intensity.
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
+          </SettingsCollapsible>
 
-      <Card className="shadow-sm">
-        <CardContent className="space-y-4 pt-6">
-          <h3 className="font-semibold text-heading">About</h3>
-          <FieldShell
-            label="Business description"
-            htmlFor="landing-description"
-            value={landing.intro.businessDescription}
-            max={LANDING_LIMITS.businessDescription}
-            hint={`Default: ${placeholders.businessDescription}`}
-            onReset={() => patchIntro("")}
+          <SettingsCollapsible
+            id="landing-section-about"
+            title="About"
+            description="Business description under the hero."
+            defaultOpen={false}
+            storageKey="admin-settings-landing-about"
+            dirty={dirtyAbout}
           >
-            <textarea
-              id="landing-description"
-              maxLength={LANDING_LIMITS.businessDescription}
-              rows={4}
+            <FieldShell
+              label="Business description"
+              htmlFor="landing-description"
               value={landing.intro.businessDescription}
-              placeholder={placeholders.businessDescription}
-              onChange={(e) => patchIntro(e.target.value)}
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-            />
-          </FieldShell>
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-sm">
-        <CardContent className="space-y-4 pt-6">
-          <h3 className="font-semibold text-heading">Industries</h3>
-          <FieldShell
-            label="Industries (comma-separated)"
-            htmlFor="landing-industries"
-            value={landing.industries.join(", ")}
-            hint={`Up to ${LANDING_LIMITS.industriesMax} items, ${LANDING_LIMITS.industryItem} chars each. Default: ${placeholders.industries.join(", ")}`}
-            onReset={() => onChange({ ...landing, industries: [] })}
-          >
-            <Input
-              id="landing-industries"
-              value={landing.industries.join(", ")}
-              placeholder={placeholders.industries.join(", ")}
-              onChange={(e) => setIndustriesText(e.target.value)}
-            />
-          </FieldShell>
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-sm">
-        <CardContent className="space-y-4 pt-6">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <h3 className="font-semibold text-heading">How it works</h3>
-              <p className="text-xs text-muted">
-                {LANDING_LIMITS.howItWorksMin}–{LANDING_LIMITS.howItWorksMax} steps (default{" "}
-                {HOW_IT_WORKS_DEFAULT_COUNT}). Horizontal scroll layout holds every count.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={resetHowItWorksDefaults}
+              max={LANDING_LIMITS.businessDescription}
+              hint={`Default: ${placeholders.businessDescription}`}
+              onReset={() => patchIntro("")}
             >
-              <RotateCcw className="mr-1 h-3 w-3" />
-              Reset to default
-            </Button>
-          </div>
-          {steps.map((step, i) => {
-            const ph = placeholders.howItWorks[i] ?? DEFAULT_HOW_IT_WORKS[i];
-            return (
-              <div key={i} className="space-y-2 rounded-lg border border-border p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Step {String(i + 1).padStart(2, "0")}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2"
-                      aria-label={`Move step ${i + 1} up`}
-                      disabled={i === 0}
-                      onClick={() => moveHowItWorksStep(i, -1)}
+              <textarea
+                id="landing-description"
+                maxLength={LANDING_LIMITS.businessDescription}
+                rows={4}
+                value={landing.intro.businessDescription}
+                placeholder={placeholders.businessDescription}
+                onChange={(e) => patchIntro(e.target.value)}
+                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+              />
+            </FieldShell>
+          </SettingsCollapsible>
+
+          <SettingsCollapsible
+            id="landing-section-industries"
+            title="Industries"
+            description="Comma-separated industry line."
+            defaultOpen={false}
+            storageKey="admin-settings-landing-industries"
+            dirty={dirtyIndustries}
+          >
+            <FieldShell
+              label="Industries (comma-separated)"
+              htmlFor="landing-industries"
+              value={landing.industries.join(", ")}
+              hint={`Up to ${LANDING_LIMITS.industriesMax} items, ${LANDING_LIMITS.industryItem} chars each. Default: ${placeholders.industries.join(", ")}`}
+              onReset={() => onChange({ ...landing, industries: [] })}
+            >
+              <Input
+                id="landing-industries"
+                value={landing.industries.join(", ")}
+                placeholder={placeholders.industries.join(", ")}
+                onChange={(e) => setIndustriesText(e.target.value)}
+              />
+            </FieldShell>
+            <label className="mt-4 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={landing.sections.industries}
+                onChange={(e) => patchSections({ industries: e.target.checked })}
+              />
+              Show industries line on the page
+            </label>
+          </SettingsCollapsible>
+
+          <SettingsCollapsible
+            id="landing-section-how-it-works"
+            title="How it works"
+            description={`${LANDING_LIMITS.howItWorksMin}–${LANDING_LIMITS.howItWorksMax} steps (default ${HOW_IT_WORKS_DEFAULT_COUNT}).`}
+            defaultOpen={false}
+            storageKey="admin-settings-landing-how-it-works"
+            dirty={dirtyHowItWorks}
+          >
+            <div className="mb-3 flex justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={resetHowItWorksDefaults}
+              >
+                <RotateCcw className="mr-1 h-3 w-3" />
+                Reset to default
+              </Button>
+            </div>
+            <div className="space-y-4">
+              {steps.map((step, i) => {
+                const ph = placeholders.howItWorks[i] ?? DEFAULT_HOW_IT_WORKS[i];
+                return (
+                  <div key={i} className="space-y-2 rounded-lg border border-border p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                        Step {String(i + 1).padStart(2, "0")}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          aria-label={`Move step ${i + 1} up`}
+                          disabled={i === 0}
+                          onClick={() => moveHowItWorksStep(i, -1)}
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          aria-label={`Move step ${i + 1} down`}
+                          disabled={i === steps.length - 1}
+                          onClick={() => moveHowItWorksStep(i, 1)}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                        {steps.length > LANDING_LIMITS.howItWorksMin ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-red-700"
+                            onClick={() => removeHowItWorksStep(i)}
+                          >
+                            <Trash2 className="mr-1 h-3 w-3" />
+                            Remove
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                    <FieldShell
+                      label="Label"
+                      htmlFor={`landing-step-${i}-label`}
+                      value={step.label}
+                      max={LANDING_LIMITS.howItWorksLabel}
+                      onReset={() => setHowItWorks(i, { label: "", description: step.description })}
                     >
-                      <ChevronUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2"
-                      aria-label={`Move step ${i + 1} down`}
-                      disabled={i === steps.length - 1}
-                      onClick={() => moveHowItWorksStep(i, 1)}
+                      <Input
+                        id={`landing-step-${i}-label`}
+                        maxLength={LANDING_LIMITS.howItWorksLabel}
+                        value={step.label}
+                        placeholder={ph?.label ?? `Step ${i + 1}`}
+                        onChange={(e) => setHowItWorks(i, { label: e.target.value })}
+                      />
+                    </FieldShell>
+                    <FieldShell
+                      label="Description"
+                      htmlFor={`landing-step-${i}-desc`}
+                      value={step.description}
+                      max={LANDING_LIMITS.howItWorksDescription}
+                      onReset={() => setHowItWorks(i, { description: "", label: step.label })}
                     >
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
-                    {steps.length > LANDING_LIMITS.howItWorksMin ? (
+                      <textarea
+                        id={`landing-step-${i}-desc`}
+                        maxLength={LANDING_LIMITS.howItWorksDescription}
+                        rows={2}
+                        value={step.description}
+                        placeholder={ph?.description}
+                        onChange={(e) => setHowItWorks(i, { description: e.target.value })}
+                        className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                      />
+                    </FieldShell>
+                  </div>
+                );
+              })}
+              {steps.length < LANDING_LIMITS.howItWorksMax ? (
+                <Button type="button" variant="outline" size="sm" onClick={addHowItWorksStep}>
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add step
+                </Button>
+              ) : null}
+            </div>
+          </SettingsCollapsible>
+
+          <SettingsCollapsible
+            id="landing-section-features"
+            title="Everything in one place"
+            description={`${LANDING_LIMITS.featuresMin}–${LANDING_LIMITS.featuresMax} feature cards. Icons from a fixed allowlist only.`}
+            defaultOpen={false}
+            storageKey="admin-settings-landing-features"
+            dirty={dirtyFeatures}
+          >
+            <div className="mb-3 flex justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setFeatures([])}
+              >
+                <RotateCcw className="mr-1 h-3 w-3" />
+                Reset to default
+              </Button>
+            </div>
+            <div className="space-y-4">
+              {editorFeatures().map((card, i) => (
+                <div key={i} className="space-y-2 rounded-lg border border-border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Card {i + 1}
+                    </p>
+                    {editorFeatures().length > LANDING_LIMITS.featuresMin ? (
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         className="h-7 px-2 text-xs text-red-700"
-                        onClick={() => removeHowItWorksStep(i)}
+                        onClick={() => setFeatures(editorFeatures().filter((_, idx) => idx !== i))}
                       >
                         <Trash2 className="mr-1 h-3 w-3" />
                         Remove
                       </Button>
                     ) : null}
                   </div>
-                </div>
-                <FieldShell
-                  label="Label"
-                  htmlFor={`landing-step-${i}-label`}
-                  value={step.label}
-                  max={LANDING_LIMITS.howItWorksLabel}
-                  onReset={() => setHowItWorks(i, { label: "", description: step.description })}
-                >
-                  <Input
-                    id={`landing-step-${i}-label`}
-                    maxLength={LANDING_LIMITS.howItWorksLabel}
-                    value={step.label}
-                    placeholder={ph?.label ?? `Step ${i + 1}`}
-                    onChange={(e) => setHowItWorks(i, { label: e.target.value })}
-                  />
-                </FieldShell>
-                <FieldShell
-                  label="Description"
-                  htmlFor={`landing-step-${i}-desc`}
-                  value={step.description}
-                  max={LANDING_LIMITS.howItWorksDescription}
-                  onReset={() => setHowItWorks(i, { description: "", label: step.label })}
-                >
-                  <textarea
-                    id={`landing-step-${i}-desc`}
-                    maxLength={LANDING_LIMITS.howItWorksDescription}
-                    rows={2}
-                    value={step.description}
-                    placeholder={ph?.description}
-                    onChange={(e) => setHowItWorks(i, { description: e.target.value })}
-                    className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-                  />
-                </FieldShell>
-              </div>
-            );
-          })}
-          {steps.length < LANDING_LIMITS.howItWorksMax ? (
-            <Button type="button" variant="outline" size="sm" onClick={addHowItWorksStep}>
-              <Plus className="mr-1 h-4 w-4" />
-              Add step
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-sm">
-        <CardContent className="space-y-4 pt-6">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <h3 className="font-semibold text-heading">Everything in one place</h3>
-              <p className="text-xs text-muted">
-                {LANDING_LIMITS.featuresMin}–{LANDING_LIMITS.featuresMax} feature cards. Icons from a
-                fixed allowlist only.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => setFeatures([])}
-            >
-              <RotateCcw className="mr-1 h-3 w-3" />
-              Reset to default
-            </Button>
-          </div>
-          {editorFeatures().map((card, i) => (
-            <div key={i} className="space-y-2 rounded-lg border border-border p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Card {i + 1}
-                </p>
-                {editorFeatures().length > LANDING_LIMITS.featuresMin ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs text-red-700"
-                    onClick={() =>
-                      setFeatures(editorFeatures().filter((_, idx) => idx !== i))
+                  <div className="space-y-2">
+                    <Label id={`landing-feature-${i}-icon-label`}>Icon</Label>
+                    <LandingFeatureIconPicker
+                      id={`landing-feature-${i}-icon`}
+                      value={card.icon}
+                      onChange={(icon: LandingFeatureIconId) => setFeature(i, { icon })}
+                    />
+                  </div>
+                  <FieldShell
+                    label="Title"
+                    htmlFor={`landing-feature-${i}-title`}
+                    value={card.title}
+                    max={LANDING_LIMITS.featureTitle}
+                    onReset={
+                      DEFAULT_FEATURE_CARDS[i]
+                        ? () => setFeature(i, { title: DEFAULT_FEATURE_CARDS[i].title })
+                        : undefined
                     }
                   >
-                    <Trash2 className="mr-1 h-3 w-3" />
-                    Remove
-                  </Button>
-                ) : null}
-              </div>
-              <div className="space-y-2">
-                <Label id={`landing-feature-${i}-icon-label`}>Icon</Label>
-                <LandingFeatureIconPicker
-                  id={`landing-feature-${i}-icon`}
-                  value={card.icon}
-                  onChange={(icon: LandingFeatureIconId) => setFeature(i, { icon })}
-                />
-              </div>
+                    <Input
+                      id={`landing-feature-${i}-title`}
+                      maxLength={LANDING_LIMITS.featureTitle}
+                      value={card.title}
+                      placeholder={placeholders.features[i]?.title}
+                      onChange={(e) => setFeature(i, { title: e.target.value })}
+                    />
+                  </FieldShell>
+                  <FieldShell
+                    label="Description"
+                    htmlFor={`landing-feature-${i}-desc`}
+                    value={card.description}
+                    max={LANDING_LIMITS.featureDescription}
+                    onReset={
+                      DEFAULT_FEATURE_CARDS[i]
+                        ? () =>
+                            setFeature(i, {
+                              description: DEFAULT_FEATURE_CARDS[i].description,
+                            })
+                        : undefined
+                    }
+                  >
+                    <textarea
+                      id={`landing-feature-${i}-desc`}
+                      maxLength={LANDING_LIMITS.featureDescription}
+                      rows={2}
+                      value={card.description}
+                      placeholder={placeholders.features[i]?.description}
+                      onChange={(e) => setFeature(i, { description: e.target.value })}
+                      className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                    />
+                  </FieldShell>
+                </div>
+              ))}
+              {editorFeatures().length < LANDING_LIMITS.featuresMax ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setFeatures([
+                      ...editorFeatures(),
+                      {
+                        icon: "CheckCircle2",
+                        title: "",
+                        description: "",
+                      },
+                    ])
+                  }
+                >
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add card
+                </Button>
+              ) : null}
+            </div>
+          </SettingsCollapsible>
+
+          <SettingsCollapsible
+            id="landing-section-footer"
+            title="Footer & social"
+            description="Tagline, social links, and optional section toggles."
+            defaultOpen={false}
+            storageKey="admin-settings-landing-footer"
+            dirty={dirtyFooter}
+          >
+            <div className="space-y-4">
               <FieldShell
-                label="Title"
-                htmlFor={`landing-feature-${i}-title`}
-                value={card.title}
-                max={LANDING_LIMITS.featureTitle}
-                onReset={
-                  DEFAULT_FEATURE_CARDS[i]
-                    ? () => setFeature(i, { title: DEFAULT_FEATURE_CARDS[i].title })
-                    : undefined
-                }
+                label="Footer tagline (optional)"
+                htmlFor="landing-footer-tagline"
+                value={landing.footer.tagline}
+                max={LANDING_LIMITS.footerTagline}
+                onReset={() => patchFooter("")}
               >
                 <Input
-                  id={`landing-feature-${i}-title`}
-                  maxLength={LANDING_LIMITS.featureTitle}
-                  value={card.title}
-                  placeholder={placeholders.features[i]?.title}
-                  onChange={(e) => setFeature(i, { title: e.target.value })}
+                  id="landing-footer-tagline"
+                  maxLength={LANDING_LIMITS.footerTagline}
+                  value={landing.footer.tagline}
+                  placeholder="Start your project in minutes…"
+                  onChange={(e) => patchFooter(e.target.value)}
                 />
               </FieldShell>
-              <FieldShell
-                label="Description"
-                htmlFor={`landing-feature-${i}-desc`}
-                value={card.description}
-                max={LANDING_LIMITS.featureDescription}
-                onReset={
-                  DEFAULT_FEATURE_CARDS[i]
-                    ? () =>
-                        setFeature(i, {
-                          description: DEFAULT_FEATURE_CARDS[i].description,
-                        })
-                    : undefined
-                }
-              >
-                <textarea
-                  id={`landing-feature-${i}-desc`}
-                  maxLength={LANDING_LIMITS.featureDescription}
-                  rows={2}
-                  value={card.description}
-                  placeholder={placeholders.features[i]?.description}
-                  onChange={(e) => setFeature(i, { description: e.target.value })}
-                  className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-                />
-              </FieldShell>
+              {(
+                [
+                  ["instagram", "Instagram"],
+                  ["facebook", "Facebook"],
+                  ["youtube", "YouTube"],
+                  ["linkedin", "LinkedIn"],
+                  ["website", "Website"],
+                ] as const
+              ).map(([key, label]) => (
+                <FieldShell
+                  key={key}
+                  label={label}
+                  htmlFor={`landing-social-${key}`}
+                  value={landing.social[key]}
+                  max={LANDING_LIMITS.socialUrl}
+                  onReset={() => patchSocial({ [key]: "" })}
+                >
+                  <Input
+                    id={`landing-social-${key}`}
+                    maxLength={LANDING_LIMITS.socialUrl}
+                    value={landing.social[key]}
+                    placeholder="https://"
+                    onChange={(e) => patchSocial({ [key]: e.target.value })}
+                  />
+                </FieldShell>
+              ))}
+
+              <div className="space-y-3 border-t border-border pt-4">
+                <p className="text-sm font-medium text-heading">Optional sections</p>
+                <p className="text-xs text-muted">
+                  Turn off sections you do not use so the page never shows an empty block.
+                </p>
+                {(
+                  [
+                    ["showreel", "Hero showreel"],
+                    ["services", "Services catalog"],
+                    ["social", "Social links"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={landing.sections[key]}
+                      onChange={(e) => patchSections({ [key]: e.target.checked })}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
             </div>
-          ))}
-          {editorFeatures().length < LANDING_LIMITS.featuresMax ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                setFeatures([
-                  ...editorFeatures(),
-                  {
-                    icon: "CheckCircle2",
-                    title: "",
-                    description: "",
-                  },
-                ])
-              }
-            >
-              <Plus className="mr-1 h-4 w-4" />
-              Add card
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-sm">
-        <CardContent className="space-y-4 pt-6">
-          <h3 className="font-semibold text-heading">Footer &amp; social</h3>
-          <FieldShell
-            label="Footer tagline (optional)"
-            htmlFor="landing-footer-tagline"
-            value={landing.footer.tagline}
-            max={LANDING_LIMITS.footerTagline}
-            onReset={() => patchFooter("")}
-          >
-            <Input
-              id="landing-footer-tagline"
-              maxLength={LANDING_LIMITS.footerTagline}
-              value={landing.footer.tagline}
-              placeholder="Start your project in minutes…"
-              onChange={(e) => patchFooter(e.target.value)}
-            />
-          </FieldShell>
-          {(
-            [
-              ["instagram", "Instagram"],
-              ["facebook", "Facebook"],
-              ["youtube", "YouTube"],
-              ["linkedin", "LinkedIn"],
-              ["website", "Website"],
-            ] as const
-          ).map(([key, label]) => (
-            <FieldShell
-              key={key}
-              label={label}
-              htmlFor={`landing-social-${key}`}
-              value={landing.social[key]}
-              max={LANDING_LIMITS.socialUrl}
-              onReset={() => patchSocial({ [key]: "" })}
-            >
-              <Input
-                id={`landing-social-${key}`}
-                maxLength={LANDING_LIMITS.socialUrl}
-                value={landing.social[key]}
-                placeholder="https://"
-                onChange={(e) => patchSocial({ [key]: e.target.value })}
-              />
-            </FieldShell>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-sm">
-        <CardContent className="space-y-3 pt-6">
-          <h3 className="font-semibold text-heading">Optional sections</h3>
-          <p className="text-xs text-muted">
-            Turn off sections you do not use so the page never shows an empty block.
-          </p>
-          {(
-            [
-              ["showreel", "Hero showreel"],
-              ["industries", "Industries line"],
-              ["services", "Services catalog"],
-              ["social", "Social links"],
-            ] as const
-          ).map(([key, label]) => (
-            <label key={key} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={landing.sections[key]}
-                onChange={(e) => patchSections({ [key]: e.target.checked })}
-              />
-              {label}
-            </label>
-          ))}
-        </CardContent>
-      </Card>
-    </div>
-    <LandingEditorPreviewFrame>
-      <div className="h-[min(70vh,48rem)] overflow-auto bg-white">
-        <div
-          style={{ width: "200%", transform: "scale(0.5)", transformOrigin: "top left" }}
-        >
-          <LandingPage brand={brand} page={previewPage} />
+          </SettingsCollapsible>
         </div>
+
+        <LandingEditorPreviewFrame wide>
+          <LandingPage brand={brand} page={previewPage} />
+        </LandingEditorPreviewFrame>
       </div>
-    </LandingEditorPreviewFrame>
     </div>
   );
 }

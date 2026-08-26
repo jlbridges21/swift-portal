@@ -575,6 +575,9 @@ export function AdminSettingsClient({
             </div>
             <LandingPageSettingsCard
               landing={settings.landing}
+              baselineLanding={
+                (JSON.parse(baseline) as AppSettings).landing ?? settings.landing
+              }
               businessName={settings.business.businessName}
               serviceNames={serviceNames}
               portalPreviewUrl={portalPreviewUrl}
