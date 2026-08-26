@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Shell chrome that Header (and related controls) depend on.
- * Used by AdminShell and PartnerDashboardShell — one source, not copy-pasted.
+ * Used by AdminShell and PartnerShell — one source, not copy-pasted.
  */
 export function AdminChromeProviders({
   children,

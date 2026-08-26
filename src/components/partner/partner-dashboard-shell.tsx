@@ -12,18 +12,26 @@ import { Button } from "@/components/ui/button";
 
 type Props = {
   children: React.ReactNode;
-  brandName: string;
+  /** Partner section sidebar — active partners on dashboard routes only. */
+  showPartnerSectionNav: boolean;
+  /** Shown in the program surface badge when the user has a partner record. */
+  partnerBrandName?: string | null;
 };
 
 /**
- * Partner dashboard shell — keeps main business nav when the user has a tenant,
- * uses a minimal header for partner-only users, and always shows the partner left sidebar.
+ * Shared partner shell for /partner (entry) and /partner/* (dashboard).
  *
- * Business+Partner: mounts AdminChromeProviders so Header search / ⌘K / PWA nav work.
- * Partner-only (no tenant): search is hidden — /api/admin/search is tenant-scoped and
- * cannot work without a business. Do not open an empty/erroring palette.
+ * Header / main nav: tenant branding when the user has a business (matches /admin).
+ * Content area: ShootPortal partner-program branding via nested BrandProvider.
+ *
+ * Business+Partner: AdminChromeProviders so search / ⌘K / PWA nav work.
+ * Partner-only (no tenant): minimal header — search stays hidden (tenant-scoped API).
  */
-export async function PartnerDashboardShell({ children, brandName }: Props) {
+export async function PartnerShell({
+  children,
+  showPartnerSectionNav,
+  partnerBrandName,
+}: Props) {
   const profile = await getProfile();
   const caps = await getCapabilities();
   const hasBusiness = caps.business.active && caps.business.role === "admin";
@@ -31,10 +39,11 @@ export async function PartnerDashboardShell({ children, brandName }: Props) {
   const navPartnerLabel = partnerNavLabel(caps);
   const navPartnerHref = partnerNavHref(caps);
 
-  let brand = getPortalBrandFromSettings(DEFAULT_APP_SETTINGS);
+  const shootPortalBrand = getPortalBrandFromSettings(DEFAULT_APP_SETTINGS);
+  let tenantBrand = shootPortalBrand;
   if (hasBusiness && caps.business.businessId) {
     const settings = await getAppSettings(caps.business.businessId);
-    brand = getPortalBrandFromSettings(settings);
+    tenantBrand = getPortalBrandFromSettings(settings);
   }
 
   const body = (
@@ -56,7 +65,9 @@ export async function PartnerDashboardShell({ children, brandName }: Props) {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
                 ShootPortal Partners
               </p>
-              <p className="text-sm font-medium text-heading">{brandName}</p>
+              <p className="text-sm font-medium text-heading">
+                {partnerBrandName ?? "Partner Program"}
+              </p>
             </div>
             <form action="/api/auth/signout" method="POST">
               <Button type="submit" variant="ghost" size="sm" className="min-h-11">
@@ -69,32 +80,38 @@ export async function PartnerDashboardShell({ children, brandName }: Props) {
 
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-start">
-          <aside className="w-full shrink-0 md:sticky md:top-20 md:w-56">
-            <p className="mb-3 hidden text-xs font-semibold uppercase tracking-[0.18em] text-accent md:block">
-              Partner program
-            </p>
-            <PartnerTabNav />
-          </aside>
+          {showPartnerSectionNav ? (
+            <aside className="w-full shrink-0 md:sticky md:top-20 md:w-56">
+              <p className="mb-3 hidden text-xs font-semibold uppercase tracking-[0.18em] text-accent md:block">
+                Partner program
+              </p>
+              <PartnerTabNav />
+            </aside>
+          ) : null}
 
-          <div
-            className="min-w-0 flex-1 rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50/40 to-white p-4 sm:p-6"
-            data-partner-program-surface
-          >
-            <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-indigo-100 pb-4">
-              <span className="rounded-full bg-indigo-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                ShootPortal Partner Program
-              </span>
-              <span className="text-sm font-medium text-heading">{brandName}</span>
+          <BrandProvider brand={shootPortalBrand}>
+            <div
+              className="min-w-0 flex-1 rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50/40 to-white p-4 sm:p-6"
+              data-partner-program-surface
+            >
+              <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-indigo-100 pb-4">
+                <span className="rounded-full bg-indigo-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                  ShootPortal Partner Program
+                </span>
+                {partnerBrandName ? (
+                  <span className="text-sm font-medium text-heading">{partnerBrandName}</span>
+                ) : null}
+              </div>
+              {children}
             </div>
-            {children}
-          </div>
+          </BrandProvider>
         </div>
       </div>
     </div>
   );
 
   return (
-    <BrandProvider brand={brand}>
+    <BrandProvider brand={tenantBrand}>
       <AdminCapabilitiesProvider
         showPartner={showPartner}
         partnerActive={caps.partner.active}
@@ -117,3 +134,6 @@ export async function PartnerDashboardShell({ children, brandName }: Props) {
     </BrandProvider>
   );
 }
+
+/** @deprecated Use PartnerShell — kept for imports during transition. */
+export const PartnerDashboardShell = PartnerShell;

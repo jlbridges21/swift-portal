@@ -28,32 +28,20 @@ export default async function PartnerEntryPage() {
   const state = await resolvePartnerEntryState();
   if (!state) notFound();
 
-  const isBusinessAdmin = profile.role === "admin" || profile.role === "super_admin";
-
   if (state.kind === "active") {
     redirect("/partner/dashboard");
   }
 
   if (state.kind === "suspended") {
-    return (
-      <PartnerSuspendedEntry
-        brandName={state.partner.brand_name}
-        isBusinessAdmin={isBusinessAdmin}
-      />
-    );
+    return <PartnerSuspendedEntry brandName={state.partner.brand_name} />;
   }
 
   if (state.kind === "application_pending") {
-    return (
-      <PartnerApplicationPending
-        appliedAt={state.application.created_at}
-        isBusinessAdmin={isBusinessAdmin}
-      />
-    );
+    return <PartnerApplicationPending appliedAt={state.application.created_at} />;
   }
 
   if (state.kind === "application_declined") {
-    return <PartnerApplicationDeclined isBusinessAdmin={isBusinessAdmin} />;
+    return <PartnerApplicationDeclined />;
   }
 
   const [data, prefill] = await Promise.all([
@@ -63,14 +51,8 @@ export default async function PartnerEntryPage() {
   if (!prefill) notFound();
 
   if (state.kind === "application_withdrawn") {
-    return (
-      <PartnerApplicationWithdrawn
-        data={data}
-        prefill={prefill}
-        isBusinessAdmin={isBusinessAdmin}
-      />
-    );
+    return <PartnerApplicationWithdrawn data={data} prefill={prefill} />;
   }
 
-  return <PartnerProgramPitch data={data} prefill={prefill} isBusinessAdmin={isBusinessAdmin} />;
+  return <PartnerProgramPitch data={data} prefill={prefill} />;
 }
