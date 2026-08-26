@@ -77,7 +77,7 @@ export default async function PartnersMarketingPage() {
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
                 <a href="#apply" className="inline-flex">
                   <Button className="min-h-12 bg-[#4F46E5] px-7 text-base font-semibold text-white shadow-md shadow-indigo-500/25 hover:bg-[#4338CA]">
-                    Apply to become a partner
+                    Join the Partner Program
                   </Button>
                 </a>
                 <a href="#calculator" className="inline-flex">
@@ -247,16 +247,19 @@ export default async function PartnersMarketingPage() {
                 <ul className="mt-6 space-y-3 text-sm text-[#475569]">
                   <li className="flex gap-2">
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#4F46E5]" />
-                    Applications are reviewed to make sure the program is a good fit for both
-                    sides.
+                    {data.autoApproveApplications
+                      ? "Instant approval — your referral link and dashboard are ready right away."
+                      : "Applications are reviewed to make sure the program is a good fit for both sides."}
                   </li>
                   <li className="flex gap-2">
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#4F46E5]" />
-                    No ShootPortal subscription required to apply.
+                    No ShootPortal subscription required to {data.autoApproveApplications ? "join" : "apply"}.
                   </li>
                   <li className="flex gap-2">
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#4F46E5]" />
-                    Approved partners get a referral link and a dashboard to track commissions.
+                    {data.autoApproveApplications
+                      ? "Track commissions and referrals from your partner dashboard."
+                      : "Approved partners get a referral link and a dashboard to track commissions."}
                   </li>
                 </ul>
               </div>
@@ -318,13 +321,13 @@ export default async function PartnersMarketingPage() {
               </h2>
               <p className="mt-4 text-base leading-relaxed text-slate-300">
                 If photographers, drone pilots, or media professionals already trust your
-                recommendations, apply to the ShootPortal Partner Program and earn recurring
+                recommendations, join the ShootPortal Partner Program and earn recurring
                 commissions when they become paying customers.
               </p>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
                 <a href="#apply" className="inline-flex">
                   <Button className="min-h-12 bg-[#4F46E5] px-7 text-base font-semibold text-white hover:bg-[#4338CA]">
-                    Apply to become a partner
+                    Join the Partner Program
                   </Button>
                 </a>
                 <a href="#calculator" className="inline-flex">
@@ -337,7 +340,7 @@ export default async function PartnersMarketingPage() {
                 </a>
               </div>
               <p className="mt-4 text-sm text-slate-400">
-                You do not need a ShootPortal subscription to apply.
+                You do not need a ShootPortal subscription to join.
               </p>
             </div>
           </div>

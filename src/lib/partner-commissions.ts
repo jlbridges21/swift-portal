@@ -69,6 +69,34 @@ function addHoldDays(earnedAt: Date, days = PARTNER_COMMISSION_HOLD_DAYS): Date 
 }
 
 /**
+ * True when the referred business is owned by the same person as the partner
+ * (user_id match or case-insensitive email match against any business admin).
+ */
+async function isSelfReferralBusiness(args: {
+  businessId: string;
+  partnerUserId: string | null;
+  partnerEmail: string;
+}): Promise<"user_id" | "email" | null> {
+  const raw = await createServiceClient();
+  const partnerEmail = args.partnerEmail.trim().toLowerCase();
+
+  const { data: admins } = await raw
+    .from("profiles")
+    .select("id, email")
+    .eq("business_id", args.businessId)
+    .eq("role", "admin");
+
+  for (const admin of admins ?? []) {
+    if (args.partnerUserId && admin.id === args.partnerUserId) return "user_id";
+    const adminEmail = String(admin.email || "")
+      .trim()
+      .toLowerCase();
+    if (partnerEmail && adminEmail && partnerEmail === adminEmail) return "email";
+  }
+  return null;
+}
+
+/**
  * Create a commission for a newly inserted platform_subscription_payments row.
  * Never throws to callers that must keep the webhook green — catch at call site
  * preferred; this also swallows unique conflicts as success-no-op.
@@ -124,7 +152,7 @@ export async function maybeCreateCommissionForPayment(args: {
 
   const { data: partner } = await raw
     .from("partners")
-    .select("id, status, commission_rate_pct")
+    .select("id, status, commission_rate_pct, user_id, email")
     .eq("id", referral.partner_id)
     .maybeSingle();
   if (!partner) {
@@ -133,6 +161,23 @@ export async function maybeCreateCommissionForPayment(args: {
   // Policy: suspended partners earn nothing on NEW payments; existing rows stay.
   if (partner.status !== "active") {
     return { created: false, reason: "partner_suspended" };
+  }
+
+  // Self-referral guard (money-critical): never commission a business owned by the partner.
+  // Discount may still apply via partner_referrals — we do not punish the customer.
+  const selfBlocked = await isSelfReferralBusiness({
+    businessId: args.businessId,
+    partnerUserId: partner.user_id as string | null,
+    partnerEmail: partner.email as string,
+  });
+  if (selfBlocked) {
+    console.warn("[partner-commissions] self-referral blocked", {
+      businessId: args.businessId,
+      partnerId: partner.id,
+      paymentId: args.paymentId,
+      match: selfBlocked,
+    });
+    return { created: false, reason: `self_referral_blocked:${selfBlocked}` };
   }
 
   const rate = Number(partner.commission_rate_pct);

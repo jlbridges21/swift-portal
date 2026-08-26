@@ -31,6 +31,8 @@ export type PartnerReferralDiscountPitch = {
 export type PartnerProgramMarketingData = {
   commissionRatePct: number;
   holdDays: number;
+  /** From partner_program_settings — drives apply UX copy. */
+  autoApproveApplications: boolean;
   plans: Awaited<ReturnType<typeof loadCalculatorPlans>>;
   referralDiscount: PartnerReferralDiscountPitch;
   /** Primary public plan used for example arithmetic (usually studio). */
@@ -79,6 +81,7 @@ export async function loadPartnerProgramMarketingData(): Promise<PartnerProgramM
   return {
     commissionRatePct,
     holdDays: PARTNER_COMMISSION_HOLD_DAYS,
+    autoApproveApplications: programSettings.auto_approve_applications !== false,
     plans,
     referralDiscount,
     examplePlan: studio

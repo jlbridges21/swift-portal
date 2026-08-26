@@ -136,18 +136,30 @@ export function PartnerProgramPitch({ data, prefill, isBusinessAdmin }: Props) {
               <SectionEyebrow>Become a partner</SectionEyebrow>
               <h2 className="mt-2 text-2xl font-semibold text-heading">Tell us about your audience.</h2>
               <p className="mt-3 text-sm leading-relaxed text-muted">
-                We review applications to make sure the program is a good fit. You are already signed
-                in — we prefilled what we know from your profile.
+                You are already signed in — we prefilled what we know from your profile.
+                {data.autoApproveApplications
+                  ? " Join now and your referral link is ready immediately."
+                  : " Submit an application and we will email you when you are approved."}
               </p>
               <ul className="mt-4 space-y-2 text-sm text-muted">
-                <li>Applications are reviewed in about 5–7 business days.</li>
-                <li>Approved partners get a referral link and dashboard — no new login required.</li>
-                <li>No ShootPortal subscription required to apply.</li>
+                {data.autoApproveApplications ? (
+                  <>
+                    <li>Instant access to your partner dashboard and referral link.</li>
+                    <li>No new login required — we use your existing ShootPortal account.</li>
+                    <li>No ShootPortal subscription required to join.</li>
+                  </>
+                ) : (
+                  <>
+                    <li>Applications are reviewed by the ShootPortal team.</li>
+                    <li>Approved partners get a referral link and dashboard — no new login required.</li>
+                    <li>No ShootPortal subscription required to apply.</li>
+                  </>
+                )}
               </ul>
             </div>
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Apply now</CardTitle>
+                <CardTitle className="text-lg">Join now</CardTitle>
               </CardHeader>
               <CardContent>
                 <PartnerInAppApplyForm prefill={prefill} />
@@ -168,13 +180,17 @@ export function PartnerApplicationPending({
   isBusinessAdmin: boolean;
 }) {
   return (
-    <PartnerEntryShell isBusinessAdmin={isBusinessAdmin} title="Application under review">
+    <PartnerEntryShell isBusinessAdmin={isBusinessAdmin} title="Finishing your partner setup">
       <p className="text-sm text-muted">
         We received your partner application on <strong>{formatAppliedDate(appliedAt)}</strong>.
-        Our team reviews applications in the order they arrive — usually within 5 to 7 business days.
+        New applications are approved instantly — refresh this page or open{" "}
+        <Link href="/partner/dashboard" className="underline">
+          your dashboard
+        </Link>{" "}
+        if your account is already active.
       </p>
       <p className="mt-3 text-sm text-muted">
-        No need to resubmit. If you have questions, email{" "}
+        If you have questions, email{" "}
         <a className="underline" href="mailto:hello@shootportal.app">
           hello@shootportal.app
         </a>
@@ -277,12 +293,11 @@ export function PartnerApplicationWithdrawn({
       <main className="mx-auto max-w-lg px-4 py-12 sm:px-6">
         <h1 className="text-2xl font-bold text-heading">Previous application withdrawn</h1>
         <p className="mt-3 text-sm text-muted">
-          You withdrew a prior partner application. You may apply again below if you would like to
-          rejoin the review queue.
+          You withdrew a prior partner application. You may join again below.
         </p>
         <Card className="mt-8">
           <CardHeader>
-            <CardTitle className="text-lg">Apply again</CardTitle>
+            <CardTitle className="text-lg">Join again</CardTitle>
           </CardHeader>
           <CardContent>
             <PartnerInAppApplyForm prefill={prefill} />

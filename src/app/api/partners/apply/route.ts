@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await submitPartnerApplication({
+    const result = await submitPartnerApplication({
       name: typeof body.name === "string" ? body.name : "",
       email: typeof body.email === "string" ? body.email : "",
       brandName: typeof body.brandName === "string" ? body.brandName : typeof body.brand_name === "string" ? body.brand_name : "",
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       audienceSize: typeof body.audienceSize === "string" ? body.audienceSize : typeof body.audience_size === "string" ? body.audience_size : null,
       promotionPlan: typeof body.promotionPlan === "string" ? body.promotionPlan : typeof body.promotion_plan === "string" ? body.promotion_plan : null,
     });
-    return NextResponse.json(GENERIC_OK);
+    return NextResponse.json({ ...GENERIC_OK, autoApproved: result.autoApproved });
   } catch (err) {
     console.error("[api/partners/apply]", err instanceof Error ? err.message : err);
     return NextResponse.json(GENERIC_ERR, { status: 400 });

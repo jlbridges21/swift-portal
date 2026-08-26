@@ -152,6 +152,9 @@ export function validateReferralCode(raw: unknown): ReferralCodeResult {
   if (isReservedReferralCode(code)) {
     return { ok: false, error: RESERVED_REFERRAL_CODE_ERROR };
   }
+  if (isBlockedReferralCodeLabel(code)) {
+    return { ok: false, error: RESERVED_REFERRAL_CODE_ERROR };
+  }
   return { ok: true, code };
 }
 
@@ -184,18 +187,71 @@ export function parseBusinessSlugOrThrow(raw: unknown): string {
   return result.slug;
 }
 
-/** Suggest a referral code from a brand name (not yet uniqueness-checked). */
-export function suggestReferralCodeFromBrand(brandName: string): string {
-  let base = normalizeBusinessSlug(brandName)
+/**
+ * Impersonation / policy-blocked referral codes (exact match after slugify).
+ * Also covered indirectly by isReservedReferralCode for app routes.
+ */
+export const BLOCKED_REFERRAL_CODE_LABELS = [
+  "admin",
+  "superadmin",
+  "super-admin",
+  "shootportal",
+  "shoot-portal",
+  "support",
+  "billing",
+  "help",
+  "platform",
+  "login",
+  "signup",
+  "root",
+  "system",
+  "official",
+  "staff",
+  "security",
+  "noreply",
+  "webmaster",
+  "abuse",
+  "postmaster",
+  "mailer",
+] as const;
+
+const BLOCKED_REFERRAL_SET = new Set<string>(BLOCKED_REFERRAL_CODE_LABELS);
+
+export function isBlockedReferralCodeLabel(label: string): boolean {
+  return BLOCKED_REFERRAL_SET.has(normalizeBusinessSlug(label));
+}
+
+/** Max length for generated base codes — leaves room for -2 / -3 collision suffixes (max 48). */
+export const REFERRAL_CODE_BASE_MAX_LEN = 40;
+
+/**
+ * Slugify a brand name for referral codes: lowercase, hyphenated, strip accents
+ * and non-alphanumerics. Empty/junk → "partner".
+ */
+export function slugifyReferralCodeBase(brandName: string): string {
+  const stripped = brandName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-  if (!base) base = "media";
-  if (!REFERRAL_CODE_RE.test(base) || isReservedReferralCode(base)) {
-    base = `${base}-media`.replace(/-+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+    .slice(0, REFERRAL_CODE_BASE_MAX_LEN)
+    .replace(/-+$/g, "");
+  return stripped || "partner";
+}
+
+/**
+ * Suggest a referral code from a brand name (not yet uniqueness-checked).
+ * Never returns empty. Avoids reserved app routes and blocked impersonation labels.
+ */
+export function suggestReferralCodeFromBrand(brandName: string): string {
+  let base = slugifyReferralCodeBase(brandName);
+
+  if (!REFERRAL_CODE_RE.test(base) || isReservedReferralCode(base) || isBlockedReferralCodeLabel(base)) {
+    base = `${base}-media`.replace(/-+/g, "-").replace(/^-+|-+$/g, "").slice(0, REFERRAL_CODE_BASE_MAX_LEN);
   }
-  if (!REFERRAL_CODE_RE.test(base) || isReservedReferralCode(base)) {
-    base = `ref-${Date.now().toString(36)}`;
+  if (!REFERRAL_CODE_RE.test(base) || isReservedReferralCode(base) || isBlockedReferralCodeLabel(base)) {
+    base = `partner-${Date.now().toString(36)}`.slice(0, REFERRAL_CODE_BASE_MAX_LEN);
   }
   return base;
 }

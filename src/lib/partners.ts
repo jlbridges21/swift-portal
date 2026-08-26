@@ -62,7 +62,7 @@ export type PartnerRow = {
   referred_business_count?: number;
 };
 
-export type PartnerActor = { id: string; email: string | null };
+export type PartnerActor = { id: string | null; email: string | null };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -175,18 +175,29 @@ export async function assertUniqueReferralCode(
   return validated.code;
 }
 
+/**
+ * Allocate a unique referral code. Preferred string is validated; on collision
+ * appends -2, -3, … deterministically. Never fails because a name was taken.
+ */
 export async function allocateUniqueReferralCode(preferred: string): Promise<string> {
   const baseValidated = validateReferralCode(preferred);
-  let candidate = baseValidated.ok ? baseValidated.code : suggestReferralCodeFromBrand(preferred);
+  const base = baseValidated.ok ? baseValidated.code : suggestReferralCodeFromBrand(preferred);
 
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < 50; i++) {
+    const candidate =
+      i === 0 ? base : `${base.slice(0, 48 - String(i + 1).length - 1)}-${i + 1}`;
     try {
       return await assertUniqueReferralCode(candidate);
     } catch {
-      candidate = `${suggestReferralCodeFromBrand(preferred)}-${(i + 2).toString(36)}`.slice(0, 48);
+      // collision or reserved — try next suffix
     }
   }
-  return assertUniqueReferralCode(`ref-${Date.now().toString(36)}`);
+  return assertUniqueReferralCode(`partner-${Date.now().toString(36)}`);
+}
+
+/** Generate + allocate from brand name (auto-approval path). */
+export async function allocateUniqueReferralCodeFromBrand(brandName: string): Promise<string> {
+  return allocateUniqueReferralCode(suggestReferralCodeFromBrand(brandName));
 }
 
 export type SubmitApplicationInput = {
@@ -201,27 +212,44 @@ export type SubmitApplicationInput = {
 
 /**
  * Authenticated in-app application. Email must match the signed-in profile.
- * Duplicate pending rows are suppressed (idempotent success).
+ * Honors partner_program_settings.auto_approve_applications.
  */
 export async function submitAuthenticatedPartnerApplication(
   userId: string,
   profileEmail: string,
   input: SubmitApplicationInput
-): Promise<void> {
+): Promise<SubmitPartnerApplicationResult> {
   const email = normalizePartnerEmail(input.email);
   const authEmail = normalizePartnerEmail(profileEmail);
   if (!email || email !== authEmail) {
     throw new Error("Invalid application.");
   }
-  await submitPartnerApplication({ ...input, email });
-  void userId;
+  return submitPartnerApplication({ ...input, email }, { applicantUserId: userId });
 }
 
+export type SubmitPartnerApplicationResult = {
+  /** True when a partner row exists after this call (auto-approve or already partner). */
+  autoApproved: boolean;
+  partner: PartnerRow | null;
+  applicationId: string;
+  alreadyExisted: boolean;
+  inviteSent: boolean;
+  linkedExistingUser: boolean;
+  inviteError: string | null;
+};
+
+/** @deprecated Use SubmitPartnerApplicationResult */
+export type AutoApprovePartnerResult = SubmitPartnerApplicationResult;
+
 /**
- * Public application insert. Always returns a generic success shape to callers —
- * do not reveal whether the email already applied.
+ * Public / in-app application.
+ * When auto_approve_applications is on: approved app + partner (case-6 link/invite).
+ * When off: pending application for super-admin review.
  */
-export async function submitPartnerApplication(input: SubmitApplicationInput): Promise<void> {
+export async function submitPartnerApplication(
+  input: SubmitApplicationInput,
+  options?: { applicantUserId?: string | null }
+): Promise<SubmitPartnerApplicationResult> {
   const name = input.name.trim();
   const email = normalizePartnerEmail(input.email);
   const brandName = input.brandName.trim();
@@ -245,27 +273,172 @@ export async function submitPartnerApplication(input: SubmitApplicationInput): P
 
   const raw = await createServiceClient();
 
-  // Soft-dedupe pending apps for the same email — still return success either way.
-  const { data: existing } = await raw
+  // Idempotent: already a partner for this email → success, no second code / email.
+  const { data: existingPartner } = await raw
+    .from("partners")
+    .select("*")
+    .eq("email", email)
+    .maybeSingle();
+  if (existingPartner) {
+    return {
+      autoApproved: true,
+      partner: existingPartner as PartnerRow,
+      applicationId: (existingPartner as PartnerRow).application_id ?? "",
+      alreadyExisted: true,
+      inviteSent: false,
+      linkedExistingUser: Boolean((existingPartner as PartnerRow).user_id),
+      inviteError: null,
+    };
+  }
+
+  // Soft-dedupe pending apps for the same email when manual review is on.
+  const { data: existingPending } = await raw
     .from("partner_applications")
     .select("id")
     .eq("email", email)
     .eq("status", "pending")
     .maybeSingle();
-  if (existing) return;
+  if (existingPending) {
+    return {
+      autoApproved: false,
+      partner: null,
+      applicationId: existingPending.id as string,
+      alreadyExisted: true,
+      inviteSent: false,
+      linkedExistingUser: false,
+      inviteError: null,
+    };
+  }
 
-  const { error } = await raw.from("partner_applications").insert({
-    name,
-    email,
-    brand_name: brandName,
-    website,
-    social_links: socialLinks,
-    audience_size: audienceSize,
-    promotion_plan: promotionPlan,
-    status: "pending",
-  });
-  if (error) {
-    console.error("[partners] application insert failed", error.message);
+  const programSettings = await loadPartnerProgramSettings();
+  const autoApprove = programSettings.auto_approve_applications !== false;
+  const applicantUserId =
+    options?.applicantUserId ?? (await findProfileIdByEmail(email));
+
+  if (!autoApprove) {
+    const { data: app, error: appErr } = await raw
+      .from("partner_applications")
+      .insert({
+        name,
+        email,
+        brand_name: brandName,
+        website,
+        social_links: socialLinks,
+        audience_size: audienceSize,
+        promotion_plan: promotionPlan,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+    if (appErr || !app) {
+      console.error("[partners] application insert failed", appErr?.message);
+      throw new Error("Could not submit application.");
+    }
+    return {
+      autoApproved: false,
+      partner: null,
+      applicationId: app.id as string,
+      alreadyExisted: false,
+      inviteSent: false,
+      linkedExistingUser: false,
+      inviteError: null,
+    };
+  }
+
+  const { data: app, error: appErr } = await raw
+    .from("partner_applications")
+    .insert({
+      name,
+      email,
+      brand_name: brandName,
+      website,
+      social_links: socialLinks,
+      audience_size: audienceSize,
+      promotion_plan: promotionPlan,
+      status: "approved",
+      reviewed_by: applicantUserId,
+      reviewed_at: new Date().toISOString(),
+      review_note: "auto_approved",
+    })
+    .select("*")
+    .single();
+
+  if (appErr || !app) {
+    // Race: parallel submit may have created partner already
+    const { data: raced } = await raw.from("partners").select("*").eq("email", email).maybeSingle();
+    if (raced) {
+      return {
+        autoApproved: true,
+        partner: raced as PartnerRow,
+        applicationId: (raced as PartnerRow).application_id ?? "",
+        alreadyExisted: true,
+        inviteSent: false,
+        linkedExistingUser: Boolean((raced as PartnerRow).user_id),
+        inviteError: null,
+      };
+    }
+    console.error("[partners] application insert failed", appErr?.message);
+    throw new Error("Could not submit application.");
+  }
+
+  const applicationId = app.id as string;
+
+  try {
+    const referralCode = await allocateUniqueReferralCodeFromBrand(brandName);
+    const actor: PartnerActor = {
+      id: applicantUserId,
+      email,
+    };
+    const created = await createPartner(
+      {
+        name,
+        email,
+        brandName,
+        website,
+        socialLinks,
+        referralCode,
+        applicationId,
+        sendInvite: true,
+      },
+      actor
+    );
+
+    await writePlatformAudit({
+      actorUserId: applicantUserId,
+      actorEmail: email,
+      action: "partner.application_approve",
+      targetType: "partner_application",
+      targetId: applicationId,
+      metadata: { email, auto: true, referral_code: created.partner.referral_code },
+    });
+
+    return {
+      autoApproved: true,
+      partner: created.partner,
+      applicationId,
+      alreadyExisted: false,
+      inviteSent: created.inviteSent,
+      linkedExistingUser: created.linkedExistingUser,
+      inviteError: created.inviteError,
+    };
+  } catch (err) {
+    // Rollback application so we never leave approved-without-partner.
+    await raw.from("partner_applications").delete().eq("id", applicationId);
+
+    const { data: raced } = await raw.from("partners").select("*").eq("email", email).maybeSingle();
+    if (raced) {
+      return {
+        autoApproved: true,
+        partner: raced as PartnerRow,
+        applicationId: (raced as PartnerRow).application_id ?? "",
+        alreadyExisted: true,
+        inviteSent: false,
+        linkedExistingUser: Boolean((raced as PartnerRow).user_id),
+        inviteError: null,
+      };
+    }
+
+    console.error("[partners] auto-approve failed", err instanceof Error ? err.message : err);
     throw new Error("Could not submit application.");
   }
 }
@@ -521,7 +694,7 @@ export async function createPartner(
       commission_rate_pct: commissionRatePct,
       status: "active",
       application_id: input.applicationId ?? null,
-      approved_by: actor.id,
+      approved_by: actor.id || null,
       approved_at: new Date().toISOString(),
       notes: input.notes?.trim() || null,
     })

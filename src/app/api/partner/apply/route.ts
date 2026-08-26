@@ -7,7 +7,7 @@ const GENERIC_ERR = { error: "Unable to submit application. Please try again lat
 
 /**
  * Authenticated partner application from inside the app.
- * Email is locked to the signed-in profile; duplicate pending rows are suppressed.
+ * Auto-approves immediately; redirects client to partner dashboard.
  */
 export async function POST(request: Request) {
   const profile = await getProfile();
@@ -21,14 +21,11 @@ export async function POST(request: Request) {
   }
 
   if (caps.partner.active) {
-    return NextResponse.json({ error: "Already a partner." }, { status: 409 });
+    return NextResponse.json({ success: true, redirectTo: "/partner/dashboard" });
   }
 
   const { resolvePartnerEntryState } = await import("@/lib/partner-entry");
   const entryState = await resolvePartnerEntryState();
-  if (entryState?.kind === "application_pending") {
-    return NextResponse.json({ success: true });
-  }
   if (entryState?.kind === "application_declined") {
     return NextResponse.json({ error: "Not available." }, { status: 403 });
   }
@@ -42,7 +39,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await submitAuthenticatedPartnerApplication(profile.id, profile.email, {
+    const result = await submitAuthenticatedPartnerApplication(profile.id, profile.email, {
       name: typeof body.name === "string" ? body.name : "",
       email: profile.email,
       brandName:
@@ -59,7 +56,14 @@ export async function POST(request: Request) {
       audienceSize: typeof body.audienceSize === "string" ? body.audienceSize : null,
       promotionPlan: typeof body.promotionPlan === "string" ? body.promotionPlan : null,
     });
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      autoApproved: result.autoApproved,
+      redirectTo: result.autoApproved ? "/partner/dashboard" : undefined,
+      alreadyExisted: result.alreadyExisted,
+      linkedExistingUser: result.linkedExistingUser,
+      referralCode: result.partner?.referral_code ?? null,
+    });
   } catch (err) {
     console.error("[api/partner/apply]", err instanceof Error ? err.message : err);
     return NextResponse.json(GENERIC_ERR, { status: 400 });

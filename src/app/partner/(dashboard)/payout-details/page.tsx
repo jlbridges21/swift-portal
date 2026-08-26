@@ -38,8 +38,8 @@ export default async function PartnerPayoutDetailsPage() {
             </p>
             <p>
               To update your payout method or tax details, email{" "}
-              <a href="mailto:partners@shootportal.app" className="text-accent underline">
-                partners@shootportal.app
+              <a href="mailto:support@shootportal.app" className="text-accent underline">
+                support@shootportal.app
               </a>{" "}
               from <strong>{access.partner.email}</strong>.
             </p>

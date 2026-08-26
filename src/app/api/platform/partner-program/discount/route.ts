@@ -63,6 +63,9 @@ export async function PATCH(request: Request) {
       }
       patch.default_commission_rate_pct = Math.round(n * 100) / 100;
     }
+    if (body.auto_approve_applications != null) {
+      patch.auto_approve_applications = Boolean(body.auto_approve_applications);
+    }
 
     if (!Object.keys(patch).length) {
       return NextResponse.json({ error: "No changes." }, { status: 400 });

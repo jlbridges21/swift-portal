@@ -63,10 +63,17 @@ export function PartnerInAppApplyForm({ prefill }: { prefill: PartnerApplyPrefil
           promotionPlan: promotionPlan.trim(),
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        redirectTo?: string;
+        autoApproved?: boolean;
+      };
       if (!res.ok) {
         setFormError(data.error || "Unable to submit application. Please try again later.");
         return;
+      }
+      if (data.redirectTo || data.autoApproved) {
+        router.push(data.redirectTo || "/partner/dashboard");
       }
       router.refresh();
     } catch {
@@ -196,7 +203,7 @@ export function PartnerInAppApplyForm({ prefill }: { prefill: PartnerApplyPrefil
       {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
 
       <Button type="submit" disabled={busy} variant="accent" className="min-h-11 px-6">
-        {busy ? "Submitting…" : "Submit application"}
+        {busy ? "Joining…" : "Become a partner"}
       </Button>
     </form>
   );

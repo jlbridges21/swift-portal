@@ -117,7 +117,7 @@ export default async function PlatformPartnersPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold text-heading">Default commission rate</h2>
+        <h2 className="mb-3 text-lg font-semibold text-heading">Program defaults</h2>
         <Card>
           <CardContent className="pt-6">
             <PartnerProgramCommissionSettings initial={discountSettings} />

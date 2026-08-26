@@ -39,6 +39,7 @@ export {
 
 const DEFAULT_PROGRAM: PartnerProgramSettingsRow = {
   default_commission_rate_pct: 30,
+  auto_approve_applications: true,
   referral_discount_enabled: true,
   referral_discount_amount_cents: 500,
   referral_discount_duration_months: 3,
@@ -47,7 +48,7 @@ const DEFAULT_PROGRAM: PartnerProgramSettingsRow = {
 };
 
 const PROGRAM_SETTINGS_SELECT =
-  "default_commission_rate_pct, referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months, referral_discount_annual_enabled, referral_discount_annual_amount_cents, stripe_coupon_sync_ok, stripe_coupon_sync_message, stripe_coupon_sync_at, stripe_coupon_sync_mode";
+  "default_commission_rate_pct, auto_approve_applications, referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months, referral_discount_annual_enabled, referral_discount_annual_amount_cents, stripe_coupon_sync_ok, stripe_coupon_sync_message, stripe_coupon_sync_at, stripe_coupon_sync_mode";
 
 export async function loadPartnerProgramSettings(): Promise<PartnerProgramSettingsRow> {
   const raw = await createServiceClient();

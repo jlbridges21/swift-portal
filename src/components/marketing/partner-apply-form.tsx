@@ -27,7 +27,7 @@ export function PartnerApplyForm() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState<"auto" | "pending" | null>(null);
 
   function validate(): FieldErrors {
     const next: FieldErrors = {};
@@ -68,12 +68,15 @@ export function PartnerApplyForm() {
           promotionPlan: promotionPlan.trim(),
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        autoApproved?: boolean;
+      };
       if (!res.ok) {
         setFormError(data.error || "Unable to submit application. Please try again later.");
         return;
       }
-      setSuccess(true);
+      setSuccess(data.autoApproved === false ? "pending" : "auto");
     } catch {
       setFormError("Unable to submit application. Please try again later.");
     } finally {
@@ -81,7 +84,7 @@ export function PartnerApplyForm() {
     }
   }
 
-  if (success) {
+  if (success === "pending") {
     return (
       <div className="p-6 sm:p-8">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F46E5]">
@@ -89,12 +92,33 @@ export function PartnerApplyForm() {
         </p>
         <h3 className="mt-2 text-2xl font-semibold text-[#0F172A]">Thanks, we got it.</h3>
         <p className="mt-3 text-base leading-relaxed text-[#475569]">
-          Our team reviews partner applications in the order they arrive. You should hear back
-          within about <strong>5 to 7 business days</strong>. If approved, we will email you an invite
-          to claim your partner account and referral link.
+          Our team reviews partner applications in the order they arrive. We will email you when
+          your application is approved with next steps for your partner account.
         </p>
         <p className="mt-3 text-sm text-[#475569]">
-          No need to resubmit. If you have questions in the meantime, email{" "}
+          Questions? Email{" "}
+          <a className="underline" href="mailto:hello@shootportal.app">
+            hello@shootportal.app
+          </a>
+          .
+        </p>
+      </div>
+    );
+  }
+
+  if (success === "auto") {
+    return (
+      <div className="p-6 sm:p-8">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F46E5]">
+          You&apos;re in
+        </p>
+        <h3 className="mt-2 text-2xl font-semibold text-[#0F172A]">Welcome to the Partner Program.</h3>
+        <p className="mt-3 text-base leading-relaxed text-[#475569]">
+          Your partner account is active. Check your email for your referral link and next steps —
+          then sign in at <strong>shootportal.app/partner</strong> to open your dashboard.
+        </p>
+        <p className="mt-3 text-sm text-[#475569]">
+          Questions? Email{" "}
           <a className="underline" href="mailto:hello@shootportal.app">
             hello@shootportal.app
           </a>
@@ -229,7 +253,7 @@ export function PartnerApplyForm() {
         className="min-h-11 px-6 text-white"
         style={{ backgroundColor: MARKETING_BRAND.indigo }}
       >
-        {busy ? "Submitting…" : "Submit application"}
+        {busy ? "Joining…" : "Become a partner"}
       </Button>
     </form>
   );

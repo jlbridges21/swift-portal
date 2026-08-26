@@ -144,11 +144,14 @@ async function tryAttributeNewBusiness(args: {
         signupUserId: args.signupUserId,
       })
     ) {
-      console.info("[partner-ref] self-referral skipped", {
+      // Still attribute so the business keeps any referral signup discount.
+      // Commission accrual is blocked separately in maybeCreateCommissionForPayment.
+      console.info("[partner-ref] self-referral attributed (commission will be blocked)", {
         businessId: args.businessId,
         partnerId: partner.id,
+        signupEmail: args.adminEmail,
+        signupUserId: args.signupUserId ?? null,
       });
-      return false;
     }
 
     const wrote = await attributeBusinessToPartner({

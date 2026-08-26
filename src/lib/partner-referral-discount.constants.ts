@@ -10,6 +10,8 @@ export const PARTNER_COMMISSION_ON_NET_COLLECTED =
 
 export type PartnerProgramSettingsRow = {
   default_commission_rate_pct?: number;
+  /** Instant partner creation on apply when true; pending review queue when false. */
+  auto_approve_applications?: boolean;
   referral_discount_enabled: boolean;
   referral_discount_amount_cents: number;
   referral_discount_duration_months: number;

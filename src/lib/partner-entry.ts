@@ -38,8 +38,8 @@ export type PartnerApplyPrefill = {
  * Resolve entry UI from partners.status and partner_applications.status.
  *
  * Application precedence (same email):
- *   1. Any pending row → pending (shows most recent pending by created_at).
- *      A later pending after an earlier declined wins — user sees "under review".
+ *   1. Any pending row → pending (legacy queue only; new apps auto-approve).
+ *      A later pending after an earlier declined wins.
  *   2. Else most recent terminal row (declined / withdrawn / approved-without-partner).
  *   3. Else pitch (no application).
  *
