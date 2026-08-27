@@ -8,6 +8,7 @@ import { isOptimizableImageUrl } from "@/lib/media-preview";
 /** Hostnames allowed for next/image optimization */
 const OPTIMIZED_HOSTS = [
   "supabase.co",
+  "auth.shootportal.app",
   "img.youtube.com",
   "assets.cdn.filesafe.space",
   "i.ytimg.com",

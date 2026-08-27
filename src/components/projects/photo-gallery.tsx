@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import Image from "next/image";
 import { ChevronLeft, ChevronRight, Download, ZoomIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SafeAreaCloseButton } from "@/components/ui/safe-area-close-button";
 import { MediaThumbnailSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { RemoteImage } from "@/components/ui/remote-image";
 import type { MediaAsset } from "@/lib/types";
 import { downloadFileName, mediaDisplayName } from "@/lib/media-display-name";
 import { toast } from "sonner";
@@ -182,13 +182,12 @@ function PhotoThumbnail({
     >
       {thumbUrl ? (
         <>
-          <Image
+          <RemoteImage
             src={thumbUrl}
             alt={photo.alt_text || mediaDisplayName(photo)}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
             sizes="(max-width: 640px) 50vw, 33vw"
-            loading="lazy"
           />
           <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/25 group-hover:opacity-100 group-focus-visible:bg-black/25 group-focus-visible:opacity-100">
             <ZoomIn className="h-8 w-8 text-white drop-shadow-lg" />
@@ -375,7 +374,14 @@ function PhotoLightbox({
           style={{ transform: `translateY(${dragY}px) scale(${scale})` }}
         >
           {url ? (
-            <Image src={url} alt={photo.alt_text || mediaDisplayName(photo)} fill className="object-contain" sizes="100vw" priority />
+            <RemoteImage
+              src={url}
+              alt={photo.alt_text || mediaDisplayName(photo)}
+              fill
+              className="object-contain"
+              sizes="100vw"
+              priority
+            />
           ) : (
             <div className="flex h-full items-center justify-center">
               <MediaThumbnailSkeleton className="h-48 w-64 rounded-xl bg-white/10" />
@@ -396,7 +402,7 @@ function PhotoLightbox({
             )}
           >
             {thumbUrls[p.id] ? (
-              <Image src={thumbUrls[p.id]} alt="" fill className="object-cover" sizes="80px" />
+              <RemoteImage src={thumbUrls[p.id]} alt="" fill className="object-cover" sizes="80px" />
             ) : (
               <div className="h-full w-full bg-white/10" />
             )}

@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { RemoteImage } from "@/components/ui/remote-image";
 import type { HeroMedia } from "@/lib/cover";
 import { CoverPlaceholder } from "@/components/projects/cover-placeholder";
 import { StatusBadge } from "@/components/ui/badge";
@@ -48,7 +48,7 @@ export function ProjectHero({
       {hero ? (
         <div className="absolute inset-0">
           {hero.type === "image" && (
-            <Image src={hero.url} alt="" fill className="object-cover" priority sizes="100vw" />
+            <RemoteImage src={hero.url} alt="" fill className="object-cover" priority sizes="100vw" />
           )}
           {hero.type === "video" && (
             <video
@@ -63,7 +63,7 @@ export function ProjectHero({
           {hero.type === "youtube" && (
             <>
               {hero.posterUrl && (
-                <Image src={hero.posterUrl} alt="" fill className="object-cover" sizes="100vw" />
+                <RemoteImage src={hero.posterUrl} alt="" fill className="object-cover" sizes="100vw" />
               )}
               <iframe
                 src={`${hero.embedUrl}?autoplay=1&mute=1&controls=0&loop=1&playlist=${extractPlaylistId(hero.embedUrl)}`}

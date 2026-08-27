@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { SafeAreaCloseButton } from "@/components/ui/safe-area-close-button";
 import { MediaThumbnailSkeleton } from "@/components/ui/skeleton";
 import { PropertyLineToolButton } from "@/components/admin/property-line-tool-button";
+import { RemoteImage } from "@/components/ui/remote-image";
 import type { MediaAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Download, Pencil } from "lucide-react";
@@ -104,7 +104,7 @@ export function AdminPhotoLightbox({ photo, onClose, onSavedPropertyLine }: Admi
 
       <div className="relative min-h-0 flex-1 overflow-hidden px-2">
         {url ? (
-          <Image
+          <RemoteImage
             src={url}
             alt={photo.alt_text || mediaDisplayName(photo)}
             fill

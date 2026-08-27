@@ -3,6 +3,10 @@ const nextConfig = {
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "*.supabase.co" },
+      // Custom Supabase Auth/Storage domain (prod NEXT_PUBLIC_SUPABASE_URL).
+      // Without this, next/image returns 400 INVALID_IMAGE_OPTIMIZE_REQUEST for
+      // client gallery thumbs/previews while plain <img> (admin grid) still works.
+      { protocol: "https", hostname: "auth.shootportal.app" },
       { protocol: "https", hostname: "assets.cdn.filesafe.space" },
       { protocol: "https", hostname: "img.youtube.com" },
       { protocol: "https", hostname: "i.ytimg.com" },
