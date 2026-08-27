@@ -32,12 +32,12 @@ export const SHOOTPORTAL_LANDING_ACCENT = "#4F46E5";
 /**
  * Render-time-only personal photo when a partner has not uploaded one.
  * Never write this path into `partner_landing_pages.photo_url` — NULL means unset.
- * Purpose-built centered ShootPortal mark on brand navy — nothing cropped at edges.
+ * Public asset: /public/icons/one-pager.png
  */
-export const PARTNER_DEFAULT_PHOTO_PATH = "/icons/partner-default-photo.jpg";
+export const PARTNER_DEFAULT_PHOTO_PATH = "/icons/one-pager.png";
 /** Intrinsic size of PARTNER_DEFAULT_PHOTO_PATH. */
-export const PARTNER_DEFAULT_PHOTO_WIDTH = 1400;
-export const PARTNER_DEFAULT_PHOTO_HEIGHT = 1050;
+export const PARTNER_DEFAULT_PHOTO_WIDTH = 1254;
+export const PARTNER_DEFAULT_PHOTO_HEIGHT = 1254;
 
 /**
  * Resolve the personal photo shown on partner landings.
