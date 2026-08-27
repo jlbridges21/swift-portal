@@ -21,7 +21,9 @@ export const SITE_ICONS = {
   icon192: "/icons/sp-icon-192.png",
   icon512: "/icons/sp-icon-512.png",
   icon512Maskable: "/icons/sp-icon-512-maskable.png",
-  ogBrand: "/icons/one-pager.png",
+  /** Social link previews (Open Graph + Twitter). Landscape ~1.9:1, per platform specs.
+   *  Not the partner landing default photo — that is PARTNER_DEFAULT_PHOTO_PATH. */
+  ogBrand: "/icons/og-brand.png",
   /** Rounded SP monogram — favicon / compact nav */
   logoPrimary: "/icons/sp-app-icon.png",
   /** Full logo mark for marketing headers (light backgrounds) */
