@@ -5,6 +5,7 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStripeMode, type StripeMode } from "@/lib/stripe";
+import { PARTNER_PAYOUT_MINIMUM_CENTS } from "@/lib/partner-payout-constants";
 
 export type PartnerPayoutAutomationSettings = {
   automated_payouts_enabled: boolean;
@@ -20,7 +21,7 @@ export const DEFAULT_PAYOUT_AUTOMATION: PartnerPayoutAutomationSettings = {
   automated_payouts_dry_run: true,
   automated_payouts_live_transfers_enabled: false,
   automated_payouts_test_transfers_enabled: false,
-  automated_payouts_minimum_cents: 5000,
+  automated_payouts_minimum_cents: PARTNER_PAYOUT_MINIMUM_CENTS,
   automated_payouts_kill_switch: false,
 };
 
@@ -106,10 +107,15 @@ export function automatedPayoutIdempotencyKey(args: {
   return `auto-payout:${args.partnerId}:${args.periodKey}:${args.stripeMode}`;
 }
 
-/** Human-readable label for a period key. */
+/** Human-readable label for a period key (YYYY-MM or YYYY-MM-…). */
 export function payoutPeriodLabel(periodKey: string): string {
-  const [y, m] = periodKey.split("-");
-  const d = new Date(Date.UTC(Number(y), Number(m) - 1, 1));
+  const parts = periodKey.trim().split("-");
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
+    return periodKey.trim();
+  }
+  const d = new Date(Date.UTC(y, m - 1, 1));
   return new Intl.DateTimeFormat("en-US", {
     month: "long",
     year: "numeric",

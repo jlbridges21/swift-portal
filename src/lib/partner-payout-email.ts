@@ -1,5 +1,5 @@
 /**
- * Partner payout notification emails — sent after automated runs.
+ * Partner payout notification emails — sent after automated / executed transfer runs.
  * Idempotent via partner_email_sends (template_key includes payout or period).
  */
 
@@ -10,8 +10,11 @@ import {
   formatCentsForEmail,
   payoutPeriodLabel,
 } from "@/lib/partner-payout-automation";
-import { PARTNER_PAYOUT_MINIMUM_CENTS } from "@/lib/partner-stripe-connect";
-import { renderPartnerLifecycleTemplate } from "@/lib/partner-lifecycle-email";
+import {
+  PARTNER_PAYOUT_MINIMUM_CENTS,
+  formatPartnerPayoutSkipReason,
+} from "@/lib/partner-payout-constants";
+import { renderEmailTemplatePair } from "@/lib/email-template-render";
 
 export type PartnerPayoutEmailTemplateKey = "partner_payout_sent" | "partner_payout_skipped";
 
@@ -97,14 +100,18 @@ export async function sendPartnerPayoutSentEmail(options: {
     partnerPayoutsUrl: `${apex}/partner/payouts`,
   };
 
-  const subject = renderPartnerLifecycleTemplate(template.subject, variables);
-  const body = renderPartnerLifecycleTemplate(template.body, variables);
+  const rendered = renderEmailTemplatePair(template.subject, template.body, variables, {
+    context: "partner_payout_sent",
+  });
+  if (!rendered.ok) {
+    return { sent: false, skipped: true, error: rendered.error };
+  }
 
   const emailResult = await sendPlatformEmail({
     to: options.email,
-    subject,
-    title: subject,
-    body,
+    subject: rendered.subject,
+    title: rendered.subject,
+    body: rendered.body,
     ctaLabel: "View payout history",
     ctaUrl: variables.partnerPayoutsUrl,
     isTest: options.isTest,
@@ -117,7 +124,7 @@ export async function sendPartnerPayoutSentEmail(options: {
         templateKey,
         templateId: template.id,
         recipient: options.email,
-        subject,
+        subject: rendered.subject,
         messageId: emailResult.messageId,
       });
     } catch (err) {
@@ -131,32 +138,58 @@ export async function sendPartnerPayoutSentEmail(options: {
   };
 }
 
-/** Actionable skip reasons that warrant a partner email. */
-export function isActionablePayoutSkipReason(reason: string): boolean {
+/**
+ * Skip reasons that *can* warrant email — only when payable balance is positive.
+ * below_minimum is not emailed: the partner cannot act except by earning more.
+ * zero_payable / negative / inactive / already_paid never email.
+ */
+export function isConnectBlockingSkipReason(reason: string): boolean {
   return (
     reason === "connect_requirements_due" ||
     reason === "connect_not_ready" ||
-    reason === "below_minimum_threshold" ||
     reason === "connect_not_linked" ||
     reason === "mode_mismatch"
   );
 }
 
+/**
+ * Gate: email only when there is a positive payable balance that could not be paid
+ * because of a Connect/setup blocker the partner can fix.
+ */
+export function shouldSendPayoutSkipEmail(args: {
+  skipReason: string;
+  openNetCents: number;
+}): boolean {
+  if (!(args.openNetCents > 0)) return false;
+  return isConnectBlockingSkipReason(args.skipReason);
+}
+
+/** @deprecated Prefer shouldSendPayoutSkipEmail — kept for call-site clarity in tests. */
+export function isActionablePayoutSkipReason(reason: string): boolean {
+  return isConnectBlockingSkipReason(reason);
+}
+
 export function humanizePayoutSkipReason(reason: string, details?: Record<string, unknown>): string {
-  switch (reason) {
-    case "connect_requirements_due":
-      return `Stripe needs more information: ${String(details?.requirementsSummary ?? "complete onboarding in Stripe.")}`;
-    case "connect_not_ready":
-      return "Your Stripe payout account is not ready to receive transfers yet.";
-    case "below_minimum_threshold":
-      return `Your payable balance is below the minimum payout threshold (${formatCentsForEmail(Number(details?.minimumCents ?? PARTNER_PAYOUT_MINIMUM_CENTS))}).`;
-    case "connect_not_linked":
-      return "Connect your Stripe payout account under Payout details.";
-    case "mode_mismatch":
-      return "Your payout account was connected in a different Stripe mode — reconnect for this environment.";
-    default:
-      return reason.replace(/_/g, " ");
+  return formatPartnerPayoutSkipReason(reason, {
+    minimumCents:
+      typeof details?.minimumCents === "number"
+        ? details.minimumCents
+        : PARTNER_PAYOUT_MINIMUM_CENTS,
+    requirementsSummary:
+      details?.requirementsSummary != null ? String(details.requirementsSummary) : null,
+  });
+}
+
+export function resolveOpenNetCentsFromSkipDetails(
+  details?: Record<string, unknown>
+): number {
+  if (typeof details?.openNetCents === "number" && Number.isFinite(details.openNetCents)) {
+    return details.openNetCents;
   }
+  if (typeof details?.payableCents === "number" && Number.isFinite(details.payableCents)) {
+    return details.payableCents;
+  }
+  return 0;
 }
 
 export async function sendPartnerPayoutSkippedEmail(options: {
@@ -166,44 +199,56 @@ export async function sendPartnerPayoutSkippedEmail(options: {
   periodKey: string;
   skipReason: string;
   details?: Record<string, unknown>;
+  /** When known, preferred over details.openNetCents. */
+  openNetCents?: number;
   isTest?: boolean;
-}): Promise<{ sent: boolean; skipped?: boolean; error?: string | null }> {
-  if (!isActionablePayoutSkipReason(options.skipReason)) {
-    return { sent: false, skipped: true };
+}): Promise<{ sent: boolean; skipped?: boolean; error?: string | null; skipReason?: string }> {
+  const openNetCents =
+    typeof options.openNetCents === "number"
+      ? options.openNetCents
+      : resolveOpenNetCentsFromSkipDetails(options.details);
+
+  if (!shouldSendPayoutSkipEmail({ skipReason: options.skipReason, openNetCents })) {
+    return { sent: false, skipped: true, skipReason: "not_actionable_or_zero_balance" };
   }
 
   const templateKey = `partner_payout_skipped:${options.periodKey}:${options.skipReason}`;
   if (!options.isTest) {
     if (await alreadySent(options.partnerId, templateKey)) {
-      return { sent: false, skipped: true };
+      return { sent: false, skipped: true, skipReason: "already_sent" };
     }
   }
 
   const template = await loadTemplate("partner_payout_skipped");
   if (!template?.is_active && !options.isTest) {
-    return { sent: false, skipped: true };
+    return { sent: false, skipped: true, skipReason: "template_inactive" };
   }
   if (!template) {
     return { sent: false, error: "Template partner_payout_skipped not found." };
   }
 
   const apex = getPlatformApexOrigin().replace(/\/$/, "");
-  const skipReason = humanizePayoutSkipReason(options.skipReason, options.details);
+  const skipReasonText = humanizePayoutSkipReason(options.skipReason, options.details);
   const variables = {
     partnerName: options.partnerName,
     periodLabel: payoutPeriodLabel(options.periodKey),
-    skipReason,
+    skipReason: skipReasonText,
+    payableAmount: formatCentsForEmail(openNetCents),
     partnerPayoutDetailsUrl: `${apex}/partner/payout-details`,
   };
 
-  const subject = renderPartnerLifecycleTemplate(template.subject, variables);
-  const body = renderPartnerLifecycleTemplate(template.body, variables);
+  const rendered = renderEmailTemplatePair(template.subject, template.body, variables, {
+    context: "partner_payout_skipped",
+  });
+  if (!rendered.ok) {
+    return { sent: false, skipped: true, error: rendered.error, skipReason: "unresolved_template_variables" };
+  }
 
   const emailResult = await sendPlatformEmail({
     to: options.email,
-    subject,
-    title: subject,
-    body,
+    subject: rendered.subject,
+    title: rendered.subject,
+    body: rendered.body,
     ctaLabel: "Open payout details",
     ctaUrl: variables.partnerPayoutDetailsUrl,
     isTest: options.isTest,
@@ -216,7 +261,7 @@ export async function sendPartnerPayoutSkippedEmail(options: {
         templateKey,
         templateId: template.id,
         recipient: options.email,
-        subject,
+        subject: rendered.subject,
         messageId: emailResult.messageId,
       });
     } catch (err) {

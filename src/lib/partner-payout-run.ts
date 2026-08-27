@@ -154,6 +154,22 @@ export async function evaluatePartnerForPayout(args: {
     return { ...base, eligible: false, skipReason: "partner_not_active" };
   }
 
+  // Always load the ledger before Connect short-circuits so skip-email gating can
+  // require a positive payable balance even when the skip reason is connect_*.
+  const balance = await computePartnerBalance(partner.id, stripeMode);
+  base.openNetCents = balance.openNetCents;
+  base.payableCents = balance.payableCents;
+  base.currency = balance.currency;
+  base.details = {
+    pendingCents: balance.pendingCents,
+    openNetCents: balance.openNetCents,
+    payableCents: balance.payableCents,
+    minimumCents,
+    meetsMinimum: balance.openNetCents >= minimumCents,
+    connectReady: false,
+    holdCleared: balance.pendingCents === 0 || balance.openNetCents > 0,
+  };
+
   if (!partner.stripe_connect_account_id) {
     return { ...base, eligible: false, skipReason: "connect_not_linked" };
   }
@@ -164,6 +180,7 @@ export async function evaluatePartnerForPayout(args: {
       eligible: false,
       skipReason: "mode_mismatch",
       details: {
+        ...base.details,
         connectMode: partner.stripe_connect_mode,
         deployMode: stripeMode,
       },
@@ -180,6 +197,7 @@ export async function evaluatePartnerForPayout(args: {
       eligible: false,
       skipReason: "connect_requirements_due",
       details: {
+        ...base.details,
         requirementsSummary: partner.stripe_connect_requirements_summary,
       },
     };
@@ -190,21 +208,20 @@ export async function evaluatePartnerForPayout(args: {
       ...base,
       eligible: false,
       skipReason: "connect_not_ready",
-      details: { status: partner.stripe_connect_account_status },
+      details: { ...base.details, status: partner.stripe_connect_account_status },
     };
   }
 
-  const balance = await computePartnerBalance(partner.id, stripeMode);
-  base.openNetCents = balance.openNetCents;
-  base.payableCents = balance.payableCents;
-  base.currency = balance.currency;
+  base.details = {
+    ...base.details,
+    connectReady: true,
+  };
 
   if (balance.openNetCents < 0) {
     return {
       ...base,
       eligible: false,
       skipReason: "negative_balance",
-      details: { openNetCents: balance.openNetCents },
     };
   }
 
@@ -217,10 +234,6 @@ export async function evaluatePartnerForPayout(args: {
       ...base,
       eligible: false,
       skipReason: "below_minimum_threshold",
-      details: {
-        openNetCents: balance.openNetCents,
-        minimumCents,
-      },
     };
   }
 
@@ -238,6 +251,7 @@ export async function evaluatePartnerForPayout(args: {
       skipReason: "already_paid_this_period",
       amountCents: existing.amount_cents as number,
       details: {
+        ...base.details,
         existingPayoutId: existing.id,
         existingReference: existing.reference,
       },
@@ -248,7 +262,6 @@ export async function evaluatePartnerForPayout(args: {
     ...base,
     eligible: true,
     amountCents: balance.openNetCents,
-    details: { openNetCents: balance.openNetCents },
   };
 }
 
@@ -263,6 +276,11 @@ async function fetchPlatformAvailableBalanceCents(): Promise<number> {
   const balance = await stripe.balance.retrieve();
   const usd = balance.available.find((b) => b.currency === "usd");
   return usd?.amount ?? 0;
+}
+
+/** Platform Stripe available balance (USD cents) — source of partner transfer funds. */
+export async function getPlatformAvailableBalanceCents(): Promise<number> {
+  return fetchPlatformAvailableBalanceCents();
 }
 
 async function createPartnerStripeTransfer(args: {
@@ -388,6 +406,7 @@ export async function previewPartnerPayoutRun(options?: {
   periodKey: string;
   stripeMode: StripeMode;
   minimumCents: number;
+  platformBalanceAvailableCents: number;
   partners: PartnerPayoutEvaluation[];
 }> {
   const stripeMode = getStripeMode();
@@ -399,21 +418,29 @@ export async function previewPartnerPayoutRun(options?: {
       )
     : await listActivePartnersForPayoutRun();
 
-  const evaluations: PartnerPayoutEvaluation[] = [];
-  for (const partner of partners) {
-    evaluations.push(
-      await evaluatePartnerForPayout({
-        partner,
-        periodKey,
-        stripeMode,
-        minimumCents: settings.automated_payouts_minimum_cents,
-      })
-    );
-  }
+  const [platformBalanceAvailableCents, evaluations] = await Promise.all([
+    fetchPlatformAvailableBalanceCents(),
+    (async () => {
+      const out: PartnerPayoutEvaluation[] = [];
+      for (const partner of partners) {
+        out.push(
+          await evaluatePartnerForPayout({
+            partner,
+            periodKey,
+            stripeMode,
+            minimumCents: settings.automated_payouts_minimum_cents,
+          })
+        );
+      }
+      return out;
+    })(),
+  ]);
+
   return {
     periodKey,
     stripeMode,
     minimumCents: settings.automated_payouts_minimum_cents,
+    platformBalanceAvailableCents,
     partners: evaluations,
   };
 }
@@ -522,7 +549,12 @@ export async function runPartnerPayouts(args: {
         await insertRunItem({ runId, result });
         totalSkipped += 1;
 
-        if (args.sendEmails !== false && evaluation.skipReason) {
+        if (
+          args.sendEmails !== false &&
+          !execution.dryRun &&
+          execution.executeTransfers &&
+          evaluation.skipReason
+        ) {
           await sendPartnerPayoutSkippedEmail({
             partnerId: partner.id,
             email: partner.email,
@@ -530,6 +562,7 @@ export async function runPartnerPayouts(args: {
             periodKey,
             skipReason: evaluation.skipReason,
             details: evaluation.details,
+            openNetCents: evaluation.openNetCents,
           }).catch((err) =>
             console.error("[partner-payout-run] skip email failed", {
               partnerId: partner.id,
@@ -661,7 +694,12 @@ export async function runPartnerPayouts(args: {
         results.push(result);
         await insertRunItem({ runId, result });
 
-        if (args.sendEmails !== false && !recorded.reusedExisting) {
+        if (
+          args.sendEmails !== false &&
+          !execution.dryRun &&
+          execution.executeTransfers &&
+          !recorded.reusedExisting
+        ) {
           await sendPartnerPayoutSentEmail({
             partnerId: partner.id,
             email: partner.email,

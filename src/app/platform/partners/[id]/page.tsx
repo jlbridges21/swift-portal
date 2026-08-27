@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { PartnerPayoutAdjustForms } from "@/components/platform/partner-payout-adjust-forms";
+import { PartnerPayThisPartnerButton } from "@/components/platform/partner-pay-this-partner-button";
 import { PartnerPayoutHistory } from "@/components/partner/partner-payout-history";
 import { PartnerReferralsTable } from "@/components/partner/partner-referrals-table";
 import { PartnerCommissionHistory } from "@/components/partner/partner-commission-history";
@@ -141,6 +142,23 @@ export default async function PlatformPartnerDetailPage({
           updatedAt={landing?.updated_at ?? null}
           updatedByLabel={landingUpdatedByLabel}
         />
+      </section>
+
+      <section className="mt-8 space-y-3">
+        <h2 className="text-lg font-semibold text-heading">Pay this partner (Stripe transfer)</h2>
+        <Card>
+          <CardContent className="space-y-3 pt-6">
+            <p className="text-sm text-muted">
+              Dry run first, then execute. Uses the same payout run path, idempotency key, and audit
+              trail as bulk &quot;Execute transfers now&quot;. Sends a real Stripe transfer to the
+              partner&apos;s Express account.
+            </p>
+            <PartnerPayThisPartnerButton
+              partnerId={partner.id}
+              partnerLabel={partner.brand_name || partner.name}
+            />
+          </CardContent>
+        </Card>
       </section>
 
       <section className="mt-8 space-y-3">

@@ -14,6 +14,7 @@ import {
   formatFromHeader,
   getPlatformFromAddress,
 } from "@/lib/email-sender-policy";
+import { renderEmailTemplate } from "@/lib/email-template-render";
 
 export type PlatformEmailSendResult = {
   sent: boolean;
@@ -39,11 +40,11 @@ export type PlatformLifecycleVariables = {
 
 export const PLATFORM_LIFECYCLE_VARIABLE_FALLBACKS: PlatformLifecycleVariables = {
   businessName: "your studio",
-  daysRemaining: "",
-  trialEndDate: "",
+  daysRemaining: "a few",
+  trialEndDate: "your trial end date",
   planName: "your plan",
-  planPrice: "",
-  billingUrl: "",
+  planPrice: "the price on Billing",
+  billingUrl: "https://shootportal.app/billing",
   ownerName: "there",
 };
 
@@ -88,26 +89,24 @@ export function getPlatformLifecycleReplyTo(): string | undefined {
 }
 
 /**
- * Same {{variable}} interpolation approach as renderWorkflowTemplate /
- * message-templates — not a second mechanism.
+ * Same {{variable}} interpolation as other platform mail — unknown keys fail closed
+ * via renderEmailTemplate (no silent empty holes).
  */
 export function renderPlatformLifecycleTemplate(
   template: string,
   variables: Partial<PlatformLifecycleVariables>
 ): string {
-  const resolved: PlatformLifecycleVariables = { ...PLATFORM_LIFECYCLE_VARIABLE_FALLBACKS };
+  const resolved: Record<string, string> = { ...PLATFORM_LIFECYCLE_VARIABLE_FALLBACKS };
   for (const key of Object.keys(PLATFORM_LIFECYCLE_VARIABLE_FALLBACKS) as (keyof PlatformLifecycleVariables)[]) {
     const raw = (variables[key] ?? "").trim();
     if (raw) resolved[key] = raw;
   }
 
-  const rendered = template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
-    const k = key as keyof PlatformLifecycleVariables;
-    if (k in resolved) return resolved[k];
-    return "";
+  return renderEmailTemplate(template, resolved, {
+    // Some templates omit these; others require them — allow empty only when unused.
+    // If a template references an empty one, renderEmailTemplate still throws.
+    allowEmpty: [],
   });
-
-  return rendered.replace(/\s{2,}/g, " ").replace(/\s+([,.!?])/g, "$1").trim();
 }
 
 export type SendPlatformEmailOptions = {

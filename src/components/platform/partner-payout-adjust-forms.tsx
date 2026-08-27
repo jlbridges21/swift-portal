@@ -138,11 +138,18 @@ export function PartnerPayoutAdjustForms({
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Record payout</CardTitle>
+          <CardTitle className="text-base">Record a payout (bookkeeping only)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted">
-            V1 pays out <strong>all</strong> currently payable commissions for this partner (past
+            Marks the payable ledger balance as paid <strong>without</strong> sending money through
+            Stripe. Use this only for payouts you already sent outside the app. To actually move
+            money, use <strong>Pay this partner</strong> (Stripe transfer) above — that path
+            enforces the transfer minimum. This bookkeeping form does{" "}
+            <strong>not</strong> enforce the transfer minimum.
+          </p>
+          <p className="text-sm text-muted">
+            V1 records <strong>all</strong> currently payable commissions for this partner (past
             the {PARTNER_COMMISSION_HOLD_DAYS}-day hold, unpaid). Partial payouts are not supported —
             they make reconciliation ambiguous.
           </p>

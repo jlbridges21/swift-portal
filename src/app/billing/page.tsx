@@ -224,9 +224,7 @@ export default async function BillingPage() {
               <h2 className="mb-3 text-lg font-semibold text-heading">Plans</h2>
               {!anyModePriceConfigured ? (
                 <p className="mb-8 text-sm text-muted">
-                  Billing is not configured for this environment (no {stripeMode} Stripe prices).
-                  An admin must run the setup script with {stripeMode} keys before checkout will
-                  work.
+                  Billing isn&apos;t set up for this studio yet. Contact ShootPortal support.
                 </p>
               ) : publicPlans.length === 0 ? (
                 <p className="mb-8 text-sm text-muted">
@@ -324,8 +322,8 @@ export default async function BillingPage() {
                                 Unavailable
                               </Button>
                               <p className="text-xs text-muted">
-                                No {stripeMode} price configured for {plan.name}. Run the setup
-                                script with {stripeMode} keys.
+                                Billing isn&apos;t set up for this studio yet. Contact ShootPortal
+                                support.
                               </p>
                             </div>
                           )}

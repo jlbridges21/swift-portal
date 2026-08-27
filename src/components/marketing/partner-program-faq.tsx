@@ -21,8 +21,8 @@ export function PartnerProgramFaq({
     : "";
 
   const payoutAnswer = automatedPayoutsEnabled
-    ? `Connect a Stripe Express payout account in your partner dashboard (bank details stay with Stripe). After commissions clear the ${holdDays}-day hold and your payable balance reaches ${payoutMinimumLabel}, ShootPortal pays that balance to your Stripe Express account ${payoutScheduleLabel}.`
-    : `Connect a Stripe Express payout account in your partner dashboard (bank details stay with Stripe). After commissions clear the ${holdDays}-day hold and your payable balance reaches ${payoutMinimumLabel}, ShootPortal records payouts to that account. Automated monthly transfers are not enabled yet — payouts are recorded by ShootPortal once your account is ready.`;
+    ? `Connect a Stripe Express payout account in your partner dashboard (bank details stay with Stripe). After commissions clear the ${holdDays}-day hold and your payable balance reaches ${payoutMinimumLabel}, ShootPortal pays that balance to your Stripe Express account as a Stripe transfer ${payoutScheduleLabel}.`
+    : `Connect a Stripe Express payout account in your partner dashboard (bank details stay with Stripe). After commissions clear the ${holdDays}-day hold and your payable balance reaches ${payoutMinimumLabel}, ShootPortal pays that balance to your Stripe Express account as a Stripe transfer. Automated monthly transfers are not enabled yet — ShootPortal sends transfers when an operator processes your payout.`;
 
   const items = [
     {

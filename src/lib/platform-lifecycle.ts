@@ -261,10 +261,16 @@ export function renderLifecyclePreview(
   template: Pick<PlatformEmailTemplateRow, "subject" | "body">,
   variables: Partial<PlatformLifecycleVariables>
 ): { subject: string; body: string } {
-  return {
-    subject: renderPlatformLifecycleTemplate(template.subject, variables),
-    body: renderPlatformLifecycleTemplate(template.body, variables),
-  };
+  try {
+    return {
+      subject: renderPlatformLifecycleTemplate(template.subject, variables),
+      body: renderPlatformLifecycleTemplate(template.body, variables),
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[platform-lifecycle] template render failed:", message);
+    throw err;
+  }
 }
 
 async function alreadySent(
@@ -448,7 +454,22 @@ export async function processBusinessLifecycle(options: {
         continue;
       }
 
-      const rendered = renderLifecyclePreview(template, variables);
+      let rendered: { subject: string; body: string };
+      try {
+        rendered = renderLifecyclePreview(template, variables);
+      } catch (err) {
+        console.error("[platform-lifecycle] skip send — unresolved template vars", {
+          templateKey: template.key,
+          businessId: business.id,
+          err,
+        });
+        actions.push({
+          action: "failed",
+          templateKey: template.key,
+          error: "unresolved_template_variables",
+        });
+        continue;
+      }
       const title = template.name || "ShootPortal notice";
 
       if (options.dryRun) {

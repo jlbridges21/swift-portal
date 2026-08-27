@@ -618,6 +618,46 @@ function main() {
   const files = walk(SRC);
   const findings = files.flatMap(lintFile);
 
+  // Partner payout cron in vercel.json must match PARTNER_PAYOUT_CRON_SCHEDULE
+  // (schedule label is derived from that constant).
+  try {
+    const vercelPath = join(ROOT, "vercel.json");
+    const constantsPath = join(ROOT, "src/lib/partner-payout-constants.ts");
+    if (existsSync(vercelPath) && existsSync(constantsPath)) {
+      const vercel = JSON.parse(readFileSync(vercelPath, "utf8")) as {
+        crons?: { path?: string; schedule?: string }[];
+      };
+      const constantsSrc = readFileSync(constantsPath, "utf8");
+      const constMatch = constantsSrc.match(
+        /export const PARTNER_PAYOUT_CRON_SCHEDULE\s*=\s*"([^"]+)"/
+      );
+      const expected = constMatch?.[1];
+      const cron = (vercel.crons ?? []).find((c) => c.path === "/api/cron/partner-payouts");
+      if (expected && cron?.schedule && cron.schedule !== expected) {
+        findings.push({
+          file: "vercel.json",
+          line: 1,
+          rule: "partner-payout-cron",
+          detail: `partner-payouts cron "${cron.schedule}" must match PARTNER_PAYOUT_CRON_SCHEDULE "${expected}"`,
+        });
+      } else if (expected && !cron?.schedule) {
+        findings.push({
+          file: "vercel.json",
+          line: 1,
+          rule: "partner-payout-cron",
+          detail: `missing /api/cron/partner-payouts cron; expected schedule "${expected}"`,
+        });
+      }
+    }
+  } catch (err) {
+    findings.push({
+      file: "vercel.json",
+      line: 1,
+      rule: "partner-payout-cron",
+      detail: `failed to verify partner payout cron: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+
   if (findings.length) {
     console.error(`tenant-lint: ${findings.length} finding(s)\n`);
     for (const f of findings) {

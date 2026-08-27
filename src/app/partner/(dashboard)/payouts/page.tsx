@@ -9,7 +9,11 @@ import {
 import { listPartnerPayouts } from "@/lib/partner-payouts";
 import { loadPartnerNextPayoutInfo } from "@/lib/partner-payout-run";
 import { PARTNER_COMMISSION_HOLD_DAYS } from "@/lib/partner-commissions";
-import { PARTNER_PAYOUT_SCHEDULE_LABEL } from "@/lib/partner-stripe-connect";
+import {
+  PARTNER_PAYOUT_SCHEDULE_LABEL,
+  formatPartnerCommissionKindLabel,
+  formatPartnerPayoutSkipReason,
+} from "@/lib/partner-payout-constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { PartnerPayoutHistory } from "@/components/partner/partner-payout-history";
@@ -58,7 +62,7 @@ export default async function PartnerPayoutsPage() {
         />
         <BalanceCard label="Paid to date" value={formatCurrency(balance.paidCents)} />
         <BalanceCard
-          label="UI payable (floor 0)"
+          label="Payable (for next payout)"
           value={formatCurrency(balance.payableCents)}
           hint="max(0, open) — amount a payout can cover"
         />
@@ -72,8 +76,8 @@ export default async function PartnerPayoutsPage() {
             </CardTitle>
             <p className="text-sm text-muted">
               {nextPayout.automationEnabled
-                ? `ShootPortal runs automated payouts ${PARTNER_PAYOUT_SCHEDULE_LABEL}. Minimum threshold: ${formatCurrency(nextPayout.minimumCents)}.`
-                : `Automated monthly payouts are not enabled yet. ShootPortal records payouts manually once your Stripe Express account is ready and your payable balance reaches ${formatCurrency(nextPayout.minimumCents)}.`}
+                ? `ShootPortal runs automated Stripe transfers ${PARTNER_PAYOUT_SCHEDULE_LABEL}. Transfer minimum: ${formatCurrency(nextPayout.minimumCents)}.`
+                : `Automated monthly transfers are not enabled. ShootPortal pays your Stripe Express account with a Stripe transfer when an operator processes your payout. Transfer minimum: ${formatCurrency(nextPayout.minimumCents)}.`}
             </p>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
@@ -96,7 +100,9 @@ export default async function PartnerPayoutsPage() {
                   {nextPayout.eligible
                     ? "Eligible for the next run"
                     : nextPayout.skipReason
-                      ? nextPayout.skipReason.replace(/_/g, " ")
+                      ? formatPartnerPayoutSkipReason(nextPayout.skipReason, {
+                          minimumCents: nextPayout.minimumCents,
+                        })
                       : "Not eligible yet"}
                 </p>
               </>
@@ -111,14 +117,16 @@ export default async function PartnerPayoutsPage() {
                 <p>
                   <span className="text-muted">Status:</span>{" "}
                   {nextPayout.eligible
-                    ? "Ready for a recorded payout when ShootPortal processes it"
+                    ? "Ready for a Stripe transfer when ShootPortal processes it"
                     : nextPayout.skipReason
-                      ? nextPayout.skipReason.replace(/_/g, " ")
+                      ? formatPartnerPayoutSkipReason(nextPayout.skipReason, {
+                          minimumCents: nextPayout.minimumCents,
+                        })
                       : "Not ready yet"}
                 </p>
                 <p className="text-muted">
-                  Connect onboarding and the commission ledger are live. Automatic transfers turn
-                  on when ShootPortal enables the payout automation switch.
+                  Connect onboarding and the commission ledger are live. Automatic monthly transfers
+                  turn on when ShootPortal enables the payout automation switch.
                 </p>
               </>
             )}
@@ -156,7 +164,7 @@ export default async function PartnerPayoutsPage() {
                         <td className="py-2 pr-3 text-muted">
                           {new Date(row.earnedAt).toLocaleDateString()}
                         </td>
-                        <td className="py-2 pr-3">{row.kind}</td>
+                        <td className="py-2 pr-3">{formatPartnerCommissionKindLabel(row.kind)}</td>
                         <td className="py-2 pr-3 font-medium tabular-nums">
                           {formatCurrency(row.amountCents)}
                         </td>

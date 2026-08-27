@@ -175,7 +175,7 @@ export function ClientsTable({ clients, showDeleted = false }: ClientsTableProps
                 { value: "active", label: "Active projects" },
                 { value: "outstanding", label: "Outstanding balance" },
                 { value: "repeat", label: "Repeat clients" },
-                { value: "new", label: "New (14 days)" },
+                { value: "new", label: "Created in last 14 days" },
                 { value: "stale", label: "No recent activity" },
               ]}
             />

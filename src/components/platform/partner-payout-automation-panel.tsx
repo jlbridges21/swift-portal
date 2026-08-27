@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { PartnerPayoutAutomationSettings } from "@/lib/partner-payout-automation";
+import { formatPartnerPayoutSkipReason, PARTNER_PAYOUT_MINIMUM_CENTS } from "@/lib/partner-payout-constants";
 import { formatCurrency } from "@/lib/utils";
+import { PartnerPayThisPartnerButton } from "@/components/platform/partner-pay-this-partner-button";
 
 type Props = {
   initial: PartnerPayoutAutomationSettings;
@@ -20,6 +23,7 @@ type PreviewPartner = {
   skipReason?: string;
   amountCents: number;
   openNetCents: number;
+  payableCents: number;
   details: Record<string, unknown>;
 };
 
@@ -57,6 +61,11 @@ export function PartnerPayoutAutomationPanel({ initial, deployMode }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewPartner[] | null>(null);
+  const [previewMeta, setPreviewMeta] = useState<{
+    minimumCents: number;
+    platformBalanceAvailableCents: number;
+    periodKey: string;
+  } | null>(null);
   const [lastRunOutput, setLastRunOutput] = useState<string | null>(null);
   const [runs, setRuns] = useState<RunSummary[]>([]);
 
@@ -113,6 +122,11 @@ export function PartnerPayoutAutomationPanel({ initial, deployMode }: Props) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Preview failed");
     setPreview(data.partners ?? []);
+    setPreviewMeta({
+      minimumCents: data.minimumCents ?? PARTNER_PAYOUT_MINIMUM_CENTS,
+      platformBalanceAvailableCents: data.platformBalanceAvailableCents ?? 0,
+      periodKey: data.periodKey ?? "",
+    });
   }
 
   async function triggerRun(options: { dryRun: boolean; execute?: boolean }) {
@@ -139,6 +153,7 @@ export function PartnerPayoutAutomationPanel({ initial, deployMode }: Props) {
           : `Run ${data.status}: ${data.totalPaid} paid, ${data.totalSkipped} skipped, ${data.totalFailed} failed.`
       );
       await loadRuns();
+      if (preview) await loadPreview().catch(() => undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Run failed");
     } finally {
@@ -146,12 +161,26 @@ export function PartnerPayoutAutomationPanel({ initial, deployMode }: Props) {
     }
   }
 
+  const minCents = previewMeta?.minimumCents ?? settings.automated_payouts_minimum_cents;
+  const platformBalance = previewMeta?.platformBalanceAvailableCents;
+
   return (
     <div className="space-y-6">
-      <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        <strong>Money movement is OFF by default.</strong> Dry run computes only. Real transfers
-        require a separate {deployMode === "test" ? "test" : "live"}-mode enable — turning on test
-        never enables live.
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 space-y-2">
+        <p>
+          <strong>Money movement is OFF by default.</strong> Dry run computes only. Real transfers
+          require a separate {deployMode === "test" ? "test" : "live"}-mode enable — turning on test
+          never enables live.
+        </p>
+        <p>
+          <strong>Execute transfers now</strong> — actually sends money via Stripe from the platform
+          balance to each eligible partner&apos;s Express account. Irreversible from ShootPortal.
+        </p>
+        <p>
+          <strong>Record a payout</strong> (on a partner&apos;s detail page) — bookkeeping only, for
+          money you already sent outside the app. It does not create a Stripe transfer and does not
+          enforce the transfer minimum.
+        </p>
       </div>
 
       <div className="space-y-4">
@@ -165,12 +194,16 @@ export function PartnerPayoutAutomationPanel({ initial, deployMode }: Props) {
           <span>
             <span className="font-medium text-heading">Enable monthly cron</span>
             <span className="mt-0.5 block text-xs text-muted">
-              When off, scheduled cron does nothing. Manual dry runs still work below.
+              When off, scheduled cron does nothing. Manual dry runs and per-partner pays still work
+              below.
             </span>
           </span>
         </label>
 
-        <label className="flex items-start gap-3 text-sm">
+        <label
+          className="flex items-start gap-3 text-sm"
+          title="Preview who would be paid and how much — no money moves."
+        >
           <input
             type="checkbox"
             checked={dryRun}
@@ -180,14 +213,17 @@ export function PartnerPayoutAutomationPanel({ initial, deployMode }: Props) {
           <span>
             <span className="font-medium text-heading">Default to dry run</span>
             <span className="mt-0.5 block text-xs text-muted">
-              When on, cron and manual runs compute and audit only — no Stripe transfers unless
-              you explicitly execute.
+              Preview who would be paid and how much — no money moves. Cron and manual runs stay in
+              preview unless you explicitly execute a transfer.
             </span>
           </span>
         </label>
 
         {deployMode === "test" ? (
-          <label className="flex items-start gap-3 text-sm">
+          <label
+            className="flex items-start gap-3 text-sm"
+            title="Allow Stripe transfers while using test keys. Never moves live customer money."
+          >
             <input
               type="checkbox"
               checked={testTransfers}
@@ -197,12 +233,16 @@ export function PartnerPayoutAutomationPanel({ initial, deployMode }: Props) {
             <span>
               <span className="font-medium text-heading">Allow test-mode transfers</span>
               <span className="mt-0.5 block text-xs text-muted">
-                Explicit enable for sk_test_ deploy only. Does not affect live.
+                Allow Stripe transfers while using test keys. Never moves live customer money.
+                Turning this on does not enable live transfers.
               </span>
             </span>
           </label>
         ) : (
-          <label className="flex items-start gap-3 text-sm">
+          <label
+            className="flex items-start gap-3 text-sm"
+            title="Allow real Stripe transfers to partner bank accounts. Keep off until you are ready."
+          >
             <input
               type="checkbox"
               checked={liveTransfers}
@@ -212,13 +252,17 @@ export function PartnerPayoutAutomationPanel({ initial, deployMode }: Props) {
             <span>
               <span className="font-medium text-heading">Allow live-mode transfers</span>
               <span className="mt-0.5 block text-xs text-muted">
-                Explicit enable for sk_live_ deploy only. Separate from test.
+                Allow real Stripe transfers to partner bank accounts. Keep off until you are ready.
+                Separate from test-mode transfers.
               </span>
             </span>
           </label>
         )}
 
-        <label className="flex items-start gap-3 text-sm">
+        <label
+          className="flex items-start gap-3 text-sm"
+          title="Emergency stop. Halts the current payout run as soon as the next partner is processed."
+        >
           <input
             type="checkbox"
             checked={killSwitch}
@@ -228,13 +272,14 @@ export function PartnerPayoutAutomationPanel({ initial, deployMode }: Props) {
           <span>
             <span className="font-medium text-red-700">Kill switch — halt in-progress run</span>
             <span className="mt-0.5 block text-xs text-muted">
-              When on, the next partner iteration aborts the current run. Save to activate.
+              Emergency stop. Halts the current payout run as soon as the next partner is processed.
+              Save to activate.
             </span>
           </span>
         </label>
 
         <div className="space-y-1.5 sm:max-w-xs">
-          <Label htmlFor="payout-minimum">Minimum payout threshold ($)</Label>
+          <Label htmlFor="payout-minimum">Transfer minimum threshold ($)</Label>
           <Input
             id="payout-minimum"
             type="number"
@@ -243,6 +288,10 @@ export function PartnerPayoutAutomationPanel({ initial, deployMode }: Props) {
             value={minimumDollars}
             onChange={(e) => setMinimumDollars(e.target.value)}
           />
+          <p className="text-xs text-muted">
+            Enforced on Stripe transfer runs (bulk and per-partner). Not enforced on bookkeeping
+            &quot;Record a payout&quot;.
+          </p>
         </div>
       </div>
 
@@ -270,7 +319,12 @@ export function PartnerPayoutAutomationPanel({ initial, deployMode }: Props) {
         <Button
           type="button"
           variant="destructive"
-          onClick={() => triggerRun({ dryRun: false, execute: true })}
+          onClick={() => {
+            const ok = window.confirm(
+              "Execute real Stripe transfers for all eligible partners? This cannot be undone from ShootPortal."
+            );
+            if (ok) void triggerRun({ dryRun: false, execute: true });
+          }}
           disabled={running}
           className="min-h-11"
         >
@@ -281,30 +335,88 @@ export function PartnerPayoutAutomationPanel({ initial, deployMode }: Props) {
       {notice ? <p className="text-sm text-green-700">{notice}</p> : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
+      {previewMeta ? (
+        <div className="rounded-md border border-border bg-subtle/40 px-4 py-3 text-sm">
+          <p>
+            Period <strong>{previewMeta.periodKey || "—"}</strong>
+            {" · "}
+            Platform Stripe available:{" "}
+            <strong>
+              {platformBalance == null ? "—" : formatCurrency(platformBalance)}
+            </strong>
+            {" · "}
+            Transfer minimum: <strong>{formatCurrency(minCents)}</strong>
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Partner transfers draw from the platform Stripe balance. Subscription revenue may still
+            be settling — available can lag behind recent payments.
+          </p>
+        </div>
+      ) : null}
+
       {preview ? (
         <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[40rem] text-left text-sm">
+          <table className="w-full min-w-[56rem] text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-xs uppercase text-muted">
                 <th className="px-3 py-2">Partner</th>
+                <th className="px-3 py-2">Payable</th>
+                <th className="px-3 py-2">In hold</th>
+                <th className="px-3 py-2">Connect</th>
+                <th className="px-3 py-2">Min</th>
                 <th className="px-3 py-2">Eligible</th>
-                <th className="px-3 py-2">Amount</th>
                 <th className="px-3 py-2">Reason</th>
+                <th className="px-3 py-2">Pay</th>
               </tr>
             </thead>
             <tbody>
-              {preview.map((p) => (
-                <tr key={p.partnerId} className="border-b border-border/70">
-                  <td className="px-3 py-2">{p.partnerName}</td>
-                  <td className="px-3 py-2">{p.eligible ? "Yes" : "No"}</td>
-                  <td className="px-3 py-2 tabular-nums">
-                    {formatCurrency(p.eligible ? p.amountCents : p.openNetCents)}
-                  </td>
-                  <td className="px-3 py-2 text-muted">
-                    {p.eligible ? "—" : p.skipReason ?? "—"}
-                  </td>
-                </tr>
-              ))}
+              {preview.map((p) => {
+                const pending =
+                  typeof p.details.pendingCents === "number" ? p.details.pendingCents : null;
+                const connectReady = p.details.connectReady === true;
+                const meetsMinimum = p.details.meetsMinimum === true;
+                return (
+                  <tr key={p.partnerId} className="border-b border-border/70 align-top">
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/platform/partners/${p.partnerId}`}
+                        className="font-medium text-accent underline-offset-2 hover:underline"
+                      >
+                        {p.partnerName}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2 tabular-nums">
+                      {formatCurrency(p.openNetCents)}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums">
+                      {pending == null ? "—" : formatCurrency(pending)}
+                    </td>
+                    <td className="px-3 py-2">{connectReady ? "Ready" : "Not ready"}</td>
+                    <td className="px-3 py-2">{meetsMinimum ? "Met" : "Below"}</td>
+                    <td className="px-3 py-2">{p.eligible ? "Yes" : "No"}</td>
+                    <td className="px-3 py-2 text-muted">
+                      {p.eligible
+                        ? formatCurrency(p.amountCents)
+                        : p.skipReason
+                          ? formatPartnerPayoutSkipReason(p.skipReason, {
+                              minimumCents: minCents,
+                              requirementsSummary:
+                                p.details.requirementsSummary != null
+                                  ? String(p.details.requirementsSummary)
+                                  : null,
+                            })
+                          : "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <PartnerPayThisPartnerButton
+                        partnerId={p.partnerId}
+                        partnerLabel={p.partnerName}
+                        compact
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

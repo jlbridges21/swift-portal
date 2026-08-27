@@ -19,6 +19,18 @@ substitute.
 - [ ] Terms of Service reviewed by counsel
 - [ ] Remove the unreviewed-draft markers once reviewed
 
+### 1b. Legal gaps before real partners onboard (BLOCKERS — lawyer required)
+
+Do **not** invent privacy/terms prose in-app. Hand these gaps to counsel:
+
+- [ ] **Privacy policy** does not describe partner Stripe Express data collection/processing
+      (bank details, tax IDs, W-9 / 1099 handled inside Stripe Express — not stored by
+      ShootPortal, but partners need accurate notice)
+- [ ] **Subprocessor list** omits **Google** as an OAuth sign-in subprocessor (Google sign-in
+      exists; privacy §6 currently lists Supabase, Vercel, Stripe, Resend only)
+
+Both items block partner onboarding until counsel updates `/privacy` (and related terms if needed).
+
 ### 2. Live Stripe billing webhook
 Live prices exist, but without the webhook a real subscription completes in Stripe while your
 database never learns about it — you take money and do not activate the account.

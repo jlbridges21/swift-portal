@@ -6,6 +6,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { getPlatformApexOrigin } from "@/lib/portal-url";
 import { sendPlatformEmail } from "@/lib/platform-email";
+import { renderEmailTemplate, renderEmailTemplatePair } from "@/lib/email-template-render";
 import {
   partnerLandingPublicUrl,
   partnerReferralLink,
@@ -35,25 +36,21 @@ export const PARTNER_LIFECYCLE_VARIABLE_FALLBACKS: PartnerLifecycleVariables = {
   inviteUrl: "",
 };
 
+/**
+ * Lifecycle templates only. Prefer renderEmailTemplatePair at send sites so empty
+ * required vars cannot leave the building.
+ */
 export function renderPartnerLifecycleTemplate(
   template: string,
   variables: Partial<PartnerLifecycleVariables>
 ): string {
-  const resolved: PartnerLifecycleVariables = { ...PARTNER_LIFECYCLE_VARIABLE_FALLBACKS };
+  const resolved: Record<string, string> = { ...PARTNER_LIFECYCLE_VARIABLE_FALLBACKS };
   for (const key of Object.keys(PARTNER_LIFECYCLE_VARIABLE_FALLBACKS) as (keyof PartnerLifecycleVariables)[]) {
     const raw = (variables[key] ?? "").trim();
     if (raw) resolved[key] = raw;
   }
-
-  return template
-    .replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
-      const k = key as keyof PartnerLifecycleVariables;
-      if (k in resolved) return resolved[k];
-      return "";
-    })
-    .replace(/\s{2,}/g, " ")
-    .replace(/\s+([,.!?])/g, "$1")
-    .trim();
+  // inviteUrl is only on the invite template; allow empty for other templates.
+  return renderEmailTemplate(template, resolved, { allowEmpty: ["inviteUrl"] });
 }
 
 type PartnerEmailTemplateRow = {
@@ -187,8 +184,20 @@ async function sendPartnerLifecycleEmail(options: {
     return { sent: false, skipped: true, skipReason: "template_inactive" };
   }
 
-  const subject = renderPartnerLifecycleTemplate(template.subject, options.variables);
-  const body = renderPartnerLifecycleTemplate(template.body, options.variables);
+  const merged: Record<string, string> = { ...PARTNER_LIFECYCLE_VARIABLE_FALLBACKS };
+  for (const key of Object.keys(PARTNER_LIFECYCLE_VARIABLE_FALLBACKS) as (keyof PartnerLifecycleVariables)[]) {
+    const raw = (options.variables[key] ?? "").trim();
+    if (raw) merged[key] = raw;
+  }
+
+  const rendered = renderEmailTemplatePair(template.subject, template.body, merged, {
+    allowEmpty: options.templateKey === "partner_application_declined" ? ["commissionRatePct", "referralLink", "landingPageUrl", "partnerDashboardUrl", "inviteUrl"] : ["inviteUrl"],
+    context: options.templateKey,
+  });
+  if (!rendered.ok) {
+    return { sent: false, error: rendered.error, skipReason: "unresolved_template_variables" };
+  }
+  const { subject, body } = rendered;
 
   const emailResult = await sendPlatformEmail({
     to: options.to,

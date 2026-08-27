@@ -26,11 +26,12 @@ import {
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 import type { PartnerRow } from "@/lib/partners";
 
-/** Planned Phase 2 automated payout floor (cents). Phase 1 surfaces this in copy only. */
-export const PARTNER_PAYOUT_MINIMUM_CENTS = 5000;
-
-/** Planned Phase 2 cadence — describe in UI; do not run transfers yet. */
-export const PARTNER_PAYOUT_SCHEDULE_LABEL = "monthly (after the hold clears)";
+export {
+  PARTNER_PAYOUT_MINIMUM_CENTS,
+  PARTNER_PAYOUT_SCHEDULE_LABEL,
+  PARTNER_PAYOUT_CRON_SCHEDULE,
+  partnerPayoutScheduleLabelFromCron,
+} from "@/lib/partner-payout-constants";
 
 export type PartnerConnectAccountStatus =
   | "not_connected"

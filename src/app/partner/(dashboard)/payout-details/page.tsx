@@ -43,6 +43,7 @@ export default async function PartnerPayoutDetailsPage() {
   const balance = summary.balance;
   const openNet = balance.openNetCents;
   const automationOn = automation.automated_payouts_enabled;
+  const transferMinimumCents = automation.automated_payouts_minimum_cents || PARTNER_PAYOUT_MINIMUM_CENTS;
 
   return (
     <>
@@ -66,8 +67,8 @@ export default async function PartnerPayoutDetailsPage() {
             <p className="text-sm text-muted">{partnerConnectNextStep(connect.status)}</p>
             {connect.modeMismatch ? (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-                Your saved payout account was connected in a different Stripe mode (test vs live).
-                Connect again for this environment.
+                Your saved payout account was connected with different Stripe keys.
+                Connect again from this page.
               </p>
             ) : null}
             {connect.requirementsDue && connect.requirementsSummary ? (
@@ -123,7 +124,7 @@ export default async function PartnerPayoutDetailsPage() {
               hint={
                 openNet < 0
                   ? "Refunds exceeded unpaid earnings — carries forward against future commissions"
-                  : "Available for the next recorded payout"
+                  : "Available for a Stripe transfer when ShootPortal pays you"
               }
               warn={openNet < 0}
             />
@@ -133,16 +134,16 @@ export default async function PartnerPayoutDetailsPage() {
               value={
                 connect.status !== "ready"
                   ? "Connect Stripe first"
-                  : openNet < PARTNER_PAYOUT_MINIMUM_CENTS
-                    ? `Below ${formatCurrency(PARTNER_PAYOUT_MINIMUM_CENTS)} minimum`
+                  : openNet < transferMinimumCents
+                    ? `Below ${formatCurrency(transferMinimumCents)} transfer minimum`
                     : automationOn
                       ? PARTNER_PAYOUT_SCHEDULE_LABEL
-                      : "Manual — recorded by ShootPortal"
+                      : "Paid when ShootPortal sends a transfer"
               }
               hint={
                 automationOn
-                  ? `Automated transfers run ${PARTNER_PAYOUT_SCHEDULE_LABEL} when enabled for this environment`
-                  : "Automated transfers are not enabled yet — Connect onboarding is live so your destination can be ready"
+                  ? `Automated transfers run ${PARTNER_PAYOUT_SCHEDULE_LABEL} when enabled`
+                  : "Monthly auto-pay is off — ShootPortal sends Stripe transfers when an operator processes your payout"
               }
             />
           </CardContent>
@@ -159,27 +160,27 @@ export default async function PartnerPayoutDetailsPage() {
               moves.
             </p>
             <p>
-              After the hold, amounts become <strong>payable</strong>. When your open balance is
-              positive and at or above <strong>{formatCurrency(PARTNER_PAYOUT_MINIMUM_CENTS)}</strong>
-              , ShootPortal can pay that ledger balance to your Stripe Express account
+              After the hold, amounts become <strong>payable</strong>. ShootPortal pays that ledger
+              balance to your Stripe Express account as a <strong>Stripe transfer</strong> (bank
+              details stay with Stripe).
               {automationOn ? (
                 <>
                   {" "}
-                  on the automated cadence (<strong>{PARTNER_PAYOUT_SCHEDULE_LABEL}</strong>).
+                  Automated transfers run <strong>{PARTNER_PAYOUT_SCHEDULE_LABEL}</strong> when your
+                  payable balance is at or above{" "}
+                  <strong>{formatCurrency(transferMinimumCents)}</strong>.
                 </>
               ) : (
                 <>
-                  . Automated monthly transfers are <strong>not enabled yet</strong> — payouts are
-                  still recorded manually by ShootPortal.
+                  {" "}
+                  Automated monthly transfers are <strong>not enabled</strong> — ShootPortal sends
+                  transfers when an operator processes your payout (not on a fixed calendar). The{" "}
+                  <strong>{formatCurrency(transferMinimumCents)}</strong> minimum applies to those
+                  Stripe transfers.
                 </>
               )}
             </p>
             <p>
-              <strong>Today:</strong> Connect onboarding is live so your payout destination can be
-              ready.
-              {automationOn
-                ? " Automated payout runs follow the schedule above when transfers are enabled for this environment."
-                : " Payouts are still recorded manually by ShootPortal."}{" "}
               A refund after a commission is payable can drive your open balance{" "}
               <strong>negative</strong>; that deficit carries forward against future earnings — we
               do not claw back prior paid amounts in a separate invoice.
