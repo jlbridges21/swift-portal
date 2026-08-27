@@ -12,7 +12,6 @@ import { PartnerLandingPhoto } from "@/components/partner/partner-landing-photo"
 import { PartnerLandingPublicView } from "@/components/partner/partner-landing-public-view";
 import { LandingEditorPreviewFrame } from "@/components/landing/landing-editor-preview-frame";
 import { LandingEditorShell } from "@/components/landing/landing-editor-shell";
-import { PartnerTabNav } from "@/components/partner/partner-tab-nav";
 import { SafeBrandImage } from "@/components/partner/safe-brand-image";
 import { toast } from "sonner";
 import { isSafeBrandAssetUrl } from "@/lib/brand-color";
@@ -41,6 +40,16 @@ type Props = {
   previewUrl?: string | null;
   updatedAt?: string | null;
   updatedByLabel?: string | null;
+  /**
+   * Left-rail section nav supplied by the caller (partner dashboard nav, platform
+   * partner-detail nav, etc.). Do not import those navs here — invert the dependency.
+   */
+  sectionNav: React.ReactNode;
+  /**
+   * When true, shell nav is desktop-only (`hidden` below lg). Use when the surrounding
+   * layout already exposes the same section nav on small screens.
+   */
+  hideNavBelowLg?: boolean;
 };
 
 function FieldHelp({ children }: { children: React.ReactNode }) {
@@ -91,6 +100,8 @@ export function PartnerLandingEditorForm({
   previewUrl,
   updatedAt,
   updatedByLabel,
+  sectionNav,
+  hideNavBelowLg = false,
 }: Props) {
   const router = useRouter();
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -376,19 +387,8 @@ export function PartnerLandingEditorForm({
 
   return (
     <LandingEditorShell
-      hideNavBelowLg={mode === "partner"}
-      nav={
-        mode === "partner" ? (
-          <>
-            <p className="mb-3 hidden text-xs font-semibold uppercase tracking-[0.18em] text-accent lg:block">
-              Partner program
-            </p>
-            <PartnerTabNav />
-          </>
-        ) : (
-          <p className="px-1 text-sm font-medium text-heading">Partner landing editor</p>
-        )
-      }
+      hideNavBelowLg={hideNavBelowLg}
+      nav={sectionNav}
       form={
     <Card className="min-w-0 border-0 shadow-none lg:border lg:shadow-sm">
       <CardHeader>

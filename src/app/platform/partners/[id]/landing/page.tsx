@@ -39,6 +39,11 @@ export default async function PlatformPartnerLandingPage({
       <PartnerLandingEditor
         partnerId={partner.id}
         brandName={partner.brand_name}
+        partnerName={partner.name}
+        partnerEmail={partner.email}
+        referralCode={partner.referral_code}
+        status={partner.status}
+        commissionRatePct={partner.commission_rate_pct}
         initial={landing}
         defaults={landingDefaults}
         suggestedSlug={partner.referral_code}

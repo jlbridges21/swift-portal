@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { PartnerLandingEditorForm } from "@/components/partner/partner-landing-editor-form";
+import { PartnerTabNav } from "@/components/partner/partner-tab-nav";
 import { PartnerShareLinks } from "@/components/partner/partner-share-links";
 import { getProfile } from "@/lib/auth";
 import {
@@ -70,6 +71,17 @@ export default async function PartnerLandingEditorPage() {
           previewUrl={previewUrl}
           updatedAt={landing?.updated_at ?? null}
           updatedByLabel={updatedByLabel}
+          sectionNav={
+            <>
+              <p className="mb-3 hidden text-xs font-semibold uppercase tracking-[0.18em] text-accent lg:block">
+                Partner program
+              </p>
+              <PartnerTabNav />
+            </>
+          }
+          // Partner dashboard shell already shows PartnerTabNav below lg.
+          // Shell is lg:fixed and covers that rail — so shell nav is needed at lg+.
+          hideNavBelowLg
         />
       </div>
     </>
