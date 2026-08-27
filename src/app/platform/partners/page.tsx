@@ -21,6 +21,7 @@ import { PartnerProgramCharts } from "@/components/platform/partner-program-char
 import { PartnerReferralDiscountSettings } from "@/components/platform/partner-referral-discount-settings";
 import { PartnerProgramCommissionSettings } from "@/components/platform/partner-program-commission-settings";
 import { PartnerReferralDiscountOverrideWarnings } from "@/components/platform/partner-referral-discount-override-warnings";
+import { PlatformPartnersProgramShell } from "@/components/platform/platform-partners-program-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 
@@ -50,8 +51,18 @@ function Metric({
 
 export default async function PlatformPartnersPage() {
   await requireSuperAdminPage();
-  const [applications, partners, metrics, charts, tableRows, discountSettings, discountCoupons, discountWarnings, plans, payoutAutomation] =
-    await Promise.all([
+  const [
+    applications,
+    partners,
+    metrics,
+    charts,
+    tableRows,
+    discountSettings,
+    discountCoupons,
+    discountWarnings,
+    plans,
+    payoutAutomation,
+  ] = await Promise.all([
     listPartnerApplications("all"),
     listPartners("all"),
     loadPartnerProgramMetrics(),
@@ -76,106 +87,109 @@ export default async function PlatformPartnersPage() {
         runs (OFF by default).
       </p>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <Metric label="Total partners" value={String(metrics.totalPartners)} />
-        <Metric label="Pending applications" value={String(metrics.pendingApplications)} />
-        <Metric label="Active partners" value={String(metrics.activePartners)} />
-        <Metric label="Customers generated" value={String(metrics.totalCustomersGenerated)} />
-        <Metric
-          label="Active referred customers"
-          value={String(metrics.activePartnerReferredCustomers)}
-        />
-        <Metric
-          label="Revenue generated"
-          value={formatCurrency(metrics.revenueGeneratedCents)}
-          hint="ShootPortal subscription payments from partner-referred businesses"
-        />
-        <Metric
-          label="Commissions earned"
-          value={formatCurrency(metrics.totalCommissionsEarnedCents)}
-        />
-        <Metric
-          label="Pending commissions"
-          value={formatCurrency(metrics.pendingCommissionsCents)}
-          hint={`Still in the ${PARTNER_COMMISSION_HOLD_DAYS}-day hold`}
-        />
-        <Metric
-          label="Commissions paid"
-          value={formatCurrency(metrics.totalCommissionsPaidCents)}
-        />
-        <Metric
-          label="Partner-generated MRR"
-          value={formatCurrency(metrics.partnerGeneratedMrrCents)}
-          hint={metrics.mrrDefinition}
-        />
-        <Metric
-          label="Active referral discounts"
-          value={String(metrics.activeDiscountedReferrals)}
-          hint="Referred businesses still in their configured discount window"
-        />
-        <Metric
-          label="Referral discount given"
-          value={formatCurrency(metrics.totalReferralDiscountGivenCents)}
-          hint="Estimated list price minus collected on discounted invoices (deploy mode)"
-        />
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold text-heading">Automated payouts</h2>
-        <Card>
-          <CardContent className="pt-6">
-            <PartnerPayoutAutomationPanel initial={payoutAutomation} deployMode={deployMode} />
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold text-heading">Program defaults</h2>
-        <Card>
-          <CardContent className="pt-6">
-            <PartnerProgramCommissionSettings initial={discountSettings} />
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold text-heading">Referral signup discount</h2>
-        <PartnerReferralDiscountOverrideWarnings warnings={discountWarnings} />
-        <Card>
-          <CardContent className="pt-6">
-            <PartnerReferralDiscountSettings
-              initial={discountSettings}
-              initialCoupons={discountCoupons}
-              deployMode={deployMode}
-              planTrialDays={planTrialDays}
-              planTrialName={planTrialName}
-            />
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold text-heading">Trends</h2>
-        <PartnerProgramCharts buckets={charts} />
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold text-heading">Partner performance</h2>
-        <Card>
-          <CardContent className="pt-6">
-            <PartnersPerformanceTable rows={tableRows} />
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="mt-10">
-        <h2 className="mb-3 text-lg font-semibold text-heading">Applications & accounts</h2>
-        <PartnersManager
-          initialApplications={applications}
-          initialPartners={partners}
-          defaultCommissionRatePct={Number(discountSettings.default_commission_rate_pct ?? 30)}
-        />
-      </section>
+      <PlatformPartnersProgramShell
+        overview={
+          <div className="space-y-8">
+            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              <Metric label="Total partners" value={String(metrics.totalPartners)} />
+              <Metric label="Pending applications" value={String(metrics.pendingApplications)} />
+              <Metric label="Active partners" value={String(metrics.activePartners)} />
+              <Metric
+                label="Customers generated"
+                value={String(metrics.totalCustomersGenerated)}
+              />
+              <Metric
+                label="Active referred customers"
+                value={String(metrics.activePartnerReferredCustomers)}
+              />
+              <Metric
+                label="Revenue generated"
+                value={formatCurrency(metrics.revenueGeneratedCents)}
+                hint="ShootPortal subscription payments from partner-referred businesses"
+              />
+              <Metric
+                label="Commissions earned"
+                value={formatCurrency(metrics.totalCommissionsEarnedCents)}
+              />
+              <Metric
+                label="Pending commissions"
+                value={formatCurrency(metrics.pendingCommissionsCents)}
+                hint={`Still in the ${PARTNER_COMMISSION_HOLD_DAYS}-day hold`}
+              />
+              <Metric
+                label="Commissions paid"
+                value={formatCurrency(metrics.totalCommissionsPaidCents)}
+              />
+              <Metric
+                label="Partner-generated MRR"
+                value={formatCurrency(metrics.partnerGeneratedMrrCents)}
+                hint={metrics.mrrDefinition}
+              />
+              <Metric
+                label="Active referral discounts"
+                value={String(metrics.activeDiscountedReferrals)}
+                hint="Referred businesses still in their configured discount window"
+              />
+              <Metric
+                label="Referral discount given"
+                value={formatCurrency(metrics.totalReferralDiscountGivenCents)}
+                hint="Estimated list price minus collected on discounted invoices (deploy mode)"
+              />
+            </section>
+            <section>
+              <h3 className="mb-3 text-base font-semibold text-heading">Trends</h3>
+              <PartnerProgramCharts buckets={charts} />
+            </section>
+          </div>
+        }
+        performance={
+          <Card>
+            <CardContent className="pt-6">
+              <PartnersPerformanceTable rows={tableRows} />
+            </CardContent>
+          </Card>
+        }
+        applications={
+          <PartnersManager
+            initialApplications={applications}
+            initialPartners={partners}
+            defaultCommissionRatePct={Number(discountSettings.default_commission_rate_pct ?? 30)}
+          />
+        }
+        payouts={
+          <Card>
+            <CardContent className="pt-6">
+              <PartnerPayoutAutomationPanel
+                initial={payoutAutomation}
+                deployMode={deployMode}
+              />
+            </CardContent>
+          </Card>
+        }
+        referralDiscount={
+          <div className="space-y-4">
+            <PartnerReferralDiscountOverrideWarnings warnings={discountWarnings} />
+            <Card>
+              <CardContent className="pt-6">
+                <PartnerReferralDiscountSettings
+                  initial={discountSettings}
+                  initialCoupons={discountCoupons}
+                  deployMode={deployMode}
+                  planTrialDays={planTrialDays}
+                  planTrialName={planTrialName}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        }
+        programSettings={
+          <Card>
+            <CardContent className="pt-6">
+              <PartnerProgramCommissionSettings initial={discountSettings} />
+            </CardContent>
+          </Card>
+        }
+      />
     </main>
   );
 }

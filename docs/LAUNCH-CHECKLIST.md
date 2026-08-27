@@ -17,19 +17,60 @@ substitute.
 
 - [ ] Privacy Policy reviewed by counsel
 - [ ] Terms of Service reviewed by counsel
-- [ ] Remove the unreviewed-draft markers once reviewed
+- [ ] Remove the unreviewed-draft markers / amber badges once reviewed
 
-### 1b. Legal gaps before real partners onboard (BLOCKERS — lawyer required)
+### 1b. Attorney handoff — precise sign-off list (Aug 27, 2026)
 
-Do **not** invent privacy/terms prose in-app. Hand these gaps to counsel:
+Hand counsel `/privacy` and `/terms` plus this checklist. Sections on `/privacy` marked
+**NEW** or **CHANGED** are code-derived facts/structure awaiting legal prose.
 
-- [ ] **Privacy policy** does not describe partner Stripe Express data collection/processing
-      (bank details, tax IDs, W-9 / 1099 handled inside Stripe Express — not stored by
-      ShootPortal, but partners need accurate notice)
-- [ ] **Subprocessor list** omits **Google** as an OAuth sign-in subprocessor (Google sign-in
-      exists; privacy §6 currently lists Supabase, Vercel, Stripe, Resend only)
+#### Privacy — must sign off
 
-Both items block partner onboarding until counsel updates `/privacy` (and related terms if needed).
+- [ ] **§1 roles** — Partner as distinct data subject / ShootPortal as controller for partner
+      program account data
+- [ ] **§2 Partners + Google OAuth** — partner application fields; Google returns email/name via
+      Supabase Auth only (no Calendar)
+- [ ] **§2b `sp_partner_ref` cookie** — 90-day first-party httpOnly attribution cookie; prior
+      “cookies for authentication and security” language does **not** specifically cover it
+- [ ] **§4 vs §4b** — Tenant Stripe Connect (Client charges) vs Partner Express payouts
+- [ ] **§4b Partner Express** — confirm disclosure that ShootPortal **never stores** bank details,
+      tax IDs/SSN, W-9/W-8 contents, or 1099 payloads (Stripe hosted onboarding only); we store
+      Connect status ids/flags/requirement key names + commission/payout ledger only
+- [ ] **§5 Resend** — includes partner lifecycle/payout emails + optional delivery events
+- [ ] **§6 Subprocessors** — Google (OAuth), OneSignal (admin push); GHL called out as
+      Tenant-optional outbound; Google Calendar confirmed removed
+- [ ] **§9 Partners** deletion/export pointer
+- [ ] **§15 inventory table** — convert or incorporate as counsel prefers; verify completeness
+
+#### Categories the prior privacy draft did NOT cover (still need counsel language)
+
+- Partner program PII and payouts (Express / ledger)
+- Google as OAuth subprocessor
+- 90-day referral attribution cookie (`sp_partner_ref`)
+- OneSignal web push
+- GoHighLevel optional Tenant webhook (Client lead fields)
+- Platform audit log (actor email, IP)
+- Super-admin impersonation cookie
+- Partner lifecycle / payout emails via Resend
+
+#### Terms — must sign off
+
+- [ ] **§16 Partners stub** — Terms previously had **zero** partner language. Counsel must draft:
+      eligibility, commission, **30-day** hold, refund clawback/reversals, Express payouts,
+      relationship to Stripe Connected Account Agreement, cross-ref Privacy
+- [ ] Confirm Tenant/Client sections still accurate after partner program launch
+
+#### Evidence counsel may want (from code)
+
+- Partner Express: `src/lib/partner-stripe-connect.ts` (`createPartnerExpressAccount`,
+  Account Links, `partnerTaxDocumentStatusFromAccount` — “we never collect TINs in-app”)
+- Referral cookie: `src/lib/partner-referral.ts` (`PARTNER_REF_COOKIE`, `PARTNER_REF_TTL_SECONDS = 90d`)
+- Hold days: `PARTNER_COMMISSION_HOLD_DAYS = 30` in `src/lib/partner-payout-constants.ts`
+- Google OAuth: `src/components/auth/google-sign-in-button.tsx` (`provider: "google"`)
+
+Both privacy partner/Express disclosure and Google-on-subprocessor-list were launch blockers;
+structure is now in `/privacy` for counsel to rewrite into final language before real partners
+onboard.
 
 ### 2. Live Stripe billing webhook
 Live prices exist, but without the webhook a real subscription completes in Stripe while your

@@ -26,7 +26,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default async function TermsPage() {
   await requirePlatformMarketingHost();
-  const updated = "August 21, 2026";
+  const updated = "August 27, 2026";
 
   return (
     <BrandProvider brand={platformPortalBrand()}>
@@ -175,6 +175,37 @@ export default async function TermsPage() {
                 {MARKETING_SUPPORT_EMAIL}
               </a>
             </p>
+          </Section>
+
+          <Section title="16. Partners / referral program — DRAFT NEEDED">
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950">
+              <p className="font-semibold">
+                NEW — AWAITING ATTORNEY REVIEW (structure / facts only; no legal prose)
+              </p>
+              <p className="mt-2">
+                Current Terms do <strong>not</strong> mention Partners, commissions, referral
+                attribution, hold periods, clawbacks/reversals, or partner Stripe Express payouts.
+                Counsel should add a Partners section covering at least:
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>Partner eligibility, application, and account status (active / suspended)</li>
+                <li>Commission rate (program default and per-partner override)</li>
+                <li>
+                  Hold period before commissions are payable:{" "}
+                  <strong>30 days</strong> (product constant{" "}
+                  <code className="text-xs">PARTNER_COMMISSION_HOLD_DAYS</code>)
+                </li>
+                <li>
+                  Clawback / reversal behavior when referred-subscription payments are refunded
+                  (append-only negative ledger rows — not silent mutation of history)
+                </li>
+                <li>
+                  Payouts via Stripe Express Transfers; ShootPortal does not hold partner bank
+                  details (see Privacy §4b)
+                </li>
+                <li>Relationship to Privacy Policy and Stripe’s Connected Account Agreement</li>
+              </ul>
+            </div>
           </Section>
         </article>
       </MarketingShell>

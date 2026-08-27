@@ -488,3 +488,38 @@ async function loadPlatformPartnerDetailFromRow(
     monthly,
   };
 }
+
+/** Platform audit rows for one partner (target_type=partner + target_id). */
+export async function loadPartnerPlatformActivity(
+  partnerId: string,
+  limit = 100
+): Promise<
+  Array<{
+    id: string;
+    actor_email: string | null;
+    action: string;
+    target_type: string | null;
+    target_id: string | null;
+    metadata: Record<string, unknown> | null;
+    created_at: string;
+  }>
+> {
+  const raw = await createServiceClient();
+  const { data, error } = await raw
+    .from("platform_audit_log")
+    .select("id, actor_email, action, target_type, target_id, metadata, created_at")
+    .eq("target_type", "partner")
+    .eq("target_id", partnerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Array<{
+    id: string;
+    actor_email: string | null;
+    action: string;
+    target_type: string | null;
+    target_id: string | null;
+    metadata: Record<string, unknown> | null;
+    created_at: string;
+  }>;
+}
