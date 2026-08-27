@@ -12,8 +12,9 @@ import type Stripe from "stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStripe, getStripeMode } from "@/lib/stripe";
 import { getSubscriptionState } from "@/lib/subscription";
+import { PARTNER_COMMISSION_HOLD_DAYS } from "@/lib/partner-payout-constants";
 
-export const PARTNER_COMMISSION_HOLD_DAYS = 30;
+export { PARTNER_COMMISSION_HOLD_DAYS };
 
 export type PartnerCommissionKind = "commission" | "reversal" | "adjustment";
 

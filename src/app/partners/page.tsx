@@ -14,6 +14,7 @@ import { platformPortalBrand } from "@/lib/public-host-chrome";
 import { requirePlatformMarketingHost } from "@/lib/marketing-host";
 import { marketingPageMetadata } from "@/lib/marketing";
 import { loadPartnerProgramMarketingData } from "@/lib/partner-program-marketing";
+import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 /** Revalidate so plan / default-rate edits show without a redeploy. */
@@ -38,14 +39,15 @@ export default async function PartnersMarketingPage() {
   await requirePlatformMarketingHost();
   const data = await loadPartnerProgramMarketingData();
   const rate = data.commissionRatePct;
+  const discount = data.referralDiscount;
   const planLabel =
     data.examplePlan?.priceMonthlyCents && data.examplePlan.priceMonthlyCents > 0
       ? data.examplePlan.priceMonthlyLabel
-      : "$29";
+      : data.examplePlan?.priceMonthlyLabel || "";
   const perReferralMonthlyCents =
     data.examplePlan && data.examplePlan.priceMonthlyCents > 0
       ? Math.round((data.examplePlan.priceMonthlyCents * rate) / 100)
-      : Math.round((2900 * rate) / 100);
+      : 0;
 
   return (
     <BrandProvider brand={platformPortalBrand()}>
@@ -92,6 +94,24 @@ export default async function PartnersMarketingPage() {
               <p className="mt-4 text-sm text-[#475569]">
                 No ShootPortal subscription required to become a partner.
               </p>
+              {discount.enabled && discount.amountCents > 0 && discount.durationMonths > 0 ? (
+                <p className="mx-auto mt-3 max-w-2xl text-sm text-[#475569]">
+                  Referred studios on <strong>monthly</strong> billing get{" "}
+                  <strong>
+                    {discount.amountLabel}/month off for their first {discount.durationMonths} paid
+                    months
+                  </strong>
+                  {discount.annualEnabled && discount.annualAmountCents > 0 ? (
+                    <>
+                      ; on <strong>annual</strong> billing they get{" "}
+                      <strong>
+                        {discount.annualAmountLabel} off the first annual invoice (once)
+                      </strong>
+                    </>
+                  ) : null}
+                  .
+                </p>
+              ) : null}
               <p className="mt-1 text-sm text-[#64748B]">
                 Your referral activity, commissions, and payouts are tracked in your partner
                 dashboard.
@@ -137,7 +157,10 @@ export default async function PartnersMarketingPage() {
               </h2>
             </div>
             <div className="mt-10 lg:mt-12">
-              <ReferralSteps commissionRatePct={rate} />
+              <ReferralSteps
+                commissionRatePct={rate}
+                autoApproveApplications={data.autoApproveApplications}
+              />
             </div>
           </div>
         </section>
@@ -292,6 +315,10 @@ export default async function PartnersMarketingPage() {
               <PartnerProgramFaq
                 commissionRatePct={rate}
                 holdDays={data.holdDays}
+                autoApproveApplications={data.autoApproveApplications}
+                payoutMinimumLabel={formatCurrency(data.payoutMinimumCents)}
+                automatedPayoutsEnabled={data.automatedPayoutsEnabled}
+                payoutScheduleLabel={data.payoutScheduleLabel}
                 monthlyPriceLabel={
                   data.examplePlan?.priceMonthlyCents && data.examplePlan.priceMonthlyCents > 0
                     ? data.examplePlan.priceMonthlyLabel

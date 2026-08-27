@@ -9,6 +9,8 @@ import { formatPlanPrice } from "@/lib/plan-catalog";
 import { PARTNER_COMMISSION_HOLD_DAYS } from "@/lib/partner-commissions";
 import { loadCalculatorPlans } from "@/lib/partner-dashboard";
 import { loadPartnerProgramSettings } from "@/lib/partner-referral-discount";
+import { loadPartnerPayoutAutomationSettings } from "@/lib/partner-payout-automation";
+import { PARTNER_PAYOUT_MINIMUM_CENTS, PARTNER_PAYOUT_SCHEDULE_LABEL } from "@/lib/partner-stripe-connect";
 
 export async function getPartnerProgramDefaultCommissionRatePct(): Promise<number> {
   const raw = await createServiceClient();
@@ -26,6 +28,9 @@ export type PartnerReferralDiscountPitch = {
   amountCents: number;
   durationMonths: number;
   amountLabel: string;
+  annualEnabled: boolean;
+  annualAmountCents: number;
+  annualAmountLabel: string;
 };
 
 export type PartnerProgramMarketingData = {
@@ -33,6 +38,10 @@ export type PartnerProgramMarketingData = {
   holdDays: number;
   /** From partner_program_settings — drives apply UX copy. */
   autoApproveApplications: boolean;
+  /** Live payout automation master switch — marketing copy must follow TODAY's state. */
+  automatedPayoutsEnabled: boolean;
+  payoutMinimumCents: number;
+  payoutScheduleLabel: string;
   plans: Awaited<ReturnType<typeof loadCalculatorPlans>>;
   referralDiscount: PartnerReferralDiscountPitch;
   /** Primary public plan used for example arithmetic (usually studio). */
@@ -48,12 +57,14 @@ export type PartnerProgramMarketingData = {
 };
 
 export async function loadPartnerProgramMarketingData(): Promise<PartnerProgramMarketingData> {
-  const [commissionRatePct, plans, publicPlans, programSettings] = await Promise.all([
-    getPartnerProgramDefaultCommissionRatePct(),
-    loadCalculatorPlans(),
-    listPublicPlans(),
-    loadPartnerProgramSettings(),
-  ]);
+  const [commissionRatePct, plans, publicPlans, programSettings, payoutAutomation] =
+    await Promise.all([
+      getPartnerProgramDefaultCommissionRatePct(),
+      loadCalculatorPlans(),
+      listPublicPlans(),
+      loadPartnerProgramSettings(),
+      loadPartnerPayoutAutomationSettings(),
+    ]);
 
   const studio =
     publicPlans.find((p) => p.key === "studio") ??
@@ -76,12 +87,19 @@ export async function loadPartnerProgramMarketingData(): Promise<PartnerProgramM
     amountCents: programSettings.referral_discount_amount_cents,
     durationMonths: programSettings.referral_discount_duration_months,
     amountLabel: formatPlanPrice(programSettings.referral_discount_amount_cents),
+    annualEnabled: programSettings.referral_discount_annual_enabled,
+    annualAmountCents: programSettings.referral_discount_annual_amount_cents,
+    annualAmountLabel: formatPlanPrice(programSettings.referral_discount_annual_amount_cents),
   };
 
   return {
     commissionRatePct,
     holdDays: PARTNER_COMMISSION_HOLD_DAYS,
     autoApproveApplications: programSettings.auto_approve_applications !== false,
+    automatedPayoutsEnabled: payoutAutomation.automated_payouts_enabled,
+    payoutMinimumCents:
+      payoutAutomation.automated_payouts_minimum_cents || PARTNER_PAYOUT_MINIMUM_CENTS,
+    payoutScheduleLabel: PARTNER_PAYOUT_SCHEDULE_LABEL,
     plans,
     referralDiscount,
     examplePlan: studio

@@ -28,7 +28,7 @@ export type PartnerLifecycleVariables = {
 
 export const PARTNER_LIFECYCLE_VARIABLE_FALLBACKS: PartnerLifecycleVariables = {
   partnerName: "there",
-  commissionRatePct: "30",
+  commissionRatePct: "",
   referralLink: "",
   landingPageUrl: "Not set yet — create one from your partner dashboard",
   partnerDashboardUrl: "",

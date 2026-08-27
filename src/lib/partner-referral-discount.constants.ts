@@ -1,5 +1,24 @@
+/** Monthly-only annual policy — use when annual referral discount is OFF. Prefer `formatPartnerReferralAnnualBillingPolicy`. */
 export const PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY =
   "Partner referral discounts apply to monthly subscriptions only. Annual billing is charged at the full plan price.";
+
+function formatUsdCents(cents: number): string {
+  return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+}
+
+/**
+ * Annual vs monthly referral-discount copy — derived from live settings, never a fixed sentence.
+ * When annual is on: monthly is recurring for N months; annual is a one-time amount off the first annual invoice.
+ */
+export function formatPartnerReferralAnnualBillingPolicy(config: {
+  annualEnabled: boolean;
+  annualAmountOffCents: number;
+}): string {
+  if (config.annualEnabled && config.annualAmountOffCents > 0) {
+    return `Monthly billing gets the recurring monthly referral discount. Annual billing gets ${formatUsdCents(config.annualAmountOffCents)} off the first annual invoice (once), then full annual price.`;
+  }
+  return PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY;
+}
 
 /** Per-partner overrides get their own Stripe coupon row keyed by amount × duration. */
 export const PARTNER_REFERRAL_OVERRIDE_COUPON_POLICY =

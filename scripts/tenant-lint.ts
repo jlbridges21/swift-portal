@@ -91,6 +91,10 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/notifications.ts",
   "src/app/api/cron/workflow-reminders/route.ts",
   "src/app/api/cron/platform-lifecycle/route.ts",
+  "src/app/api/cron/partner-payouts/route.ts",
+  "src/app/api/platform/partner-payouts/settings/route.ts",
+  "src/app/api/platform/partner-payouts/preview/route.ts",
+  "src/app/api/platform/partner-payouts/runs/route.ts",
   "src/lib/cron-auth.ts",
   "src/lib/platform-email.ts",
   "src/lib/platform-lifecycle.ts",
@@ -123,6 +127,10 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/partner-commissions.ts",
   "src/lib/partner-dashboard.ts",
   "src/lib/partner-payouts.ts",
+  "src/lib/partner-payout-automation.ts",
+  "src/lib/partner-payout-run.ts",
+  "src/lib/partner-payout-email.ts",
+  "src/lib/partner-stripe-connect.ts",
   "src/lib/partner-program.ts",
   "src/lib/partner-program-marketing.ts",
   "src/lib/partner-entry.ts",
@@ -136,6 +144,10 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/platform-admin-recovery.ts",
   "src/lib/client-portal-recovery.ts",
   "src/app/api/cron/platform-lifecycle/route.ts",
+  "src/app/api/cron/partner-payouts/route.ts",
+  "src/app/api/platform/partner-payouts/settings/route.ts",
+  "src/app/api/platform/partner-payouts/preview/route.ts",
+  "src/app/api/platform/partner-payouts/runs/route.ts",
   "src/app/api/platform/lifecycle-emails/route.ts",
   "src/app/api/platform/lifecycle-emails/[id]/route.ts",
   "src/app/api/platform/businesses/[id]/lifecycle-emails/route.ts",
@@ -157,6 +169,7 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/lib/supabase/tenant-service.ts",
   "src/lib/stripe-payments.ts",
   "src/lib/stripe-connect.ts",
+  "src/lib/partner-stripe-connect.ts",
   "src/lib/stripe-billing.ts",
   "src/lib/stripe-webhook-events.ts",
   "src/app/api/resend/webhook/route.ts",
@@ -200,6 +213,10 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/lib/platform-email.ts",
   "src/lib/platform-lifecycle.ts",
   "src/app/api/cron/platform-lifecycle/route.ts",
+  "src/app/api/cron/partner-payouts/route.ts",
+  "src/app/api/platform/partner-payouts/settings/route.ts",
+  "src/app/api/platform/partner-payouts/preview/route.ts",
+  "src/app/api/platform/partner-payouts/runs/route.ts",
   "src/app/api/platform/lifecycle-emails/route.ts",
   "src/app/api/platform/lifecycle-emails/[id]/route.ts",
   "src/app/api/platform/businesses/[id]/lifecycle-emails/route.ts",
@@ -453,6 +470,138 @@ function lintFile(abs: string): Finding[] {
           detail:
             "Hand-built /auth/v1/verify URLs are GET-consumable. Use /auth/confirm?token_hash=…",
         });
+      }
+    }
+  }
+
+  // Rule 9: three money flows must never mix.
+  // A = platform bills businesses (stripe_customer_id)
+  // B = businesses bill clients (business_integrations.stripe_account_id / getStripeForBusiness)
+  // C = platform pays partners (partners.stripe_connect_account_id / partner-stripe-connect)
+  findings.push(...lintMoneyFlowSeparation(file, source, lines));
+
+  return findings;
+}
+
+/** Partner payout / Connect Express (FLOW C) — must never touch business charging accounts. */
+const FLOW_C_PARTNER_PAYOUT_FILES = [
+  "src/lib/partner-stripe-connect.ts",
+  "src/lib/partner-payouts.ts",
+  "src/lib/partner-payout-automation.ts",
+  "src/lib/partner-payout-run.ts",
+  "src/lib/partner-payout-email.ts",
+  "src/app/api/cron/partner-payouts/route.ts",
+  "src/app/api/platform/partner-payouts/settings/route.ts",
+  "src/app/api/platform/partner-payouts/preview/route.ts",
+  "src/app/api/platform/partner-payouts/runs/route.ts",
+  "src/app/api/partner/stripe/connect/route.ts",
+  "src/app/api/partner/stripe/connect/callback/route.ts",
+  "src/app/api/partner/stripe/connect/refresh/route.ts",
+  "src/app/api/stripe/webhook/partner-connect/route.ts",
+  "src/app/partner/(dashboard)/payout-details/page.tsx",
+  "src/app/partner/(dashboard)/payouts/page.tsx",
+  "src/components/partner/partner-connect-onboard-button.tsx",
+];
+
+/** Business → client Connect charges (FLOW B) — must never touch partner payout accounts. */
+const FLOW_B_BUSINESS_CHARGE_FILES = [
+  "src/lib/stripe-connect.ts",
+  "src/app/api/stripe/connect/route.ts",
+  "src/app/api/stripe/connect/callback/route.ts",
+  "src/app/api/stripe/connect/refresh/route.ts",
+  "src/lib/stripe-payments.ts",
+];
+
+function lintMoneyFlowSeparation(
+  file: string,
+  source: string,
+  lines: string[]
+): Finding[] {
+  const findings: Finding[] = [];
+
+  if (FLOW_C_PARTNER_PAYOUT_FILES.includes(file)) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      if (trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
+      if (
+        /getStripeForBusiness\b/.test(line) ||
+        /loadIntegrationByStripeAccount\b/.test(line) ||
+        /ensureStripeConnectAccount\b/.test(line) ||
+        /from\(["']business_integrations["']\)/.test(line) ||
+        /\.eq\(\s*["']stripe_account_id["']/.test(line)
+      ) {
+        // Comments documenting the forbid are OK; only live code fails.
+        if (/\/\/.*(?:never|must not|FLOW B|do not)/i.test(line) && !/getStripeForBusiness\s*\(/.test(line)) {
+          continue;
+        }
+        findings.push({
+          file,
+          line: i + 1,
+          rule: "9",
+          detail:
+            "FLOW C (partner payouts) must not reference business charging Connect (FLOW B)",
+        });
+      }
+    }
+  }
+
+  if (FLOW_B_BUSINESS_CHARGE_FILES.includes(file)) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      if (trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
+      if (
+        /loadPartnerConnectByPartnerId\b/.test(line) ||
+        /loadPartnerByStripeConnectAccountId\b/.test(line) ||
+        /ensurePartnerStripeConnectAccount\b/.test(line) ||
+        /createPartnerStripeAccountLink\b/.test(line) ||
+        /from\(["']partners["']\)/.test(line) ||
+        /stripe_connect_account_id/.test(line)
+      ) {
+        if (/\/\/.*(?:never|must not|FLOW C|do not)/i.test(line)) continue;
+        findings.push({
+          file,
+          line: i + 1,
+          rule: "9",
+          detail:
+            "FLOW B (business→client charges) must not reference partner Connect (FLOW C)",
+        });
+      }
+    }
+  }
+
+  // Cross-import guard: partner payout libs must not import stripe-connect charge helpers
+  // (account id helpers like connectEventAccountId are shared — allowlisted by name).
+  if (
+    FLOW_C_PARTNER_PAYOUT_FILES.includes(file) &&
+    /from\s+["']@\/lib\/stripe-connect["']/.test(source)
+  ) {
+    const allowedImports = [
+      "connectEventAccountId",
+      "type Stripe",
+    ];
+    const importBlock = source.match(
+      /import\s*\{([^}]+)\}\s*from\s*["']@\/lib\/stripe-connect["']/
+    );
+    if (importBlock) {
+      const names = importBlock[1]
+        .split(",")
+        .map((s) => s.trim().replace(/^type\s+/, ""))
+        .filter(Boolean);
+      for (const name of names) {
+        if (
+          !allowedImports.includes(name) &&
+          !allowedImports.includes(`type ${name}`)
+        ) {
+          const lineNo = lineOf(source, source.indexOf(importBlock[0]));
+          findings.push({
+            file,
+            line: lineNo,
+            rule: "9",
+            detail: `FLOW C must not import charge helper "${name}" from stripe-connect`,
+          });
+        }
       }
     }
   }

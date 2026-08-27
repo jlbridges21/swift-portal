@@ -7,6 +7,7 @@ import {
   loadIntegrationByStripeAccount,
   markStripeAccountDisabled,
 } from "@/lib/stripe-connect";
+import { loadPartnerByStripeConnectAccountId } from "@/lib/partner-stripe-connect";
 import {
   checkPaymentBusinessAttribution,
   findPaymentFromStripe,
@@ -117,6 +118,17 @@ export async function POST(request: Request) {
 
   const integration = await loadIntegrationByStripeAccount(connectedAccountId);
   if (!integration) {
+    // Partner Express accounts are FLOW C — handled by /api/stripe/webhook/partner-connect.
+    const partnerHit = await loadPartnerByStripeConnectAccountId(connectedAccountId);
+    if (partnerHit) {
+      logConnect("partner Express account — ignored here (flow C webhook owns it)", {
+        eventType: event.type,
+        eventId: event.id,
+        stripeAccount: connectedAccountId,
+        partnerId: partnerHit.partnerId,
+      });
+      return NextResponse.json({ received: true, ignored: true, flow: "partner_payouts" });
+    }
     logConnect("unknown connected account — writing nothing", {
       eventType: event.type,
       eventId: event.id,

@@ -11,13 +11,15 @@ import {
 import { cn } from "@/lib/utils";
 import { useInView, usePrefersReducedMotion } from "./motion";
 
-function buildSteps(rate: number) {
+function buildSteps(rate: number, autoApprove: boolean) {
   return [
     {
       key: "link",
       title: "Get your referral link",
       short: "Get your link",
-      body: "After approval, you get your own partner link and referral code.",
+      body: autoApprove
+        ? "When you join, you get your own partner link and referral code right away."
+        : "After approval, you get your own partner link and referral code.",
       icon: Link2,
     },
     {
@@ -51,8 +53,14 @@ function buildSteps(rate: number) {
   ] as const;
 }
 
-export function ReferralSteps({ commissionRatePct }: { commissionRatePct: number }) {
-  const steps = buildSteps(commissionRatePct);
+export function ReferralSteps({
+  commissionRatePct,
+  autoApproveApplications = true,
+}: {
+  commissionRatePct: number;
+  autoApproveApplications?: boolean;
+}) {
+  const steps = buildSteps(commissionRatePct, autoApproveApplications);
   const [active, setActive] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();

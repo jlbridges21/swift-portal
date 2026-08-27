@@ -1,0 +1,42 @@
+Executing via MCP, query length: 33690
+Starting isolation run at 2026-08-26T20:58:53.048Z
+supabase db execute exit=1
+stdout:
+{"_tag":"Error","error":{"code":"ShowHelp","message":"Unrecognized flag: --linked in command supabase db\n\n  Hint: --linked is available on `supabase db diff`, `supabase db dump`, `supabase db push`, `supabase db pull`, `supabase db reset`, `supabase db lint`, `supabase db query`, `supabase db advisors`, and `supabase db schema declarative generate`. Pass it after the subcommand.\n\nUnknown subcommand \"execute\" for \"supabase db\"\n\nUnrecognized flag: --file in command supabase db\n\n  Hint: --file is available on `supabase db diff`, `supabase db dump`, `supabase db query`, and `supabase db schema declarative sync`. Pass it after the subcommand."}}
+
+stderr:
+{"_tag":"Help","doc":{"description":"Manage Postgres databases.","usage":"supabase db <subcommand> [flags]","flags":[],"annotations":{"_id":"Context","services":[]},"subcommands":[{"commands":[{"name":"diff","shortDescription":"Diffs the local database for schema changes","description":"Diffs the local database for schema changes."},{"name":"dump","shortDescription":"Dumps data or schemas from the remote database","description":"Dumps data or schemas from the remote database."},{"name":"push","shortDescription":"Push new migrations to the remote database","description":"Push new migrations to the remote database. Vault secrets from config.toml are updated before migrations unless --skip-vault is set."},{"name":"pull","shortDescription":"Pull schema from the remote database","description":"Pull schema from the remote database."},{"name":"reset","shortDescription":"Resets the local database to current migrations","description":"Resets the local database to current migrations."},{"name":"lint","shortDescription":"Checks local database for typing error","description":"Checks local database for typing error."},{"name":"start","shortDescription":"Starts local Postgres database","description":"Starts local Postgres database."},{"name":"query","shortDescription":"Execute a SQL query against the database","description":"Execute a SQL query against the database."},{"name":"advisors","shortDescription":"Checks database for security and performance issues","description":"Checks database for security and performance issues."},{"name":"schema","shortDescription":"Manage database schema","description":"Manage database schema."}]}],"globalFlags":[{"name":"help","aliases":["-h"],"type":"boolean","description":{"_id":"Option","_tag":"Some","value":"Show help information"},"required":false},{"name":"version","aliases":["-v"],"type":"boolean","description":{"_id":"Option","_tag":"Some","value":"Show version information"},"required":false},{"name":"wizard","aliases":[],"type":"boolean","description":{"_id":"Option","_tag":"Some","value":"Start wizard mode for a command"},"required":false},{"name":"completions","aliases":[],"type":"<bash|zsh|fish|sh>","description":{"_id":"Option","_tag":"Some","value":"Print shell completion script (choices: bash, zsh, fish, sh)"},"required":false},{"name":"log-level","aliases":[],"type":"<all|trace|debug|info|warn|warning|error|fatal|none>","description":{"_id":"Option","_tag":"Some","value":"Sets the minimum log level (choices: all, trace, debug, info, warn, warning, error, fatal, none)"},"required":false},{"name":"output-format","aliases":[],"type":"choice","description":{"_id":"Option","_tag":"Some","value":"Output format: text (default), json, or stream-json (NDJSON) (choices: text, json, stream-json)"},"required":false},{"name":"output","aliases":["-o"],"type":"choice","description":{"_id":"Option","_tag":"Some","value":"output format of status variables (choices: env, pretty, json, toml, yaml, table, csv)"},"required":false},{"name":"profile","aliases":[],"type":"string","description":{"_id":"Option","_tag":"Some","value":"use a specific profile for connecting to Supabase API"},"required":false},{"name":"debug","aliases":[],"type":"boolean","description":{"_id":"Option","_tag":"Some","value":"output debug logs to stderr"},"required":false},{"name":"workdir","aliases":[],"type":"string","description":{"_id":"Option","_tag":"Some","value":"path to a Supabase project directory"},"required":false},{"name":"experimental","aliases":[],"type":"boolean","description":{"_id":"Option","_tag":"Some","value":"enable experimental features"},"required":false},{"name":"network-id","aliases":[],"type":"string","description":{"_id":"Option","_tag":"Some","value":"use the specified docker network instead of a generated one"},"required":false},{"name":"yes","aliases":[],"type":"boolean","description":{"_id":"Option","_tag":"Some","value":"answer yes to all prompts"},"required":false},{"name":"dns-resolver","aliases":[],"type":"choice","description":{"_id":"Option","_tag":"Some","value":"lookup domain names using the specified resolver (choices: native, https)"},"required":false},{"name":"create-ticket","aliases":[],"type":"boolean","description":{"_id":"Option","_tag":"Some","value":"create a support ticket for any CLI error"},"required":false},{"name":"agent","aliases":[],"type":"choice","description":{"_id":"Option","_tag":"Some","value":"Override agent detection: yes, no, or auto (default auto) (choices: auto, yes, no)"},"required":false}]}}
+
+
+Attempting full isolation run (33691 bytes) at 2026-08-26T21:04:40.105Z
+
+--- MCP execute_sql isolation run 2026-08-26T21:05:31.345Z (33691 bytes) ---
+
+[2026-08-26T21:06:56.698Z] Invoking execute_sql via node helper (33691 bytes)
+node:internal/modules/package_json_reader:267
+  throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);
+        ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@modelcontextprotocol/sdk' imported from /private/tmp/run-isolation-exec.mjs
+    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:267:9)
+    at packageResolve (node:internal/modules/esm/resolve:768:81)
+    at moduleResolve (node:internal/modules/esm/resolve:854:18)
+    at defaultResolve (node:internal/modules/esm/resolve:984:11)
+    at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:736:12)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:660:25)
+    at ModuleLoader.resolve (node:internal/modules/esm/loader:643:38)
+    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:279:38)
+    at ModuleJob._link (node:internal/modules/esm/module_job:137:49) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v23.9.0
+MCP error: StreamableHTTPError: Streamable HTTP error: Error POSTing to endpoint: {"message":"Unauthorized"}
+    at StreamableHTTPClientTransport.send (file:///Users/jlbridges21/Desktop/coding/swift%20portal%20v2/node_modules/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js:365:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  code: 401
+}
+
+[2026-08-26T21:11:08.242Z] Prepared isolation MCP payload 33691 bytes
+{"_tag":"Error","error":{"code":"LegacyDbQueryMutuallyExclusiveFlagsError","message":"--project-ref only applies when targeting the linked project; use it with --linked (not --local or --db-url)"}}
+{"_tag":"Error","error":{"code":"LegacyProjectNotLinkedError","message":"Cannot find project ref. Have you run supabase link?"}}

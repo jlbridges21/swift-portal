@@ -1,5 +1,6 @@
 import { requireSuperAdminPage } from "@/lib/admin-access";
 import { listPartnerApplications, listPartners } from "@/lib/partners";
+import { PARTNER_COMMISSION_HOLD_DAYS } from "@/lib/partner-commissions";
 import {
   loadPartnerProgramCharts,
   loadPartnerProgramMetrics,
@@ -10,6 +11,8 @@ import {
   loadReferralDiscountStripeCoupons,
   listPartnerReferralDiscountWarnings,
 } from "@/lib/partner-referral-discount";
+import { loadPartnerPayoutAutomationSettings } from "@/lib/partner-payout-automation";
+import { PartnerPayoutAutomationPanel } from "@/components/platform/partner-payout-automation-panel";
 import { getStripeMode } from "@/lib/stripe";
 import { listActivePlans } from "@/lib/entitlements";
 import { PartnersManager } from "@/components/platform/partners-manager";
@@ -47,7 +50,7 @@ function Metric({
 
 export default async function PlatformPartnersPage() {
   await requireSuperAdminPage();
-  const [applications, partners, metrics, charts, tableRows, discountSettings, discountCoupons, discountWarnings, plans] =
+  const [applications, partners, metrics, charts, tableRows, discountSettings, discountCoupons, discountWarnings, plans, payoutAutomation] =
     await Promise.all([
     listPartnerApplications("all"),
     listPartners("all"),
@@ -58,6 +61,7 @@ export default async function PlatformPartnersPage() {
     loadReferralDiscountStripeCoupons(),
     listPartnerReferralDiscountWarnings(),
     listActivePlans(),
+    loadPartnerPayoutAutomationSettings(),
   ]);
   const deployMode = getStripeMode();
   const primaryPlan = plans[0];
@@ -68,8 +72,8 @@ export default async function PlatformPartnersPage() {
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="mb-2 text-2xl font-bold text-heading">Partners</h1>
       <p className="mb-8 text-sm text-muted">
-        Program metrics, partner performance, applications, and manual payouts. Automated payouts
-        and Stripe Connect for partners are out of scope.
+        Program metrics, partner performance, applications, manual payouts, and automated payout
+        runs (OFF by default).
       </p>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -93,7 +97,7 @@ export default async function PlatformPartnersPage() {
         <Metric
           label="Pending commissions"
           value={formatCurrency(metrics.pendingCommissionsCents)}
-          hint="Still in the 30-day hold"
+          hint={`Still in the ${PARTNER_COMMISSION_HOLD_DAYS}-day hold`}
         />
         <Metric
           label="Commissions paid"
@@ -114,6 +118,15 @@ export default async function PlatformPartnersPage() {
           value={formatCurrency(metrics.totalReferralDiscountGivenCents)}
           hint="Estimated list price minus collected on discounted invoices (deploy mode)"
         />
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-3 text-lg font-semibold text-heading">Automated payouts</h2>
+        <Card>
+          <CardContent className="pt-6">
+            <PartnerPayoutAutomationPanel initial={payoutAutomation} deployMode={deployMode} />
+          </CardContent>
+        </Card>
       </section>
 
       <section className="mt-8">
@@ -157,7 +170,11 @@ export default async function PlatformPartnersPage() {
 
       <section className="mt-10">
         <h2 className="mb-3 text-lg font-semibold text-heading">Applications & accounts</h2>
-        <PartnersManager initialApplications={applications} initialPartners={partners} />
+        <PartnersManager
+          initialApplications={applications}
+          initialPartners={partners}
+          defaultCommissionRatePct={Number(discountSettings.default_commission_rate_pct ?? 30)}
+        />
       </section>
     </main>
   );

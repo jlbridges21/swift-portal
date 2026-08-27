@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/platform-lifecycle",
       "schedule": "30 14 * * *"
+    },
+    {
+      "path": "/api/cron/partner-payouts",
+      "schedule": "0 15 1 * *"
     }
   ]
 }

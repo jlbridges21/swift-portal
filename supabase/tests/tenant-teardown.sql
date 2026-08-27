@@ -52,6 +52,7 @@ BEGIN
   DELETE FROM partner_referrals WHERE business_id = v_teardown_business_id;
   -- Commission ledger is append-only in app code; teardown may delete test rows.
   DELETE FROM partner_commissions WHERE business_id = v_teardown_business_id;
+  DELETE FROM partners WHERE id = '00000000-0000-0000-0000-0000000000d0';
   -- profiles.business_id FK: clear Tenant B test profiles before deleting the business
   UPDATE profiles SET business_id = NULL, client_id = NULL
   WHERE id IN (v_tenant_b_admin_user_id, v_tenant_b_client_user_id);

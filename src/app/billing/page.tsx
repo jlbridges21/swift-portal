@@ -294,7 +294,11 @@ export default async function BillingPage() {
                             ) : (
                               <p className="text-xs text-muted">
                                 or {formatPlanPrice(plan.price_annual_cents)}/mo billed annually
-                                {monthlyDisplay
+                                {monthlyDisplay &&
+                                !(
+                                  annualReferralDiscount?.config?.annualEnabled &&
+                                  (annualReferralDiscount.config.annualAmountOffCents ?? 0) > 0
+                                )
                                   ? " (referral discount applies to monthly billing)"
                                   : ""}
                               </p>

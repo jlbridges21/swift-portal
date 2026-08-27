@@ -10,7 +10,7 @@ import type {
   ReferralDiscountStripeCouponRow,
 } from "@/lib/partner-referral-discount.constants";
 import {
-  PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY,
+  formatPartnerReferralAnnualBillingPolicy,
   PARTNER_REFERRAL_OVERRIDE_COUPON_POLICY,
 } from "@/lib/partner-referral-discount.constants";
 import { referralDiscountTrialDurationWarning } from "@/lib/partner-referral-discount-trial-guard";
@@ -275,7 +275,10 @@ export function PartnerReferralDiscountSettings({
       ) : null}
 
       <div className="rounded-lg border border-border bg-subtle/40 px-3 py-2 text-xs text-muted">
-        {PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY}
+        {formatPartnerReferralAnnualBillingPolicy({
+          annualEnabled,
+          annualAmountOffCents: Math.round(Number(annualDollars || 0) * 100) || 0,
+        })}
       </div>
 
       <label className="flex items-center gap-2 text-sm">

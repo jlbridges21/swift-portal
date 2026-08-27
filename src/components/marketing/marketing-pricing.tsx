@@ -19,7 +19,7 @@ const BASE_CAPABILITIES = [
   "Shoot scheduling & client approval",
   "In-portal messaging",
   "Photo & video delivery with review",
-  "Stripe payments & Connect payouts",
+  "Stripe payments & Connect payouts (ShootPortal takes 0%)",
   "Branded client emails",
 ] as const;
 

@@ -5,7 +5,7 @@ import { loadPartnerReferrals, resolvePartnerAccess } from "@/lib/partner-dashbo
 import {
   resolveReferralDiscountForPartner,
   PARTNER_COMMISSION_ON_NET_COLLECTED,
-  PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY,
+  formatPartnerReferralAnnualBillingPolicy,
 } from "@/lib/partner-referral-discount";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
@@ -51,10 +51,21 @@ export default async function PartnerReferralsPage({
                 <p>
                   <strong>Referral signup offer:</strong> businesses that join through your link
                   get {formatCurrency(referralDiscount.config.amountOffCents)}/mo off for their
-                  first {referralDiscount.config.durationMonths} paid months (monthly billing).
+                  first {referralDiscount.config.durationMonths} paid months on{" "}
+                  <strong>monthly</strong> billing
+                  {referralDiscount.config.annualEnabled &&
+                  referralDiscount.config.annualAmountOffCents > 0
+                    ? `, or ${formatCurrency(referralDiscount.config.annualAmountOffCents)} off the first annual invoice (once) on annual billing`
+                    : ""}
+                  .
                 </p>
                 <p>{PARTNER_COMMISSION_ON_NET_COLLECTED}</p>
-                <p className="text-xs text-amber-900">{PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY}</p>
+                <p className="text-xs text-amber-900">
+                  {formatPartnerReferralAnnualBillingPolicy({
+                    annualEnabled: referralDiscount.config.annualEnabled,
+                    annualAmountOffCents: referralDiscount.config.annualAmountOffCents,
+                  })}
+                </p>
               </div>
             ) : referralDiscount.config?.enabled ? (
               <div className="mt-3 rounded-lg border border-border bg-subtle/40 px-3 py-2 text-sm text-muted">

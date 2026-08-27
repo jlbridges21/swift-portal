@@ -15,6 +15,7 @@ import { getStripe, getStripeMode, type StripeMode } from "@/lib/stripe";
 import type { BillingInterval } from "@/lib/stripe-billing";
 import {
   PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY,
+  formatPartnerReferralAnnualBillingPolicy,
   PARTNER_REFERRAL_OVERRIDE_COUPON_POLICY,
   PARTNER_COMMISSION_ON_NET_COLLECTED,
   type PartnerProgramSettingsRow,
@@ -27,6 +28,7 @@ import {
 
 export {
   PARTNER_REFERRAL_DISCOUNT_ANNUAL_POLICY,
+  formatPartnerReferralAnnualBillingPolicy,
   PARTNER_REFERRAL_OVERRIDE_COUPON_POLICY,
   PARTNER_COMMISSION_ON_NET_COLLECTED,
   type PartnerProgramSettingsRow,
@@ -225,12 +227,22 @@ export function resolveEffectiveReferralDiscount(
 
 /** Offer copy for co-branded landing pages — null when discount is off or invalid. */
 export function formatPartnerReferralLandingOffer(config: EffectiveReferralDiscount): string | null {
-  if (!config.enabled || config.amountOffCents <= 0 || config.durationMonths <= 0) {
-    return null;
+  if (!config.enabled) return null;
+  const parts: string[] = [];
+  if (config.amountOffCents > 0 && config.durationMonths > 0) {
+    const amt = formatCents(config.amountOffCents);
+    const months = config.durationMonths;
+    parts.push(
+      `${amt}/month off your first ${months} paid month${months === 1 ? "" : "s"} on monthly billing`
+    );
   }
-  const amt = formatCents(config.amountOffCents);
-  const months = config.durationMonths;
-  return `Get ${amt}/month off your first ${months} paid month${months === 1 ? "" : "s"} when you subscribe through this page (monthly billing).`;
+  if (config.annualEnabled && config.annualAmountOffCents > 0) {
+    parts.push(
+      `${formatCents(config.annualAmountOffCents)} off your first annual invoice (once) on annual billing`
+    );
+  }
+  if (parts.length === 0) return null;
+  return `Get ${parts.join("; ")} when you subscribe through this page.`;
 }
 
 /**

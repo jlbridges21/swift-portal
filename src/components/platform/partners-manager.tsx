@@ -16,10 +16,17 @@ import type { PartnerApplicationRow, PartnerRow } from "@/lib/partners";
 type Props = {
   initialApplications: PartnerApplicationRow[];
   initialPartners: PartnerRow[];
+  /** Program default commission % — never hardcode in form defaults. */
+  defaultCommissionRatePct: number;
 };
 
-export function PartnersManager({ initialApplications, initialPartners }: Props) {
+export function PartnersManager({
+  initialApplications,
+  initialPartners,
+  defaultCommissionRatePct,
+}: Props) {
   const router = useRouter();
+  const defaultRate = String(defaultCommissionRatePct);
   const [tab, setTab] = useState<"applications" | "partners">("applications");
   const [appStatus, setAppStatus] = useState("pending");
   const [partnerStatus, setPartnerStatus] = useState("all");
@@ -29,7 +36,7 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
 
   const [approveId, setApproveId] = useState<string | null>(null);
   const [approveCode, setApproveCode] = useState("");
-  const [approveRate, setApproveRate] = useState("30");
+  const [approveRate, setApproveRate] = useState(defaultRate);
   const [approveNote, setApproveNote] = useState("");
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -39,7 +46,7 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
     brandName: "",
     website: "",
     referralCode: "",
-    commissionRatePct: "30",
+    commissionRatePct: defaultRate,
     notes: "",
   });
 
@@ -50,7 +57,7 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
     brandName: "",
     website: "",
     referralCode: "",
-    commissionRatePct: "30",
+    commissionRatePct: defaultRate,
     status: "active",
     notes: "",
     useProgramDiscount: true,
@@ -105,7 +112,7 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
   function startApprove(app: PartnerApplicationRow) {
     setApproveId(app.id);
     setApproveCode(suggestReferralCodeFromBrand(app.brand_name));
-    setApproveRate("30");
+    setApproveRate(defaultRate);
     setApproveNote("");
   }
 
@@ -176,7 +183,7 @@ export function PartnersManager({ initialApplications, initialPartners }: Props)
         brandName: "",
         website: "",
         referralCode: "",
-        commissionRatePct: "30",
+        commissionRatePct: defaultRate,
         notes: "",
       });
       toast.success(

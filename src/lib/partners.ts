@@ -56,6 +56,11 @@ export type PartnerRow = {
   referral_discount_enabled?: boolean | null;
   referral_discount_amount_cents?: number | null;
   referral_discount_duration_months?: number | null;
+  /** FLOW C: Express Connect account for partner payouts — never use for client charges. */
+  stripe_connect_account_id?: string | null;
+  stripe_connect_account_status?: string | null;
+  stripe_connect_payouts_enabled?: boolean | null;
+  stripe_connect_mode?: "test" | "live" | null;
   created_at: string;
   updated_at: string;
   /** Phase 2: count of attributed businesses (read-only). */

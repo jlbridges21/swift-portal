@@ -34,10 +34,6 @@ type Props = {
 export function PartnerProgramPitch({ data, prefill }: Props) {
   const rate = data.commissionRatePct;
   const discount = data.referralDiscount;
-  const discountLine =
-    discount.enabled && discount.amountCents > 0 && discount.durationMonths > 0
-      ? `${discount.amountLabel}/month off for their first ${discount.durationMonths} paid months`
-      : null;
 
   return (
     <>
@@ -63,17 +59,33 @@ export function PartnerProgramPitch({ data, prefill }: Props) {
             <CardTitle className="text-lg">How it works</CardTitle>
           </CardHeader>
           <CardContent>
-            <ReferralSteps commissionRatePct={rate} />
+            <ReferralSteps
+              commissionRatePct={rate}
+              autoApproveApplications={data.autoApproveApplications}
+            />
             <p className="mt-6 text-sm text-muted">
               Share your unique referral link or code. When someone signs up through it and becomes
               a paying subscriber, attribution sticks to you. Commissions enter a {data.holdDays}
               -day hold after each payment (refunds / chargebacks), then become payable on the
               platform&apos;s payout schedule.
-              {discountLine ? (
+              {discount.enabled && discount.amountCents > 0 && discount.durationMonths > 0 ? (
                 <>
                   {" "}
-                  Referred businesses get <strong>{discountLine}</strong> on monthly billing when
-                  they join through your link.
+                  Referred businesses on <strong>monthly</strong> billing get{" "}
+                  <strong>
+                    {discount.amountLabel}/month off for their first {discount.durationMonths} paid
+                    months
+                  </strong>{" "}
+                  when they join through your link.
+                </>
+              ) : null}
+              {discount.enabled &&
+              discount.annualEnabled &&
+              discount.annualAmountCents > 0 ? (
+                <>
+                  {" "}
+                  On <strong>annual</strong> billing they get{" "}
+                  <strong>{discount.annualAmountLabel} off the first annual invoice (once)</strong>.
                 </>
               ) : null}
             </p>

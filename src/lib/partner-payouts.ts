@@ -1,6 +1,6 @@
 /**
  * Partner payouts + manual adjustments (phase 5).
- * No automated / Stripe Connect payouts.
+ * Automated transfers via partner-payout-run.ts (Phase 2).
  */
 
 import { createServiceClient } from "@/lib/supabase/server";
@@ -19,6 +19,8 @@ export {
   PARTNER_PAYOUT_DISCREPANCY_ACK,
 } from "@/lib/partner-payout-constants";
 
+export type PartnerPayoutSource = "manual" | "automated";
+
 export type PartnerPayoutRow = {
   id: string;
   partner_id: string;
@@ -30,7 +32,9 @@ export type PartnerPayoutRow = {
   note: string | null;
   stripe_mode: string;
   idempotency_key: string | null;
-  created_by: string;
+  /** Null when source=automated (Phase 2). */
+  created_by: string | null;
+  source: PartnerPayoutSource;
   created_at: string;
 };
 
@@ -238,6 +242,7 @@ export async function recordPartnerPayout(input: RecordPayoutInput): Promise<{
     p_created_by: input.actor.id,
     p_idempotency_key: key,
     p_stripe_mode: mode,
+    p_source: "manual",
   });
 
   if (error) {
@@ -273,4 +278,78 @@ export async function recordPartnerPayout(input: RecordPayoutInput): Promise<{
   });
 
   return { payoutId: id, amountCents: amount, reusedExisting: false };
+}
+
+/** Automated cron transfer — no human actor. Idempotent via idempotencyKey. */
+export async function recordAutomatedPartnerPayout(input: {
+  partnerId: string;
+  amountCents: number;
+  currency: string;
+  reference: string;
+  note?: string | null;
+  idempotencyKey: string;
+  stripeMode: "test" | "live";
+}): Promise<{ payoutId: string; amountCents: number; reusedExisting: boolean }> {
+  const key = input.idempotencyKey?.trim();
+  if (!key || key.length < 8) throw new Error("idempotencyKey is required.");
+
+  const raw = await createServiceClient();
+
+  const { data: existing } = await raw
+    .from("partner_payouts")
+    .select("id, amount_cents")
+    .eq("idempotency_key", key)
+    .maybeSingle();
+  if (existing) {
+    return {
+      payoutId: existing.id as string,
+      amountCents: existing.amount_cents as number,
+      reusedExisting: true,
+    };
+  }
+
+  if (process.env.PARTNER_PAYOUT_FORCE_LEDGER_FAIL_PARTNER_ID?.trim() === input.partnerId) {
+    throw new Error(
+      "Simulated ledger record failure (PARTNER_PAYOUT_FORCE_LEDGER_FAIL_PARTNER_ID)."
+    );
+  }
+
+  const { data: payoutId, error } = await raw.rpc("record_partner_payout", {
+    p_partner_id: input.partnerId,
+    p_amount_cents: Math.trunc(input.amountCents),
+    p_currency: input.currency,
+    p_paid_at: new Date().toISOString(),
+    p_method: "stripe_transfer",
+    p_reference: input.reference,
+    p_note: input.note ?? `Automated payout`,
+    p_created_by: null,
+    p_idempotency_key: key,
+    p_stripe_mode: input.stripeMode,
+    p_source: "automated",
+  });
+
+  if (error) {
+    const msg = error.message || "Automated payout record failed";
+    if (/unique|duplicate/i.test(msg)) {
+      const { data: dup } = await raw
+        .from("partner_payouts")
+        .select("id, amount_cents")
+        .eq("idempotency_key", key)
+        .maybeSingle();
+      if (dup) {
+        return {
+          payoutId: dup.id as string,
+          amountCents: dup.amount_cents as number,
+          reusedExisting: true,
+        };
+      }
+    }
+    throw new Error(msg);
+  }
+
+  return {
+    payoutId: payoutId as string,
+    amountCents: Math.trunc(input.amountCents),
+    reusedExisting: false,
+  };
 }

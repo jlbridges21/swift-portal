@@ -2,14 +2,27 @@ export function PartnerProgramFaq({
   commissionRatePct,
   holdDays,
   monthlyPriceLabel,
+  autoApproveApplications,
+  payoutMinimumLabel,
+  automatedPayoutsEnabled,
+  payoutScheduleLabel,
 }: {
   commissionRatePct: number;
   holdDays: number;
   monthlyPriceLabel: string;
+  autoApproveApplications: boolean;
+  /** e.g. "$50" from PARTNER_PAYOUT_MINIMUM_CENTS / automation minimum */
+  payoutMinimumLabel: string;
+  automatedPayoutsEnabled: boolean;
+  payoutScheduleLabel: string;
 }) {
   const priceNote = monthlyPriceLabel
     ? ` For reference, the current public Studio monthly price is ${monthlyPriceLabel}.`
     : "";
+
+  const payoutAnswer = automatedPayoutsEnabled
+    ? `Connect a Stripe Express payout account in your partner dashboard (bank details stay with Stripe). After commissions clear the ${holdDays}-day hold and your payable balance reaches ${payoutMinimumLabel}, ShootPortal pays that balance to your Stripe Express account ${payoutScheduleLabel}.`
+    : `Connect a Stripe Express payout account in your partner dashboard (bank details stay with Stripe). After commissions clear the ${holdDays}-day hold and your payable balance reaches ${payoutMinimumLabel}, ShootPortal records payouts to that account. Automated monthly transfers are not enabled yet — payouts are recorded by ShootPortal once your account is ready.`;
 
   const items = [
     {
@@ -30,7 +43,9 @@ export function PartnerProgramFaq({
     },
     {
       q: "How are referrals tracked?",
-      a: "After approval you get a partner link and referral code. When someone signs up through your link and creates a ShootPortal business, that referral is attributed to you.",
+      a: autoApproveApplications
+        ? "When you join you get a partner link and referral code. When someone signs up through your link and creates a ShootPortal business, that referral is attributed to you."
+        : "After your application is approved you get a partner link and referral code. When someone signs up through your link and creates a ShootPortal business, that referral is attributed to you.",
     },
     {
       q: "What happens if a customer cancels?",
@@ -46,7 +61,7 @@ export function PartnerProgramFaq({
     },
     {
       q: "How do I get paid?",
-      a: "ShootPortal pays partners manually after commissions clear the hold period (for example PayPal, Wise, ACH, or check). You can see payout history in your partner dashboard.",
+      a: payoutAnswer,
     },
     {
       q: "Can I see my referrals and commissions?",

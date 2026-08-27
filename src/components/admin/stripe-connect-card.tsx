@@ -100,7 +100,10 @@ export function StripeConnectCard() {
           Stripe
         </CardTitle>
         <p className="text-sm text-muted">
-          Clients pay you directly. You keep your own Stripe Dashboard for payouts, refunds, and tax forms.
+          Clients pay you directly through Stripe. ShootPortal takes 0% of client payments —
+          Stripe&apos;s processing fees apply (estimates for US domestic cards; international and
+          other card types may differ). You keep your own Stripe Dashboard for payouts, refunds,
+          and tax forms.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">

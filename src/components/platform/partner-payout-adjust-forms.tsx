@@ -12,6 +12,7 @@ import { formatCurrency } from "@/lib/utils";
 import {
   PARTNER_ADJUST_DEBIT_CONFIRM,
   PARTNER_PAYOUT_DISCREPANCY_ACK,
+  PARTNER_COMMISSION_HOLD_DAYS,
 } from "@/lib/partner-payout-constants";
 
 type Props = {
@@ -142,8 +143,8 @@ export function PartnerPayoutAdjustForms({
         <CardContent className="space-y-3">
           <p className="text-sm text-muted">
             V1 pays out <strong>all</strong> currently payable commissions for this partner (past
-            the 30-day hold, unpaid). Partial payouts are not supported — they make reconciliation
-            ambiguous.
+            the {PARTNER_COMMISSION_HOLD_DAYS}-day hold, unpaid). Partial payouts are not supported —
+            they make reconciliation ambiguous.
           </p>
           {blockedNegative ? (
             <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
@@ -189,7 +190,7 @@ export function PartnerPayoutAdjustForms({
               <Label htmlFor={`${formId}-method`}>Method</Label>
               <Input
                 id={`${formId}-method`}
-                placeholder="PayPal, Wise, ACH, check…"
+                placeholder="Stripe Connect transfer, bank transfer…"
                 value={method}
                 onChange={(e) => setMethod(e.target.value)}
                 disabled={blockedNegative || nothingPayable}
