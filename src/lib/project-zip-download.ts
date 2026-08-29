@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { PassThrough } from "node:stream";
 import { finished } from "node:stream/promises";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -11,7 +12,7 @@ import type { MediaAsset, Profile } from "@/lib/types";
 const BUCKET = "project-media";
 const ZIP_FOLDER = "deliverables";
 const ERRORS_MANIFEST = `${ZIP_FOLDER}/_download_errors.txt`;
-/** Skip individual files above 400MB to avoid serverless OOM. */
+/** Skip individual files above 400MB to avoid serverless OOM on a single object. */
 const MAX_SINGLE_FILE_BYTES = 400 * 1024 * 1024;
 
 export type ZipLogStep =
@@ -72,6 +73,12 @@ export interface SkippedZipFile {
   fileName: string;
   storagePath: string;
   reason: string;
+}
+
+export interface ZipStreamResult {
+  fileCount: number;
+  totalBytes: number;
+  skipped: SkippedZipFile[];
 }
 
 export function pickDownloadableAssets(
@@ -137,19 +144,19 @@ function uniqueZipEntryName(rawName: string, used: Set<string>): string {
   return unique;
 }
 
-interface FetchedFile {
-  buffer: Buffer;
-  byteLength: number;
+interface OpenStreamResult {
+  stream: Readable;
+  byteLength?: number;
   storagePath: string;
   source: "storage_download" | "signed_url";
 }
 
-async function fetchStorageFile(
+async function openStorageReadStream(
   supabase: SupabaseClient,
   rawPath: string,
   ctx: ZipLogContext,
   asset: DownloadableAsset
-): Promise<{ ok: true; file: FetchedFile } | { ok: false; reason: string; storagePath: string }> {
+): Promise<{ ok: true; file: OpenStreamResult } | { ok: false; reason: string; storagePath: string }> {
   const storagePath = normalizeStoragePath(rawPath);
   if (!storagePath) {
     return { ok: false, reason: "invalid or empty storage path", storagePath: rawPath };
@@ -162,87 +169,76 @@ async function fetchStorageFile(
     bucket: BUCKET,
   });
 
+  const { data: signed, error: signError } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(storagePath, 300);
+
+  if (!signError && signed?.signedUrl) {
+    const res = await fetch(signed.signedUrl, { cache: "no-store" });
+    if (res.ok && res.body) {
+      const contentLength = res.headers.get("content-length");
+      const byteLength = contentLength ? Number.parseInt(contentLength, 10) : undefined;
+      const stream = Readable.fromWeb(res.body as import("stream/web").ReadableStream);
+      zipLog("file_fetch", ctx, {
+        assetId: asset.id,
+        storagePath,
+        exists: true,
+        bytes: byteLength,
+        method: "signed_url",
+      });
+      return {
+        ok: true,
+        file: {
+          stream,
+          byteLength: Number.isFinite(byteLength) ? byteLength : undefined,
+          storagePath,
+          source: "signed_url",
+        },
+      };
+    }
+    zipLog("file_fetch", ctx, {
+      assetId: asset.id,
+      storagePath,
+      signedUrlFetchStatus: res.status,
+    });
+  }
+
   const { data: blob, error: downloadError } = await supabase.storage
     .from(BUCKET)
     .download(storagePath);
 
   if (!downloadError && blob) {
-    const buffer = Buffer.from(await blob.arrayBuffer());
+    const stream = Readable.fromWeb(blob.stream() as import("stream/web").ReadableStream);
     zipLog("file_fetch", ctx, {
       assetId: asset.id,
       storagePath,
       exists: true,
-      bytes: buffer.length,
+      bytes: blob.size,
       method: "storage_download",
     });
     return {
       ok: true,
-      file: { buffer, byteLength: buffer.length, storagePath, source: "storage_download" },
+      file: {
+        stream,
+        byteLength: blob.size,
+        storagePath,
+        source: "storage_download",
+      },
     };
   }
 
-  zipLog("file_fetch", ctx, {
+  zipLog("file_skip", ctx, {
     assetId: asset.id,
     storagePath,
-    downloadFailed: true,
+    signError: signError?.message ?? "no signed url",
     downloadError: downloadError?.message ?? "unknown",
   });
 
-  const { data: signed, error: signError } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(storagePath, 300);
-
-  if (signError || !signed?.signedUrl) {
-    zipLog("file_skip", ctx, {
-      assetId: asset.id,
-      storagePath,
-      signedUrlFailed: true,
-      signError: signError?.message ?? "no signed url",
-    });
-    return {
-      ok: false,
-      reason: downloadError?.message ?? signError?.message ?? "storage download failed",
-      storagePath,
-    };
-  }
-
-  zipLog("file_fetch", ctx, {
-    assetId: asset.id,
-    storagePath,
-    method: "signed_url",
-    signedUrlOk: true,
-  });
-
-  const res = await fetch(signed.signedUrl, { cache: "no-store" });
-  if (!res.ok) {
-    zipLog("file_skip", ctx, {
-      assetId: asset.id,
-      storagePath,
-      signedUrlFetchStatus: res.status,
-    });
-    return { ok: false, reason: `signed URL fetch returned ${res.status}`, storagePath };
-  }
-
-  const buffer = Buffer.from(await res.arrayBuffer());
-  zipLog("file_fetch", ctx, {
-    assetId: asset.id,
-    storagePath,
-    exists: true,
-    bytes: buffer.length,
-    method: "signed_url",
-  });
-
   return {
-    ok: true,
-    file: { buffer, byteLength: buffer.length, storagePath, source: "signed_url" },
+    ok: false,
+    reason: signError?.message ?? downloadError?.message ?? "storage download failed",
+    storagePath,
   };
-}
-
-export interface ZipBuildResult {
-  buffer: Buffer;
-  fileCount: number;
-  totalBytes: number;
-  skipped: SkippedZipFile[];
 }
 
 function buildErrorsManifest(skipped: SkippedZipFile[]): string {
@@ -258,151 +254,170 @@ function buildErrorsManifest(skipped: SkippedZipFile[]): string {
   return lines.join("\n");
 }
 
-export async function buildProjectZipBuffer(
+function appendStreamToArchive(
+  archive: import("archiver").ZipArchive,
+  stream: Readable,
+  name: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    stream.once("error", reject);
+    archive.append(stream, { name });
+    finished(stream).then(() => resolve()).catch(reject);
+  });
+}
+
+/**
+ * Stream a project ZIP to the client as each storage object is read.
+ * Memory stays bounded — only one file + compression buffers at a time.
+ */
+export function createProjectZipStream(
   supabase: SupabaseClient,
   assets: DownloadableAsset[],
   ctx: ZipLogContext
-): Promise<ZipBuildResult> {
-  let ZipArchive: typeof import("archiver").ZipArchive;
-  try {
-    ({ ZipArchive } = await import("archiver"));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    zipLog("error", ctx, { phase: "import_archiver", message });
-    throw new ZipDownloadError(
-      "ZIP_DOWNLOAD_FAILED",
-      "ZIP library failed to load.",
-      `archiver import failed: ${message}`,
-      500
-    );
-  }
+): { stream: ReadableStream<Uint8Array>; completion: Promise<ZipStreamResult> } {
+  const passThrough = new PassThrough();
+  const webStream = Readable.toWeb(passThrough) as ReadableStream<Uint8Array>;
 
-  const usedNames = new Set<string>();
-  const skipped: SkippedZipFile[] = [];
-  const fileBuffers: { name: string; buffer: Buffer; byteLength: number }[] = [];
-
-  for (const asset of assets) {
+  const completion = (async (): Promise<ZipStreamResult> => {
+    let ZipArchive: typeof import("archiver").ZipArchive;
     try {
-      const result = await fetchStorageFile(supabase, asset.file_path, ctx, asset);
-      if (!result.ok) {
-        skipped.push({
-          assetId: asset.id,
-          fileName: asset.file_name,
-          storagePath: result.storagePath,
-          reason: result.reason,
-        });
-        zipLog("file_skip", ctx, {
-          assetId: asset.id,
-          fileName: asset.file_name,
-          reason: result.reason,
-        });
-        continue;
-      }
+      ({ ZipArchive } = await import("archiver"));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      zipLog("error", ctx, { phase: "import_archiver", message });
+      throw new ZipDownloadError(
+        "ZIP_DOWNLOAD_FAILED",
+        "ZIP library failed to load.",
+        `archiver import failed: ${message}`,
+        500
+      );
+    }
 
-      if (result.file.byteLength > MAX_SINGLE_FILE_BYTES) {
-        const reason = `file too large (${result.file.byteLength} bytes, max ${MAX_SINGLE_FILE_BYTES})`;
+    const usedNames = new Set<string>();
+    const skipped: SkippedZipFile[] = [];
+    let fileCount = 0;
+    let totalBytes = 0;
+
+    const archive = new ZipArchive({ zlib: { level: 1 } });
+    archive.pipe(passThrough);
+
+    const archiveError = new Promise<never>((_, reject) => {
+      archive.on("error", (err: Error) => {
+        zipLog("error", ctx, { phase: "archive", message: err.message, stack: err.stack });
+        reject(
+          new ZipDownloadError(
+            "ZIP_DOWNLOAD_FAILED",
+            "ZIP compression failed while building your download.",
+            err.message,
+            500
+          )
+        );
+      });
+    });
+
+    for (const asset of assets) {
+      try {
+        const result = await openStorageReadStream(supabase, asset.file_path, ctx, asset);
+        if (!result.ok) {
+          skipped.push({
+            assetId: asset.id,
+            fileName: asset.file_name,
+            storagePath: result.storagePath,
+            reason: result.reason,
+          });
+          zipLog("file_skip", ctx, {
+            assetId: asset.id,
+            fileName: asset.file_name,
+            reason: result.reason,
+          });
+          continue;
+        }
+
+        const byteLength = result.file.byteLength ?? 0;
+        if (byteLength > MAX_SINGLE_FILE_BYTES) {
+          result.file.stream.destroy();
+          const reason = `file too large (${byteLength} bytes, max ${MAX_SINGLE_FILE_BYTES})`;
+          skipped.push({
+            assetId: asset.id,
+            fileName: asset.file_name,
+            storagePath: result.file.storagePath,
+            reason,
+          });
+          zipLog("file_skip", ctx, { assetId: asset.id, reason, bytes: byteLength });
+          continue;
+        }
+
+        const entryName = uniqueZipEntryName(asset.file_name, usedNames);
+        await Promise.race([
+          appendStreamToArchive(archive, result.file.stream, `${ZIP_FOLDER}/${entryName}`),
+          archiveError,
+        ]);
+        fileCount++;
+        if (byteLength > 0) totalBytes += byteLength;
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : "unknown fetch error";
         skipped.push({
           assetId: asset.id,
           fileName: asset.file_name,
-          storagePath: result.file.storagePath,
+          storagePath: asset.file_path,
           reason,
         });
-        zipLog("file_skip", ctx, { assetId: asset.id, reason, bytes: result.file.byteLength });
-        continue;
+        zipLog("file_skip", ctx, { assetId: asset.id, reason });
       }
-
-      const entryName = uniqueZipEntryName(asset.file_name, usedNames);
-      fileBuffers.push({
-        name: `${ZIP_FOLDER}/${entryName}`,
-        buffer: result.file.buffer,
-        byteLength: result.file.byteLength,
-      });
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : "unknown fetch error";
-      skipped.push({
-        assetId: asset.id,
-        fileName: asset.file_name,
-        storagePath: asset.file_path,
-        reason,
-      });
-      zipLog("file_skip", ctx, { assetId: asset.id, reason });
     }
-  }
 
-  if (!fileBuffers.length) {
-    throw new ZipDownloadError(
-      "ZIP_DOWNLOAD_FAILED",
-      "No files could be downloaded for this project.",
-      skipped.length
-        ? `all ${skipped.length} file(s) failed — ${skipped.map((s) => s.reason).join("; ")}`
-        : "no media files available",
-      404
-    );
-  }
-
-  const archive = new ZipArchive({ zlib: { level: 1 } });
-  const output = new PassThrough();
-  const chunks: Buffer[] = [];
-  output.on("data", (chunk: Buffer) => chunks.push(chunk));
-
-  const archiveError = new Promise<never>((_, reject) => {
-    archive.on("error", (err: Error) => {
-      zipLog("error", ctx, { phase: "archive", message: err.message, stack: err.stack });
-      reject(
-        new ZipDownloadError(
-          "ZIP_DOWNLOAD_FAILED",
-          "ZIP compression failed.",
-          err.message,
-          500
-        )
+    if (!fileCount) {
+      archive.abort();
+      throw new ZipDownloadError(
+        "ZIP_DOWNLOAD_FAILED",
+        skipped.length
+          ? "No files could be downloaded for this project."
+          : "No downloadable files for this project.",
+        skipped.length
+          ? `all ${skipped.length} file(s) failed — ${skipped.map((s) => `${s.fileName}: ${s.reason}`).join("; ")}`
+          : "no media files available",
+        404
       );
+    }
+
+    if (skipped.length > 0) {
+      archive.append(buildErrorsManifest(skipped), { name: ERRORS_MANIFEST });
+    }
+
+    zipLog("zip_finalize", ctx, {
+      fileCount,
+      skippedCount: skipped.length,
+      totalBytes,
     });
+
+    try {
+      await Promise.race([archive.finalize(), archiveError]);
+      await finished(passThrough);
+    } catch (err) {
+      if (err instanceof ZipDownloadError) throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      zipLog("error", ctx, { phase: "zip_finalize", message });
+      throw new ZipDownloadError(
+        "ZIP_DOWNLOAD_FAILED",
+        "ZIP compression failed while finishing your download.",
+        message,
+        500
+      );
+    }
+
+    zipLog("zip_ready", ctx, {
+      fileCount,
+      skippedCount: skipped.length,
+      totalBytes,
+    });
+
+    return { fileCount, totalBytes, skipped };
+  })().catch((err) => {
+    passThrough.destroy(err instanceof Error ? err : new Error(String(err)));
+    throw err;
   });
 
-  archive.pipe(output);
-
-  for (const file of fileBuffers) {
-    archive.append(file.buffer, { name: file.name });
-  }
-
-  if (skipped.length > 0) {
-    archive.append(buildErrorsManifest(skipped), { name: ERRORS_MANIFEST });
-  }
-
-  zipLog("zip_finalize", ctx, {
-    fileCount: fileBuffers.length,
-    skippedCount: skipped.length,
-    totalBytes: fileBuffers.reduce((sum, f) => sum + f.byteLength, 0),
-  });
-
-  try {
-    await Promise.race([archive.finalize(), archiveError]);
-    await finished(output);
-  } catch (err) {
-    if (err instanceof ZipDownloadError) throw err;
-    const message = err instanceof Error ? err.message : String(err);
-    zipLog("error", ctx, { phase: "zip_finalize", message });
-    throw new ZipDownloadError(
-      "ZIP_DOWNLOAD_FAILED",
-      "ZIP compression failed.",
-      message,
-      500
-    );
-  }
-
-  const buffer = Buffer.concat(chunks);
-  zipLog("zip_ready", ctx, {
-    fileCount: fileBuffers.length,
-    zipBytes: buffer.length,
-    skippedCount: skipped.length,
-  });
-
-  return {
-    buffer,
-    fileCount: fileBuffers.length,
-    totalBytes: fileBuffers.reduce((sum, f) => sum + f.byteLength, 0),
-    skipped,
-  };
+  return { stream: webStream, completion };
 }
 
 export function buildZipFilename(projectName: string | null, propertyAddress: string | null): string {
@@ -463,7 +478,7 @@ export async function authorizeProjectZipDownload(
       ok: false,
       status: 403,
       error: "Downloads unlock after your final payment is complete.",
-      details: "unauthorized — payment required",
+      details: "unauthorized — project not delivered",
     };
   }
 

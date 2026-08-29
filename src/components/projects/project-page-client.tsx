@@ -126,6 +126,13 @@ export function ProjectPageClient({
   const uploadedVideos = videos.filter((v) => v.media_source !== "youtube");
   const youtubeVideos = videos.filter((v) => v.media_source === "youtube");
   const hasMedia = photos.length > 0 || videos.length > 0 || tours.length > 0 || documents.length > 0;
+  const downloadableFileCount = [...photos, ...uploadedVideos].filter(
+    (m) =>
+      m.file_path &&
+      m.media_source !== "youtube" &&
+      m.media_source !== "kuula" &&
+      m.media_source !== "external"
+  ).length;
   const isClientView = !isPreview && !isAdmin;
 
   const paymentStatus = (() => {
@@ -233,6 +240,7 @@ export function ProjectPageClient({
             hasPendingPayment={pendingPayments.length > 0}
             hasMedia={hasAnyMedia}
             projectId={project.id}
+            downloadableFileCount={downloadableFileCount}
           />
         )}
       </ProjectHero>

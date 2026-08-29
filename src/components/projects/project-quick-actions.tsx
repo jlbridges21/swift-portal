@@ -14,6 +14,7 @@ interface QuickActionsProps {
   hasPendingPayment: boolean;
   hasMedia: boolean;
   projectId?: string;
+  downloadableFileCount?: number;
   className?: string;
 }
 
@@ -22,6 +23,7 @@ export function ProjectQuickActions({
   hasPendingPayment,
   hasMedia,
   projectId,
+  downloadableFileCount,
   className,
 }: QuickActionsProps) {
   const s = normalizeStatus(status);
@@ -75,7 +77,11 @@ export function ProjectQuickActions({
         </Link>
       ))}
       {showDownload && projectId && (
-        <ProjectZipDownload projectId={projectId} variant="hero" />
+        <ProjectZipDownload
+          projectId={projectId}
+          expectedFileCount={downloadableFileCount}
+          variant="hero"
+        />
       )}
       {canPreview && !canDownload && hasMedia && (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-2 text-xs text-slate-300">

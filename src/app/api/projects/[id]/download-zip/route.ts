@@ -3,9 +3,9 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import {
   authorizeProjectZipDownload,
-  buildProjectZipBuffer,
   buildZipFilename,
   contentDispositionAttachment,
+  createProjectZipStream,
   pickDownloadableAssets,
   zipErrorResponse,
   zipLog,
@@ -104,35 +104,37 @@ export async function GET(
       );
     }
 
-    // Signed URLs / storage downloads are bearer capabilities: only mint after
-    // the tenant-scoped project + media lookups above succeeded.
-    let zipResult;
+    const filename = buildZipFilename(project.project_name, project.property_address);
+
+    let zipStream;
     try {
-      zipResult = await buildProjectZipBuffer(db.raw, downloadable, ctx);
+      zipStream = createProjectZipStream(db.raw, downloadable, ctx);
     } catch (err) {
       if (err instanceof ZipDownloadError) {
-        zipLog("error", ctx, {
-          phase: "zip_build",
-          code: err.code,
-          message: err.message,
-          details: err.details,
-        });
         return zipErrorResponse(err.code, err.message, err.details, err.status);
       }
       throw err;
     }
 
-    const filename = buildZipFilename(project.project_name, project.property_address);
+    void zipStream.completion
+      .then((result) => {
+        zipLog("zip_ready", ctx, {
+          fileCount: result.fileCount,
+          skippedCount: result.skipped.length,
+          totalBytes: result.totalBytes,
+        });
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        zipLog("error", ctx, { phase: "zip_stream", message });
+      });
 
-    return new NextResponse(new Uint8Array(zipResult.buffer), {
+    return new NextResponse(zipStream.stream, {
       headers: {
         "Content-Type": "application/zip",
         "Content-Disposition": contentDispositionAttachment(filename),
-        "Content-Length": String(zipResult.buffer.length),
         "Cache-Control": "no-store",
-        "X-Zip-File-Count": String(zipResult.fileCount),
-        "X-Zip-Bytes": String(zipResult.buffer.length),
-        "X-Zip-Skipped-Count": String(zipResult.skipped.length),
+        "X-Zip-Expected-Files": String(downloadable.length),
       },
     });
   } catch (err) {
@@ -141,11 +143,13 @@ export async function GET(
     zipLog("error", logCtx, { phase: "unhandled", message, stack });
     console.error("[project-zip] unhandled error", err);
 
-    return zipErrorResponse(
-      "ZIP_DOWNLOAD_FAILED",
-      "We couldn't prepare your ZIP download. Please try again, or download files individually from the gallery.",
-      message,
-      500
-    );
+    const userMessage =
+      /heap|memory|ENOMEM/i.test(message)
+        ? "This gallery is too large to download in one request. Try downloading files individually from the gallery."
+        : /timeout|timed out|ETIMEDOUT/i.test(message)
+          ? "The download timed out before the archive finished. Try again on a stable connection, or download files individually."
+          : "We couldn't prepare your ZIP download. Please try again, or download files individually from the gallery.";
+
+    return zipErrorResponse("ZIP_DOWNLOAD_FAILED", userMessage, message, 500);
   }
 }
