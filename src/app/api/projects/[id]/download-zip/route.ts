@@ -3,10 +3,13 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import {
   authorizeProjectZipDownload,
+  buildFolderZipFilename,
   buildZipFilename,
   contentDispositionAttachment,
   createProjectZipStream,
+  filterDownloadableAssetsByFolder,
   pickDownloadableAssets,
+  resolveFolderZipScope,
   zipErrorResponse,
   zipLog,
   ZipDownloadError,
@@ -18,11 +21,12 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: projectId } = await params;
-  const logCtx = { projectId };
+  const folderParam = new URL(request.url).searchParams.get("folderId");
+  const logCtx = { projectId, folderId: folderParam ?? undefined };
 
   try {
     zipLog("start", logCtx, { phase: "request_received" });
@@ -70,6 +74,16 @@ export async function GET(
     const { project, isAdmin } = auth;
     zipLog("project", ctx, { found: true, status: project.status, isAdmin });
 
+    const folderScope = await resolveFolderZipScope(projectId, folderParam, db);
+    if (!folderScope.ok) {
+      zipLog("access", ctx, {
+        result: "folder_denied",
+        status: folderScope.status,
+        details: folderScope.details,
+      });
+      return zipErrorResponse("ZIP_DOWNLOAD_FAILED", folderScope.error, folderScope.details, folderScope.status);
+    }
+
     const { data: media, error: mediaError } = await db
       .from("media_assets")
       .select("*")
@@ -89,22 +103,36 @@ export async function GET(
 
     zipLog("media_query", ctx, { totalAssets: media?.length ?? 0 });
 
-    const downloadable = pickDownloadableAssets(media ?? [], isAdmin);
+    let downloadable = pickDownloadableAssets(media ?? [], isAdmin);
+    if (folderScope.folderScope) {
+      downloadable = filterDownloadableAssetsByFolder(downloadable, folderScope.folderScope);
+    }
     zipLog("media_filter", ctx, {
       downloadableCount: downloadable.length,
+      folderScope: folderScope.folderScope,
+      folderName: folderScope.folderName,
       paths: downloadable.map((a) => ({ id: a.id, path: a.file_path, name: a.file_name })),
     });
 
     if (!downloadable.length) {
+      const emptyMessage = folderScope.folderScope
+        ? folderScope.folderName
+          ? `No downloadable files in “${folderScope.folderName}”.`
+          : "No downloadable files in this folder."
+        : "No downloadable files for this project.";
       return zipErrorResponse(
         "ZIP_DOWNLOAD_FAILED",
-        "No downloadable files for this project.",
-        "no media with valid storage paths",
+        emptyMessage,
+        folderScope.folderScope
+          ? "no downloadable media in folder scope after visibility filter"
+          : "no media with valid storage paths",
         404
       );
     }
 
-    const filename = buildZipFilename(project.project_name, project.property_address);
+    const filename = folderScope.folderName
+      ? buildFolderZipFilename(project.project_name, project.property_address, folderScope.folderName)
+      : buildZipFilename(project.project_name, project.property_address);
 
     let zipStream;
     try {

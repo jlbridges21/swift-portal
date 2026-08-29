@@ -8,6 +8,7 @@ import { filterClientVisibleActivities } from "@/lib/communications";
 import { getClientVisibleQuotes } from "@/lib/quote-display";
 import { getAppSettings } from "@/lib/app-settings";
 import { requireTenantContext } from "@/lib/tenant";
+import { reconcileProjectPaymentsOnLoad } from "@/lib/stripe-payment-reconcile";
 import { ProjectPageClient } from "@/components/projects/project-page-client";
 import { UrlToastHandler } from "@/components/ui/url-toast-handler";
 
@@ -64,6 +65,15 @@ async function ProjectContent({
 
   if (!project) notFound();
 
+  await reconcileProjectPaymentsOnLoad(id, tenant.businessId, "project_page");
+
+  const { data: refreshedPayments } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("business_id", tenant.businessId)
+    .eq("project_id", id)
+    .order("created_at", { ascending: false });
+
   const appSettings = await getAppSettings(tenant.businessId);
   const hero = await getProjectHeroMedia(supabase, project, tenant.businessId);
   const visibleMedia = filterClientMedia(media ?? []);
@@ -84,7 +94,7 @@ async function ProjectContent({
         videos={videos}
         documents={documents}
         tours={visibleTours}
-        payments={payments ?? []}
+        payments={refreshedPayments ?? payments ?? []}
         revisions={revisions ?? []}
         shootProposals={shootProposals ?? []}
         activities={filterClientVisibleActivities(activities ?? [])}

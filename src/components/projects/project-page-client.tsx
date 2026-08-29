@@ -296,11 +296,13 @@ export function ProjectPageClient({
             <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
               {photos.length > 0 ? (
                 <ClientPhotoFolders
+                  projectId={project.id}
                   photos={photos}
                   folders={mediaFolders}
                   getDownloadUrl={getDownloadUrl}
                   downloadsAllowed={downloadsUnlocked}
                   compactInitialCount={12}
+                  isAdmin={!!isAdmin}
                 />
               ) : (
                 <EmptyState
@@ -427,11 +429,13 @@ export function ProjectPageClient({
           >
             <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
               <ClientPhotoFolders
+                projectId={project.id}
                 photos={photos}
                 folders={mediaFolders}
                 getDownloadUrl={getDownloadUrl}
                 downloadsAllowed={downloadsUnlocked}
                 compactInitialCount={12}
+                isAdmin={!!isAdmin}
               />
             </div>
           </MicrositeSection>

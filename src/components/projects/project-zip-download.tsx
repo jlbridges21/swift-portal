@@ -18,17 +18,25 @@ interface ZipErrorBody {
 interface ProjectZipDownloadProps {
   projectId: string;
   expectedFileCount?: number;
+  /** UUID or `unfiled` — scopes the archive to one folder. */
+  folderId?: string;
+  /** Display label for folder downloads (filename uses server-side folder name). */
+  folderLabel?: string;
   className?: string;
   buttonClassName?: string;
   variant?: "hero" | "default";
+  compact?: boolean;
 }
 
 export function ProjectZipDownload({
   projectId,
   expectedFileCount,
+  folderId,
+  folderLabel,
   className,
   buttonClassName,
   variant = "hero",
+  compact = false,
 }: ProjectZipDownloadProps) {
   const [mounted, setMounted] = useState(false);
   const [active, setActive] = useState(false);
@@ -96,7 +104,11 @@ export function ProjectZipDownload({
     abortRef.current = controller;
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/download-zip`, {
+      const zipUrl = folderId
+        ? `/api/projects/${projectId}/download-zip?folderId=${encodeURIComponent(folderId)}`
+        : `/api/projects/${projectId}/download-zip`;
+
+      const res = await fetch(zipUrl, {
         credentials: "include",
         signal: controller.signal,
       });
@@ -208,6 +220,13 @@ export function ProjectZipDownload({
   }
 
   const isHero = variant === "hero";
+  const buttonLabel = folderLabel
+    ? compact
+      ? "Download"
+      : `Download ${folderLabel}`
+    : active
+      ? "Preparing download…"
+      : "Download All";
 
   return (
     <div className={cn("space-y-3", className)}>
@@ -219,7 +238,9 @@ export function ProjectZipDownload({
         className={cn(
           isHero
             ? "group inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20 hover:border-white/30 disabled:opacity-60"
-            : "inline-flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-primary hover:bg-slate-50 disabled:opacity-60",
+            : compact
+              ? "inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-slate-50 disabled:opacity-60"
+              : "inline-flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-primary hover:bg-slate-50 disabled:opacity-60",
           buttonClassName
         )}
       >
@@ -228,7 +249,7 @@ export function ProjectZipDownload({
         ) : (
           <Download className={cn("h-4 w-4", isHero && "opacity-80 group-hover:opacity-100")} />
         )}
-        {active ? "Preparing download…" : "Download All"}
+        {active ? "Preparing download…" : buttonLabel}
       </button>
 
       {active && (

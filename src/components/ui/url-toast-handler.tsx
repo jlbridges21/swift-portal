@@ -22,8 +22,16 @@ export function UrlToastHandler() {
     }
 
     if (payment === "success") {
+      const projectMatch = pathname.match(/\/dashboard\/projects\/([^/]+)/);
+      const projectId = projectMatch?.[1];
+      if (projectId) {
+        void fetch(`/api/projects/${projectId}/payments/reconcile`, { method: "POST" })
+          .then(() => router.refresh())
+          .catch(() => router.refresh());
+      }
       toast.success("Payment received — thank you!");
       router.replace(`${pathname}#payments`);
+      return;
     }
 
     if (payment === "already_completed") {

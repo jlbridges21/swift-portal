@@ -30,12 +30,15 @@ npx tsx scripts/setup-stripe-billing.ts --confirm-live
 
 ## 3. Live platform + Connect webhooks
 
-| Endpoint | Env secret | Events from |
-|----------|------------|-------------|
-| `/api/stripe/webhook` | `STRIPE_WEBHOOK_SECRET` | Your account (tenant checkout / PaymentIntents) |
-| `/api/stripe/webhook/connect` | `STRIPE_CONNECT_WEBHOOK_SECRET` | Connected accounts |
+| Endpoint | Env secret | Stripe Dashboard account | Events to subscribe |
+|----------|------------|--------------------------|---------------------|
+| `https://<production-host>/api/stripe/webhook` | `STRIPE_WEBHOOK_SECRET` | **Your platform account** (not Connect) | `checkout.session.completed`, `checkout.session.expired`, `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.succeeded`, `invoice.paid`, `invoice.payment_failed` |
+| `https://<production-host>/api/stripe/webhook/connect` | `STRIPE_CONNECT_WEBHOOK_SECRET` | **Your platform account** → “Listen to events on Connected accounts” | Same client-payment events as above, emitted on connected accounts |
+| `https://<production-host>/api/stripe/webhook/billing` | `STRIPE_BILLING_WEBHOOK_SECRET` | **Your platform account** | `customer.subscription.*`, `invoice.paid`, `invoice.payment_failed`, `checkout.session.completed` (subscription mode only), `charge.refunded`, `invoice.voided` |
 
-**Verify:** each endpoint’s “Signing secret” matches the Production env; a forged body returns 400.
+**Critical:** Tenant→client Payment Links on the **platform** Stripe account (legacy Swift) must use `/api/stripe/webhook` + `STRIPE_WEBHOOK_SECRET`. Do **not** put that signing secret in `STRIPE_BILLING_WEBHOOK_SECRET` or `STRIPE_CONNECT_WEBHOOK_SECRET`.
+
+**Verify:** each endpoint’s “Signing secret” matches the Production env var with the same name; a forged body returns 400; a real `checkout.session.completed` for a Payment Link creates/updates a `payments` row and a `processed_stripe_events` row.
 
 ## 4. Mode-aware price lookup
 

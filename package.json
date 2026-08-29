@@ -15,6 +15,8 @@
     "test:brand-theme": "npx tsx scripts/verify-brand-theme.ts",
     "test:comped-access": "npx tsx scripts/verify-comped-access.ts",
     "test:stripe-billing-guards": "npx tsx scripts/verify-stripe-billing-guards.ts",
+    "test:stripe-payment-reconcile": "npx tsx scripts/verify-stripe-payment-reconcile.ts",
+    "test:project-folder-zip": "npx tsx scripts/verify-project-folder-zip.ts",
     "test:paywall-checkout-http": "npx tsx scripts/verify-paywall-checkout-http.ts",
     "test:partner-lifecycle-e2e": "npx tsx scripts/verify-partner-lifecycle-e2e.ts",
     "test:plan-stripe-prices": "npx tsx scripts/verify-plan-stripe-price-consistency.ts",

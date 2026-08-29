@@ -421,12 +421,81 @@ export function createProjectZipStream(
 }
 
 export function buildZipFilename(projectName: string | null, propertyAddress: string | null): string {
-  const label = sanitizeStorageFileName(
+  const label = projectZipBaseLabel(projectName, propertyAddress);
+  return `${label}-deliverables.zip`;
+}
+
+function projectZipBaseLabel(projectName: string | null, propertyAddress: string | null): string {
+  return sanitizeStorageFileName(
     projectName?.trim() ||
       propertyAddress?.split(",")[0]?.trim() ||
       "project"
   );
-  return `${label}-deliverables.zip`;
+}
+
+/** "{Project Name} - {Folder Name}.zip" */
+export function buildFolderZipFilename(
+  projectName: string | null,
+  propertyAddress: string | null,
+  folderName: string
+): string {
+  const projectLabel = projectZipBaseLabel(projectName, propertyAddress);
+  const folderLabel = sanitizeStorageFileName(folderName.trim() || "Folder");
+  return `${projectLabel} - ${folderLabel}.zip`;
+}
+
+export function filterDownloadableAssetsByFolder(
+  assets: DownloadableAsset[],
+  folderScope: string | null
+): DownloadableAsset[] {
+  if (folderScope === null) return assets;
+  if (folderScope === "unfiled") {
+    return assets.filter((a) => !a.folder_id);
+  }
+  return assets.filter((a) => a.folder_id === folderScope);
+}
+
+export async function resolveFolderZipScope(
+  projectId: string,
+  folderParam: string | null,
+  supabase: { from: SupabaseClient["from"] }
+): Promise<
+  | { ok: true; folderScope: string | null; folderName: string | null }
+  | { ok: false; status: number; error: string; details: string }
+> {
+  if (!folderParam) {
+    return { ok: true, folderScope: null, folderName: null };
+  }
+
+  if (folderParam === "unfiled") {
+    return { ok: true, folderScope: "unfiled", folderName: "General Photos" };
+  }
+
+  const { data: folder, error } = await supabase
+    .from("media_folders")
+    .select("id, name, project_id")
+    .eq("id", folderParam)
+    .maybeSingle();
+
+  if (error) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Could not load folder.",
+      details: error.message,
+    };
+  }
+
+  if (!folder || folder.project_id !== projectId) {
+    return {
+      ok: false,
+      status: 404,
+      error: "Folder not found.",
+      details: "folder missing or does not belong to this project",
+    };
+  }
+
+  return { ok: true, folderScope: folder.id, folderName: folder.name };
 }
 
 export function contentDispositionAttachment(filename: string): string {

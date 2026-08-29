@@ -79,6 +79,7 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/capabilities.ts",
   "src/lib/stripe-webhook-events.ts",
   "src/lib/stripe-payments.ts",
+  "src/lib/stripe-payment-reconcile.ts",
   "src/lib/stripe-connect.ts",
   "src/lib/stripe-billing.ts",
   "src/lib/workflow.ts",
@@ -168,6 +169,7 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
 const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/lib/supabase/tenant-service.ts",
   "src/lib/stripe-payments.ts",
+  "src/lib/stripe-payment-reconcile.ts",
   "src/lib/stripe-connect.ts",
   "src/lib/partner-stripe-connect.ts",
   "src/lib/stripe-billing.ts",
@@ -506,6 +508,9 @@ const FLOW_C_PARTNER_PAYOUT_FILES = [
 /** Business → client Connect charges (FLOW B) — must never touch partner payout accounts. */
 const FLOW_B_BUSINESS_CHARGE_FILES = [
   "src/lib/stripe-connect.ts",
+  "src/lib/stripe-payment-reconcile.ts",
+  "src/app/api/cron/payment-reconciliation/route.ts",
+  "src/app/api/projects/[id]/payments/reconcile/route.ts",
   "src/app/api/stripe/connect/route.ts",
   "src/app/api/stripe/connect/callback/route.ts",
   "src/app/api/stripe/connect/refresh/route.ts",

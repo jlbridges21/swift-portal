@@ -7,6 +7,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getStripeForBusiness, portalCheckoutBaseUrl, StripeConnectNotReadyError } from "@/lib/stripe-connect";
 import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
 import { isPaymentComplete } from "@/lib/payment-status";
+import { ensureCheckoutNotAlreadyPaid } from "@/lib/stripe-payment-reconcile";
 import type { Payment } from "@/lib/types";
 
 const ALREADY_PAID_MESSAGE = "This payment has already been completed.";
@@ -121,6 +122,12 @@ export async function GET(
       return NextResponse.redirect(redirectUrl);
     }
 
+    const block = await ensureCheckoutNotAlreadyPaid(payment, "checkout_get");
+    if (block.blocked) {
+      const redirectUrl = `${portalCheckoutBaseUrl(tenant.business)}/dashboard/projects/${payment.project_id}?payment=already_completed#payments`;
+      return NextResponse.redirect(redirectUrl);
+    }
+
     const result = await createCheckoutSession(payment, tenant.businessId, tenant.business);
     if (!result.ok) return result.response;
 
@@ -156,6 +163,11 @@ export async function POST(
 
     if (isPaymentComplete(payment.status)) {
       return NextResponse.json({ error: ALREADY_PAID_MESSAGE }, { status: 409 });
+    }
+
+    const block = await ensureCheckoutNotAlreadyPaid(payment, "checkout_post");
+    if (block.blocked) {
+      return NextResponse.json({ error: block.message ?? ALREADY_PAID_MESSAGE }, { status: 409 });
     }
 
     const result = await createCheckoutSession(payment, tenant.businessId, tenant.business);

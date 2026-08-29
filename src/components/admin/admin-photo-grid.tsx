@@ -56,6 +56,12 @@ import {
 import { toast } from "sonner";
 import { createThumbRequestQueue } from "@/lib/media-thumb-client";
 import { isClientVisibleMedia } from "@/lib/client-media";
+import { ProjectZipDownload } from "@/components/projects/project-zip-download";
+import {
+  countFolderDownloadableAssets,
+  UNFILED_FOLDER_LABEL,
+  UNFILED_FOLDER_SCOPE,
+} from "@/lib/project-zip-assets";
 
 type FolderFilter = "all" | "unfiled" | string;
 
@@ -542,6 +548,18 @@ export function AdminPhotoGrid({
     }
     return map;
   }, [allProjectPhotos]);
+
+  const scopedFolderDownload = useMemo(() => {
+    if (folderFilter === "all") return null;
+    const scope = folderFilter === "unfiled" ? UNFILED_FOLDER_SCOPE : folderFilter;
+    const label =
+      folderFilter === "unfiled"
+        ? UNFILED_FOLDER_LABEL
+        : folders.find((f) => f.id === folderFilter)?.name ?? "Folder";
+    const count = countFolderDownloadableAssets(allProjectPhotos, scope, true);
+    if (count <= 0) return null;
+    return { scope, label, count };
+  }, [allProjectPhotos, folderFilter, folders]);
 
   // Mount all sensors always — hybrid devices need both mouse and touch paths
   const sensors = useSensors(
@@ -1097,9 +1115,22 @@ export function AdminPhotoGrid({
               : "bg-slate-100 text-slate-700 hover:bg-slate-200"
           )}
         >
-          Unfiled ({folderCounts.get("null") ?? 0})
+          {UNFILED_FOLDER_LABEL} ({folderCounts.get("null") ?? 0})
         </button>
-        {folders.map((folder) => (
+        {countFolderDownloadableAssets(allProjectPhotos, UNFILED_FOLDER_SCOPE, true) > 0 && (
+          <ProjectZipDownload
+            projectId={projectId}
+            folderId={UNFILED_FOLDER_SCOPE}
+            folderLabel={UNFILED_FOLDER_LABEL}
+            expectedFileCount={countFolderDownloadableAssets(allProjectPhotos, UNFILED_FOLDER_SCOPE, true)}
+            variant="default"
+            compact
+            className="!space-y-0"
+          />
+        )}
+        {folders.map((folder) => {
+          const folderDownloadCount = countFolderDownloadableAssets(allProjectPhotos, folder.id, true);
+          return (
           <div key={folder.id} className="flex items-center gap-0.5">
             <button
               type="button"
@@ -1120,6 +1151,17 @@ export function AdminPhotoGrid({
             >
               {folder.name} ({folderCounts.get(folder.id) ?? 0})
             </button>
+            {folderDownloadCount > 0 && (
+              <ProjectZipDownload
+                projectId={projectId}
+                folderId={folder.id}
+                folderLabel={folder.name}
+                expectedFileCount={folderDownloadCount}
+                variant="default"
+                compact
+                className="!space-y-0"
+              />
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -1139,7 +1181,8 @@ export function AdminPhotoGrid({
               <Trash2 className="h-3 w-3" />
             </Button>
           </div>
-        ))}
+        );
+        })}
         <Button variant="outline" size="sm" className="h-8" onClick={() => setNewFolderOpen(true)}>
           <FolderPlus className="h-3.5 w-3.5" /> New folder
         </Button>
@@ -1159,6 +1202,16 @@ export function AdminPhotoGrid({
           </Button>
         )}
       </div>
+
+      {scopedFolderDownload && (
+        <ProjectZipDownload
+          projectId={projectId}
+          folderId={scopedFolderDownload.scope}
+          folderLabel={scopedFolderDownload.label}
+          expectedFileCount={scopedFolderDownload.count}
+          variant="default"
+        />
+      )}
 
       <p className="text-xs text-muted">
         {coarsePointer
