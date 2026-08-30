@@ -184,6 +184,16 @@ async function main() {
     throw new Error("Need Swift admin + client profiles");
   }
 
+  const { data: baseVideo } = await admin
+    .from("media_assets")
+    .select("id, project_id")
+    .eq("business_id", SWIFT_BUSINESS)
+    .eq("media_type", "video")
+    .not("project_id", "is", null)
+    .limit(1)
+    .maybeSingle();
+  if (!baseVideo?.project_id) throw new Error("Need a project video");
+
   const { data: projectRow } = await admin
     .from("projects")
     .select("client_id")
@@ -199,16 +209,6 @@ async function main() {
     if (projectClient?.user_id) projectClientUserId = projectClient.user_id as string;
   }
   console.log("project client user:", projectClientUserId);
-
-  const { data: baseVideo } = await admin
-    .from("media_assets")
-    .select("id, project_id")
-    .eq("business_id", SWIFT_BUSINESS)
-    .eq("media_type", "video")
-    .not("project_id", "is", null)
-    .limit(1)
-    .maybeSingle();
-  if (!baseVideo?.project_id) throw new Error("Need a project video");
 
   const projectId = baseVideo.project_id as string;
   let reviewId: string | null = null;
@@ -480,8 +480,16 @@ async function main() {
       projectId,
       since: actorMark,
     });
-    assert(clientSelf === 0, "comment author not notified");
+    const adminGotClientComment = await countNotifications(admin, {
+      userId: adminProfile.id,
+      type: "video_review_activity",
+      projectId,
+      since: actorMark,
+    });
+    assert(clientSelf === 0, "comment author (client) not notified");
+    assert(adminGotClientComment >= 1, "admins still notified when client comments");
 
+    const replyActorMark = new Date().toISOString();
     await notifyVideoReviewEvent("business_reply", {
       businessId: SWIFT_BUSINESS,
       projectId,
@@ -497,9 +505,16 @@ async function main() {
       userId: adminProfile.id,
       type: "video_review_activity",
       projectId,
-      since: actorMark,
+      since: replyActorMark,
     });
-    assert(adminSelf === 0, "reply author admin not notified in-app");
+    const clientGotReply = await countNotifications(admin, {
+      userId: projectClientUserId,
+      type: "video_review_activity",
+      projectId,
+      since: replyActorMark,
+    });
+    assert(adminSelf === 0, "reply author (admin) not notified in-app");
+    assert(clientGotReply >= 1, "client still notified when admin replies");
 
     console.log("\n=== 9. duplicate trigger idempotency (new_version) ===");
     const beforeSends = (

@@ -75,9 +75,9 @@ export function VideoReviewCommentPanel({
         <div className="flex flex-wrap gap-2" role="tablist" aria-label="Comment views">
           {(
             [
+              ["all", "All", counts.all],
               ["unresolved", "Unresolved", counts.unresolved],
               ["resolved", "Resolved", counts.resolved],
-              ["all", "All", counts.all],
             ] as const
           ).map(([key, label, count]) => (
             <Button
