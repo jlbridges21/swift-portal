@@ -33,6 +33,7 @@ export default async function AdminVideoReviewPage({ params }: PageProps) {
         review={detail.review}
         versions={detail.versions}
         isAdmin
+        currentUserId={profile.id}
         backHref={`/admin/projects/${projectId}`}
         backLabel="Back to project"
       />

@@ -145,8 +145,10 @@ function testMarkingInteractionModel() {
   assert(
     resolveVideoSurfaceClick({
       markingMode: false,
+      editMarkMode: false,
       videoPaused: true,
       hasDraftPoint: false,
+      blockPlaybackToggle: false,
       clientX: cx,
       clientY: cy,
       containerRect: rect,
@@ -157,8 +159,10 @@ function testMarkingInteractionModel() {
 
   const mark = resolveVideoSurfaceClick({
     markingMode: true,
+    editMarkMode: false,
     videoPaused: true,
     hasDraftPoint: false,
+    blockPlaybackToggle: false,
     clientX: cx,
     clientY: cy,
     containerRect: rect,
@@ -169,8 +173,10 @@ function testMarkingInteractionModel() {
   assert(
     resolveVideoSurfaceClick({
       markingMode: false,
+      editMarkMode: false,
       videoPaused: true,
       hasDraftPoint: true,
+      blockPlaybackToggle: false,
       clientX: cx + 10,
       clientY: cy + 10,
       containerRect: rect,
@@ -182,8 +188,10 @@ function testMarkingInteractionModel() {
   assert(
     resolveVideoSurfaceClick({
       markingMode: true,
+      editMarkMode: false,
       videoPaused: true,
       hasDraftPoint: false,
+      blockPlaybackToggle: false,
       clientX: 0,
       clientY: 0,
       containerRect: rect,
@@ -197,6 +205,9 @@ function testMarkingInteractionModel() {
     pendingPoint: { x: 0.5, y: 0.5 },
     activeCommentId: "a",
     activeCommentPoint: { x: 0.2, y: 0.2 },
+    markingMode: false,
+    editMarkMode: false,
+    hoverPreviewPoint: null,
   }) === null, "NO dot visible while playing");
 
   assert(
@@ -205,6 +216,9 @@ function testMarkingInteractionModel() {
       pendingPoint: { x: 0.5, y: 0.5 },
       activeCommentId: "a",
       activeCommentPoint: { x: 0.2, y: 0.2 },
+      markingMode: false,
+      editMarkMode: false,
+      hoverPreviewPoint: null,
     })?.kind === "draft",
     "only draft dot when draft exists (one dot max)"
   );
@@ -215,6 +229,9 @@ function testMarkingInteractionModel() {
       pendingPoint: null,
       activeCommentId: "b",
       activeCommentPoint: { x: 0.15, y: 0.15 },
+      markingMode: false,
+      editMarkMode: false,
+      hoverPreviewPoint: null,
     })?.kind === "selected",
     "two nearby comments: only selected comment id drives the one visible dot"
   );

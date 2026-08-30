@@ -37,7 +37,7 @@ interface VideoReviewCommentPanelProps {
   onRetry: () => void;
   onSeek: (seconds: number, commentId?: string) => void;
   onCommentsChange: () => void;
-  newCommentForm: React.ReactNode;
+  onSelectComment: (commentId: string) => void;
 }
 
 export function VideoReviewCommentPanel({
@@ -54,11 +54,11 @@ export function VideoReviewCommentPanel({
   onRetry,
   onSeek,
   onCommentsChange,
-  newCommentForm,
+  onSelectComment,
 }: VideoReviewCommentPanelProps) {
   return (
-    <div className="flex min-h-[320px] flex-col rounded-2xl bg-white p-4 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-      <div className="mb-3 space-y-2">
+    <div className="flex h-full min-h-[320px] flex-col rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5 lg:min-h-0">
+      <div className="shrink-0 space-y-2 border-b border-border/60 p-4">
         <h2 className="flex items-center gap-2 text-base font-semibold text-primary">
           <MessageSquarePlus className="h-4 w-4 text-accent" />
           Comments · V{versionNumber}
@@ -96,9 +96,7 @@ export function VideoReviewCommentPanel({
         </div>
       </div>
 
-      {newCommentForm}
-
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-3">
         {loading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted" />
@@ -145,6 +143,7 @@ export function VideoReviewCommentPanel({
                 activeCommentId={activeCommentId}
                 onSeek={onSeek}
                 onCommentsChange={onCommentsChange}
+                onSelectComment={onSelectComment}
               />
             ))}
           </ul>
@@ -161,6 +160,7 @@ function CommentThread({
   activeCommentId,
   onSeek,
   onCommentsChange,
+  onSelectComment,
 }: {
   reviewId: string;
   thread: VideoReviewCommentThread;
@@ -168,6 +168,7 @@ function CommentThread({
   activeCommentId: string | null;
   onSeek: (seconds: number, commentId?: string) => void;
   onCommentsChange: () => void;
+  onSelectComment: (commentId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [replyText, setReplyText] = useState("");
@@ -253,7 +254,10 @@ function CommentThread({
         <button
           type="button"
           className="flex w-full items-start gap-2 text-left"
-          onClick={() => onSeek(timestamp, comment.id)}
+          onClick={() => {
+            onSelectComment(comment.id);
+            onSeek(timestamp, comment.id);
+          }}
         >
           {replies.length > 0 && (
             <span

@@ -37,6 +37,7 @@ export default async function ClientVideoReviewPage({ params }: PageProps) {
         review={detail.review}
         versions={detail.versions}
         isAdmin={false}
+        currentUserId={profile.id}
         backHref={`/dashboard/projects/${projectId}#video`}
         backLabel="Back to project"
       />

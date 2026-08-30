@@ -24,9 +24,22 @@ import {
 import {
   resolveVideoSurfaceClick,
   resolveVisibleDot,
+  shouldDeferToNativeVideoControls,
 } from "@/lib/video-review-player-interaction";
-import { clusterReviewComments, markerPositionPercent } from "@/lib/video-review-timeline";
+import { markerPositionPercent } from "@/lib/video-review-timeline";
+import {
+  clusterEnrichedReviewComments,
+  clusterMarkerLabel,
+} from "@/lib/video-review-timeline-markers";
 import { useVideoReviewStream } from "@/lib/use-video-review-stream";
+import { useVideoReviewPoll } from "@/lib/use-video-review-poll";
+import {
+  mergeCommentStore,
+  mergeVersionRows,
+  populateCommentStore,
+  snapshotFromCommentStore,
+  type VideoReviewPollResult,
+} from "@/lib/video-review-poll-merge";
 import type { VideoReview } from "@/lib/types";
 import type { VideoReviewVersionRow } from "@/lib/video-reviews";
 import type {
@@ -34,7 +47,7 @@ import type {
   VideoReviewCommentEnriched,
   VideoReviewCommentThread,
   VideoReviewCommentView,
-} from "@/lib/video-review-comments";
+} from "@/lib/video-review-comment-model";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -44,6 +57,7 @@ interface VideoReviewViewProps {
   review: VideoReview;
   versions: VideoReviewVersionRow[];
   isAdmin: boolean;
+  currentUserId: string;
   backHref: string;
   backLabel?: string;
 }
@@ -54,6 +68,7 @@ export function VideoReviewView({
   review,
   versions: initialVersions,
   isAdmin,
+  currentUserId,
   backHref,
   backLabel = "Back to project",
 }: VideoReviewViewProps) {
@@ -75,12 +90,16 @@ export function VideoReviewView({
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
+  const [composerTimestamp, setComposerTimestamp] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [savingMark, setSavingMark] = useState(false);
   const [pausedAt, setPausedAt] = useState<number | null>(null);
   const [pendingPoint, setPendingPoint] = useState<{ x: number; y: number } | null>(null);
   const [hoverPreviewPoint, setHoverPreviewPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [markingMode, setMarkingMode] = useState(false);
+  const [editMarkMode, setEditMarkMode] = useState(false);
+  const [editMarkCommentId, setEditMarkCommentId] = useState<string | null>(null);
   const [videoPaused, setVideoPaused] = useState(true);
   const [duration, setDuration] = useState(0);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -89,6 +108,15 @@ export function VideoReviewView({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const commentStoreRef = useRef<Map<string, VideoReviewCommentEnriched>>(new Map());
+  const commentViewRef = useRef(commentView);
+  const blockPlaybackRef = useRef(false);
+
+  useEffect(() => {
+    commentViewRef.current = commentView;
+  }, [commentView]);
+
+  const [pollSince, setPollSince] = useState<string | null>(null);
 
   useEffect(() => {
     setVersionRows(initialVersions);
@@ -102,33 +130,80 @@ export function VideoReviewView({
   const mediaAssetId = activeVersion?.media_asset_id ?? null;
   const { url, loading, error, refresh, registerVideo } = useVideoReviewStream(mediaAssetId, true);
 
-  const loadComments = useCallback(async () => {
-    if (!activeVersionId) return;
-    setCommentsLoading(true);
-    setCommentsError(null);
-    try {
-      const res = await fetch(
-        `/api/video-reviews/${reviewId}/comments?version_id=${activeVersionId}&view=${commentView}`,
-        { credentials: "include" }
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        setCommentsError(data.error || "Could not load comments.");
-        setThreads([]);
-        setMarkerComments([]);
+  const applyStoreSnapshot = useCallback(
+    (store: Map<string, VideoReviewCommentEnriched>, nextCounts: VideoReviewCommentCounts) => {
+      const snap = snapshotFromCommentStore(store, commentViewRef.current);
+      setThreads(snap.threads);
+      setMarkerComments(snap.markerComments);
+      setCounts(nextCounts);
+    },
+    []
+  );
+
+  const loadComments = useCallback(
+    async (options?: { quiet?: boolean }) => {
+      if (!activeVersionId) return;
+      if (!options?.quiet) {
+        setCommentsLoading(true);
+      }
+      setCommentsError(null);
+      try {
+        const res = await fetch(
+          `/api/video-reviews/${reviewId}/comments?version_id=${activeVersionId}&view=all`,
+          { credentials: "include" }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          setCommentsError(data.error || "Could not load comments.");
+          if (!options?.quiet) {
+            setThreads([]);
+            setMarkerComments([]);
+          }
+          return;
+        }
+        const store = populateCommentStore(data.threads ?? [], data.markerComments ?? []);
+        commentStoreRef.current = store;
+        applyStoreSnapshot(store, data.counts ?? { all: 0, unresolved: 0, resolved: 0 });
+        setPollSince(new Date().toISOString());
+      } catch {
+        setCommentsError("Could not load comments.");
+        if (!options?.quiet) {
+          setThreads([]);
+          setMarkerComments([]);
+        }
+      } finally {
+        if (!options?.quiet) {
+          setCommentsLoading(false);
+        }
+      }
+    },
+    [reviewId, activeVersionId, applyStoreSnapshot]
+  );
+
+  const handlePollResult = useCallback(
+    (result: VideoReviewPollResult) => {
+      if (!result.changes.length && !result.versions.length) {
+        setCounts(result.counts);
+        setPollSince(result.serverTime);
         return;
       }
-      setThreads(data.threads ?? []);
-      setMarkerComments(data.markerComments ?? []);
-      setCounts(data.counts ?? { all: 0, unresolved: 0, resolved: 0 });
-    } catch {
-      setCommentsError("Could not load comments.");
-      setThreads([]);
-      setMarkerComments([]);
-    } finally {
-      setCommentsLoading(false);
-    }
-  }, [reviewId, activeVersionId, commentView]);
+      commentStoreRef.current = mergeCommentStore(commentStoreRef.current, result.changes);
+      applyStoreSnapshot(commentStoreRef.current, result.counts);
+      if (result.versions.length) {
+        setVersionRows((prev) => mergeVersionRows(prev, result.versions));
+      }
+      setPollSince(result.serverTime);
+    },
+    [applyStoreSnapshot]
+  );
+
+  useVideoReviewPoll({
+    reviewId,
+    versionId: activeVersionId,
+    since: pollSince,
+    enabled: Boolean(activeVersionId && pollSince && !commentsLoading),
+    onResult: handlePollResult,
+  });
 
   useEffect(() => {
     if (deepLinkVersion && versionRows.some((v) => v.id === deepLinkVersion)) {
@@ -141,11 +216,24 @@ export function VideoReviewView({
     setPendingPoint(null);
     setHoverPreviewPoint(null);
     setMarkingMode(false);
+    setEditMarkMode(false);
+    setEditMarkCommentId(null);
+    setComposerTimestamp(null);
+    setCommentText("");
     setPausedAt(null);
+    setPollSince(null);
+    commentStoreRef.current = new Map();
     if (!deepLinkComment) {
       setActiveCommentId(null);
     }
-  }, [loadComments, deepLinkComment]);
+  }, [reviewId, activeVersionId, deepLinkComment, loadComments]);
+
+  useEffect(() => {
+    if (commentStoreRef.current.size === 0) return;
+    const snap = snapshotFromCommentStore(commentStoreRef.current, commentView);
+    setThreads(snap.threads);
+    setMarkerComments(snap.markerComments);
+  }, [commentView]);
 
   useEffect(() => {
     if (deepLinkComment) {
@@ -179,9 +267,37 @@ export function VideoReviewView({
     );
   }, [containerSize, videoDimensions]);
 
+  const activeComment = useMemo(() => {
+    if (!activeCommentId) return null;
+    for (const thread of threads) {
+      if (thread.comment.id === activeCommentId) return thread.comment;
+    }
+    return markerComments.find((c) => c.id === activeCommentId) ?? null;
+  }, [activeCommentId, threads, markerComments]);
+
+  const blockPlaybackToggle =
+    pendingPoint !== null ||
+    markingMode ||
+    editMarkMode ||
+    commentText.trim().length > 0;
+
+  useEffect(() => {
+    blockPlaybackRef.current = blockPlaybackToggle;
+  }, [blockPlaybackToggle]);
+
+  const canEditMark = Boolean(
+    activeComment &&
+      activeComment.author_user_id === currentUserId &&
+      activeComment.point_x != null &&
+      activeComment.point_y != null &&
+      !pendingPoint &&
+      !markingMode &&
+      !editMarkMode
+  );
+
   const visibleDot = useMemo(() => {
     let activeCommentPoint: { x: number; y: number } | null = null;
-    if (activeCommentId) {
+    if (activeCommentId && !editMarkMode) {
       const fromMarker = markerComments.find((c) => c.id === activeCommentId);
       if (fromMarker?.point_x != null && fromMarker.point_y != null) {
         activeCommentPoint = { x: fromMarker.point_x, y: fromMarker.point_y };
@@ -203,27 +319,33 @@ export function VideoReviewView({
       pendingPoint,
       activeCommentId,
       activeCommentPoint,
+      markingMode,
+      editMarkMode,
+      hoverPreviewPoint,
     });
-  }, [videoPaused, pendingPoint, activeCommentId, markerComments, threads]);
-
-  const previewDot = markingMode && videoPaused ? hoverPreviewPoint : null;
+  }, [
+    videoPaused,
+    pendingPoint,
+    activeCommentId,
+    markerComments,
+    threads,
+    markingMode,
+    editMarkMode,
+    hoverPreviewPoint,
+  ]);
 
   const dotStyle = useMemo(() => {
-    const point = previewDot ?? (visibleDot ? { x: visibleDot.x, y: visibleDot.y } : null);
+    const point = visibleDot ? { x: visibleDot.x, y: visibleDot.y } : null;
     if (!point || !contentRect || !containerSize.width) return null;
     return normalizedPointToPercent(point, containerSize.width, containerSize.height, contentRect);
-  }, [previewDot, visibleDot, contentRect, containerSize]);
+  }, [visibleDot, contentRect, containerSize]);
 
   const clusters = useMemo(
-    () =>
-      clusterReviewComments(
-        markerComments.map((c) => ({
-          ...c,
-          timestamp_seconds: c.timestamp_seconds ?? 0,
-        }))
-      ),
+    () => clusterEnrichedReviewComments(markerComments),
     [markerComments]
   );
+
+  const composerDisplayTime = composerTimestamp ?? pausedAt ?? playheadSeconds;
 
   const pauseVideo = useCallback(() => {
     const video = videoRef.current;
@@ -251,8 +373,11 @@ export function VideoReviewView({
       video.currentTime = seconds;
       setPausedAt(seconds);
       setPlayheadSeconds(seconds);
+      setComposerTimestamp(seconds);
       setActiveCommentId(commentId ?? null);
       setMarkingMode(false);
+      setEditMarkMode(false);
+      setEditMarkCommentId(null);
       setHoverPreviewPoint(null);
     },
     []
@@ -273,22 +398,91 @@ export function VideoReviewView({
 
   const exitMarkingMode = useCallback(() => {
     setMarkingMode(false);
+    setEditMarkMode(false);
+    setEditMarkCommentId(null);
     setHoverPreviewPoint(null);
   }, []);
 
   const enterMarkingMode = useCallback(() => {
+    setEditMarkMode(false);
+    setEditMarkCommentId(null);
     setMarkingMode((active) => {
       if (active) {
         setHoverPreviewPoint(null);
         return false;
       }
-      const video = videoRef.current;
-      if (video && !video.paused) {
-        video.pause();
-      }
+      pauseVideo();
+      setComposerTimestamp((prev) => prev ?? videoRef.current?.currentTime ?? playheadSeconds);
       return true;
     });
-  }, []);
+  }, [pauseVideo, playheadSeconds]);
+
+  const enterEditMarkMode = useCallback(() => {
+    if (!activeCommentId || !canEditMark) return;
+    pauseVideo();
+    setMarkingMode(false);
+    setPendingPoint(null);
+    setEditMarkCommentId(activeCommentId);
+    setEditMarkMode(true);
+    setHoverPreviewPoint(null);
+  }, [activeCommentId, canEditMark, pauseVideo]);
+
+  const saveEditMark = useCallback(
+    async (point: { x: number; y: number }) => {
+      if (!editMarkCommentId) return;
+      setSavingMark(true);
+      try {
+        const res = await fetch(
+          `/api/video-reviews/${reviewId}/comments/${editMarkCommentId}/mark`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ point_x: point.x, point_y: point.y }),
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          toast.error(data.error || "Could not update mark.");
+          return;
+        }
+        commentStoreRef.current = mergeCommentStore(commentStoreRef.current, [data]);
+        applyStoreSnapshot(commentStoreRef.current, counts);
+        setEditMarkMode(false);
+        setEditMarkCommentId(null);
+        setHoverPreviewPoint(null);
+        toast.success("Mark updated");
+      } catch {
+        toast.error("Could not update mark.");
+      } finally {
+        setSavingMark(false);
+      }
+    },
+    [reviewId, editMarkCommentId, applyStoreSnapshot, counts]
+  );
+
+  const handleMarkButtonClick = useCallback(() => {
+    if (canEditMark) {
+      enterEditMarkMode();
+      return;
+    }
+    enterMarkingMode();
+  }, [canEditMark, enterEditMarkMode, enterMarkingMode]);
+
+  const handleCommentInputChange = useCallback(
+    (value: string) => {
+      const video = videoRef.current;
+      if (value.length > 0 && commentText.length === 0 && video && !video.paused) {
+        const captured = video.currentTime;
+        video.pause();
+        setComposerTimestamp(captured);
+        setPausedAt(captured);
+        setPlayheadSeconds(captured);
+      }
+      setCommentText(value);
+    },
+    [commentText.length]
+  );
 
   const handleSurfacePointer = useCallback(
     (clientX: number, clientY: number) => {
@@ -297,10 +491,16 @@ export function VideoReviewView({
       if (!video || !container || !contentRect) return;
 
       const rect = container.getBoundingClientRect();
+      if (shouldDeferToNativeVideoControls(rect.height, clientY, rect.top)) {
+        return;
+      }
+
       const result = resolveVideoSurfaceClick({
         markingMode,
+        editMarkMode,
         videoPaused,
         hasDraftPoint: pendingPoint !== null,
+        blockPlaybackToggle,
         clientX,
         clientY,
         containerRect: rect,
@@ -312,17 +512,38 @@ export function VideoReviewView({
         return;
       }
 
+      if (result.action === "blocked_draft") {
+        toast.message("Clear your mark or finish your comment before playing.");
+        return;
+      }
+
+      if (result.action === "move_edit_mark") {
+        void saveEditMark(result.point);
+        return;
+      }
+
       if (result.action === "place_mark" || result.action === "move_draft") {
         setPendingPoint(result.point);
         pauseVideo();
         setMarkingMode(false);
         setHoverPreviewPoint(null);
+        setComposerTimestamp((prev) => prev ?? video.currentTime);
         return;
       }
 
       togglePlayPause();
     },
-    [markingMode, videoPaused, pendingPoint, contentRect, pauseVideo, togglePlayPause]
+    [
+      markingMode,
+      editMarkMode,
+      videoPaused,
+      pendingPoint,
+      blockPlaybackToggle,
+      contentRect,
+      pauseVideo,
+      togglePlayPause,
+      saveEditMark,
+    ]
   );
 
   useEffect(() => {
@@ -330,7 +551,7 @@ export function VideoReviewView({
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "TEXTAREA" || tag === "INPUT" || (e.target as HTMLElement)?.isContentEditable) return;
 
-      if (e.key === "Escape" && markingMode) {
+      if (e.key === "Escape" && (markingMode || editMarkMode)) {
         e.preventDefault();
         exitMarkingMode();
         return;
@@ -343,7 +564,7 @@ export function VideoReviewView({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [markingMode, exitMarkingMode, togglePlayPause]);
+  }, [markingMode, editMarkMode, exitMarkingMode, togglePlayPause]);
 
   const handleVideoPause = () => {
     const video = videoRef.current;
@@ -354,9 +575,13 @@ export function VideoReviewView({
   };
 
   const handleVideoPlay = () => {
+    if (blockPlaybackRef.current) {
+      videoRef.current?.pause();
+      toast.message("Clear your mark or finish your comment before playing.");
+      return;
+    }
     setVideoPaused(false);
     setPausedAt(null);
-    setActiveCommentId(null);
     setHoverPreviewPoint(null);
     exitMarkingMode();
   };
@@ -370,7 +595,7 @@ export function VideoReviewView({
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();
     const video = videoRef.current;
-    const timestamp = pausedAt ?? video?.currentTime ?? 0;
+    const timestamp = composerTimestamp ?? pausedAt ?? video?.currentTime ?? 0;
     const body = commentText.trim();
     if (!body) {
       toast.error("Write a comment first.");
@@ -399,9 +624,10 @@ export function VideoReviewView({
       }
       setCommentText("");
       setPendingPoint(null);
+      setComposerTimestamp(null);
       exitMarkingMode();
       toast.success("Comment added");
-      void loadComments();
+      void loadComments({ quiet: true });
     } catch {
       toast.error("Could not save comment.");
     } finally {
@@ -430,7 +656,7 @@ export function VideoReviewView({
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-4 pb-8 sm:px-6">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-4 pb-8 sm:px-6">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Link
           href={backHref}
@@ -455,41 +681,14 @@ export function VideoReviewView({
         isAdmin={isAdmin}
       />
 
-      <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className="space-y-3">
+      <div className="mt-4 flex flex-col gap-6 lg:min-h-[calc(100vh-12rem)] lg:flex-row lg:items-stretch">
+        <div className="min-w-0 flex-1 space-y-3">
           <div
             ref={containerRef}
             className={cn(
-              "relative aspect-video overflow-hidden rounded-2xl bg-black ring-1 ring-black/10",
-              markingMode && "cursor-crosshair ring-2 ring-accent/70"
+              "relative aspect-video w-full overflow-hidden rounded-2xl bg-black ring-1 ring-black/10 lg:min-h-[min(70vh,820px)] lg:aspect-auto",
+              (markingMode || editMarkMode) && "ring-2 ring-accent/70"
             )}
-            onClick={(e) => {
-              if ((e.target as HTMLElement).closest("button")) return;
-              handleSurfacePointer(e.clientX, e.clientY);
-            }}
-            onMouseMove={(e) => {
-              if (!markingMode || !videoPaused || !contentRect || !containerRef.current) {
-                setHoverPreviewPoint(null);
-                return;
-              }
-              const rect = containerRef.current.getBoundingClientRect();
-              const result = resolveVideoSurfaceClick({
-                markingMode: true,
-                videoPaused: true,
-                hasDraftPoint: false,
-                clientX: e.clientX,
-                clientY: e.clientY,
-                containerRect: rect,
-                content: contentRect,
-              });
-              if (result.action === "place_mark") {
-                setHoverPreviewPoint(result.point);
-              } else {
-                setHoverPreviewPoint(null);
-              }
-            }}
-            onMouseLeave={() => setHoverPreviewPoint(null)}
-            role="presentation"
           >
             {loading && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60">
@@ -527,53 +726,92 @@ export function VideoReviewView({
                 aria-label={`Review video version ${activeVersion.version_number}`}
               />
             )}
-            {dotStyle && (visibleDot || previewDot) && (
+            {url && !loading && !error && (
+              <div
+                className={cn(
+                  "absolute inset-x-0 top-0 bottom-12 z-10",
+                  markingMode || editMarkMode ? "cursor-crosshair" : "cursor-pointer"
+                )}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest("button")) return;
+                  handleSurfacePointer(e.clientX, e.clientY);
+                }}
+                onMouseMove={(e) => {
+                  if ((!markingMode && !editMarkMode) || !videoPaused || !contentRect || !containerRef.current) {
+                    setHoverPreviewPoint(null);
+                    return;
+                  }
+                  const rect = containerRef.current.getBoundingClientRect();
+                  const result = resolveVideoSurfaceClick({
+                    markingMode,
+                    editMarkMode,
+                    videoPaused: true,
+                    hasDraftPoint: false,
+                    blockPlaybackToggle: false,
+                    clientX: e.clientX,
+                    clientY: e.clientY,
+                    containerRect: rect,
+                    content: contentRect,
+                  });
+                  if (result.action === "place_mark" || result.action === "move_edit_mark") {
+                    setHoverPreviewPoint(result.point);
+                  } else {
+                    setHoverPreviewPoint(null);
+                  }
+                }}
+                onMouseLeave={() => setHoverPreviewPoint(null)}
+                role="presentation"
+                aria-hidden
+              />
+            )}
+            {dotStyle && visibleDot && (
               <span
                 className={cn(
                   "pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-lg ring-2 ring-white",
-                  previewDot ? "h-3 w-3 bg-accent/60" : "h-3.5 w-3.5 bg-accent sm:h-4 sm:w-4",
-                  visibleDot?.kind === "selected" && "h-3.5 w-3.5 bg-white ring-accent sm:h-4 sm:w-4"
+                  visibleDot.kind === "preview" && "h-3 w-3 bg-accent/60",
+                  visibleDot.kind === "draft" && "h-3.5 w-3.5 bg-accent sm:h-4 sm:w-4",
+                  visibleDot.kind === "selected" && "h-3.5 w-3.5 bg-white ring-accent sm:h-4 sm:w-4"
                 )}
                 style={{ left: `${dotStyle.leftPct}%`, top: `${dotStyle.topPct}%` }}
                 aria-hidden
               />
             )}
-            {markingMode && (
+            {(markingMode || editMarkMode) && (
               <div className="pointer-events-none absolute left-3 top-3 z-20 rounded-full bg-accent px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-                Marking mode
+                {editMarkMode ? "Edit mark" : "Marking mode"}
               </div>
             )}
           </div>
 
           {duration > 0 && (
             <div
-              className="relative h-10 rounded-lg bg-slate-100 px-1"
+              className="relative h-11 rounded-lg bg-slate-100 px-1"
               role="group"
               aria-label={`Comment timeline · ${commentView} view`}
             >
               {clusters.map((cluster) => {
                 const pct = markerPositionPercent(cluster.anchorSeconds, duration);
-                const count = cluster.comments.length;
+                const { initials, color, extraCount, ariaLabel } = clusterMarkerLabel(cluster);
                 return (
                   <button
                     key={`${cluster.anchorSeconds}-${cluster.comments[0]?.id}`}
                     type="button"
                     className={cn(
-                      "absolute top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-white shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
-                      count > 1 ? "h-6 min-w-6 px-1" : "h-4 w-4"
+                      "absolute top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[9px] font-bold leading-none text-white shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
+                      extraCount > 0 ? "h-7 min-w-7 px-1" : "h-6 w-6"
                     )}
-                    style={{ left: `${pct}%` }}
-                    aria-label={
-                      count > 1
-                        ? `${count} comments at ${formatReviewTimestamp(cluster.anchorSeconds)}`
-                        : `Comment at ${formatReviewTimestamp(cluster.anchorSeconds)}`
-                    }
+                    style={{ left: `${pct}%`, backgroundColor: color }}
+                    aria-label={`${ariaLabel} at ${formatReviewTimestamp(cluster.anchorSeconds)}`}
                     onClick={(e) => {
                       e.stopPropagation();
+                      setActiveCommentId(cluster.comments[0]?.id ?? null);
                       seekTo(cluster.anchorSeconds, cluster.comments[0]?.id);
                     }}
                   >
-                    {count > 1 ? count : null}
+                    <span>{initials}</span>
+                    {extraCount > 0 && (
+                      <span className="ml-0.5 text-[8px] font-semibold opacity-90">+{extraCount}</span>
+                    )}
                   </button>
                 );
               })}
@@ -581,79 +819,85 @@ export function VideoReviewView({
             </div>
           )}
 
+          <form onSubmit={handleSubmitComment} className="space-y-2 rounded-2xl bg-white p-4 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+              <span>
+                At{" "}
+                <strong className="text-primary">{formatReviewTimestamp(composerDisplayTime)}</strong>
+                {composerTimestamp != null && (
+                  <span className="ml-1 text-[10px] text-muted">(locked when typing started)</span>
+                )}
+              </span>
+              {pendingPoint && (
+                <span className="inline-flex items-center gap-1 text-accent">
+                  <MapPin className="h-3 w-3" /> Point marked
+                </span>
+              )}
+              {(canEditMark || !activeComment?.point_x) && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={markingMode || editMarkMode ? "accent" : "outline"}
+                  className={cn("min-h-9", (markingMode || editMarkMode) && "cursor-crosshair")}
+                  onClick={handleMarkButtonClick}
+                  aria-pressed={markingMode || editMarkMode}
+                  disabled={savingMark || Boolean(activeComment?.point_x && !canEditMark)}
+                >
+                  <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                  {editMarkMode ? "Editing mark…" : canEditMark ? "Edit mark" : "Add mark"}
+                </Button>
+              )}
+            </div>
+            <Textarea
+              value={commentText}
+              onChange={(e) => handleCommentInputChange(e.target.value)}
+              placeholder="Describe what you'd like changed at this moment…"
+              rows={3}
+              className="min-h-[88px] resize-y"
+              disabled={submitting}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" variant="accent" size="sm" className="min-h-11" disabled={submitting}>
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add comment"}
+              </Button>
+              {pendingPoint && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11"
+                  onClick={() => setPendingPoint(null)}
+                >
+                  Clear point
+                </Button>
+              )}
+            </div>
+          </form>
+
           <p className="text-xs text-muted">
             Click the video to play or pause. Use <strong>Add mark</strong> to pin a spot on a paused
             frame (optional). Comments belong to V{activeVersion.version_number} only.
           </p>
         </div>
 
-        <VideoReviewCommentPanel
-          reviewId={reviewId}
-          versionNumber={activeVersion.version_number}
-          isAdmin={isAdmin}
-          view={commentView}
-          counts={counts}
-          threads={threads}
-          loading={commentsLoading}
-          error={commentsError}
-          activeCommentId={activeCommentId}
-          onViewChange={setCommentView}
-          onRetry={() => void loadComments()}
-          onSeek={seekTo}
-          onCommentsChange={() => void loadComments()}
-          newCommentForm={
-            <form onSubmit={handleSubmitComment} className="mb-4 space-y-2 border-b border-border/60 pb-4">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-                <span>
-                  At{" "}
-                  <strong className="text-primary">
-                    {formatReviewTimestamp(pausedAt ?? playheadSeconds)}
-                  </strong>
-                </span>
-                {pendingPoint && (
-                  <span className="inline-flex items-center gap-1 text-accent">
-                    <MapPin className="h-3 w-3" /> Point marked
-                  </span>
-                )}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={markingMode ? "accent" : "outline"}
-                  className={cn("min-h-9", markingMode && "cursor-crosshair")}
-                  onClick={enterMarkingMode}
-                  aria-pressed={markingMode}
-                >
-                  <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                  Add mark
-                </Button>
-              </div>
-              <Textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Describe what you'd like changed at this moment…"
-                rows={3}
-                className="min-h-[88px] resize-y"
-                disabled={submitting}
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button type="submit" variant="accent" size="sm" className="min-h-11" disabled={submitting}>
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add comment"}
-                </Button>
-                {pendingPoint && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="min-h-11"
-                    onClick={() => setPendingPoint(null)}
-                  >
-                    Clear point
-                  </Button>
-                )}
-              </div>
-            </form>
-          }
-        />
+        <aside className="w-full shrink-0 lg:w-[380px] lg:max-w-[30%]">
+          <VideoReviewCommentPanel
+            reviewId={reviewId}
+            versionNumber={activeVersion.version_number}
+            isAdmin={isAdmin}
+            view={commentView}
+            counts={counts}
+            threads={threads}
+            loading={commentsLoading}
+            error={commentsError}
+            activeCommentId={activeCommentId}
+            onViewChange={setCommentView}
+            onRetry={() => void loadComments()}
+            onSeek={seekTo}
+            onCommentsChange={() => void loadComments({ quiet: true })}
+            onSelectComment={setActiveCommentId}
+          />
+        </aside>
       </div>
     </div>
   );

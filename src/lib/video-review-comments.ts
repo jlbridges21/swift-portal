@@ -3,66 +3,20 @@ import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supab
 import type { VideoReviewComment, VideoReviewCommentStatus } from "@/lib/types";
 import { VideoReviewError } from "@/lib/video-reviews";
 
-export type VideoReviewCommentView = "unresolved" | "resolved" | "all";
+export type {
+  VideoReviewCommentCounts,
+  VideoReviewCommentEnriched,
+  VideoReviewCommentThread,
+  VideoReviewCommentView,
+} from "@/lib/video-review-comment-model";
+export {
+  buildCommentThreads,
+  countTopLevelComments,
+  filterTopLevelForView,
+} from "@/lib/video-review-comment-model";
 
-export interface VideoReviewCommentEnriched extends VideoReviewComment {
-  author_name: string;
-  resolved_by_name: string | null;
-  reopened_by_name: string | null;
-}
-
-export interface VideoReviewCommentThread {
-  comment: VideoReviewCommentEnriched;
-  replies: VideoReviewCommentEnriched[];
-}
-
-export interface VideoReviewCommentCounts {
-  all: number;
-  unresolved: number;
-  resolved: number;
-}
-
-export function countTopLevelComments(comments: VideoReviewComment[]): VideoReviewCommentCounts {
-  const topLevel = comments.filter((c) => !c.parent_comment_id);
-  const unresolved = topLevel.filter((c) => c.status === "unresolved").length;
-  const resolved = topLevel.filter((c) => c.status === "resolved").length;
-  return { all: topLevel.length, unresolved, resolved };
-}
-
-export function filterTopLevelForView(
-  comments: VideoReviewComment[],
-  view: VideoReviewCommentView
-): VideoReviewComment[] {
-  const topLevel = comments.filter((c) => !c.parent_comment_id);
-  if (view === "all") return topLevel;
-  return topLevel.filter((c) => c.status === view);
-}
-
-export function buildCommentThreads(
-  comments: VideoReviewComment[],
-  enriched: Map<string, VideoReviewCommentEnriched>,
-  view: VideoReviewCommentView
-): VideoReviewCommentThread[] {
-  const topLevel = filterTopLevelForView(comments, view).sort(
-    (a, b) => (a.timestamp_seconds ?? 0) - (b.timestamp_seconds ?? 0)
-  );
-
-  const repliesByParent = new Map<string, VideoReviewComment[]>();
-  for (const row of comments) {
-    if (!row.parent_comment_id) continue;
-    const list = repliesByParent.get(row.parent_comment_id) ?? [];
-    list.push(row);
-    repliesByParent.set(row.parent_comment_id, list);
-  }
-
-  return topLevel.map((comment) => {
-    const replies = (repliesByParent.get(comment.id) ?? [])
-      .sort((a, b) => a.created_at.localeCompare(b.created_at))
-      .map((reply) => enriched.get(reply.id)!)
-      .filter(Boolean);
-    return { comment: enriched.get(comment.id)!, replies };
-  });
-}
+import type { VideoReviewCommentEnriched, VideoReviewCommentCounts } from "@/lib/video-review-comment-model";
+import { countTopLevelComments } from "@/lib/video-review-comment-model";
 
 async function loadDisplayNames(
   db: TenantServiceClient,
@@ -352,6 +306,58 @@ export async function reopenVideoReviewComment(
   );
 
   return { comment: comment as VideoReviewComment, changed: true };
+}
+
+export async function updateVideoReviewCommentMark(
+  db: TenantServiceClient,
+  reviewId: string,
+  commentId: string,
+  userId: string,
+  pointX: number | null,
+  pointY: number | null
+): Promise<VideoReviewComment> {
+  const existing = await loadTopLevelComment(db, reviewId, commentId);
+
+  if (existing.author_user_id !== userId) {
+    throw new VideoReviewError("Only the comment author can edit this mark.", "mark_edit_forbidden");
+  }
+
+  const hasPointX = pointX != null;
+  const hasPointY = pointY != null;
+  if (hasPointX !== hasPointY) {
+    throw new VideoReviewError("Point coordinates must be provided as a pair.", "comment_point_pair");
+  }
+
+  if (hasPointX) {
+    if (
+      !Number.isFinite(pointX!) ||
+      pointX! < 0 ||
+      pointX! > 1 ||
+      !Number.isFinite(pointY!) ||
+      pointY! < 0 ||
+      pointY! > 1
+    ) {
+      throw new VideoReviewError("Point coordinates must be between 0 and 1.", "comment_point_range");
+    }
+  }
+
+  const { data: comment, error } = await db
+    .from("video_review_comments")
+    .update({
+      point_x: hasPointX ? pointX : null,
+      point_y: hasPointY ? pointY : null,
+    })
+    .eq("business_id", db.businessId)
+    .eq("id", commentId)
+    .eq("review_id", reviewId)
+    .select()
+    .single();
+
+  if (error || !comment) {
+    throw new VideoReviewError(error?.message ?? "Could not update mark.", "mark_update_failed");
+  }
+
+  return comment as VideoReviewComment;
 }
 
 function formatActivityTimestamp(seconds: number | null): string {
