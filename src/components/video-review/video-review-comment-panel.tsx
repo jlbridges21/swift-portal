@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  HelpCircle,
   Loader2,
   MapPin,
   MessageSquarePlus,
@@ -56,22 +57,47 @@ export function VideoReviewCommentPanel({
   onCommentsChange,
   onSelectComment,
 }: VideoReviewCommentPanelProps) {
+  const [helpOpen, setHelpOpen] = useState(false);
+
   return (
-    <div className="flex h-full min-h-[320px] flex-col rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5 lg:min-h-0">
-      <div className="shrink-0 space-y-2 border-b border-border/60 p-4">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-primary">
-          <MessageSquarePlus className="h-4 w-4 text-accent" />
-          Comments · V{versionNumber}
-        </h2>
-        <p className="text-xs leading-relaxed text-muted">
-          Uploading a new version does not resolve notes on earlier versions — each version keeps its
-          own open feedback until someone resolves or reopens it.
-        </p>
-        <p className="text-xs leading-relaxed text-muted">
-          {isAdmin
-            ? "You can mark feedback resolved when work is done. Clients can reopen if something still needs attention."
-            : "The business marks notes resolved when work is done. You can reopen if something still needs fixing."}
-        </p>
+    <div className="flex h-full min-h-[320px] min-w-0 flex-col rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5 lg:min-h-0">
+      <div className="shrink-0 border-b border-border/60 p-4">
+        <div className="mb-2 flex min-w-0 items-start justify-between gap-2">
+          <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold text-primary">
+            <MessageSquarePlus className="h-4 w-4 shrink-0 text-accent" />
+            <span className="truncate">Comments · V{versionNumber}</span>
+          </h2>
+          <div className="relative shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9 w-9 p-0"
+              aria-expanded={helpOpen}
+              aria-label="Comment help"
+              onClick={() => setHelpOpen((open) => !open)}
+            >
+              <HelpCircle className="h-4 w-4 text-muted" />
+            </Button>
+            {helpOpen && (
+              <div
+                className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border border-border bg-white p-3 text-xs leading-relaxed text-muted shadow-lg"
+                role="region"
+                aria-label="Comment help"
+              >
+                <p>
+                  Uploading a new version does not resolve notes on earlier versions — each version
+                  keeps its own open feedback until someone resolves or reopens it.
+                </p>
+                <p className="mt-2">
+                  {isAdmin
+                    ? "You can mark feedback resolved when work is done. Clients can reopen if something still needs attention."
+                    : "The business marks notes resolved when work is done. You can reopen if something still needs fixing."}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2" role="tablist" aria-label="Comment views">
           {(
             [

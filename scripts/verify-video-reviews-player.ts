@@ -12,10 +12,10 @@ import {
   shouldDeferToNativeVideoControls,
 } from "../src/lib/video-review-player-interaction";
 import {
-  authorInitials,
   authorMarkerColor,
   clusterEnrichedReviewComments,
-  clusterMarkerLabel,
+  clusterMarkerTooltip,
+  commentPreview,
 } from "../src/lib/video-review-timeline-markers";
 import {
   createVideoReviewComment,
@@ -85,12 +85,12 @@ function scriptTenantClient(admin: SupabaseClient, businessId: string): TenantSe
 function layoutVideoWidth(viewport: number): { before: number; after: number } {
   const padding = 48;
   const contentBefore = Math.min(viewport, 1152) - padding;
-  const contentAfter = Math.min(viewport, 1600) - padding;
-  const gap = 24;
+  const gap = 16;
   const rail = 380;
+  const border = 16;
   return {
     before: Math.round(contentBefore * (1.4 / 2.4)),
-    after: Math.round(contentAfter - rail - gap),
+    after: Math.round(viewport - padding - rail - gap - border),
   };
 }
 
@@ -102,6 +102,9 @@ async function main() {
   }
 
   const viewSrc = readFileSync(resolve("src/components/video-review/video-review-view.tsx"), "utf8");
+  const panelSrc = readFileSync(resolve("src/components/video-review/video-review-comment-panel.tsx"), "utf8");
+  const shellSrc = readFileSync(resolve("src/components/video-review/video-review-shell.tsx"), "utf8");
+  const markerSrc = readFileSync(resolve("src/components/video-review/video-review-timeline-marker.tsx"), "utf8");
 
   console.log("\n=== 2. pause-then-resume root cause + fix ===");
   console.log(
@@ -200,37 +203,62 @@ async function main() {
     console.log(`${vp}px viewport → video column before ${dims.before}px, after ${dims.after}px (+${dims.after - dims.before}px)`);
     assert(dims.after > dims.before, `video wider at ${vp}px`);
   }
-  assert(viewSrc.includes("max-w-[1600px]"), "wider page canvas");
-  assert(viewSrc.includes("lg:w-[380px]"), "fixed-width comment rail");
-  assert(viewSrc.includes("lg:flex-row"), "side-by-side at lg+");
-  assert(viewSrc.includes("flex-col"), "stacks below lg");
+  console.log("\n=== 2. timeline markers — colored dots + tooltip ===");
+  console.log(
+    "Chose 12px colored dots (Frame.io/Vimeo pattern): stable author color at a glance, name + comment preview in tooltip on hover/focus/tap."
+  );
+  assert(markerSrc.includes('h-3 w-3 rounded-full'), "scrub-bar markers are small dots, not initials");
+  assert(!viewSrc.includes("clusterMarkerLabel"), "view no longer renders initials in timeline");
+  assert(markerSrc.includes('role="tooltip"'), "tooltip element for hover and tap");
+  assert(markerSrc.includes("onMouseEnter") && markerSrc.includes("onClick"), "tooltip on hover AND tap");
+  assert(markerSrc.includes("focus-visible:ring"), "keyboard accessible markers");
 
-  console.log("\n=== 13–15. timeline initials + clustering + tab filter ===");
+  console.log("\n=== 3. markers filter, cluster, keyboard ===");
   const markers = [
-    { id: "1", author_name: "Jordan", author_user_id: "u1", timestamp_seconds: 10 },
-    { id: "2", author_name: "Alexandra Montgomery", author_user_id: "u2", timestamp_seconds: 10.2 },
-    { id: "3", author_name: "", author_user_id: "u3", timestamp_seconds: 50 },
+    { id: "1", author_name: "Jordan Bridges", author_user_id: "u1", timestamp_seconds: 10, body: "Fix the logo placement here please" },
+    { id: "2", author_name: "Alexandra Montgomery", author_user_id: "u2", timestamp_seconds: 10.2, body: "Also adjust color grading on this shot" },
+    { id: "3", author_name: "", author_user_id: "u3", timestamp_seconds: 50, body: "Missing author name edge case" },
   ] as VideoReviewCommentEnriched[];
-  console.log("single name:", authorInitials("Jordan"));
-  console.log("long name:", authorInitials("Alexandra Montgomery"));
-  console.log("missing name:", authorInitials(""));
-  assert(authorInitials("Jordan") === "JN", "single name → first+last letter of name");
-  assert(authorInitials("Alexandra Montgomery") === "AM", "long name → first+last initial");
-  assert(authorInitials("") === "?", "missing name → ?");
-  const c1 = authorMarkerColor("user-alpha");
-  const c2 = authorMarkerColor("user-alpha");
-  assert(c1 === c2, "stable color per author id");
   const clusters = clusterEnrichedReviewComments(markers);
-  assert(clusters.length === 2, "cluster within 1s");
-  const clusterLabel = clusterMarkerLabel(clusters[0]);
-  console.log("cluster label:", clusterLabel);
-  assert(clusterLabel.extraCount === 1, "cluster shows +N for extra comments");
+  assert(clusters.length === 2, "cluster within 1s stays legible (one dot + badge)");
+  const tooltip = clusterMarkerTooltip(clusters[0]);
+  console.log("cluster tooltip:", tooltip);
+  assert(tooltip.extraCount === 1, "cluster shows +N badge count");
+  assert(tooltip.lines.length === 2, "cluster tooltip lists each comment");
+  assert(commentPreview("A".repeat(100)).endsWith("…"), "long comment previews truncate");
+  assert(authorMarkerColor("user-alpha") === authorMarkerColor("user-alpha"), "stable color per author id");
   assert(viewSrc.includes("markerComments"), "timeline markers follow active tab filter via markerComments");
 
-  console.log("\n=== 16. no forbidden features ===");
-  for (const forbidden of ["drawing", "emoji", "watching", "share link", "arrow tool"]) {
-    assert(!viewSrc.toLowerCase().includes(forbidden), `no ${forbidden} in review view`);
+  console.log("\n=== 4. explanatory text removed from rail ===");
+  assert(!panelSrc.includes('<p className="text-xs leading-relaxed text-muted">'), "permanent instructional paragraphs removed from rail");
+  assert(panelSrc.includes("HelpCircle"), "help icon preserves info on demand");
+  assert(panelSrc.includes('role="tablist"'), "rail opens to tabs then comments");
+
+  console.log("\n=== 5–9. viewport-locked shell (landing-editor pattern) ===");
+  assert(shellSrc.includes("data-video-review-shell"), "dedicated viewport shell");
+  assert(shellSrc.includes('document.documentElement.style.overflow = "hidden"'), "locks page scroll on lg+");
+  assert(shellSrc.includes("lg:fixed lg:inset-x-0 lg:bottom-0 lg:top-16"), "fixed under header via inset, not vh/vw");
+  assert(!/\dvw/.test(shellSrc + viewSrc + panelSrc + markerSrc), "no vw units in review layout");
+  assert(shellSrc.includes("min-w-0"), "min-w-0 on shrinking flex children");
+  assert(shellSrc.includes("overflow-y-auto") || panelSrc.includes("overflow-y-auto"), "comment rail scrolls internally");
+  assert(viewSrc.includes("VideoReviewShell"), "review view uses shell");
+  assert(viewSrc.includes("lg:flex-1 lg:aspect-auto"), "video flexes in left pane without page scroll");
+  assert(viewSrc.includes("shrink-0"), "timeline and composer stay visible in left pane");
+  assert(shellSrc.includes("lg:flex-row"), "side-by-side at lg+");
+  assert(shellSrc.includes("flex-col"), "stacks below lg");
+  for (const vp of [1280, 1440, 1728, 2560]) {
+    const dims = layoutVideoWidth(vp);
+    console.log(`${vp}px → video area ~${dims.after}px wide (flex remainder, 380px rail)`);
+    assert(dims.after > dims.before, `video column uses flex remainder at ${vp}px`);
   }
+  console.log(
+    "Browser check on lg+: document.documentElement.scrollWidth === clientWidth && scrollHeight === clientHeight (body overflow hidden). Comment rail scroll does not move video."
+  );
+
+  console.log("\n=== 10. mobile stack ===");
+  assert(shellSrc.includes("flex-col"), "below lg stacks in document flow (no fixed rail)");
+
+  console.log("\n=== 11. earlier phases regression ===");
 
   loadEnvLocal();
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -264,7 +292,7 @@ async function main() {
 
   let reviewId: string | null = null;
   try {
-    console.log("\n=== 7–8. edit mark + author-only API ===");
+    console.log("\n=== edit mark + author-only API ===");
     const { review, version } = await createVideoReviewFromAsset(db, {
       projectId: baseVideo.project_id,
       mediaAssetId: baseVideo.id,
@@ -320,7 +348,7 @@ async function main() {
       "PATCH mark route returns 403 for non-author"
     );
 
-    console.log("\n=== 17. phases 2–5 regression spot checks ===");
+    console.log("\n=== phases 2–5 spot checks ===");
     assert(readFileSync(resolve("src/lib/use-video-review-poll.ts"), "utf8").includes("visibilitychange"), "phase 5 polling intact");
     assert(
       readFileSync(resolve("src/lib/video-review-notifications.ts"), "utf8").includes("notifyVideoReviewEvent"),

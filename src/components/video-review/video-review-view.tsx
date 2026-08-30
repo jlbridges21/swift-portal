@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/ui/empty-state";
 import { VideoReviewCommentPanel } from "@/components/video-review/video-review-comment-panel";
+import { VideoReviewShell } from "@/components/video-review/video-review-shell";
+import { VideoReviewTimelineMarker } from "@/components/video-review/video-review-timeline-marker";
 import { VideoReviewVersionBar } from "@/components/video-review/video-review-version-bar";
 import { formatReviewTimestamp } from "@/lib/video-review-format";
 import {
@@ -29,7 +31,6 @@ import {
 import { markerPositionPercent } from "@/lib/video-review-timeline";
 import {
   clusterEnrichedReviewComments,
-  clusterMarkerLabel,
 } from "@/lib/video-review-timeline-markers";
 import { useVideoReviewStream } from "@/lib/use-video-review-stream";
 import { useVideoReviewPoll } from "@/lib/use-video-review-poll";
@@ -656,37 +657,39 @@ export function VideoReviewView({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 py-4 pb-8 sm:px-6">
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <Link
-          href={backHref}
-          className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-muted hover:text-primary"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {backLabel}
-        </Link>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-bold text-primary sm:text-2xl">{review.title}</h1>
-          <p className="text-sm text-muted">Video review · {isAdmin ? "Admin" : "Client"} view</p>
-        </div>
-      </div>
-
-      <VideoReviewVersionBar
-        reviewId={reviewId}
-        projectId={projectId}
-        versions={versionRows}
-        activeVersionId={activeVersionId}
-        onVersionChange={setActiveVersionId}
-        onVersionAdded={handleVersionAdded}
-        isAdmin={isAdmin}
-      />
-
-      <div className="mt-4 flex flex-col gap-6 lg:min-h-[calc(100vh-12rem)] lg:flex-row lg:items-stretch">
-        <div className="min-w-0 flex-1 space-y-3">
+    <VideoReviewShell
+      header={
+        <>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <Link
+              href={backHref}
+              className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-muted hover:text-primary"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {backLabel}
+            </Link>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-xl font-bold text-primary sm:text-2xl">{review.title}</h1>
+              <p className="text-sm text-muted">Video review · {isAdmin ? "Admin" : "Client"} view</p>
+            </div>
+          </div>
+          <VideoReviewVersionBar
+            reviewId={reviewId}
+            projectId={projectId}
+            versions={versionRows}
+            activeVersionId={activeVersionId}
+            onVersionChange={setActiveVersionId}
+            onVersionAdded={handleVersionAdded}
+            isAdmin={isAdmin}
+          />
+        </>
+      }
+      main={
+        <>
           <div
             ref={containerRef}
             className={cn(
-              "relative aspect-video w-full overflow-hidden rounded-2xl bg-black ring-1 ring-black/10 lg:min-h-[min(70vh,820px)] lg:aspect-auto",
+              "relative aspect-video w-full min-h-0 overflow-hidden rounded-2xl bg-black ring-1 ring-black/10 lg:min-h-0 lg:flex-1 lg:aspect-auto",
               (markingMode || editMarkMode) && "ring-2 ring-accent/70"
             )}
           >
@@ -785,41 +788,29 @@ export function VideoReviewView({
 
           {duration > 0 && (
             <div
-              className="relative h-11 rounded-lg bg-slate-100 px-1"
+              className="relative h-11 shrink-0 rounded-lg bg-slate-100 px-1"
               role="group"
               aria-label={`Comment timeline · ${commentView} view`}
             >
-              {clusters.map((cluster) => {
-                const pct = markerPositionPercent(cluster.anchorSeconds, duration);
-                const { initials, color, extraCount, ariaLabel } = clusterMarkerLabel(cluster);
-                return (
-                  <button
-                    key={`${cluster.anchorSeconds}-${cluster.comments[0]?.id}`}
-                    type="button"
-                    className={cn(
-                      "absolute top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[9px] font-bold leading-none text-white shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
-                      extraCount > 0 ? "h-7 min-w-7 px-1" : "h-6 w-6"
-                    )}
-                    style={{ left: `${pct}%`, backgroundColor: color }}
-                    aria-label={`${ariaLabel} at ${formatReviewTimestamp(cluster.anchorSeconds)}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveCommentId(cluster.comments[0]?.id ?? null);
-                      seekTo(cluster.anchorSeconds, cluster.comments[0]?.id);
-                    }}
-                  >
-                    <span>{initials}</span>
-                    {extraCount > 0 && (
-                      <span className="ml-0.5 text-[8px] font-semibold opacity-90">+{extraCount}</span>
-                    )}
-                  </button>
-                );
-              })}
+              {clusters.map((cluster) => (
+                <VideoReviewTimelineMarker
+                  key={`${cluster.anchorSeconds}-${cluster.comments[0]?.id}`}
+                  cluster={cluster}
+                  leftPct={markerPositionPercent(cluster.anchorSeconds, duration)}
+                  onActivate={(activeCluster) => {
+                    setActiveCommentId(activeCluster.comments[0]?.id ?? null);
+                    seekTo(activeCluster.anchorSeconds, activeCluster.comments[0]?.id);
+                  }}
+                />
+              ))}
               <div className="absolute inset-x-1 top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-300" />
             </div>
           )}
 
-          <form onSubmit={handleSubmitComment} className="space-y-2 rounded-2xl bg-white p-4 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+          <form
+            onSubmit={handleSubmitComment}
+            className="shrink-0 space-y-2 rounded-2xl bg-white p-4 shadow-lg shadow-slate-200/40 ring-1 ring-black/5"
+          >
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
               <span>
                 At{" "}
@@ -873,32 +864,26 @@ export function VideoReviewView({
               )}
             </div>
           </form>
-
-          <p className="text-xs text-muted">
-            Click the video to play or pause. Use <strong>Add mark</strong> to pin a spot on a paused
-            frame (optional). Comments belong to V{activeVersion.version_number} only.
-          </p>
-        </div>
-
-        <aside className="w-full shrink-0 lg:w-[380px] lg:max-w-[30%]">
-          <VideoReviewCommentPanel
-            reviewId={reviewId}
-            versionNumber={activeVersion.version_number}
-            isAdmin={isAdmin}
-            view={commentView}
-            counts={counts}
-            threads={threads}
-            loading={commentsLoading}
-            error={commentsError}
-            activeCommentId={activeCommentId}
-            onViewChange={setCommentView}
-            onRetry={() => void loadComments()}
-            onSeek={seekTo}
-            onCommentsChange={() => void loadComments({ quiet: true })}
-            onSelectComment={setActiveCommentId}
-          />
-        </aside>
-      </div>
-    </div>
+        </>
+      }
+      rail={
+        <VideoReviewCommentPanel
+          reviewId={reviewId}
+          versionNumber={activeVersion.version_number}
+          isAdmin={isAdmin}
+          view={commentView}
+          counts={counts}
+          threads={threads}
+          loading={commentsLoading}
+          error={commentsError}
+          activeCommentId={activeCommentId}
+          onViewChange={setCommentView}
+          onRetry={() => void loadComments()}
+          onSeek={seekTo}
+          onCommentsChange={() => void loadComments({ quiet: true })}
+          onSelectComment={setActiveCommentId}
+        />
+      }
+    />
   );
 }

@@ -1,22 +1,5 @@
 import type { VideoReviewCommentEnriched } from "@/lib/video-review-comment-model";
 
-/** Derive up to two initials from a display name. */
-export function authorInitials(name: string | null | undefined): string {
-  const trimmed = (name ?? "").trim();
-  if (!trimmed) return "?";
-
-  const parts = trimmed.split(/\s+/).filter(Boolean);
-  if (parts.length === 1) {
-    const one = parts[0];
-    if (one.length <= 2) return one.toUpperCase();
-    return (one[0] + one[one.length - 1]).toUpperCase();
-  }
-
-  const first = parts[0][0] ?? "";
-  const last = parts[parts.length - 1][0] ?? "";
-  return `${first}${last}`.toUpperCase() || "?";
-}
-
 /** Stable marker color from author id (same user → same color across loads). */
 export function authorMarkerColor(userId: string): string {
   let hash = 0;
@@ -25,6 +8,13 @@ export function authorMarkerColor(userId: string): string {
   }
   const hue = Math.abs(hash) % 360;
   return `hsl(${hue} 62% 42%)`;
+}
+
+export function commentPreview(body: string, maxLen = 72): string {
+  const trimmed = body.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "(No comment text)";
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen - 1)}…`;
 }
 
 export interface TimelineMarkerCluster {
@@ -55,21 +45,40 @@ export function clusterEnrichedReviewComments(
   return clusters;
 }
 
+export function clusterMarkerTooltip(cluster: TimelineMarkerCluster): {
+  color: string;
+  extraCount: number;
+  ariaLabel: string;
+  lines: { author: string; preview: string }[];
+} {
+  const primary = cluster.comments[0];
+  const color = authorMarkerColor(primary.author_user_id);
+  const extraCount = cluster.comments.length - 1;
+  const lines = cluster.comments.map((comment) => ({
+    author: comment.author_name?.trim() || "Unknown",
+    preview: commentPreview(comment.body),
+  }));
+  const names = lines.map((line) => line.author).join(", ");
+  const ariaLabel =
+    extraCount > 0
+      ? `${cluster.comments.length} comments by ${names}`
+      : `Comment by ${lines[0]?.author ?? "Unknown"}`;
+
+  return { color, extraCount, ariaLabel, lines };
+}
+
+/** @deprecated Use clusterMarkerTooltip — initials markers removed. */
 export function clusterMarkerLabel(cluster: TimelineMarkerCluster): {
   initials: string;
   color: string;
   extraCount: number;
   ariaLabel: string;
 } {
-  const primary = cluster.comments[0];
-  const initials = authorInitials(primary.author_name);
-  const color = authorMarkerColor(primary.author_user_id);
-  const extraCount = cluster.comments.length - 1;
-  const names = cluster.comments.map((c) => c.author_name).join(", ");
-  const ariaLabel =
-    extraCount > 0
-      ? `${cluster.comments.length} comments by ${names}`
-      : `Comment by ${primary.author_name}`;
-
-  return { initials, color, extraCount, ariaLabel };
+  const tooltip = clusterMarkerTooltip(cluster);
+  return {
+    initials: "",
+    color: tooltip.color,
+    extraCount: tooltip.extraCount,
+    ariaLabel: tooltip.ariaLabel,
+  };
 }
