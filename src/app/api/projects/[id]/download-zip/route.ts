@@ -15,6 +15,10 @@ import {
   ZipDownloadError,
 } from "@/lib/project-zip-download";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import {
+  filterMediaForVideoReviewDelivery,
+  loadVideoReviewVersionMap,
+} from "@/lib/video-review-media";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -103,7 +107,9 @@ export async function GET(
 
     zipLog("media_query", ctx, { totalAssets: media?.length ?? 0 });
 
-    let downloadable = pickDownloadableAssets(media ?? [], isAdmin);
+    const versionMap = await loadVideoReviewVersionMap(db, projectId);
+    const deliveryMedia = filterMediaForVideoReviewDelivery(media ?? [], versionMap, isAdmin);
+    let downloadable = pickDownloadableAssets(deliveryMedia, isAdmin);
     if (folderScope.folderScope) {
       downloadable = filterDownloadableAssetsByFolder(downloadable, folderScope.folderScope);
     }

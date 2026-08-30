@@ -121,6 +121,31 @@ export const CLIENT_EMAIL_EVENT_MAP: Record<NotificationEventKey, ClientEmailEve
     premiumTemplate: "general",
     defaultSubjectHint: "You've been added to a project",
   },
+  video_review_client_comment: {
+    messageKey: null,
+    premiumTemplate: "general",
+    defaultSubjectHint: "(admin) Client video review comment",
+  },
+  video_review_business_reply: {
+    messageKey: null,
+    premiumTemplate: "general",
+    defaultSubjectHint: "Reply on your video review",
+  },
+  video_review_reopened: {
+    messageKey: null,
+    premiumTemplate: "general",
+    defaultSubjectHint: "Video feedback reopened",
+  },
+  video_review_new_version: {
+    messageKey: null,
+    premiumTemplate: "general",
+    defaultSubjectHint: "New video review version ready",
+  },
+  video_review_feedback_resolved: {
+    messageKey: null,
+    premiumTemplate: "general",
+    defaultSubjectHint: "Video feedback marked resolved",
+  },
 };
 
 /** Fallback when eventKey is missing or unknown — never deliverables_ready. */

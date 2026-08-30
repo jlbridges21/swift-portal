@@ -14,7 +14,8 @@ export type NotificationType =
   | "invoice_available"
   | "payment_confirmed"
   | "project_message"
-  | "client_added_to_project";
+  | "client_added_to_project"
+  | "video_review_activity";
 
 export type ProjectStatus =
   | "new_request"
@@ -88,7 +89,9 @@ export type ActivityType =
   | "email_bounced"
   | "email_complained"
   | "preliminary_estimate_created"
-  | "official_proposal_sent";
+  | "official_proposal_sent"
+  | "video_review_comment_resolved"
+  | "video_review_comment_reopened";
 
 export interface Profile {
   id: string;
@@ -320,6 +323,52 @@ export interface Revision {
   description: string;
   status: RevisionStatus;
   admin_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VideoReview {
+  id: string;
+  business_id: string;
+  project_id: string;
+  title: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VideoReviewVersion {
+  id: string;
+  business_id: string;
+  review_id: string;
+  media_asset_id: string;
+  version_number: number;
+  uploaded_by: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export type VideoReviewCommentStatus = "unresolved" | "resolved";
+export type VideoReviewAuthorKind = "client" | "admin";
+
+export interface VideoReviewComment {
+  id: string;
+  business_id: string;
+  review_id: string;
+  version_id: string;
+  project_id: string;
+  parent_comment_id: string | null;
+  author_user_id: string;
+  author_kind: VideoReviewAuthorKind;
+  timestamp_seconds: number | null;
+  point_x: number | null;
+  point_y: number | null;
+  body: string;
+  status: VideoReviewCommentStatus;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  reopened_by: string | null;
+  reopened_at: string | null;
   created_at: string;
   updated_at: string;
 }

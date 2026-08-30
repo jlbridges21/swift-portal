@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
@@ -26,6 +26,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { normalizeStatus } from "@/lib/constants";
 import { canDownloadDeliverables } from "@/lib/deliverables";
 import type { Project, MediaAsset, Tour, Payment, Revision, ShootProposal, ActivityLog, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
+import type { VideoReviewListItem } from "@/lib/video-reviews";
 import { formatDate } from "@/lib/utils";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import {
@@ -54,6 +55,7 @@ interface ProjectPageClientProps {
   quotes: ProjectQuote[];
   assetReviews: AssetReview[];
   mediaFolders?: MediaFolder[];
+  videoReviews?: VideoReviewListItem[];
   isPreview?: boolean;
   isAdmin?: boolean;
   allowClientProposalChanges?: boolean;
@@ -106,12 +108,22 @@ export function ProjectPageClient({
   quotes,
   assetReviews,
   mediaFolders = [],
+  videoReviews = [],
   isPreview,
   isAdmin,
   allowClientProposalChanges = true,
 }: ProjectPageClientProps) {
   const router = useRouter();
   const brand = usePortalBrand();
+  const reviewByAssetId = useMemo(() => {
+    const map = new Map<string, VideoReviewListItem>();
+    for (const item of videoReviews) {
+      for (const version of item.versions) {
+        map.set(version.media_asset_id, item);
+      }
+    }
+    return map;
+  }, [videoReviews]);
   const [showRevisionForm, setShowRevisionForm] = useState(false);
   const [revisionText, setRevisionText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -317,6 +329,7 @@ export function ProjectPageClient({
 
         {isClientView && (
           <MicrositeSection
+            id="video"
             title="Video"
             icon={Clapperboard}
             subtitle={
@@ -329,6 +342,8 @@ export function ProjectPageClient({
           >
             {uploadedVideos.length > 0 || youtubeVideos.length > 0 ? (
               <ProjectVideoList
+                projectId={project.id}
+                reviewByAssetId={reviewByAssetId}
                 youtubeVideos={youtubeVideos}
                 uploadedVideos={uploadedVideos}
                 getDownloadUrl={getDownloadUrl}
@@ -443,12 +458,15 @@ export function ProjectPageClient({
 
         {!isClientView && mediaVisible && (uploadedVideos.length > 0 || youtubeVideos.length > 0) && (
           <MicrositeSection
+            id="video"
             title="Video"
             icon={Clapperboard}
             subtitle={downloadsUnlocked ? undefined : "Stream previews below — download after payment"}
           >
             <div className="space-y-5">
               <ProjectVideoList
+                projectId={project.id}
+                reviewByAssetId={reviewByAssetId}
                 youtubeVideos={youtubeVideos}
                 uploadedVideos={uploadedVideos}
                 getDownloadUrl={getDownloadUrl}
@@ -584,12 +602,16 @@ export function ProjectPageClient({
 }
 
 function ProjectVideoList({
+  projectId,
+  reviewByAssetId,
   youtubeVideos,
   uploadedVideos,
   getDownloadUrl,
   downloadsAllowed,
   onDownload,
 }: {
+  projectId: string;
+  reviewByAssetId: Map<string, VideoReviewListItem>;
   youtubeVideos: MediaAsset[];
   uploadedVideos: MediaAsset[];
   getDownloadUrl: (asset: MediaAsset, thumb?: boolean) => Promise<string | null>;
@@ -617,13 +639,22 @@ function ProjectVideoList({
       );
     }
     return (
-      <VideoPlayer
-        key={entry.video.id}
-        video={entry.video}
-        getDownloadUrl={getDownloadUrl}
-        onDownload={() => onDownload(entry.video)}
-        downloadsAllowed={downloadsAllowed}
-      />
+      <div key={entry.video.id} className="space-y-2">
+        <VideoPlayer
+          video={entry.video}
+          getDownloadUrl={getDownloadUrl}
+          onDownload={() => onDownload(entry.video)}
+          downloadsAllowed={downloadsAllowed}
+        />
+        {reviewByAssetId.has(entry.video.id) && (
+          <Link
+            href={`/dashboard/projects/${projectId}/reviews/${reviewByAssetId.get(entry.video.id)!.review.id}`}
+            className="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+          >
+            Open video review (all versions)
+          </Link>
+        )}
+      </div>
     );
   };
 

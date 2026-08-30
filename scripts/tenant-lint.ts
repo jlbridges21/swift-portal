@@ -63,6 +63,11 @@ const BUSINESS_OWNED_TABLES = new Set([
   "revisions",
   "shoot_proposals",
   "tours",
+  "video_review_comments",
+  "video_review_notification_batches",
+  "video_review_notification_sends",
+  "video_review_versions",
+  "video_reviews",
 ]);
 
 /** createServiceClient() / SERVICE_ROLE_KEY — each file is justified in SERVICE-ROLE-MIGRATION.md */
@@ -91,6 +96,7 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/status-automation.ts",
   "src/lib/notifications.ts",
   "src/app/api/cron/workflow-reminders/route.ts",
+  "src/app/api/cron/video-review-notifications/route.ts",
   "src/app/api/cron/platform-lifecycle/route.ts",
   "src/app/api/cron/partner-payouts/route.ts",
   "src/app/api/platform/partner-payouts/settings/route.ts",
@@ -197,6 +203,8 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/app/api/admin/email/domain/route.ts",
   "src/lib/client-portal-link.ts",
   "src/lib/project-zip-download.ts",
+  "src/lib/video-review-media.ts",
+  "src/lib/video-reviews.ts",
   "src/lib/platform-audit.ts",
   "src/lib/platform-onboard.ts",
   "src/lib/custom-domain.ts",

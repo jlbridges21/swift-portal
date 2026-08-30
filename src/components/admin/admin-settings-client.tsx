@@ -954,7 +954,13 @@ export function AdminSettingsClient({
         <SettingsPanel id="notifications" active={section}>
           <div id="settings-notifications" tabIndex={-1} className="scroll-mt-24">
             <h2 className="text-lg font-semibold text-primary">Notifications</h2>
-            <p className="mt-1 mb-4 text-sm text-muted">Toggle delivery channels per event. Activity still logs when notifications are off.</p>
+            <p className="mt-1 mb-2 text-sm text-muted">
+              Toggle delivery channels per event. Activity still logs when notifications are off.
+            </p>
+            <p className="mb-4 text-sm text-muted">
+              Push notifications are sent to your team (admins) only. Clients receive in-app and email
+              alerts — they are never sent push notifications.
+            </p>
             <Card className="shadow-sm">
               <CardContent className="p-0 sm:p-0">
                 <div className="hidden overflow-hidden md:block">

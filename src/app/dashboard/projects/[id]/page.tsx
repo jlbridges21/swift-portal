@@ -9,6 +9,12 @@ import { getClientVisibleQuotes } from "@/lib/quote-display";
 import { getAppSettings } from "@/lib/app-settings";
 import { requireTenantContext } from "@/lib/tenant";
 import { reconcileProjectPaymentsOnLoad } from "@/lib/stripe-payment-reconcile";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import {
+  filterMediaForVideoReviewDelivery,
+  loadVideoReviewVersionMap,
+} from "@/lib/video-review-media";
+import { listProjectVideoReviews } from "@/lib/video-reviews";
 import { ProjectPageClient } from "@/components/projects/project-page-client";
 import { UrlToastHandler } from "@/components/ui/url-toast-handler";
 
@@ -76,7 +82,12 @@ async function ProjectContent({
 
   const appSettings = await getAppSettings(tenant.businessId);
   const hero = await getProjectHeroMedia(supabase, project, tenant.businessId);
-  const visibleMedia = filterClientMedia(media ?? []);
+  const db = await createTenantServiceClient(tenant.businessId);
+  const versionMap = await loadVideoReviewVersionMap(db, id);
+  const videoReviews = await listProjectVideoReviews(db, id);
+  const visibleMedia = filterClientMedia(
+    filterMediaForVideoReviewDelivery(media ?? [], versionMap, false)
+  );
   const visibleTours = filterClientTours(tours ?? []);
   const photos = visibleMedia.filter((m) => m.media_type === "photo");
   const videos = visibleMedia.filter((m) => m.media_type === "video");
@@ -104,6 +115,7 @@ async function ProjectContent({
         allowClientProposalChanges={appSettings.proposals.allowClientProposalChanges}
         assetReviews={assetReviews ?? []}
         mediaFolders={mediaFolders ?? []}
+        videoReviews={videoReviews}
         isPreview={preview && profile.role === "admin"}
         isAdmin={profile.role === "admin"}
       />

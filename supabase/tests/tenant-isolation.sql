@@ -170,6 +170,11 @@ BEGIN
   DELETE FROM media_asset_events WHERE business_id = v_business;
   DELETE FROM media_downloads WHERE business_id = v_business;
   DELETE FROM asset_reviews WHERE business_id = v_business;
+  DELETE FROM video_review_notification_sends WHERE business_id = v_business;
+  DELETE FROM video_review_notification_batches WHERE business_id = v_business;
+  DELETE FROM video_review_comments WHERE business_id = v_business;
+  DELETE FROM video_review_versions WHERE business_id = v_business;
+  DELETE FROM video_reviews WHERE business_id = v_business;
   DELETE FROM email_events WHERE business_id = v_business;
   DELETE FROM client_notes WHERE business_id = v_business;
   DELETE FROM communications WHERE business_id = v_business;
@@ -700,6 +705,11 @@ BEGIN
   DELETE FROM media_asset_events WHERE business_id = v_teardown_business_id;
   DELETE FROM media_downloads WHERE business_id = v_teardown_business_id;
   DELETE FROM asset_reviews WHERE business_id = v_teardown_business_id;
+  DELETE FROM video_review_notification_sends WHERE business_id = v_teardown_business_id;
+  DELETE FROM video_review_notification_batches WHERE business_id = v_teardown_business_id;
+  DELETE FROM video_review_comments WHERE business_id = v_teardown_business_id;
+  DELETE FROM video_review_versions WHERE business_id = v_teardown_business_id;
+  DELETE FROM video_reviews WHERE business_id = v_teardown_business_id;
   DELETE FROM email_events WHERE business_id = v_teardown_business_id;
   DELETE FROM client_notes WHERE business_id = v_teardown_business_id;
   DELETE FROM communications WHERE business_id = v_teardown_business_id;
@@ -745,6 +755,11 @@ BEGIN
   DELETE FROM media_asset_events WHERE business_id = v_pentest_business_id;
   DELETE FROM media_downloads WHERE business_id = v_pentest_business_id;
   DELETE FROM asset_reviews WHERE business_id = v_pentest_business_id;
+  DELETE FROM video_review_notification_sends WHERE business_id = v_pentest_business_id;
+  DELETE FROM video_review_notification_batches WHERE business_id = v_pentest_business_id;
+  DELETE FROM video_review_comments WHERE business_id = v_pentest_business_id;
+  DELETE FROM video_review_versions WHERE business_id = v_pentest_business_id;
+  DELETE FROM video_reviews WHERE business_id = v_pentest_business_id;
   DELETE FROM email_events WHERE business_id = v_pentest_business_id;
   DELETE FROM client_notes WHERE business_id = v_pentest_business_id;
   DELETE FROM communications WHERE business_id = v_pentest_business_id;

@@ -11,6 +11,7 @@ import {
   MessageSquare,
   CheckCircle,
   AlertCircle,
+  Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -44,6 +45,7 @@ const NOTIFICATION_ICONS: Record<string, LucideIcon> = {
   revision_requested: MessageSquare,
   status_changed: Bell,
   project_message: MessageSquare,
+  video_review_activity: Video,
 };
 
 function getNotificationIcon(type: string): LucideIcon {

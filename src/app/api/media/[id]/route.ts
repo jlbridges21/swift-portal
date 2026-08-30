@@ -5,6 +5,7 @@ import { getYouTubeEmbedUrl } from "@/lib/youtube";
 import { logMediaEvent } from "@/lib/media-library";
 import { normalizeMediaTitle } from "@/lib/media-display-name";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { getVideoReviewVersionLink, removeVideoReviewVersionAndAsset } from "@/lib/video-reviews";
 
 const ALLOWED_PATCH_FIELDS = [
   "title",
@@ -145,6 +146,28 @@ export async function DELETE(
 
   if (!asset) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const versionLink = await getVideoReviewVersionLink(db, id);
+  const forceRemove = new URL(_request.url).searchParams.get("remove_review_version") === "1";
+
+  if (versionLink && !forceRemove) {
+    return NextResponse.json(
+      {
+        error: `This video is version V${versionLink.versionNumber} of the review “${versionLink.reviewTitle}”. Remove it from the review before deleting the file.`,
+        code: "video_review_version_linked",
+        reviewId: versionLink.reviewId,
+        versionId: versionLink.versionId,
+        versionNumber: versionLink.versionNumber,
+        reviewTitle: versionLink.reviewTitle,
+        commentCount: versionLink.commentCount,
+      },
+      { status: 409 }
+    );
+  }
+
+  if (versionLink && forceRemove) {
+    await removeVideoReviewVersionAndAsset(db, versionLink.versionId, false);
   }
 
   // YouTube / external / kuula rows use sentinel file_path values — not Storage objects

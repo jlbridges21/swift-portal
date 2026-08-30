@@ -25,6 +25,8 @@ interface NotifyOptions {
   notifyClients?: boolean;
   clientId?: string;
   sendEmail?: boolean;
+  sendPush?: boolean;
+  excludeUserIds?: string[];
   eventKey?: NotificationEventKey;
   businessId?: string;
 }
@@ -308,6 +310,7 @@ export async function notifyUsers(options: NotifyOptions) {
 
   for (const user of unique.values()) {
     if (!user.id || user.id.includes("@")) continue;
+    if (options.excludeUserIds?.includes(user.id)) continue;
 
     if (options.paymentId && options.type === "payment_received") {
       const duplicate = await hasDuplicatePaymentNotification(businessId, user.id, options.paymentId);
@@ -406,7 +409,7 @@ export async function notifyUsers(options: NotifyOptions) {
     }
   }
 
-  if (options.notifyAdmins && allowPush) {
+  if (options.notifyAdmins && allowPush && options.sendPush !== false) {
     try {
       const pushResult = await sendAdminPushNotification({
         businessId,

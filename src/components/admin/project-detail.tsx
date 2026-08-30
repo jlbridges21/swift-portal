@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense, useMemo } from "react";
+import { useState, useEffect, Suspense, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -36,6 +36,8 @@ import { cn, defaultProjectName } from "@/lib/utils";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { ALLOWED_VIDEO_MIME_TYPES } from "@/lib/upload/constants";
 import { toast } from "sonner";
+import { VideoReviewAdminActions, useVideoReviewDeleteHandler } from "@/components/admin/video-review-admin-actions";
+import type { VideoReviewListItem } from "@/lib/video-reviews";
 import { useAsyncAction } from "@/lib/use-async-action";
 
 function dedupeMedia<T extends { id: string }>(items: T[]): T[] {
@@ -61,6 +63,7 @@ interface AdminProjectDetailProps {
   assetReviews: AssetReview[];
   mediaFolders: MediaFolder[];
   portalUrl: string;
+  initialVideoReviews?: VideoReviewListItem[];
 }
 
 export function AdminProjectDetail({
@@ -77,6 +80,7 @@ export function AdminProjectDetail({
   assetReviews,
   mediaFolders: initialFolders,
   portalUrl,
+  initialVideoReviews = [],
 }: AdminProjectDetailProps) {
   const router = useRouter();
   const { enqueueUploads } = useUploadManager();
@@ -105,6 +109,38 @@ export function AdminProjectDetail({
   const [folders, setFolders] = useState(initialFolders);
   const [tourPendingDelete, setTourPendingDelete] = useState<Tour | null>(null);
   const [deletingTour, setDeletingTour] = useState(false);
+  const [videoReviews, setVideoReviews] = useState(initialVideoReviews);
+
+  const reviewByAssetId = useMemo(() => {
+    const map = new Map<string, VideoReviewListItem>();
+    for (const item of videoReviews) {
+      for (const version of item.versions) {
+        map.set(version.media_asset_id, item);
+      }
+    }
+    return map;
+  }, [videoReviews]);
+
+  const refreshVideoReviews = useCallback(async () => {
+    const res = await fetch(`/api/video-reviews?project_id=${initialProject.id}`, {
+      credentials: "include",
+    });
+    if (res.ok) {
+      setVideoReviews((await res.json()) as VideoReviewListItem[]);
+    }
+  }, [initialProject.id]);
+
+  const {
+    blocked: deleteBlockedReview,
+    dismissBlocked,
+    removing: removingReviewVersion,
+    deleteMedia: deleteMediaWithReviewCheck,
+    confirmRemoveVersion,
+  } = useVideoReviewDeleteHandler((mediaId) => {
+    if (mediaId) setMedia((m) => m.filter((a) => a.id !== mediaId));
+    void refreshVideoReviews();
+    router.refresh();
+  });
 
   const { run: hideProject, pending: hidingProject } = useAsyncAction(async () => {
     const res = await fetch(`/api/projects/${initialProject.id}`, { method: "DELETE" });
@@ -319,12 +355,17 @@ export function AdminProjectDetail({
     router.refresh();
   }
 
+  useEffect(() => {
+    setVideoReviews(initialVideoReviews);
+  }, [initialVideoReviews]);
+
   async function deleteMedia(id: string) {
     if (!confirm("Delete this file?")) return;
-    await fetch(`/api/media/${id}`, { method: "DELETE", credentials: "include" });
-    setMedia((m) => m.filter((a) => a.id !== id));
-    toast.success("Deleted");
-    router.refresh();
+    const ok = await deleteMediaWithReviewCheck(id);
+    if (ok) {
+      setMedia((m) => m.filter((a) => a.id !== id));
+      void refreshVideoReviews();
+    }
   }
 
   async function toggleMediaVisibility(id: string, visible: boolean) {
@@ -889,6 +930,16 @@ export function AdminProjectDetail({
                   }
                   onDelete={() => deleteMedia(v.id)} />
               )}
+              {v.media_source !== "youtube" && (
+                <div className="border-t border-border px-3 pb-3">
+                  <VideoReviewAdminActions
+                    projectId={initialProject.id}
+                    video={v}
+                    reviewItem={reviewByAssetId.get(v.id) ?? null}
+                    onReviewsChange={() => void refreshVideoReviews()}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </CardContent>
@@ -1044,6 +1095,36 @@ export function AdminProjectDetail({
         onClose={() => setSelectedRevision(null)}
         onUpdate={(updated) => setRevisions((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))}
       />
+
+      <Modal
+        open={!!deleteBlockedReview}
+        onClose={dismissBlocked}
+        title="Video is part of a review"
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => confirmRemoveVersion(false)}>
+              Remove from review only
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={removingReviewVersion}
+              onClick={() => confirmRemoveVersion(true)}
+            >
+              {removingReviewVersion ? "Removing…" : "Remove version & delete file"}
+            </Button>
+          </div>
+        }
+      >
+        {deleteBlockedReview && (
+          <p className="text-sm text-muted">
+            This file is version V{deleteBlockedReview.versionNumber} of “{deleteBlockedReview.reviewTitle}”.
+            {deleteBlockedReview.commentCount > 0
+              ? ` Removing it will permanently delete ${deleteBlockedReview.commentCount} comment${deleteBlockedReview.commentCount === 1 ? "" : "s"} on this version.`
+              : " You can remove it from the review first, or delete the version and file together."}
+          </p>
+        )}
+      </Modal>
 
       <Modal open={showShootCompleteModal} onClose={() => markShootComplete(false)} title="Shoot Complete?"
         footer={

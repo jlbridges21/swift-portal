@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { AdminProjectDetail } from "@/components/admin/project-detail";
 import { getBusinessPortalOrigin } from "@/lib/portal-url";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { listProjectVideoReviews } from "@/lib/video-reviews";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -49,6 +51,9 @@ export default async function AdminProjectPage({ params }: PageProps) {
 
   if (!project) notFound();
 
+  const db = await createTenantServiceClient(tenant.businessId);
+  const videoReviews = await listProjectVideoReviews(db, id);
+
   const appUrl = getBusinessPortalOrigin(tenant.business);
   const portalUrl = `${appUrl}/dashboard/projects/${id}?preview=1`;
 
@@ -70,6 +75,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
           assetReviews={assetReviews ?? []}
           mediaFolders={mediaFolders ?? []}
           portalUrl={portalUrl}
+          initialVideoReviews={videoReviews}
         />
       </main>
     </div>

@@ -42,7 +42,12 @@ export type NotificationEventKey =
   | "payment_failed"
   | "project_delivered"
   | "project_message"
-  | "client_added_to_project";
+  | "client_added_to_project"
+  | "video_review_client_comment"
+  | "video_review_business_reply"
+  | "video_review_reopened"
+  | "video_review_new_version"
+  | "video_review_feedback_resolved";
 
 export interface NotificationChannelSettings {
   inApp: boolean;
@@ -155,6 +160,37 @@ export const NOTIFICATION_EVENT_DEFINITIONS: {
     description: "Notifies a client when an admin adds them to an existing project.",
     audience: "client",
   },
+  {
+    key: "video_review_client_comment",
+    label: "Client leaves video feedback",
+    description: "Notifies your team when a client adds a comment on a video review. Push is admin-only — clients never receive push.",
+    audience: "admin",
+  },
+  {
+    key: "video_review_business_reply",
+    label: "Business replies on video review",
+    description: "Notifies the client when your team replies on a video review thread. Email and in-app only (no client push).",
+    audience: "client",
+  },
+  {
+    key: "video_review_reopened",
+    label: "Video feedback reopened",
+    description: "Notifies the other party when feedback is reopened — client reopens → your team; you reopen → client.",
+    audience: "both",
+  },
+  {
+    key: "video_review_new_version",
+    label: "New video review version",
+    description: "Notifies the client when you upload a new version to a video review.",
+    audience: "client",
+  },
+  {
+    key: "video_review_feedback_resolved",
+    label: "Video feedback marked resolved (optional)",
+    description:
+      "Off by default. Enable to notify clients when you mark a note resolved. We recommend leaving this off — clients see resolved status in the review.",
+    audience: "client",
+  },
 ];
 
 function defaultChannelSettings(overrides?: Partial<NotificationChannelSettings>): NotificationChannelSettings {
@@ -167,7 +203,13 @@ function defaultChannelSettings(overrides?: Partial<NotificationChannelSettings>
 }
 
 function buildDefaultNotifications(): Record<NotificationEventKey, NotificationChannelSettings> {
-  const entries = NOTIFICATION_EVENT_DEFINITIONS.map((def) => [def.key, defaultChannelSettings()] as const);
+  const entries = NOTIFICATION_EVENT_DEFINITIONS.map((def) => {
+    const overrides =
+      def.key === "video_review_feedback_resolved"
+        ? { inApp: false, email: false, push: false }
+        : undefined;
+    return [def.key, defaultChannelSettings(overrides)] as const;
+  });
   return Object.fromEntries(entries) as Record<NotificationEventKey, NotificationChannelSettings>;
 }
 
