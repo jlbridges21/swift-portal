@@ -17,6 +17,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { VideoReviewCommentPanel } from "@/components/video-review/video-review-comment-panel";
 import { VideoReviewShell } from "@/components/video-review/video-review-shell";
 import { VideoReviewTimelineMarker } from "@/components/video-review/video-review-timeline-marker";
+import type { ScrollCommentFn } from "@/lib/use-video-review-playback-follow";
+import type { TimelineMarkerCluster } from "@/lib/video-review-timeline-markers";
 import {
   VideoReviewVersionPills,
   VideoReviewVersionUpload,
@@ -120,6 +122,11 @@ export function VideoReviewView({
   const commentViewRef = useRef(commentView);
   const blockPlaybackRef = useRef(false);
   const allThreadsRef = useRef<VideoReviewCommentThread[]>([]);
+  const scrollCommentRef = useRef<ScrollCommentFn>(() => {});
+
+  const registerScrollComment = useCallback((fn: ScrollCommentFn) => {
+    scrollCommentRef.current = fn;
+  }, []);
 
   useEffect(() => {
     commentViewRef.current = commentView;
@@ -403,6 +410,18 @@ export function VideoReviewView({
       syncPlaybackFollowComment(seconds);
     },
     [syncPlaybackFollowComment]
+  );
+
+  const handleTimelineMarkerActivate = useCallback(
+    (cluster: TimelineMarkerCluster) => {
+      const commentId = cluster.comments[0]?.id ?? null;
+      if (!commentId) return;
+      seekTo(cluster.anchorSeconds, commentId);
+      requestAnimationFrame(() => {
+        scrollCommentRef.current(commentId, "start");
+      });
+    },
+    [seekTo]
   );
 
   useEffect(() => {
@@ -894,10 +913,7 @@ export function VideoReviewView({
                   key={`${cluster.anchorSeconds}-${cluster.comments[0]?.id}`}
                   cluster={cluster}
                   leftPct={markerPositionPercent(cluster.anchorSeconds, duration)}
-                  onActivate={(activeCluster) => {
-                    setActiveCommentId(activeCluster.comments[0]?.id ?? null);
-                    seekTo(activeCluster.anchorSeconds, activeCluster.comments[0]?.id);
-                  }}
+                  onActivate={handleTimelineMarkerActivate}
                 />
               ))}
               <div className="absolute inset-x-1 top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-300" />
@@ -925,6 +941,7 @@ export function VideoReviewView({
           playbackFollowCommentId={playbackFollowCommentId}
           videoPaused={videoPaused}
           composerFocused={composerFocused}
+          onRegisterScrollComment={registerScrollComment}
         />
       }
     />

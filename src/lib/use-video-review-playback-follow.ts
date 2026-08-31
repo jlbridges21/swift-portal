@@ -5,7 +5,17 @@ import {
   isCommentIntersectingContainer,
   isCommentIdInThreads,
 } from "@/lib/video-review-playback-follow";
+import {
+  readFollowPlaybackPreference,
+  writeFollowPlaybackPreference,
+} from "@/lib/video-review-playback-follow-preference";
+import {
+  scrollCommentInContainer,
+  type CommentScrollAlign,
+} from "@/lib/video-review-comment-scroll";
 import type { VideoReviewCommentThread } from "@/lib/video-review-comment-model";
+
+export type ScrollCommentFn = (commentId: string, align: CommentScrollAlign) => void;
 
 interface UseVideoReviewPlaybackFollowOptions {
   playbackFollowCommentId: string | null;
@@ -14,6 +24,7 @@ interface UseVideoReviewPlaybackFollowOptions {
   composerFocused: boolean;
   /** lg+ only — below lg the list is in page flow; auto-scroll is disabled entirely. */
   enabledByBreakpoint: boolean;
+  onRegisterScrollComment?: (fn: ScrollCommentFn) => void;
 }
 
 export function useVideoReviewPlaybackFollow({
@@ -22,28 +33,26 @@ export function useVideoReviewPlaybackFollow({
   videoPaused,
   composerFocused,
   enabledByBreakpoint,
+  onRegisterScrollComment,
 }: UseVideoReviewPlaybackFollowOptions) {
   const listRef = useRef<HTMLDivElement>(null);
-  const [followEnabled, setFollowEnabled] = useState(true);
+  const [followEnabled, setFollowEnabledState] = useState(true);
   const [autoFollowPaused, setAutoFollowPaused] = useState(false);
   const [replyFocused, setReplyFocused] = useState(false);
   const programmaticScrollRef = useRef(false);
   const scrollEndTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setFollowEnabledState(readFollowPlaybackPreference());
+  }, []);
 
   const visibleInTab = useCallback(
     (commentId: string | null) => isCommentIdInThreads(commentId, visibleThreads),
     [visibleThreads]
   );
 
-  const scrollToComment = useCallback((commentId: string) => {
-    const container = listRef.current;
-    if (!container) return;
-    const el = container.querySelector<HTMLElement>(`[data-comment-id="${commentId}"]`);
-    if (!el) return;
-
+  const beginProgrammaticScroll = useCallback(() => {
     programmaticScrollRef.current = true;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-
     if (scrollEndTimerRef.current != null) {
       window.clearTimeout(scrollEndTimerRef.current);
     }
@@ -52,6 +61,47 @@ export function useVideoReviewPlaybackFollow({
       scrollEndTimerRef.current = null;
     }, 700);
   }, []);
+
+  const scrollCommentToPosition = useCallback(
+    (commentId: string, align: CommentScrollAlign) => {
+      const container = listRef.current;
+      if (!container) return;
+      const el = container.querySelector<HTMLElement>(`[data-comment-id="${commentId}"]`);
+      if (!el) return;
+
+      beginProgrammaticScroll();
+      scrollCommentInContainer(container, el, align, "smooth");
+    },
+    [beginProgrammaticScroll]
+  );
+
+  useEffect(() => {
+    onRegisterScrollComment?.(scrollCommentToPosition);
+  }, [onRegisterScrollComment, scrollCommentToPosition]);
+
+  const setFollowEnabled = useCallback(
+    (value: boolean) => {
+      setFollowEnabledState(value);
+      writeFollowPlaybackPreference(value);
+      if (!value) return;
+      setAutoFollowPaused(false);
+      if (
+        enabledByBreakpoint &&
+        !videoPaused &&
+        playbackFollowCommentId &&
+        visibleInTab(playbackFollowCommentId)
+      ) {
+        scrollCommentToPosition(playbackFollowCommentId, "center");
+      }
+    },
+    [
+      enabledByBreakpoint,
+      videoPaused,
+      playbackFollowCommentId,
+      visibleInTab,
+      scrollCommentToPosition,
+    ]
+  );
 
   const resumeFollow = useCallback(() => {
     setAutoFollowPaused(false);
@@ -62,7 +112,7 @@ export function useVideoReviewPlaybackFollow({
       playbackFollowCommentId &&
       visibleInTab(playbackFollowCommentId)
     ) {
-      scrollToComment(playbackFollowCommentId);
+      scrollCommentToPosition(playbackFollowCommentId, "center");
     }
   }, [
     enabledByBreakpoint,
@@ -70,7 +120,7 @@ export function useVideoReviewPlaybackFollow({
     videoPaused,
     playbackFollowCommentId,
     visibleInTab,
-    scrollToComment,
+    scrollCommentToPosition,
   ]);
 
   const shouldAutoScroll =
@@ -89,9 +139,9 @@ export function useVideoReviewPlaybackFollow({
     if (!shouldAutoScroll || !playbackFollowCommentId) return;
     if (lastAutoScrolledIdRef.current === playbackFollowCommentId) return;
 
-    scrollToComment(playbackFollowCommentId);
+    scrollCommentToPosition(playbackFollowCommentId, "center");
     lastAutoScrolledIdRef.current = playbackFollowCommentId;
-  }, [shouldAutoScroll, playbackFollowCommentId, scrollToComment]);
+  }, [shouldAutoScroll, playbackFollowCommentId, scrollCommentToPosition]);
 
   useEffect(() => {
     if (videoPaused || autoFollowPaused || !followEnabled) {
@@ -124,6 +174,7 @@ export function useVideoReviewPlaybackFollow({
     return () => container.removeEventListener("scroll", onScroll);
   }, [followEnabled, playbackFollowCommentId, visibleInTab]);
 
+  /** Shown only when follow is ON but the user manually detached by scrolling the list. */
   const showJumpToCurrent =
     enabledByBreakpoint &&
     followEnabled &&
@@ -145,6 +196,7 @@ export function useVideoReviewPlaybackFollow({
     resumeFollow,
     showJumpToCurrent,
     highlightCommentId,
+    scrollCommentToPosition,
     onReplyFocus: () => setReplyFocused(true),
     onReplyBlur: () => {
       requestAnimationFrame(() => {

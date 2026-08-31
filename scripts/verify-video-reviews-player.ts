@@ -31,6 +31,12 @@ import {
   findPlaybackActiveCommentId,
   isCommentIdInThreads,
 } from "../src/lib/video-review-playback-follow";
+import { computeCommentScrollTop } from "../src/lib/video-review-comment-scroll";
+import {
+  FOLLOW_PLAYBACK_SESSION_KEY,
+  readFollowPlaybackPreference,
+  writeFollowPlaybackPreference,
+} from "../src/lib/video-review-playback-follow-preference";
 
 const SWIFT_BUSINESS = "00000000-0000-0000-0000-000000000001";
 
@@ -168,14 +174,28 @@ function testPlaybackFollowLogic() {
   assert(!/syncPlaybackFollowComment[\s\S]{0,200}setActiveCommentId/.test(viewSrc), "follow sync does not set selected comment");
   assert(viewSrc.includes("playbackFollowCommentId"), "follow id separate from activeCommentId");
   assert(panelSrc.includes("data-playback-active"), "playback highlight distinct from selection");
-  assert(panelSrc.includes("Jump to current"), "manual scroll shows jump affordance");
+  assert(panelSrc.includes("Jump to current"), "manual scroll shows jump affordance when follow is on");
   assert(hookSrc.includes("programmaticScrollRef"), "ignores programmatic scroll for pause detection");
   assert(hookSrc.includes("!videoPaused"), "no auto-scroll while paused");
   assert(hookSrc.includes("composerFocused") && hookSrc.includes("replyFocused"), "no auto-scroll while typing");
   assert(hookSrc.includes("enabledByBreakpoint"), "lg+ gate for auto-follow");
   assert(hookSrc.includes("resumeFollow"), "resume via jump / comment click / scroll-back");
   assert(hookSrc.includes("lastAutoScrolledIdRef"), "scroll only when active comment id changes");
-  assert(panelSrc.includes("Follow playback"), "optional follow toggle in rail header");
+  assert(panelSrc.includes('role="switch"') || readFileSync(resolve("src/components/ui/switch.tsx"), "utf8").includes('role="switch"'), "Follow playback uses accessible switch");
+  assert(readFileSync(resolve("src/components/ui/switch.tsx"), "utf8").includes("aria-checked"), "switch exposes aria-checked");
+  assert(panelSrc.includes("Follow playback"), "follow label beside switch");
+  assert(hookSrc.includes("readFollowPlaybackPreference"), "follow preference persisted in session");
+  assert(hookSrc.includes("writeFollowPlaybackPreference"), "toggle writes session preference");
+  assert(FOLLOW_PLAYBACK_SESSION_KEY === "video-review-follow-playback", "session storage key defined");
+  assert(viewSrc.includes("handleTimelineMarkerActivate"), "timeline markers use dedicated navigate handler");
+  assert(viewSrc.includes('scrollCommentRef.current(commentId, "start")'), "marker scrolls comment to top of list");
+  assert(viewSrc.includes("cluster.comments[0]"), "clustered marker selects first comment in cluster");
+  assert(readFileSync(resolve("src/lib/video-review-comment-scroll.ts"), "utf8").includes('"start"'), "scroll helper supports top alignment");
+
+  console.log("Switch appearance: ON = accent-filled track (bg-accent) with knob right; OFF = neutral slate track (bg-slate-200) with knob left.");
+  console.log(
+    "Jump to current vs switch: switch is the master on/off; Jump to current only appears when follow is ON but user manually scrolled the list (temporary detach). Marker clicks are explicit navigation and never disable follow."
+  );
 
   let stateUpdates = 0;
   let prevId: string | null = null;
@@ -189,6 +209,38 @@ function testPlaybackFollowLogic() {
   }
   console.log(`Performance: 200 simulated timeupdates → ${stateUpdates} active-id changes (scroll work only on change)`);
   assert(stateUpdates === 2, "scroll/state work only twice across 7.5s and 15.3s boundaries");
+
+  const sessionStore = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => sessionStore.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      sessionStore.set(key, value);
+    },
+  };
+  (globalThis as typeof globalThis & { sessionStorage: typeof storage }).sessionStorage =
+    storage as Storage;
+
+  writeFollowPlaybackPreference(false);
+  assert(readFollowPlaybackPreference() === false, "session persistence: off survives write");
+  writeFollowPlaybackPreference(true);
+  assert(readFollowPlaybackPreference() === true, "session persistence: on survives write");
+
+  const scrollMock = {
+    scrollTop: 100,
+    scrollHeight: 500,
+    clientHeight: 200,
+    getBoundingClientRect: () => ({ top: 0, bottom: 200, height: 200 }),
+    scrollTo: () => {},
+  } as unknown as HTMLElement;
+  const elMock = {
+    getBoundingClientRect: () => ({ top: 80, bottom: 140, height: 60 }),
+  } as unknown as HTMLElement;
+  const topAligned = computeCommentScrollTop(scrollMock, elMock, "start");
+  assert(topAligned === 180, "top align scrolls comment to list top (clamped)");
+  scrollMock.scrollTop = 350;
+  scrollMock.scrollHeight = 500;
+  const endAligned = computeCommentScrollTop(scrollMock, elMock, "start");
+  assert(endAligned === 300, "near list end: scroll clamped to maxScroll, not broken");
 
   console.log(
     "Tab filter behavior: follow id computed from all comments; scroll/highlight only when that id is in the current tab — filtered-out comments produce no scroll and no highlight."

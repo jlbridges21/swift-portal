@@ -12,10 +12,11 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatReviewTimestamp } from "@/lib/video-review-format";
-import { useVideoReviewPlaybackFollow } from "@/lib/use-video-review-playback-follow";
+import { useVideoReviewPlaybackFollow, type ScrollCommentFn } from "@/lib/use-video-review-playback-follow";
 import type {
   VideoReviewCommentCounts,
   VideoReviewCommentEnriched,
@@ -44,6 +45,7 @@ interface VideoReviewCommentPanelProps {
   playbackFollowCommentId: string | null;
   videoPaused: boolean;
   composerFocused: boolean;
+  onRegisterScrollComment?: (fn: ScrollCommentFn) => void;
 }
 
 export function VideoReviewCommentPanel({
@@ -65,6 +67,7 @@ export function VideoReviewCommentPanel({
   playbackFollowCommentId,
   videoPaused,
   composerFocused,
+  onRegisterScrollComment,
 }: VideoReviewCommentPanelProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [isLargeScreen, setIsLargeScreen] = useState(false);
@@ -92,6 +95,7 @@ export function VideoReviewCommentPanel({
     videoPaused,
     composerFocused,
     enabledByBreakpoint: isLargeScreen,
+    onRegisterScrollComment,
   });
 
   function handleSelectComment(commentId: string) {
@@ -107,17 +111,21 @@ export function VideoReviewCommentPanel({
             <MessageSquarePlus className="h-3.5 w-3.5 shrink-0 text-accent" />
             <span className="truncate">Comments · V{versionNumber}</span>
           </h2>
-          <div className="relative flex shrink-0 items-center gap-1">
-            <Button
-              type="button"
-              variant={followEnabled ? "outline" : "ghost"}
-              size="sm"
-              className="hidden h-7 px-2 text-[10px] lg:inline-flex"
-              aria-pressed={followEnabled}
-              onClick={() => setFollowEnabled((on) => !on)}
-            >
-              Follow playback
-            </Button>
+          <div className="relative flex shrink-0 items-center gap-1.5">
+            <div className="hidden items-center gap-1.5 lg:flex">
+              <label
+                htmlFor="video-review-follow-playback"
+                className="cursor-pointer text-[10px] leading-none text-muted"
+              >
+                Follow playback
+              </label>
+              <Switch
+                id="video-review-follow-playback"
+                checked={followEnabled}
+                onCheckedChange={setFollowEnabled}
+                aria-label="Follow playback"
+              />
+            </div>
             <Button
               type="button"
               variant="ghost"
