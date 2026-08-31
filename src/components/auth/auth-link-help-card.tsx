@@ -16,15 +16,17 @@ import {
 export function AuthLinkHelpCard({
   errorKind,
   description,
+  initialEmail = "",
   onDismiss,
   dismissLabel = "Back",
 }: {
   errorKind: AuthLinkErrorKind;
   description?: string | null;
+  initialEmail?: string;
   onDismiss?: () => void;
   dismissLabel?: string;
 }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState(messageForAuthLinkError(errorKind, description ?? null));
@@ -51,18 +53,47 @@ export function AuthLinkHelpCard({
     setNotice(data.message || "If an account exists, a new link was sent.");
   }
 
+  const shareErrorTitle =
+    errorKind === "share_expired"
+      ? "This share link expired"
+      : errorKind === "share_one_time_used"
+        ? "One-time link already used"
+        : errorKind === "share_revoked"
+          ? "Share access revoked"
+          : errorKind === "share_not_started"
+            ? "Share not active yet"
+            : errorKind === "share_rate_limited"
+              ? "Too many attempts"
+              : "That link didn’t work";
+
+  const shareErrorDescription =
+    errorKind === "share_expired" ||
+    errorKind === "share_one_time_used" ||
+    errorKind === "share_revoked" ||
+    errorKind === "share_not_started" ||
+    errorKind === "share_rate_limited" ? (
+      <CardDescription>{messageForAuthLinkError(errorKind, description ?? null)}</CardDescription>
+    ) : (
+      <CardDescription>
+        Email security scanners often open invite or reset links automatically and consume them.
+        Requesting a new link usually fixes this — the product isn’t broken.
+      </CardDescription>
+    );
+
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
-        <CardTitle>That link didn’t work</CardTitle>
-        <CardDescription>
-          Email security scanners often open invite or reset links automatically and consume them.
-          Requesting a new link usually fixes this — the product isn’t broken.
-        </CardDescription>
+        <CardTitle>{shareErrorTitle}</CardTitle>
+        {shareErrorDescription}
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="space-y-4">
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && errorKind !== "share_expired" && errorKind !== "share_one_time_used" && (
+            <p className="text-sm text-red-600">{error}</p>
+          )}
+          {(errorKind === "share_expired" || errorKind === "share_one_time_used") && (
+            <p className="text-sm text-muted">{error}</p>
+          )}
           {errorKind === "otp_expired" && (
             <p className="text-sm text-muted">
               Expired or already-used links are common when an email scanner opens the URL before

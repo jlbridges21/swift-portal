@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import {
   AlertTriangle,
   Copy,
@@ -20,12 +21,27 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ProjectLinkAccessMode } from "@/lib/project-link-access";
+import {
+  formatShareExpiryLabel,
+  validateShareAccessWindow,
+  type ShareExpiryPreset,
+} from "@/lib/project-share-expiry";
 import type { ProjectShareRow } from "@/lib/project-shares";
 import {
   isValidShareEmail,
   normalizeShareEmail,
   parseShareEmailInput,
 } from "@/lib/share-email-parse";
+
+const SHARE_EXPIRY_OPTIONS: { value: ShareExpiryPreset; label: string }[] = [
+  { value: "one_time", label: "One-time access" },
+  { value: "24h", label: "24 hours" },
+  { value: "1week", label: "1 week" },
+  { value: "30days", label: "30 days (default)" },
+  { value: "60days", label: "60 days" },
+  { value: "indefinite", label: "Indefinitely" },
+  { value: "custom", label: "Custom" },
+];
 
 type AssignedClient = {
   name: string;
@@ -65,10 +81,17 @@ export function ProjectShareModal({
 }) {
   const [emailInput, setEmailInput] = useState("");
   const [notify, setNotify] = useState(true);
+  const [expiryPreset, setExpiryPreset] = useState<ShareExpiryPreset>("30days");
+  const [customStartsAt, setCustomStartsAt] = useState("");
+  const [customExpiresAt, setCustomExpiresAt] = useState("");
   const [personalMessage, setPersonalMessage] = useState("");
   const [adding, setAdding] = useState(false);
   const [shares, setShares] = useState(initialShares);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [updatingExpiryId, setUpdatingExpiryId] = useState<string | null>(null);
+  const [editExpiryPreset, setEditExpiryPreset] = useState<ShareExpiryPreset>("30days");
+  const [editCustomStartsAt, setEditCustomStartsAt] = useState("");
+  const [editCustomExpiresAt, setEditCustomExpiresAt] = useState("");
   const [linkMode, setLinkMode] = useState(initialLinkMode);
   const [publicUrl, setPublicUrl] = useState(initialPublicUrl);
   const [viewCount, setViewCount] = useState(initialViewCount);
@@ -158,7 +181,13 @@ export function ProjectShareModal({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ emails: toInvite, notify }),
+          body: JSON.stringify({
+            emails: toInvite,
+            notify,
+            expiryPreset,
+            customAccessStartsAt: expiryPreset === "custom" ? customStartsAt || null : null,
+            customAccessExpiresAt: expiryPreset === "custom" ? customExpiresAt || null : null,
+          }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Could not add shares");
@@ -219,6 +248,41 @@ export function ProjectShareModal({
       setPersonalMessage("");
     }
     setAdding(false);
+  }
+
+  async function handleUpdateExpiry(share: ProjectShareRow) {
+    setUpdatingExpiryId(share.id);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/shares/${share.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          expiryPreset: editExpiryPreset,
+          customAccessStartsAt: editExpiryPreset === "custom" ? editCustomStartsAt || null : null,
+          customAccessExpiresAt: editExpiryPreset === "custom" ? editCustomExpiresAt || null : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not update expiry");
+      setShares((prev) => prev.map((s) => (s.id === share.id ? data.share : s)));
+      toast.success(`Updated access window for ${share.email}.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update expiry");
+    } finally {
+      setUpdatingExpiryId(null);
+    }
+  }
+
+  function beginEditExpiry(share: ProjectShareRow) {
+    setUpdatingExpiryId(share.id);
+    setEditExpiryPreset(share.expiry_preset || "30days");
+    setEditCustomStartsAt(
+      share.access_starts_at ? share.access_starts_at.slice(0, 10) : ""
+    );
+    setEditCustomExpiresAt(
+      share.access_expires_at ? share.access_expires_at.slice(0, 10) : ""
+    );
   }
 
   async function handleRevoke(shareId: string, email: string) {
@@ -364,10 +428,60 @@ export function ProjectShareModal({
             <span>
               <span className="font-medium">Notify people</span>
               <span className="block text-xs text-muted mt-0.5">
-                Sends a passwordless sign-in link from your business portal.
+                Sends a reusable sign-in link from your business portal.
               </span>
             </span>
           </label>
+          <div className="space-y-1.5">
+            <Label htmlFor="share-expiry" className="text-xs text-muted">
+              Link access expires
+            </Label>
+            <Select
+              id="share-expiry"
+              value={expiryPreset}
+              onChange={(e) => setExpiryPreset(e.target.value as ShareExpiryPreset)}
+              options={SHARE_EXPIRY_OPTIONS}
+            />
+            <p className="text-xs text-muted">
+              Default is 30 days. The same emailed link works on every device until it expires or is
+              revoked.
+            </p>
+          </div>
+          {expiryPreset === "indefinite" && (
+            <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-xs text-amber-900">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <p>
+                <strong>Indefinitely</strong> keeps a permanent bearer link in the recipient&apos;s
+                inbox. Anyone with the email can open the project until you revoke access.
+              </p>
+            </div>
+          )}
+          {expiryPreset === "custom" && (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="custom-start" className="text-xs text-muted">
+                  Active from
+                </Label>
+                <Input
+                  id="custom-start"
+                  type="date"
+                  value={customStartsAt}
+                  onChange={(e) => setCustomStartsAt(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="custom-end" className="text-xs text-muted">
+                  Expires on
+                </Label>
+                <Input
+                  id="custom-end"
+                  type="date"
+                  value={customExpiresAt}
+                  onChange={(e) => setCustomExpiresAt(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
           {notify && (
             <div className="space-y-1.5">
               <Label htmlFor="share-message" className="text-xs text-muted">
@@ -427,7 +541,12 @@ export function ProjectShareModal({
                 </p>
               </div>
             </li>
-            {shares.map((share) => (
+            {shares.map((share) => {
+              const accessWindow = validateShareAccessWindow(share);
+              const expired = !accessWindow.ok && !share.revoked_at;
+              const indefinite = share.expiry_preset === "indefinite";
+              const editing = updatingExpiryId === share.id;
+              return (
               <li key={share.id} className="flex items-start gap-3 px-3 py-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                   <Users className="h-4 w-4" />
@@ -435,7 +554,74 @@ export function ProjectShareModal({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{share.email}</p>
                   <p className="text-xs text-muted">{shareAccessLabel(share)}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        expired
+                          ? "bg-destructive/10 text-destructive"
+                          : indefinite
+                            ? "bg-amber-100 text-amber-900 ring-1 ring-amber-200"
+                            : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {formatShareExpiryLabel(share)}
+                    </span>
+                    {expired && (
+                      <span className="text-[11px] font-medium text-destructive">Expired</span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted mt-0.5">Shared viewer · Media only</p>
+                  {editing ? (
+                    <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/20 p-2">
+                      <Select
+                        value={editExpiryPreset}
+                        onChange={(e) =>
+                          setEditExpiryPreset(e.target.value as ShareExpiryPreset)
+                        }
+                        options={SHARE_EXPIRY_OPTIONS}
+                      />
+                      {editExpiryPreset === "custom" && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            type="date"
+                            value={editCustomStartsAt}
+                            onChange={(e) => setEditCustomStartsAt(e.target.value)}
+                          />
+                          <Input
+                            type="date"
+                            value={editCustomExpiresAt}
+                            onChange={(e) => setEditCustomExpiresAt(e.target.value)}
+                          />
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="accent"
+                          onClick={() => void handleUpdateExpiry(share)}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setUpdatingExpiryId(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="mt-1 text-xs text-accent hover:underline"
+                      onClick={() => beginEditExpiry(share)}
+                    >
+                      Change expiry
+                    </button>
+                  )}
                 </div>
                 <Button
                   type="button"
@@ -453,7 +639,8 @@ export function ProjectShareModal({
                   )}
                 </Button>
               </li>
-            ))}
+            );
+            })}
           </ul>
           <p className="text-xs text-muted flex items-start gap-1.5">
             <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />

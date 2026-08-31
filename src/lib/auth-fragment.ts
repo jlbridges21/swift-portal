@@ -8,7 +8,15 @@
  *   #error=access_denied&error_code=otp_expired&error_description=…
  */
 
-export type AuthLinkErrorKind = "otp_expired" | "access_denied" | "generic";
+export type AuthLinkErrorKind =
+  | "otp_expired"
+  | "access_denied"
+  | "generic"
+  | "share_expired"
+  | "share_one_time_used"
+  | "share_revoked"
+  | "share_not_started"
+  | "share_rate_limited";
 
 export type ParsedAuthFragment =
   | { kind: "none" }
@@ -25,6 +33,27 @@ export function messageForAuthLinkError(
   kind: AuthLinkErrorKind,
   description: string | null
 ): string {
+  if (kind === "share_expired") {
+    return (
+      "This project share link has expired. " +
+      "Ask the studio to extend access, or request a fresh sign-in link below."
+    );
+  }
+  if (kind === "share_one_time_used") {
+    return (
+      "This one-time share link was already used. " +
+      "Request a new sign-in link below to open the project again."
+    );
+  }
+  if (kind === "share_revoked") {
+    return "This project share was revoked. Contact the studio if you still need access.";
+  }
+  if (kind === "share_not_started") {
+    return "This share link is not active yet. Try again after the access window starts.";
+  }
+  if (kind === "share_rate_limited") {
+    return description || "Too many sign-in attempts. Wait a few minutes and try again.";
+  }
   if (kind === "otp_expired") {
     return (
       "That invite or reset link expired or was already used. " +

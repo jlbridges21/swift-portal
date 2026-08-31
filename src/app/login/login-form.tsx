@@ -38,6 +38,7 @@ export function LoginForm({
   const queryError = searchParams.get("error");
   const queryCode = searchParams.get("code");
   const queryMessage = searchParams.get("message");
+  const queryEmail = searchParams.get("email") || "";
   const queryUnavailable =
     queryError === "unavailable"
       ? "This portal is unavailable. Your business is suspended or no longer active."
@@ -114,6 +115,30 @@ export function LoginForm({
     } else if (queryError === "access_denied") {
       setLinkErrorKind("access_denied");
       setLinkDescription(null);
+      setMode("link_help");
+    } else if (queryError === "share_expired") {
+      setLinkErrorKind("share_expired");
+      setLinkDescription(null);
+      setMode("link_help");
+    } else if (queryError === "share_one_time_used") {
+      setLinkErrorKind("share_one_time_used");
+      setLinkDescription(null);
+      setMode("link_help");
+    } else if (queryError === "share_revoked") {
+      setLinkErrorKind("share_revoked");
+      setLinkDescription(null);
+      setMode("link_help");
+    } else if (queryError === "share_not_started") {
+      setLinkErrorKind("share_not_started");
+      setLinkDescription(null);
+      setMode("link_help");
+    } else if (queryError === "share_rate_limited") {
+      setLinkErrorKind("share_rate_limited");
+      setLinkDescription(queryMessage);
+      setMode("link_help");
+    } else if (queryError === "share_invalid") {
+      setLinkErrorKind("generic");
+      setLinkDescription("This share link is not valid. Request a new one below.");
       setMode("link_help");
     }
   }, [queryError, queryMessage]);
@@ -234,6 +259,7 @@ export function LoginForm({
           <AuthLinkHelpCard
             errorKind={linkErrorKind}
             description={linkDescription}
+            initialEmail={queryEmail}
             onDismiss={() => {
               setMode("login");
               setError("");

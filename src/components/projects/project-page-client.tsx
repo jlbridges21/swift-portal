@@ -278,6 +278,7 @@ export function ProjectPageClient({
       <main className="mobile-container py-12 pb-16 space-y-16">
         {canViewFinancials && <NextStepBanner step={clientStep} />}
 
+        {canViewFinancials && (
         <Card className="border-0 shadow-lg shadow-slate-200/50 rounded-2xl overflow-hidden">
           <CardHeader className="bg-white border-b border-border/60 pb-4">
             <CardTitle className="text-lg font-semibold">Your Progress</CardTitle>
@@ -286,6 +287,7 @@ export function ProjectPageClient({
             <StatusTimeline currentStatus={project.status} />
           </CardContent>
         </Card>
+        )}
 
         {(isClientView || isPreview) && canViewFinancials && (
           <ClientPricingCta project={project} quotes={quotes} payments={payments} />

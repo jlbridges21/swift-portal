@@ -138,6 +138,29 @@ export async function getBusinessPortalOriginById(businessId: string): Promise<s
   return getBusinessPortalOrigin(data);
 }
 
+/** Share access links + host checks — use local `/b/{slug}` origin in dev. */
+export async function getShareAccessPortalOrigin(businessId: string): Promise<string> {
+  const dep = getDeploymentOrigin();
+  try {
+    const depHost = new URL(dep).hostname;
+    if (depHost === "localhost" || depHost === "127.0.0.1") {
+      const supabase = serviceClient();
+      const { data } = await supabase
+        .from("businesses")
+        .select("slug")
+        .eq("id", businessId)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (data?.slug) {
+        return `${dep.replace(/\/$/, "")}/b/${data.slug}`;
+      }
+    }
+  } catch {
+    /* fall through to canonical portal origin */
+  }
+  return getBusinessPortalOriginById(businessId);
+}
+
 export function joinPortalPath(origin: string, path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
   const prefix = origin.replace(/\/$/, "");

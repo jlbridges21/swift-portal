@@ -1,8 +1,16 @@
 import { createServiceClient } from "@/lib/supabase/server";
-import { buildAuthConfirmLink } from "@/lib/auth-confirm";
 import { sendBrandedEmail } from "@/lib/email";
-import { getBusinessPortalOriginById, joinPortalPath } from "@/lib/portal-url";
+import { getShareAccessPortalOrigin } from "@/lib/portal-url";
 import type { Profile } from "@/lib/types";
+import {
+  buildShareAccessUrl,
+  ensureShareAccessToken,
+  mintShareAccessCredentials,
+  resolveShareAccessWindow,
+  validateShareAccessWindow,
+  type ShareExpiryPreset,
+  type ShareAccessFields,
+} from "@/lib/project-share-access";
 
 export type ProjectShareRow = {
   id: string;
@@ -14,6 +22,12 @@ export type ProjectShareRow = {
   notified_at: string | null;
   last_accessed_at: string | null;
   revoked_at: string | null;
+  access_token_hash: string | null;
+  access_mode: "one_time" | "reusable";
+  access_starts_at: string | null;
+  access_expires_at: string | null;
+  one_time_used_at: string | null;
+  expiry_preset: ShareExpiryPreset;
 };
 
 export function normalizeShareEmail(email: string): string {
@@ -51,6 +65,13 @@ export async function listProjectShares(
   return (data ?? []) as ProjectShareRow[];
 }
 
+function shareRowIsActive(row: Pick<
+  ProjectShareRow,
+  "revoked_at" | "access_mode" | "access_starts_at" | "access_expires_at" | "one_time_used_at"
+>): boolean {
+  return validateShareAccessWindow(row).ok;
+}
+
 export async function listActiveShareProjectIdsForEmail(
   email: string,
   businessId?: string
@@ -59,7 +80,9 @@ export async function listActiveShareProjectIdsForEmail(
   const normalized = normalizeShareEmail(email);
   let query = raw
     .from("project_shares")
-    .select("project_id")
+    .select(
+      "project_id, revoked_at, access_mode, access_starts_at, access_expires_at, one_time_used_at"
+    )
     .eq("email", normalized)
     .is("revoked_at", null);
   if (businessId) {
@@ -67,7 +90,8 @@ export async function listActiveShareProjectIdsForEmail(
   }
   const { data: shares, error } = await query;
   if (error) throw new Error(error.message);
-  const projectIds = [...new Set((shares ?? []).map((row) => row.project_id as string))];
+  const activeShares = (shares ?? []).filter((row) => shareRowIsActive(row as ProjectShareRow));
+  const projectIds = [...new Set(activeShares.map((row) => row.project_id as string))];
   if (projectIds.length === 0) return [];
   const { data: projects } = await raw
     .from("projects")
@@ -82,12 +106,13 @@ export async function listSharedBusinessIdsForEmail(email: string): Promise<stri
   const normalized = normalizeShareEmail(email);
   const { data: shares, error } = await raw
     .from("project_shares")
-    .select("business_id, project_id")
+    .select("business_id, project_id, revoked_at, access_mode, access_starts_at, access_expires_at, one_time_used_at")
     .eq("email", normalized)
     .is("revoked_at", null);
   if (error) throw new Error(error.message);
   if ((shares ?? []).length === 0) return [];
-  const projectIds = [...new Set((shares ?? []).map((s) => s.project_id as string))];
+  const activeShares = (shares ?? []).filter((row) => shareRowIsActive(row as ProjectShareRow));
+  const projectIds = [...new Set(activeShares.map((s) => s.project_id as string))];
   const { data: projects } = await raw
     .from("projects")
     .select("id")
@@ -95,7 +120,7 @@ export async function listSharedBusinessIdsForEmail(email: string): Promise<stri
     .is("deleted_at", null);
   const liveIds = new Set((projects ?? []).map((p) => p.id as string));
   const businessIds = new Set<string>();
-  for (const row of shares ?? []) {
+  for (const row of activeShares) {
     if (liveIds.has(row.project_id as string)) {
       businessIds.add(row.business_id as string);
     }
@@ -137,33 +162,16 @@ async function ensureAuthUserForShareEmail(email: string): Promise<{ userId: str
   return { userId: created.data.user?.id ?? null };
 }
 
-async function buildShareMagicLink(options: {
+async function buildShareAccessLink(options: {
+  shareId: string;
   businessId: string;
-  projectId: string;
   email: string;
+  accessFields: ShareAccessFields;
 }): Promise<string> {
-  const raw = await createServiceClient();
-  const normalized = normalizeShareEmail(options.email);
-  await ensureAuthUserForShareEmail(normalized);
-
-  const portalOrigin = await getBusinessPortalOriginById(options.businessId);
-  const nextPath = `/dashboard/projects/${options.projectId}`;
-
-  const { data: linkData, error: linkError } = await raw.auth.admin.generateLink({
-    type: "magiclink",
-    email: normalized,
-    options: { redirectTo: joinPortalPath(portalOrigin, "/auth/confirm") },
-  });
-  if (linkError || !linkData.properties?.hashed_token) {
-    throw new Error(linkError?.message || "Could not generate share sign-in link.");
-  }
-
-  return buildAuthConfirmLink({
-    portalOrigin,
-    tokenHash: linkData.properties.hashed_token,
-    type: "magiclink",
-    nextPath,
-  });
+  await ensureAuthUserForShareEmail(options.email);
+  const { rawToken } = await ensureShareAccessToken(options.shareId, options.accessFields);
+  const portalOrigin = await getShareAccessPortalOrigin(options.businessId);
+  return buildShareAccessUrl(portalOrigin, rawToken);
 }
 
 /** Exported for resend flows and verification scripts. */
@@ -171,8 +179,31 @@ export async function buildShareMagicLinkForProject(options: {
   businessId: string;
   projectId: string;
   email: string;
+  shareId?: string;
+  accessFields?: ShareAccessFields;
 }): Promise<string> {
-  return buildShareMagicLink(options);
+  const raw = await createServiceClient();
+  const normalized = normalizeShareEmail(options.email);
+  let shareId = options.shareId;
+  if (!shareId) {
+    const { data: row } = await raw
+      .from("project_shares")
+      .select("id")
+      .eq("project_id", options.projectId)
+      .eq("email", normalized)
+      .is("revoked_at", null)
+      .maybeSingle();
+    shareId = row?.id as string | undefined;
+  }
+  if (!shareId) throw new Error("Share row not found");
+  const accessFields =
+    options.accessFields ?? resolveShareAccessWindow("30days");
+  return buildShareAccessLink({
+    shareId,
+    businessId: options.businessId,
+    email: normalized,
+    accessFields,
+  });
 }
 
 export async function resendProjectShareAuthLink(options: {
@@ -188,7 +219,7 @@ export async function resendProjectShareAuthLink(options: {
 
   const { data: shareRow } = await raw
     .from("project_shares")
-    .select("project_id")
+    .select("*")
     .eq("email", normalized)
     .eq("business_id", options.businessId)
     .is("revoked_at", null)
@@ -196,14 +227,22 @@ export async function resendProjectShareAuthLink(options: {
     .limit(1)
     .maybeSingle();
 
-  const projectId = shareRow?.project_id as string | undefined;
-  if (!projectId) return { sent: false };
+  if (!shareRow) return { sent: false };
 
+  const projectId = shareRow.project_id as string;
   const { data: project } = await raw
     .from("projects")
     .select("project_name")
     .eq("id", projectId)
     .maybeSingle();
+
+  const accessFields = resolveShareAccessWindow(
+    (shareRow.expiry_preset as ShareExpiryPreset) || "30days",
+    {
+      startsAt: shareRow.access_starts_at,
+      expiresAt: shareRow.access_expires_at,
+    }
+  );
 
   const result = await sendProjectShareInviteEmail({
     businessId: options.businessId,
@@ -211,6 +250,8 @@ export async function resendProjectShareAuthLink(options: {
     projectName: project?.project_name || "Shared project",
     email: normalized,
     inviterName: "ShootPortal",
+    shareId: shareRow.id as string,
+    accessFields,
   });
 
   if (!result.sent) {
@@ -226,11 +267,14 @@ export async function sendProjectShareInviteEmail(options: {
   projectName: string;
   email: string;
   inviterName: string;
+  shareId: string;
+  accessFields: ShareAccessFields;
 }): Promise<{ sent: boolean; signInUrl: string; error?: string }> {
-  const signInUrl = await buildShareMagicLink({
+  const signInUrl = await buildShareAccessLink({
+    shareId: options.shareId,
     businessId: options.businessId,
-    projectId: options.projectId,
     email: options.email,
+    accessFields: options.accessFields,
   });
 
   const existingProfile = await findProfileIdByEmail(options.email);
@@ -244,8 +288,8 @@ export async function sendProjectShareInviteEmail(options: {
     subject,
     title: existingProfile ? "A project was shared with you" : "View a shared project",
     body: existingProfile
-      ? `${options.inviterName} shared "${options.projectName}" with you. Sign in with one click — no password needed.`
-      : `${options.inviterName} shared "${options.projectName}" with you. Open the link to sign in passwordlessly and view the project.`,
+      ? `${options.inviterName} shared "${options.projectName}" with you. Open the link on any device — it stays active until it expires.`
+      : `${options.inviterName} shared "${options.projectName}" with you. Open the link to view the project on any device.`,
     ctaLabel: "Open project",
     ctaUrl: signInUrl,
     emailType: "project_share_invite",
@@ -266,6 +310,9 @@ export type AddProjectShareInput = {
   notify: boolean;
   projectName: string;
   inviterName: string;
+  expiryPreset?: ShareExpiryPreset;
+  customAccessStartsAt?: string | null;
+  customAccessExpiresAt?: string | null;
 };
 
 export type AddProjectShareResult = {
@@ -283,6 +330,14 @@ export async function addProjectShare(input: AddProjectShareInput): Promise<AddP
   if (!isValidShareEmail(email)) {
     throw new Error("Enter a valid email address.");
   }
+
+  const accessFields = resolveShareAccessWindow(
+    input.expiryPreset ?? "30days",
+    {
+      startsAt: input.customAccessStartsAt,
+      expiresAt: input.customAccessExpiresAt,
+    }
+  );
 
   const { data: existing } = await raw
     .from("project_shares")
@@ -305,6 +360,8 @@ export async function addProjectShare(input: AddProjectShareInput): Promise<AddP
           invited_by: input.invitedBy,
           invited_at: new Date().toISOString(),
           notified_at: null,
+          ...accessFields,
+          one_time_used_at: null,
         })
         .eq("id", existing.id)
         .select("*")
@@ -321,12 +378,19 @@ export async function addProjectShare(input: AddProjectShareInput): Promise<AddP
         project_id: input.projectId,
         email,
         invited_by: input.invitedBy,
+        ...accessFields,
       })
       .select("*")
       .single();
     if (insertError || !inserted) throw new Error(insertError?.message || "Could not add share.");
     share = inserted as ProjectShareRow;
     created = true;
+  }
+
+  if (!share.access_token_hash && !input.notify) {
+    await mintShareAccessCredentials(share.id, accessFields);
+    const { data: refreshed } = await raw.from("project_shares").select("*").eq("id", share.id).single();
+    if (refreshed) share = refreshed as ProjectShareRow;
   }
 
   const linkedExistingUser = Boolean(await findProfileIdByEmail(email));
@@ -341,6 +405,8 @@ export async function addProjectShare(input: AddProjectShareInput): Promise<AddP
       projectName: input.projectName,
       email,
       inviterName: input.inviterName,
+      shareId: share.id,
+      accessFields,
     });
     notified = emailResult.sent;
     notifyError = emailResult.error ?? null;
@@ -361,6 +427,29 @@ export async function addProjectShare(input: AddProjectShareInput): Promise<AddP
     signInUrl,
     linkedExistingUser,
   };
+}
+
+export async function updateProjectShareExpiry(
+  businessId: string,
+  projectId: string,
+  shareId: string,
+  accessFields: ShareAccessFields
+): Promise<ProjectShareRow> {
+  const raw = await createServiceClient();
+  const { data, error } = await raw
+    .from("project_shares")
+    .update({
+      ...accessFields,
+      one_time_used_at: null,
+    })
+    .eq("id", shareId)
+    .eq("business_id", businessId)
+    .eq("project_id", projectId)
+    .is("revoked_at", null)
+    .select("*")
+    .single();
+  if (error || !data) throw new Error(error?.message || "Could not update share expiry.");
+  return data as ProjectShareRow;
 }
 
 export async function revokeProjectShare(
@@ -395,3 +484,5 @@ export async function resolveSharedViewerContext(
     sharedProjectIds,
   };
 }
+
+export { validateShareAccessWindow, resolveShareAccessWindow, type ShareExpiryPreset };

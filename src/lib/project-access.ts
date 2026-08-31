@@ -96,13 +96,18 @@ export async function resolveProjectAccess(
   if (email) {
     const { data: share } = await raw
       .from("project_shares")
-      .select("id")
+      .select(
+        "id, revoked_at, access_mode, access_starts_at, access_expires_at, one_time_used_at"
+      )
       .eq("project_id", projectId)
       .eq("email", email)
       .is("revoked_at", null)
       .maybeSingle();
     if (share) {
-      return { allowed: true, kind: "share", businessId, shareId: share.id as string };
+      const { validateShareAccessWindow } = await import("@/lib/project-share-access");
+      if (validateShareAccessWindow(share).ok) {
+        return { allowed: true, kind: "share", businessId, shareId: share.id as string };
+      }
     }
   }
 

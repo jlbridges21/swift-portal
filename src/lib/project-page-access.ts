@@ -1,10 +1,13 @@
 import type { Project } from "@/lib/types";
 import type { ProjectAccessKind } from "@/lib/project-access";
 
-/** Payments, quotes, estimates, proposals — assigned client + business admin only. */
+/** Payments, quotes, estimates, proposals, and client workflow UI — assigned client + admin only. */
 export function canViewProjectFinancials(accessKind: ProjectAccessKind): boolean {
   return accessKind === "admin" || accessKind === "assigned_client";
 }
+
+/** Alias — shared viewers and anonymous visitors are media-only. */
+export const canViewProjectProgress = canViewProjectFinancials;
 
 /** Fields safe for shared-by-email and anonymous link viewers in HTML/RSC payload. */
 export function sanitizeProjectForMediaViewer(project: Project): Project {

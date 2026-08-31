@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
-import { requireBusinessAdmin, requireTenantContext } from "@/lib/tenant";
+import { requireBusinessAdmin } from "@/lib/tenant";
 import { listProjectShares } from "@/lib/project-shares";
+import type { ShareExpiryPreset } from "@/lib/project-share-expiry";
 
 export async function GET(
   _request: Request,
@@ -35,6 +36,9 @@ export async function POST(
       emails?: string[];
       email?: string;
       notify?: boolean;
+      expiryPreset?: ShareExpiryPreset;
+      customAccessStartsAt?: string | null;
+      customAccessExpiresAt?: string | null;
     };
     const emails = Array.isArray(body.emails)
       ? body.emails
@@ -66,6 +70,9 @@ export async function POST(
         notify,
         projectName: project.project_name,
         inviterName: profile.full_name || profile.email,
+        expiryPreset: body.expiryPreset,
+        customAccessStartsAt: body.customAccessStartsAt,
+        customAccessExpiresAt: body.customAccessExpiresAt,
       });
       results.push(result);
     }
