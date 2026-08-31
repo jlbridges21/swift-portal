@@ -10,7 +10,7 @@ import { useUploadManager } from "@/components/admin/upload-manager";
 import type { MediaAsset } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import { mediaDisplayName } from "@/lib/media-display-name";
-import { formatDate } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
 import { Clapperboard, History, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,6 +19,8 @@ interface VideoReviewAdminActionsProps {
   video: MediaAsset;
   reviewItem: VideoReviewListItem | null;
   onReviewsChange: () => void;
+  /** Card footer — no outer border/margin. */
+  embedded?: boolean;
 }
 
 export function VideoReviewAdminActions({
@@ -26,6 +28,7 @@ export function VideoReviewAdminActions({
   video,
   reviewItem,
   onReviewsChange,
+  embedded = false,
 }: VideoReviewAdminActionsProps) {
   const router = useRouter();
   const { enqueueUploads } = useUploadManager();
@@ -108,38 +111,58 @@ export function VideoReviewAdminActions({
   if (reviewItem) {
     const { review, versions } = reviewItem;
     return (
-      <div className="mt-2 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-accent">
-            <Clapperboard className="h-3.5 w-3.5" />
+      <div
+        className={
+          embedded
+            ? "space-y-2"
+            : "mt-2 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3"
+        }
+      >
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 font-medium text-muted-foreground",
+              embedded ? "text-[11px]" : "text-xs text-accent"
+            )}
+          >
+            <Clapperboard className="h-3.5 w-3.5 shrink-0" />
             Review · {versions.length} version{versions.length === 1 ? "" : "s"}
           </span>
           <Link
             href={`/admin/projects/${projectId}/reviews/${review.id}`}
-            className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+            className={cn(
+              "font-medium text-primary underline-offset-2 hover:underline",
+              embedded ? "text-[11px]" : "text-xs"
+            )}
           >
             Open review
           </Link>
         </div>
-        <ul className="space-y-1 text-xs text-muted">
-          {versions.map((v) => (
-            <li key={v.id} className="flex items-center gap-2">
-              <History className="h-3 w-3 shrink-0" />
-              V{v.version_number} · {formatDate(v.created_at)}
-              {v.media_asset_id === video.id ? " · this file" : ""}
-            </li>
-          ))}
-        </ul>
+        {!embedded && (
+          <ul className="space-y-1 text-xs text-muted">
+            {versions.map((v) => (
+              <li key={v.id} className="flex items-center gap-2">
+                <History className="h-3 w-3 shrink-0" />
+                V{v.version_number} · {formatDate(v.created_at)}
+                {v.media_asset_id === video.id ? " · this file" : ""}
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             size="sm"
-            variant="outline"
-            className="min-h-9"
+            variant={embedded ? "ghost" : "outline"}
+            className={embedded ? "h-9 min-h-9 px-2 text-[11px]" : "min-h-9"}
             disabled={uploadingVersion}
             onClick={() => uploadNewVersion(review.id)}
           >
-            {uploadingVersion ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            {uploadingVersion ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className={embedded ? "mr-1 h-3 w-3" : "h-3.5 w-3.5"} />
+            )}
             Upload new version
           </Button>
         </div>
@@ -174,8 +197,10 @@ export function VideoReviewAdminActions({
       <Button
         type="button"
         size="sm"
-        variant="outline"
-        className="mt-2 min-h-9 w-full sm:w-auto"
+        variant={embedded ? "ghost" : "outline"}
+        className={
+          embedded ? "h-9 min-h-9 w-full justify-start px-0 text-[11px] text-muted-foreground" : "mt-2 min-h-9 w-full sm:w-auto"
+        }
         onClick={() => setShowCreate(true)}
       >
         <Clapperboard className="mr-1.5 h-3.5 w-3.5" />

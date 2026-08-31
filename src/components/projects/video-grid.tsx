@@ -36,7 +36,14 @@ export type VideoGridProps = {
   compactInitialCount?: number;
   /** Public link visitors: review links go to sign-in. */
   signInHref?: string;
-  /** Admin: controls rendered below each card (reorder, visibility, review actions). */
+  /** Admin: full card chrome (controls + review). Replaces default VideoCard + renderBelowCard. */
+  renderAdminCard?: (
+    entry: VideoGridEntry,
+    index: number,
+    openPlayer: () => void,
+    thumbUrl?: string | null
+  ) => ReactNode;
+  /** @deprecated Prefer renderAdminCard for admin layouts. */
   renderBelowCard?: (entry: VideoGridEntry, index: number) => ReactNode;
 };
 
@@ -51,6 +58,7 @@ export function VideoGrid({
   isAdmin = false,
   compactInitialCount,
   signInHref,
+  renderAdminCard,
   renderBelowCard,
 }: VideoGridProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -72,18 +80,30 @@ export function VideoGrid({
 
   if (!entries.length) return null;
 
-  const openPlayer = (index: number) => setActiveIndex(index);
+  const renderCard = (entry: VideoGridEntry, index: number) => {
+    const openPlayer = () => openPlayerAt(index);
+    if (renderAdminCard) {
+      return (
+        <div key={entry.video.id} className="min-w-0">
+          {renderAdminCard(entry, index, openPlayer, thumbUrls[entry.video.id])}
+        </div>
+      );
+    }
+    return (
+      <div key={entry.video.id} className="min-w-0">
+        <VideoCard
+          video={entry.video}
+          thumbUrl={thumbUrls[entry.video.id]}
+          onClick={openPlayer}
+        />
+        {renderBelowCard?.(entry, index)}
+      </div>
+    );
+  };
 
-  const renderCard = (entry: VideoGridEntry, index: number) => (
-    <div key={entry.video.id} className="flex flex-col gap-2">
-      <VideoCard
-        video={entry.video}
-        thumbUrl={thumbUrls[entry.video.id]}
-        onClick={() => openPlayer(index)}
-      />
-      {renderBelowCard?.(entry, index)}
-    </div>
-  );
+  function openPlayerAt(index: number) {
+    setActiveIndex(index);
+  }
 
   return (
     <>

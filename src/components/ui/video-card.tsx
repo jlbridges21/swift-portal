@@ -30,7 +30,7 @@ export function VideoCard({
     <button
       type="button"
       onClick={onClick}
-      className={cn("group w-full text-left focus-visible:outline-none", className)}
+      className={cn("group w-full min-w-0 text-left focus-visible:outline-none", className)}
       aria-label={`Play ${title}`}
     >
       <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900 ring-1 ring-black/5 transition group-hover:ring-black/10">
@@ -66,4 +66,4 @@ export function VideoCard({
 
 /** Larger cards than photo tiles — two-up on mobile, two on large, three on xl. */
 export const VIDEO_GRID_CLASS =
-  "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3";
+  "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0";

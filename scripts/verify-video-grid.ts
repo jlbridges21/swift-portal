@@ -60,6 +60,7 @@ async function main() {
   assert(cardSrc.includes("Play"), "centered play button");
 
   const gridSrc = readSrc("src/components/projects/video-grid.tsx");
+  const projectDetailSrc = readSrc("src/components/admin/project-detail.tsx");
   assert(gridSrc.includes("VideoPlayerLightbox"), "player lightbox");
   assert(gridSrc.includes("lg:flex-row"), "desktop side rail");
   assert(gridSrc.includes("max-h-[40vh]"), "mobile rail below player");
@@ -75,6 +76,17 @@ async function main() {
   const zipSrc = readSrc("src/lib/project-zip-download.ts");
   assert(zipSrc.includes('"video"'), "ZIP path still includes video media type");
 
+  console.log("\n=== Admin video grid card ===");
+  const adminCardSrc = readSrc("src/components/admin/admin-video-grid-card.tsx");
+  assert(adminCardSrc.includes("min-w-0"), "admin card constrains width");
+  assert(adminCardSrc.includes("overflow-hidden"), "admin card clips content");
+  assert(adminCardSrc.includes("flex-wrap"), "control row wraps");
+  assert(adminCardSrc.includes("stopPropagation"), "overlay actions do not open player");
+  assert(adminCardSrc.includes("bg-black/60"), "overlay chips for legibility");
+  assert(adminCardSrc.includes("h-11 w-11"), "44px overlay touch targets");
+  assert(adminCardSrc.includes("line-clamp-2"), "long titles clamped");
+  assert(gridSrc.includes("renderAdminCard"), "admin card hook on VideoGrid");
+  assert(gridSrc.includes("min-w-0"), "grid items min-w-0");
   console.log("\n=== Mobile grid choice ===");
   console.log("375px: two-up grid (grid-cols-2) — readable 16:9 cards; player rail stacks below (flex-col).");
 

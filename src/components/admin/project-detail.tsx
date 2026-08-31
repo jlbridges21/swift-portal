@@ -36,7 +36,8 @@ import { cn, defaultProjectName } from "@/lib/utils";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { ALLOWED_VIDEO_MIME_TYPES } from "@/lib/upload/constants";
 import { toast } from "sonner";
-import { VideoReviewAdminActions, useVideoReviewDeleteHandler } from "@/components/admin/video-review-admin-actions";
+import { useVideoReviewDeleteHandler } from "@/components/admin/video-review-admin-actions";
+import { AdminVideoGridCard } from "@/components/admin/admin-video-grid-card";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import type { ProjectShareRow } from "@/lib/project-shares";
 import { ProjectShareModal } from "@/components/admin/project-share-modal";
@@ -952,100 +953,53 @@ export function AdminProjectDetail({
               }}
               reviewPathPrefix="/admin/projects"
               isAdmin
-              renderBelowCard={(entry) => {
+              renderAdminCard={(entry, _index, openPlayer, thumbUrl) => {
                 const v = entry.video;
                 const i = videos.findIndex((row) => row.id === v.id);
                 if (i < 0) return null;
+                const badge = !isClientVisibleMedia(v)
+                  ? "Hidden"
+                  : isHero(v.id)
+                    ? "Hero"
+                    : v.media_source === "youtube"
+                      ? "YouTube"
+                      : "Upload";
                 return (
-                  <div className="rounded-lg border border-border bg-white">
-                    {editingMedia === v.id ? (
-                      <div className="space-y-2 p-3">
-                        <Input
-                          value={editMediaForm.title}
-                          onChange={(e) => setEditMediaForm({ ...editMediaForm, title: e.target.value })}
-                          placeholder="Title"
-                          maxLength={120}
-                        />
-                        {v.media_source === "youtube" && (
-                          <Input
-                            value={editMediaForm.youtube_url}
-                            onChange={(e) =>
-                              setEditMediaForm({ ...editMediaForm, youtube_url: e.target.value })
-                            }
-                            placeholder="YouTube URL"
-                          />
-                        )}
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="accent" onClick={() => saveMediaEdit(v.id)}>
-                            Save
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => setEditingMedia(null)}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <AssetRow
-                        name={mediaDisplayName(v)}
-                        badge={
-                          !isClientVisibleMedia(v)
-                            ? "Hidden"
-                            : isHero(v.id)
-                              ? "Hero"
-                              : v.media_source === "youtube"
-                                ? "YouTube"
-                                : "Upload"
-                        }
-                        onUp={() => moveItem("media", v.id, "up", videos)}
-                        onDown={() => moveItem("media", v.id, "down", videos)}
-                        canUp={i > 0}
-                        canDown={i < videos.length - 1}
-                        extra={
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              title={isClientVisibleMedia(v) ? "Hide from client" : "Show to client"}
-                              onClick={() => toggleMediaVisibility(v.id, !isClientVisibleMedia(v))}
-                            >
-                              {isClientVisibleMedia(v) ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
-                                <Eye className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setHeroMedia(v.id)}>
-                              Set as Hero
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setEditingMedia(v.id);
-                                setEditMediaForm({
-                                  title: mediaDisplayName(v),
-                                  youtube_url: v.youtube_url || "",
-                                });
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        }
-                        onDelete={() => deleteMedia(v.id)}
-                      />
-                    )}
-                    {v.media_source !== "youtube" && (
-                      <div className="border-t border-border px-3 pb-3">
-                        <VideoReviewAdminActions
-                          projectId={initialProject.id}
-                          video={v}
-                          reviewItem={reviewByAssetId.get(v.id) ?? null}
-                          onReviewsChange={() => void refreshVideoReviews()}
-                        />
-                      </div>
-                    )}
-                  </div>
+                  <AdminVideoGridCard
+                    video={v}
+                    thumbUrl={thumbUrl}
+                    onPlay={openPlayer}
+                    onEdit={() => {
+                      setEditingMedia(v.id);
+                      setEditMediaForm({
+                        title: mediaDisplayName(v),
+                        youtube_url: v.youtube_url || "",
+                      });
+                    }}
+                    onDelete={() => void deleteMedia(v.id)}
+                    onUp={() => moveItem("media", v.id, "up", videos)}
+                    onDown={() => moveItem("media", v.id, "down", videos)}
+                    canUp={i > 0}
+                    canDown={i < videos.length - 1}
+                    badge={badge}
+                    onToggleVisibility={() =>
+                      void toggleMediaVisibility(v.id, !isClientVisibleMedia(v))
+                    }
+                    visibleToClient={isClientVisibleMedia(v)}
+                    onSetHero={() => void setHeroMedia(v.id)}
+                    isEditing={editingMedia === v.id}
+                    editTitle={editMediaForm.title}
+                    editYoutubeUrl={editMediaForm.youtube_url}
+                    onEditTitleChange={(title) => setEditMediaForm((f) => ({ ...f, title }))}
+                    onEditYoutubeUrlChange={(youtube_url) =>
+                      setEditMediaForm((f) => ({ ...f, youtube_url }))
+                    }
+                    onSaveEdit={() => void saveMediaEdit(v.id)}
+                    onCancelEdit={() => setEditingMedia(null)}
+                    projectId={initialProject.id}
+                    reviewItem={reviewByAssetId.get(v.id) ?? null}
+                    onReviewsChange={() => void refreshVideoReviews()}
+                  />
                 );
               }}
             />
