@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
-import { canAccessProject } from "@/lib/project-access";
 import { isClientVisibleMedia } from "@/lib/client-media";
+import { assertMediaAssetProjectAccess } from "@/lib/media-asset-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { signMediaThumbnailUrl, type ThumbSignAsset } from "@/lib/media-signed-thumbs";
 
@@ -39,35 +39,6 @@ export async function POST(request: Request) {
   const db = await createTenantServiceClient(tenant.businessId);
   const isAdmin = profile.role === "admin" || profile.role === "super_admin";
 
-  if (!isAdmin) {
-    const allowedProjects =
-      tenant.isSharedViewer && tenant.sharedProjectIds
-        ? new Set(tenant.sharedProjectIds)
-        : null;
-    const { data: probeRows } = await db
-      .from("media_assets")
-      .select("id, project_id, business_id")
-      .in("id", ids);
-    for (const id of ids) {
-      const asset = (probeRows ?? []).find((r) => r.id === id);
-      if (!asset || asset.business_id !== tenant.businessId || !asset.project_id) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      if (allowedProjects && !allowedProjects.has(asset.project_id as string)) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      if (!allowedProjects) {
-        const ok = await canAccessProject(profile, asset.project_id as string);
-        if (!ok) {
-          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
-      }
-    }
-  }
-
-  // Storage signing uses service role after access checks — share viewers have no tenant storage JWT.
-  const storageClient = db.raw;
-
   const { data: rows, error } = await db
     .from("media_assets")
     .select(
@@ -80,42 +51,40 @@ export async function POST(request: Request) {
   }
 
   const byId = new Map((rows ?? []).map((r) => [r.id, r]));
-  const urls: Record<string, string | null> = {};
 
-  // Project access cache for clients
-  const projectAccess = new Map<string, boolean>();
+  if (!isAdmin) {
+    for (const id of ids) {
+      const asset = byId.get(id);
+      if (!asset) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      const access = await assertMediaAssetProjectAccess(profile, tenant, asset);
+      if (!access.ok || !isClientVisibleMedia(asset)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+  } else {
+    for (const id of ids) {
+      const asset = byId.get(id);
+      if (!asset || asset.business_id !== tenant.businessId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+  }
+
+  // Storage signing uses service role after access checks — share viewers have no tenant storage JWT.
+  const storageClient = db.raw;
+  const urls: Record<string, string | null> = {};
 
   await Promise.all(
     ids.map(async (id) => {
-      const asset = byId.get(id);
-      if (!asset || asset.business_id !== tenant.businessId) {
-        urls[id] = null;
-        return;
-      }
-
-      if (!isAdmin) {
-        if (!asset.project_id) {
-          urls[id] = null;
-          return;
-        }
-        let allowed = projectAccess.get(asset.project_id);
-        if (allowed === undefined) {
-          allowed = await canAccessProject(profile, asset.project_id);
-          projectAccess.set(asset.project_id, allowed);
-        }
-        if (!allowed || !isClientVisibleMedia(asset)) {
-          urls[id] = null;
-          return;
-        }
-      }
-
+      const asset = byId.get(id)!;
       const bucket = asset.media_type === "document" ? "project-documents" : "project-media";
-      const signed = await signMediaThumbnailUrl(
+      urls[id] = await signMediaThumbnailUrl(
         storageClient,
         bucket,
         asset as ThumbSignAsset
       );
-      urls[id] = signed;
     })
   );
 

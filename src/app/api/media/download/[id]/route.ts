@@ -6,12 +6,13 @@ import {
   resolveProjectDownloadAllowed,
 } from "@/lib/deliverables";
 import { getAppSettings } from "@/lib/app-settings";
-import { resolveProjectAccess, touchProjectShareAccess } from "@/lib/project-access";
+import { touchProjectShareAccess } from "@/lib/project-access";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { logMediaEvent, trackMediaDownload } from "@/lib/media-library";
 import { normalizeStatus } from "@/lib/constants";
 import { downloadFileName, mediaDisplayName } from "@/lib/media-display-name";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { assertMediaAssetProjectAccess } from "@/lib/media-asset-access";
 import {
   signMediaThumbnailUrl,
   THUMB_SIGNED_TTL_SECONDS,
@@ -59,22 +60,11 @@ export async function GET(
   const appSettings = await getAppSettings(tenant.businessId);
   const requireDeliveredForDownloads = appSettings.payments.requireDeliveredForDownloads;
 
-  let shareIdToTouch: string | null = null;
-  if (!asset.project_id) {
-    if (!isAdmin) {
-      return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
-    }
-  } else {
-    const access = await resolveProjectAccess(profile, asset.project_id, {
-      tenantBusinessId: tenant.businessId,
-    });
-    if (!access.allowed) {
-      return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
-    }
-    if (access.kind === "share" && access.shareId) {
-      shareIdToTouch = access.shareId;
-    }
+  const mediaAccess = await assertMediaAssetProjectAccess(profile, tenant, asset);
+  if (!mediaAccess.ok) {
+    return NextResponse.json({ error: mediaAccess.message }, { status: mediaAccess.status });
   }
+  const shareIdToTouch = mediaAccess.shareId;
 
   let projectStatus = "new_request";
   if (asset.project_id) {

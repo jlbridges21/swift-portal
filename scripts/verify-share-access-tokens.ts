@@ -22,7 +22,7 @@ const TEST_PROJECT = "933c476c-c1c4-4d8b-a5fa-aa556fcf640a";
 const TEST_CLIENT_EMAIL = "jackson.bridges21@gmail.com";
 const OTHER_SWIFT_PROJECT = "26e65643-74d1-4c34-b085-0711c6e4b97c";
 const OTHER_BUSINESS_PROJECT = "f4a9a474-9470-4b5a-b998-8c9236b40b31";
-const OTHER_SWIFT_MEDIA = "7d3bc3f6-e39b-4c3a-9c19-480eeeb841ea";
+const OTHER_SWIFT_MEDIA = "2651b010-a430-4fdf-9d73-f051f843b1f8";
 const OTHER_FOLDER = "df142d88-fa00-44af-95c8-da6e2c92324f";
 const PAYMENT_ID = "a46320ec-9ee2-44ad-b1fb-80ebd0208ed2";
 

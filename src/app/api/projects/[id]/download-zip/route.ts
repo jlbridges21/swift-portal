@@ -77,7 +77,11 @@ export async function GET(
       profile,
       projectId,
       db,
-      appSettings.payments.requireDeliveredForDownloads
+      appSettings.payments.requireDeliveredForDownloads,
+      {
+        isSharedViewer: tenant.isSharedViewer,
+        sharedProjectIds: tenant.sharedProjectIds,
+      }
     );
     if (!auth.ok) {
       zipLog("access", ctx, { result: "denied", status: auth.status, details: auth.details });

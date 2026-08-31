@@ -510,7 +510,8 @@ export async function authorizeProjectZipDownload(
   profile: Profile,
   projectId: string,
   supabase: { from: SupabaseClient["from"] },
-  requireDeliveredForDownloads: boolean
+  requireDeliveredForDownloads: boolean,
+  shareScope?: { isSharedViewer?: boolean; sharedProjectIds?: string[] }
 ): Promise<
   | {
       ok: true;
@@ -563,6 +564,18 @@ export async function authorizeProjectZipDownload(
   }
 
   if (!isAdmin) {
+    if (shareScope?.isSharedViewer) {
+      const allowed = shareScope.sharedProjectIds ?? [];
+      if (!allowed.includes(projectId)) {
+        return {
+          ok: false,
+          status: 403,
+          error: "You don't have access to this project.",
+          details: "unauthorized — shared viewer project scope",
+        };
+      }
+    }
+
     const access = await resolveProjectAccess(profile, projectId, {
       tenantBusinessId: project.business_id,
     });
