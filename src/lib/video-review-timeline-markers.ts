@@ -1,6 +1,6 @@
 import type { VideoReviewCommentEnriched } from "@/lib/video-review-comment-model";
 
-/** Stable marker color from author id (same user → same color across loads). */
+/** @deprecated Per-author HSL colors replaced by brand/reply marker styling. */
 export function authorMarkerColor(userId: string): string {
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
@@ -46,13 +46,10 @@ export function clusterEnrichedReviewComments(
 }
 
 export function clusterMarkerTooltip(cluster: TimelineMarkerCluster): {
-  color: string;
   extraCount: number;
   ariaLabel: string;
   lines: { author: string; preview: string }[];
 } {
-  const primary = cluster.comments[0];
-  const color = authorMarkerColor(primary.author_user_id);
   const extraCount = cluster.comments.length - 1;
   const lines = cluster.comments.map((comment) => ({
     author: comment.author_name?.trim() || "Unknown",
@@ -64,7 +61,18 @@ export function clusterMarkerTooltip(cluster: TimelineMarkerCluster): {
       ? `${cluster.comments.length} comments by ${names}`
       : `Comment by ${lines[0]?.author ?? "Unknown"}`;
 
-  return { color, extraCount, ariaLabel, lines };
+  return { extraCount, ariaLabel, lines };
+}
+
+/** @deprecated Use clusterMarkerTooltip — color field removed (brand/reply styling). */
+export function clusterMarkerTooltipLegacy(cluster: TimelineMarkerCluster): {
+  color: string;
+  extraCount: number;
+  ariaLabel: string;
+  lines: { author: string; preview: string }[];
+} {
+  const tooltip = clusterMarkerTooltip(cluster);
+  return { ...tooltip, color: authorMarkerColor(cluster.comments[0].author_user_id) };
 }
 
 /** @deprecated Use clusterMarkerTooltip — initials markers removed. */
@@ -74,7 +82,7 @@ export function clusterMarkerLabel(cluster: TimelineMarkerCluster): {
   extraCount: number;
   ariaLabel: string;
 } {
-  const tooltip = clusterMarkerTooltip(cluster);
+  const tooltip = clusterMarkerTooltipLegacy(cluster);
   return {
     initials: "",
     color: tooltip.color,

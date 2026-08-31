@@ -12,11 +12,20 @@ import {
   shouldDeferToNativeVideoControls,
 } from "../src/lib/video-review-player-interaction";
 import {
-  authorMarkerColor,
   clusterEnrichedReviewComments,
   clusterMarkerTooltip,
   commentPreview,
 } from "../src/lib/video-review-timeline-markers";
+import {
+  computeTimelineMarkerAppearance,
+  ensureVisibleOnScrubTrack,
+  hasOppositeSideReply,
+  markerStateSamples,
+  MARKER_COLOR_SIMILARITY_THRESHOLD,
+  MARKER_TRACK_MIN_CONTRAST,
+  resolveMarkerBrandColors,
+} from "../src/lib/video-review-timeline-marker-style";
+import { contrastRatio, cssContrast, deriveBrandTheme } from "../src/lib/brand-color";
 import {
   createVideoReviewComment,
   createVideoReviewFromAsset,
@@ -122,6 +131,106 @@ function mockThread(id: string, seconds: number): VideoReviewCommentThread {
     } as VideoReviewCommentEnriched,
     replies: [],
   };
+}
+
+function mockEnriched(
+  id: string,
+  authorKind: "admin" | "client",
+  extra: Partial<VideoReviewCommentEnriched> = {}
+): VideoReviewCommentEnriched {
+  return {
+    id,
+    author_kind: authorKind,
+    author_user_id: id,
+    author_name: authorKind === "admin" ? "Business Owner" : "Client User",
+    body: "Sample",
+    timestamp_seconds: 10,
+    status: "unresolved",
+  } as VideoReviewCommentEnriched;
+}
+
+function testMarkerBrandStyles() {
+  console.log("\n=== Timeline marker brand + reply styling ===");
+  const markerStyleSrc = readFileSync(resolve("src/lib/video-review-timeline-marker-style.ts"), "utf8");
+  const markerSrc = readFileSync(resolve("src/components/video-review/video-review-timeline-marker.tsx"), "utf8");
+  const viewSrc = readFileSync(resolve("src/components/video-review/video-review-view.tsx"), "utf8");
+
+  assert(markerSrc.includes("usePortalBrand"), "markers read business brand from portal settings");
+  assert(markerSrc.includes("computeClusterMarkerAppearance"), "cluster appearance uses brand + replies");
+  assert(viewSrc.includes("repliesByCommentId"), "view passes reply data for border logic");
+  assert(markerStyleSrc.includes("deriveBrandTheme"), "reuses brand-color derivation, not hardcoded partner colors");
+  assert(markerStyleSrc.includes("sanitizeCssColor"), "reuses brand-color validation");
+
+  const defaultSamples = markerStateSamples("", "");
+  console.log("Default brand (unset → platform defaults):");
+  console.table([
+    { state: "admin solid", fill: defaultSamples.adminSolid.fill, border: defaultSamples.adminSolid.border ?? "none" },
+    { state: "client solid", fill: defaultSamples.clientSolid.fill, border: defaultSamples.clientSolid.border ?? "none" },
+    { state: "admin + client reply", fill: defaultSamples.adminClientReplied.fill, border: defaultSamples.adminClientReplied.border },
+    { state: "client + business reply", fill: defaultSamples.clientAdminReplied.fill, border: defaultSamples.clientAdminReplied.border },
+  ]);
+  assert(defaultSamples.adminSolid.border === null, "admin solid: no border");
+  assert(defaultSamples.clientSolid.border === null, "client solid: no border");
+  assert(defaultSamples.adminClientReplied.border !== null, "admin + client reply: accent border");
+  assert(defaultSamples.clientAdminReplied.border !== null, "client + business reply: primary border");
+  assert(defaultSamples.adminSolid.fill !== defaultSamples.clientSolid.fill, "unset defaults: admin vs client fills differ");
+
+  const customPrimary = "#7C3AED";
+  const customAccent = "#DB2777";
+  const before = markerStateSamples(customPrimary, customAccent);
+  console.log(`Custom brand before (${customPrimary} / ${customAccent}):`, before.adminSolid.fill, before.clientSolid.fill);
+  const afterPrimary = "#059669";
+  const afterAccent = "#D97706";
+  const after = markerStateSamples(afterPrimary, afterAccent);
+  console.log(`Custom brand after (${afterPrimary} / ${afterAccent}):`, after.adminSolid.fill, after.clientSolid.fill);
+  assert(before.adminSolid.fill !== after.adminSolid.fill, "changing settings changes marker fill without deploy");
+
+  const adminComment = mockEnriched("a1", "admin");
+  const sameSide = computeTimelineMarkerAppearance(adminComment, [mockEnriched("r1", "admin")], "#0F172A", "#3B82F6");
+  assert(sameSide.border === null, "business owner replying to own comment adds no border");
+  const clientSame = computeTimelineMarkerAppearance(
+    mockEnriched("c1", "client"),
+    [mockEnriched("r2", "client")],
+    "#0F172A",
+    "#3B82F6"
+  );
+  assert(clientSame.border === null, "client replying to own comment adds no border");
+
+  const similar = markerStateSamples("#3B82F6", "#2563EB");
+  assert(
+    similar.adminClientReplied.fill !== similar.clientAdminReplied.fill ||
+      similar.adminClientReplied.border !== similar.clientAdminReplied.border,
+    "similar primary/accent: four states stay distinguishable via fallback borders"
+  );
+  console.log(
+    `Similar colors (#3B82F6 / #2563EB) → admin fill ${similar.adminSolid.fill}, client fill ${similar.clientSolid.fill}, borders ${similar.adminClientReplied.border} / ${similar.clientAdminReplied.border} (threshold contrast < ${MARKER_COLOR_SIMILARITY_THRESHOLD})`
+  );
+
+  const nearWhite = ensureVisibleOnScrubTrack("#FAFAFA");
+  const trackContrast = cssContrast(nearWhite, "rgb(241, 245, 249)");
+  console.log(`Near-white #FAFAFA → clamped fill ${nearWhite}, track contrast ${trackContrast?.toFixed(2)}:1 (min ${MARKER_TRACK_MIN_CONTRAST})`);
+  assert(trackContrast != null && trackContrast >= MARKER_TRACK_MIN_CONTRAST, "near-white brand still visible on scrub bar");
+
+  const cluster = {
+    anchorSeconds: 10,
+    comments: [mockEnriched("c-admin", "admin"), mockEnriched("c-client", "client")],
+  };
+  const replies = new Map<string, VideoReviewCommentEnriched[]>([["c-admin", []]]);
+  const clusterAppearance = computeTimelineMarkerAppearance(
+    cluster.comments[0],
+    replies.get("c-admin")!,
+    "#0F172A",
+    "#3B82F6"
+  );
+  console.log(
+    "Mixed-author cluster: visual follows first comment (admin); tooltip lists all authors; click activates first."
+  );
+  assert(clusterAppearance.fill === markerStateSamples("#0F172A", "#3B82F6").adminSolid.fill, "cluster fill = first comment author");
+
+  assert(markerSrc.includes('role="tooltip"'), "tooltips still name the author");
+  assert(viewSrc.includes("handleTimelineMarkerActivate"), "markers still seek/pause/scroll on click");
+  assert(markerSrc.includes("h-3 w-3"), "dot size unchanged at 12px");
+  console.log("Low-contrast approach: darken pale fills toward ink until scrub-track contrast ≥ 2.5:1, plus white/dark halo in box-shadow.");
 }
 
 function testPlaybackFollowLogic() {
@@ -370,6 +479,7 @@ async function main() {
   assert(chrome.after < chrome.before, "header uses less vertical space");
   console.log("Reply boxes: NOT wired — replies have no timestamp attachment.");
 
+  testMarkerBrandStyles();
   testPlaybackFollowLogic();
 
   console.log("\n=== 11. layout dimensions ===");
@@ -378,17 +488,16 @@ async function main() {
     console.log(`${vp}px viewport → video column before ${dims.before}px, after ${dims.after}px (+${dims.after - dims.before}px)`);
     assert(dims.after > dims.before, `video wider at ${vp}px`);
   }
-  console.log("\n=== 2. timeline markers — colored dots + tooltip ===");
-  console.log(
-    "Chose 12px colored dots (Frame.io/Vimeo pattern): stable author color at a glance, name + comment preview in tooltip on hover/focus/tap."
-  );
-  assert(markerSrc.includes('h-3 w-3 rounded-full'), "scrub-bar markers are small dots, not initials");
+  console.log("\n=== timeline markers — brand/reply dots + tooltip ===");
+  assert(markerSrc.includes('h-3 w-3 rounded-full'), "scrub-bar markers stay 12px dots");
+  assert(markerSrc.includes("data-marker-fill"), "marker encodes computed fill");
+  assert(markerSrc.includes("data-marker-border"), "marker encodes reply border state");
   assert(!viewSrc.includes("clusterMarkerLabel"), "view no longer renders initials in timeline");
   assert(markerSrc.includes('role="tooltip"'), "tooltip element for hover and tap");
   assert(markerSrc.includes("onMouseEnter") && markerSrc.includes("onClick"), "tooltip on hover AND tap");
   assert(markerSrc.includes("focus-visible:ring"), "keyboard accessible markers");
 
-  console.log("\n=== 3. markers filter, cluster, keyboard ===");
+  console.log("\n=== markers filter, cluster, keyboard ===");
   const markers = [
     { id: "1", author_name: "Jordan Bridges", author_user_id: "u1", timestamp_seconds: 10, body: "Fix the logo placement here please" },
     { id: "2", author_name: "Alexandra Montgomery", author_user_id: "u2", timestamp_seconds: 10.2, body: "Also adjust color grading on this shot" },
@@ -401,7 +510,8 @@ async function main() {
   assert(tooltip.extraCount === 1, "cluster shows +N badge count");
   assert(tooltip.lines.length === 2, "cluster tooltip lists each comment");
   assert(commentPreview("A".repeat(100)).endsWith("…"), "long comment previews truncate");
-  assert(authorMarkerColor("user-alpha") === authorMarkerColor("user-alpha"), "stable color per author id");
+  assert(hasOppositeSideReply(mockEnriched("a", "admin"), [mockEnriched("r", "client")]), "opposite-side reply detected");
+  assert(!hasOppositeSideReply(mockEnriched("a", "admin"), [mockEnriched("r", "admin")]), "same-side reply ignored");
   assert(viewSrc.includes("markerComments"), "timeline markers follow active tab filter via markerComments");
 
   console.log("\n=== 4. explanatory text removed from rail ===");

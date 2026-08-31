@@ -373,6 +373,14 @@ export function VideoReviewView({
     [markerComments]
   );
 
+  const repliesByCommentId = useMemo(() => {
+    const map = new Map<string, VideoReviewCommentEnriched[]>();
+    for (const thread of allThreads) {
+      map.set(thread.comment.id, thread.replies);
+    }
+    return map;
+  }, [allThreads]);
+
   const composerDisplayTime = composerTimestamp ?? pausedAt ?? playheadSeconds;
 
   const pauseVideo = useCallback(() => {
@@ -913,6 +921,7 @@ export function VideoReviewView({
                   key={`${cluster.anchorSeconds}-${cluster.comments[0]?.id}`}
                   cluster={cluster}
                   leftPct={markerPositionPercent(cluster.anchorSeconds, duration)}
+                  repliesByCommentId={repliesByCommentId}
                   onActivate={handleTimelineMarkerActivate}
                 />
               ))}
