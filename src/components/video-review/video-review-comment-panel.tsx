@@ -30,6 +30,8 @@ interface VideoReviewCommentPanelProps {
   reviewId: string;
   versionNumber: number;
   isAdmin: boolean;
+  canResolveComments?: boolean;
+  canReopenComments?: boolean;
   view: VideoReviewCommentView;
   counts: VideoReviewCommentCounts;
   threads: VideoReviewCommentThread[];
@@ -52,6 +54,8 @@ export function VideoReviewCommentPanel({
   reviewId,
   versionNumber,
   isAdmin,
+  canResolveComments = false,
+  canReopenComments = false,
   view,
   counts,
   threads,
@@ -241,6 +245,8 @@ export function VideoReviewCommentPanel({
                 reviewId={reviewId}
                 thread={thread}
                 isAdmin={isAdmin}
+                canResolveComments={canResolveComments}
+                canReopenComments={canReopenComments}
                 activeCommentId={activeCommentId}
                 playbackHighlightId={highlightCommentId}
                 onSeek={onSeek}
@@ -261,6 +267,8 @@ function CommentThread({
   reviewId,
   thread,
   isAdmin,
+  canResolveComments = false,
+  canReopenComments = false,
   activeCommentId,
   playbackHighlightId,
   onSeek,
@@ -272,6 +280,8 @@ function CommentThread({
   reviewId: string;
   thread: VideoReviewCommentThread;
   isAdmin: boolean;
+  canResolveComments?: boolean;
+  canReopenComments?: boolean;
   activeCommentId: string | null;
   playbackHighlightId: string | null;
   onSeek: (seconds: number, commentId?: string) => void;
@@ -419,7 +429,7 @@ function CommentThread({
         </button>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          {isAdmin && comment.status === "unresolved" && (
+          {canResolveComments && comment.status === "unresolved" && (
             <Button
               type="button"
               size="sm"
@@ -432,7 +442,7 @@ function CommentThread({
               Resolve
             </Button>
           )}
-          {comment.status === "resolved" && (
+          {canReopenComments && comment.status === "resolved" && (
             <Button
               type="button"
               size="sm"

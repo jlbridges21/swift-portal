@@ -1,13 +1,30 @@
 import type { Project } from "@/lib/types";
 import type { ProjectAccessKind } from "@/lib/project-access";
 
-/** Payments, quotes, estimates, proposals, and client workflow UI — assigned client + admin only. */
+/** Payments, quotes, estimates, proposals — assigned client + admin only. */
 export function canViewProjectFinancials(accessKind: ProjectAccessKind): boolean {
   return accessKind === "admin" || accessKind === "assigned_client";
 }
 
-/** Alias — shared viewers and anonymous visitors are media-only. */
-export const canViewProjectProgress = canViewProjectFinancials;
+/** Status timeline / "Your Progress" — assigned client + admin only. */
+export function canViewProjectProgress(accessKind: ProjectAccessKind): boolean {
+  return canViewProjectFinancials(accessKind);
+}
+
+/** Video review surfaces (grid links, player entry, review page) — any authenticated project viewer. */
+export function canAccessVideoReviews(accessKind: ProjectAccessKind): boolean {
+  return accessKind === "admin" || accessKind === "assigned_client" || accessKind === "share";
+}
+
+/** Resolve comments — admin only (server enforced in API). */
+export function canResolveVideoReviewComments(accessKind: ProjectAccessKind): boolean {
+  return accessKind === "admin";
+}
+
+/** Reopen resolved comments — assigned client + admin, not email-shared viewers. */
+export function canReopenVideoReviewComments(accessKind: ProjectAccessKind): boolean {
+  return accessKind === "admin" || accessKind === "assigned_client";
+}
 
 /** Fields safe for shared-by-email and anonymous link viewers in HTML/RSC payload. */
 export function sanitizeProjectForMediaViewer(project: Project): Project {

@@ -61,8 +61,12 @@ interface ProjectPageClientProps {
   allowClientProposalChanges?: boolean;
   requireDeliveredForDownloads?: boolean;
   isSharedViewer?: boolean;
-  /** Assigned client + admin only — never shared-by-email or anonymous link viewers. */
+  /** Assigned client + admin only — quotes, payments, estimates, proposals. */
   canViewFinancials?: boolean;
+  /** Assigned client + admin only — "Your Progress" timeline and next-step banner. */
+  canViewProjectProgress?: boolean;
+  /** Authenticated project viewers — video review links and comment UI. */
+  canAccessVideoReviews?: boolean;
 }
 
 const REVISION_STATUS_LABEL: Record<string, string> = {
@@ -119,6 +123,8 @@ export function ProjectPageClient({
   requireDeliveredForDownloads = true,
   isSharedViewer = false,
   canViewFinancials = false,
+  canViewProjectProgress = false,
+  canAccessVideoReviews = false,
 }: ProjectPageClientProps) {
   const router = useRouter();
   const brand = usePortalBrand();
@@ -276,9 +282,9 @@ export function ProjectPageClient({
       </ProjectHero>
 
       <main className="mobile-container py-12 pb-16 space-y-16">
-        {canViewFinancials && <NextStepBanner step={clientStep} />}
+        {canViewProjectProgress && <NextStepBanner step={clientStep} />}
 
-        {canViewFinancials && (
+        {canViewProjectProgress && (
         <Card className="border-0 shadow-lg shadow-slate-200/50 rounded-2xl overflow-hidden">
           <CardHeader className="bg-white border-b border-border/60 pb-4">
             <CardTitle className="text-lg font-semibold">Your Progress</CardTitle>
@@ -376,6 +382,7 @@ export function ProjectPageClient({
                   reviewPathPrefix={reviewPathPrefix}
                   downloadsAllowed={downloadsUnlocked}
                   onDownload={handleDownload}
+                  canAccessVideoReviews={canAccessVideoReviews}
                   compactInitialCount={4}
                 />
               </div>
@@ -516,6 +523,7 @@ export function ProjectPageClient({
                 downloadsAllowed={downloadsUnlocked}
                 onDownload={handleDownload}
                 isAdmin={!!isAdmin}
+                canAccessVideoReviews={canAccessVideoReviews || !!isAdmin}
                 compactInitialCount={4}
               />
             </div>

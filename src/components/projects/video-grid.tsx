@@ -34,8 +34,10 @@ export type VideoGridProps = {
   /** Admin-only: show Start video review in player when no review exists. */
   isAdmin?: boolean;
   compactInitialCount?: number;
-  /** Public link visitors: review links go to sign-in. */
+  /** Public link visitors without a session: review links prompt sign-in. Omit when authenticated. */
   signInHref?: string;
+  /** Show review entry on cards and in player (authenticated viewers with review access). */
+  canAccessVideoReviews?: boolean;
   /** Admin: full card chrome (controls + review). Replaces default VideoCard + renderBelowCard. */
   renderAdminCard?: (
     entry: VideoGridEntry,
@@ -58,6 +60,7 @@ export function VideoGrid({
   isAdmin = false,
   compactInitialCount,
   signInHref,
+  canAccessVideoReviews = false,
   renderAdminCard,
   renderBelowCard,
 }: VideoGridProps) {
@@ -82,6 +85,15 @@ export function VideoGrid({
 
   const renderCard = (entry: VideoGridEntry, index: number) => {
     const openPlayer = () => openPlayerAt(index);
+    const reviewItem = reviewByAssetId.get(entry.video.id) ?? null;
+    const reviewHref = buildReviewHref({
+      reviewItem,
+      projectId,
+      reviewPathPrefix,
+      signInHref,
+      isAdmin,
+      canAccessVideoReviews,
+    });
     if (renderAdminCard) {
       return (
         <div key={entry.video.id} className="min-w-0">
@@ -96,6 +108,21 @@ export function VideoGrid({
           thumbUrl={thumbUrls[entry.video.id]}
           onClick={openPlayer}
         />
+        {canAccessVideoReviews ? (
+          <VideoReviewCardEntry reviewHref={reviewHref} reviewItem={reviewItem} />
+        ) : signInHref && reviewItem ? (
+          <VideoReviewCardEntry
+            reviewHref={buildReviewHref({
+              reviewItem,
+              projectId,
+              reviewPathPrefix,
+              signInHref,
+              isAdmin,
+              canAccessVideoReviews: false,
+            })}
+            reviewItem={reviewItem}
+          />
+        ) : null}
         {renderBelowCard?.(entry, index)}
       </div>
     );
@@ -136,12 +163,57 @@ export function VideoGrid({
           onDownload={onDownload}
           isAdmin={isAdmin}
           signInHref={signInHref}
+          canAccessVideoReviews={canAccessVideoReviews}
           onClose={() => setActiveIndex(null)}
           onNavigate={setActiveIndex}
           onLoadThumb={loadThumb}
         />
       )}
     </>
+  );
+}
+
+function buildReviewHref({
+  reviewItem,
+  projectId,
+  reviewPathPrefix,
+  signInHref,
+  isAdmin,
+  canAccessVideoReviews,
+}: {
+  reviewItem: VideoReviewListItem | null;
+  projectId: string;
+  reviewPathPrefix: string;
+  signInHref?: string;
+  isAdmin?: boolean;
+  canAccessVideoReviews?: boolean;
+}): string | null {
+  if (!reviewItem) return null;
+  if (signInHref && !isAdmin) return signInHref;
+  if (canAccessVideoReviews || isAdmin) {
+    return `${reviewPathPrefix}/${projectId}/reviews/${reviewItem.review.id}`;
+  }
+  return null;
+}
+
+function VideoReviewCardEntry({
+  reviewHref,
+  reviewItem,
+}: {
+  reviewHref: string | null;
+  reviewItem: VideoReviewListItem | null;
+}) {
+  if (!reviewItem || !reviewHref) return null;
+  const isSignIn = reviewHref.startsWith("/login");
+  return (
+    <div className="mt-2">
+      <Button variant="outline" size="sm" className="min-h-10 w-full sm:w-auto" asChild>
+        <Link href={reviewHref}>
+          <Clapperboard className="mr-1.5 h-4 w-4" />
+          {isSignIn ? "Sign in to comment" : "Open review"}
+        </Link>
+      </Button>
+    </div>
   );
 }
 
@@ -157,6 +229,7 @@ function VideoPlayerLightbox({
   onDownload,
   isAdmin,
   signInHref,
+  canAccessVideoReviews = false,
   onClose,
   onNavigate,
   onLoadThumb,
@@ -172,6 +245,7 @@ function VideoPlayerLightbox({
   onDownload?: (video: MediaAsset) => void;
   isAdmin?: boolean;
   signInHref?: string;
+  canAccessVideoReviews?: boolean;
   onClose: () => void;
   onNavigate: (index: number) => void;
   onLoadThumb: (video: MediaAsset) => void;
@@ -246,11 +320,14 @@ function VideoPlayerLightbox({
     }
   }
 
-  const reviewHref = reviewItem
-    ? signInHref && !isAdmin
-      ? signInHref
-      : `${reviewPathPrefix}/${projectId}/reviews/${reviewItem.review.id}`
-    : null;
+  const reviewHref = buildReviewHref({
+    reviewItem,
+    projectId,
+    reviewPathPrefix,
+    signInHref,
+    isAdmin,
+    canAccessVideoReviews,
+  });
 
   const embedUrl =
     entry.kind === "youtube" && video.embed_url
@@ -315,7 +392,7 @@ function VideoPlayerLightbox({
               <Button variant="accent" size="sm" className="min-h-10" asChild>
                 <Link href={reviewHref}>
                   <Clapperboard className="mr-1.5 h-4 w-4" />
-                  {signInHref && !isAdmin ? "Sign in to view comments" : "Open review"}
+                  {reviewHref.startsWith("/login") ? "Sign in to comment" : "Open review"}
                 </Link>
               </Button>
             ) : isAdmin && entry.kind === "uploaded" ? (

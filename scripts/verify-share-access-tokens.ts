@@ -17,9 +17,10 @@ import type { ShareExpiryPreset } from "../src/lib/project-share-access";
 const SWIFT = "00000000-0000-0000-0000-000000000001";
 const SWIFT_ADMIN = "7d0957c6-6330-48ca-a530-f13d4dc15a84";
 const SWIFT_SLUG = "swift-aerial-media";
-const JOY_PROJECT = "26e65643-74d1-4c34-b085-0711c6e4b97c";
-const JOY_CLIENT_EMAIL = "joysullivanhomes@gmail.com";
-const OTHER_SWIFT_PROJECT = "933c476c-c1c4-4d8b-a5fa-aa556fcf640a";
+/** Jackson Bridges test project — never use live client fixtures (Joy Sullivan, etc.). */
+const TEST_PROJECT = "933c476c-c1c4-4d8b-a5fa-aa556fcf640a";
+const TEST_CLIENT_EMAIL = "jackson.bridges21@gmail.com";
+const OTHER_SWIFT_PROJECT = "26e65643-74d1-4c34-b085-0711c6e4b97c";
 const OTHER_BUSINESS_PROJECT = "f4a9a474-9470-4b5a-b998-8c9236b40b31";
 const OTHER_SWIFT_MEDIA = "7d3bc3f6-e39b-4c3a-9c19-480eeeb841ea";
 const OTHER_FOLDER = "df142d88-fa00-44af-95c8-da6e2c92324f";
@@ -89,7 +90,7 @@ async function cleanupShare(admin: SupabaseClient, email: string) {
   await admin
     .from("project_shares")
     .update({ revoked_at: new Date().toISOString() })
-    .eq("project_id", JOY_PROJECT)
+    .eq("project_id", TEST_PROJECT)
     .eq("email", email);
 }
 
@@ -104,11 +105,11 @@ async function createShareWithLink(
   const accessFields = resolveShareAccessWindow(preset, custom);
   const added = await addProjectShare({
     businessId: SWIFT,
-    projectId: JOY_PROJECT,
+    projectId: TEST_PROJECT,
     email,
     invitedBy: SWIFT_ADMIN,
     notify: false,
-    projectName: "Joy Sullivan Project",
+    projectName: "Jackson Bridges - 9560 CR-99 - Aerial Photography",
     inviterName: "Admin",
     expiryPreset: preset,
     customAccessStartsAt: custom?.startsAt,
@@ -116,7 +117,7 @@ async function createShareWithLink(
   });
   const link = await buildShareMagicLinkForProject({
     businessId: SWIFT,
-    projectId: JOY_PROJECT,
+    projectId: TEST_PROJECT,
     email,
     shareId: added.share.id,
     accessFields,
@@ -170,7 +171,7 @@ async function runPhase2Probes(base: string, cookie: string) {
   const pages: [string, string][] = [
     ["PAGE /admin", "/admin"],
     ["PAGE /admin/projects", "/admin/projects"],
-    ["PAGE /admin/projects/{shared}", `/admin/projects/${JOY_PROJECT}`],
+    ["PAGE /admin/projects/{shared}", `/admin/projects/${TEST_PROJECT}`],
     ["PAGE /admin/settings", "/admin/settings"],
     ["PAGE /admin/clients", "/admin/clients"],
     ["PAGE /platform", "/platform"],
@@ -191,14 +192,14 @@ async function runPhase2Probes(base: string, cookie: string) {
     ["API GET /api/media/download/{other}?preview=1", `/api/media/download/${OTHER_SWIFT_MEDIA}?preview=1`],
     ["API POST /api/media/thumbnails (other)", "/api/media/thumbnails", "POST", { ids: [OTHER_SWIFT_MEDIA] }],
     ["API GET /api/projects/{other}/download-zip", `/api/projects/${OTHER_SWIFT_PROJECT}/download-zip`],
-    ["API GET /api/projects/{shared}/shares", `/api/projects/${JOY_PROJECT}/shares`],
-    ["API POST /api/projects/{shared}/shares", `/api/projects/${JOY_PROJECT}/shares`, "POST", { emails: ["evil@example.test"] }],
+    ["API GET /api/projects/{shared}/shares", `/api/projects/${TEST_PROJECT}/shares`],
+    ["API POST /api/projects/{shared}/shares", `/api/projects/${TEST_PROJECT}/shares`, "POST", { emails: ["evil@example.test"] }],
     ["API GET /api/payments", "/api/payments"],
     ["API GET /api/payments/{id}", `/api/payments/${PAYMENT_ID}`],
     ["API GET /api/quotes", "/api/quotes"],
-    ["API POST /api/revisions", "/api/revisions", "POST", { project_id: JOY_PROJECT, description: "probe" }],
+    ["API POST /api/revisions", "/api/revisions", "POST", { project_id: TEST_PROJECT, description: "probe" }],
     ["API GET /api/shoot-proposals", "/api/shoot-proposals"],
-    ["API POST /api/shoot-proposals", "/api/shoot-proposals", "POST", { project_id: JOY_PROJECT }],
+    ["API POST /api/shoot-proposals", "/api/shoot-proposals", "POST", { project_id: TEST_PROJECT }],
     ["API GET /api/admin/search", "/api/admin/search?q=test"],
     ["API GET /api/partner/me", "/api/partner/me"],
   ];
@@ -254,21 +255,21 @@ async function runPhase3Probes(base: string, publicUrl: string) {
     ["API GET /api/clients", "/api/clients"],
     ["API GET /api/payments", "/api/payments"],
     ["API GET /api/quotes", "/api/quotes"],
-    ["API GET /api/projects/{shared}/shares", `/api/projects/${JOY_PROJECT}/shares`],
+    ["API GET /api/projects/{shared}/shares", `/api/projects/${TEST_PROJECT}/shares`],
     ["API GET /api/admin/search", "/api/admin/search?q=test"],
     ["API GET /api/partner/me", "/api/partner/me"],
-    ["API POST /api/revisions", "/api/revisions", "POST", { project_id: JOY_PROJECT, description: "anon" }],
+    ["API POST /api/revisions", "/api/revisions", "POST", { project_id: TEST_PROJECT, description: "anon" }],
     ["API GET /api/projects/{other}", `/api/projects/${OTHER_SWIFT_PROJECT}`],
     ["API GET /api/media/download shared preview", `/api/media/download/${OTHER_SWIFT_MEDIA}?preview=1`],
     ["API POST thumbnails shared ids", "/api/media/thumbnails", "POST", { ids: [OTHER_SWIFT_MEDIA] }],
-    ["API GET shared download-zip", `/api/projects/${JOY_PROJECT}/download-zip`],
+    ["API GET shared download-zip", `/api/projects/${TEST_PROJECT}/download-zip`],
     ["API GET other download-zip", `/api/projects/${OTHER_SWIFT_PROJECT}/download-zip`],
     ["API GET shoot-proposals", "/api/shoot-proposals"],
-    ["API POST shoot-proposals", "/api/shoot-proposals", "POST", { project_id: JOY_PROJECT }],
-    ["API GET video-reviews", `/api/video-reviews?project_id=${JOY_PROJECT}`],
+    ["API POST shoot-proposals", "/api/shoot-proposals", "POST", { project_id: TEST_PROJECT }],
+    ["API GET video-reviews", `/api/video-reviews?project_id=${TEST_PROJECT}`],
     ["API GET payments checkout", `/api/payments/${PAYMENT_ID}/checkout`],
-    ["API GET quotes project", `/api/quotes?project_id=${JOY_PROJECT}`],
-    ["API GET revisions project", `/api/revisions?project_id=${JOY_PROJECT}`],
+    ["API GET quotes project", `/api/quotes?project_id=${TEST_PROJECT}`],
+    ["API GET revisions project", `/api/revisions?project_id=${TEST_PROJECT}`],
     ["API GET platform", "/platform"],
     ["API GET billing", "/billing"],
     ["API GET admin", "/admin"],
@@ -311,11 +312,11 @@ async function main() {
   const deviceA = await consumeShareToken(base, token);
   console.log("device A:", deviceA.status, deviceA.location);
   assert(deviceA.status === 302 || deviceA.status === 307, "device A exchange redirects");
-  assert(deviceA.location.includes(JOY_PROJECT), "device A lands on shared project");
+  assert(deviceA.location.includes(TEST_PROJECT), "device A lands on shared project");
 
   const deviceB = await consumeShareToken(base, token);
   assert(deviceB.status === 302 || deviceB.status === 307, "device B exchange redirects with SAME token");
-  assert(deviceB.location.includes(JOY_PROJECT), "device B lands on shared project");
+  assert(deviceB.location.includes(TEST_PROJECT), "device B lands on shared project");
 
   await admin
     .from("project_shares")
@@ -423,20 +424,36 @@ async function main() {
   const { data: pubProject } = await admin
     .from("projects")
     .select("link_access_mode, link_access_token")
-    .eq("id", JOY_PROJECT)
+    .eq("id", TEST_PROJECT)
     .single();
-  if (pubProject?.link_access_mode === "anyone_with_link" && pubProject.link_access_token) {
-    const publicUrl = `${base}/view/${pubProject.link_access_token}`;
+  const priorLinkMode = pubProject?.link_access_mode;
+  let publicUrl: string | null = null;
+  if (pubProject?.link_access_token) {
+    if (priorLinkMode !== "anyone_with_link") {
+      await admin
+        .from("projects")
+        .update({ link_access_mode: "anyone_with_link" })
+        .eq("id", TEST_PROJECT);
+      console.log("Temporarily enabled anyone_with_link on test project for phase 3 probes");
+    }
+    publicUrl = `${base}/view/${pubProject.link_access_token}`;
     await runPhase3Probes(base, publicUrl);
+    if (priorLinkMode && priorLinkMode !== "anyone_with_link") {
+      await admin
+        .from("projects")
+        .update({ link_access_mode: priorLinkMode })
+        .eq("id", TEST_PROJECT);
+      console.log(`Restored link_access_mode=${priorLinkMode}`);
+    }
   } else {
-    console.log("SKIP phase 3 public link probes — project not in anyone_with_link mode");
+    console.log("SKIP phase 3 public link probes — test project has no link_access_token");
   }
 
   section("10–11. Access list fields + admin expiry PATCH (API)");
   const { updateProjectShareExpiry, resolveShareAccessWindow } = await import("../src/lib/project-shares");
   const patched = await updateProjectShareExpiry(
     SWIFT,
-    JOY_PROJECT,
+    TEST_PROJECT,
     reusableShare.id,
     resolveShareAccessWindow("60days")
   );
@@ -446,7 +463,7 @@ async function main() {
   const { data: legacyShares } = await admin
     .from("project_shares")
     .select("id, access_token_hash, access_expires_at, expiry_preset, invited_at")
-    .eq("project_id", JOY_PROJECT)
+    .eq("project_id", TEST_PROJECT)
     .is("revoked_at", null)
     .limit(5);
   console.log("sample active shares:", legacyShares);
@@ -459,7 +476,7 @@ async function main() {
   );
 
   section("13–14. Your Progress HTML gating");
-  const sharedPage = await fetch(`${base}/dashboard/projects/${JOY_PROJECT}`, {
+  const sharedPage = await fetch(`${base}/dashboard/projects/${TEST_PROJECT}`, {
     headers: { Cookie: shareCookie },
   });
   const sharedHtml = await sharedPage.text();
@@ -469,8 +486,8 @@ async function main() {
   );
   assert(!sharedHtml.includes("Your Progress"), "shared viewer HTML lacks Your Progress");
 
-  if (pubProject?.link_access_mode === "anyone_with_link" && pubProject.link_access_token) {
-    const anonPage = await fetch(`${base}/view/${pubProject.link_access_token}`);
+  if (publicUrl) {
+    const anonPage = await fetch(publicUrl);
     const anonHtml = await anonPage.text();
     console.log(
       "grep anonymous Your Progress:",
@@ -479,15 +496,15 @@ async function main() {
     assert(!anonHtml.includes("Your Progress"), "anonymous HTML lacks Your Progress");
   }
 
-  const { data: joyProfile } = await admin
+  const { data: clientProfile } = await admin
     .from("profiles")
     .select("id")
-    .ilike("email", JOY_CLIENT_EMAIL)
+    .ilike("email", TEST_CLIENT_EMAIL)
     .maybeSingle();
-  if (joyProfile?.id) {
+  if (clientProfile?.id) {
     const { data: linkData } = await admin.auth.admin.generateLink({
       type: "magiclink",
-      email: JOY_CLIENT_EMAIL,
+      email: TEST_CLIENT_EMAIL,
     });
     const hashed = linkData.properties?.hashed_token;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -498,28 +515,28 @@ async function main() {
       type: "email",
     });
     const ref = new URL(url).hostname.split(".")[0];
-    const joyCookie = `sb-${ref}-auth-token=${encodeURIComponent(
+    const clientCookie = `sb-${ref}-auth-token=${encodeURIComponent(
       JSON.stringify({
         access_token: verified.session!.access_token,
         refresh_token: verified.session!.refresh_token,
         user: verified.user,
       })
     )}`;
-    const joyPage = await fetch(`${base}/dashboard/projects/${JOY_PROJECT}`, {
-      headers: { Cookie: joyCookie },
+    const clientPage = await fetch(`${base}/dashboard/projects/${TEST_PROJECT}`, {
+      headers: { Cookie: clientCookie },
     });
-    const joyHtml = await joyPage.text();
+    const clientHtml = await clientPage.text();
     console.log(
       "grep assigned client Your Progress:",
-      joyHtml.includes("Your Progress") ? "present (ok)" : "absent (fail)"
+      clientHtml.includes("Your Progress") ? "present (ok)" : "absent (fail)"
     );
-    assert(joyHtml.includes("Your Progress"), "assigned client still sees Your Progress");
+    assert(clientHtml.includes("Your Progress"), "assigned client still sees Your Progress");
   } else {
-    console.log("SKIP assigned client regression — Joy profile not found");
+    console.log("SKIP assigned client regression — test client profile not found");
   }
 
   section("15. Share with existing ShootPortal account");
-  const existingEmail = JOY_CLIENT_EMAIL;
+  const existingEmail = TEST_CLIENT_EMAIL;
   await cleanupShare(admin, existingEmail);
   const existing = await createShareWithLink(admin, existingEmail, "30days");
   const existingConsume = await consumeShareToken(base, extractToken(existing.link));

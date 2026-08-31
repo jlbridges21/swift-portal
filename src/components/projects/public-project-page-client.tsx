@@ -62,7 +62,7 @@ export function PublicProjectPageClient({
 }) {
   const brand = usePortalBrand();
   const apiBase = `/api/public/link/${encodeURIComponent(token)}`;
-  const signInHref = `/login?redirect=${encodeURIComponent(`/view/${token}`)}`;
+  const signInHref = `/login?redirect=${encodeURIComponent(`/view/${token}#video`)}`;
 
   const reviewByAssetId = useMemo(() => {
     const map = new Map<string, VideoReviewListItem>();

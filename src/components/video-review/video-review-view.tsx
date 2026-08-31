@@ -64,6 +64,8 @@ interface VideoReviewViewProps {
   review: VideoReview;
   versions: VideoReviewVersionRow[];
   isAdmin: boolean;
+  canResolveComments?: boolean;
+  canReopenComments?: boolean;
   currentUserId: string;
   backHref: string;
   backLabel?: string;
@@ -75,10 +77,14 @@ export function VideoReviewView({
   review,
   versions: initialVersions,
   isAdmin,
+  canResolveComments = false,
+  canReopenComments = false,
   currentUserId,
   backHref,
   backLabel = "Back to project",
 }: VideoReviewViewProps) {
+  const mayResolveComments = canResolveComments || isAdmin;
+  const mayReopenComments = canReopenComments || isAdmin;
   const searchParams = useSearchParams();
   const deepLinkVersion = searchParams.get("version");
   const deepLinkComment = searchParams.get("comment");
@@ -935,6 +941,8 @@ export function VideoReviewView({
           reviewId={reviewId}
           versionNumber={activeVersion.version_number}
           isAdmin={isAdmin}
+          canResolveComments={mayResolveComments}
+          canReopenComments={mayReopenComments}
           view={commentView}
           counts={counts}
           threads={threads}

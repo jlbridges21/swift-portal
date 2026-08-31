@@ -5,6 +5,11 @@ import { requireTenantContext } from "@/lib/tenant";
 import { VideoReviewView } from "@/components/video-review/video-review-view";
 import { getVideoReviewDetail } from "@/lib/video-reviews";
 import { loadReviewForAccess } from "@/lib/video-review-access";
+import { resolveProjectAccess } from "@/lib/project-access";
+import {
+  canReopenVideoReviewComments,
+  canResolveVideoReviewComments,
+} from "@/lib/project-page-access";
 import { notFound, redirect } from "next/navigation";
 
 interface PageProps {
@@ -17,6 +22,11 @@ export default async function ClientVideoReviewPage({ params }: PageProps) {
 
   const { id: projectId, reviewId } = await params;
   const tenant = await requireTenantContext();
+  const access = await resolveProjectAccess(profile, projectId, {
+    tenantBusinessId: tenant.businessId,
+  });
+  if (!access.allowed) notFound();
+
   const db = await createTenantServiceClient(tenant.businessId);
 
   try {
@@ -37,6 +47,8 @@ export default async function ClientVideoReviewPage({ params }: PageProps) {
         review={detail.review}
         versions={detail.versions}
         isAdmin={false}
+        canResolveComments={canResolveVideoReviewComments(access.kind)}
+        canReopenComments={canReopenVideoReviewComments(access.kind)}
         currentUserId={profile.id}
         backHref={`/dashboard/projects/${projectId}#video`}
         backLabel="Back to project"

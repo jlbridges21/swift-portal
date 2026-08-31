@@ -18,6 +18,8 @@ import { listProjectVideoReviews } from "@/lib/video-reviews";
 import { resolveProjectAccess } from "@/lib/project-access";
 import {
   canViewProjectFinancials,
+  canViewProjectProgress,
+  canAccessVideoReviews,
   sanitizeProjectForMediaViewer,
 } from "@/lib/project-page-access";
 import type {
@@ -60,6 +62,8 @@ async function ProjectContent({
 
   const isSharedViewer = access.kind === "share";
   const canViewFinancials = canViewProjectFinancials(access.kind);
+  const canViewProgress = canViewProjectProgress(access.kind);
+  const canAccessReviews = canAccessVideoReviews(access.kind);
 
   const [
     { data: projectRow },
@@ -185,6 +189,8 @@ async function ProjectContent({
         isAdmin={profile.role === "admin"}
         isSharedViewer={isSharedViewer}
         canViewFinancials={canViewFinancials}
+        canViewProjectProgress={canViewProgress}
+        canAccessVideoReviews={canAccessReviews}
       />
     </>
   );
