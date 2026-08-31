@@ -94,6 +94,14 @@ function layoutVideoWidth(viewport: number): { before: number; after: number } {
   };
 }
 
+/** Approximate chrome above the video player (px) — old layout vs YouTube-style restructure. */
+function headerChromeHeight(): { before: number; after: number } {
+  return {
+    before: 220, // hero title + subtitle + drop zone + version section
+    after: 72, // one-line header + compact pills
+  };
+}
+
 async function main() {
   console.log("=== 1. typecheck / lint / build / tenant-lint ===");
   for (const cmd of ["npm run typecheck", "npm run lint", "npm run build", "npm run tenant-lint"]) {
@@ -105,6 +113,7 @@ async function main() {
   const panelSrc = readFileSync(resolve("src/components/video-review/video-review-comment-panel.tsx"), "utf8");
   const shellSrc = readFileSync(resolve("src/components/video-review/video-review-shell.tsx"), "utf8");
   const markerSrc = readFileSync(resolve("src/components/video-review/video-review-timeline-marker.tsx"), "utf8");
+  const versionSrc = readFileSync(resolve("src/components/video-review/video-review-version-bar.tsx"), "utf8");
 
   console.log("\n=== 2. pause-then-resume root cause + fix ===");
   console.log(
@@ -194,7 +203,20 @@ async function main() {
   console.log("\n=== 10. typing captures timestamp (main composer only) ===");
   assert(viewSrc.includes("handleCommentInputChange"), "composer pauses on first keystroke");
   assert(viewSrc.includes("composerTimestamp"), "timestamp locked at typing start");
-  assert(viewSrc.includes("(locked when typing started)"), "UI shows captured timestamp");
+  assert(viewSrc.includes("(locked)"), "UI shows captured timestamp");
+
+  console.log("\n=== YouTube-style layout restructure ===");
+  assert(!versionSrc.includes("onDrop"), "drag-drop zone removed — button-only upload");
+  assert(versionSrc.includes("Upload new version"), "upload button remains");
+  assert(viewSrc.includes("VideoReviewVersionUpload"), "upload in header row");
+  assert(viewSrc.includes("VideoReviewVersionPills"), "compact version pills under header");
+  assert(!viewSrc.includes("VideoReviewVersionBar"), "deprecated monolithic version bar not used");
+  assert(viewSrc.includes("composer={commentComposer}"), "composer passed to right rail");
+  assert(panelSrc.includes("{composer}"), "composer pinned above tabs in rail");
+  assert(!viewSrc.includes('className="shrink-0 space-y-2 rounded-2xl bg-white p-4'), "composer removed from left column");
+  const chrome = headerChromeHeight();
+  console.log(`Header chrome before ~${chrome.before}px → after ~${chrome.after}px (−${chrome.before - chrome.after}px)`);
+  assert(chrome.after < chrome.before, "header uses less vertical space");
   console.log("Reply boxes: NOT wired — replies have no timestamp attachment.");
 
   console.log("\n=== 11. layout dimensions ===");
@@ -243,7 +265,8 @@ async function main() {
   assert(shellSrc.includes("overflow-y-auto") || panelSrc.includes("overflow-y-auto"), "comment rail scrolls internally");
   assert(viewSrc.includes("VideoReviewShell"), "review view uses shell");
   assert(viewSrc.includes("lg:flex-1 lg:aspect-auto"), "video flexes in left pane without page scroll");
-  assert(viewSrc.includes("shrink-0"), "timeline and composer stay visible in left pane");
+  assert(viewSrc.includes("h-11 shrink-0"), "timeline stays directly under video");
+  assert(panelSrc.includes("overflow-y-auto"), "only comment list scrolls in rail");
   assert(shellSrc.includes("lg:flex-row"), "side-by-side at lg+");
   assert(shellSrc.includes("flex-col"), "stacks below lg");
   for (const vp of [1280, 1440, 1728, 2560]) {

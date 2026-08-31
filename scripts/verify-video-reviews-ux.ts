@@ -331,7 +331,7 @@ async function main() {
 
     const versionBarSrc = readFileSync(resolve("src/components/video-review/video-review-version-bar.tsx"), "utf8");
     assert(versionBarSrc.includes("Upload new version"), "prominent upload action in review player");
-    assert(versionBarSrc.includes("onDrop"), "drag-and-drop supported");
+    assert(!versionBarSrc.includes("onDrop"), "drag-and-drop removed — button-only upload");
     assert(versionBarSrc.includes("Try again"), "upload failure is recoverable");
 
     const viewSrc = readFileSync(resolve("src/components/video-review/video-review-view.tsx"), "utf8");

@@ -52,8 +52,8 @@ export function VideoReviewShell({
       )}
       data-video-review-shell=""
     >
-      <div className="min-w-0 shrink-0 px-4 pt-4 sm:px-6">{header}</div>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-hidden px-4 pb-4 pt-4 sm:px-6 lg:flex-row lg:gap-0 lg:pb-4">
+      <div className="min-w-0 shrink-0 px-4 pt-3 sm:px-6">{header}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-hidden px-4 pb-4 pt-2 sm:px-6 lg:flex-row lg:gap-0 lg:pb-4 lg:pt-2">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden lg:min-h-0 lg:pr-4">
           {main}
         </div>

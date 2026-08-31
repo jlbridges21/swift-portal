@@ -8,33 +8,23 @@ import type { VideoReviewVersionRow } from "@/lib/video-reviews";
 import { cn, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 
-interface VideoReviewVersionBarProps {
+interface VideoReviewVersionUploadProps {
   reviewId: string;
   projectId: string;
-  versions: VideoReviewVersionRow[];
-  activeVersionId: string;
-  onVersionChange: (versionId: string) => void;
+  nextVersionNumber: number;
   onVersionAdded: (version: VideoReviewVersionRow) => void;
-  isAdmin: boolean;
 }
 
-export function VideoReviewVersionBar({
+export function VideoReviewVersionUpload({
   reviewId,
   projectId,
-  versions,
-  activeVersionId,
-  onVersionChange,
+  nextVersionNumber,
   onVersionAdded,
-  isAdmin,
-}: VideoReviewVersionBarProps) {
+}: VideoReviewVersionUploadProps) {
   const uploadManager = useUploadManagerOptional();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-
-  const latestId = versions[versions.length - 1]?.id;
-  const activeVersion = versions.find((v) => v.id === activeVersionId) ?? versions[versions.length - 1];
 
   function startUpload(files: FileList | File[]) {
     const list = Array.from(files).filter((f) => f.type.startsWith("video/") || /\.(mp4|mov|m4v)$/i.test(f.name));
@@ -86,115 +76,125 @@ export function VideoReviewVersionBar({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-medium text-primary">
-          Viewing{" "}
-          <span className="text-accent">
-            V{activeVersion?.version_number ?? "—"}
-            {activeVersion?.id === latestId ? " · Latest" : ""}
-          </span>
-          {activeVersion?.id !== latestId && (
-            <span className="ml-1 font-normal text-muted">(not the latest version)</span>
-          )}
-        </p>
-        {isAdmin && (
-          <div className="flex flex-wrap gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="video/mp4,video/quicktime,video/x-m4v,.mp4,.mov,.m4v"
-              className="sr-only"
-              onChange={(e) => {
-                if (e.target.files?.length) startUpload(e.target.files);
-                e.target.value = "";
-              }}
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="accent"
-              className="min-h-11"
-              disabled={uploading}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {uploading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="mr-2 h-4 w-4" />
-              )}
-              Upload new version
-            </Button>
-          </div>
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/mp4,video/quicktime,video/x-m4v,.mp4,.mov,.m4v"
+        className="sr-only"
+        onChange={(e) => {
+          if (e.target.files?.length) startUpload(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <Button
+        type="button"
+        size="sm"
+        variant="accent"
+        className="min-h-9 shrink-0"
+        disabled={uploading}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        {uploading ? (
+          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Upload className="mr-1.5 h-3.5 w-3.5" />
         )}
-      </div>
-
-      {isAdmin && (
-        <div
-          className={cn(
-            "rounded-xl border border-dashed px-4 py-3 text-center text-xs transition",
-            dragOver ? "border-accent bg-accent/5 text-primary" : "border-border/80 text-muted",
-            uploading && "opacity-70"
-          )}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            if (!uploading) startUpload(e.dataTransfer.files);
-          }}
-        >
-          {uploading
-            ? "Uploading next version… track progress in the upload panel."
-            : "Drag a video here to add the next version (V" +
-              ((activeVersion?.version_number ?? versions.length) + 1) +
-              ")."}
-        </div>
-      )}
-
+        Upload new version
+      </Button>
       {uploadError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          <p>{uploadError}</p>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="mt-2 min-h-11"
-            disabled={uploading}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Try again
-          </Button>
-        </div>
+        <button
+          type="button"
+          className="max-w-[220px] truncate text-right text-[10px] text-red-600 underline"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          {uploadError} — Try again
+        </button>
       )}
+      {!uploading && !uploadError && (
+        <span className="sr-only">Adds version V{nextVersionNumber}</span>
+      )}
+    </div>
+  );
+}
 
-      <div className="flex flex-wrap gap-2">
-        {versions.map((version) => {
-          const isActive = version.id === activeVersionId;
-          const isLatest = version.id === latestId;
-          return (
-            <Button
-              key={version.id}
-              type="button"
-              size="sm"
-              variant={isActive ? "accent" : "outline"}
-              className={cn("min-h-11 flex-col items-start gap-0 py-2 h-auto", isActive && "ring-2 ring-accent/30")}
-              onClick={() => onVersionChange(version.id)}
-              aria-pressed={isActive}
-            >
-              <span className="font-semibold">
-                V{version.version_number}
-                {isLatest ? " · Latest" : ""}
-                {isActive ? " · Viewing" : ""}
-              </span>
-              <span className="text-[10px] font-normal opacity-80">{formatDate(version.created_at)}</span>
-            </Button>
-          );
-        })}
-      </div>
+interface VideoReviewVersionPillsProps {
+  versions: VideoReviewVersionRow[];
+  activeVersionId: string;
+  onVersionChange: (versionId: string) => void;
+}
+
+export function VideoReviewVersionPills({
+  versions,
+  activeVersionId,
+  onVersionChange,
+}: VideoReviewVersionPillsProps) {
+  const latestId = versions[versions.length - 1]?.id;
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5" role="tablist" aria-label="Review versions">
+      {versions.map((version) => {
+        const isActive = version.id === activeVersionId;
+        const isLatest = version.id === latestId;
+        return (
+          <button
+            key={version.id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            title={formatDate(version.created_at)}
+            className={cn(
+              "rounded-full px-2.5 py-1 text-xs font-medium transition",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
+              isActive
+                ? "bg-accent text-white shadow-sm"
+                : "bg-slate-100 text-primary hover:bg-slate-200"
+            )}
+            onClick={() => onVersionChange(version.id)}
+          >
+            V{version.version_number}
+            {isLatest && <span className={cn(isActive ? "text-white/90" : "text-muted")}> · Latest</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** @deprecated Use VideoReviewVersionUpload + VideoReviewVersionPills */
+export function VideoReviewVersionBar({
+  reviewId,
+  projectId,
+  versions,
+  activeVersionId,
+  onVersionChange,
+  onVersionAdded,
+  isAdmin,
+}: {
+  reviewId: string;
+  projectId: string;
+  versions: VideoReviewVersionRow[];
+  activeVersionId: string;
+  onVersionChange: (versionId: string) => void;
+  onVersionAdded: (version: VideoReviewVersionRow) => void;
+  isAdmin: boolean;
+}) {
+  const nextVersionNumber = (versions[versions.length - 1]?.version_number ?? versions.length) + 1;
+  return (
+    <div className="space-y-2">
+      {isAdmin && (
+        <VideoReviewVersionUpload
+          reviewId={reviewId}
+          projectId={projectId}
+          nextVersionNumber={nextVersionNumber}
+          onVersionAdded={onVersionAdded}
+        />
+      )}
+      <VideoReviewVersionPills
+        versions={versions}
+        activeVersionId={activeVersionId}
+        onVersionChange={onVersionChange}
+      />
     </div>
   );
 }

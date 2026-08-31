@@ -17,7 +17,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { VideoReviewCommentPanel } from "@/components/video-review/video-review-comment-panel";
 import { VideoReviewShell } from "@/components/video-review/video-review-shell";
 import { VideoReviewTimelineMarker } from "@/components/video-review/video-review-timeline-marker";
-import { VideoReviewVersionBar } from "@/components/video-review/video-review-version-bar";
+import {
+  VideoReviewVersionPills,
+  VideoReviewVersionUpload,
+} from "@/components/video-review/video-review-version-bar";
 import { formatReviewTimestamp } from "@/lib/video-review-format";
 import {
   computeVideoContentRect,
@@ -646,6 +649,65 @@ export function VideoReviewView({
     setActiveVersionId(version.id);
   }
 
+  const nextVersionNumber = (versionRows[versionRows.length - 1]?.version_number ?? versionRows.length) + 1;
+
+  const commentComposer = (
+    <form onSubmit={handleSubmitComment} className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+        <span>
+          At{" "}
+          <strong className="text-primary">{formatReviewTimestamp(composerDisplayTime)}</strong>
+          {composerTimestamp != null && (
+            <span className="ml-1 text-[10px] text-muted">(locked)</span>
+          )}
+        </span>
+        {pendingPoint && (
+          <span className="inline-flex items-center gap-1 text-accent">
+            <MapPin className="h-3 w-3" /> Marked
+          </span>
+        )}
+        {(canEditMark || !activeComment?.point_x) && (
+          <Button
+            type="button"
+            size="sm"
+            variant={markingMode || editMarkMode ? "accent" : "outline"}
+            className={cn("min-h-8 px-2 text-xs", (markingMode || editMarkMode) && "cursor-crosshair")}
+            onClick={handleMarkButtonClick}
+            aria-pressed={markingMode || editMarkMode}
+            disabled={savingMark || Boolean(activeComment?.point_x && !canEditMark)}
+          >
+            <Pencil className="mr-1 h-3 w-3" />
+            {editMarkMode ? "Editing…" : canEditMark ? "Edit mark" : "Add mark"}
+          </Button>
+        )}
+      </div>
+      <Textarea
+        value={commentText}
+        onChange={(e) => handleCommentInputChange(e.target.value)}
+        placeholder="Describe what you'd like changed…"
+        rows={2}
+        className="min-h-[56px] resize-y text-sm"
+        disabled={submitting}
+      />
+      <div className="flex flex-wrap gap-1.5">
+        <Button type="submit" variant="accent" size="sm" className="min-h-9" disabled={submitting}>
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add comment"}
+        </Button>
+        {pendingPoint && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-9"
+            onClick={() => setPendingPoint(null)}
+          >
+            Clear point
+          </Button>
+        )}
+      </div>
+    </form>
+  );
+
   if (!activeVersion) {
     return (
       <EmptyState
@@ -659,33 +721,44 @@ export function VideoReviewView({
   return (
     <VideoReviewShell
       header={
-        <>
-          <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="space-y-2">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <Link
               href={backHref}
-              className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-muted hover:text-primary"
+              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted hover:text-primary sm:text-sm"
             >
-              <ArrowLeft className="h-4 w-4" />
-              {backLabel}
+              <ArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">{backLabel}</span>
             </Link>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-xl font-bold text-primary sm:text-2xl">{review.title}</h1>
-              <p className="text-sm text-muted">Video review · {isAdmin ? "Admin" : "Client"} view</p>
+              <div className="flex min-w-0 items-baseline gap-1.5 sm:gap-2">
+                <h1 className="truncate text-sm font-semibold text-primary sm:text-base">{review.title}</h1>
+                <span className="hidden shrink-0 text-[11px] text-muted sm:inline">
+                  · Video review · {isAdmin ? "Admin" : "Client"}
+                </span>
+              </div>
+              <p className="truncate text-[11px] text-muted sm:hidden">
+                Video review · {isAdmin ? "Admin" : "Client"}
+              </p>
             </div>
+            {isAdmin && (
+              <VideoReviewVersionUpload
+                reviewId={reviewId}
+                projectId={projectId}
+                nextVersionNumber={nextVersionNumber}
+                onVersionAdded={handleVersionAdded}
+              />
+            )}
           </div>
-          <VideoReviewVersionBar
-            reviewId={reviewId}
-            projectId={projectId}
+          <VideoReviewVersionPills
             versions={versionRows}
             activeVersionId={activeVersionId}
             onVersionChange={setActiveVersionId}
-            onVersionAdded={handleVersionAdded}
-            isAdmin={isAdmin}
           />
-        </>
+        </div>
       }
       main={
-        <>
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
           <div
             ref={containerRef}
             className={cn(
@@ -806,65 +879,7 @@ export function VideoReviewView({
               <div className="absolute inset-x-1 top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-300" />
             </div>
           )}
-
-          <form
-            onSubmit={handleSubmitComment}
-            className="shrink-0 space-y-2 rounded-2xl bg-white p-4 shadow-lg shadow-slate-200/40 ring-1 ring-black/5"
-          >
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-              <span>
-                At{" "}
-                <strong className="text-primary">{formatReviewTimestamp(composerDisplayTime)}</strong>
-                {composerTimestamp != null && (
-                  <span className="ml-1 text-[10px] text-muted">(locked when typing started)</span>
-                )}
-              </span>
-              {pendingPoint && (
-                <span className="inline-flex items-center gap-1 text-accent">
-                  <MapPin className="h-3 w-3" /> Point marked
-                </span>
-              )}
-              {(canEditMark || !activeComment?.point_x) && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={markingMode || editMarkMode ? "accent" : "outline"}
-                  className={cn("min-h-9", (markingMode || editMarkMode) && "cursor-crosshair")}
-                  onClick={handleMarkButtonClick}
-                  aria-pressed={markingMode || editMarkMode}
-                  disabled={savingMark || Boolean(activeComment?.point_x && !canEditMark)}
-                >
-                  <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                  {editMarkMode ? "Editing mark…" : canEditMark ? "Edit mark" : "Add mark"}
-                </Button>
-              )}
-            </div>
-            <Textarea
-              value={commentText}
-              onChange={(e) => handleCommentInputChange(e.target.value)}
-              placeholder="Describe what you'd like changed at this moment…"
-              rows={3}
-              className="min-h-[88px] resize-y"
-              disabled={submitting}
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" variant="accent" size="sm" className="min-h-11" disabled={submitting}>
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add comment"}
-              </Button>
-              {pendingPoint && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="min-h-11"
-                  onClick={() => setPendingPoint(null)}
-                >
-                  Clear point
-                </Button>
-              )}
-            </div>
-          </form>
-        </>
+        </div>
       }
       rail={
         <VideoReviewCommentPanel
@@ -882,6 +897,7 @@ export function VideoReviewView({
           onSeek={seekTo}
           onCommentsChange={() => void loadComments({ quiet: true })}
           onSelectComment={setActiveCommentId}
+          composer={commentComposer}
         />
       }
     />

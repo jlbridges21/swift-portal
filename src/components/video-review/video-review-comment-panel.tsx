@@ -39,6 +39,7 @@ interface VideoReviewCommentPanelProps {
   onSeek: (seconds: number, commentId?: string) => void;
   onCommentsChange: () => void;
   onSelectComment: (commentId: string) => void;
+  composer: React.ReactNode;
 }
 
 export function VideoReviewCommentPanel({
@@ -56,15 +57,16 @@ export function VideoReviewCommentPanel({
   onSeek,
   onCommentsChange,
   onSelectComment,
+  composer,
 }: VideoReviewCommentPanelProps) {
   const [helpOpen, setHelpOpen] = useState(false);
 
   return (
     <div className="flex h-full min-h-[320px] min-w-0 flex-col rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5 lg:min-h-0">
-      <div className="shrink-0 border-b border-border/60 p-4">
-        <div className="mb-2 flex min-w-0 items-start justify-between gap-2">
-          <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold text-primary">
-            <MessageSquarePlus className="h-4 w-4 shrink-0 text-accent" />
+      <div className="shrink-0 space-y-2 border-b border-border/60 p-3">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-primary">
+            <MessageSquarePlus className="h-3.5 w-3.5 shrink-0 text-accent" />
             <span className="truncate">Comments · V{versionNumber}</span>
           </h2>
           <div className="relative shrink-0">
@@ -72,12 +74,12 @@ export function VideoReviewCommentPanel({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-9 w-9 p-0"
+              className="h-8 w-8 p-0"
               aria-expanded={helpOpen}
               aria-label="Comment help"
               onClick={() => setHelpOpen((open) => !open)}
             >
-              <HelpCircle className="h-4 w-4 text-muted" />
+              <HelpCircle className="h-3.5 w-3.5 text-muted" />
             </Button>
             {helpOpen && (
               <div
@@ -98,7 +100,10 @@ export function VideoReviewCommentPanel({
             )}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Comment views">
+
+        {composer}
+
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Comment views">
           {(
             [
               ["all", "All", counts.all],
@@ -111,7 +116,7 @@ export function VideoReviewCommentPanel({
               type="button"
               size="sm"
               variant={view === key ? "accent" : "outline"}
-              className="min-h-11"
+              className="min-h-9 px-2.5 text-xs"
               role="tab"
               aria-selected={view === key}
               onClick={() => onViewChange(key)}
@@ -122,7 +127,7 @@ export function VideoReviewCommentPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-3">
+      <div className="min-h-0 flex-1 overflow-y-auto p-3 pt-2">
         {loading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted" />
