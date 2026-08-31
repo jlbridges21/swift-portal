@@ -18,6 +18,7 @@ type View = "browse" | "all" | "folder" | "unfiled";
 
 interface ClientPhotoFoldersProps {
   projectId: string;
+  zipApiBase?: string;
   photos: MediaAsset[];
   folders: MediaFolder[];
   getDownloadUrl: (asset: MediaAsset, thumb?: boolean) => Promise<string | null>;
@@ -36,6 +37,7 @@ function sortInFolder(list: MediaAsset[]) {
 
 export function ClientPhotoFolders({
   projectId,
+  zipApiBase,
   photos,
   folders,
   getDownloadUrl,
@@ -104,6 +106,7 @@ export function ClientPhotoFolders({
     return (
       <ProjectZipDownload
         projectId={projectId}
+        zipApiBase={zipApiBase}
         folderId={folderId}
         folderLabel={folderName}
         expectedFileCount={fileCount}

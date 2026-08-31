@@ -31,7 +31,8 @@ export type ThumbSignAsset = Pick<
 export async function signMediaThumbnailUrl(
   storage: SupabaseClient,
   bucket: string,
-  asset: ThumbSignAsset
+  asset: ThumbSignAsset,
+  ttlSeconds: number = THUMB_SIGNED_TTL_SECONDS
 ): Promise<string | null> {
   if (asset.media_source === "youtube") return null;
   if (asset.media_type === "video" || asset.media_type === "document") return null;
@@ -39,7 +40,7 @@ export async function signMediaThumbnailUrl(
   if (asset.thumbnail_url) {
     const { data, error } = await storage.storage
       .from(bucket)
-      .createSignedUrl(asset.thumbnail_url, THUMB_SIGNED_TTL_SECONDS);
+      .createSignedUrl(asset.thumbnail_url, ttlSeconds);
     if (!error && data?.signedUrl) return data.signedUrl;
   }
 
@@ -50,7 +51,7 @@ export async function signMediaThumbnailUrl(
 
   const { data, error } = await storage.storage.from(bucket).createSignedUrl(
     asset.file_path,
-    THUMB_SIGNED_TTL_SECONDS,
+    ttlSeconds,
     canTransform
       ? {
           transform: {

@@ -61,6 +61,8 @@ interface ProjectPageClientProps {
   allowClientProposalChanges?: boolean;
   requireDeliveredForDownloads?: boolean;
   isSharedViewer?: boolean;
+  /** Assigned client + admin only — never shared-by-email or anonymous link viewers. */
+  canViewFinancials?: boolean;
 }
 
 const REVISION_STATUS_LABEL: Record<string, string> = {
@@ -116,6 +118,7 @@ export function ProjectPageClient({
   allowClientProposalChanges = true,
   requireDeliveredForDownloads = true,
   isSharedViewer = false,
+  canViewFinancials = false,
 }: ProjectPageClientProps) {
   const router = useRouter();
   const brand = usePortalBrand();
@@ -160,6 +163,7 @@ export function ProjectPageClient({
   const isClientView = !isPreview && !isAdmin;
 
   const paymentStatus = (() => {
+    if (!canViewFinancials) return undefined;
     if (!isClientView && !isPreview) return undefined;
     const outstanding = pendingPayments.length;
     const allPaid = payments.length > 0 && payments.every((p) => p.status === "paid" || p.status === "cancelled");
@@ -258,7 +262,7 @@ export function ProjectPageClient({
         microsite={isClientView || isPreview}
         paymentStatus={paymentStatus}
       >
-        {(isClientView || isPreview) && (
+        {(isClientView || isPreview) && canViewFinancials && (
           <ProjectQuickActions
             status={project.status}
             hasPendingPayment={pendingPayments.length > 0}
@@ -271,7 +275,7 @@ export function ProjectPageClient({
       </ProjectHero>
 
       <main className="mobile-container py-12 pb-16 space-y-16">
-        {!isSharedViewer && <NextStepBanner step={clientStep} />}
+        {canViewFinancials && <NextStepBanner step={clientStep} />}
 
         <Card className="border-0 shadow-lg shadow-slate-200/50 rounded-2xl overflow-hidden">
           <CardHeader className="bg-white border-b border-border/60 pb-4">
@@ -282,11 +286,11 @@ export function ProjectPageClient({
           </CardContent>
         </Card>
 
-        {(isClientView || isPreview) && !isSharedViewer && (
+        {(isClientView || isPreview) && canViewFinancials && (
           <ClientPricingCta project={project} quotes={quotes} payments={payments} />
         )}
 
-        {!isSharedViewer && (
+        {canViewFinancials && (
         <QuoteSection
           projectId={project.id}
           quotes={quotes}
@@ -296,7 +300,7 @@ export function ProjectPageClient({
         />
         )}
 
-        {!isPreview && !isSharedViewer && (
+        {!isPreview && canViewFinancials && (
           <Suspense fallback={null}>
             <ShootScheduling
               projectId={project.id}
@@ -569,7 +573,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {!isPreview && status === "ready_for_review" && (isClientView || mediaVisible) && !isSharedViewer && (
+        {!isPreview && status === "ready_for_review" && (isClientView || mediaVisible) && canViewFinancials && (
           <DeliverableReview
             projectId={project.id}
             photos={photos}
@@ -580,15 +584,15 @@ export function ProjectPageClient({
           />
         )}
 
-        {!isSharedViewer && (
+        {canViewFinancials && (
         <PaymentsSection payments={payments} isPreview={isPreview} alwaysShow={isClientView} />
         )}
 
-        {!isPreview && !isSharedViewer && (
+        {!isPreview && canViewFinancials && (
           <ClientMessagesChat projectId={project.id} compact />
         )}
 
-        {!isPreview && !isSharedViewer && status !== "ready_for_review" && status !== "awaiting_payment" && (
+        {!isPreview && canViewFinancials && status !== "ready_for_review" && status !== "awaiting_payment" && (
           <Card className="border-0 shadow-lg rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -631,11 +635,13 @@ export function ProjectPageClient({
           </Card>
         )}
 
-        <MicrositeSection title="Project Activity" icon={MessageSquare}>
-          <div className="rounded-2xl bg-white p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-            <ProjectActivityTimeline activities={activities} clientMode={isClientView} />
-          </div>
-        </MicrositeSection>
+        {canViewFinancials && (
+          <MicrositeSection title="Project Activity" icon={MessageSquare}>
+            <div className="rounded-2xl bg-white p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+              <ProjectActivityTimeline activities={activities} clientMode={isClientView} />
+            </div>
+          </MicrositeSection>
+        )}
       </main>
     </div>
   );

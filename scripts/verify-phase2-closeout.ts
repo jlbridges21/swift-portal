@@ -315,6 +315,39 @@ async function main() {
     throw new Error(`${leaks.length} boundary leak(s) — see above`);
   }
 
+  if (leaks.length) {
+    console.error("LEAKS DETECTED:");
+    leaks.forEach((l) => console.error(`  - ${l.label}: ${l.status}`));
+    throw new Error(`${leaks.length} boundary leak(s) — see above`);
+  }
+
+  section("ITEM 10c — Shared viewer project page HTML (no billing in payload)");
+  const sharedPageRes = await fetch(`${base}/dashboard/projects/${SHARED_PROJECT}`, {
+    headers: { Cookie: cookie },
+    signal: AbortSignal.timeout(25_000),
+  });
+  const sharedHtml = await sharedPageRes.text();
+  console.log("Shared project page status:", sharedPageRes.status, "| bytes:", sharedHtml.length);
+  const { assertNoBillingInHtml, assertBillingPresentForClient } = await import("./lib/billing-html-grep");
+  await assertNoBillingInHtml(admin, SHARED_PROJECT, sharedHtml, "shared viewer");
+
+  section("ITEM 10d — Assigned client still sees billing (regression)");
+  const { data: joyClient } = await admin
+    .from("projects")
+    .select("clients(email)")
+    .eq("id", SHARED_PROJECT)
+    .single();
+  const clientEmail = (joyClient?.clients as { email?: string } | null)?.email;
+  if (!clientEmail) throw new Error("Could not resolve Joy assigned client email");
+  const clientCookie = await sessionCookie(admin, clientEmail);
+  const clientPageRes = await fetch(`${base}/dashboard/projects/${SHARED_PROJECT}`, {
+    headers: { Cookie: clientCookie },
+    signal: AbortSignal.timeout(25_000),
+  });
+  const clientHtml = await clientPageRes.text();
+  console.log("Assigned client page status:", clientPageRes.status, "| bytes:", clientHtml.length);
+  await assertBillingPresentForClient(admin, SHARED_PROJECT, clientHtml, "assigned client");
+
   // --- ITEM 4b — Download gate OFF + comment ---
   section("ITEM 4b — Shared viewer download (gate OFF) + video comment");
   const { saveAppSettings } = await import("../src/lib/app-settings");

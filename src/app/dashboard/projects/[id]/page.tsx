@@ -15,6 +15,19 @@ import {
   loadVideoReviewVersionMap,
 } from "@/lib/video-review-media";
 import { listProjectVideoReviews } from "@/lib/video-reviews";
+import { resolveProjectAccess } from "@/lib/project-access";
+import {
+  canViewProjectFinancials,
+  sanitizeProjectForMediaViewer,
+} from "@/lib/project-page-access";
+import type {
+  ActivityLog,
+  AssetReview,
+  Payment,
+  ProjectQuote,
+  Revision,
+  ShootProposal,
+} from "@/lib/types";
 import { ProjectPageClient } from "@/components/projects/project-page-client";
 import { UrlToastHandler } from "@/components/ui/url-toast-handler";
 
@@ -40,22 +53,18 @@ async function ProjectContent({
   const supabase = await createClient();
   const tenant = await requireTenantContext();
 
-  if (tenant.isSharedViewer && !tenant.sharedProjectIds?.includes(id)) {
-    notFound();
-  }
+  const access = await resolveProjectAccess(profile, id, {
+    tenantBusinessId: tenant.businessId,
+  });
+  if (!access.allowed) notFound();
 
-  const isSharedViewer = Boolean(tenant.isSharedViewer);
+  const isSharedViewer = access.kind === "share";
+  const canViewFinancials = canViewProjectFinancials(access.kind);
 
   const [
-    { data: project },
+    { data: projectRow },
     { data: media },
     { data: tours },
-    { data: payments },
-    { data: revisions },
-    { data: shootProposals },
-    { data: activities },
-    { data: quotes },
-    { data: assetReviews },
     { data: mediaFolders },
   ] = await Promise.all([
     supabase.from("projects").select("*").eq("business_id", tenant.businessId).eq("id", id).single(),
@@ -66,30 +75,73 @@ async function ProjectContent({
       .eq("project_id", id)
       .order("display_order", { ascending: true }),
     supabase.from("tours").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order"),
-    supabase.from("payments").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("revisions").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("shoot_proposals").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("proposed_at", { ascending: true }),
-    supabase.from("activity_logs").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("project_quotes").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("asset_reviews").select("*").eq("business_id", tenant.businessId).eq("project_id", id),
     supabase.from("media_folders").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order", { ascending: true }),
   ]);
 
-  if (!project) notFound();
+  if (!projectRow) notFound();
 
-  if (!isSharedViewer) {
+  let payments: Payment[] = [];
+  let revisions: Revision[] = [];
+  let shootProposals: ShootProposal[] = [];
+  let activities: ActivityLog[] = [];
+  let quotes: ProjectQuote[] = [];
+  let assetReviews: AssetReview[] = [];
+
+  if (canViewFinancials) {
     await reconcileProjectPaymentsOnLoad(id, tenant.businessId, "project_page");
+
+    const [
+      { data: paymentRows },
+      { data: revisionRows },
+      { data: proposalRows },
+      { data: activityRows },
+      { data: quoteRows },
+      { data: reviewRows },
+    ] = await Promise.all([
+      supabase
+        .from("payments")
+        .select("*")
+        .eq("business_id", tenant.businessId)
+        .eq("project_id", id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("revisions")
+        .select("*")
+        .eq("business_id", tenant.businessId)
+        .eq("project_id", id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("shoot_proposals")
+        .select("*")
+        .eq("business_id", tenant.businessId)
+        .eq("project_id", id)
+        .order("proposed_at", { ascending: true }),
+      supabase
+        .from("activity_logs")
+        .select("*")
+        .eq("business_id", tenant.businessId)
+        .eq("project_id", id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("project_quotes")
+        .select("*")
+        .eq("business_id", tenant.businessId)
+        .eq("project_id", id)
+        .order("created_at", { ascending: false }),
+      supabase.from("asset_reviews").select("*").eq("business_id", tenant.businessId).eq("project_id", id),
+    ]);
+
+    payments = paymentRows ?? [];
+    revisions = revisionRows ?? [];
+    shootProposals = proposalRows ?? [];
+    activities = activityRows ?? [];
+    quotes = quoteRows ?? [];
+    assetReviews = reviewRows ?? [];
   }
 
-  const { data: refreshedPayments } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("business_id", tenant.businessId)
-    .eq("project_id", id)
-    .order("created_at", { ascending: false });
-
   const appSettings = await getAppSettings(tenant.businessId);
-  const hero = await getProjectHeroMedia(supabase, project, tenant.businessId);
+  const project = isSharedViewer ? sanitizeProjectForMediaViewer(projectRow) : projectRow;
+  const hero = await getProjectHeroMedia(supabase, projectRow, tenant.businessId);
   const db = await createTenantServiceClient(tenant.businessId);
   const versionMap = await loadVideoReviewVersionMap(db, id);
   const videoReviews = await listProjectVideoReviews(db, id);
@@ -113,21 +165,26 @@ async function ProjectContent({
         videos={videos}
         documents={documents}
         tours={visibleTours}
-        payments={isSharedViewer ? [] : (refreshedPayments ?? payments ?? [])}
-        revisions={isSharedViewer ? [] : (revisions ?? [])}
-        shootProposals={isSharedViewer ? [] : (shootProposals ?? [])}
-        activities={isSharedViewer ? [] : filterClientVisibleActivities(activities ?? [])}
-        quotes={isSharedViewer ? [] : getClientVisibleQuotes(quotes ?? [], {
-          showPreliminaryToClients: appSettings.proposals.showPreliminaryToClients,
-        })}
-        allowClientProposalChanges={!isSharedViewer && appSettings.proposals.allowClientProposalChanges}
+        payments={payments}
+        revisions={revisions}
+        shootProposals={shootProposals}
+        activities={canViewFinancials ? filterClientVisibleActivities(activities) : []}
+        quotes={
+          canViewFinancials
+            ? getClientVisibleQuotes(quotes, {
+                showPreliminaryToClients: appSettings.proposals.showPreliminaryToClients,
+              })
+            : []
+        }
+        allowClientProposalChanges={canViewFinancials && appSettings.proposals.allowClientProposalChanges}
         requireDeliveredForDownloads={appSettings.payments.requireDeliveredForDownloads}
-        assetReviews={isSharedViewer ? [] : (assetReviews ?? [])}
+        assetReviews={canViewFinancials ? assetReviews : []}
         mediaFolders={mediaFolders ?? []}
         videoReviews={videoReviews}
         isPreview={preview && profile.role === "admin"}
         isAdmin={profile.role === "admin"}
         isSharedViewer={isSharedViewer}
+        canViewFinancials={canViewFinancials}
       />
     </>
   );

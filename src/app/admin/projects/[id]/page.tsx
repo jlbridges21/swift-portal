@@ -7,7 +7,7 @@ import { getBusinessPortalOrigin } from "@/lib/portal-url";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { listProjectVideoReviews } from "@/lib/video-reviews";
 import { listProjectShares } from "@/lib/project-shares";
-import { ProjectSharesPanel } from "@/components/admin/project-shares-panel";
+import { getProjectLinkAccessState } from "@/lib/project-link-access";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -56,6 +56,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
   const db = await createTenantServiceClient(tenant.businessId);
   const videoReviews = await listProjectVideoReviews(db, id);
   const projectShares = await listProjectShares(tenant.businessId, id);
+  const linkAccess = await getProjectLinkAccessState(tenant.businessId, id);
 
   const appUrl = getBusinessPortalOrigin(tenant.business);
   const portalUrl = `${appUrl}/dashboard/projects/${id}?preview=1`;
@@ -80,6 +81,9 @@ export default async function AdminProjectPage({ params }: PageProps) {
           portalUrl={portalUrl}
           initialVideoReviews={videoReviews}
           projectShares={projectShares}
+          linkAccessMode={linkAccess.mode}
+          linkAccessPublicUrl={linkAccess.publicUrl}
+          linkAccessViewCount={linkAccess.viewCount}
         />
       </main>
     </div>

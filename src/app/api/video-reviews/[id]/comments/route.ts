@@ -75,8 +75,23 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const tenant = await getTenantContext();
-  if (!tenant) return missingTenantResponse(profile.role);
+  const linkToken = request.headers.get("x-public-link-token")?.trim();
+  let tenant = await getTenantContext();
+  let businessId = tenant?.businessId;
+  let publicLinkProjectId: string | null = null;
+
+  if (linkToken && !tenant) {
+    const { getPublicHostContext } = await import("@/lib/host-resolution");
+    const { resolvePublicLinkProject } = await import("@/lib/project-link-access");
+    const host = await getPublicHostContext();
+    const linkCtx = await resolvePublicLinkProject(linkToken, host.businessId);
+    if (linkCtx) {
+      businessId = linkCtx.businessId;
+      publicLinkProjectId = linkCtx.projectId;
+    }
+  }
+
+  if (!businessId) return missingTenantResponse(profile.role);
 
   const { id: reviewId } = await params;
   const body = await request.json();
@@ -88,13 +103,30 @@ export async function POST(
     return NextResponse.json({ error: "body is required." }, { status: 400 });
   }
 
-  const db = await createTenantServiceClient(tenant.businessId);
+  const db = await createTenantServiceClient(businessId);
 
   try {
-    const review = await loadReviewForAccess(db, profile, reviewId);
+    let review;
+    if (publicLinkProjectId) {
+      const { data: row } = await db
+        .from("video_reviews")
+        .select("*")
+        .eq("id", reviewId)
+        .eq("project_id", publicLinkProjectId)
+        .maybeSingle();
+      if (!row) {
+        return NextResponse.json({ error: "Review not found or access denied." }, { status: 404 });
+      }
+      review = row;
+    } else {
+      review = await loadReviewForAccess(db, profile, reviewId);
+    }
     const authorKind = isReviewAdmin(profile) ? "admin" : "client";
-    const isSharedCommenter = Boolean(tenant.isSharedViewer);
-    if (authorKind === "client" && !profile.client_id && !isSharedCommenter) {
+    const isSharedCommenter = Boolean(tenant?.isSharedViewer);
+    const isPublicLinkCommenter = Boolean(
+      publicLinkProjectId && review.project_id === publicLinkProjectId
+    );
+    if (authorKind === "client" && !profile.client_id && !isSharedCommenter && !isPublicLinkCommenter) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -109,7 +141,7 @@ export async function POST(
       const enriched = await enrichVideoReviewComments(db, [reply]);
       if (authorKind === "admin") {
         await notifyVideoReviewEvent("business_reply", {
-          businessId: tenant.businessId,
+          businessId,
           projectId: review.project_id,
           reviewId,
           reviewTitle: review.title,
@@ -132,7 +164,19 @@ export async function POST(
       return NextResponse.json({ error: "timestamp_seconds is required." }, { status: 400 });
     }
 
-    await loadVersionForReview(db, profile, reviewId, versionId);
+    if (publicLinkProjectId) {
+      const { data: version } = await db
+        .from("video_review_versions")
+        .select("id")
+        .eq("id", versionId)
+        .eq("review_id", reviewId)
+        .maybeSingle();
+      if (!version) {
+        return NextResponse.json({ error: "Version not found or access denied." }, { status: 404 });
+      }
+    } else {
+      await loadVersionForReview(db, profile, reviewId, versionId);
+    }
 
     const comment = await createVideoReviewComment(db, {
       reviewId,
@@ -149,7 +193,7 @@ export async function POST(
     const enriched = await enrichVideoReviewComments(db, [comment]);
     if (authorKind === "client") {
       await notifyVideoReviewEvent("client_comment", {
-        businessId: tenant.businessId,
+        businessId,
         projectId: review.project_id,
         reviewId,
         reviewTitle: review.title,

@@ -40,6 +40,8 @@ import { VideoReviewAdminActions, useVideoReviewDeleteHandler } from "@/componen
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import type { ProjectShareRow } from "@/lib/project-shares";
 import { ProjectSharesPanel } from "@/components/admin/project-shares-panel";
+import { ProjectLinkAccessPanel } from "@/components/admin/project-link-access-panel";
+import type { ProjectLinkAccessMode } from "@/lib/project-link-access";
 import { useAsyncAction } from "@/lib/use-async-action";
 
 function dedupeMedia<T extends { id: string }>(items: T[]): T[] {
@@ -67,6 +69,9 @@ interface AdminProjectDetailProps {
   portalUrl: string;
   initialVideoReviews?: VideoReviewListItem[];
   projectShares?: ProjectShareRow[];
+  linkAccessMode?: ProjectLinkAccessMode;
+  linkAccessPublicUrl?: string | null;
+  linkAccessViewCount?: number;
 }
 
 export function AdminProjectDetail({
@@ -85,6 +90,9 @@ export function AdminProjectDetail({
   portalUrl,
   initialVideoReviews = [],
   projectShares = [],
+  linkAccessMode = "restricted",
+  linkAccessPublicUrl = null,
+  linkAccessViewCount = 0,
 }: AdminProjectDetailProps) {
   const router = useRouter();
   const { enqueueUploads } = useUploadManager();
@@ -787,6 +795,12 @@ export function AdminProjectDetail({
         onEnablePortal={enablePortalForClient}
       />
 
+      <ProjectLinkAccessPanel
+        projectId={initialProject.id}
+        initialMode={linkAccessMode}
+        initialPublicUrl={linkAccessPublicUrl}
+        initialViewCount={linkAccessViewCount}
+      />
       <ProjectSharesPanel projectId={initialProject.id} initialShares={projectShares} />
 
       <Suspense fallback={null}>

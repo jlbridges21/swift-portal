@@ -718,5 +718,9 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
+  if (path.startsWith("/view/")) {
+    supabaseResponse.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+  }
+
   return applyPathCookie(supabaseResponse, resolution);
 }

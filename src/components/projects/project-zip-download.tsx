@@ -17,6 +17,8 @@ interface ZipErrorBody {
 
 interface ProjectZipDownloadProps {
   projectId: string;
+  /** Override ZIP endpoint (public link routes). */
+  zipApiBase?: string;
   expectedFileCount?: number;
   /** UUID or `unfiled` — scopes the archive to one folder. */
   folderId?: string;
@@ -30,6 +32,7 @@ interface ProjectZipDownloadProps {
 
 export function ProjectZipDownload({
   projectId,
+  zipApiBase,
   expectedFileCount,
   folderId,
   folderLabel,
@@ -104,12 +107,13 @@ export function ProjectZipDownload({
     abortRef.current = controller;
 
     try {
+      const base = zipApiBase ?? `/api/projects/${projectId}/download-zip`;
       const zipUrl = folderId
-        ? `/api/projects/${projectId}/download-zip?folderId=${encodeURIComponent(folderId)}`
-        : `/api/projects/${projectId}/download-zip`;
+        ? `${base}?folderId=${encodeURIComponent(folderId)}`
+        : base;
 
       const res = await fetch(zipUrl, {
-        credentials: "include",
+        credentials: zipApiBase ? "omit" : "include",
         signal: controller.signal,
       });
 

@@ -222,6 +222,8 @@ export const PAYWALL_API_EXEMPT_PREFIXES = [
   "/api/billing/checkout",
   /** Customer Portal: update card, invoices, resubscribe, cancel. */
   "/api/billing/portal",
+  /** Anonymous public project link — must work even when subscription paused. */
+  "/api/public",
 ] as const;
 
 /** True when pathname is (or is under) a paywall-exempt API. */

@@ -189,6 +189,11 @@ export interface Project {
   ghl_webhook_response_body?: string | null;
   deleted_at?: string | null;
   deleted_by?: string | null;
+  link_access_mode?: "restricted" | "anyone_with_link";
+  link_access_token?: string | null;
+  link_access_enabled_at?: string | null;
+  link_access_enabled_by?: string | null;
+  link_access_view_count?: number;
   created_at: string;
   updated_at: string;
   clients?: Client;
