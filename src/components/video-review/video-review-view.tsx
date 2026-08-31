@@ -22,6 +22,7 @@ import {
   VideoReviewVersionUpload,
 } from "@/components/video-review/video-review-version-bar";
 import { formatReviewTimestamp } from "@/lib/video-review-format";
+import { findPlaybackActiveCommentId } from "@/lib/video-review-playback-follow";
 import {
   computeVideoContentRect,
   normalizedPointToPercent,
@@ -85,6 +86,8 @@ export function VideoReviewView({
   const [activeVersionId, setActiveVersionId] = useState(latestVersion?.id ?? "");
   const [commentView, setCommentView] = useState<VideoReviewCommentView>("all");
   const [threads, setThreads] = useState<VideoReviewCommentThread[]>([]);
+  const [allThreads, setAllThreads] = useState<VideoReviewCommentThread[]>([]);
+  const [playbackFollowCommentId, setPlaybackFollowCommentId] = useState<string | null>(null);
   const [markerComments, setMarkerComments] = useState<VideoReviewCommentEnriched[]>([]);
   const [counts, setCounts] = useState<VideoReviewCommentCounts>({
     all: 0,
@@ -109,16 +112,27 @@ export function VideoReviewView({
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const [playheadSeconds, setPlayheadSeconds] = useState(0);
+  const [composerFocused, setComposerFocused] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const commentStoreRef = useRef<Map<string, VideoReviewCommentEnriched>>(new Map());
   const commentViewRef = useRef(commentView);
   const blockPlaybackRef = useRef(false);
+  const allThreadsRef = useRef<VideoReviewCommentThread[]>([]);
 
   useEffect(() => {
     commentViewRef.current = commentView;
   }, [commentView]);
+
+  useEffect(() => {
+    allThreadsRef.current = allThreads;
+  }, [allThreads]);
+
+  const syncPlaybackFollowComment = useCallback((time: number) => {
+    const nextId = findPlaybackActiveCommentId(allThreadsRef.current, time);
+    setPlaybackFollowCommentId((prev) => (prev === nextId ? prev : nextId));
+  }, []);
 
   const [pollSince, setPollSince] = useState<string | null>(null);
 
@@ -137,7 +151,9 @@ export function VideoReviewView({
   const applyStoreSnapshot = useCallback(
     (store: Map<string, VideoReviewCommentEnriched>, nextCounts: VideoReviewCommentCounts) => {
       const snap = snapshotFromCommentStore(store, commentViewRef.current);
+      const allSnap = snapshotFromCommentStore(store, "all");
       setThreads(snap.threads);
+      setAllThreads(allSnap.threads);
       setMarkerComments(snap.markerComments);
       setCounts(nextCounts);
     },
@@ -226,6 +242,7 @@ export function VideoReviewView({
     setCommentText("");
     setPausedAt(null);
     setPollSince(null);
+    setPlaybackFollowCommentId(null);
     commentStoreRef.current = new Map();
     if (!deepLinkComment) {
       setActiveCommentId(null);
@@ -383,8 +400,9 @@ export function VideoReviewView({
       setEditMarkMode(false);
       setEditMarkCommentId(null);
       setHoverPreviewPoint(null);
+      syncPlaybackFollowComment(seconds);
     },
-    []
+    [syncPlaybackFollowComment]
   );
 
   useEffect(() => {
@@ -592,8 +610,12 @@ export function VideoReviewView({
 
   const handleTimeUpdate = () => {
     const video = videoRef.current;
-    if (!video || !video.paused) return;
-    setPlayheadSeconds(video.currentTime);
+    if (!video) return;
+    const t = video.currentTime;
+    if (video.paused) {
+      setPlayheadSeconds(t);
+    }
+    syncPlaybackFollowComment(t);
   };
 
   const handleSubmitComment = async (e: React.FormEvent) => {
@@ -684,6 +706,8 @@ export function VideoReviewView({
       <Textarea
         value={commentText}
         onChange={(e) => handleCommentInputChange(e.target.value)}
+        onFocus={() => setComposerFocused(true)}
+        onBlur={() => setComposerFocused(false)}
         placeholder="Describe what you'd like changed…"
         rows={2}
         className="min-h-[56px] resize-y text-sm"
@@ -898,6 +922,9 @@ export function VideoReviewView({
           onCommentsChange={() => void loadComments({ quiet: true })}
           onSelectComment={setActiveCommentId}
           composer={commentComposer}
+          playbackFollowCommentId={playbackFollowCommentId}
+          videoPaused={videoPaused}
+          composerFocused={composerFocused}
         />
       }
     />

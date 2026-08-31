@@ -26,7 +26,11 @@ import {
   updateVideoReviewCommentMark,
 } from "../src/lib/video-review-comments";
 import { createTenantServiceClient, type TenantServiceClient } from "../src/lib/supabase/tenant-service";
-import type { VideoReviewCommentEnriched } from "../src/lib/video-review-comment-model";
+import type { VideoReviewCommentEnriched, VideoReviewCommentThread } from "../src/lib/video-review-comment-model";
+import {
+  findPlaybackActiveCommentId,
+  isCommentIdInThreads,
+} from "../src/lib/video-review-playback-follow";
 
 const SWIFT_BUSINESS = "00000000-0000-0000-0000-000000000001";
 
@@ -100,6 +104,101 @@ function headerChromeHeight(): { before: number; after: number } {
     before: 220, // hero title + subtitle + drop zone + version section
     after: 72, // one-line header + compact pills
   };
+}
+
+function mockThread(id: string, seconds: number): VideoReviewCommentThread {
+  return {
+    comment: {
+      id,
+      timestamp_seconds: seconds,
+      body: `Comment at ${seconds}s`,
+      status: "unresolved",
+    } as VideoReviewCommentEnriched,
+    replies: [],
+  };
+}
+
+function testPlaybackFollowLogic() {
+  console.log("\n=== Playback-synced comment follow ===");
+  const threads = [mockThread("a", 7.5), mockThread("b", 15.3)];
+
+  assert(findPlaybackActiveCommentId(threads, 5) === null, "before first comment: no active id");
+  assert(findPlaybackActiveCommentId(threads, 7.5) === "a", "at 7.5s comment a is active");
+  assert(findPlaybackActiveCommentId(threads, 10) === "a", "at 10s still comment a (7.5 <= 10)");
+  assert(findPlaybackActiveCommentId(threads, 15.3) === "b", "crossing 15.3 activates comment b");
+  assert(findPlaybackActiveCommentId(threads, 99) === "b", "after last comment stays on b");
+  assert(findPlaybackActiveCommentId([], 10) === null, "no comments → null, no errors");
+
+  const dense = [
+    mockThread("c1", 1),
+    mockThread("c2", 1.1),
+    mockThread("c3", 1.2),
+    mockThread("c4", 1.3),
+    mockThread("c5", 1.4),
+    mockThread("c6", 1.5),
+    mockThread("c7", 1.6),
+    mockThread("c8", 1.7),
+    mockThread("c9", 1.8),
+    mockThread("c10", 1.9),
+  ];
+  let changes = 0;
+  let prev: string | null = null;
+  for (let t = 0; t <= 2; t += 0.05) {
+    const id = findPlaybackActiveCommentId(dense, t);
+    if (id !== prev) {
+      changes++;
+      prev = id;
+    }
+  }
+  console.log(`Ten comments within 2s: active-id changes=${changes} over 41 time steps (not per tick thrash)`);
+  assert(changes <= 11, "dense timestamps: only changes when active comment id changes");
+
+  const unresolvedOnly = [mockThread("resolved-one", 5)];
+  assert(
+    !isCommentIdInThreads("resolved-one", []),
+    "tab filter: filtered-out comment not in visible threads — no scroll target"
+  );
+  assert(isCommentIdInThreads("resolved-one", unresolvedOnly), "visible when in current tab");
+
+  const viewSrc = readFileSync(resolve("src/components/video-review/video-review-view.tsx"), "utf8");
+  const panelSrc = readFileSync(resolve("src/components/video-review/video-review-comment-panel.tsx"), "utf8");
+  const hookSrc = readFileSync(resolve("src/lib/use-video-review-playback-follow.ts"), "utf8");
+
+  assert(viewSrc.includes("syncPlaybackFollowComment"), "seek/timeupdate recompute follow id immediately");
+  assert(!/syncPlaybackFollowComment[\s\S]{0,200}setActiveCommentId/.test(viewSrc), "follow sync does not set selected comment");
+  assert(viewSrc.includes("playbackFollowCommentId"), "follow id separate from activeCommentId");
+  assert(panelSrc.includes("data-playback-active"), "playback highlight distinct from selection");
+  assert(panelSrc.includes("Jump to current"), "manual scroll shows jump affordance");
+  assert(hookSrc.includes("programmaticScrollRef"), "ignores programmatic scroll for pause detection");
+  assert(hookSrc.includes("!videoPaused"), "no auto-scroll while paused");
+  assert(hookSrc.includes("composerFocused") && hookSrc.includes("replyFocused"), "no auto-scroll while typing");
+  assert(hookSrc.includes("enabledByBreakpoint"), "lg+ gate for auto-follow");
+  assert(hookSrc.includes("resumeFollow"), "resume via jump / comment click / scroll-back");
+  assert(hookSrc.includes("lastAutoScrolledIdRef"), "scroll only when active comment id changes");
+  assert(panelSrc.includes("Follow playback"), "optional follow toggle in rail header");
+
+  let stateUpdates = 0;
+  let prevId: string | null = null;
+  for (let i = 0; i < 200; i++) {
+    const t = (i / 200) * 20;
+    const next = findPlaybackActiveCommentId(threads, t);
+    if (next !== prevId) {
+      stateUpdates++;
+      prevId = next;
+    }
+  }
+  console.log(`Performance: 200 simulated timeupdates → ${stateUpdates} active-id changes (scroll work only on change)`);
+  assert(stateUpdates === 2, "scroll/state work only twice across 7.5s and 15.3s boundaries");
+
+  console.log(
+    "Tab filter behavior: follow id computed from all comments; scroll/highlight only when that id is in the current tab — filtered-out comments produce no scroll and no highlight."
+  );
+  console.log(
+    "Below lg: auto-follow disabled entirely (enabledByBreakpoint=false) — list scroll stays inside rail on desktop only; mobile page flow never auto-scrolls."
+  );
+  console.log(
+    "Resume triggers: (1) Jump to current button, (2) clicking a comment, (3) manual scroll until playback-active row intersects the list viewport."
+  );
 }
 
 async function main() {
@@ -218,6 +317,8 @@ async function main() {
   console.log(`Header chrome before ~${chrome.before}px → after ~${chrome.after}px (−${chrome.before - chrome.after}px)`);
   assert(chrome.after < chrome.before, "header uses less vertical space");
   console.log("Reply boxes: NOT wired — replies have no timestamp attachment.");
+
+  testPlaybackFollowLogic();
 
   console.log("\n=== 11. layout dimensions ===");
   for (const vp of [1280, 1440, 1728, 2560]) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatReviewTimestamp } from "@/lib/video-review-format";
+import { useVideoReviewPlaybackFollow } from "@/lib/use-video-review-playback-follow";
 import type {
   VideoReviewCommentCounts,
   VideoReviewCommentEnriched,
@@ -40,6 +41,9 @@ interface VideoReviewCommentPanelProps {
   onCommentsChange: () => void;
   onSelectComment: (commentId: string) => void;
   composer: React.ReactNode;
+  playbackFollowCommentId: string | null;
+  videoPaused: boolean;
+  composerFocused: boolean;
 }
 
 export function VideoReviewCommentPanel({
@@ -58,8 +62,42 @@ export function VideoReviewCommentPanel({
   onCommentsChange,
   onSelectComment,
   composer,
+  playbackFollowCommentId,
+  videoPaused,
+  composerFocused,
 }: VideoReviewCommentPanelProps) {
   const [helpOpen, setHelpOpen] = useState(false);
+  const [isLargeScreen, setIsLargeScreen] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsLargeScreen(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const {
+    listRef,
+    followEnabled,
+    setFollowEnabled,
+    resumeFollow,
+    showJumpToCurrent,
+    highlightCommentId,
+    onReplyFocus,
+    onReplyBlur,
+  } = useVideoReviewPlaybackFollow({
+    playbackFollowCommentId,
+    visibleThreads: threads,
+    videoPaused,
+    composerFocused,
+    enabledByBreakpoint: isLargeScreen,
+  });
+
+  function handleSelectComment(commentId: string) {
+    onSelectComment(commentId);
+    resumeFollow();
+  }
 
   return (
     <div className="flex h-full min-h-[320px] min-w-0 flex-col rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5 lg:min-h-0">
@@ -69,7 +107,17 @@ export function VideoReviewCommentPanel({
             <MessageSquarePlus className="h-3.5 w-3.5 shrink-0 text-accent" />
             <span className="truncate">Comments · V{versionNumber}</span>
           </h2>
-          <div className="relative shrink-0">
+          <div className="relative flex shrink-0 items-center gap-1">
+            <Button
+              type="button"
+              variant={followEnabled ? "outline" : "ghost"}
+              size="sm"
+              className="hidden h-7 px-2 text-[10px] lg:inline-flex"
+              aria-pressed={followEnabled}
+              onClick={() => setFollowEnabled((on) => !on)}
+            >
+              Follow playback
+            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -127,7 +175,21 @@ export function VideoReviewCommentPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3 pt-2">
+      {showJumpToCurrent && (
+        <div className="shrink-0 border-b border-border/60 px-3 py-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 w-full text-xs"
+            onClick={resumeFollow}
+          >
+            Jump to current
+          </Button>
+        </div>
+      )}
+
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-3 pt-2">
         {loading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted" />
@@ -172,9 +234,12 @@ export function VideoReviewCommentPanel({
                 thread={thread}
                 isAdmin={isAdmin}
                 activeCommentId={activeCommentId}
+                playbackHighlightId={highlightCommentId}
                 onSeek={onSeek}
                 onCommentsChange={onCommentsChange}
-                onSelectComment={onSelectComment}
+                onSelectComment={handleSelectComment}
+                onReplyFocus={onReplyFocus}
+                onReplyBlur={onReplyBlur}
               />
             ))}
           </ul>
@@ -189,17 +254,23 @@ function CommentThread({
   thread,
   isAdmin,
   activeCommentId,
+  playbackHighlightId,
   onSeek,
   onCommentsChange,
   onSelectComment,
+  onReplyFocus,
+  onReplyBlur,
 }: {
   reviewId: string;
   thread: VideoReviewCommentThread;
   isAdmin: boolean;
   activeCommentId: string | null;
+  playbackHighlightId: string | null;
   onSeek: (seconds: number, commentId?: string) => void;
   onCommentsChange: () => void;
   onSelectComment: (commentId: string) => void;
+  onReplyFocus: () => void;
+  onReplyBlur: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [replyText, setReplyText] = useState("");
@@ -276,9 +347,19 @@ function CommentThread({
   return (
     <li
       data-comment-id={comment.id}
+      data-playback-active={playbackHighlightId === comment.id ? "true" : undefined}
       className={cn(
         "rounded-xl border transition",
-        activeCommentId === comment.id ? "border-accent bg-accent/5" : "border-border/70"
+        activeCommentId === comment.id && "border-accent bg-accent/5",
+        playbackHighlightId === comment.id &&
+          activeCommentId !== comment.id &&
+          "border-accent/70 bg-accent/[0.08] ring-1 ring-accent/25 shadow-sm",
+        playbackHighlightId === comment.id &&
+          activeCommentId === comment.id &&
+          "ring-2 ring-accent/35",
+        activeCommentId !== comment.id &&
+          playbackHighlightId !== comment.id &&
+          "border-border/70"
       )}
     >
       <div className="p-3">
@@ -380,6 +461,8 @@ function CommentThread({
           <Textarea
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
+            onFocus={onReplyFocus}
+            onBlur={onReplyBlur}
             placeholder="Write a reply…"
             rows={2}
             className="mb-2 min-h-[72px] resize-y"
