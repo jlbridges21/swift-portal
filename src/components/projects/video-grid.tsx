@@ -87,6 +87,7 @@ export function VideoGrid({
     const openPlayer = () => openPlayerAt(index);
     const reviewItem = reviewByAssetId.get(entry.video.id) ?? null;
     const reviewHref = buildReviewHref({
+      mediaAssetId: entry.video.id,
       reviewItem,
       projectId,
       reviewPathPrefix,
@@ -108,20 +109,8 @@ export function VideoGrid({
           thumbUrl={thumbUrls[entry.video.id]}
           onClick={openPlayer}
         />
-        {canAccessVideoReviews ? (
+        {canAccessVideoReviews || signInHref ? (
           <VideoReviewCardEntry reviewHref={reviewHref} reviewItem={reviewItem} />
-        ) : signInHref && reviewItem ? (
-          <VideoReviewCardEntry
-            reviewHref={buildReviewHref({
-              reviewItem,
-              projectId,
-              reviewPathPrefix,
-              signInHref,
-              isAdmin,
-              canAccessVideoReviews: false,
-            })}
-            reviewItem={reviewItem}
-          />
         ) : null}
         {renderBelowCard?.(entry, index)}
       </div>
@@ -174,6 +163,7 @@ export function VideoGrid({
 }
 
 function buildReviewHref({
+  mediaAssetId,
   reviewItem,
   projectId,
   reviewPathPrefix,
@@ -181,6 +171,7 @@ function buildReviewHref({
   isAdmin,
   canAccessVideoReviews,
 }: {
+  mediaAssetId: string;
   reviewItem: VideoReviewListItem | null;
   projectId: string;
   reviewPathPrefix: string;
@@ -188,11 +179,13 @@ function buildReviewHref({
   isAdmin?: boolean;
   canAccessVideoReviews?: boolean;
 }): string | null {
-  if (!reviewItem) return null;
-  if (signInHref && !isAdmin) return signInHref;
   if (canAccessVideoReviews || isAdmin) {
-    return `${reviewPathPrefix}/${projectId}/reviews/${reviewItem.review.id}`;
+    if (reviewItem) {
+      return `${reviewPathPrefix}/${projectId}/reviews/${reviewItem.review.id}`;
+    }
+    return `${reviewPathPrefix}/${projectId}/reviews/asset/${mediaAssetId}`;
   }
+  if (signInHref && !isAdmin) return signInHref;
   return null;
 }
 
@@ -203,14 +196,15 @@ function VideoReviewCardEntry({
   reviewHref: string | null;
   reviewItem: VideoReviewListItem | null;
 }) {
-  if (!reviewItem || !reviewHref) return null;
+  if (!reviewHref) return null;
   const isSignIn = reviewHref.startsWith("/login");
+  const label = isSignIn ? "Sign in to comment" : reviewItem ? "Open review" : "Add comment";
   return (
     <div className="mt-2">
       <Button variant="outline" size="sm" className="min-h-10 w-full sm:w-auto" asChild>
         <Link href={reviewHref}>
           <Clapperboard className="mr-1.5 h-4 w-4" />
-          {isSignIn ? "Sign in to comment" : "Open review"}
+          {label}
         </Link>
       </Button>
     </div>
@@ -321,6 +315,7 @@ function VideoPlayerLightbox({
   }
 
   const reviewHref = buildReviewHref({
+    mediaAssetId: video.id,
     reviewItem,
     projectId,
     reviewPathPrefix,
@@ -392,10 +387,14 @@ function VideoPlayerLightbox({
               <Button variant="accent" size="sm" className="min-h-10" asChild>
                 <Link href={reviewHref}>
                   <Clapperboard className="mr-1.5 h-4 w-4" />
-                  {reviewHref.startsWith("/login") ? "Sign in to comment" : "Open review"}
+                  {reviewHref.startsWith("/login")
+                    ? "Sign in to comment"
+                    : reviewItem
+                      ? "Open review"
+                      : "Add comment"}
                 </Link>
               </Button>
-            ) : isAdmin && entry.kind === "uploaded" ? (
+            ) : isAdmin && entry.kind === "uploaded" && !reviewItem ? (
               <Button
                 type="button"
                 variant="accent"

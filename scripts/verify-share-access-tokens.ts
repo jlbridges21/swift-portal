@@ -519,6 +519,9 @@ async function main() {
       JSON.stringify({
         access_token: verified.session!.access_token,
         refresh_token: verified.session!.refresh_token,
+        expires_at: verified.session!.expires_at,
+        expires_in: verified.session!.expires_in,
+        token_type: verified.session!.token_type,
         user: verified.user,
       })
     )}`;

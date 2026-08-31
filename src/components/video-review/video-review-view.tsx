@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Loader2,
@@ -58,6 +58,11 @@ import type {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+interface VideoReviewLazyMode {
+  mediaAssetId: string;
+  reviewPathPrefix: string;
+}
+
 interface VideoReviewViewProps {
   projectId: string;
   reviewId: string;
@@ -69,6 +74,8 @@ interface VideoReviewViewProps {
   currentUserId: string;
   backHref: string;
   backLabel?: string;
+  /** First comment creates review + V1 atomically, then redirects to the real review URL. */
+  lazyMode?: VideoReviewLazyMode;
 }
 
 export function VideoReviewView({
@@ -82,7 +89,10 @@ export function VideoReviewView({
   currentUserId,
   backHref,
   backLabel = "Back to project",
+  lazyMode,
 }: VideoReviewViewProps) {
+  const router = useRouter();
+  const isLazyReview = Boolean(lazyMode);
   const mayResolveComments = canResolveComments || isAdmin;
   const mayReopenComments = canReopenComments || isAdmin;
   const searchParams = useSearchParams();
@@ -102,7 +112,7 @@ export function VideoReviewView({
     unresolved: 0,
     resolved: 0,
   });
-  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [commentsLoading, setCommentsLoading] = useState(!lazyMode);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [composerTimestamp, setComposerTimestamp] = useState<number | null>(null);
@@ -175,7 +185,16 @@ export function VideoReviewView({
 
   const loadComments = useCallback(
     async (options?: { quiet?: boolean }) => {
-      if (!activeVersionId) return;
+      if (isLazyReview || !activeVersionId || activeVersionId === "__lazy__") {
+        if (!options?.quiet) {
+          setCommentsLoading(false);
+          setThreads([]);
+          setAllThreads([]);
+          setMarkerComments([]);
+          setCounts({ all: 0, unresolved: 0, resolved: 0 });
+        }
+        return;
+      }
       if (!options?.quiet) {
         setCommentsLoading(true);
       }
@@ -210,7 +229,7 @@ export function VideoReviewView({
         }
       }
     },
-    [reviewId, activeVersionId, applyStoreSnapshot]
+    [reviewId, activeVersionId, applyStoreSnapshot, isLazyReview]
   );
 
   const handlePollResult = useCallback(
@@ -234,7 +253,7 @@ export function VideoReviewView({
     reviewId,
     versionId: activeVersionId,
     since: pollSince,
-    enabled: Boolean(activeVersionId && pollSince && !commentsLoading),
+    enabled: Boolean(activeVersionId && pollSince && !commentsLoading && !isLazyReview),
     onResult: handlePollResult,
   });
 
@@ -664,6 +683,33 @@ export function VideoReviewView({
 
     setSubmitting(true);
     try {
+      if (isLazyReview && lazyMode) {
+        const res = await fetch("/api/video-reviews/lazy-comment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            project_id: projectId,
+            media_asset_id: lazyMode.mediaAssetId,
+            title: review.title,
+            body,
+            timestamp_seconds: timestamp,
+            point_x: pendingPoint?.x ?? null,
+            point_y: pendingPoint?.y ?? null,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          toast.error(data.error || "Could not save comment.");
+          return;
+        }
+        toast.success("Comment added");
+        router.replace(
+          `${lazyMode.reviewPathPrefix}/${projectId}/reviews/${data.review_id as string}`
+        );
+        return;
+      }
+
       const res = await fetch(`/api/video-reviews/${reviewId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -798,7 +844,7 @@ export function VideoReviewView({
                 Video review · {isAdmin ? "Admin" : "Client"}
               </p>
             </div>
-            {isAdmin && (
+            {isAdmin && !isLazyReview && (
               <VideoReviewVersionUpload
                 reviewId={reviewId}
                 projectId={projectId}

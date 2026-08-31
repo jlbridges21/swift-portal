@@ -314,6 +314,117 @@ export interface CreateVideoReviewCommentInput {
   pointY?: number | null;
 }
 
+export interface CreateLazyVideoReviewCommentInput {
+  projectId: string;
+  mediaAssetId: string;
+  title: string;
+  /** Recorded as review.created_by and V1.uploaded_by — the commenter. */
+  createdBy: string;
+  authorUserId: string;
+  authorKind: "client" | "admin";
+  body: string;
+  timestampSeconds: number;
+  pointX?: number | null;
+  pointY?: number | null;
+}
+
+export interface LazyVideoReviewCommentResult {
+  reviewId: string;
+  versionId: string;
+  commentId: string;
+  reviewCreated: boolean;
+  comment: VideoReviewComment;
+}
+
+function mapLazyRpcError(error: { message?: string }): VideoReviewError {
+  const msg = error.message ?? "";
+  if (msg.includes("comment_body_required")) {
+    return new VideoReviewError("Comment body is required.", "comment_body_required");
+  }
+  if (msg.includes("comment_timestamp_required")) {
+    return new VideoReviewError("A valid timestamp is required.", "comment_timestamp_required");
+  }
+  if (msg.includes("invalid_author_kind")) {
+    return new VideoReviewError("Invalid author kind.", "invalid_author_kind");
+  }
+  if (msg.includes("asset_not_found")) {
+    return new VideoReviewError("Media asset not found.", "asset_not_found");
+  }
+  if (msg.includes("asset_project_mismatch")) {
+    return new VideoReviewError("Media asset does not belong to this project.", "asset_project_mismatch");
+  }
+  return new VideoReviewError(msg || "Could not save comment.", "lazy_comment_failed");
+}
+
+/** Atomically get-or-create review + V1 and attach the first (or next) comment. */
+export async function createLazyVideoReviewComment(
+  db: TenantServiceClient,
+  input: CreateLazyVideoReviewCommentInput
+): Promise<LazyVideoReviewCommentResult> {
+  const body = input.body.trim();
+  if (!body) {
+    throw new VideoReviewError("Comment body is required.", "comment_body_required");
+  }
+  if (!Number.isFinite(input.timestampSeconds) || input.timestampSeconds < 0) {
+    throw new VideoReviewError("A valid timestamp is required.", "comment_timestamp_required");
+  }
+
+  const hasPointX = input.pointX != null;
+  const hasPointY = input.pointY != null;
+  if (hasPointX !== hasPointY) {
+    throw new VideoReviewError("Point coordinates must be provided as a pair.", "comment_point_pair");
+  }
+
+  const { data, error } = await db.raw.rpc("create_lazy_video_review_comment", {
+    p_business_id: db.businessId,
+    p_project_id: input.projectId,
+    p_media_asset_id: input.mediaAssetId,
+    p_title: input.title.trim(),
+    p_created_by: input.createdBy,
+    p_author_user_id: input.authorUserId,
+    p_author_kind: input.authorKind,
+    p_body: body,
+    p_timestamp_seconds: input.timestampSeconds,
+    p_point_x: hasPointX ? input.pointX : null,
+    p_point_y: hasPointY ? input.pointY : null,
+  });
+
+  if (error) {
+    throw mapLazyRpcError(error);
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | {
+        review_id: string;
+        version_id: string;
+        comment_id: string;
+        review_created: boolean;
+      }
+    | undefined;
+
+  if (!row?.comment_id) {
+    throw new VideoReviewError("Could not save comment.", "lazy_comment_failed");
+  }
+
+  const { data: comment, error: commentError } = await db
+    .from("video_review_comments")
+    .select("*")
+    .eq("id", row.comment_id)
+    .single();
+
+  if (commentError || !comment) {
+    throw new VideoReviewError(commentError?.message ?? "Could not load comment.", "comment_load_failed");
+  }
+
+  return {
+    reviewId: row.review_id,
+    versionId: row.version_id,
+    commentId: row.comment_id,
+    reviewCreated: Boolean(row.review_created),
+    comment: comment as VideoReviewComment,
+  };
+}
+
 export async function createVideoReviewComment(
   db: TenantServiceClient,
   input: CreateVideoReviewCommentInput
