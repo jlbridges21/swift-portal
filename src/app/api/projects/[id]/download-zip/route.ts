@@ -14,6 +14,7 @@ import {
   zipLog,
   ZipDownloadError,
 } from "@/lib/project-zip-download";
+import { touchProjectShareAccess } from "@/lib/project-access";
 import { getAppSettings } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import {
@@ -160,6 +161,7 @@ export async function GET(
 
     void zipStream.completion
       .then((result) => {
+        if (auth.shareId) void touchProjectShareAccess(auth.shareId);
         zipLog("zip_ready", ctx, {
           fileCount: result.fileCount,
           skippedCount: result.skipped.length,

@@ -8,7 +8,7 @@ import {
   resolveProjectDownloadAllowed,
 } from "@/lib/deliverables";
 import { sanitizeStorageFileName } from "@/lib/media-upload";
-import { resolveProjectAccess, touchProjectShareAccess } from "@/lib/project-access";
+import { resolveProjectAccess } from "@/lib/project-access";
 import { downloadFileName } from "@/lib/media-display-name";
 import type { MediaAsset, Profile } from "@/lib/types";
 
@@ -515,6 +515,7 @@ export async function authorizeProjectZipDownload(
   | {
       ok: true;
       isAdmin: boolean;
+      shareId?: string | null;
       project: {
         id: string;
         project_name: string | null;
@@ -573,12 +574,15 @@ export async function authorizeProjectZipDownload(
         details: "unauthorized — not project client or share",
       };
     }
-    if (access.kind === "share" && access.shareId) {
-      void touchProjectShareAccess(access.shareId);
-    }
+    return {
+      ok: true,
+      isAdmin,
+      shareId: access.kind === "share" ? access.shareId ?? null : null,
+      project,
+    };
   }
 
-  return { ok: true, isAdmin, project };
+  return { ok: true, isAdmin, shareId: null, project };
 }
 
 export function clientCanSeeAsset(asset: MediaAsset, isAdmin: boolean): boolean {

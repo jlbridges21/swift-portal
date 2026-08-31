@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import {
@@ -7,7 +6,7 @@ import {
   resolveProjectDownloadAllowed,
 } from "@/lib/deliverables";
 import { getAppSettings } from "@/lib/app-settings";
-import { resolveProjectAccess, touchProjectShareAccess, canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
+import { resolveProjectAccess, touchProjectShareAccess } from "@/lib/project-access";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { logMediaEvent, trackMediaDownload } from "@/lib/media-library";
 import { normalizeStatus } from "@/lib/constants";
@@ -38,7 +37,6 @@ export async function GET(
   const preview = searchParams.get("preview") === "1";
 
   const db = await createTenantServiceClient(tenant.businessId);
-  const cookieClient = await createClient();
 
   const { data: asset, error: assetError } = await db
     .from("media_assets")
@@ -61,6 +59,7 @@ export async function GET(
   const appSettings = await getAppSettings(tenant.businessId);
   const requireDeliveredForDownloads = appSettings.payments.requireDeliveredForDownloads;
 
+  let shareIdToTouch: string | null = null;
   if (!asset.project_id) {
     if (!isAdmin) {
       return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
@@ -73,7 +72,7 @@ export async function GET(
       return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
     }
     if (access.kind === "share" && access.shareId) {
-      void touchProjectShareAccess(access.shareId);
+      shareIdToTouch = access.shareId;
     }
   }
 
@@ -105,7 +104,12 @@ export async function GET(
   }
 
   const bucket = asset.media_type === "document" ? "project-documents" : "project-media";
-  const storageClient = isAdmin ? db.raw : cookieClient;
+  // Storage signing uses service role after access checks — share viewers have no tenant storage JWT.
+  const storageClient = db.raw;
+
+  const recordShareAccess = () => {
+    if (shareIdToTouch) void touchProjectShareAccess(shareIdToTouch);
+  };
 
   if (asFile) {
     const { data: fileData, error: downloadError } = await storageClient.storage
@@ -113,8 +117,16 @@ export async function GET(
       .download(asset.file_path);
 
     if (downloadError || !fileData) {
+      console.error("[media/download] storage download failed", {
+        mediaId: id,
+        bucket,
+        path: asset.file_path,
+        message: downloadError?.message,
+      });
       return NextResponse.json({ error: "We couldn't download that file. Please try again or contact support." }, { status: 500 });
     }
+
+    recordShareAccess();
 
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
     void trackMediaDownload({
@@ -168,6 +180,7 @@ export async function GET(
         mediaType: asset.media_type,
       });
     }
+    recordShareAccess();
     return NextResponse.json({
       url: signed,
       preview: true,
@@ -187,9 +200,16 @@ export async function GET(
     .createSignedUrl(asset.file_path, THUMB_SIGNED_TTL_SECONDS, options);
 
   if (error || !data?.signedUrl) {
+    console.error("[media/download] createSignedUrl failed", {
+      mediaId: id,
+      bucket,
+      path: asset.file_path,
+      message: error?.message,
+    });
     return NextResponse.json({ error: "Failed to generate preview URL" }, { status: 500 });
   }
 
+  recordShareAccess();
   return NextResponse.json({
     url: data.signedUrl,
     preview: forcePreview,

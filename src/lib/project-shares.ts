@@ -166,6 +166,60 @@ async function buildShareMagicLink(options: {
   });
 }
 
+/** Exported for resend flows and verification scripts. */
+export async function buildShareMagicLinkForProject(options: {
+  businessId: string;
+  projectId: string;
+  email: string;
+}): Promise<string> {
+  return buildShareMagicLink(options);
+}
+
+export async function resendProjectShareAuthLink(options: {
+  email: string;
+  businessId: string;
+}): Promise<{ sent: boolean; projectId?: string; error?: string }> {
+  const raw = await createServiceClient();
+  const normalized = normalizeShareEmail(options.email);
+  const projectIds = await listActiveShareProjectIdsForEmail(normalized, options.businessId);
+  if (projectIds.length === 0) {
+    return { sent: false };
+  }
+
+  const { data: shareRow } = await raw
+    .from("project_shares")
+    .select("project_id")
+    .eq("email", normalized)
+    .eq("business_id", options.businessId)
+    .is("revoked_at", null)
+    .order("invited_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const projectId = shareRow?.project_id as string | undefined;
+  if (!projectId) return { sent: false };
+
+  const { data: project } = await raw
+    .from("projects")
+    .select("project_name")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  const result = await sendProjectShareInviteEmail({
+    businessId: options.businessId,
+    projectId,
+    projectName: project?.project_name || "Shared project",
+    email: normalized,
+    inviterName: "ShootPortal",
+  });
+
+  if (!result.sent) {
+    return { sent: false, error: result.error ?? "Could not send share sign-in email." };
+  }
+
+  return { sent: true, projectId };
+}
+
 export async function sendProjectShareInviteEmail(options: {
   businessId: string;
   projectId: string;

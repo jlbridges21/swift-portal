@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { canAccessProject } from "@/lib/project-access";
@@ -66,8 +65,8 @@ export async function POST(request: Request) {
     }
   }
 
-  const cookieClient = await createClient();
-  const storageClient = isAdmin ? db.raw : cookieClient;
+  // Storage signing uses service role after access checks — share viewers have no tenant storage JWT.
+  const storageClient = db.raw;
 
   const { data: rows, error } = await db
     .from("media_assets")
