@@ -28,10 +28,12 @@ import { clientDownloadLockMessage, resolveProjectDownloadAllowed } from "@/lib/
 import type { Project, MediaAsset, Tour, Payment, Revision, ShootProposal, ActivityLog, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import { formatDate } from "@/lib/utils";
+import { getYouTubePosterUrl } from "@/lib/media-preview";
+import { RemoteImage } from "@/components/ui/remote-image";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import {
   Download, MessageSquare,
-  FileText, Clapperboard, Images, Globe, Eye, ArrowLeft, Lock,
+  FileText, Clapperboard, Images, Globe, Eye, ArrowLeft, Lock, Play,
 } from "lucide-react";
 import type { HeroMedia } from "@/lib/cover";
 import { ProjectHero } from "@/components/projects/project-hero";
@@ -177,7 +179,6 @@ export function ProjectPageClient({
   })();
 
   async function getDownloadUrl(asset: MediaAsset, thumb = false): Promise<string | null> {
-    if (thumb && asset.media_type === "video") return null;
     try {
       const preview = !downloadsUnlocked && !thumb;
       const res = await fetch(
@@ -674,15 +675,7 @@ function ProjectVideoList({
 
   const renderEntry = (entry: VideoEntry) => {
     if (entry.kind === "youtube") {
-      const v = entry.video;
-      return (
-        <div key={v.id} className="overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-          <div className="aspect-video bg-black">
-            <iframe src={v.embed_url || ""} className="h-full w-full" allowFullScreen title={mediaDisplayName(v)} />
-          </div>
-          <div className="border-t border-border/60 px-5 py-3 text-sm text-muted">{mediaDisplayName(v)}</div>
-        </div>
-      );
+      return <YouTubeProjectVideo key={entry.video.id} video={entry.video} />;
     }
     return (
       <div key={entry.video.id} className="space-y-2">
@@ -718,6 +711,42 @@ function ProjectVideoList({
       viewAllLabel={(n) => `View all ${n} videos`}
       renderItem={(entry) => renderEntry(entry)}
     />
+  );
+}
+
+function YouTubeProjectVideo({ video }: { video: MediaAsset }) {
+  const [playing, setPlaying] = useState(false);
+  const poster = getYouTubePosterUrl(video);
+
+  return (
+    <div className="overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+      <div className="relative aspect-video bg-black">
+        {playing ? (
+          <iframe
+            src={video.embed_url || ""}
+            className="h-full w-full"
+            allowFullScreen
+            title={mediaDisplayName(video)}
+          />
+        ) : (
+          <button
+            type="button"
+            className="group relative flex h-full w-full items-center justify-center"
+            onClick={() => setPlaying(true)}
+            aria-label={`Play ${mediaDisplayName(video)}`}
+          >
+            {poster ? (
+              <RemoteImage src={poster} alt="" fill className="object-cover opacity-90" sizes="640px" />
+            ) : null}
+            <div className="absolute inset-0 bg-black/20 transition group-hover:bg-black/35" />
+            <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-white/95 shadow-lg">
+              <Play className="ml-1 h-7 w-7 text-slate-900" fill="currentColor" />
+            </div>
+          </button>
+        )}
+      </div>
+      <div className="border-t border-border/60 px-5 py-3 text-sm text-muted">{mediaDisplayName(video)}</div>
+    </div>
   );
 }
 

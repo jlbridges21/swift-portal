@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { MediaUploadModal } from "@/components/admin/media-upload-modal";
 import { PropertyLineToolButton } from "@/components/admin/property-line-tool-button";
+import { LibraryVideoPoster } from "@/components/ui/library-video-poster";
 import { VideoMediaPlaceholder } from "@/components/ui/video-media-placeholder";
 import {
   isVideoLibraryAsset,
@@ -503,7 +504,7 @@ function AssetCard({
       >
         <div className="relative aspect-[4/3] bg-slate-100">
           {isVideoLibraryAsset(asset) ? (
-            <VideoMediaPlaceholder fileName={mediaDisplayName(asset)} label={libraryKindLabel(asset.kind)} />
+            <LibraryVideoPoster asset={asset} thumbUrl={thumbUrl} className="absolute inset-0" />
           ) : thumbUrl ? (
             <RemoteImage src={thumbUrl} alt={asset.title} fill className="object-cover" sizes="200px" />
           ) : (

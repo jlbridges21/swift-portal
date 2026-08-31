@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Play, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { VideoMediaPlaceholder } from "@/components/ui/video-media-placeholder";
+import { VideoPosterSurface } from "@/components/ui/video-poster-surface";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import type { MediaAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,17 @@ export function VideoPlayer({
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getDownloadUrl(video, true).then((url) => {
+      if (!cancelled) setPosterUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [video, getDownloadUrl]);
 
   async function startPlayback() {
     if (playing || loading) return;
@@ -60,8 +71,9 @@ export function VideoPlayer({
             className="group relative flex h-full w-full items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             aria-label={`Play ${mediaDisplayName(video)}`}
           >
-            <VideoMediaPlaceholder
-              fileName={mediaDisplayName(video)}
+            <VideoPosterSurface
+              asset={video}
+              thumbUrl={posterUrl}
               compact={compact}
               className="absolute inset-0"
             />

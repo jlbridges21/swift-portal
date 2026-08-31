@@ -1,5 +1,6 @@
 import type { MediaAsset } from "@/lib/types";
 import type { LibraryAsset, LibraryAssetKind } from "@/lib/media-library";
+import { getYouTubeThumbnail } from "@/lib/youtube";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|m4v|webm|avi|mkv|mpeg|mpg)(\?|#|$)/i;
 const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|gif|avif|bmp|svg)(\?|#|$)/i;
@@ -87,7 +88,8 @@ export function shouldFetchImageThumbnail(
   asset: Pick<MediaAsset, "media_type" | "mime_type" | "file_name" | "media_source">
 ): boolean {
   if (asset.media_source === "youtube") return false;
-  return isImageMediaAsset(asset) && !isVideoMediaAsset(asset);
+  if (asset.media_type === "document") return false;
+  return asset.media_type === "photo" || asset.media_type === "video";
 }
 
 export function shouldFetchLibraryThumbnail(
@@ -95,7 +97,22 @@ export function shouldFetchLibraryThumbnail(
 ): boolean {
   if (asset.kind === "tour" || asset.kind === "document") return false;
   if (asset.media_source === "youtube") return false;
-  return isImageLibraryAsset(asset) && !isVideoLibraryAsset(asset);
+  return asset.kind === "photo" || asset.kind === "video";
+}
+
+/** External poster for linked YouTube assets (no uploaded file). */
+export function getYouTubePosterUrl(
+  asset: Pick<MediaAsset, "media_source" | "embed_url" | "file_name" | "title">
+): string | null {
+  if (asset.media_source !== "youtube") return null;
+  return getYouTubeThumbnail(asset.embed_url || asset.file_name || asset.title || "");
+}
+
+export function getYouTubeLibraryPosterUrl(
+  asset: Pick<LibraryAsset, "media_source" | "embed_url" | "file_name" | "title">
+): string | null {
+  if (asset.media_source !== "youtube") return null;
+  return getYouTubeThumbnail(asset.embed_url || asset.file_name || asset.title || "");
 }
 
 export function libraryKindLabel(kind: LibraryAssetKind): string {

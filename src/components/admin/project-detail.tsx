@@ -13,7 +13,7 @@ import { StickySaveBar } from "@/components/ui/sticky-save-bar";
 import { Modal } from "@/components/ui/modal";
 import { StatusBadge } from "@/components/ui/badge";
 import { AdminPhotoGrid } from "@/components/admin/admin-photo-grid";
-import { VideoMediaPlaceholder } from "@/components/ui/video-media-placeholder";
+import { VideoPosterSurface } from "@/components/ui/video-poster-surface";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import { RevisionDrawer } from "@/components/admin/revision-drawer";
 import { PROJECT_STATUSES } from "@/lib/constants";
@@ -1381,6 +1381,22 @@ function AdminVideoThumb({ asset }: { asset: MediaAsset }) {
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(`/api/media/download/${asset.id}?thumb=1`, { credentials: "include" })
+      .then((res) => res.json())
+      .then((data: { url?: string | null }) => {
+        if (!cancelled) setPosterUrl(data.url ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setPosterUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [asset.id]);
 
   async function play() {
     if (playing || loading) return;
@@ -1408,7 +1424,13 @@ function AdminVideoThumb({ asset }: { asset: MediaAsset }) {
       className="relative flex w-full max-h-40 min-h-[5rem] overflow-hidden rounded-lg"
       aria-label={`Play ${mediaDisplayName(asset)}`}
     >
-      <VideoMediaPlaceholder fileName={mediaDisplayName(asset)} compact className="min-h-[5rem]" />
+      <VideoPosterSurface
+        asset={asset}
+        thumbUrl={posterUrl}
+        compact
+        className="min-h-[5rem] w-full max-h-40 overflow-hidden rounded-lg"
+        imageClassName="rounded-lg"
+      />
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-xs text-white">
           Loading…

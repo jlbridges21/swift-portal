@@ -1,10 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RemoteImage } from "@/components/ui/remote-image";
 import { useUploadManagerOptional } from "@/components/admin/upload-manager";
 import type { VideoReviewVersionRow } from "@/lib/video-reviews";
+import { fetchThumbUrls } from "@/lib/media-thumb-client";
 import { cn, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -130,12 +132,26 @@ export function VideoReviewVersionPills({
   onVersionChange,
 }: VideoReviewVersionPillsProps) {
   const latestId = versions[versions.length - 1]?.id;
+  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const ids = versions.map((v) => v.media_asset_id).filter(Boolean);
+    if (!ids.length) return;
+    void fetchThumbUrls(ids).then((urls) => {
+      const found: Record<string, string> = {};
+      for (const [id, url] of Object.entries(urls)) {
+        if (url) found[id] = url;
+      }
+      setThumbUrls(found);
+    });
+  }, [versions]);
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5" role="tablist" aria-label="Review versions">
       {versions.map((version) => {
         const isActive = version.id === activeVersionId;
         const isLatest = version.id === latestId;
+        const poster = thumbUrls[version.media_asset_id];
         return (
           <button
             key={version.id}
@@ -144,7 +160,7 @@ export function VideoReviewVersionPills({
             aria-selected={isActive}
             title={formatDate(version.created_at)}
             className={cn(
-              "rounded-full px-2.5 py-1 text-xs font-medium transition",
+              "inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium transition",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
               isActive
                 ? "bg-accent text-white shadow-sm"
@@ -152,8 +168,17 @@ export function VideoReviewVersionPills({
             )}
             onClick={() => onVersionChange(version.id)}
           >
-            V{version.version_number}
-            {isLatest && <span className={cn(isActive ? "text-white/90" : "text-muted")}> · Latest</span>}
+            {poster ? (
+              <span className="relative h-6 w-10 shrink-0 overflow-hidden rounded-md ring-1 ring-black/10">
+                <RemoteImage src={poster} alt="" fill className="object-cover" sizes="40px" />
+              </span>
+            ) : null}
+            <span>
+              V{version.version_number}
+              {isLatest && (
+                <span className={cn(isActive ? "text-white/90" : "text-muted")}> · Latest</span>
+              )}
+            </span>
           </button>
         );
       })}

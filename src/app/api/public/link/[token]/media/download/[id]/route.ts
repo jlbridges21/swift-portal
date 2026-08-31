@@ -91,20 +91,23 @@ export async function GET(
 
   const forcePreview = preview || !downloadsAllowed;
 
-  if (thumb && asset.media_type === "photo") {
+  if (thumb) {
+    if (asset.media_type === "document") {
+      return NextResponse.json(
+        { url: null, preview: true, downloadsAllowed, mediaType: asset.media_type },
+        { headers: PUBLIC_LINK_CACHE_HEADERS }
+      );
+    }
+
     const signed = await signMediaThumbnailUrl(storage, bucket, asset);
     if (!signed) {
-      return NextResponse.json({ error: "Failed to generate preview URL" }, { status: 500 });
+      return NextResponse.json(
+        { url: null, preview: true, downloadsAllowed, mediaType: asset.media_type },
+        { headers: PUBLIC_LINK_CACHE_HEADERS }
+      );
     }
     return NextResponse.json(
       { url: signed, preview: true, downloadsAllowed },
-      { headers: PUBLIC_LINK_CACHE_HEADERS }
-    );
-  }
-
-  if (thumb) {
-    return NextResponse.json(
-      { url: null, preview: true, downloadsAllowed, mediaType: asset.media_type },
       { headers: PUBLIC_LINK_CACHE_HEADERS }
     );
   }

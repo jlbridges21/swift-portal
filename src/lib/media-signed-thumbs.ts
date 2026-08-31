@@ -25,8 +25,8 @@ export type ThumbSignAsset = Pick<
 
 /**
  * Resolve a signed URL suitable for a grid/list tile.
- * Prefer stored thumbnail_url; else on-the-fly transform for photos ≤25MB;
- * else full original (degraded — keeps tiles working until backfill).
+ * Prefer stored thumbnail_url (photos + uploaded videos); else on-the-fly transform for photos ≤25MB;
+ * else null (caller shows placeholder).
  */
 export async function signMediaThumbnailUrl(
   storage: SupabaseClient,
@@ -35,7 +35,7 @@ export async function signMediaThumbnailUrl(
   ttlSeconds: number = THUMB_SIGNED_TTL_SECONDS
 ): Promise<string | null> {
   if (asset.media_source === "youtube") return null;
-  if (asset.media_type === "video" || asset.media_type === "document") return null;
+  if (asset.media_type === "document") return null;
 
   if (asset.thumbnail_url) {
     const { data, error } = await storage.storage
@@ -43,6 +43,8 @@ export async function signMediaThumbnailUrl(
       .createSignedUrl(asset.thumbnail_url, ttlSeconds);
     if (!error && data?.signedUrl) return data.signedUrl;
   }
+
+  if (asset.media_type === "video") return null;
 
   if (asset.media_type !== "photo" || !asset.file_path) return null;
 

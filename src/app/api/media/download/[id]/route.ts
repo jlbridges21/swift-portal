@@ -149,17 +149,8 @@ export async function GET(
 
   const forcePreview = preview || (!downloadsAllowed && !isAdmin);
 
-  if (thumb && asset.media_type === "video") {
-    return NextResponse.json({
-      url: null,
-      preview: true,
-      downloadsAllowed,
-      mediaType: "video",
-    });
-  }
-
   if (thumb) {
-    if (asset.media_type !== "photo") {
+    if (asset.media_type === "document") {
       return NextResponse.json({
         url: null,
         preview: true,
@@ -170,7 +161,12 @@ export async function GET(
 
     const signed = await signMediaThumbnailUrl(storageClient, bucket, asset);
     if (!signed) {
-      return NextResponse.json({ error: "Failed to generate preview URL" }, { status: 500 });
+      return NextResponse.json({
+        url: null,
+        preview: true,
+        downloadsAllowed,
+        mediaType: asset.media_type,
+      });
     }
     return NextResponse.json({
       url: signed,
