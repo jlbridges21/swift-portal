@@ -28,7 +28,7 @@ import { NextStepBanner } from "@/components/projects/next-step-banner";
 import { getAdminNextStep } from "@/lib/journey";
 import {
   Upload, CreditCard, Globe, Trash2, ChevronUp, ChevronDown,
-  ExternalLink, Check, Video, ImageIcon, Eye, EyeOff, Link2, Pencil, Users, Plus, MapPin,
+  ExternalLink, Check, Video, ImageIcon, Eye, EyeOff, Link2, Pencil, Users, Plus, MapPin, Share2,
 } from "lucide-react";
 import { CreateClientModal } from "@/components/admin/create-client-modal";
 import { useUploadManager } from "@/components/admin/upload-manager";
@@ -39,8 +39,7 @@ import { toast } from "sonner";
 import { VideoReviewAdminActions, useVideoReviewDeleteHandler } from "@/components/admin/video-review-admin-actions";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import type { ProjectShareRow } from "@/lib/project-shares";
-import { ProjectSharesPanel } from "@/components/admin/project-shares-panel";
-import { ProjectLinkAccessPanel } from "@/components/admin/project-link-access-panel";
+import { ProjectShareModal } from "@/components/admin/project-share-modal";
 import type { ProjectLinkAccessMode } from "@/lib/project-link-access";
 import { useAsyncAction } from "@/lib/use-async-action";
 
@@ -67,6 +66,7 @@ interface AdminProjectDetailProps {
   assetReviews: AssetReview[];
   mediaFolders: MediaFolder[];
   portalUrl: string;
+  clientProjectUrl: string;
   initialVideoReviews?: VideoReviewListItem[];
   projectShares?: ProjectShareRow[];
   linkAccessMode?: ProjectLinkAccessMode;
@@ -88,6 +88,7 @@ export function AdminProjectDetail({
   assetReviews,
   mediaFolders: initialFolders,
   portalUrl,
+  clientProjectUrl,
   initialVideoReviews = [],
   projectShares = [],
   linkAccessMode = "restricted",
@@ -118,6 +119,7 @@ export function AdminProjectDetail({
   const [markingShootComplete, setMarkingShootComplete] = useState(false);
   const [creatingPayment, setCreatingPayment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [folders, setFolders] = useState(initialFolders);
   const [tourPendingDelete, setTourPendingDelete] = useState<Tour | null>(null);
   const [deletingTour, setDeletingTour] = useState(false);
@@ -687,6 +689,17 @@ export function AdminProjectDetail({
 
   const displayName = form.project_name.trim() || defaultProjectName(form.property_address, form.service_type);
 
+  const assignedClientForShare = useMemo(() => {
+    const primary =
+      projectClients.find((pc) => pc.is_primary)?.clients ??
+      (initialProject.clients as Client);
+    return {
+      name: primary.name || primary.full_name || primary.email,
+      email: primary.email,
+      user_id: primary.user_id,
+    };
+  }, [projectClients, initialProject.clients]);
+
   return (
     <div className="space-y-6 pb-6 md:pb-24">
       {/* Sticky project header */}
@@ -705,6 +718,14 @@ export function AdminProjectDetail({
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <StatusBadge status={form.status} />
+            <Button
+              variant="accent"
+              size="sm"
+              className="min-h-10"
+              onClick={() => setShowShareModal(true)}
+            >
+              <Share2 className="h-4 w-4" /> Share
+            </Button>
             <Button variant="accent" size="sm" onClick={saveProject} disabled={saving} className="hidden md:inline-flex">
               {saving ? "Saving…" : "Save"}
             </Button>
@@ -728,6 +749,18 @@ export function AdminProjectDetail({
           </div>
         </div>
       </div>
+
+      <ProjectShareModal
+        open={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        projectId={initialProject.id}
+        assignedClient={assignedClientForShare}
+        clientProjectUrl={clientProjectUrl}
+        initialShares={projectShares}
+        initialLinkMode={linkAccessMode}
+        initialPublicUrl={linkAccessPublicUrl}
+        initialViewCount={linkAccessViewCount}
+      />
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={copyPortalLink}>
@@ -794,14 +827,6 @@ export function AdminProjectDetail({
         onCreateClient={() => setShowCreateClient(true)}
         onEnablePortal={enablePortalForClient}
       />
-
-      <ProjectLinkAccessPanel
-        projectId={initialProject.id}
-        initialMode={linkAccessMode}
-        initialPublicUrl={linkAccessPublicUrl}
-        initialViewCount={linkAccessViewCount}
-      />
-      <ProjectSharesPanel projectId={initialProject.id} initialShares={projectShares} />
 
       <Suspense fallback={null}>
         <ShootScheduling

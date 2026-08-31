@@ -59,7 +59,8 @@ export default async function AdminProjectPage({ params }: PageProps) {
   const linkAccess = await getProjectLinkAccessState(tenant.businessId, id);
 
   const appUrl = getBusinessPortalOrigin(tenant.business);
-  const portalUrl = `${appUrl}/dashboard/projects/${id}?preview=1`;
+  const clientProjectUrl = `${appUrl}/dashboard/projects/${id}`;
+  const portalUrl = `${clientProjectUrl}?preview=1`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -79,6 +80,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
           assetReviews={assetReviews ?? []}
           mediaFolders={mediaFolders ?? []}
           portalUrl={portalUrl}
+          clientProjectUrl={clientProjectUrl}
           initialVideoReviews={videoReviews}
           projectShares={projectShares}
           linkAccessMode={linkAccess.mode}
