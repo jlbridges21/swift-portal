@@ -25,7 +25,8 @@ async function loadDisplayNames(
   const unique = [...new Set(userIds.filter(Boolean))];
   if (!unique.length) return new Map();
 
-  const { data: profiles } = await db
+  // Shared viewers have profiles.business_id NULL — must not use tenant-scoped `.from("profiles")`.
+  const { data: profiles } = await db.raw
     .from("profiles")
     .select("id, full_name, email, role, client_id")
     .in("id", unique);
@@ -56,15 +57,25 @@ async function loadDisplayNames(
     } else {
       out.set(
         profile.id as string,
-        (profile.full_name as string | null)?.trim() || (profile.email as string) || "Team member"
+        (profile.full_name as string | null)?.trim() ||
+          (profile.email as string)?.split("@")[0] ||
+          "Team member"
       );
     }
   }
   return out;
 }
 
-function authorLabel(kind: string, name: string): string {
-  return kind === "admin" ? `${name} (business)` : `${name} (client)`;
+function authorLabel(
+  kind: string,
+  name: string,
+  profile?: { role?: string; client_id?: string | null }
+): string {
+  if (kind === "admin") return `${name} (business)`;
+  if (profile?.role === "client" && !profile.client_id) {
+    return `${name} (shared viewer)`;
+  }
+  return `${name} (client)`;
 }
 
 export async function enrichVideoReviewComments(
@@ -79,8 +90,8 @@ export async function enrichVideoReviewComments(
   const names = await loadDisplayNames(db, userIds as string[]);
   const unique = [...new Set(userIds.filter(Boolean))];
   const { data: profiles } = unique.length
-    ? await db.from("profiles").select("id, role").in("id", unique)
-    : { data: [] as { id: string; role: string }[] };
+    ? await db.raw.from("profiles").select("id, role, client_id").in("id", unique)
+    : { data: [] as { id: string; role: string; client_id: string | null }[] };
   const profileById = new Map((profiles ?? []).map((p) => [p.id as string, p]));
 
   const enriched = new Map<string, VideoReviewCommentEnriched>();
@@ -91,17 +102,23 @@ export async function enrichVideoReviewComments(
     const reopenedProfile = comment.reopened_by ? profileById.get(comment.reopened_by) : null;
     enriched.set(comment.id, {
       ...comment,
-      author_name: authorLabel(comment.author_kind, authorName),
+      author_name: authorLabel(
+        comment.author_kind,
+        authorName,
+        authorProfile ?? undefined
+      ),
       resolved_by_name: comment.resolved_by
         ? authorLabel(
             resolvedProfile?.role === "client" ? "client" : "admin",
-            names.get(comment.resolved_by) ?? "Team member"
+            names.get(comment.resolved_by) ?? "Team member",
+            resolvedProfile ?? undefined
           )
         : null,
       reopened_by_name: comment.reopened_by
         ? authorLabel(
             reopenedProfile?.role === "client" ? "client" : "admin",
-            names.get(comment.reopened_by) ?? "Unknown"
+            names.get(comment.reopened_by) ?? "Unknown",
+            reopenedProfile ?? undefined
           )
         : null,
     });

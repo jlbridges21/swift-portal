@@ -70,7 +70,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: "payments",
     label: "Payments",
     description: "Connect Stripe so clients pay you directly.",
-    hashes: ["settings-payments"],
+    hashes: ["settings-payments", "settings-download-gate"],
   },
   {
     id: "services",

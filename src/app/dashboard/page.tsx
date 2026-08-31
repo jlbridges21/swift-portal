@@ -18,7 +18,7 @@ import { ActivityFeed } from "@/components/admin/activity-feed";
 import { filterClientVisibleActivities } from "@/lib/communications";
 import { getClientNextStep } from "@/lib/journey";
 import { normalizeStatus } from "@/lib/constants";
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   ArrowRight, Calendar, CreditCard, MapPin, Sparkles, FileText, CheckCircle2,
@@ -35,21 +35,42 @@ export default async function ClientDashboard() {
 
   const supabase = await createClient();
   const tenant = await requireTenantContext();
+  const isSharedViewer = Boolean(tenant.isSharedViewer);
+  const sharedProjectIds = tenant.sharedProjectIds ?? [];
+
+  if (isSharedViewer && sharedProjectIds.length === 0) {
+    notFound();
+  }
+
   const appSettings = await getAppSettings(tenant.businessId);
   const brand = getPortalBrandFromSettings(appSettings);
   const firstName = profile.full_name?.split(" ")[0] || "there";
 
+  const projectQuery = supabase
+    .from("projects")
+    .select("*")
+    .eq("business_id", tenant.businessId)
+    .order("updated_at", { ascending: false });
+  if (isSharedViewer) {
+    projectQuery.in("id", sharedProjectIds);
+  }
+
+  const emptyPayments = Promise.resolve({ data: [] as never[] });
+  const emptyActivities = Promise.resolve({ data: [] as never[] });
+  const emptyProposals = Promise.resolve({ data: [] as never[] });
+  const emptyQuotes = Promise.resolve({ data: [] as never[] });
+
   const [{ data: projects }, { data: payments }, { data: activities }, { data: shootProposals }, { data: allQuotes }] = await Promise.all([
-    supabase.from("projects").select("*").eq("business_id", tenant.businessId).order("updated_at", { ascending: false }),
-    supabase.from("payments").select("*, projects(project_name)").eq("business_id", tenant.businessId).order("created_at", { ascending: false }),
-    supabase
+    projectQuery,
+    isSharedViewer ? emptyPayments : supabase.from("payments").select("*, projects(project_name)").eq("business_id", tenant.businessId).order("created_at", { ascending: false }),
+    isSharedViewer ? emptyActivities : supabase
       .from("activity_logs")
       .select("*, projects(id, project_name)")
       .eq("business_id", tenant.businessId)
       .order("created_at", { ascending: false })
       .limit(15),
-    supabase.from("shoot_proposals").select("*").eq("business_id", tenant.businessId).in("status", ["confirmed", "pending"]),
-    supabase.from("project_quotes").select("*").eq("business_id", tenant.businessId).in("status", ["sent", "approved"]).order("updated_at", { ascending: false }),
+    isSharedViewer ? emptyProposals : supabase.from("shoot_proposals").select("*").eq("business_id", tenant.businessId).in("status", ["confirmed", "pending"]),
+    isSharedViewer ? emptyQuotes : supabase.from("project_quotes").select("*").eq("business_id", tenant.businessId).in("status", ["sent", "approved"]).order("updated_at", { ascending: false }),
   ]);
 
   const proposalsByProject = new Map<string, ShootProposal[]>();
@@ -114,7 +135,9 @@ export default async function ClientDashboard() {
               Welcome back, {firstName}.
             </h1>
             <p className="mt-2 text-lg text-muted">
-              You have {activeProjects.length} active project{activeProjects.length !== 1 ? "s" : ""}.
+              {isSharedViewer
+                ? `You have access to ${activeProjects.length} shared project${activeProjects.length !== 1 ? "s" : ""}.`
+                : `You have ${activeProjects.length} active project${activeProjects.length !== 1 ? "s" : ""}.`}
             </p>
           </div>
           <div className="hidden sm:flex sm:items-center">
@@ -175,7 +198,7 @@ export default async function ClientDashboard() {
           </section>
         )}
 
-        {!featured && (
+        {!featured && !isSharedViewer && (
           <Card className="mb-10 border-dashed shadow-sm">
             <CardContent className="py-16 text-center">
               <p className="text-lg font-medium text-primary">No active projects yet</p>
@@ -231,7 +254,7 @@ export default async function ClientDashboard() {
 
         <div className="grid gap-10 lg:grid-cols-3">
           <section className="lg:col-span-2 space-y-10">
-            {pendingEstimates.length > 0 && (
+            {!isSharedViewer && pendingEstimates.length > 0 && (
               <div>
                 <h2 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
                   <FileText className="h-5 w-5 text-accent" />
@@ -263,6 +286,7 @@ export default async function ClientDashboard() {
               </div>
             )}
 
+            {!isSharedViewer && (
             <div>
               <h2 className="text-lg font-semibold text-primary mb-4">Recent Activity</h2>
               <Card className="shadow-sm border-0 ring-1 ring-black/5">
@@ -275,8 +299,10 @@ export default async function ClientDashboard() {
                 </CardContent>
               </Card>
             </div>
+            )}
           </section>
 
+          {!isSharedViewer && (
           <div className="space-y-8">
             {outstandingInvoices.length > 0 && (
               <section>
@@ -320,6 +346,7 @@ export default async function ClientDashboard() {
             )}
 
           </div>
+          )}
         </div>
 
         {deliveredProjects.length > 0 && (

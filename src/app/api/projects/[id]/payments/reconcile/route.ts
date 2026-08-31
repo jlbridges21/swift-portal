@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
-import { canAccessProject } from "@/lib/project-access";
+import { canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
 import { requireTenantContext } from "@/lib/tenant";
 import {
   reconcileProjectOutstandingPayments,
@@ -15,7 +15,7 @@ async function authorizeProject(projectId: string) {
     return { ok: false as const, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
 
-  const allowed = await canAccessProject(profile, projectId);
+  const allowed = await canAccessProjectAsAssignedClientOrAdmin(profile, projectId);
   if (!allowed) {
     return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }

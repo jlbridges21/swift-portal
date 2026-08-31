@@ -40,6 +40,12 @@ async function ProjectContent({
   const supabase = await createClient();
   const tenant = await requireTenantContext();
 
+  if (tenant.isSharedViewer && !tenant.sharedProjectIds?.includes(id)) {
+    notFound();
+  }
+
+  const isSharedViewer = Boolean(tenant.isSharedViewer);
+
   const [
     { data: project },
     { data: media },
@@ -71,7 +77,9 @@ async function ProjectContent({
 
   if (!project) notFound();
 
-  await reconcileProjectPaymentsOnLoad(id, tenant.businessId, "project_page");
+  if (!isSharedViewer) {
+    await reconcileProjectPaymentsOnLoad(id, tenant.businessId, "project_page");
+  }
 
   const { data: refreshedPayments } = await supabase
     .from("payments")
@@ -105,19 +113,21 @@ async function ProjectContent({
         videos={videos}
         documents={documents}
         tours={visibleTours}
-        payments={refreshedPayments ?? payments ?? []}
-        revisions={revisions ?? []}
-        shootProposals={shootProposals ?? []}
-        activities={filterClientVisibleActivities(activities ?? [])}
-        quotes={getClientVisibleQuotes(quotes ?? [], {
+        payments={isSharedViewer ? [] : (refreshedPayments ?? payments ?? [])}
+        revisions={isSharedViewer ? [] : (revisions ?? [])}
+        shootProposals={isSharedViewer ? [] : (shootProposals ?? [])}
+        activities={isSharedViewer ? [] : filterClientVisibleActivities(activities ?? [])}
+        quotes={isSharedViewer ? [] : getClientVisibleQuotes(quotes ?? [], {
           showPreliminaryToClients: appSettings.proposals.showPreliminaryToClients,
         })}
-        allowClientProposalChanges={appSettings.proposals.allowClientProposalChanges}
-        assetReviews={assetReviews ?? []}
+        allowClientProposalChanges={!isSharedViewer && appSettings.proposals.allowClientProposalChanges}
+        requireDeliveredForDownloads={appSettings.payments.requireDeliveredForDownloads}
+        assetReviews={isSharedViewer ? [] : (assetReviews ?? [])}
         mediaFolders={mediaFolders ?? []}
         videoReviews={videoReviews}
         isPreview={preview && profile.role === "admin"}
         isAdmin={profile.role === "admin"}
+        isSharedViewer={isSharedViewer}
       />
     </>
   );

@@ -14,6 +14,7 @@ import {
   zipLog,
   ZipDownloadError,
 } from "@/lib/project-zip-download";
+import { getAppSettings } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import {
   filterMediaForVideoReviewDelivery,
@@ -69,7 +70,14 @@ export async function GET(
       );
     }
 
-    const auth = await authorizeProjectZipDownload(profile, projectId, db);
+    const appSettings = await getAppSettings(tenant.businessId);
+
+    const auth = await authorizeProjectZipDownload(
+      profile,
+      projectId,
+      db,
+      appSettings.payments.requireDeliveredForDownloads
+    );
     if (!auth.ok) {
       zipLog("access", ctx, { result: "denied", status: auth.status, details: auth.details });
       return zipErrorResponse("ZIP_DOWNLOAD_FAILED", auth.error, auth.details, auth.status);

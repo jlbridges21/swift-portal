@@ -3,9 +3,12 @@ import { PassThrough } from "node:stream";
 import { finished } from "node:stream/promises";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { filterClientMedia, isClientVisibleMedia } from "@/lib/client-media";
-import { canDownloadDeliverables } from "@/lib/deliverables";
+import {
+  DOWNLOAD_GATE_API_MESSAGE,
+  resolveProjectDownloadAllowed,
+} from "@/lib/deliverables";
 import { sanitizeStorageFileName } from "@/lib/media-upload";
-import { canAccessProject } from "@/lib/project-access";
+import { resolveProjectAccess, touchProjectShareAccess } from "@/lib/project-access";
 import { downloadFileName } from "@/lib/media-display-name";
 import type { MediaAsset, Profile } from "@/lib/types";
 
@@ -506,7 +509,8 @@ export function contentDispositionAttachment(filename: string): string {
 export async function authorizeProjectZipDownload(
   profile: Profile,
   projectId: string,
-  supabase: { from: SupabaseClient["from"] }
+  supabase: { from: SupabaseClient["from"] },
+  requireDeliveredForDownloads: boolean
 ): Promise<
   | {
       ok: true;
@@ -525,7 +529,7 @@ export async function authorizeProjectZipDownload(
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
-    .select("id, project_name, property_address, status, client_id, deleted_at")
+    .select("id, project_name, property_address, status, client_id, business_id, deleted_at")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -542,24 +546,35 @@ export async function authorizeProjectZipDownload(
     return { ok: false, status: 404, error: "Project not found.", details: "project missing or deleted" };
   }
 
-  if (!isAdmin && !canDownloadDeliverables(project.status)) {
+  if (
+    !resolveProjectDownloadAllowed({
+      projectStatus: project.status,
+      isAdmin,
+      requireDeliveredForDownloads,
+    })
+  ) {
     return {
       ok: false,
       status: 403,
-      error: "Downloads unlock after your final payment is complete.",
-      details: "unauthorized — project not delivered",
+      error: DOWNLOAD_GATE_API_MESSAGE,
+      details: "unauthorized — download gate closed",
     };
   }
 
   if (!isAdmin) {
-    const hasAccess = await canAccessProject(profile, projectId);
-    if (!hasAccess) {
+    const access = await resolveProjectAccess(profile, projectId, {
+      tenantBusinessId: project.business_id,
+    });
+    if (!access.allowed) {
       return {
         ok: false,
         status: 403,
         error: "You don't have access to this project.",
-        details: "unauthorized — not project client",
+        details: "unauthorized — not project client or share",
       };
+    }
+    if (access.kind === "share" && access.shareId) {
+      void touchProjectShareAccess(access.shareId);
     }
   }
 

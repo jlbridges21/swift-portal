@@ -142,6 +142,23 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
     keywords: ["contact", "phone", "address", "support email", "website"],
   },
   {
+    id: "download-gate",
+    sectionId: "payments",
+    label: "Require Delivered before download",
+    description:
+      "When on, clients download only after the project reaches Delivered. When off, they can download anytime.",
+    keywords: [
+      "download",
+      "delivered",
+      "payment",
+      "gate",
+      "media",
+      "zip",
+      "pay before download",
+      "require delivered",
+    ],
+  },
+  {
     id: "integrations",
     sectionId: "integrations",
     label: "Integrations",
@@ -160,6 +177,7 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
 const HASH_BY_ENTRY: Record<string, string> = {
   custom_domain: "settings-custom-domain",
   payments: "settings-payments",
+  "download-gate": "settings-download-gate",
   email: "settings-email",
   "reply-to": "settings-reply-to",
   "from-name": "settings-from-name",

@@ -31,6 +31,11 @@ export type Capabilities = {
     active: boolean;
     clientId: string | null;
   };
+  /** Passwordless project_shares viewer — profiles.business_id stays NULL. */
+  sharedViewer: {
+    active: boolean;
+    projectIds: string[];
+  };
   platform: {
     active: boolean;
   };
@@ -40,6 +45,7 @@ const EMPTY_CAPABILITIES: Capabilities = {
   business: { active: false, businessId: null, role: null },
   partner: { active: false, suspended: false, partnerId: null },
   client: { active: false, clientId: null },
+  sharedViewer: { active: false, projectIds: [] },
   platform: { active: false },
 };
 
@@ -51,6 +57,7 @@ async function resolveCapabilities(): Promise<Capabilities> {
     business: { active: false, businessId: null, role: null },
     partner: { active: false, suspended: false, partnerId: null },
     client: { active: false, clientId: null },
+    sharedViewer: { active: false, projectIds: [] },
     platform: { active: profile.role === "super_admin" },
   };
 
@@ -81,6 +88,15 @@ async function resolveCapabilities(): Promise<Capabilities> {
     };
     if (!active) {
       caps.business.active = false;
+    }
+  }
+
+  // Shared viewer — active project_shares rows (no profiles.business_id).
+  if (!profile.business_id && !profile.client_id && profile.email) {
+    const { listActiveShareProjectIdsForEmail } = await import("@/lib/project-shares");
+    const projectIds = await listActiveShareProjectIdsForEmail(profile.email);
+    if (projectIds.length > 0) {
+      caps.sharedViewer = { active: true, projectIds };
     }
   }
 

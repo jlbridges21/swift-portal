@@ -6,7 +6,7 @@ import {
   Calendar, Eye, CreditCard, Images,
 } from "lucide-react";
 import { normalizeStatus } from "@/lib/constants";
-import { canDownloadDeliverables } from "@/lib/deliverables";
+import { clientDownloadLockMessage, resolveProjectDownloadAllowed } from "@/lib/deliverables";
 import { ProjectZipDownload } from "@/components/projects/project-zip-download";
 
 interface QuickActionsProps {
@@ -15,6 +15,7 @@ interface QuickActionsProps {
   hasMedia: boolean;
   projectId?: string;
   downloadableFileCount?: number;
+  requireDeliveredForDownloads?: boolean;
   className?: string;
 }
 
@@ -24,11 +25,17 @@ export function ProjectQuickActions({
   hasMedia,
   projectId,
   downloadableFileCount,
+  requireDeliveredForDownloads = true,
   className,
 }: QuickActionsProps) {
   const s = normalizeStatus(status);
   const canPreview = hasMedia;
-  const canDownload = canDownloadDeliverables(s);
+  const canDownload = resolveProjectDownloadAllowed({
+    projectStatus: s,
+    isAdmin: false,
+    requireDeliveredForDownloads,
+  });
+  const downloadLockMessage = clientDownloadLockMessage(s, requireDeliveredForDownloads);
 
   const actions = [
     {
@@ -83,9 +90,9 @@ export function ProjectQuickActions({
           variant="hero"
         />
       )}
-      {canPreview && !canDownload && hasMedia && (
+      {canPreview && downloadLockMessage && hasMedia && (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-2 text-xs text-slate-300">
-          <Images className="h-3.5 w-3.5" /> Downloads unlock after payment
+          <Images className="h-3.5 w-3.5" /> {downloadLockMessage}
         </span>
       )}
     </nav>

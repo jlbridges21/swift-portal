@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAuth } from "@/lib/auth";
-import { canAccessProject } from "@/lib/project-access";
+import { canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getStripeForBusiness, portalCheckoutBaseUrl, StripeConnectNotReadyError } from "@/lib/stripe-connect";
 import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
@@ -25,7 +25,7 @@ async function loadPayment(id: string, businessId?: string) {
 
 async function authorizePaymentAccess(payment: Payment) {
   const profile = await requireAuth();
-  const allowed = await canAccessProject(profile, payment.project_id);
+  const allowed = await canAccessProjectAsAssignedClientOrAdmin(profile, payment.project_id);
   if (!allowed) {
     return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }

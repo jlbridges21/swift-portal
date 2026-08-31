@@ -20,6 +20,10 @@ export async function GET(request: Request) {
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(profile.role);
 
+  if (tenant.isSharedViewer) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { searchParams } = new URL(request.url);
   const projectId = searchParams.get("project_id");
 

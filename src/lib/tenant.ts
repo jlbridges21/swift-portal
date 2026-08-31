@@ -47,6 +47,9 @@ export interface TenantContext {
   isSuperAdmin: boolean;
   impersonating: boolean;
   allowWrites: boolean;
+  /** Passwordless shared viewer — profiles.business_id stays NULL. */
+  isSharedViewer?: boolean;
+  sharedProjectIds?: string[];
 }
 
 const UUID_RE =
@@ -145,7 +148,32 @@ async function resolveTenantContext(): Promise<TenantContext | null> {
     businessId = data?.business_id ?? null;
   }
 
-  if (!businessId) return null;
+  if (!businessId) {
+    const host = await getPublicHostContext();
+    if (host.kind === "tenant" && host.businessId && profile.email) {
+      const { listActiveShareProjectIdsForEmail } = await import("@/lib/project-shares");
+      const sharedProjectIds = await listActiveShareProjectIdsForEmail(
+        profile.email,
+        host.businessId
+      );
+      if (sharedProjectIds.length > 0) {
+        const business = await loadBusiness(host.businessId);
+        if (business) {
+          return {
+            businessId: business.id,
+            business,
+            role: "client",
+            isSuperAdmin: false,
+            impersonating: false,
+            allowWrites: false,
+            isSharedViewer: true,
+            sharedProjectIds,
+          };
+        }
+      }
+    }
+    return null;
+  }
 
   const business = await loadBusiness(businessId);
   if (!business) return null;

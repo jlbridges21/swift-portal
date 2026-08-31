@@ -24,7 +24,7 @@ import { QuoteSection } from "@/components/projects/quote-section";
 import { DeliverableReview } from "@/components/projects/deliverable-review";
 import { EmptyState } from "@/components/ui/empty-state";
 import { normalizeStatus } from "@/lib/constants";
-import { canDownloadDeliverables } from "@/lib/deliverables";
+import { clientDownloadLockMessage, resolveProjectDownloadAllowed } from "@/lib/deliverables";
 import type { Project, MediaAsset, Tour, Payment, Revision, ShootProposal, ActivityLog, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import { formatDate } from "@/lib/utils";
@@ -59,6 +59,8 @@ interface ProjectPageClientProps {
   isPreview?: boolean;
   isAdmin?: boolean;
   allowClientProposalChanges?: boolean;
+  requireDeliveredForDownloads?: boolean;
+  isSharedViewer?: boolean;
 }
 
 const REVISION_STATUS_LABEL: Record<string, string> = {
@@ -112,6 +114,8 @@ export function ProjectPageClient({
   isPreview,
   isAdmin,
   allowClientProposalChanges = true,
+  requireDeliveredForDownloads = true,
+  isSharedViewer = false,
 }: ProjectPageClientProps) {
   const router = useRouter();
   const brand = usePortalBrand();
@@ -130,7 +134,15 @@ export function ProjectPageClient({
   const [revisions, setRevisions] = useState(initialRevisions);
 
   const status = normalizeStatus(project.status);
-  const downloadsUnlocked = isPreview || isAdmin || canDownloadDeliverables(status);
+  const downloadsUnlocked =
+    isPreview ||
+    isAdmin ||
+    resolveProjectDownloadAllowed({
+      projectStatus: status,
+      isAdmin: false,
+      requireDeliveredForDownloads,
+    });
+  const downloadLockMessage = clientDownloadLockMessage(status, requireDeliveredForDownloads);
   const hasAnyMedia = photos.length > 0 || videos.length > 0 || tours.length > 0 || documents.length > 0;
   const mediaVisible = isPreview || isAdmin || hasAnyMedia;
   const pendingPayments = payments.filter((p) => p.status === "pending" || p.status === "sent");
@@ -185,7 +197,7 @@ export function ProjectPageClient({
 
   async function handleDownload(asset: MediaAsset) {
     if (!downloadsUnlocked) {
-      toast.error("Downloads unlock after final payment");
+      toast.error(downloadLockMessage ?? "Downloads are not available yet");
       return;
     }
     await downloadMediaAsset(asset);
@@ -253,12 +265,13 @@ export function ProjectPageClient({
             hasMedia={hasAnyMedia}
             projectId={project.id}
             downloadableFileCount={downloadableFileCount}
+            requireDeliveredForDownloads={requireDeliveredForDownloads}
           />
         )}
       </ProjectHero>
 
       <main className="mobile-container py-12 pb-16 space-y-16">
-        <NextStepBanner step={clientStep} />
+        {!isSharedViewer && <NextStepBanner step={clientStep} />}
 
         <Card className="border-0 shadow-lg shadow-slate-200/50 rounded-2xl overflow-hidden">
           <CardHeader className="bg-white border-b border-border/60 pb-4">
@@ -269,10 +282,11 @@ export function ProjectPageClient({
           </CardContent>
         </Card>
 
-        {(isClientView || isPreview) && (
+        {(isClientView || isPreview) && !isSharedViewer && (
           <ClientPricingCta project={project} quotes={quotes} payments={payments} />
         )}
 
+        {!isSharedViewer && (
         <QuoteSection
           projectId={project.id}
           quotes={quotes}
@@ -280,8 +294,9 @@ export function ProjectPageClient({
           previewMode={isPreview}
           allowClientProposalChanges={allowClientProposalChanges}
         />
+        )}
 
-        {!isPreview && (
+        {!isPreview && !isSharedViewer && (
           <Suspense fallback={null}>
             <ShootScheduling
               projectId={project.id}
@@ -301,7 +316,9 @@ export function ProjectPageClient({
               photos.length > 0
                 ? downloadsUnlocked
                   ? "Full-resolution downloads available"
-                  : "Tap any photo to view fullscreen — downloads unlock after payment"
+                  : downloadLockMessage
+                    ? `Tap any photo to view fullscreen. ${downloadLockMessage}`
+                    : undefined
                 : undefined
             }
           >
@@ -336,7 +353,9 @@ export function ProjectPageClient({
               uploadedVideos.length > 0 || youtubeVideos.length > 0
                 ? downloadsUnlocked
                   ? undefined
-                  : "Stream previews below — download after payment"
+                  : downloadLockMessage
+                    ? `Stream previews below. ${downloadLockMessage}`
+                    : undefined
                 : undefined
             }
           >
@@ -389,7 +408,9 @@ export function ProjectPageClient({
               documents.length > 0
                 ? downloadsUnlocked
                   ? "Download your files below"
-                  : "Preview available — full downloads unlock after payment"
+                  : downloadLockMessage
+                    ? `Preview available. ${downloadLockMessage}`
+                    : undefined
                 : undefined
             }
           >
@@ -402,9 +423,9 @@ export function ProjectPageClient({
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium text-primary">{mediaDisplayName(doc)}</p>
-                      {!downloadsUnlocked && !isPreview && (
+                      {!downloadsUnlocked && !isPreview && downloadLockMessage && (
                         <p className="text-xs text-muted mt-1 flex items-center gap-1">
-                          <Lock className="h-3 w-3" /> Download locked
+                          <Lock className="h-3 w-3" /> {downloadLockMessage}
                         </p>
                       )}
                     </div>
@@ -440,7 +461,13 @@ export function ProjectPageClient({
             id="photo-gallery"
             title="Photo Gallery"
             icon={Images}
-            subtitle={downloadsUnlocked ? "Full-resolution downloads available" : "Tap any photo to view fullscreen — downloads unlock after payment"}
+            subtitle={
+              downloadsUnlocked
+                ? "Full-resolution downloads available"
+                : downloadLockMessage
+                  ? `Tap any photo to view fullscreen. ${downloadLockMessage}`
+                  : undefined
+            }
           >
             <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
               <ClientPhotoFolders
@@ -461,7 +488,13 @@ export function ProjectPageClient({
             id="video"
             title="Video"
             icon={Clapperboard}
-            subtitle={downloadsUnlocked ? undefined : "Stream previews below — download after payment"}
+            subtitle={
+              downloadsUnlocked
+                ? undefined
+                : downloadLockMessage
+                  ? `Stream previews below. ${downloadLockMessage}`
+                  : undefined
+            }
           >
             <div className="space-y-5">
               <ProjectVideoList
@@ -494,7 +527,13 @@ export function ProjectPageClient({
             id="documents"
             title="Documents"
             icon={FileText}
-            subtitle={downloadsUnlocked ? "Download your files below" : "Preview available — full downloads unlock after payment"}
+            subtitle={
+              downloadsUnlocked
+                ? "Download your files below"
+                : downloadLockMessage
+                  ? `Preview available. ${downloadLockMessage}`
+                  : undefined
+            }
           >
             <div className="grid gap-3 sm:grid-cols-2">
               {documents.map((doc) => (
@@ -504,9 +543,9 @@ export function ProjectPageClient({
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium text-primary">{mediaDisplayName(doc)}</p>
-                    {!downloadsUnlocked && !isPreview && (
+                    {!downloadsUnlocked && !isPreview && downloadLockMessage && (
                       <p className="text-xs text-muted mt-1 flex items-center gap-1">
-                        <Lock className="h-3 w-3" /> Download locked
+                        <Lock className="h-3 w-3" /> {downloadLockMessage}
                       </p>
                     )}
                   </div>
@@ -530,7 +569,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {!isPreview && status === "ready_for_review" && (isClientView || mediaVisible) && (
+        {!isPreview && status === "ready_for_review" && (isClientView || mediaVisible) && !isSharedViewer && (
           <DeliverableReview
             projectId={project.id}
             photos={photos}
@@ -541,14 +580,15 @@ export function ProjectPageClient({
           />
         )}
 
-
+        {!isSharedViewer && (
         <PaymentsSection payments={payments} isPreview={isPreview} alwaysShow={isClientView} />
+        )}
 
-        {!isPreview && (
+        {!isPreview && !isSharedViewer && (
           <ClientMessagesChat projectId={project.id} compact />
         )}
 
-        {!isPreview && status !== "ready_for_review" && status !== "awaiting_payment" && (
+        {!isPreview && !isSharedViewer && status !== "ready_for_review" && status !== "awaiting_payment" && (
           <Card className="border-0 shadow-lg rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-base">

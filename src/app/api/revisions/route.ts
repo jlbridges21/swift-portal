@@ -5,7 +5,7 @@ import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { idempotencyKey } from "@/lib/idempotency";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
-import { canAccessProject } from "@/lib/project-access";
+import { canAccessProject, canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getAppSettings } from "@/lib/app-settings";
 
@@ -20,6 +20,16 @@ export async function GET(request: Request) {
 
   if (!projectId) {
     return NextResponse.json({ error: "project_id required" }, { status: 400 });
+  }
+
+  const tenant = await getTenantContext();
+  if (tenant?.isSharedViewer) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const allowed = await canAccessProjectAsAssignedClientOrAdmin(profile, projectId);
+  if (!allowed) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const supabase = await createClient();

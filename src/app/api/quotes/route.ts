@@ -10,6 +10,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { archivePreviousOfficialQuotes } from "@/lib/quote-archive";
+import { canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -23,6 +24,15 @@ export async function GET(request: Request) {
   if (!bid) {
     if (profile.role === "super_admin") return missingTenantResponse(profile.role);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (tenant?.isSharedViewer) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const allowed = await canAccessProjectAsAssignedClientOrAdmin(profile, projectId);
+  if (!allowed) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const supabase = await createClient();

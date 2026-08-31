@@ -93,7 +93,8 @@ export async function POST(
   try {
     const review = await loadReviewForAccess(db, profile, reviewId);
     const authorKind = isReviewAdmin(profile) ? "admin" : "client";
-    if (authorKind === "client" && !profile.client_id) {
+    const isSharedCommenter = Boolean(tenant.isSharedViewer);
+    if (authorKind === "client" && !profile.client_id && !isSharedCommenter) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

@@ -15,6 +15,7 @@ import type { User } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getPublicHostContext, lookupBusinessById } from "@/lib/host-resolution";
 import { getLoginRedirectOrigin, joinPortalPath } from "@/lib/portal-url";
+import { safeAuthNext } from "@/lib/auth-confirm";
 import { needsOnboardingRedirect } from "@/lib/onboarding";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import { resolvePartnerAccess } from "@/lib/partner-dashboard";
@@ -169,6 +170,10 @@ function portalUnavailableError(): LoginResolveResult {
   };
 }
 
+function safeAuthNextFromRequest(nextPath?: string | null): string | null {
+  return safeAuthNext(nextPath ?? null);
+}
+
 /**
  * Resolve where a signed-in user should go after login / OAuth callback.
  * Caller is responsible for signing out when result.signOut is true.
@@ -178,7 +183,7 @@ function portalUnavailableError(): LoginResolveResult {
 export async function resolveLoginDestination(
   profile: Profile,
   user: User,
-  options?: { requestHost?: string; requestOrigin?: string }
+  options?: { requestHost?: string; requestOrigin?: string; nextPath?: string | null }
 ): Promise<LoginResolveResult> {
   if (user.user_metadata?.must_change_password === true) {
     return { kind: "redirect", redirect: "/auth/update-password?reason=forced" };
@@ -238,11 +243,47 @@ export async function resolveLoginDestination(
     return { kind: "redirect", redirect: joinPortalPath(destOrigin, "/dashboard") };
   }
 
+  // (b2) Passwordless shared viewer — profiles.business_id stays NULL (like partners).
+  const email = (user.email || profile.email || "").trim();
+  if (email) {
+    const { listActiveShareProjectIdsForEmail, listSharedBusinessIdsForEmail } = await import(
+      "@/lib/project-shares"
+    );
+    const shareBusinessIds = await listSharedBusinessIdsForEmail(email);
+    if (shareBusinessIds.length > 0) {
+      let targetBusinessId = shareBusinessIds[0]!;
+      if (
+        publicHost.kind === "tenant" &&
+        publicHost.businessId &&
+        shareBusinessIds.includes(publicHost.businessId)
+      ) {
+        targetBusinessId = publicHost.businessId;
+      }
+      const own = await lookupBusinessById(targetBusinessId);
+      if (!own || own.status !== "active") {
+        return portalUnavailableError();
+      }
+      const sharedProjectIds = await listActiveShareProjectIdsForEmail(email, targetBusinessId);
+      const safeNext = safeAuthNextFromRequest(options?.nextPath);
+      const destPath =
+        safeNext ??
+        (sharedProjectIds.length === 1
+          ? `/dashboard/projects/${sharedProjectIds[0]}`
+          : "/dashboard");
+      const onOwnTenant = publicHost.kind === "tenant" && publicHost.businessId === own.id;
+      const destOrigin = getLoginRedirectOrigin(
+        own,
+        { hostname, origin },
+        { foreignTenantHost: !onOwnTenant }
+      );
+      return { kind: "redirect", redirect: joinPortalPath(destOrigin, destPath) };
+    }
+  }
+
   // (c) Partner — serve /partner on the CURRENT auth origin (relative path).
   // Partner-only users have no tenant host; relative /partner keeps them where they signed in.
   // Business+Partner never reach here (branch a returns first). Never force apex —
   // that would cross origins and drop the session cookie.
-  const email = (user.email || profile.email || "").trim();
   if (email) {
     await linkPartnerByEmailIfNeeded(user.id, email);
   }

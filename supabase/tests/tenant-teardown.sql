@@ -37,6 +37,7 @@ BEGIN
   DELETE FROM media_assets WHERE business_id = v_teardown_business_id;
   DELETE FROM media_folders WHERE business_id = v_teardown_business_id;
   DELETE FROM project_clients WHERE business_id = v_teardown_business_id;
+  DELETE FROM project_shares WHERE business_id = v_teardown_business_id;
   DELETE FROM leads WHERE business_id = v_teardown_business_id;
   DELETE FROM business_integrations WHERE business_id = v_teardown_business_id;
   -- protect_objects_delete blocks SQL DELETE. Wrap so CRM teardown still runs.

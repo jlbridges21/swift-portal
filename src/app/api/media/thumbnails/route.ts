@@ -34,12 +34,39 @@ export async function POST(request: Request) {
   }
 
   if (!ids.length) {
-    return NextResponse.json({ urls: {} });
+    return NextResponse.json({ error: "ids required" }, { status: 400 });
   }
 
   const db = await createTenantServiceClient(tenant.businessId);
-  const cookieClient = await createClient();
   const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+
+  if (!isAdmin) {
+    const allowedProjects =
+      tenant.isSharedViewer && tenant.sharedProjectIds
+        ? new Set(tenant.sharedProjectIds)
+        : null;
+    const { data: probeRows } = await db
+      .from("media_assets")
+      .select("id, project_id, business_id")
+      .in("id", ids);
+    for (const id of ids) {
+      const asset = (probeRows ?? []).find((r) => r.id === id);
+      if (!asset || asset.business_id !== tenant.businessId || !asset.project_id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      if (allowedProjects && !allowedProjects.has(asset.project_id as string)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      if (!allowedProjects) {
+        const ok = await canAccessProject(profile, asset.project_id as string);
+        if (!ok) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+      }
+    }
+  }
+
+  const cookieClient = await createClient();
   const storageClient = isAdmin ? db.raw : cookieClient;
 
   const { data: rows, error } = await db
@@ -81,8 +108,6 @@ export async function POST(request: Request) {
           urls[id] = null;
           return;
         }
-      } else if (asset.project_id) {
-        // Admin: still scoped by tenant client; no extra project check needed
       }
 
       const bucket = asset.media_type === "document" ? "project-documents" : "project-media";

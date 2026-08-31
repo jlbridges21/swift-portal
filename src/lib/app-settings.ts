@@ -109,6 +109,12 @@ export interface IntegrationSettings {
   ghlLeadSource: string;
 }
 
+/** Settings → Payments (Stripe + download policy). Not workflow automation. */
+export interface PaymentsSettings {
+  /** When true, clients download only after the project reaches Delivered. */
+  requireDeliveredForDownloads: boolean;
+}
+
 /** Optional setup items a studio may keep as ShootPortal defaults (persisted). */
 export type SetupAcceptDefaultKey = "logo" | "colors" | "stripe" | "custom_domain";
 
@@ -119,6 +125,7 @@ export interface AppSettings {
   email: EmailSettings;
   business: BusinessSettings;
   proposals: ProposalSettings;
+  payments: PaymentsSettings;
   workflow: WorkflowSettings;
   integrations: IntegrationSettings;
   landing: LandingSettings;
@@ -231,6 +238,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     allowClientProposalChanges: true,
     preliminaryDisclaimer: DEFAULT_PRELIMINARY_DISCLAIMER,
   },
+  payments: {
+    requireDeliveredForDownloads: true,
+  },
   workflow: buildDefaultWorkflowSettings(),
   integrations: {
     ghlWebhookUrl: "",
@@ -279,6 +289,13 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
     email: { ...DEFAULT_APP_SETTINGS.email, ...(stored.email ?? {}) },
     business: { ...DEFAULT_APP_SETTINGS.business, ...(stored.business ?? {}) },
     proposals: { ...DEFAULT_APP_SETTINGS.proposals, ...(stored.proposals ?? {}) },
+    payments: {
+      ...DEFAULT_APP_SETTINGS.payments,
+      ...(stored.payments ?? {}),
+      requireDeliveredForDownloads:
+        stored.payments?.requireDeliveredForDownloads ??
+        DEFAULT_APP_SETTINGS.payments.requireDeliveredForDownloads,
+    },
     workflow: mergeWorkflowSettings(stored.workflow),
     integrations: {
       ...DEFAULT_APP_SETTINGS.integrations,

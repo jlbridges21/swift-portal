@@ -397,6 +397,10 @@ export function AdminSettingsClient({
     setSettings((prev) => ({ ...prev, proposals: { ...prev.proposals, ...patch } }));
   }, []);
 
+  const patchPayments = useCallback((patch: Partial<AppSettings["payments"]>) => {
+    setSettings((prev) => ({ ...prev, payments: { ...prev.payments, ...patch } }));
+  }, []);
+
   const patchWorkflow = useCallback((workflow: AppSettings["workflow"]) => {
     setSettings((prev) => ({ ...prev, workflow }));
   }, []);
@@ -859,6 +863,31 @@ export function AdminSettingsClient({
             <h2 className="text-lg font-semibold text-primary">Payments</h2>
             <p className="mt-1 mb-4 text-sm text-muted">Connect your Stripe account so clients pay you directly.</p>
             {payments}
+            <Card className="shadow-sm" id="settings-download-gate">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Download access</CardTitle>
+                <p className="text-sm text-muted">
+                  Controls when clients with project access can download full-resolution files.
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-hidden rounded-xl border border-border p-0">
+                <div className="divide-y divide-border">
+                  <div className="px-4 py-3">
+                    <RowToggle
+                      id="requireDeliveredForDownloads"
+                      label="Require projects to reach Delivered before clients can download media"
+                      checked={settings.payments.requireDeliveredForDownloads}
+                      onChange={(v) => patchPayments({ requireDeliveredForDownloads: v })}
+                    />
+                    <p className="mt-2 px-4 text-xs text-muted">
+                      When off, anyone with project access can download photos, videos, and documents at
+                      any status — including before they pay. Video review playback and previews are
+                      always available either way.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
             {!settings.setupAcceptedDefaults?.stripe ? (
               <AcceptSetupDefaultButton acceptKey="stripe" />
             ) : (

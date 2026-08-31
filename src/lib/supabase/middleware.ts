@@ -261,7 +261,7 @@ export async function updateSession(request: NextRequest) {
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, business_id")
+      .select("role, business_id, client_id, email")
       .eq("id", user.id)
       .single();
 
@@ -308,6 +308,33 @@ export async function updateSession(request: NextRequest) {
       url.searchParams.set("error", "unavailable");
       url.searchParams.delete("redirect");
       return applyPathCookie(NextResponse.redirect(url), resolution);
+    }
+
+    // Authenticated shared viewers on platform apex must reach their tenant portal
+    // (same class of bug as business admins on apex — session cookie is host-scoped).
+    if (
+      !isApi &&
+      resolution.kind === "platform" &&
+      profile?.role !== "super_admin" &&
+      !profile?.business_id &&
+      profile?.email &&
+      (path === "/dashboard" ||
+        path.startsWith("/dashboard/"))
+    ) {
+      const { listSharedBusinessIdsForEmail } = await import("@/lib/project-shares");
+      const shareBizIds = await listSharedBusinessIdsForEmail(profile.email);
+      if (shareBizIds.length > 0) {
+        const shareBiz = await lookupBusinessById(shareBizIds[0]!);
+        if (shareBiz && shareBiz.status === "active") {
+          const destOrigin = getLoginRedirectOrigin(
+            shareBiz,
+            { hostname: inboundHostname, origin: request.nextUrl.origin },
+            { foreignTenantHost: true }
+          );
+          const dest = `${destOrigin}${path}${request.nextUrl.search}`;
+          return applyPathCookie(redirectViaSessionContinue(request, dest), resolution);
+        }
+      }
     }
 
     // Authenticated tenant users on the platform apex must not stay on /dashboard|/admin —
@@ -393,6 +420,46 @@ export async function updateSession(request: NextRequest) {
         );
         const dest = `${destOrigin}${destPath}`;
         return applyPathCookie(redirectViaSessionContinue(request, dest), resolution);
+      }
+
+      // Shared viewer — passwordless project_shares (profiles.business_id stays NULL).
+      if (profile?.email) {
+        const { listActiveShareProjectIdsForEmail, listSharedBusinessIdsForEmail } = await import(
+          "@/lib/project-shares"
+        );
+        let targetBusinessId: string | null = null;
+        if (resolution.kind === "tenant" && resolution.business?.id) {
+          const onTenantShares = await listActiveShareProjectIdsForEmail(
+            profile.email,
+            resolution.business.id
+          );
+          if (onTenantShares.length > 0) targetBusinessId = resolution.business.id;
+        } else {
+          const bizIds = await listSharedBusinessIdsForEmail(profile.email);
+          if (bizIds.length > 0) targetBusinessId = bizIds[0]!;
+        }
+        if (targetBusinessId) {
+          const shareBiz = await lookupBusinessById(targetBusinessId);
+          if (shareBiz && shareBiz.status === "active") {
+            const sharedProjectIds = await listActiveShareProjectIdsForEmail(
+              profile.email,
+              targetBusinessId
+            );
+            const shareDestPath =
+              sharedProjectIds.length === 1
+                ? `/dashboard/projects/${sharedProjectIds[0]}`
+                : "/dashboard";
+            const onOwnTenant =
+              resolution.kind === "tenant" && resolution.business?.id === shareBiz.id;
+            const destOrigin = getLoginRedirectOrigin(
+              shareBiz,
+              { hostname: inboundHost(request), origin: request.nextUrl.origin },
+              { foreignTenantHost: !onOwnTenant }
+            );
+            const dest = `${destOrigin}${shareDestPath}`;
+            return applyPathCookie(redirectViaSessionContinue(request, dest), resolution);
+          }
+        }
       }
 
       // No business_id: partners go to /partner; OAuth unfinished on apex → finish-setup.
@@ -563,6 +630,52 @@ export async function updateSession(request: NextRequest) {
             ? `${resolution.pathPrefix}/admin`
             : `${resolution.pathPrefix}/dashboard`;
         return applyPathCookie(NextResponse.redirect(url), resolution);
+      }
+    }
+
+    // Shared viewers — block client-only surfaces outside their share list.
+    if (
+      profile?.email &&
+      !profile.business_id &&
+      !profile.client_id &&
+      profile.role !== "super_admin" &&
+      resolution.kind === "tenant" &&
+      resolution.business?.id
+    ) {
+      const { listActiveShareProjectIdsForEmail } = await import("@/lib/project-shares");
+      const sharedProjectIds = await listActiveShareProjectIdsForEmail(
+        profile.email,
+        resolution.business.id
+      );
+      if (sharedProjectIds.length > 0) {
+        const blockedClientPaths = ["/dashboard/request", "/dashboard/settings"];
+        const isBlockedPath = blockedClientPaths.some(
+          (p) => path === p || path.startsWith(`${p}/`)
+        );
+        if (isBlockedPath) {
+          if (isApi) {
+            return applyPathCookie(
+              NextResponse.json({ error: "Not found." }, { status: 404 }),
+              resolution
+            );
+          }
+          const url = request.nextUrl.clone();
+          url.pathname = `${resolution.pathPrefix}/dashboard`;
+          return applyPathCookie(NextResponse.redirect(url), resolution);
+        }
+
+        const projectMatch = path.match(/^\/dashboard\/projects\/([^/]+)/);
+        if (projectMatch && !sharedProjectIds.includes(projectMatch[1]!)) {
+          if (isApi) {
+            return applyPathCookie(
+              NextResponse.json({ error: "Not found." }, { status: 404 }),
+              resolution
+            );
+          }
+          const url = request.nextUrl.clone();
+          url.pathname = `${resolution.pathPrefix}/dashboard`;
+          return applyPathCookie(NextResponse.redirect(url), resolution);
+        }
       }
     }
 

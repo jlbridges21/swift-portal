@@ -38,6 +38,8 @@ import { ALLOWED_VIDEO_MIME_TYPES } from "@/lib/upload/constants";
 import { toast } from "sonner";
 import { VideoReviewAdminActions, useVideoReviewDeleteHandler } from "@/components/admin/video-review-admin-actions";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
+import type { ProjectShareRow } from "@/lib/project-shares";
+import { ProjectSharesPanel } from "@/components/admin/project-shares-panel";
 import { useAsyncAction } from "@/lib/use-async-action";
 
 function dedupeMedia<T extends { id: string }>(items: T[]): T[] {
@@ -64,6 +66,7 @@ interface AdminProjectDetailProps {
   mediaFolders: MediaFolder[];
   portalUrl: string;
   initialVideoReviews?: VideoReviewListItem[];
+  projectShares?: ProjectShareRow[];
 }
 
 export function AdminProjectDetail({
@@ -81,6 +84,7 @@ export function AdminProjectDetail({
   mediaFolders: initialFolders,
   portalUrl,
   initialVideoReviews = [],
+  projectShares = [],
 }: AdminProjectDetailProps) {
   const router = useRouter();
   const { enqueueUploads } = useUploadManager();
@@ -782,6 +786,8 @@ export function AdminProjectDetail({
         onCreateClient={() => setShowCreateClient(true)}
         onEnablePortal={enablePortalForClient}
       />
+
+      <ProjectSharesPanel projectId={initialProject.id} initialShares={projectShares} />
 
       <Suspense fallback={null}>
         <ShootScheduling

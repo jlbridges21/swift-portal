@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
-import { canDownloadDeliverables } from "@/lib/deliverables";
-import { canAccessProject } from "@/lib/project-access";
+import {
+  DOWNLOAD_GATE_API_MESSAGE,
+  resolveProjectDownloadAllowed,
+} from "@/lib/deliverables";
+import { getAppSettings } from "@/lib/app-settings";
+import { resolveProjectAccess, touchProjectShareAccess, canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { logMediaEvent, trackMediaDownload } from "@/lib/media-library";
 import { normalizeStatus } from "@/lib/constants";
@@ -54,15 +58,22 @@ export async function GET(
   }
 
   const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+  const appSettings = await getAppSettings(tenant.businessId);
+  const requireDeliveredForDownloads = appSettings.payments.requireDeliveredForDownloads;
 
   if (!asset.project_id) {
     if (!isAdmin) {
       return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
     }
   } else {
-    const hasAccess = await canAccessProject(profile, asset.project_id);
-    if (!hasAccess) {
+    const access = await resolveProjectAccess(profile, asset.project_id, {
+      tenantBusinessId: tenant.businessId,
+    });
+    if (!access.allowed) {
       return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
+    }
+    if (access.kind === "share" && access.shareId) {
+      void touchProjectShareAccess(access.shareId);
     }
   }
 
@@ -79,7 +90,15 @@ export async function GET(
     return NextResponse.json({ error: "This file is not available." }, { status: 404 });
   }
 
-  const downloadsAllowed = isAdmin || canDownloadDeliverables(projectStatus);
+  const downloadsAllowed = resolveProjectDownloadAllowed({
+    projectStatus,
+    isAdmin,
+    requireDeliveredForDownloads,
+  });
+
+  if (asFile && !downloadsAllowed) {
+    return NextResponse.json({ error: DOWNLOAD_GATE_API_MESSAGE }, { status: 403 });
+  }
 
   if (asset.media_source === "youtube") {
     return NextResponse.json({ url: asset.embed_url });
@@ -87,13 +106,6 @@ export async function GET(
 
   const bucket = asset.media_type === "document" ? "project-documents" : "project-media";
   const storageClient = isAdmin ? db.raw : cookieClient;
-
-  if (asFile && !downloadsAllowed) {
-    return NextResponse.json(
-      { error: "Downloads unlock after your final payment is complete." },
-      { status: 403 }
-    );
-  }
 
   if (asFile) {
     const { data: fileData, error: downloadError } = await storageClient.storage

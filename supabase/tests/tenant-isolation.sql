@@ -554,6 +554,19 @@ BEGIN
   END;
 
   BEGIN
+    INSERT INTO project_shares (business_id, project_id, email, invited_by)
+    VALUES (v_swift_bid, v_project, 'shared@example.test', v_swift_admin_user_id);
+    RAISE EXCEPTION 'WRITE LEAK: INSERT project_share w/ Tenant B project succeeded';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE 'WRITE LEAK:%' THEN RAISE; END IF;
+    v_mechanism := CASE WHEN SQLERRM LIKE '%tenant integrity%' THEN 'trigger (v30/v81)'
+      WHEN SQLSTATE = '42501' THEN 'RLS' ELSE 'blocked: ' || SQLERRM END;
+    INSERT INTO _tenant_test_writes VALUES ('INSERT project_share w/ Tenant B project', v_mechanism);
+    RAISE NOTICE 'WRITE blocked — INSERT project_share: %', v_mechanism;
+    PERFORM _tenant_test_bump();
+  END;
+
+  BEGIN
     INSERT INTO media_assets (business_id, project_id, file_name, file_path, mime_type, media_type)
     VALUES (v_swift_bid, v_project, 'hack.jpg', 'tenant-b/hack.jpg', 'image/jpeg', 'photo');
     RAISE EXCEPTION 'WRITE LEAK: INSERT media_asset w/ Tenant B project succeeded';
