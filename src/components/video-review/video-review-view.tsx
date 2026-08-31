@@ -26,6 +26,10 @@ import {
 import { formatReviewTimestamp } from "@/lib/video-review-format";
 import { findPlaybackActiveCommentId } from "@/lib/video-review-playback-follow";
 import {
+  commentTimestampForSubmit,
+  shouldClearDraftMark,
+} from "@/lib/video-review-composer";
+import {
   computeVideoContentRect,
   normalizedPointToPercent,
 } from "@/lib/video-review-coords";
@@ -115,11 +119,10 @@ export function VideoReviewView({
   const [commentsLoading, setCommentsLoading] = useState(!lazyMode);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
-  const [composerTimestamp, setComposerTimestamp] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [savingMark, setSavingMark] = useState(false);
-  const [pausedAt, setPausedAt] = useState<number | null>(null);
   const [pendingPoint, setPendingPoint] = useState<{ x: number; y: number } | null>(null);
+  const pendingMarkTimestampRef = useRef<number | null>(null);
   const [hoverPreviewPoint, setHoverPreviewPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [markingMode, setMarkingMode] = useState(false);
@@ -270,11 +273,10 @@ export function VideoReviewView({
     setMarkingMode(false);
     setEditMarkMode(false);
     setEditMarkCommentId(null);
-    setComposerTimestamp(null);
     setCommentText("");
-    setPausedAt(null);
     setPollSince(null);
     setPlaybackFollowCommentId(null);
+    pendingMarkTimestampRef.current = null;
     commentStoreRef.current = new Map();
     if (!deepLinkComment) {
       setActiveCommentId(null);
@@ -406,15 +408,23 @@ export function VideoReviewView({
     return map;
   }, [allThreads]);
 
-  const composerDisplayTime = composerTimestamp ?? pausedAt ?? playheadSeconds;
+  const composerDisplayTime = playheadSeconds;
+
+  const syncPlayheadFromVideo = useCallback((time: number) => {
+    setPlayheadSeconds(time);
+    if (shouldClearDraftMark(time, pendingMarkTimestampRef.current)) {
+      pendingMarkTimestampRef.current = null;
+      setPendingPoint(null);
+      toast.message("Mark cleared — it belongs to a different moment in the video.");
+    }
+  }, []);
 
   const pauseVideo = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     video.pause();
-    setPausedAt(video.currentTime);
-    setPlayheadSeconds(video.currentTime);
-  }, []);
+    syncPlayheadFromVideo(video.currentTime);
+  }, [syncPlayheadFromVideo]);
 
   const togglePlayPause = useCallback(() => {
     const video = videoRef.current;
@@ -432,9 +442,7 @@ export function VideoReviewView({
       if (!video) return;
       video.pause();
       video.currentTime = seconds;
-      setPausedAt(seconds);
-      setPlayheadSeconds(seconds);
-      setComposerTimestamp(seconds);
+      syncPlayheadFromVideo(seconds);
       setActiveCommentId(commentId ?? null);
       setMarkingMode(false);
       setEditMarkMode(false);
@@ -442,7 +450,7 @@ export function VideoReviewView({
       setHoverPreviewPoint(null);
       syncPlaybackFollowComment(seconds);
     },
-    [syncPlaybackFollowComment]
+    [syncPlayheadFromVideo, syncPlaybackFollowComment]
   );
 
   const handleTimelineMarkerActivate = useCallback(
@@ -486,16 +494,16 @@ export function VideoReviewView({
         return false;
       }
       pauseVideo();
-      setComposerTimestamp((prev) => prev ?? videoRef.current?.currentTime ?? playheadSeconds);
       return true;
     });
-  }, [pauseVideo, playheadSeconds]);
+  }, [pauseVideo]);
 
   const enterEditMarkMode = useCallback(() => {
     if (!activeCommentId || !canEditMark) return;
     pauseVideo();
     setMarkingMode(false);
     setPendingPoint(null);
+    pendingMarkTimestampRef.current = null;
     setEditMarkCommentId(activeCommentId);
     setEditMarkMode(true);
     setHoverPreviewPoint(null);
@@ -547,15 +555,12 @@ export function VideoReviewView({
     (value: string) => {
       const video = videoRef.current;
       if (value.length > 0 && commentText.length === 0 && video && !video.paused) {
-        const captured = video.currentTime;
         video.pause();
-        setComposerTimestamp(captured);
-        setPausedAt(captured);
-        setPlayheadSeconds(captured);
+        syncPlayheadFromVideo(video.currentTime);
       }
       setCommentText(value);
     },
-    [commentText.length]
+    [commentText.length, syncPlayheadFromVideo]
   );
 
   const handleSurfacePointer = useCallback(
@@ -597,11 +602,13 @@ export function VideoReviewView({
       }
 
       if (result.action === "place_mark" || result.action === "move_draft") {
+        const markTime = video.currentTime;
         setPendingPoint(result.point);
+        pendingMarkTimestampRef.current = markTime;
         pauseVideo();
+        syncPlayheadFromVideo(markTime);
         setMarkingMode(false);
         setHoverPreviewPoint(null);
-        setComposerTimestamp((prev) => prev ?? video.currentTime);
         return;
       }
 
@@ -615,6 +622,7 @@ export function VideoReviewView({
       blockPlaybackToggle,
       contentRect,
       pauseVideo,
+      syncPlayheadFromVideo,
       togglePlayPause,
       saveEditMark,
     ]
@@ -644,8 +652,7 @@ export function VideoReviewView({
     const video = videoRef.current;
     if (!video) return;
     setVideoPaused(true);
-    setPausedAt(video.currentTime);
-    setPlayheadSeconds(video.currentTime);
+    syncPlayheadFromVideo(video.currentTime);
   };
 
   const handleVideoPlay = () => {
@@ -655,25 +662,33 @@ export function VideoReviewView({
       return;
     }
     setVideoPaused(false);
-    setPausedAt(null);
     setHoverPreviewPoint(null);
     exitMarkingMode();
+  };
+
+  const handleVideoSeeked = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    syncPlayheadFromVideo(video.currentTime);
   };
 
   const handleTimeUpdate = () => {
     const video = videoRef.current;
     if (!video) return;
     const t = video.currentTime;
-    if (video.paused) {
-      setPlayheadSeconds(t);
-    }
+    syncPlayheadFromVideo(t);
     syncPlaybackFollowComment(t);
   };
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();
     const video = videoRef.current;
-    const timestamp = composerTimestamp ?? pausedAt ?? video?.currentTime ?? 0;
+    const timestamp = commentTimestampForSubmit({
+      playheadSeconds,
+      videoCurrentTime: video?.currentTime ?? null,
+      pendingPoint,
+      pendingMarkTimestamp: pendingMarkTimestampRef.current,
+    });
     const body = commentText.trim();
     if (!body) {
       toast.error("Write a comment first.");
@@ -729,7 +744,7 @@ export function VideoReviewView({
       }
       setCommentText("");
       setPendingPoint(null);
-      setComposerTimestamp(null);
+      pendingMarkTimestampRef.current = null;
       exitMarkingMode();
       toast.success("Comment added");
       void loadComments({ quiet: true });
@@ -756,11 +771,7 @@ export function VideoReviewView({
     <form onSubmit={handleSubmitComment} className="space-y-1.5">
       <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
         <span>
-          At{" "}
-          <strong className="text-primary">{formatReviewTimestamp(composerDisplayTime)}</strong>
-          {composerTimestamp != null && (
-            <span className="ml-1 text-[10px] text-muted">(locked)</span>
-          )}
+          At <strong className="text-primary">{formatReviewTimestamp(composerDisplayTime)}</strong>
         </span>
         {pendingPoint && (
           <span className="inline-flex items-center gap-1 text-accent">
@@ -802,7 +813,10 @@ export function VideoReviewView({
             variant="outline"
             size="sm"
             className="min-h-9"
-            onClick={() => setPendingPoint(null)}
+            onClick={() => {
+              setPendingPoint(null);
+              pendingMarkTimestampRef.current = null;
+            }}
           >
             Clear point
           </Button>
@@ -902,6 +916,7 @@ export function VideoReviewView({
                   setVideoPaused(e.currentTarget.paused);
                 }}
                 onTimeUpdate={handleTimeUpdate}
+                onSeeked={handleVideoSeeked}
                 aria-label={`Review video version ${activeVersion.version_number}`}
               />
             )}
@@ -974,6 +989,7 @@ export function VideoReviewView({
                   cluster={cluster}
                   leftPct={markerPositionPercent(cluster.anchorSeconds, duration)}
                   repliesByCommentId={repliesByCommentId}
+                  showResolvedIndicator={commentView === "all"}
                   onActivate={handleTimelineMarkerActivate}
                 />
               ))}

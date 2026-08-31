@@ -1,9 +1,11 @@
 "use client";
 
 import { useId, useState } from "react";
+import { Check } from "lucide-react";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import { formatReviewTimestamp } from "@/lib/video-review-format";
 import { computeClusterMarkerAppearance } from "@/lib/video-review-timeline-marker-style";
+import { clusterShowsResolvedIndicator } from "@/lib/video-review-composer";
 import {
   clusterMarkerTooltip,
   type TimelineMarkerCluster,
@@ -15,6 +17,7 @@ interface VideoReviewTimelineMarkerProps {
   cluster: TimelineMarkerCluster;
   leftPct: number;
   repliesByCommentId: Map<string, VideoReviewCommentEnriched[]>;
+  showResolvedIndicator?: boolean;
   onActivate: (cluster: TimelineMarkerCluster) => void;
 }
 
@@ -22,6 +25,7 @@ export function VideoReviewTimelineMarker({
   cluster,
   leftPct,
   repliesByCommentId,
+  showResolvedIndicator = false,
   onActivate,
 }: VideoReviewTimelineMarkerProps) {
   const [tipOpen, setTipOpen] = useState(false);
@@ -34,6 +38,7 @@ export function VideoReviewTimelineMarker({
     brand.primaryColor,
     brand.accentColor
   );
+  const resolvedIndicator = clusterShowsResolvedIndicator(cluster.comments, showResolvedIndicator);
 
   return (
     <button
@@ -65,7 +70,16 @@ export function VideoReviewTimelineMarker({
           aria-hidden
           data-marker-fill={fill}
           data-marker-border={border ?? "none"}
+          data-marker-resolved={resolvedIndicator ? "true" : "false"}
         />
+        {resolvedIndicator && (
+          <span
+            className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/50"
+            aria-hidden
+          >
+            <Check className="h-2 w-2 text-white" strokeWidth={3} aria-hidden />
+          </span>
+        )}
         {extraCount > 0 && (
           <span className="absolute -right-2 -top-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-slate-800 px-0.5 text-[8px] font-bold leading-none text-white">
             +{extraCount}

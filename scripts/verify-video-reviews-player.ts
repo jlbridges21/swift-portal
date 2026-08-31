@@ -460,10 +460,12 @@ async function main() {
     "marking preview is the only dot while placing"
   );
 
-  console.log("\n=== 10. typing captures timestamp (main composer only) ===");
+  console.log("\n=== 10. composer tracks live playhead (no typing lock) ===");
   assert(viewSrc.includes("handleCommentInputChange"), "composer pauses on first keystroke");
-  assert(viewSrc.includes("composerTimestamp"), "timestamp locked at typing start");
-  assert(viewSrc.includes("(locked)"), "UI shows captured timestamp");
+  assert(viewSrc.includes("syncPlayheadFromVideo"), "playhead sync drives composer timestamp");
+  assert(!viewSrc.includes("composerTimestamp"), "no sticky timestamp lock on comment select");
+  assert(!viewSrc.includes("(locked)"), "no misleading locked label");
+  assert(viewSrc.includes("shouldClearDraftMark"), "draft mark cleared when playhead leaves mark frame");
 
   console.log("\n=== YouTube-style layout restructure ===");
   assert(!versionSrc.includes("onDrop"), "drag-drop zone removed — button-only upload");
