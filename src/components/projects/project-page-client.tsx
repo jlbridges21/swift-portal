@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusTimeline } from "@/components/projects/status-timeline";
 import { ClientPhotoFolders } from "@/components/projects/client-photo-folders";
-import { VideoPlayer } from "@/components/projects/video-player";
+import { VideoGrid, videosToGridEntries } from "@/components/projects/video-grid";
 import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
 import { TourCard } from "@/components/projects/tour-card";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
@@ -28,12 +28,10 @@ import { clientDownloadLockMessage, resolveProjectDownloadAllowed } from "@/lib/
 import type { Project, MediaAsset, Tour, Payment, Revision, ShootProposal, ActivityLog, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import { formatDate } from "@/lib/utils";
-import { getYouTubePosterUrl } from "@/lib/media-preview";
-import { RemoteImage } from "@/components/ui/remote-image";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import {
   Download, MessageSquare,
-  FileText, Clapperboard, Images, Globe, Eye, ArrowLeft, Lock, Play,
+  FileText, Clapperboard, Images, Globe, Eye, ArrowLeft, Lock,
 } from "lucide-react";
 import type { HeroMedia } from "@/lib/cover";
 import { ProjectHero } from "@/components/projects/project-hero";
@@ -154,6 +152,8 @@ export function ProjectPageClient({
   const clientStep = getClientNextStep(project, pendingPayments.length > 0, shootProposals, brand.name);
   const uploadedVideos = videos.filter((v) => v.media_source !== "youtube");
   const youtubeVideos = videos.filter((v) => v.media_source === "youtube");
+  const videoEntries = useMemo(() => videosToGridEntries(videos), [videos]);
+  const reviewPathPrefix = isAdmin ? "/admin/projects" : "/dashboard/projects";
   const hasMedia = photos.length > 0 || videos.length > 0 || tours.length > 0 || documents.length > 0;
   const downloadableFileCount = [...photos, ...uploadedVideos].filter(
     (m) =>
@@ -364,16 +364,19 @@ export function ProjectPageClient({
                 : undefined
             }
           >
-            {uploadedVideos.length > 0 || youtubeVideos.length > 0 ? (
-              <ProjectVideoList
-                projectId={project.id}
-                reviewByAssetId={reviewByAssetId}
-                youtubeVideos={youtubeVideos}
-                uploadedVideos={uploadedVideos}
-                getDownloadUrl={getDownloadUrl}
-                downloadsAllowed={downloadsUnlocked}
-                onDownload={handleDownload}
-              />
+            {videoEntries.length > 0 ? (
+              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+                <VideoGrid
+                  entries={videoEntries}
+                  projectId={project.id}
+                  reviewByAssetId={reviewByAssetId}
+                  getDownloadUrl={getDownloadUrl}
+                  reviewPathPrefix={reviewPathPrefix}
+                  downloadsAllowed={downloadsUnlocked}
+                  onDownload={handleDownload}
+                  compactInitialCount={4}
+                />
+              </div>
             ) : (
               <EmptyState
                 icon={Clapperboard}
@@ -501,15 +504,17 @@ export function ProjectPageClient({
                   : undefined
             }
           >
-            <div className="space-y-5">
-              <ProjectVideoList
+            <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+              <VideoGrid
+                entries={videoEntries}
                 projectId={project.id}
                 reviewByAssetId={reviewByAssetId}
-                youtubeVideos={youtubeVideos}
-                uploadedVideos={uploadedVideos}
                 getDownloadUrl={getDownloadUrl}
+                reviewPathPrefix={reviewPathPrefix}
                 downloadsAllowed={downloadsUnlocked}
                 onDownload={handleDownload}
+                isAdmin={!!isAdmin}
+                compactInitialCount={4}
               />
             </div>
           </MicrositeSection>
@@ -644,108 +649,6 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
       </main>
-    </div>
-  );
-}
-
-function ProjectVideoList({
-  projectId,
-  reviewByAssetId,
-  youtubeVideos,
-  uploadedVideos,
-  getDownloadUrl,
-  downloadsAllowed,
-  onDownload,
-}: {
-  projectId: string;
-  reviewByAssetId: Map<string, VideoReviewListItem>;
-  youtubeVideos: MediaAsset[];
-  uploadedVideos: MediaAsset[];
-  getDownloadUrl: (asset: MediaAsset, thumb?: boolean) => Promise<string | null>;
-  downloadsAllowed: boolean;
-  onDownload: (video: MediaAsset) => void;
-}) {
-  type VideoEntry = { kind: "youtube"; video: MediaAsset } | { kind: "uploaded"; video: MediaAsset };
-  const entries: VideoEntry[] = [
-    ...youtubeVideos.map((video) => ({ kind: "youtube" as const, video })),
-    ...uploadedVideos.map((video) => ({ kind: "uploaded" as const, video })),
-  ];
-
-  if (!entries.length) return null;
-
-  const renderEntry = (entry: VideoEntry) => {
-    if (entry.kind === "youtube") {
-      return <YouTubeProjectVideo key={entry.video.id} video={entry.video} />;
-    }
-    return (
-      <div key={entry.video.id} className="space-y-2">
-        <VideoPlayer
-          video={entry.video}
-          getDownloadUrl={getDownloadUrl}
-          onDownload={() => onDownload(entry.video)}
-          downloadsAllowed={downloadsAllowed}
-        />
-        {reviewByAssetId.has(entry.video.id) && (
-          <Link
-            href={`/dashboard/projects/${projectId}/reviews/${reviewByAssetId.get(entry.video.id)!.review.id}`}
-            className="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-          >
-            Open video review (all versions)
-          </Link>
-        )}
-      </div>
-    );
-  };
-
-  if (entries.length <= 2) {
-    return <div className="space-y-5">{entries.map(renderEntry)}</div>;
-  }
-
-  return (
-    <ExpandableMediaList
-      items={entries}
-      initialCount={2}
-      labelSingular="video"
-      labelPlural="videos"
-      listClassName="space-y-5"
-      viewAllLabel={(n) => `View all ${n} videos`}
-      renderItem={(entry) => renderEntry(entry)}
-    />
-  );
-}
-
-function YouTubeProjectVideo({ video }: { video: MediaAsset }) {
-  const [playing, setPlaying] = useState(false);
-  const poster = getYouTubePosterUrl(video);
-
-  return (
-    <div className="overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-      <div className="relative aspect-video bg-black">
-        {playing ? (
-          <iframe
-            src={video.embed_url || ""}
-            className="h-full w-full"
-            allowFullScreen
-            title={mediaDisplayName(video)}
-          />
-        ) : (
-          <button
-            type="button"
-            className="group relative flex h-full w-full items-center justify-center"
-            onClick={() => setPlaying(true)}
-            aria-label={`Play ${mediaDisplayName(video)}`}
-          >
-            {poster ? (
-              <RemoteImage src={poster} alt="" fill className="object-cover opacity-90" sizes="640px" />
-            ) : null}
-            <div className="absolute inset-0 bg-black/20 transition group-hover:bg-black/35" />
-            <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-white/95 shadow-lg">
-              <Play className="ml-1 h-7 w-7 text-slate-900" fill="currentColor" />
-            </div>
-          </button>
-        )}
-      </div>
-      <div className="border-t border-border/60 px-5 py-3 text-sm text-muted">{mediaDisplayName(video)}</div>
     </div>
   );
 }

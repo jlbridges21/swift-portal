@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import { ProjectHero } from "@/components/projects/project-hero";
 import { ClientPhotoFolders } from "@/components/projects/client-photo-folders";
-import { VideoPlayer } from "@/components/projects/video-player";
+import { VideoGrid, videosToGridEntries } from "@/components/projects/video-grid";
 import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
 import { TourCard } from "@/components/projects/tour-card";
 import { Badge } from "@/components/ui/badge";
@@ -83,6 +83,7 @@ export function PublicProjectPageClient({
   const downloadLockMessage = clientDownloadLockMessage(status, requireDeliveredForDownloads);
   const uploadedVideos = videos.filter((v) => v.media_source !== "youtube");
   const youtubeVideos = videos.filter((v) => v.media_source === "youtube");
+  const videoEntries = useMemo(() => videosToGridEntries(videos), [videos]);
   const hasMedia = photos.length > 0 || videos.length > 0 || tours.length > 0 || documents.length > 0;
 
   async function getDownloadUrl(asset: MediaAsset, thumb = false): Promise<string | null> {
@@ -199,45 +200,22 @@ export function PublicProjectPageClient({
           </section>
         )}
 
-        {(youtubeVideos.length > 0 || uploadedVideos.length > 0) && (
+        {videoEntries.length > 0 && (
           <section id="video" className="scroll-mt-24 space-y-4">
             <h2 className="flex items-center gap-2 text-xl font-bold text-primary">
               <Clapperboard className="h-5 w-5 text-accent" /> Video
             </h2>
-            <div className="space-y-5">
-              {youtubeVideos.map((v) => (
-                <div
-                  key={v.id}
-                  className="overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-black/5"
-                >
-                  <div className="aspect-video bg-black">
-                    <iframe
-                      src={v.embed_url || ""}
-                      className="h-full w-full"
-                      allowFullScreen
-                      title={mediaDisplayName(v)}
-                    />
-                  </div>
-                </div>
-              ))}
-              {uploadedVideos.map((v) => (
-                <div key={v.id} className="space-y-2">
-                  <VideoPlayer
-                    video={v}
-                    getDownloadUrl={getDownloadUrl}
-                    onDownload={() => handleDownload(v)}
-                    downloadsAllowed={downloadsUnlocked}
-                  />
-                  {reviewByAssetId.has(v.id) && (
-                    <Link
-                      href={signInHref}
-                      className="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-                    >
-                      Sign in to view comments and leave feedback
-                    </Link>
-                  )}
-                </div>
-              ))}
+            <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+              <VideoGrid
+                entries={videoEntries}
+                projectId={project.id}
+                reviewByAssetId={reviewByAssetId}
+                getDownloadUrl={getDownloadUrl}
+                reviewPathPrefix="/dashboard/projects"
+                downloadsAllowed={downloadsUnlocked}
+                onDownload={handleDownload}
+                signInHref={signInHref}
+              />
             </div>
           </section>
         )}

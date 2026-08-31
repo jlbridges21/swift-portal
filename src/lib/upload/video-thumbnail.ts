@@ -128,7 +128,9 @@ function captureFrameAtSeek(file: File, seekSeconds: number): Promise<HTMLCanvas
   });
 }
 
-async function captureVideoThumbnailBlobInner(file: File): Promise<Blob | null> {
+async function captureVideoThumbnailBlobInner(
+  file: File
+): Promise<{ blob: Blob | null; durationSeconds: number | null }> {
   const probeUrl = URL.createObjectURL(file);
   const probe = document.createElement("video");
   probe.muted = true;
@@ -146,6 +148,9 @@ async function captureVideoThumbnailBlobInner(file: File): Promise<Blob | null> 
     probe.addEventListener("error", () => done(0));
   });
 
+  const durationSeconds =
+    Number.isFinite(duration) && duration > 0 ? Math.round(duration) : null;
+
   const primarySeek = chooseVideoPosterSeekSeconds(duration, "primary");
   let canvas = await captureFrameAtSeek(file, primarySeek);
   if (canvas && isUniformFrame(canvas)) {
@@ -156,16 +161,70 @@ async function captureVideoThumbnailBlobInner(file: File): Promise<Blob | null> 
     }
   }
 
-  if (!canvas) return null;
+  if (!canvas) return { blob: null, durationSeconds };
 
   const raw = await new Promise<Blob | null>((resolve) =>
     canvas!.toBlob(resolve, "image/jpeg", 0.92)
   );
-  if (!raw) return null;
+  if (!raw) return { blob: null, durationSeconds };
 
   const compressed = await compressPhotoThumbnail(raw);
-  return compressed?.blob ?? raw;
+  return { blob: compressed?.blob ?? raw, durationSeconds };
 }
+
+/** Probe duration from a local video file without capturing a poster. */
+export async function probeVideoFileDuration(file: File): Promise<number | null> {
+  if (typeof window === "undefined") return null;
+  const probeUrl = URL.createObjectURL(file);
+  const probe = document.createElement("video");
+  probe.muted = true;
+  probe.preload = "metadata";
+  probe.src = probeUrl;
+
+  const duration = await new Promise<number>((resolve) => {
+    const done = (value: number) => {
+      probe.removeAttribute("src");
+      probe.load();
+      URL.revokeObjectURL(probeUrl);
+      resolve(value);
+    };
+    probe.addEventListener("loadedmetadata", () => done(probe.duration || 0));
+    probe.addEventListener("error", () => done(0));
+  });
+
+  return Number.isFinite(duration) && duration > 0 ? Math.round(duration) : null;
+}
+
+/** Capture poster blob and duration in one metadata pass. */
+export async function captureVideoPosterAndDuration(
+  file: File,
+  timeoutMs = THUMBNAIL_CAPTURE_TIMEOUT_MS
+): Promise<{ blob: Blob | null; durationSeconds: number | null }> {
+  const result = await Promise.race([
+    captureVideoThumbnailBlobInner(file),
+    UPLOAD_DIAGNOSTIC_MODE
+      ? new Promise<{ blob: Blob | null; durationSeconds: number | null }>(() => {
+          /* diagnostic: no timeout */
+        })
+      : new Promise<{ blob: Blob | null; durationSeconds: number | null }>((resolve) =>
+          setTimeout(() => resolve({ blob: null, durationSeconds: null }), timeoutMs)
+        ),
+  ]);
+
+  if (result.blob === null && result.durationSeconds === null) {
+    logUploadStep("warn", {
+      step: "thumbnail_generate",
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type || "unknown",
+      providerMessage: "Video poster capture failed — upload continues without thumbnail",
+      details: { timeoutMs },
+    });
+  }
+
+  return result;
+}
+
 
 /** Capture a grid poster from a local video file. Never throws — returns null on failure. */
 export async function captureVideoThumbnailBlob(
@@ -174,7 +233,7 @@ export async function captureVideoThumbnailBlob(
   timeoutMs = THUMBNAIL_CAPTURE_TIMEOUT_MS
 ): Promise<Blob | null> {
   const result = await Promise.race([
-    captureVideoThumbnailBlobInner(file),
+    captureVideoThumbnailBlobInner(file).then((r) => r.blob),
     UPLOAD_DIAGNOSTIC_MODE
       ? new Promise<null>(() => {
           /* diagnostic: no timeout */

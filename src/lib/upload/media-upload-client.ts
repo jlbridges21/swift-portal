@@ -27,7 +27,7 @@ import type { PendingSavePayload } from "./pending-save";
 import { getTusUploadEndpoint, getTusUploadHeaders } from "./tus-config";
 import { validateMediaFileBeforeUpload } from "./validation";
 import { uploadPhotoThumbnail } from "./photo-thumbnail";
-import { uploadVideoThumbnail } from "./video-thumbnail";
+import { buildThumbnailStoragePath, captureVideoPosterAndDuration } from "./video-thumbnail";
 
 export interface UploadProgressUpdate {
   phase: UploadPhase;
@@ -714,28 +714,49 @@ async function attachDeferredThumbnail(args: {
   projectId: string | null;
 }): Promise<void> {
   try {
-    const thumbPath =
-      args.mediaType === "photo"
-        ? await uploadPhotoThumbnail(args.bucket, args.filePath, args.file, {
-            fileName: args.file.name,
-            projectId: args.projectId,
-            filePath: args.filePath,
-          })
-        : await uploadVideoThumbnail(args.bucket, args.filePath, args.file, {
-            fileName: args.file.name,
-            projectId: args.projectId,
-            filePath: args.filePath,
-          });
-    if (!thumbPath) return;
+    let thumbPath: string | null = null;
+    let durationSeconds: number | null = null;
+
+    if (args.mediaType === "photo") {
+      thumbPath = await uploadPhotoThumbnail(args.bucket, args.filePath, args.file, {
+        fileName: args.file.name,
+        projectId: args.projectId,
+        filePath: args.filePath,
+      });
+    } else {
+      const { blob, durationSeconds: capturedDuration } = await captureVideoPosterAndDuration(
+        args.file
+      );
+      durationSeconds = capturedDuration;
+      if (blob) {
+        const ext: "webp" | "jpg" = blob.type === "image/webp" ? "webp" : "jpg";
+        const builtPath = buildThumbnailStoragePath(args.filePath, ext);
+        const supabase = createClient();
+        const { error } = await supabase.storage.from(args.bucket).upload(builtPath, blob, {
+          contentType: blob.type || "image/jpeg",
+          upsert: true,
+          cacheControl: "86400",
+        });
+        if (!error) thumbPath = builtPath;
+      }
+    }
+
+    const patchBody: { id: string; thumbnail_url?: string; duration_seconds?: number } = {
+      id: args.assetId,
+    };
+    if (thumbPath) patchBody.thumbnail_url = thumbPath;
+    if (durationSeconds != null) patchBody.duration_seconds = durationSeconds;
+
+    if (!patchBody.thumbnail_url && patchBody.duration_seconds == null) return;
 
     await fetch("/api/media/" + args.assetId, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ id: args.assetId, thumbnail_url: thumbPath }),
+      body: JSON.stringify(patchBody),
     });
   } catch {
-    // Thumbnail is best-effort; original remains available for display.
+    // Thumbnail/duration metadata is best-effort; original remains available for display.
   }
 }
 
