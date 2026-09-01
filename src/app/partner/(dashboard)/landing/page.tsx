@@ -56,6 +56,7 @@ export default async function PartnerLandingEditorPage() {
             referralLink={referralLink}
             landingUrl={landingUrl}
             referralCode={access.partner.referral_code}
+            promoCode={access.partner.promo_code ?? null}
           />
         </div>
       </div>

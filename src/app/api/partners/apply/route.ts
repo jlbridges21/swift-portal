@@ -53,6 +53,12 @@ export async function POST(request: Request) {
             : {},
       audienceSize: typeof body.audienceSize === "string" ? body.audienceSize : typeof body.audience_size === "string" ? body.audience_size : null,
       promotionPlan: typeof body.promotionPlan === "string" ? body.promotionPlan : typeof body.promotion_plan === "string" ? body.promotion_plan : null,
+      promoCode:
+        typeof body.promoCode === "string"
+          ? body.promoCode
+          : typeof body.promo_code === "string"
+            ? body.promo_code
+            : null,
     });
     return NextResponse.json({ ...GENERIC_OK, autoApproved: result.autoApproved });
   } catch (err) {

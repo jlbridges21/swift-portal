@@ -74,6 +74,7 @@ export default async function PartnerOverviewPage() {
           referralLink={summary.referralLink}
           landingUrl={landingUrl}
           referralCode={summary.partner.referralCode}
+          promoCode={summary.partner.promoCode}
         />
       </section>
 

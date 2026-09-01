@@ -21,11 +21,14 @@ export function SubscribeButton({
   interval = "monthly",
   disabled,
   label,
+  promoCode,
 }: {
   planKey: string;
   interval?: "monthly" | "annual";
   disabled?: boolean;
   label: string;
+  /** Applied partner promo code from billing UI (optional). */
+  promoCode?: string | null;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +40,11 @@ export function SubscribeButton({
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planKey, interval }),
+        body: JSON.stringify({
+          planKey,
+          interval,
+          ...(promoCode ? { promoCode } : {}),
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         url?: string;

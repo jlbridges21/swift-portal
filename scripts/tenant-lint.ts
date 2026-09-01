@@ -132,6 +132,7 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/partners.ts",
   "src/lib/partner-lifecycle-email.ts",
   "src/lib/partner-referral.ts",
+  "src/lib/partner-promo.ts",
   "src/lib/partner-commissions.ts",
   "src/lib/partner-dashboard.ts",
   "src/lib/partner-payouts.ts",

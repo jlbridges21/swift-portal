@@ -55,6 +55,7 @@ export async function POST(request: Request) {
           : {},
       audienceSize: typeof body.audienceSize === "string" ? body.audienceSize : null,
       promotionPlan: typeof body.promotionPlan === "string" ? body.promotionPlan : null,
+      promoCode: typeof body.promoCode === "string" ? body.promoCode : null,
     });
     return NextResponse.json({
       success: true,
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
       alreadyExisted: result.alreadyExisted,
       linkedExistingUser: result.linkedExistingUser,
       referralCode: result.partner?.referral_code ?? null,
+      promoCode: result.partner?.promo_code ?? null,
     });
   } catch (err) {
     console.error("[api/partner/apply]", err instanceof Error ? err.message : err);

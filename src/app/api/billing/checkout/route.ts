@@ -32,10 +32,15 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       planKey?: string;
       interval?: BillingInterval;
+      promoCode?: string;
     };
 
     const planKey = typeof body.planKey === "string" ? body.planKey.trim() : "";
     const interval: BillingInterval = body.interval === "annual" ? "annual" : "monthly";
+    const promoCode =
+      typeof body.promoCode === "string" && body.promoCode.trim()
+        ? body.promoCode.trim()
+        : null;
 
     if (!planKey) {
       return NextResponse.json({ error: "planKey is required." }, { status: 400 });
@@ -93,15 +98,11 @@ export async function POST(request: Request) {
       business.trial_ends_at &&
       Number.isFinite(new Date(business.trial_ends_at).getTime());
 
-    // Trial handoff: keep remaining trial so mid-trial subscribe does not charge early.
-    // Stripe requires trial_end to be at least 2 days in the future — if fewer than
-    // 48h remain, omit trial_end (subscription starts without an extended trial).
-    // Expired / trial_expired customers must never get trial_end.
     let trialEndApplied = false;
     if (hasTrialHandoff && business.trial_ends_at) {
       const trialEndSec = Math.floor(new Date(business.trial_ends_at).getTime() / 1000);
       const nowSec = Math.floor(Date.now() / 1000);
-      const minTrialLeadSec = 2 * 24 * 60 * 60 + 60; // Stripe minimum + 1 minute buffer
+      const minTrialLeadSec = 2 * 24 * 60 * 60 + 60;
       if (trialEndSec > nowSec + minTrialLeadSec) {
         subscriptionData.trial_end = trialEndSec;
         trialEndApplied = true;
@@ -116,9 +117,40 @@ export async function POST(request: Request) {
 
     const { stripe } = getStripe();
 
-    // Partner referral discount — apply at Checkout (not deferred). Never block payment
-    // if the coupon cannot be applied; fall back to list price.
+    // Partner referral / promo discount — apply at Checkout via `discounts` only.
+    // Never set allow_promotion_codes (conflicts with discounts → Stripe 400).
     let checkoutDiscounts: { coupon: string }[] | undefined;
+    let partnerIdOverride: string | null = null;
+    let promoAttributionMessage: string | null = null;
+
+    if (promoCode) {
+      try {
+        const { applyPromoCodeAtCheckout } = await import("@/lib/partner-promo");
+        const attribution = await applyPromoCodeAtCheckout({
+          businessId: business.id,
+          promoCode,
+          actorUserId: profile.id,
+          actorEmail: profile.email ?? "",
+        });
+        promoAttributionMessage = attribution.message;
+        if (attribution.discountPartnerId) {
+          partnerIdOverride = attribution.discountPartnerId;
+        } else if (!attribution.ok) {
+          // Invalid / suspended / self-referral — continue at cookie/list price.
+          console.info("[billing/checkout] promo code rejected", {
+            businessId: business.id,
+            outcome: attribution.outcome,
+            message: attribution.message,
+          });
+        }
+      } catch (err) {
+        console.error("[billing/checkout] promo attribution FAILED (checkout continues)", {
+          businessId: business.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     try {
       const { resolveReferralDiscountForBusiness } = await import(
         "@/lib/partner-referral-discount"
@@ -126,9 +158,9 @@ export async function POST(request: Request) {
       const discount = await resolveReferralDiscountForBusiness({
         businessId: business.id,
         interval,
+        partnerIdOverride,
       });
       if (discount.eligible && discount.couponId) {
-        // Verify the coupon still exists in this Stripe mode before attaching.
         try {
           const coupon = await stripe.coupons.retrieve(discount.couponId);
           if (coupon.valid) {
@@ -141,6 +173,7 @@ export async function POST(request: Request) {
               amountOffCents: discount.config?.amountOffCents,
               durationMonths: discount.config?.durationMonths,
               trialEndApplied,
+              viaPromo: Boolean(promoCode),
             });
           } else {
             console.error(
@@ -186,9 +219,8 @@ export async function POST(request: Request) {
     }
 
     const buildParams = (discounts: { coupon: string }[] | undefined): CheckoutSessionParams => {
-      // Stripe rejects sessions that pass BOTH `discounts` and `allow_promotion_codes`
-      // (even when allow_promotion_codes is false). Omit the promo flag when a coupon
-      // is pre-applied; otherwise allow customer promo codes.
+      // Only attach `discounts` when we have a coupon. Never set allow_promotion_codes —
+      // ShootPortal collects partner promo codes in-app and maps them to this same path.
       const params: CheckoutSessionParams = {
         mode: "subscription",
         customer: customerId,
@@ -201,13 +233,10 @@ export async function POST(request: Request) {
       };
       if (discounts?.length) {
         params.discounts = discounts;
-      } else {
-        params.allow_promotion_codes = true;
       }
       return params;
     };
 
-    // Platform account only — never pass stripeAccount / requestOptions.
     let session: Stripe.Checkout.Session;
     try {
       session = await stripe.checkout.sessions.create(buildParams(checkoutDiscounts));
@@ -239,7 +268,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Checkout session missing URL." }, { status: 500 });
     }
 
-    return NextResponse.json({ url: session.url, mode });
+    return NextResponse.json({
+      url: session.url,
+      mode,
+      ...(promoAttributionMessage ? { attributionMessage: promoAttributionMessage } : {}),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown";
     if (message === "Unauthorized" || message === "Forbidden") {

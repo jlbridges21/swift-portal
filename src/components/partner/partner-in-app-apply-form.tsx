@@ -21,6 +21,7 @@ export function PartnerInAppApplyForm({ prefill }: { prefill: PartnerApplyPrefil
   const [otherSocial, setOtherSocial] = useState("");
   const [audienceSize, setAudienceSize] = useState("");
   const [promotionPlan, setPromotionPlan] = useState("");
+  const [promoCode, setPromoCode] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -61,6 +62,7 @@ export function PartnerInAppApplyForm({ prefill }: { prefill: PartnerApplyPrefil
           socialLinks,
           audienceSize: audienceSize.trim() || null,
           promotionPlan: promotionPlan.trim(),
+          promoCode: promoCode.trim() || null,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -186,9 +188,9 @@ export function PartnerInAppApplyForm({ prefill }: { prefill: PartnerApplyPrefil
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="ipa-promo">How do you plan to promote ShootPortal?</Label>
+        <Label htmlFor="ipa-plan">How do you plan to promote ShootPortal?</Label>
         <Textarea
-          id="ipa-promo"
+          id="ipa-plan"
           rows={3}
           value={promotionPlan}
           onChange={(e) => setPromotionPlan(e.target.value)}
@@ -198,6 +200,23 @@ export function PartnerInAppApplyForm({ prefill }: { prefill: PartnerApplyPrefil
         {errors.promotionPlan ? (
           <p className="text-sm text-red-600">{errors.promotionPlan}</p>
         ) : null}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="ipa-promo-code">Checkout promo code (optional)</Label>
+        <Input
+          id="ipa-promo-code"
+          className="min-h-11 font-mono uppercase"
+          placeholder="e.g. SWIFT5"
+          value={promoCode}
+          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+          maxLength={16}
+        />
+        <p className="text-xs text-muted">
+          Short code customers can enter at billing. You can set or change this later. Letters and
+          numbers only, 4–16 characters.
+        </p>
+        {errors.promoCode ? <p className="text-sm text-red-600">{errors.promoCode}</p> : null}
       </div>
 
       {formError ? <p className="text-sm text-red-600">{formError}</p> : null}

@@ -2,23 +2,24 @@
 
 import Link from "next/link";
 import { PartnerReferralCopy } from "@/components/partner/partner-referral-copy";
+import { PartnerPromoCodeEditor } from "@/components/partner/partner-promo-code-editor";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Props = {
   referralLink: string;
   landingUrl: string | null;
   referralCode: string;
+  promoCode: string | null;
 };
 
-export function PartnerShareLinks({ referralLink, landingUrl, referralCode }: Props) {
+export function PartnerShareLinks({ referralLink, landingUrl, referralCode, promoCode }: Props) {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Your referral links</CardTitle>
+        <CardTitle className="text-base">Your referral tools</CardTitle>
         <p className="text-sm text-muted">
-          Both links below are tracked identically and earn the same commission when someone signs
-          up and becomes a paying ShootPortal customer. Use whichever fits your audience — a plain
-          link for bios and DMs, or your co-branded landing page for a fuller pitch.
+          Links, landing pages, and promo codes all earn the same commission when someone signs up
+          and becomes a paying ShootPortal customer. Use whichever fits your audience.
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -49,6 +50,9 @@ export function PartnerShareLinks({ referralLink, landingUrl, referralCode }: Pr
               for a richer first impression than the plain referral link alone.
             </p>
           )}
+        </div>
+        <div className="border-t border-border pt-5">
+          <PartnerPromoCodeEditor initialPromoCode={promoCode} />
         </div>
       </CardContent>
     </Card>

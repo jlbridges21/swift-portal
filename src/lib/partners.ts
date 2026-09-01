@@ -15,6 +15,7 @@ import {
 import { loadPartnerProgramSettings } from "@/lib/partner-referral-discount";
 import {
   suggestReferralCodeFromBrand,
+  validatePromoCode,
   validateReferralCode,
 } from "@/lib/reserved-subdomains";
 
@@ -30,6 +31,7 @@ export type PartnerApplicationRow = {
   social_links: Record<string, unknown>;
   audience_size: string | null;
   promotion_plan: string | null;
+  requested_promo_code?: string | null;
   status: PartnerApplicationStatus;
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -50,6 +52,7 @@ export type PartnerRow = {
   referral_code: string;
   commission_rate_pct: number;
   status: PartnerStatus;
+  promo_code?: string | null;
   approved_by: string | null;
   approved_at: string | null;
   notes: string | null;
@@ -180,6 +183,22 @@ export async function assertUniqueReferralCode(
   return validated.code;
 }
 
+/** Ensure promo code is valid and unused (case-insensitive). Empty/null clears. */
+export async function assertUniquePromoCode(
+  rawCode: unknown,
+  excludePartnerId?: string | null
+): Promise<string> {
+  const validated = validatePromoCode(rawCode);
+  if (!validated.ok) throw new Error(validated.error);
+
+  const raw = await createServiceClient();
+  let q = raw.from("partners").select("id").ilike("promo_code", validated.code);
+  if (excludePartnerId) q = q.neq("id", excludePartnerId);
+  const { data } = await q.maybeSingle();
+  if (data) throw new Error("That promo code is already in use.");
+  return validated.code;
+}
+
 /**
  * Allocate a unique referral code. Preferred string is validated; on collision
  * appends -2, -3, … deterministically. Never fails because a name was taken.
@@ -213,6 +232,8 @@ export type SubmitApplicationInput = {
   socialLinks?: Record<string, unknown> | null;
   audienceSize?: string | null;
   promotionPlan?: string | null;
+  /** Optional short checkout promo code (e.g. SWIFT5). */
+  promoCode?: string | null;
 };
 
 /**
@@ -264,6 +285,11 @@ export async function submitPartnerApplication(
 
   const website = input.website?.trim() || null;
   if (website && website.length > 500) throw new Error("Invalid application.");
+
+  let requestedPromoCode: string | null = null;
+  if (input.promoCode != null && String(input.promoCode).trim()) {
+    requestedPromoCode = await assertUniquePromoCode(input.promoCode);
+  }
 
   const audienceSize = input.audienceSize?.trim() || null;
   const promotionPlan = input.promotionPlan?.trim() || null;
@@ -331,6 +357,7 @@ export async function submitPartnerApplication(
         social_links: socialLinks,
         audience_size: audienceSize,
         promotion_plan: promotionPlan,
+        requested_promo_code: requestedPromoCode,
         status: "pending",
       })
       .select("id")
@@ -360,6 +387,7 @@ export async function submitPartnerApplication(
       social_links: socialLinks,
       audience_size: audienceSize,
       promotion_plan: promotionPlan,
+      requested_promo_code: requestedPromoCode,
       status: "approved",
       reviewed_by: applicantUserId,
       reviewed_at: new Date().toISOString(),
@@ -402,6 +430,7 @@ export async function submitPartnerApplication(
         website,
         socialLinks,
         referralCode,
+        promoCode: requestedPromoCode,
         applicationId,
         sendInvite: true,
       },
@@ -414,7 +443,12 @@ export async function submitPartnerApplication(
       action: "partner.application_approve",
       targetType: "partner_application",
       targetId: applicationId,
-      metadata: { email, auto: true, referral_code: created.partner.referral_code },
+      metadata: {
+        email,
+        auto: true,
+        referral_code: created.partner.referral_code,
+        promo_code: created.partner.promo_code ?? null,
+      },
     });
 
     return {
@@ -455,6 +489,8 @@ export type CreatePartnerInput = {
   website?: string | null;
   socialLinks?: Record<string, unknown> | null;
   referralCode: string;
+  /** Optional short checkout promo code. */
+  promoCode?: string | null;
   commissionRatePct?: number;
   notes?: string | null;
   applicationId?: string | null;
@@ -667,6 +703,10 @@ export async function createPartner(
   if (!brandName) throw new Error("Brand name is required.");
 
   const referralCode = await assertUniqueReferralCode(input.referralCode);
+  const promoCode =
+    input.promoCode != null && String(input.promoCode).trim()
+      ? await assertUniquePromoCode(input.promoCode)
+      : null;
   const programSettings = await loadPartnerProgramSettings();
   const defaultRate = programSettings.default_commission_rate_pct ?? 30;
   const commissionRatePct =
@@ -696,6 +736,7 @@ export async function createPartner(
       website: input.website?.trim() || null,
       social_links: socialLinks,
       referral_code: referralCode,
+      promo_code: promoCode,
       commission_rate_pct: commissionRatePct,
       status: "active",
       application_id: input.applicationId ?? null,
@@ -717,6 +758,7 @@ export async function createPartner(
     metadata: {
       email,
       referral_code: referralCode,
+      promo_code: promoCode,
       commission_rate_pct: commissionRatePct,
       application_id: input.applicationId ?? null,
     },
@@ -790,6 +832,7 @@ export async function approvePartnerApplication(
     referralCode: string;
     commissionRatePct?: number;
     reviewNote?: string | null;
+    promoCode?: string | null;
   },
   actor: PartnerActor
 ): Promise<CreatePartnerResult> {
@@ -818,6 +861,11 @@ export async function approvePartnerApplication(
     metadata: { email: app.email, review_note: options.reviewNote?.trim() || null },
   });
 
+  const promoCode =
+    options.promoCode !== undefined
+      ? options.promoCode
+      : app.requested_promo_code ?? null;
+
   return createPartner(
     {
       name: app.name,
@@ -826,6 +874,7 @@ export async function approvePartnerApplication(
       website: app.website,
       socialLinks: app.social_links,
       referralCode: options.referralCode,
+      promoCode,
       commissionRatePct: options.commissionRatePct,
       applicationId: app.id,
       sendInvite: true,
@@ -888,6 +937,8 @@ export type UpdatePartnerInput = {
   brandName?: string;
   website?: string | null;
   referralCode?: string;
+  /** Set or clear (null/empty) the checkout promo code. */
+  promoCode?: string | null;
   commissionRatePct?: number;
   status?: PartnerStatus;
   notes?: string | null;
@@ -943,6 +994,14 @@ export async function updatePartner(
   }
   if (input.referralCode != null) {
     patch.referral_code = await assertUniqueReferralCode(input.referralCode, partnerId);
+  }
+  if (input.promoCode !== undefined) {
+    const rawPromo = input.promoCode;
+    if (rawPromo == null || !String(rawPromo).trim()) {
+      patch.promo_code = null;
+    } else {
+      patch.promo_code = await assertUniquePromoCode(rawPromo, partnerId);
+    }
   }
   if (input.commissionRatePct != null) {
     patch.commission_rate_pct = parseCommissionRate(input.commissionRatePct);

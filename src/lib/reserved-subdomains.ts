@@ -159,6 +159,47 @@ export function validateReferralCode(raw: unknown): ReferralCodeResult {
 }
 
 /**
+ * Validate an optional partner checkout promo code (e.g. SWIFT5).
+ * Distinct from referral_code URL slugs — short, memorable, alphanumeric.
+ * Stored uppercase; uniqueness is case-insensitive.
+ */
+export type PromoCodeResult =
+  | { ok: true; code: string }
+  | { ok: false; error: string };
+
+export const PROMO_CODE_MIN_LEN = 4;
+export const PROMO_CODE_MAX_LEN = 16;
+const PROMO_CODE_RE = /^[A-Z0-9]+$/;
+
+export function normalizePromoCode(raw: string): string {
+  return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+export function validatePromoCode(raw: unknown): PromoCodeResult {
+  if (typeof raw !== "string" || !raw.trim()) {
+    return { ok: false, error: "A promo code is required." };
+  }
+  const code = normalizePromoCode(raw);
+  if (code.length < PROMO_CODE_MIN_LEN || code.length > PROMO_CODE_MAX_LEN) {
+    return {
+      ok: false,
+      error: `Promo code must be ${PROMO_CODE_MIN_LEN}–${PROMO_CODE_MAX_LEN} letters or numbers (e.g. SWIFT5).`,
+    };
+  }
+  if (!PROMO_CODE_RE.test(code)) {
+    return {
+      ok: false,
+      error: "Promo code may only contain letters and numbers (no spaces or symbols).",
+    };
+  }
+  const asSlug = normalizeBusinessSlug(code);
+  if (isReservedReferralCode(asSlug) || isBlockedReferralCodeLabel(asSlug)) {
+    return { ok: false, error: RESERVED_REFERRAL_CODE_ERROR };
+  }
+  return { ok: true, code };
+}
+
+/**
  * Validate a partner landing page slug (apex /{slug}).
  * Rejects reserved app routes and platform subdomain labels.
  */

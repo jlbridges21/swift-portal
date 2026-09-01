@@ -93,6 +93,7 @@ export type PartnerDashboardSummary = {
     name: string;
     brandName: string;
     referralCode: string;
+    promoCode: string | null;
     commissionRatePct: number;
     status: string;
   };
@@ -173,6 +174,7 @@ export async function loadPartnerDashboardSummaryAsPlatform(
       name: partner.name,
       brandName: partner.brand_name,
       referralCode: partner.referral_code,
+      promoCode: partner.promo_code ?? null,
       commissionRatePct: Number(partner.commission_rate_pct),
       status: partner.status,
     },

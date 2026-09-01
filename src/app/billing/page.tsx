@@ -5,7 +5,7 @@ import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { BrandProvider } from "@/components/brand/brand-provider";
 import { ImpersonationBanner } from "@/components/platform/impersonation-banner";
 import { getSubscriptionState } from "@/lib/subscription";
-import { formatPlanPrice, formatTrialDaysLabel } from "@/lib/plan-catalog";
+import { formatPlanPrice } from "@/lib/plan-catalog";
 import {
   formatReferralPlanPriceDisplay,
   resolveReferralDiscountForBusiness,
@@ -17,7 +17,8 @@ import { Logo } from "@/components/brand/logo";
 import { metadataFromBusiness } from "@/lib/site-metadata";
 import type { Metadata } from "next";
 import { getTenantContext } from "@/lib/tenant";
-import { ManageBillingButton, SubscribeButton } from "@/components/billing/billing-actions";
+import { ManageBillingButton } from "@/components/billing/billing-actions";
+import { BillingPlansWithPromo } from "@/components/billing/billing-plans-with-promo";
 import {
   customerIdForMode,
   listPublicPlansWithModePrices,
@@ -232,13 +233,12 @@ export default async function BillingPage() {
                   restored.
                 </p>
               ) : (
-                <div className="mb-8 grid gap-4 sm:grid-cols-2">
-                  {publicPlans.map((plan) => {
-                    const isCurrent = plan.key === tenant.business.plan;
-                    const canSubscribe = Boolean(plan.stripe_price_monthly_id);
-                    // Expired / canceled / past_due must always be able to (re)subscribe.
-                    const alreadyOnPaidPlan = isCurrent && sub.status === "active" && !sub.requiresPayment;
-                    const monthlyDisplay =
+                <BillingPlansWithPromo
+                  currentPlanKey={tenant.business.plan}
+                  requiresPayment={sub.requiresPayment}
+                  status={sub.status}
+                  plans={publicPlans.map((plan) => {
+                    const cookieMonthlyDisplay =
                       monthlyReferralDiscount?.eligible && plan.price_monthly_cents != null
                         ? formatReferralPlanPriceDisplay({
                             listPriceCents: plan.price_monthly_cents,
@@ -246,7 +246,7 @@ export default async function BillingPage() {
                             interval: "monthly",
                           })
                         : null;
-                    const annualDisplay =
+                    const cookieAnnualDisplay =
                       plan.price_annual_cents != null && annualReferralDiscount?.eligible
                         ? formatReferralPlanPriceDisplay({
                             listPriceCents: plan.price_annual_cents,
@@ -254,84 +254,19 @@ export default async function BillingPage() {
                             interval: "annual",
                           })
                         : null;
-                    return (
-                      <Card key={plan.id} className={isCurrent ? "border-accent" : undefined}>
-                        <CardHeader className="pb-2">
-                          <CardTitle className="flex items-center justify-between text-base">
-                            <span>{plan.name}</span>
-                            {isCurrent && <Badge variant="success">Current</Badge>}
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          {monthlyDisplay ? (
-                            <div className="space-y-1">
-                              <p className="text-2xl font-semibold text-heading">
-                                <span className="mr-2 text-base font-normal text-muted line-through">
-                                  {formatPlanPrice(monthlyDisplay.listPriceCents)}/mo
-                                </span>
-                                {formatPlanPrice(monthlyDisplay.discountedPriceCents)}
-                                <span className="text-sm font-normal text-muted">/mo</span>
-                              </p>
-                              <p className="text-xs text-muted">{monthlyDisplay.headline}</p>
-                            </div>
-                          ) : (
-                            <p className="text-2xl font-semibold text-heading">
-                              {formatPlanPrice(plan.price_monthly_cents)}
-                              <span className="text-sm font-normal text-muted">/mo</span>
-                            </p>
-                          )}
-                          {plan.price_annual_cents != null && (
-                            annualDisplay ? (
-                              <p className="text-xs text-muted">
-                                <span className="line-through">
-                                  {formatPlanPrice(annualDisplay.listPriceCents)}/mo billed annually
-                                </span>
-                                {" · "}
-                                {annualDisplay.headline}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-muted">
-                                or {formatPlanPrice(plan.price_annual_cents)}/mo billed annually
-                                {monthlyDisplay &&
-                                !(
-                                  annualReferralDiscount?.config?.annualEnabled &&
-                                  (annualReferralDiscount.config.annualAmountOffCents ?? 0) > 0
-                                )
-                                  ? " (referral discount applies to monthly billing)"
-                                  : ""}
-                              </p>
-                            )
-                          )}
-                          <p className="text-xs text-muted">
-                            {plan.trial_days > 0
-                              ? `${formatTrialDaysLabel(plan.trial_days)} free trial for new signups`
-                              : "No free trial — subscribe to start"}
-                          </p>
-                          {plan.description && (
-                            <p className="text-sm text-muted">{plan.description}</p>
-                          )}
-                          {canSubscribe ? (
-                            <SubscribeButton
-                              planKey={plan.key}
-                              label={alreadyOnPaidPlan ? "Current plan" : "Subscribe"}
-                              disabled={alreadyOnPaidPlan}
-                            />
-                          ) : (
-                            <div className="space-y-1">
-                              <Button type="button" className="w-full" disabled>
-                                Unavailable
-                              </Button>
-                              <p className="text-xs text-muted">
-                                Billing isn&apos;t set up for this studio yet. Contact ShootPortal
-                                support.
-                              </p>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
+                    return {
+                      id: plan.id,
+                      key: plan.key,
+                      name: plan.name,
+                      price_monthly_cents: plan.price_monthly_cents,
+                      price_annual_cents: plan.price_annual_cents,
+                      stripe_price_monthly_id: plan.stripe_price_monthly_id,
+                      stripe_price_annual_id: plan.stripe_price_annual_id,
+                      cookieMonthlyDisplay,
+                      cookieAnnualDisplay,
+                    };
                   })}
-                </div>
+                />
               )}
             </>
           )}

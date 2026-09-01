@@ -470,14 +470,22 @@ export async function loadStripeCouponIdForReferralDiscount(args: {
 export async function resolveReferralDiscountForBusiness(args: {
   businessId: string;
   interval: BillingInterval;
+  /** When set, resolve discount against this partner instead of the attributed one. */
+  partnerIdOverride?: string | null;
 }): Promise<AppliedReferralDiscount> {
   const raw = await createServiceClient();
-  const { data: referral } = await raw
-    .from("partner_referrals")
-    .select("partner_id")
-    .eq("business_id", args.businessId)
-    .maybeSingle();
-  if (!referral?.partner_id) {
+
+  let partnerId = args.partnerIdOverride ?? null;
+  if (!partnerId) {
+    const { data: referral } = await raw
+      .from("partner_referrals")
+      .select("partner_id")
+      .eq("business_id", args.businessId)
+      .maybeSingle();
+    partnerId = (referral?.partner_id as string | undefined) ?? null;
+  }
+
+  if (!partnerId) {
     return { eligible: false, reason: "no_referral" };
   }
 
@@ -487,7 +495,7 @@ export async function resolveReferralDiscountForBusiness(args: {
       .select(
         "id, status, referral_discount_enabled, referral_discount_amount_cents, referral_discount_duration_months"
       )
-      .eq("id", referral.partner_id)
+      .eq("id", partnerId)
       .maybeSingle(),
     loadPartnerProgramSettings(),
   ]);

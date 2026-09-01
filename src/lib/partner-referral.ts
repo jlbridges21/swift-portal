@@ -12,7 +12,7 @@ import { validateLandingSlug, validateReferralCode } from "@/lib/reserved-subdom
 export const PARTNER_REF_COOKIE = "sp_partner_ref";
 export const PARTNER_REF_TTL_SECONDS = 90 * 24 * 60 * 60;
 
-export type PartnerReferralSource = "link" | "landing_page" | "manual";
+export type PartnerReferralSource = "link" | "landing_page" | "manual" | "promo_code";
 
 export type PartnerRefClaims = {
   code: string;
