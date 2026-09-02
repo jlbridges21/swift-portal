@@ -11,8 +11,12 @@ import {
 } from "@/lib/platform-business-bulk";
 
 export const runtime = "nodejs";
-/** Hard-delete batches need room for sequential storage wipes. Cap is BULK_HARD_DELETE_MAX. */
-export const maxDuration = BULK_ROUTE_MAX_DURATION_SECONDS;
+/**
+ * Hard-delete batches need room for sequential storage wipes.
+ * Cap is BULK_HARD_DELETE_MAX (5). Must be a numeric literal for Next.js.
+ * Keep in sync with BULK_ROUTE_MAX_DURATION_SECONDS in platform-business-bulk.shared.ts.
+ */
+export const maxDuration = 300;
 
 const ACTIONS = new Set<BulkBusinessAction>([
   "suspend",

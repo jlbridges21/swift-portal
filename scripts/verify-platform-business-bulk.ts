@@ -380,6 +380,7 @@ async function main() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "suspend", businessIds: [a] }),
+        signal: AbortSignal.timeout(5000),
       });
       const body = await res.json().catch(() => ({}));
       console.log("unauthenticated bulk response:", res.status, body);
