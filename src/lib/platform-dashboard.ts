@@ -21,6 +21,8 @@ export type PlatformBusinessRow = {
   created_via: "platform" | "signup" | string;
   created_at: string;
   deleted_at: string | null;
+  is_protected: boolean;
+  hasCommissionHistory: boolean;
   clientCount: number;
   projectCount: number;
   mediaCount: number;
@@ -48,7 +50,7 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
   const { data: businesses, error } = await raw
     .from("businesses")
     .select(
-      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end, created_via, created_at, deleted_at"
+      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end, created_via, created_at, deleted_at, is_protected"
     )
     .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
@@ -56,24 +58,29 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
   const rows = businesses ?? [];
   return Promise.all(
     rows.map(async (b) => {
-      const [clientCount, projectCount, mediaCount, payments, integ, activity] = await Promise.all([
-        countEq("clients", b.id),
-        countEq("projects", b.id),
-        countEq("media_assets", b.id),
-        raw.from("payments").select("amount, status").eq("business_id", b.id).eq("status", "paid"),
-        raw
-          .from("business_integrations")
-          .select("stripe_account_status")
-          .eq("business_id", b.id)
-          .maybeSingle(),
-        raw
-          .from("activity_logs")
-          .select("created_at")
-          .eq("business_id", b.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
+      const [clientCount, projectCount, mediaCount, payments, integ, activity, commissionCount] =
+        await Promise.all([
+          countEq("clients", b.id),
+          countEq("projects", b.id),
+          countEq("media_assets", b.id),
+          raw.from("payments").select("amount, status").eq("business_id", b.id).eq("status", "paid"),
+          raw
+            .from("business_integrations")
+            .select("stripe_account_status")
+            .eq("business_id", b.id)
+            .maybeSingle(),
+          raw
+            .from("activity_logs")
+            .select("created_at")
+            .eq("business_id", b.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          raw
+            .from("partner_commissions")
+            .select("id", { count: "exact", head: true })
+            .eq("business_id", b.id),
+        ]);
 
       const lifetimeRevenueCents = (payments.data ?? []).reduce(
         (sum, p) => sum + (typeof p.amount === "number" ? p.amount : 0),
@@ -93,6 +100,8 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
         ...b,
         subscription_cancel_at_period_end: Boolean(b.subscription_cancel_at_period_end),
         subscription_current_period_end: b.subscription_current_period_end ?? null,
+        is_protected: b.is_protected === true,
+        hasCommissionHistory: (commissionCount.count ?? 0) > 0,
         clientCount,
         projectCount,
         mediaCount,

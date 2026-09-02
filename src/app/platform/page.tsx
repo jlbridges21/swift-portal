@@ -2,10 +2,10 @@ import Link from "next/link";
 import { requireSuperAdminPage } from "@/lib/admin-access";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { loadPlatformAudit, loadPlatformBusinesses, platformTotals } from "@/lib/platform-dashboard";
 import { sumShootPortalSubscriptionRevenueCents } from "@/lib/platform-revenue";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { PlatformBusinessesTable } from "@/components/platform/platform-businesses-table";
 
 export const dynamic = "force-dynamic";
 
@@ -113,100 +113,8 @@ export default async function PlatformHomePage({
         <CardHeader>
           <CardTitle>All businesses</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-border text-muted">
-                <th className="py-2 pr-3 font-medium">Business</th>
-                <th className="py-2 pr-3 font-medium">Source</th>
-                <th className="py-2 pr-3 font-medium">Status</th>
-                <th className="py-2 pr-3 font-medium">Subscription</th>
-                <th className="py-2 pr-3 font-medium">Plan</th>
-                <th className="py-2 pr-3 font-medium">Clients</th>
-                <th className="py-2 pr-3 font-medium">Projects</th>
-                <th className="py-2 pr-3 font-medium">Media</th>
-                <th className="py-2 pr-3 font-medium">Revenue</th>
-                <th className="py-2 pr-3 font-medium">Stripe</th>
-                <th className="py-2 pr-3 font-medium">Created</th>
-                <th className="py-2 font-medium">Last activity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {businesses.map((b) => (
-                <tr key={b.id} className="border-b border-border last:border-0">
-                  <td className="py-3 pr-3">
-                    <Link href={`/platform/businesses/${b.id}`} className="font-medium text-heading underline">
-                      {b.name}
-                    </Link>
-                    <div className="text-xs text-muted">{b.slug}</div>
-                  </td>
-                  <td className="py-3 pr-3">
-                    <Badge variant={b.created_via === "signup" ? "warning" : "default"}>
-                      {b.created_via === "signup" ? "signup" : "platform"}
-                    </Badge>
-                  </td>
-                  <td className="py-3 pr-3">
-                    <Badge variant={b.deleted_at ? "default" : b.status === "active" ? "success" : "warning"}>
-                      {b.deleted_at ? "deleted" : b.status}
-                    </Badge>
-                  </td>
-                  <td className="py-3 pr-3">
-                    <div className="flex flex-col gap-1">
-                      <Badge variant={b.requiresPayment ? "warning" : "success"}>
-                        {b.subscription_status}
-                      </Badge>
-                      {b.isComped && (
-                        <span className="text-xs text-muted">
-                          {b.comped_reason || "comped"}
-                          {b.comped_until == null
-                            ? " · permanent"
-                            : b.daysLeftInComp != null
-                              ? ` · ${b.daysLeftInComp}d left`
-                              : ""}
-                        </span>
-                      )}
-                      {b.subscription_status === "trialing" && b.trial_ends_at && (
-                        <span className="text-xs text-muted">
-                          ends {formatDate(b.trial_ends_at)}
-                          {b.daysLeftInTrial != null ? ` · ${b.daysLeftInTrial}d left` : ""}
-                        </span>
-                      )}
-                      {b.subscription_cancel_at_period_end && (
-                        <span className="text-xs text-muted">
-                          cancel at period end
-                          {b.subscription_current_period_end
-                            ? ` · ${formatDate(b.subscription_current_period_end)}`
-                            : ""}
-                        </span>
-                      )}
-                      {!b.subscription_cancel_at_period_end &&
-                        b.subscription_current_period_end &&
-                        b.subscription_status === "active" && (
-                          <span className="text-xs text-muted">
-                            period end {formatDate(b.subscription_current_period_end)}
-                          </span>
-                        )}
-                      {b.daysLeftInTrial != null &&
-                        b.subscription_status !== "trialing" &&
-                        !b.requiresPayment &&
-                        !b.isComped && (
-                          <span className="text-xs text-muted">{b.daysLeftInTrial}d left</span>
-                        )}
-                      {b.requiresPayment && <span className="text-xs text-amber-700">paywalled</span>}
-                    </div>
-                  </td>
-                  <td className="py-3 pr-3">{b.plan}</td>
-                  <td className="py-3 pr-3">{b.clientCount}</td>
-                  <td className="py-3 pr-3">{b.projectCount}</td>
-                  <td className="py-3 pr-3">{b.mediaCount}</td>
-                  <td className="py-3 pr-3">{formatCurrency(b.lifetimeRevenueCents)}</td>
-                  <td className="py-3 pr-3">{b.stripeStatus}</td>
-                  <td className="py-3 pr-3">{formatDate(b.created_at)}</td>
-                  <td className="py-3">{formatDate(b.lastActivityAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <CardContent>
+          <PlatformBusinessesTable businesses={businesses} />
         </CardContent>
       </Card>
 

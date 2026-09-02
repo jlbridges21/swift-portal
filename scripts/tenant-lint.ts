@@ -116,6 +116,7 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/app/api/admin/email/domain/route.ts",
   "src/lib/platform-audit.ts",
   "src/lib/platform-onboard.ts",
+  "src/lib/platform-business-bulk.ts",
   "src/lib/custom-domain.ts",
   "src/lib/platform-dashboard.ts",
   "src/lib/setup-checklist.ts",
