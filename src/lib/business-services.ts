@@ -132,6 +132,7 @@ export async function resolveServiceId(
   businessId: string,
   serviceType: string
 ): Promise<string | null> {
+  if (!serviceType?.trim()) return null;
   const rows = await listBusinessServices(businessId);
   if (!rows.length) return null;
   const templates = rows.map(rowToServiceTemplate);

@@ -90,7 +90,7 @@ export function PricingPaymentWorkflow({
           step={1}
           title="Preliminary Quote"
           status={prelimStatus}
-          summary={preliminary ? preliminary.title : "Auto-generated on project request"}
+          summary={preliminary ? preliminary.title : "No estimate yet — create one manually"}
         >
           {preliminary && (
             <span className="text-sm font-medium text-primary">{quoteSummaryLabel(preliminary)}</span>

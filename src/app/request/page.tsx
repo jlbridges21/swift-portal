@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PublicRequestForm } from "@/components/forms/public-request-form";
 import { TenantUnavailable } from "@/components/public/tenant-unavailable";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
+import { getAppSettings } from "@/lib/app-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -35,5 +36,10 @@ export default async function RequestPage() {
     );
   }
 
-  return <PublicRequestForm />;
+  const settings = await getAppSettings(host.businessId!);
+  return (
+    <PublicRequestForm
+      instantPreliminaryEstimate={settings.proposals.autoPreliminaryEstimate !== false}
+    />
+  );
 }

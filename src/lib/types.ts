@@ -194,6 +194,11 @@ export interface Project {
   link_access_enabled_at?: string | null;
   link_access_enabled_by?: string | null;
   link_access_view_count?: number;
+  /** Client-facing media sections — false hides the section and its downloads for non-admins. */
+  client_section_photos?: boolean;
+  client_section_videos?: boolean;
+  client_section_tours?: boolean;
+  client_section_documents?: boolean;
   created_at: string;
   updated_at: string;
   clients?: Client;

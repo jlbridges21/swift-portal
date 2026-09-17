@@ -12,6 +12,10 @@ import { syncNewProjectLeadToGhl } from "@/lib/ghl/sync-portal-lead";
 import { getAppSettings } from "@/lib/app-settings";
 import { resolveServiceId } from "@/lib/business-services";
 import { resolvePublicSignupBusinessId } from "@/lib/tenant";
+import {
+  normalizeProjectMediaSections,
+  projectColumnsFromMediaSections,
+} from "@/lib/project-media-sections";
 
 export async function POST(request: Request) {
   try {
@@ -39,7 +43,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: addressError }, { status: 400 });
     }
 
-    if (!person.firstName || !person.lastName || !email || !service_requested || !password) {
+    if (!person.firstName || !person.lastName || !email || !password) {
       return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
     }
 
@@ -56,6 +60,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
     const businessId = resolved.businessId;
+    const appSettingsEarly = await getAppSettings(businessId);
+    const instantPreliminary = appSettingsEarly.proposals.autoPreliminaryEstimate !== false;
+    const serviceRequested = instantPreliminary
+      ? String(service_requested ?? "").trim()
+      : "";
+    if (instantPreliminary && !serviceRequested) {
+      return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
+    }
 
     const raw = await createServiceClient();
     const db = await createTenantServiceClient(businessId);
@@ -152,8 +164,11 @@ export async function POST(request: Request) {
       })
       .eq("id", userId);
 
-    const projectName = defaultProjectTitle(property_address, service_requested);
-    const serviceId = await resolveServiceId(businessId, service_requested);
+    const projectName = defaultProjectTitle(property_address, serviceRequested);
+    const serviceId = await resolveServiceId(businessId, serviceRequested);
+    const sectionDefaults = projectColumnsFromMediaSections(
+      normalizeProjectMediaSections(appSettingsEarly.mediaSectionDefaults)
+    );
 
     const { data: project, error: projectError } = await db
       .from("projects")
@@ -161,12 +176,13 @@ export async function POST(request: Request) {
         client_id: client.id,
         project_name: projectName,
         property_address,
-        service_type: service_requested,
+        service_type: serviceRequested,
         service_id: serviceId,
         status: "new_request",
         notes: notes || null,
         shoot_date: preferred_date || null,
         ghl_sync_status: "pending",
+        ...sectionDefaults,
       })
       .select()
       .single();
@@ -188,7 +204,7 @@ export async function POST(request: Request) {
         phone: phone || null,
         company: company || null,
         property_address,
-        service_requested,
+        service_requested: serviceRequested,
         preferred_date: preferred_date || null,
         notes: notes || null,
         project_id: project.id,
@@ -197,14 +213,17 @@ export async function POST(request: Request) {
       .select()
       .single();
 
+    const activityServiceLabel = serviceRequested || "inquiry";
     await db.from("activity_logs").insert([
       {
         activity_type: "proposal_submitted",
-        description: `Proposal submitted for ${service_requested}`,
+        description: instantPreliminary
+          ? `Proposal submitted for ${serviceRequested}`
+          : `Inquiry submitted for ${property_address}`,
         lead_id: lead?.id,
         project_id: project.id,
         user_id: userId,
-        metadata: { email, service: service_requested, auto_created: true },
+        metadata: { email, service: activityServiceLabel, auto_created: true, inquiry: !instantPreliminary },
       },
       {
         activity_type: "account_created",
@@ -225,8 +244,10 @@ export async function POST(request: Request) {
     await notifyAdmins({
       type: "proposal_submitted",
       eventKey: "new_project_request",
-      title: "New Project Request",
-      body: `${person.fullName} submitted a request for ${service_requested} at ${property_address}. A preliminary estimate was generated automatically.`,
+      title: instantPreliminary ? "New Project Request" : "New Project Inquiry",
+      body: instantPreliminary
+        ? `${person.fullName} submitted a request for ${serviceRequested} at ${property_address}. A preliminary estimate was generated automatically.`
+        : `${person.fullName} sent an inquiry for ${property_address}. No preliminary estimate was created — follow up manually.`,
       link: `/admin/projects/${project.id}`,
       projectId: project.id,
       businessId,
@@ -236,20 +257,23 @@ export async function POST(request: Request) {
       clientId: client.id,
       type: "proposal_submitted",
       eventKey: "new_project_request",
-      title: "We received your project request",
-      body: `Thanks ${person.fullName} — we received your request for ${service_requested} at ${property_address}.`,
+      title: instantPreliminary ? "We received your project request" : "We received your inquiry",
+      body: instantPreliminary
+        ? `Thanks ${person.fullName} — we received your request for ${serviceRequested} at ${property_address}.`
+        : `Thanks ${person.fullName} — we received your inquiry for ${property_address}. We'll follow up shortly.`,
       link: `/dashboard/projects/${project.id}`,
       projectId: project.id,
       businessId,
     });
 
-    await createPreliminaryEstimate(project.id, service_requested, {
-      userId,
-      skipIfExists: true,
-      businessId,
-    });
+    if (instantPreliminary && serviceRequested) {
+      await createPreliminaryEstimate(project.id, serviceRequested, {
+        userId,
+        skipIfExists: true,
+        businessId,
+      });
+    }
 
-    const appSettings = await getAppSettings(businessId);
     const ghlPayload = await buildPortalLeadPayload({
       businessId,
       clientId: client.id,
@@ -259,7 +283,7 @@ export async function POST(request: Request) {
       email,
       phone,
       company,
-      serviceRequested: service_requested,
+      serviceRequested: serviceRequested,
       propertyAddress: property_address,
       streetAddress: String(body.street_address ?? "").trim() || null,
       city: String(body.city ?? "").trim() || null,
@@ -269,7 +293,7 @@ export async function POST(request: Request) {
       referralSource: body.referral_source,
       preferredDate: preferred_date,
       propertyType: body.property_type,
-      source: appSettings.integrations.ghlLeadSource,
+      source: appSettingsEarly.integrations.ghlLeadSource,
     });
 
     await syncNewProjectLeadToGhl(project.id, ghlPayload, businessId);

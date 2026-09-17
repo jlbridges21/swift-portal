@@ -10,13 +10,14 @@ import { touchProjectShareAccess } from "@/lib/project-access";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { logMediaEvent, trackMediaDownload } from "@/lib/media-library";
 import { normalizeStatus } from "@/lib/constants";
-import { downloadFileName, mediaDisplayName } from "@/lib/media-display-name";
+import { mediaDisplayName } from "@/lib/media-display-name";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { assertMediaAssetProjectAccess } from "@/lib/media-asset-access";
 import {
   signMediaThumbnailUrl,
   THUMB_SIGNED_TTL_SECONDS,
 } from "@/lib/media-signed-thumbs";
+import { serveMediaFileDownload } from "@/lib/serve-media-file-download";
 
 export async function GET(
   request: Request,
@@ -67,15 +68,36 @@ export async function GET(
   const shareIdToTouch = mediaAccess.shareId;
 
   let projectStatus = "new_request";
+  let sectionRow: {
+    client_section_photos?: boolean | null;
+    client_section_videos?: boolean | null;
+    client_section_tours?: boolean | null;
+    client_section_documents?: boolean | null;
+  } | null = null;
   if (asset.project_id) {
     const { data: project } = await db
       .from("projects")
-      .select("status")
+      .select(
+        "status, client_section_photos, client_section_videos, client_section_tours, client_section_documents"
+      )
       .eq("id", asset.project_id)
       .maybeSingle();
     projectStatus = normalizeStatus(project?.status ?? "new_request");
+    sectionRow = project;
   }
   if (!isAdmin && !isClientVisibleMedia(asset)) {
+    return NextResponse.json({ error: "This file is not available." }, { status: 404 });
+  }
+  const { clientMayAccessMediaSection, mediaSectionsFromProject } = await import(
+    "@/lib/project-media-sections"
+  );
+  if (
+    !clientMayAccessMediaSection(
+      mediaSectionsFromProject(sectionRow),
+      asset.media_type,
+      isAdmin
+    )
+  ) {
     return NextResponse.json({ error: "This file is not available." }, { status: 404 });
   }
 
@@ -102,49 +124,31 @@ export async function GET(
   };
 
   if (asFile) {
-    const { data: fileData, error: downloadError } = await storageClient.storage
-      .from(bucket)
-      .download(asset.file_path);
-
-    if (downloadError || !fileData) {
-      console.error("[media/download] storage download failed", {
-        mediaId: id,
-        bucket,
-        path: asset.file_path,
-        message: downloadError?.message,
-      });
-      return NextResponse.json({ error: "We couldn't download that file. Please try again or contact support." }, { status: 500 });
-    }
-
-    recordShareAccess();
-
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
-    void trackMediaDownload({
-      businessId: tenant.businessId,
-      mediaAssetId: id,
-      userId: profile.id,
-      email: profile.email,
-      ipAddress: ip,
-    });
-    void logMediaEvent({
-      businessId: tenant.businessId,
-      mediaAssetId: id,
-      projectId: asset.project_id,
-      userId: profile.id,
-      eventType: "downloaded",
-      description: `Downloaded ${mediaDisplayName(asset)}`,
-      metadata: { by: profile.email },
-    });
-
-    const disposition = inline ? "inline" : "attachment";
-    const mimeType = asset.mime_type || "application/octet-stream";
-    const filename = downloadFileName(asset);
-
-    return new NextResponse(fileData, {
-      headers: {
-        "Content-Type": mimeType,
-        "Content-Disposition": `${disposition}; filename="${encodeURIComponent(filename)}"`,
-        "Cache-Control": "private, max-age=3600",
+    return serveMediaFileDownload({
+      storage: storageClient,
+      bucket,
+      asset,
+      searchParams,
+      inline,
+      onSuccess: () => {
+        recordShareAccess();
+        const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+        void trackMediaDownload({
+          businessId: tenant.businessId,
+          mediaAssetId: id,
+          userId: profile.id,
+          email: profile.email,
+          ipAddress: ip,
+        });
+        void logMediaEvent({
+          businessId: tenant.businessId,
+          mediaAssetId: id,
+          projectId: asset.project_id,
+          userId: profile.id,
+          eventType: "downloaded",
+          description: `Downloaded ${mediaDisplayName(asset)}`,
+          metadata: { by: profile.email },
+        });
       },
     });
   }

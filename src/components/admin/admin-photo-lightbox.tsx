@@ -10,7 +10,10 @@ import type { MediaAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Download, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { downloadFileName, mediaDisplayName } from "@/lib/media-display-name";
+import { mediaDisplayName } from "@/lib/media-display-name";
+import { downloadMediaAsset } from "@/lib/download";
+import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
+import type { DownloadQuality } from "@/lib/download-quality";
 
 interface AdminPhotoLightboxProps {
   photo: MediaAsset;
@@ -22,6 +25,7 @@ export function AdminPhotoLightbox({ photo, onClose, onSavedPropertyLine }: Admi
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [qualityOpen, setQualityOpen] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -89,12 +93,7 @@ export function AdminPhotoLightbox({ photo, onClose, onSavedPropertyLine }: Admi
               variant="outline"
               size="sm"
               className="min-h-11 border-white/20 bg-white/10 text-white hover:bg-white/20"
-              onClick={() => {
-                const a = document.createElement("a");
-                a.href = `/api/media/download/${photo.id}?file=1`;
-                a.download = downloadFileName(photo);
-                a.click();
-              }}
+              onClick={() => setQualityOpen(true)}
             >
               <Download className="h-4 w-4" />
             </Button>
@@ -143,6 +142,15 @@ export function AdminPhotoLightbox({ photo, onClose, onSavedPropertyLine }: Admi
           />
         </div>
       )}
+
+      <DownloadQualityDialog
+        open={qualityOpen}
+        onClose={() => setQualityOpen(false)}
+        title="Download photo"
+        onConfirm={(quality: DownloadQuality) => {
+          void downloadMediaAsset(photo, { quality });
+        }}
+      />
     </div>
   );
 }

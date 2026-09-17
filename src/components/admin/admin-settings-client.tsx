@@ -401,6 +401,16 @@ export function AdminSettingsClient({
     setSettings((prev) => ({ ...prev, payments: { ...prev.payments, ...patch } }));
   }, []);
 
+  const patchMediaSectionDefaults = useCallback(
+    (patch: Partial<AppSettings["mediaSectionDefaults"]>) => {
+      setSettings((prev) => ({
+        ...prev,
+        mediaSectionDefaults: { ...prev.mediaSectionDefaults, ...patch },
+      }));
+    },
+    []
+  );
+
   const patchWorkflow = useCallback((workflow: AppSettings["workflow"]) => {
     setSettings((prev) => ({ ...prev, workflow }));
   }, []);
@@ -888,6 +898,42 @@ export function AdminSettingsClient({
                 </div>
               </CardContent>
             </Card>
+            <Card className="shadow-sm" id="settings-media-section-defaults">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Client media sections</CardTitle>
+                <p className="text-sm text-muted">
+                  Defaults for new projects only. Existing projects keep their own toggles.
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-hidden rounded-xl border border-border p-0">
+                <div className="divide-y divide-border">
+                  <RowToggle
+                    id="mediaDefaultPhotos"
+                    label="Photo Gallery visible to clients by default"
+                    checked={settings.mediaSectionDefaults.photos}
+                    onChange={(v) => patchMediaSectionDefaults({ photos: v })}
+                  />
+                  <RowToggle
+                    id="mediaDefaultVideos"
+                    label="Video visible to clients by default"
+                    checked={settings.mediaSectionDefaults.videos}
+                    onChange={(v) => patchMediaSectionDefaults({ videos: v })}
+                  />
+                  <RowToggle
+                    id="mediaDefaultTours"
+                    label="360° Virtual Tours visible to clients by default"
+                    checked={settings.mediaSectionDefaults.tours}
+                    onChange={(v) => patchMediaSectionDefaults({ tours: v })}
+                  />
+                  <RowToggle
+                    id="mediaDefaultDocuments"
+                    label="Documents visible to clients by default"
+                    checked={settings.mediaSectionDefaults.documents}
+                    onChange={(v) => patchMediaSectionDefaults({ documents: v })}
+                  />
+                </div>
+              </CardContent>
+            </Card>
             {!settings.setupAcceptedDefaults?.stripe ? (
               <AcceptSetupDefaultButton acceptKey="stripe" />
             ) : (
@@ -899,10 +945,36 @@ export function AdminSettingsClient({
         </SettingsPanel>
 
         <SettingsPanel id="services" active={section}>
-          <div id="settings-services" tabIndex={-1} className="scroll-mt-24">
+          <div id="settings-services" tabIndex={-1} className="scroll-mt-24 space-y-4">
             <h2 className="text-lg font-semibold text-primary">Services</h2>
             <p className="mt-1 mb-4 text-sm text-muted">Catalog and preliminary estimate prices for this business.</p>
             {services}
+            <Card className="shadow-sm" id="settings-instant-preliminary">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Request form</CardTitle>
+                <p className="text-sm text-muted">
+                  Controls whether new public and portal requests collect a service and create an
+                  instant preliminary estimate.
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-hidden rounded-xl border border-border p-0">
+                <div className="divide-y divide-border">
+                  <div className="px-4 py-3">
+                    <RowToggle
+                      id="autoPreliminaryEstimate"
+                      label="Provide instant preliminary estimate"
+                      checked={settings.proposals.autoPreliminaryEstimate}
+                      onChange={(v) => patchProposals({ autoPreliminaryEstimate: v })}
+                    />
+                    <p className="mt-2 px-4 text-xs text-muted">
+                      When off, the request form becomes an inquiry (no service selection) and no
+                      preliminary estimate is created. You can still send official estimates
+                      manually.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </SettingsPanel>
 
@@ -918,12 +990,6 @@ export function AdminSettingsClient({
               </CardHeader>
               <CardContent className="overflow-hidden rounded-xl border border-border p-0">
                 <div className="divide-y divide-border">
-                  <RowToggle
-                    id="autoPreliminaryEstimate"
-                    label="Automatically create preliminary estimate on new request"
-                    checked={settings.proposals.autoPreliminaryEstimate}
-                    onChange={(v) => patchProposals({ autoPreliminaryEstimate: v })}
-                  />
                   <RowToggle
                     id="requireAdminReview"
                     label="Require admin review before official proposal is sent"

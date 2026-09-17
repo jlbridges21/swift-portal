@@ -19,6 +19,7 @@ type View = "browse" | "all" | "folder" | "unfiled";
 interface ClientPhotoFoldersProps {
   projectId: string;
   zipApiBase?: string;
+  downloadApiBase?: string;
   photos: MediaAsset[];
   folders: MediaFolder[];
   getDownloadUrl: (asset: MediaAsset, thumb?: boolean) => Promise<string | null>;
@@ -38,6 +39,7 @@ function sortInFolder(list: MediaAsset[]) {
 export function ClientPhotoFolders({
   projectId,
   zipApiBase,
+  downloadApiBase,
   photos,
   folders,
   getDownloadUrl,
@@ -97,6 +99,7 @@ export function ClientPhotoFolders({
         getDownloadUrl={getDownloadUrl}
         downloadsAllowed={downloadsAllowed}
         compactInitialCount={compactInitialCount}
+        downloadApiBase={downloadApiBase}
       />
     );
   }
@@ -247,6 +250,7 @@ export function ClientPhotoFolders({
         getDownloadUrl={getDownloadUrl}
         downloadsAllowed={downloadsAllowed}
         compactInitialCount={view === "all" ? compactInitialCount : undefined}
+        downloadApiBase={downloadApiBase}
       />
       {view === "folder" && list[0] && (
         <p className="sr-only">Folder starts with {mediaDisplayName(list[0])}</p>

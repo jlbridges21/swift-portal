@@ -13,6 +13,11 @@ import { createPreliminaryEstimate, upsertPreliminaryEstimate } from "@/lib/prel
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { resolveServiceId } from "@/lib/business-services";
 import { getAppSettings, type NotificationEventKey } from "@/lib/app-settings";
+import {
+  normalizeProjectMediaSections,
+  parseMediaSectionsPatch,
+  projectColumnsFromMediaSections,
+} from "@/lib/project-media-sections";
 
 function clientEventKeyForStatus(status: string): NotificationEventKey | undefined {
   switch (normalizeStatus(status)) {
@@ -67,6 +72,10 @@ export async function POST(request: Request) {
       defaultProjectTitle(property_address, body.service_type);
 
     const serviceId = await resolveServiceId(businessId, body.service_type);
+    const appSettings = await getAppSettings(businessId);
+    const sectionDefaults = projectColumnsFromMediaSections(
+      normalizeProjectMediaSections(appSettings.mediaSectionDefaults)
+    );
 
     const { data: project, error } = await supabase
       .from("projects")
@@ -81,6 +90,7 @@ export async function POST(request: Request) {
         shoot_date: null,
         delivery_date: body.delivery_date || null,
         notes: body.notes || null,
+        ...sectionDefaults,
       })
       .select()
       .single();
@@ -140,9 +150,24 @@ export async function PATCH(request: Request) {
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
     const body = await request.json();
-    const { id, ...updates } = body;
+    const { id, media_sections, ...rest } = body;
+    const updates: Record<string, unknown> = { ...rest };
+    // Section visibility only via media_sections — refuse raw column mass-assignment.
+    delete updates.media_sections;
+    delete updates.client_section_photos;
+    delete updates.client_section_videos;
+    delete updates.client_section_tours;
+    delete updates.client_section_documents;
 
-    if (updates.service_type && typeof updates.service_type === "string") {
+    if (media_sections !== undefined) {
+      const parsed = parseMediaSectionsPatch(media_sections);
+      if (!parsed) {
+        return NextResponse.json({ error: "Invalid media_sections" }, { status: 400 });
+      }
+      Object.assign(updates, projectColumnsFromMediaSections(parsed));
+    }
+
+    if (typeof updates.service_type === "string") {
       updates.service_id = await resolveServiceId(businessId, updates.service_type);
     }
 
@@ -167,12 +192,17 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    if (updates.status && existing && updates.status !== existing.status) {
-      const label = getStatusLabel(updates.status);
+    if (
+      typeof updates.status === "string" &&
+      existing &&
+      updates.status !== existing.status
+    ) {
+      const newStatus = updates.status;
+      const label = getStatusLabel(newStatus);
       const activityType =
-        updates.status === "shoot_complete_editing"
+        newStatus === "shoot_complete_editing"
           ? "shoot_completed"
-          : updates.status === "ready_for_review"
+          : newStatus === "ready_for_review"
             ? "sent_for_review"
             : "status_updated";
 
@@ -187,16 +217,16 @@ export async function PATCH(request: Request) {
           businessId,
           projectId: id,
           idempotencyKey: idempotencyKey("project", id, activityType),
-          metadata: { from: existing.status, to: updates.status },
+          metadata: { from: existing.status, to: newStatus },
         }
       );
 
       const appSettings = await getAppSettings(businessId);
       await notifyProjectClients({
-        type: updates.status === "awaiting_payment" ? "invoice_available" : "status_changed",
-        eventKey: clientEventKeyForStatus(updates.status),
-        title: clientStatusNotification(updates.status, appSettings.business.businessName).title,
-        body: clientStatusNotification(updates.status, appSettings.business.businessName).body,
+        type: newStatus === "awaiting_payment" ? "invoice_available" : "status_changed",
+        eventKey: clientEventKeyForStatus(newStatus),
+        title: clientStatusNotification(newStatus, appSettings.business.businessName).title,
+        body: clientStatusNotification(newStatus, appSettings.business.businessName).body,
         link: `/dashboard/projects/${id}`,
         projectId: id,
       });

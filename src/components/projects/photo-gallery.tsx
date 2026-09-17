@@ -8,12 +8,15 @@ import { MediaThumbnailSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { RemoteImage } from "@/components/ui/remote-image";
 import type { MediaAsset } from "@/lib/types";
-import { downloadFileName, mediaDisplayName } from "@/lib/media-display-name";
+import { mediaDisplayName } from "@/lib/media-display-name";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
 import { Images } from "lucide-react";
 import { createThumbRequestQueue } from "@/lib/media-thumb-client";
+import { downloadMediaAsset } from "@/lib/download";
+import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
+import type { DownloadQuality } from "@/lib/download-quality";
 
 /** Consistent responsive grid for photo galleries */
 export const PHOTO_GRID_CLASS =
@@ -24,6 +27,8 @@ interface PhotoGalleryProps {
   getDownloadUrl: (asset: MediaAsset, thumb?: boolean) => Promise<string | null>;
   downloadsAllowed?: boolean;
   compactInitialCount?: number;
+  /** Override download API base (public link: `/api/public/link/{token}/media/download`). */
+  downloadApiBase?: string;
 }
 
 export function PhotoGallery({
@@ -31,6 +36,7 @@ export function PhotoGallery({
   getDownloadUrl,
   downloadsAllowed = true,
   compactInitialCount,
+  downloadApiBase,
 }: PhotoGalleryProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
@@ -124,6 +130,7 @@ export function PhotoGallery({
           onClose={() => setLightboxIndex(null)}
           onNavigate={setLightboxIndex}
           downloadsAllowed={downloadsAllowed}
+          downloadApiBase={downloadApiBase}
         />
       )}
     </>
@@ -219,6 +226,7 @@ function PhotoLightbox({
   onClose,
   onNavigate,
   downloadsAllowed = true,
+  downloadApiBase,
 }: {
   photos: MediaAsset[];
   currentIndex: number;
@@ -229,7 +237,9 @@ function PhotoLightbox({
   onClose: () => void;
   onNavigate: (i: number) => void;
   downloadsAllowed?: boolean;
+  downloadApiBase?: string;
 }) {
+  const [qualityOpen, setQualityOpen] = useState(false);
   const photo = photos[currentIndex];
   const [url, setUrl] = useState<string | undefined>(fullUrls[photo.id]);
   const [scale, setScale] = useState(1);
@@ -420,17 +430,22 @@ function PhotoLightbox({
             variant="outline"
             size="sm"
             className="min-h-11 border-white/20 bg-white/10 text-white hover:bg-white/20"
-            onClick={() => {
-              const a = document.createElement("a");
-              a.href = `/api/media/download/${photo.id}?file=1`;
-              a.download = downloadFileName(photo);
-              a.click();
-            }}
+            onClick={() => setQualityOpen(true)}
           >
             <Download className="h-4 w-4" /> Download
           </Button>
         )}
       </div>
+
+      <DownloadQualityDialog
+        open={qualityOpen}
+        onClose={() => setQualityOpen(false)}
+        title="Download photo"
+        confirmLabel="Download"
+        onConfirm={(quality: DownloadQuality) => {
+          void downloadMediaAsset(photo, { quality, apiBase: downloadApiBase });
+        }}
+      />
     </div>
   );
 }

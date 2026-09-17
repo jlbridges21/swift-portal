@@ -21,6 +21,7 @@ import {
   filterMediaForVideoReviewDelivery,
   loadVideoReviewVersionMap,
 } from "@/lib/video-review-media";
+import { DOWNLOAD_QUALITY_PARAM, parseDownloadQuality } from "@/lib/download-quality";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +32,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: projectId } = await params;
-  const folderParam = new URL(request.url).searchParams.get("folderId");
+  const url = new URL(request.url);
+  const folderParam = url.searchParams.get("folderId");
+  const quality = parseDownloadQuality(url.searchParams.get(DOWNLOAD_QUALITY_PARAM));
   const logCtx = { projectId, folderId: folderParam ?? undefined };
 
   try {
@@ -120,9 +123,19 @@ export async function GET(
 
     zipLog("media_query", ctx, { totalAssets: media?.length ?? 0 });
 
+    const { data: projectRow } = await db
+      .from("projects")
+      .select(
+        "client_section_photos, client_section_videos, client_section_tours, client_section_documents"
+      )
+      .eq("id", projectId)
+      .maybeSingle();
+    const { mediaSectionsFromProject } = await import("@/lib/project-media-sections");
+    const sections = mediaSectionsFromProject(projectRow);
+
     const versionMap = await loadVideoReviewVersionMap(db, projectId);
     const deliveryMedia = filterMediaForVideoReviewDelivery(media ?? [], versionMap, isAdmin);
-    let downloadable = pickDownloadableAssets(deliveryMedia, isAdmin);
+    let downloadable = pickDownloadableAssets(deliveryMedia, isAdmin, sections);
     if (folderScope.folderScope) {
       downloadable = filterDownloadableAssetsByFolder(downloadable, folderScope.folderScope);
     }
@@ -150,12 +163,17 @@ export async function GET(
     }
 
     const filename = folderScope.folderName
-      ? buildFolderZipFilename(project.project_name, project.property_address, folderScope.folderName)
-      : buildZipFilename(project.project_name, project.property_address);
+      ? buildFolderZipFilename(
+          project.project_name,
+          project.property_address,
+          folderScope.folderName,
+          quality
+        )
+      : buildZipFilename(project.project_name, project.property_address, quality);
 
     let zipStream;
     try {
-      zipStream = createProjectZipStream(db.raw, downloadable, ctx);
+      zipStream = createProjectZipStream(db.raw, downloadable, ctx, quality);
     } catch (err) {
       if (err instanceof ZipDownloadError) {
         return zipErrorResponse(err.code, err.message, err.details, err.status);
@@ -183,6 +201,7 @@ export async function GET(
         "Content-Disposition": contentDispositionAttachment(filename),
         "Cache-Control": "no-store",
         "X-Zip-Expected-Files": String(downloadable.length),
+        "X-Download-Quality": quality,
       },
     });
   } catch (err) {

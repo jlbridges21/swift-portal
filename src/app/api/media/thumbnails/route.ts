@@ -53,6 +53,33 @@ export async function POST(request: Request) {
   const byId = new Map((rows ?? []).map((r) => [r.id, r]));
 
   if (!isAdmin) {
+    const projectIds = [
+      ...new Set(
+        [...byId.values()]
+          .map((a) => a.project_id as string | null)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const sectionByProject = new Map<
+      string,
+      ReturnType<typeof import("@/lib/project-media-sections").mediaSectionsFromProject>
+    >();
+    if (projectIds.length) {
+      const { data: projects } = await db
+        .from("projects")
+        .select(
+          "id, client_section_photos, client_section_videos, client_section_tours, client_section_documents"
+        )
+        .in("id", projectIds);
+      const { mediaSectionsFromProject } = await import("@/lib/project-media-sections");
+      for (const p of projects ?? []) {
+        sectionByProject.set(p.id as string, mediaSectionsFromProject(p));
+      }
+    }
+    const { clientMayAccessMediaSection, DEFAULT_PROJECT_MEDIA_SECTIONS } = await import(
+      "@/lib/project-media-sections"
+    );
+
     for (const id of ids) {
       const asset = byId.get(id);
       if (!asset) {
@@ -60,6 +87,12 @@ export async function POST(request: Request) {
       }
       const access = await assertMediaAssetProjectAccess(profile, tenant, asset);
       if (!access.ok || !isClientVisibleMedia(asset)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      const sections =
+        (asset.project_id && sectionByProject.get(asset.project_id as string)) ||
+        DEFAULT_PROJECT_MEDIA_SECTIONS;
+      if (!clientMayAccessMediaSection(sections, asset.media_type, false)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }

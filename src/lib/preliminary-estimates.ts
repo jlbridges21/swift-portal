@@ -20,6 +20,10 @@ export async function upsertPreliminaryEstimate(
   serviceType: string,
   options?: { userId?: string | null; businessId?: string }
 ) {
+  if (!serviceType?.trim()) {
+    return null;
+  }
+
   const businessId = options?.businessId || (await resolveProjectBusinessId(projectId));
   if (!businessId) {
     console.warn("[preliminary-estimate] skipped upsert — could not resolve businessId", { projectId });
@@ -84,6 +88,10 @@ export async function createPreliminaryEstimate(
   serviceType: string,
   options?: { userId?: string | null; skipIfExists?: boolean; businessId?: string }
 ) {
+  if (!serviceType?.trim()) {
+    return null;
+  }
+
   const businessId = options?.businessId || (await resolveProjectBusinessId(projectId));
   if (!businessId) {
     console.warn("[preliminary-estimate] skipped create — could not resolve businessId", { projectId });

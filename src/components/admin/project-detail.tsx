@@ -43,6 +43,12 @@ import type { ProjectShareRow } from "@/lib/project-shares";
 import { ProjectShareModal } from "@/components/admin/project-share-modal";
 import type { ProjectLinkAccessMode } from "@/lib/project-link-access";
 import { useAsyncAction } from "@/lib/use-async-action";
+import {
+  MEDIA_SECTION_LABELS,
+  mediaSectionsFromProject,
+  type MediaSectionKey,
+  type ProjectMediaSections,
+} from "@/lib/project-media-sections";
 
 function dedupeMedia<T extends { id: string }>(items: T[]): T[] {
   const seen = new Set<string>();
@@ -51,6 +57,40 @@ function dedupeMedia<T extends { id: string }>(items: T[]): T[] {
     seen.add(item.id);
     return true;
   });
+}
+
+function ClientSectionVisibilityToggle({
+  sectionKey,
+  visible,
+  saving,
+  onChange,
+}: {
+  sectionKey: MediaSectionKey;
+  visible: boolean;
+  saving: boolean;
+  onChange: (visible: boolean) => void;
+}) {
+  const label = MEDIA_SECTION_LABELS[sectionKey];
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={visible}
+      aria-label={`${label}: ${visible ? "visible to clients" : "hidden from clients"}`}
+      disabled={saving}
+      onClick={() => onChange(!visible)}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+        visible
+          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+          : "border-amber-200 bg-amber-50 text-amber-900",
+        saving && "opacity-60"
+      )}
+    >
+      {visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+      {visible ? "Visible to clients" : "Hidden from clients"}
+    </button>
+  );
 }
 
 interface AdminProjectDetailProps {
@@ -125,6 +165,10 @@ export function AdminProjectDetail({
   const [tourPendingDelete, setTourPendingDelete] = useState<Tour | null>(null);
   const [deletingTour, setDeletingTour] = useState(false);
   const [videoReviews, setVideoReviews] = useState(initialVideoReviews);
+  const [mediaSections, setMediaSections] = useState<ProjectMediaSections>(() =>
+    mediaSectionsFromProject(initialProject)
+  );
+  const [sectionSaving, setSectionSaving] = useState<MediaSectionKey | null>(null);
 
   const reviewByAssetId = useMemo(() => {
     const map = new Map<string, VideoReviewListItem>();
@@ -196,6 +240,22 @@ export function AdminProjectDetail({
     setFolders(initialFolders);
   }, [initialFolders]);
 
+  useEffect(() => {
+    setMediaSections(
+      mediaSectionsFromProject({
+        client_section_photos: initialProject.client_section_photos,
+        client_section_videos: initialProject.client_section_videos,
+        client_section_tours: initialProject.client_section_tours,
+        client_section_documents: initialProject.client_section_documents,
+      })
+    );
+  }, [
+    initialProject.client_section_photos,
+    initialProject.client_section_videos,
+    initialProject.client_section_tours,
+    initialProject.client_section_documents,
+  ]);
+
   const [form, setForm] = useState({
     project_name: initialProject.project_name,
     property_address: initialProject.property_address,
@@ -245,6 +305,37 @@ export function AdminProjectDetail({
       }
     } else {
       toast.error("Failed to save project");
+    }
+  }
+
+  async function setClientSectionVisible(key: MediaSectionKey, visible: boolean) {
+    const prev = mediaSections;
+    const next = { ...mediaSections, [key]: visible };
+    setMediaSections(next);
+    setSectionSaving(key);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id: initialProject.id, media_sections: next }),
+      });
+      if (!res.ok) {
+        setMediaSections(prev);
+        toast.error("Failed to update client section visibility");
+        return;
+      }
+      toast.success(
+        visible
+          ? `${MEDIA_SECTION_LABELS[key]} visible to clients`
+          : `${MEDIA_SECTION_LABELS[key]} hidden from clients`
+      );
+      router.refresh();
+    } catch {
+      setMediaSections(prev);
+      toast.error("Failed to update client section visibility");
+    } finally {
+      setSectionSaving(null);
     }
   }
 
@@ -716,7 +807,7 @@ export function AdminProjectDetail({
                 Property: {(initialProject.properties as { nickname?: string; address: string }).nickname || (initialProject.properties as { address: string }).address}
               </p>
             )}
-            <p className="text-xs text-muted">{form.service_type}</p>
+            <p className="text-xs text-muted">{form.service_type || "Service TBD"}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <StatusBadge status={form.status} />
@@ -863,9 +954,17 @@ export function AdminProjectDetail({
 
       {/* Photos */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2"><ImageIcon className="h-5 w-5" /> Photos</CardTitle>
-          <label className="cursor-pointer">
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <CardTitle className="flex items-center gap-2"><ImageIcon className="h-5 w-5" /> Photos</CardTitle>
+            <ClientSectionVisibilityToggle
+              sectionKey="photos"
+              visible={mediaSections.photos}
+              saving={sectionSaving === "photos"}
+              onChange={(v) => void setClientSectionVisible("photos", v)}
+            />
+          </div>
+          <label className="cursor-pointer shrink-0">
             <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-medium hover:bg-slate-50">
               <Upload className="h-4 w-4" /> Upload Photos
             </span>
@@ -912,9 +1011,17 @@ export function AdminProjectDetail({
 
       {/* Videos */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2">Videos</CardTitle>
-          <div className="flex gap-2">
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <CardTitle className="flex items-center gap-2">Videos</CardTitle>
+            <ClientSectionVisibilityToggle
+              sectionKey="videos"
+              visible={mediaSections.videos}
+              saving={sectionSaving === "videos"}
+              onChange={(v) => void setClientSectionVisible("videos", v)}
+            />
+          </div>
+          <div className="flex gap-2 shrink-0">
             <Button variant="outline" size="sm" onClick={() => setShowYoutubeForm(!showYoutubeForm)}>
               <Video className="h-4 w-4" /> YouTube Link
             </Button>
@@ -1009,9 +1116,17 @@ export function AdminProjectDetail({
 
       {/* 360 Tours */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" /> 360 Tours</CardTitle>
-          <Button variant="outline" size="sm" onClick={() => setShowTourForm(!showTourForm)}>Add Tour</Button>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" /> 360 Tours</CardTitle>
+            <ClientSectionVisibilityToggle
+              sectionKey="tours"
+              visible={mediaSections.tours}
+              saving={sectionSaving === "tours"}
+              onChange={(v) => void setClientSectionVisible("tours", v)}
+            />
+          </div>
+          <Button variant="outline" size="sm" className="shrink-0" onClick={() => setShowTourForm(!showTourForm)}>Add Tour</Button>
         </CardHeader>
         <CardContent>
           {showTourForm && (
@@ -1062,9 +1177,17 @@ export function AdminProjectDetail({
 
       {/* Documents */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Documents</CardTitle>
-          <label className="cursor-pointer">
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <CardTitle>Documents</CardTitle>
+            <ClientSectionVisibilityToggle
+              sectionKey="documents"
+              visible={mediaSections.documents}
+              saving={sectionSaving === "documents"}
+              onChange={(v) => void setClientSectionVisible("documents", v)}
+            />
+          </div>
+          <label className="cursor-pointer shrink-0">
             <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-medium hover:bg-slate-50">
               <Upload className="h-4 w-4" /> Upload
             </span>

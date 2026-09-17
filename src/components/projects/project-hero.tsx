@@ -41,7 +41,7 @@ export function ProjectHero({
   const minHeight = isMicrosite ? "min-h-[420px] sm:min-h-[520px]" : "min-h-[240px] sm:min-h-[280px]";
 
   const title = isMicrosite ? propertyAddress : projectName;
-  const subtitle = isMicrosite ? serviceType : propertyAddress;
+  const subtitle = isMicrosite ? (serviceType?.trim() || undefined) : propertyAddress;
 
   return (
     <section className={`relative bg-primary ${minHeight} overflow-hidden`}>

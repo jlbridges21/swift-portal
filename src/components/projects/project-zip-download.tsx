@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { formatBytes } from "@/lib/format-bytes";
+import { DOWNLOAD_QUALITY_PARAM, type DownloadQuality } from "@/lib/download-quality";
+import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
 
 type DownloadStage = "packaging" | "receiving" | "starting" | "done" | "error";
 
@@ -42,6 +44,7 @@ export function ProjectZipDownload({
   compact = false,
 }: ProjectZipDownloadProps) {
   const [mounted, setMounted] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [active, setActive] = useState(false);
   const [stage, setStage] = useState<DownloadStage>("packaging");
   const [progress, setProgress] = useState<number | null>(null);
@@ -67,7 +70,7 @@ export function ProjectZipDownload({
     };
   }, [clearTimers]);
 
-  function startPackagingStatus() {
+  function startPackagingStatus(quality: DownloadQuality) {
     clearTimers();
     setStage("packaging");
     setProgress(null);
@@ -78,8 +81,9 @@ export function ProjectZipDownload({
       expectedFileCount && expectedFileCount > 0
         ? `${expectedFileCount} file${expectedFileCount === 1 ? "" : "s"}`
         : "your files";
+    const qualityLabel = quality === "mls" ? "MLS" : "Print";
     setStatusLine(
-      `Packaging ${fileLabel} on the server. Large galleries can take several minutes — keep this page open.`
+      `Packaging ${fileLabel} (${qualityLabel}) on the server. Large galleries can take several minutes — keep this page open.`
     );
 
     let tick = 0;
@@ -97,20 +101,21 @@ export function ProjectZipDownload({
     }, 15000);
   }
 
-  async function handleDownload() {
+  async function handleDownload(quality: DownloadQuality) {
     if (!mounted || active) return;
 
     setActive(true);
-    startPackagingStatus();
+    startPackagingStatus(quality);
 
     const controller = new AbortController();
     abortRef.current = controller;
 
     try {
       const base = zipApiBase ?? `/api/projects/${projectId}/download-zip`;
-      const zipUrl = folderId
-        ? `${base}?folderId=${encodeURIComponent(folderId)}`
-        : base;
+      const params = new URLSearchParams();
+      params.set(DOWNLOAD_QUALITY_PARAM, quality);
+      if (folderId) params.set("folderId", folderId);
+      const zipUrl = `${base}?${params.toString()}`;
 
       const res = await fetch(zipUrl, {
         credentials: zipApiBase ? "omit" : "include",
@@ -236,7 +241,7 @@ export function ProjectZipDownload({
     <div className={cn("space-y-3", className)}>
       <button
         type="button"
-        onClick={handleDownload}
+        onClick={() => setPickerOpen(true)}
         disabled={!mounted || active}
         aria-busy={active}
         className={cn(
@@ -255,6 +260,15 @@ export function ProjectZipDownload({
         )}
         {active ? "Preparing download…" : buttonLabel}
       </button>
+
+      <DownloadQualityDialog
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        title={folderLabel ? `Download ${folderLabel}` : "Download All"}
+        zipMode
+        confirmLabel="Build ZIP"
+        onConfirm={(q) => void handleDownload(q)}
+      />
 
       {active && (
         <div

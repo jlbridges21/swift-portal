@@ -149,10 +149,20 @@ async function ProjectContent({
   const db = await createTenantServiceClient(tenant.businessId);
   const versionMap = await loadVideoReviewVersionMap(db, id);
   const videoReviews = await listProjectVideoReviews(db, id);
-  const visibleMedia = filterClientMedia(
-    filterMediaForVideoReviewDelivery(media ?? [], versionMap, false)
+  const { mediaSectionsFromProject, filterMediaByClientSections, filterToursByClientSections } =
+    await import("@/lib/project-media-sections");
+  const mediaSections = mediaSectionsFromProject(projectRow);
+  const isAdminViewer = profile.role === "admin";
+  const visibleMedia = filterMediaByClientSections(
+    filterClientMedia(filterMediaForVideoReviewDelivery(media ?? [], versionMap, isAdminViewer)),
+    mediaSections,
+    isAdminViewer
   );
-  const visibleTours = filterClientTours(tours ?? []);
+  const visibleTours = filterToursByClientSections(
+    filterClientTours(tours ?? []),
+    mediaSections,
+    isAdminViewer
+  );
   const photos = visibleMedia.filter((m) => m.media_type === "photo");
   const videos = visibleMedia.filter((m) => m.media_type === "video");
   const documents = visibleMedia.filter((m) => m.media_type === "document");
@@ -169,6 +179,7 @@ async function ProjectContent({
         videos={videos}
         documents={documents}
         tours={visibleTours}
+        mediaSections={mediaSections}
         payments={payments}
         revisions={revisions}
         shootProposals={shootProposals}

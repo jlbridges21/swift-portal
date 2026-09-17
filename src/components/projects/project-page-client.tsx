@@ -39,7 +39,14 @@ import { ProjectQuickActions } from "@/components/projects/project-quick-actions
 import { ClientPricingCta } from "@/components/projects/client-pricing-cta";
 import { HashScrollHandler } from "@/components/ui/hash-scroll-handler";
 import { downloadMediaAsset, viewMediaAsset, isPdf } from "@/lib/download";
+import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
+import type { DownloadQuality } from "@/lib/download-quality";
 import { toast } from "sonner";
+import {
+  DEFAULT_PROJECT_MEDIA_SECTIONS,
+  isMediaSectionVisibleForClient,
+  type ProjectMediaSections,
+} from "@/lib/project-media-sections";
 
 interface ProjectPageClientProps {
   project: Project;
@@ -56,6 +63,7 @@ interface ProjectPageClientProps {
   assetReviews: AssetReview[];
   mediaFolders?: MediaFolder[];
   videoReviews?: VideoReviewListItem[];
+  mediaSections?: ProjectMediaSections;
   isPreview?: boolean;
   isAdmin?: boolean;
   allowClientProposalChanges?: boolean;
@@ -76,13 +84,14 @@ const REVISION_STATUS_LABEL: Record<string, string> = {
 };
 
 function MicrositeSection({
-  id, title, icon: Icon, subtitle, children,
+  id, title, icon: Icon, subtitle, children, hiddenFromClients,
 }: {
   id?: string;
   title: string;
   icon: React.ComponentType<{ className?: string }>;
   subtitle?: string;
   children: React.ReactNode;
+  hiddenFromClients?: boolean;
 }) {
   return (
     <section id={id} className="scroll-mt-24">
@@ -92,7 +101,14 @@ function MicrositeSection({
             <Icon className="h-5 w-5 text-accent" />
           </div>
           <div>
-            <h2 className="text-xl font-bold tracking-tight text-primary sm:text-2xl">{title}</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-bold tracking-tight text-primary sm:text-2xl">{title}</h2>
+              {hiddenFromClients ? (
+                <Badge variant="warning" className="text-xs">
+                  Hidden from clients
+                </Badge>
+              ) : null}
+            </div>
             {subtitle && <p className="text-sm text-muted mt-0.5">{subtitle}</p>}
           </div>
         </div>
@@ -117,6 +133,7 @@ export function ProjectPageClient({
   assetReviews,
   mediaFolders = [],
   videoReviews = [],
+  mediaSections = DEFAULT_PROJECT_MEDIA_SECTIONS,
   isPreview,
   isAdmin,
   allowClientProposalChanges = true,
@@ -141,6 +158,7 @@ export function ProjectPageClient({
   const [revisionText, setRevisionText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [revisions, setRevisions] = useState(initialRevisions);
+  const [pendingPhotoDownload, setPendingPhotoDownload] = useState<MediaAsset | null>(null);
 
   const status = normalizeStatus(project.status);
   const downloadsUnlocked =
@@ -152,16 +170,30 @@ export function ProjectPageClient({
       requireDeliveredForDownloads,
     });
   const downloadLockMessage = clientDownloadLockMessage(status, requireDeliveredForDownloads);
-  const hasAnyMedia = photos.length > 0 || videos.length > 0 || tours.length > 0 || documents.length > 0;
+  const showPhotos = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "photos");
+  const showVideos = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "videos");
+  const showTours = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "tours");
+  const showDocuments = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "documents");
+  const photosHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "photos");
+  const videosHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "videos");
+  const toursHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "tours");
+  const documentsHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "documents");
+  const hasAnyMedia =
+    (showPhotos && photos.length > 0) ||
+    (showVideos && videos.length > 0) ||
+    (showTours && tours.length > 0) ||
+    (showDocuments && documents.length > 0);
   const mediaVisible = isPreview || isAdmin || hasAnyMedia;
   const pendingPayments = payments.filter((p) => p.status === "pending" || p.status === "sent");
-  const clientStep = getClientNextStep(project, pendingPayments.length > 0, shootProposals, brand.name);
+  const clientStep = getClientNextStep(project, pendingPayments.length > 0, shootProposals, brand.name, {
+    hasQuote: quotes.length > 0,
+  });
   const uploadedVideos = videos.filter((v) => v.media_source !== "youtube");
   const youtubeVideos = videos.filter((v) => v.media_source === "youtube");
   const videoEntries = useMemo(() => videosToGridEntries(videos), [videos]);
   const reviewPathPrefix = isAdmin ? "/admin/projects" : "/dashboard/projects";
-  const hasMedia = photos.length > 0 || videos.length > 0 || tours.length > 0 || documents.length > 0;
-  const downloadableFileCount = [...photos, ...uploadedVideos].filter(
+  const hasMedia = hasAnyMedia;
+  const downloadableFileCount = [...(showPhotos ? photos : []), ...(showVideos ? uploadedVideos : [])].filter(
     (m) =>
       m.file_path &&
       m.media_source !== "youtube" &&
@@ -211,7 +243,17 @@ export function ProjectPageClient({
       toast.error(downloadLockMessage ?? "Downloads are not available yet");
       return;
     }
+    if (asset.media_type === "photo") {
+      setPendingPhotoDownload(asset);
+      return;
+    }
     await downloadMediaAsset(asset);
+  }
+
+  async function confirmPhotoDownload(quality: DownloadQuality) {
+    if (!pendingPhotoDownload) return;
+    await downloadMediaAsset(pendingPhotoDownload, { quality });
+    setPendingPhotoDownload(null);
   }
 
   async function handleView(asset: MediaAsset) {
@@ -320,7 +362,7 @@ export function ProjectPageClient({
           </Suspense>
         )}
 
-        {isClientView && (
+        {isClientView && showPhotos && (
           <MicrositeSection
             id="photo-gallery"
             title="Photo Gallery"
@@ -357,7 +399,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {isClientView && (
+        {isClientView && showVideos && (
           <MicrositeSection
             id="video"
             title="Video"
@@ -396,7 +438,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {isClientView && (
+        {isClientView && showTours && (
           <MicrositeSection title="360° Virtual Tours" icon={Globe} subtitle={tours.length > 0 ? "Explore immersive walkthroughs" : undefined}>
             {tours.length > 0 ? (
               <div className="space-y-6">
@@ -416,7 +458,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {isClientView && (
+        {isClientView && showDocuments && (
           <MicrositeSection
             id="documents"
             title="Documents"
@@ -473,11 +515,20 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {!isClientView && mediaVisible && photos.length > 0 && (
+        {isClientView && !hasMedia && (
+          <EmptyState
+            icon={Images}
+            title="No media available"
+            description="There are no media sections available for this project right now."
+          />
+        )}
+
+        {!isClientView && mediaVisible && showPhotos && photos.length > 0 && (
           <MicrositeSection
             id="photo-gallery"
             title="Photo Gallery"
             icon={Images}
+            hiddenFromClients={photosHidden}
             subtitle={
               downloadsUnlocked
                 ? "Full-resolution downloads available"
@@ -500,11 +551,12 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {!isClientView && mediaVisible && (uploadedVideos.length > 0 || youtubeVideos.length > 0) && (
+        {!isClientView && mediaVisible && showVideos && (uploadedVideos.length > 0 || youtubeVideos.length > 0) && (
           <MicrositeSection
             id="video"
             title="Video"
             icon={Clapperboard}
+            hiddenFromClients={videosHidden}
             subtitle={
               downloadsUnlocked
                 ? undefined
@@ -530,8 +582,8 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {!isClientView && mediaVisible && tours.length > 0 && (
-          <MicrositeSection title="360° Virtual Tours" icon={Globe} subtitle="Explore immersive walkthroughs">
+        {!isClientView && mediaVisible && showTours && tours.length > 0 && (
+          <MicrositeSection title="360° Virtual Tours" icon={Globe} subtitle="Explore immersive walkthroughs" hiddenFromClients={toursHidden}>
             <div className="space-y-6">
               {tours.map((tour) => (
                 <div key={tour.id} className="rounded-2xl overflow-hidden shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
@@ -542,11 +594,12 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {!isClientView && mediaVisible && documents.length > 0 && (
+        {!isClientView && mediaVisible && showDocuments && documents.length > 0 && (
           <MicrositeSection
             id="documents"
             title="Documents"
             icon={FileText}
+            hiddenFromClients={documentsHidden}
             subtitle={
               downloadsUnlocked
                 ? "Download your files below"
@@ -659,6 +712,13 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
       </main>
+
+      <DownloadQualityDialog
+        open={!!pendingPhotoDownload}
+        onClose={() => setPendingPhotoDownload(null)}
+        title="Download photo"
+        onConfirm={(q) => void confirmPhotoDownload(q)}
+      />
     </div>
   );
 }

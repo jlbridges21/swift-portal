@@ -468,8 +468,12 @@ async function main() {
     .limit(5);
   console.log("sample active shares:", legacyShares);
   assert(
-    (legacyShares ?? []).every((s) => s.expiry_preset && s.access_expires_at),
-    "backfilled rows have expiry_preset + access_expires_at"
+    (legacyShares ?? []).every(
+      (s) =>
+        !!s.expiry_preset &&
+        (s.expiry_preset === "indefinite" || !!s.access_expires_at)
+    ),
+    "backfilled rows have expiry_preset + access_expires_at (indefinite may omit expires_at)"
   );
   console.log(
     "Backfill decision: existing rows get 30-day window in SQL; durable token minted lazily on next email/resend (not bulk)."

@@ -15,11 +15,17 @@ import { createClient } from "@/lib/supabase/client";
 import { AddressFields } from "@/components/forms/address-fields";
 import { CheckCircle, Lock, LogIn } from "lucide-react";
 
-export function PublicRequestForm() {
+export function PublicRequestForm({
+  instantPreliminaryEstimate = true,
+}: {
+  /** When false, inquiry mode: no service field, no estimate language. */
+  instantPreliminaryEstimate?: boolean;
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [accountExists, setAccountExists] = useState(false);
+  const inquiryMode = !instantPreliminaryEstimate;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -82,17 +88,23 @@ export function PublicRequestForm() {
       <main className="flex-1 px-4 py-12 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl">
           <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-primary">Request a Shoot</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-primary">
+              {inquiryMode ? "Send an Inquiry" : "Request a Shoot"}
+            </h1>
             <p className="mt-2 text-muted">
-              Submit your project details and create your client portal account in one step.
+              {inquiryMode
+                ? "Tell us about your property and create your client portal account in one step."
+                : "Submit your project details and create your client portal account in one step."}
             </p>
           </div>
 
           <Card className="shadow-sm">
             <CardHeader>
-              <CardTitle>Project Request</CardTitle>
+              <CardTitle>{inquiryMode ? "Project Inquiry" : "Project Request"}</CardTitle>
               <CardDescription>
-                Your project will appear in your portal immediately after submission.
+                {inquiryMode
+                  ? "Your inquiry will appear in your portal immediately after submission."
+                  : "Your project will appear in your portal immediately after submission."}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -128,19 +140,35 @@ export function PublicRequestForm() {
                 <section className="space-y-4">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Project</h3>
                   <AddressFields />
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="service_requested">Service Requested *</Label>
-                      <ServiceSelect id="service_requested" name="service_requested" required />
-                    </div>
+                  {inquiryMode ? (
                     <div className="space-y-2">
                       <Label htmlFor="preferred_date">Preferred Date</Label>
                       <Input id="preferred_date" name="preferred_date" type="date" />
                     </div>
-                  </div>
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="service_requested">Service Requested *</Label>
+                        <ServiceSelect id="service_requested" name="service_requested" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="preferred_date">Preferred Date</Label>
+                        <Input id="preferred_date" name="preferred_date" type="date" />
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-2">
-                    <Label htmlFor="notes">Project Notes</Label>
-                    <Textarea id="notes" name="notes" placeholder="Tell us about the property, deliverables, or special requirements..." rows={4} />
+                    <Label htmlFor="notes">{inquiryMode ? "Description" : "Project Notes"}</Label>
+                    <Textarea
+                      id="notes"
+                      name="notes"
+                      placeholder={
+                        inquiryMode
+                          ? "Tell us about the property, what you need, or any special requirements..."
+                          : "Tell us about the property, deliverables, or special requirements..."
+                      }
+                      rows={4}
+                    />
                   </div>
                 </section>
 
@@ -150,7 +178,9 @@ export function PublicRequestForm() {
                     <h3 className="text-sm font-semibold text-primary">Portal Account</h3>
                   </div>
                   <p className="text-xs text-muted">
-                    Create a password to access your project status, media, and invoices.
+                    {inquiryMode
+                      ? "Create a password to access your project status, messages, and updates."
+                      : "Create a password to access your project status, media, and invoices."}
                   </p>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
@@ -179,7 +209,13 @@ export function PublicRequestForm() {
                 )}
 
                 <Button type="submit" variant="accent" size="lg" className="w-full" disabled={loading}>
-                  {loading ? "Creating your portal..." : "Submit Request & Create Account"}
+                  {loading
+                    ? inquiryMode
+                      ? "Sending your inquiry..."
+                      : "Creating your portal..."
+                    : inquiryMode
+                      ? "Send Inquiry & Create Account"
+                      : "Submit Request & Create Account"}
                 </Button>
               </form>
             </CardContent>

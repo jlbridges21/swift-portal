@@ -686,8 +686,8 @@ export function QuoteSection({
             <CardContent className="py-12 text-center">
               <p className="text-sm text-muted">
                 {asAdmin
-                  ? "A preliminary estimate is generated automatically when a client requests a project."
-                  : "Your preliminary estimate will appear here shortly after your request is submitted."}
+                  ? "No estimate yet. Create an official proposal when you're ready."
+                  : "Pricing will appear here when your studio shares an estimate."}
               </p>
             </CardContent>
           </Card>

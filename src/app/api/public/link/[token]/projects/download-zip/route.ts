@@ -23,6 +23,7 @@ import {
 } from "@/lib/video-review-media";
 import { requirePublicLinkContext } from "@/lib/public-link-api";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { DOWNLOAD_QUALITY_PARAM, parseDownloadQuality } from "@/lib/download-quality";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +34,9 @@ export async function GET(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
-  const folderParam = new URL(request.url).searchParams.get("folderId");
+  const url = new URL(request.url);
+  const folderParam = url.searchParams.get("folderId");
+  const quality = parseDownloadQuality(url.searchParams.get(DOWNLOAD_QUALITY_PARAM));
   const host = await getPublicHostContext();
   const gate = await requirePublicLinkContext(request, token, host.businessId);
   if ("error" in gate && gate.error) return gate.error;
@@ -49,7 +52,9 @@ export async function GET(
 
     const { data: project } = await db
       .from("projects")
-      .select("id, project_name, property_address, status, link_access_mode, deleted_at")
+      .select(
+        "id, project_name, property_address, status, link_access_mode, deleted_at, client_section_photos, client_section_videos, client_section_tours, client_section_documents"
+      )
       .eq("id", projectId)
       .maybeSingle();
 
@@ -90,7 +95,9 @@ export async function GET(
 
     const versionMap = await loadVideoReviewVersionMap(db, projectId);
     const deliveryMedia = filterMediaForVideoReviewDelivery(media ?? [], versionMap, false);
-    let downloadable = pickDownloadableAssets(deliveryMedia, false);
+    const { mediaSectionsFromProject } = await import("@/lib/project-media-sections");
+    const sections = mediaSectionsFromProject(project);
+    let downloadable = pickDownloadableAssets(deliveryMedia, false, sections);
     if (folderScope.folderScope) {
       downloadable = filterDownloadableAssetsByFolder(downloadable, folderScope.folderScope);
     }
@@ -100,15 +107,21 @@ export async function GET(
     }
 
     const filename = folderScope.folderName
-      ? buildFolderZipFilename(project.project_name, project.property_address, folderScope.folderName)
-      : buildZipFilename(project.project_name, project.property_address);
+      ? buildFolderZipFilename(
+          project.project_name,
+          project.property_address,
+          folderScope.folderName,
+          quality
+        )
+      : buildZipFilename(project.project_name, project.property_address, quality);
 
-    const zip = createProjectZipStream(db.raw, downloadable, logCtx);
+    const zip = createProjectZipStream(db.raw, downloadable, logCtx, quality);
     return new NextResponse(zip.stream, {
       headers: {
         "Content-Type": "application/zip",
         "Content-Disposition": contentDispositionAttachment(filename),
         "Cache-Control": "private, no-store",
+        "X-Download-Quality": quality,
       },
     });
   } catch (err) {

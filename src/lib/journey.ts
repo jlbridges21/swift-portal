@@ -15,7 +15,8 @@ export function getClientNextStep(
   project: Project,
   hasPendingPayment: boolean,
   proposals: ShootProposal[] = [],
-  businessName = "our team"
+  businessName = "our team",
+  options?: { hasQuote?: boolean }
 ): NextStepInfo {
   const status = normalizeStatus(project.status);
   const shootWhen = getProjectShootDateTime(project, proposals);
@@ -27,9 +28,17 @@ export function getClientNextStep(
   });
   const pendingAdminProposal = proposals.find((p) => p.status === "pending" && p.proposed_by === "admin");
   const pendingClientProposal = proposals.find((p) => p.status === "pending" && p.proposed_by === "client");
+  const hasQuote = options?.hasQuote === true;
 
   switch (status) {
     case "new_request":
+      if (!hasQuote) {
+        return {
+          title: getClientStatusLabel("new_request"),
+          description: `We've received your inquiry. ${businessName} will follow up with next steps shortly.`,
+          variant: "info",
+        };
+      }
       return {
         title: getClientStatusLabel("new_request"),
         description: `Review your preliminary estimate below. ${businessName} will confirm final pricing after reviewing your property and scope.`,

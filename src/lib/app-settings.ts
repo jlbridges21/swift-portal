@@ -115,6 +115,17 @@ export interface PaymentsSettings {
   requireDeliveredForDownloads: boolean;
 }
 
+/**
+ * Defaults applied only when creating a NEW project.
+ * Changing these never rewrites existing projects.
+ */
+export interface MediaSectionDefaultsSettings {
+  photos: boolean;
+  videos: boolean;
+  tours: boolean;
+  documents: boolean;
+}
+
 /** Optional setup items a studio may keep as ShootPortal defaults (persisted). */
 export type SetupAcceptDefaultKey = "logo" | "colors" | "stripe" | "custom_domain";
 
@@ -126,6 +137,8 @@ export interface AppSettings {
   business: BusinessSettings;
   proposals: ProposalSettings;
   payments: PaymentsSettings;
+  /** Snapshot copied onto new projects only. */
+  mediaSectionDefaults: MediaSectionDefaultsSettings;
   workflow: WorkflowSettings;
   integrations: IntegrationSettings;
   landing: LandingSettings;
@@ -241,6 +254,12 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   payments: {
     requireDeliveredForDownloads: true,
   },
+  mediaSectionDefaults: {
+    photos: true,
+    videos: true,
+    tours: true,
+    documents: true,
+  },
   workflow: buildDefaultWorkflowSettings(),
   integrations: {
     ghlWebhookUrl: "",
@@ -288,13 +307,25 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
     notifications,
     email: { ...DEFAULT_APP_SETTINGS.email, ...(stored.email ?? {}) },
     business: { ...DEFAULT_APP_SETTINGS.business, ...(stored.business ?? {}) },
-    proposals: { ...DEFAULT_APP_SETTINGS.proposals, ...(stored.proposals ?? {}) },
+    proposals: {
+      ...DEFAULT_APP_SETTINGS.proposals,
+      ...(stored.proposals ?? {}),
+      autoPreliminaryEstimate: stored.proposals?.autoPreliminaryEstimate !== false,
+    },
     payments: {
       ...DEFAULT_APP_SETTINGS.payments,
       ...(stored.payments ?? {}),
       requireDeliveredForDownloads:
         stored.payments?.requireDeliveredForDownloads ??
         DEFAULT_APP_SETTINGS.payments.requireDeliveredForDownloads,
+    },
+    mediaSectionDefaults: {
+      ...DEFAULT_APP_SETTINGS.mediaSectionDefaults,
+      ...(stored.mediaSectionDefaults ?? {}),
+      photos: stored.mediaSectionDefaults?.photos !== false,
+      videos: stored.mediaSectionDefaults?.videos !== false,
+      tours: stored.mediaSectionDefaults?.tours !== false,
+      documents: stored.mediaSectionDefaults?.documents !== false,
     },
     workflow: mergeWorkflowSettings(stored.workflow),
     integrations: {

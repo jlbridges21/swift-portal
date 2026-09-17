@@ -8,6 +8,12 @@ import { getProjectHeroMedia } from "@/lib/cover";
 import { filterClientMedia, filterClientTours } from "@/lib/client-media";
 import { getAppSettings } from "@/lib/app-settings";
 import {
+  filterMediaByClientSections,
+  filterToursByClientSections,
+  mediaSectionsFromProject,
+  type ProjectMediaSections,
+} from "@/lib/project-media-sections";
+import {
   filterMediaForVideoReviewDelivery,
   loadVideoReviewVersionMap,
 } from "@/lib/video-review-media";
@@ -26,6 +32,7 @@ export type PublicProjectViewData = {
   mediaFolders: MediaFolder[];
   videoReviews: VideoReviewListItem[];
   requireDeliveredForDownloads: boolean;
+  mediaSections: ProjectMediaSections;
 };
 
 export async function loadPublicProjectView(
@@ -53,10 +60,17 @@ export async function loadPublicProjectView(
 
   const versionMap = await loadVideoReviewVersionMap(db, projectId);
   const videoReviews = await listProjectVideoReviews(db, projectId);
-  const visibleMedia = filterClientMedia(
-    filterMediaForVideoReviewDelivery(media ?? [], versionMap, false)
+  const mediaSections = mediaSectionsFromProject(ctx.project as never);
+  const visibleMedia = filterMediaByClientSections(
+    filterClientMedia(filterMediaForVideoReviewDelivery(media ?? [], versionMap, false)),
+    mediaSections,
+    false
   );
-  const visibleTours = filterClientTours(tours ?? []);
+  const visibleTours = filterToursByClientSections(
+    filterClientTours(tours ?? []),
+    mediaSections,
+    false
+  );
   const hero = await getProjectHeroMedia(raw, ctx.project as never, businessId);
   const appSettings = await getAppSettings(businessId);
 
@@ -70,6 +84,7 @@ export async function loadPublicProjectView(
     mediaFolders: mediaFolders ?? [],
     videoReviews,
     requireDeliveredForDownloads: appSettings.payments.requireDeliveredForDownloads,
+    mediaSections,
   };
 }
 

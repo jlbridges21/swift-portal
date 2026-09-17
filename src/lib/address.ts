@@ -120,7 +120,8 @@ export function formatAutoProjectName(
 
 export function defaultProjectTitle(propertyAddress: string, serviceType: string): string {
   const label = propertyAddress.split(",")[0]?.trim() || propertyAddress.trim();
-  return `${label} — ${serviceType}`;
+  const service = serviceType.trim();
+  return service ? `${label} — ${service}` : label;
 }
 
 export function formatPropertyLabel(property: {

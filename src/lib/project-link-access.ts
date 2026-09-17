@@ -25,6 +25,10 @@ export type PublicLinkProjectContext = {
     | "link_access_mode"
     | "link_access_token"
     | "link_access_view_count"
+    | "client_section_photos"
+    | "client_section_videos"
+    | "client_section_tours"
+    | "client_section_documents"
   >;
 };
 
@@ -48,7 +52,7 @@ export async function resolvePublicLinkProject(
   const { data: project, error } = await raw
     .from("projects")
     .select(
-      "id, business_id, project_name, property_address, service_type, status, delivery_date, cover_image_url, cover_image_id, link_access_mode, link_access_token, link_access_view_count, deleted_at"
+      "id, business_id, project_name, property_address, service_type, status, delivery_date, cover_image_url, cover_image_id, link_access_mode, link_access_token, link_access_view_count, deleted_at, client_section_photos, client_section_videos, client_section_tours, client_section_documents"
     )
     .eq("link_access_token", trimmed)
     .eq("link_access_mode", "anyone_with_link")
@@ -74,6 +78,10 @@ export async function resolvePublicLinkProject(
       link_access_mode: project.link_access_mode as ProjectLinkAccessMode,
       link_access_token: project.link_access_token as string,
       link_access_view_count: Number(project.link_access_view_count ?? 0),
+      client_section_photos: project.client_section_photos !== false,
+      client_section_videos: project.client_section_videos !== false,
+      client_section_tours: project.client_section_tours !== false,
+      client_section_documents: project.client_section_documents !== false,
     },
   };
 }

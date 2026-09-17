@@ -7,7 +7,6 @@ import {
 import { getAppSettings } from "@/lib/app-settings";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { loadPublicLinkMediaAsset } from "@/lib/load-public-project-view";
-import { downloadFileName } from "@/lib/media-display-name";
 import { normalizeStatus } from "@/lib/constants";
 import {
   PUBLIC_LINK_CACHE_HEADERS,
@@ -16,6 +15,7 @@ import {
 import { PUBLIC_LINK_SIGNED_TTL_SECONDS } from "@/lib/project-link-access";
 import { signMediaThumbnailUrl } from "@/lib/media-signed-thumbs";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { serveMediaFileDownload } from "@/lib/serve-media-file-download";
 
 export async function GET(
   request: Request,
@@ -35,12 +35,27 @@ export async function GET(
   const db = await createTenantServiceClient(ctx.businessId);
   const { data: project } = await db
     .from("projects")
-    .select("status, link_access_mode")
+    .select(
+      "status, link_access_mode, client_section_photos, client_section_videos, client_section_tours, client_section_documents"
+    )
     .eq("id", ctx.projectId)
     .maybeSingle();
 
   if (!project || project.link_access_mode !== "anyone_with_link") {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  const { clientMayAccessMediaSection, mediaSectionsFromProject } = await import(
+    "@/lib/project-media-sections"
+  );
+  if (
+    !clientMayAccessMediaSection(
+      mediaSectionsFromProject(project),
+      asset.media_type,
+      false
+    )
+  ) {
+    return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
   }
 
   const appSettings = await getAppSettings(ctx.businessId);
@@ -68,24 +83,12 @@ export async function GET(
   const storage = db.raw;
 
   if (asFile) {
-    const { data: fileData, error: downloadError } = await storage.storage
-      .from(bucket)
-      .download(asset.file_path);
-
-    if (downloadError || !fileData) {
-      return NextResponse.json(
-        { error: "We couldn't download that file. Please try again or contact support." },
-        { status: 500 }
-      );
-    }
-
-    const filename = downloadFileName(asset);
-    return new NextResponse(fileData, {
-      headers: {
-        ...PUBLIC_LINK_CACHE_HEADERS,
-        "Content-Type": asset.mime_type || "application/octet-stream",
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
-      },
+    return serveMediaFileDownload({
+      storage,
+      bucket,
+      asset,
+      searchParams,
+      extraHeaders: PUBLIC_LINK_CACHE_HEADERS,
     });
   }
 

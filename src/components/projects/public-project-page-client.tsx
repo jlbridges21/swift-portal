@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import { ProjectHero } from "@/components/projects/project-hero";
 import { ClientPhotoFolders } from "@/components/projects/client-photo-folders";
@@ -14,6 +14,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { normalizeStatus } from "@/lib/constants";
 import { clientDownloadLockMessage, resolveProjectDownloadAllowed } from "@/lib/deliverables";
 import { downloadFileName, mediaDisplayName } from "@/lib/media-display-name";
+import { DOWNLOAD_QUALITY_PARAM, type DownloadQuality } from "@/lib/download-quality";
+import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
 import type { HeroMedia } from "@/lib/cover";
 import type { MediaAsset, MediaFolder, Project, Tour } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
@@ -63,6 +65,7 @@ export function PublicProjectPageClient({
   const brand = usePortalBrand();
   const apiBase = `/api/public/link/${encodeURIComponent(token)}`;
   const signInHref = `/login?redirect=${encodeURIComponent(`/view/${token}#video`)}`;
+  const [pendingPhotoDownload, setPendingPhotoDownload] = useState<MediaAsset | null>(null);
 
   const reviewByAssetId = useMemo(() => {
     const map = new Map<string, VideoReviewListItem>();
@@ -107,8 +110,20 @@ export function PublicProjectPageClient({
       toast.error(downloadLockMessage ?? "Downloads are not available yet");
       return;
     }
+    if (asset.media_type === "photo") {
+      setPendingPhotoDownload(asset);
+      return;
+    }
+    await fetchAssetDownload(asset);
+  }
+
+  async function fetchAssetDownload(asset: MediaAsset, quality: DownloadQuality = "print") {
     try {
-      const res = await fetch(`${apiBase}/media/download/${asset.id}?file=1`);
+      const params = new URLSearchParams({ file: "1" });
+      if (asset.media_type === "photo") {
+        params.set(DOWNLOAD_QUALITY_PARAM, quality);
+      }
+      const res = await fetch(`${apiBase}/media/download/${asset.id}?${params.toString()}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         toast.error(data.error || "Download failed");
@@ -158,10 +173,14 @@ export function PublicProjectPageClient({
             {project.project_name}
           </h1>
           <p className="text-muted">{project.property_address}</p>
-          <p className="text-sm text-muted">
-            {project.service_type}
-            {project.delivery_date ? ` · Delivered ${formatDate(project.delivery_date)}` : null}
-          </p>
+            {project.service_type ? (
+              <p className="text-sm text-muted">
+                {project.service_type}
+                {project.delivery_date ? ` · Delivered ${formatDate(project.delivery_date)}` : null}
+              </p>
+            ) : project.delivery_date ? (
+              <p className="text-sm text-muted">Delivered {formatDate(project.delivery_date)}</p>
+            ) : null}
           {!downloadsUnlocked && (
             <p className="flex items-center gap-2 text-sm text-amber-700">
               <Lock className="h-4 w-4 shrink-0" />
@@ -181,7 +200,10 @@ export function PublicProjectPageClient({
         />
 
         {!hasMedia ? (
-          <EmptyState title="No media yet" description="Check back when deliverables are ready." />
+          <EmptyState
+            title="No media available"
+            description="There are no media sections available for this project right now."
+          />
         ) : null}
 
         {photos.length > 0 && (
@@ -192,6 +214,7 @@ export function PublicProjectPageClient({
             <ClientPhotoFolders
               projectId={project.id}
               zipApiBase={downloadsUnlocked ? `${apiBase}/projects/download-zip` : undefined}
+              downloadApiBase={`${apiBase}/media/download`}
               photos={photos}
               folders={mediaFolders}
               downloadsAllowed={downloadsUnlocked}
@@ -288,6 +311,18 @@ export function PublicProjectPageClient({
           {viewCount.toLocaleString()}. Signed media links expire in 30 minutes.
         </p>
       </main>
+
+      <DownloadQualityDialog
+        open={!!pendingPhotoDownload}
+        onClose={() => setPendingPhotoDownload(null)}
+        title="Download photo"
+        onConfirm={(q) => {
+          if (!pendingPhotoDownload) return;
+          void fetchAssetDownload(pendingPhotoDownload, q).then(() =>
+            setPendingPhotoDownload(null)
+          );
+        }}
+      />
     </div>
   );
 }

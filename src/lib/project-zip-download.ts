@@ -4,9 +4,23 @@ import { finished } from "node:stream/promises";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { filterClientMedia, isClientVisibleMedia } from "@/lib/client-media";
 import {
+  DEFAULT_PROJECT_MEDIA_SECTIONS,
+  filterMediaByClientSections,
+  type ProjectMediaSections,
+} from "@/lib/project-media-sections";
+import {
   DOWNLOAD_GATE_API_MESSAGE,
   resolveProjectDownloadAllowed,
 } from "@/lib/deliverables";
+import {
+  appendZipQualitySuffix,
+  canApplyMlsTransform,
+  downloadFileNameForQuality,
+  MLS_LONG_EDGE,
+  MLS_OVERSIZE_DISCLOSURE,
+  MLS_TRANSFORM_QUALITY,
+  type DownloadQuality,
+} from "@/lib/download-quality";
 import { sanitizeStorageFileName } from "@/lib/media-upload";
 import { resolveProjectAccess } from "@/lib/project-access";
 import { downloadFileName } from "@/lib/media-display-name";
@@ -15,6 +29,7 @@ import type { MediaAsset, Profile } from "@/lib/types";
 const BUCKET = "project-media";
 const ZIP_FOLDER = "deliverables";
 const ERRORS_MANIFEST = `${ZIP_FOLDER}/_download_errors.txt`;
+const NOTES_MANIFEST = `${ZIP_FOLDER}/_download_notes.txt`;
 /** Skip individual files above 400MB to avoid serverless OOM on a single object. */
 const MAX_SINGLE_FILE_BYTES = 400 * 1024 * 1024;
 
@@ -69,6 +84,8 @@ export interface DownloadableAsset {
   media_type: string;
   display_order: number | null;
   folder_id?: string | null;
+  file_size?: number | null;
+  title?: string | null;
 }
 
 export interface SkippedZipFile {
@@ -82,13 +99,16 @@ export interface ZipStreamResult {
   fileCount: number;
   totalBytes: number;
   skipped: SkippedZipFile[];
+  mlsFallbacks: string[];
 }
 
 export function pickDownloadableAssets(
   media: MediaAsset[],
-  isAdmin: boolean
+  isAdmin: boolean,
+  sections: ProjectMediaSections = DEFAULT_PROJECT_MEDIA_SECTIONS
 ): DownloadableAsset[] {
-  const visible = isAdmin ? media : filterClientMedia(media);
+  const sectionScoped = filterMediaByClientSections(media, sections, isAdmin);
+  const visible = isAdmin ? sectionScoped : filterClientMedia(sectionScoped);
   return visible
     .filter((a) => {
       if (a.media_type !== "photo" && a.media_type !== "video") return false;
@@ -106,6 +126,8 @@ export function pickDownloadableAssets(
       media_type: a.media_type,
       display_order: a.display_order,
       folder_id: a.folder_id ?? null,
+      file_size: a.file_size ?? null,
+      title: a.title ?? null,
     }));
 }
 
@@ -152,29 +174,47 @@ interface OpenStreamResult {
   byteLength?: number;
   storagePath: string;
   source: "storage_download" | "signed_url";
+  transformed?: boolean;
 }
 
 async function openStorageReadStream(
   supabase: SupabaseClient,
   rawPath: string,
   ctx: ZipLogContext,
-  asset: DownloadableAsset
+  asset: DownloadableAsset,
+  opts?: { transformMls?: boolean }
 ): Promise<{ ok: true; file: OpenStreamResult } | { ok: false; reason: string; storagePath: string }> {
   const storagePath = normalizeStoragePath(rawPath);
   if (!storagePath) {
     return { ok: false, reason: "invalid or empty storage path", storagePath: rawPath };
   }
 
+  const transformMls = !!opts?.transformMls;
+
   zipLog("file_fetch", ctx, {
     assetId: asset.id,
     mediaType: asset.media_type,
     storagePath,
     bucket: BUCKET,
+    transformMls,
   });
 
   const { data: signed, error: signError } = await supabase.storage
     .from(BUCKET)
-    .createSignedUrl(storagePath, 300);
+    .createSignedUrl(
+      storagePath,
+      300,
+      transformMls
+        ? {
+            transform: {
+              width: MLS_LONG_EDGE,
+              height: MLS_LONG_EDGE,
+              resize: "contain",
+              quality: MLS_TRANSFORM_QUALITY,
+            },
+          }
+        : undefined
+    );
 
   if (!signError && signed?.signedUrl) {
     const res = await fetch(signed.signedUrl, { cache: "no-store" });
@@ -188,6 +228,7 @@ async function openStorageReadStream(
         exists: true,
         bytes: byteLength,
         method: "signed_url",
+        transformed: transformMls,
       });
       return {
         ok: true,
@@ -196,6 +237,7 @@ async function openStorageReadStream(
           byteLength: Number.isFinite(byteLength) ? byteLength : undefined,
           storagePath,
           source: "signed_url",
+          transformed: transformMls,
         },
       };
     }
@@ -203,7 +245,13 @@ async function openStorageReadStream(
       assetId: asset.id,
       storagePath,
       signedUrlFetchStatus: res.status,
+      transformMls,
     });
+  }
+
+  // MLS transform failed — fall through to original only when not already requesting original.
+  if (transformMls) {
+    return openStorageReadStream(supabase, rawPath, ctx, asset, { transformMls: false });
   }
 
   const { data: blob, error: downloadError } = await supabase.storage
@@ -226,6 +274,7 @@ async function openStorageReadStream(
         byteLength: blob.size,
         storagePath,
         source: "storage_download",
+        transformed: false,
       },
     };
   }
@@ -257,6 +306,22 @@ function buildErrorsManifest(skipped: SkippedZipFile[]): string {
   return lines.join("\n");
 }
 
+function buildMlsNotesManifest(fallbacks: string[]): string {
+  const lines = [
+    "MLS download notes",
+    "",
+    "Photos are resized to 2048px on the long edge when possible.",
+    "Videos, documents, and tours are included at original quality.",
+    "",
+    MLS_OVERSIZE_DISCLOSURE,
+    "",
+    "The following photos exceeded the transform size limit and were included at original (Print) size:",
+    "",
+    ...fallbacks.map((name) => `- ${name}`),
+  ];
+  return lines.join("\n");
+}
+
 function appendStreamToArchive(
   archive: import("archiver").ZipArchive,
   stream: Readable,
@@ -272,11 +337,13 @@ function appendStreamToArchive(
 /**
  * Stream a project ZIP to the client as each storage object is read.
  * Memory stays bounded — only one file + compression buffers at a time.
+ * MLS photos fetch a transformed signed URL (still streamed, not buffered).
  */
 export function createProjectZipStream(
   supabase: SupabaseClient,
   assets: DownloadableAsset[],
-  ctx: ZipLogContext
+  ctx: ZipLogContext,
+  quality: DownloadQuality = "print"
 ): { stream: ReadableStream<Uint8Array>; completion: Promise<ZipStreamResult> } {
   const passThrough = new PassThrough();
   const webStream = Readable.toWeb(passThrough) as ReadableStream<Uint8Array>;
@@ -298,6 +365,7 @@ export function createProjectZipStream(
 
     const usedNames = new Set<string>();
     const skipped: SkippedZipFile[] = [];
+    const mlsFallbacks: string[] = [];
     let fileCount = 0;
     let totalBytes = 0;
 
@@ -320,7 +388,17 @@ export function createProjectZipStream(
 
     for (const asset of assets) {
       try {
-        const result = await openStorageReadStream(supabase, asset.file_path, ctx, asset);
+        const isPhoto = asset.media_type === "photo";
+        const wantMls = quality === "mls" && isPhoto;
+        const canMls = wantMls && canApplyMlsTransform(asset.file_size);
+        const willFallback =
+          wantMls && !canMls
+            ? true
+            : false;
+
+        const result = await openStorageReadStream(supabase, asset.file_path, ctx, asset, {
+          transformMls: canMls,
+        });
         if (!result.ok) {
           skipped.push({
             assetId: asset.id,
@@ -350,7 +428,20 @@ export function createProjectZipStream(
           continue;
         }
 
-        const entryName = uniqueZipEntryName(asset.file_name, usedNames);
+        const fellBack =
+          wantMls && (!result.file.transformed || willFallback);
+        const entryBase = isPhoto
+          ? downloadFileNameForQuality(
+              { title: asset.title, file_name: asset.file_name },
+              quality,
+              { mlsFellBackToPrint: fellBack }
+            )
+          : asset.file_name;
+        if (fellBack) {
+          mlsFallbacks.push(entryBase);
+        }
+
+        const entryName = uniqueZipEntryName(entryBase, usedNames);
         await Promise.race([
           appendStreamToArchive(archive, result.file.stream, `${ZIP_FOLDER}/${entryName}`),
           archiveError,
@@ -386,10 +477,15 @@ export function createProjectZipStream(
     if (skipped.length > 0) {
       archive.append(buildErrorsManifest(skipped), { name: ERRORS_MANIFEST });
     }
+    if (mlsFallbacks.length > 0) {
+      archive.append(buildMlsNotesManifest(mlsFallbacks), { name: NOTES_MANIFEST });
+    }
 
     zipLog("zip_finalize", ctx, {
       fileCount,
       skippedCount: skipped.length,
+      mlsFallbackCount: mlsFallbacks.length,
+      quality,
       totalBytes,
     });
 
@@ -411,10 +507,12 @@ export function createProjectZipStream(
     zipLog("zip_ready", ctx, {
       fileCount,
       skippedCount: skipped.length,
+      mlsFallbackCount: mlsFallbacks.length,
+      quality,
       totalBytes,
     });
 
-    return { fileCount, totalBytes, skipped };
+    return { fileCount, totalBytes, skipped, mlsFallbacks };
   })().catch((err) => {
     passThrough.destroy(err instanceof Error ? err : new Error(String(err)));
     throw err;
@@ -423,9 +521,13 @@ export function createProjectZipStream(
   return { stream: webStream, completion };
 }
 
-export function buildZipFilename(projectName: string | null, propertyAddress: string | null): string {
+export function buildZipFilename(
+  projectName: string | null,
+  propertyAddress: string | null,
+  quality: DownloadQuality = "print"
+): string {
   const label = projectZipBaseLabel(projectName, propertyAddress);
-  return `${label}-deliverables.zip`;
+  return appendZipQualitySuffix(`${label}-deliverables.zip`, quality);
 }
 
 function projectZipBaseLabel(projectName: string | null, propertyAddress: string | null): string {
@@ -436,15 +538,16 @@ function projectZipBaseLabel(projectName: string | null, propertyAddress: string
   );
 }
 
-/** "{Project Name} - {Folder Name}.zip" */
+/** "{Project Name} - {Folder Name}-Print.zip" / "-MLS.zip" */
 export function buildFolderZipFilename(
   projectName: string | null,
   propertyAddress: string | null,
-  folderName: string
+  folderName: string,
+  quality: DownloadQuality = "print"
 ): string {
   const projectLabel = projectZipBaseLabel(projectName, propertyAddress);
   const folderLabel = sanitizeStorageFileName(folderName.trim() || "Folder");
-  return `${projectLabel} - ${folderLabel}.zip`;
+  return appendZipQualitySuffix(`${projectLabel} - ${folderLabel}.zip`, quality);
 }
 
 export function filterDownloadableAssetsByFolder(
