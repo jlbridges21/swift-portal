@@ -81,6 +81,7 @@ export default async function PublicProjectViewPage({ params }: PageProps) {
         tours={data.tours}
         mediaFolders={data.mediaFolders}
         videoReviews={data.videoReviews}
+        mediaSections={data.mediaSections}
         requireDeliveredForDownloads={data.requireDeliveredForDownloads}
         viewCount={(data.ctx.project.link_access_view_count ?? 0) + 1}
         rateLimitPagePerMinute={PUBLIC_LINK_RATE_LIMITS.pagePerMinute}

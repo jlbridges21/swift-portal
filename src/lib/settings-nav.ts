@@ -6,6 +6,7 @@ export const SETTINGS_SECTION_IDS = [
   "email",
   "custom_domain",
   "automated_emails",
+  "new_project_setup",
   "payments",
   "services",
   "workflow",
@@ -67,6 +68,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     hashes: ["settings-automated-emails"],
   },
   {
+    id: "new_project_setup",
+    label: "New project setup",
+    description: "Defaults applied when a new project is created.",
+    hashes: ["settings-media-section-defaults", "settings-new-project-setup"],
+  },
+  {
     id: "payments",
     label: "Payments",
     description: "Connect Stripe so clients pay you directly.",
@@ -76,7 +83,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: "services",
     label: "Services",
     description: "Catalog, request-form estimate toggle, and preliminary estimate prices.",
-    hashes: ["settings-services"],
+    hashes: ["settings-services", "settings-instant-preliminary"],
   },
   {
     id: "workflow",

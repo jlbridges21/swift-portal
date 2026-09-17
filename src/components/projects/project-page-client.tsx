@@ -178,12 +178,13 @@ export function ProjectPageClient({
   const videosHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "videos");
   const toursHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "tours");
   const documentsHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "documents");
+  /** True when any visible section has files — used for Download All / deliverable review, not section chrome. */
   const hasAnyMedia =
     (showPhotos && photos.length > 0) ||
     (showVideos && videos.length > 0) ||
     (showTours && tours.length > 0) ||
     (showDocuments && documents.length > 0);
-  const mediaVisible = isPreview || isAdmin || hasAnyMedia;
+  const anySectionVisible = showPhotos || showVideos || showTours || showDocuments;
   const pendingPayments = payments.filter((p) => p.status === "pending" || p.status === "sent");
   const clientStep = getClientNextStep(project, pendingPayments.length > 0, shootProposals, brand.name, {
     hasQuote: quotes.length > 0,
@@ -392,7 +393,7 @@ export function ProjectPageClient({
                 <EmptyState
                   icon={Images}
                   title="No photos yet"
-                  description="No photos have been added yet. Your image previews will appear here once they're ready."
+                  description="Photos will appear here once your shoot is ready."
                 />
               )}
             </div>
@@ -432,7 +433,7 @@ export function ProjectPageClient({
               <EmptyState
                 icon={Clapperboard}
                 title="No videos yet"
-                description="No videos have been added yet. Your video previews will appear here once they're ready."
+                description="Videos will appear here once they're ready to review."
               />
             )}
           </MicrositeSection>
@@ -452,7 +453,7 @@ export function ProjectPageClient({
               <EmptyState
                 icon={Globe}
                 title="No 360° tours yet"
-                description="No 360° tours have been added yet. Interactive tour links will appear here when available."
+                description="Interactive tour links will appear here when they're ready."
               />
             )}
           </MicrositeSection>
@@ -509,140 +510,183 @@ export function ProjectPageClient({
               <EmptyState
                 icon={FileText}
                 title="No documents yet"
-                description="Project documents and deliverable files will appear here when they're ready."
+                description="Project documents will appear here when they're ready."
               />
             )}
           </MicrositeSection>
         )}
 
-        {isClientView && !hasMedia && (
+        {isClientView && !anySectionVisible && (
           <EmptyState
             icon={Images}
             title="No media available"
-            description="There are no media sections available for this project right now."
+            description="Media sections for this project aren’t visible right now."
           />
         )}
 
-        {!isClientView && mediaVisible && showPhotos && photos.length > 0 && (
+        {!isClientView && showPhotos && (
           <MicrositeSection
             id="photo-gallery"
             title="Photo Gallery"
             icon={Images}
             hiddenFromClients={photosHidden}
             subtitle={
-              downloadsUnlocked
-                ? "Full-resolution downloads available"
-                : downloadLockMessage
-                  ? `Tap any photo to view fullscreen. ${downloadLockMessage}`
-                  : undefined
+              photos.length > 0
+                ? downloadsUnlocked
+                  ? "Full-resolution downloads available"
+                  : downloadLockMessage
+                    ? `Tap any photo to view fullscreen. ${downloadLockMessage}`
+                    : undefined
+                : undefined
             }
           >
             <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-              <ClientPhotoFolders
-                projectId={project.id}
-                photos={photos}
-                folders={mediaFolders}
-                getDownloadUrl={getDownloadUrl}
-                downloadsAllowed={downloadsUnlocked}
-                compactInitialCount={12}
-                isAdmin={!!isAdmin}
-              />
+              {photos.length > 0 ? (
+                <ClientPhotoFolders
+                  projectId={project.id}
+                  photos={photos}
+                  folders={mediaFolders}
+                  getDownloadUrl={getDownloadUrl}
+                  downloadsAllowed={downloadsUnlocked}
+                  compactInitialCount={12}
+                  isAdmin={!!isAdmin}
+                />
+              ) : (
+                <EmptyState
+                  icon={Images}
+                  title="No photos yet"
+                  description="Photos will appear here once your shoot is ready."
+                />
+              )}
             </div>
           </MicrositeSection>
         )}
 
-        {!isClientView && mediaVisible && showVideos && (uploadedVideos.length > 0 || youtubeVideos.length > 0) && (
+        {!isClientView && showVideos && (
           <MicrositeSection
             id="video"
             title="Video"
             icon={Clapperboard}
             hiddenFromClients={videosHidden}
             subtitle={
-              downloadsUnlocked
-                ? undefined
-                : downloadLockMessage
-                  ? `Stream previews below. ${downloadLockMessage}`
-                  : undefined
+              uploadedVideos.length > 0 || youtubeVideos.length > 0
+                ? downloadsUnlocked
+                  ? undefined
+                  : downloadLockMessage
+                    ? `Stream previews below. ${downloadLockMessage}`
+                    : undefined
+                : undefined
             }
           >
-            <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-              <VideoGrid
-                entries={videoEntries}
-                projectId={project.id}
-                reviewByAssetId={reviewByAssetId}
-                getDownloadUrl={getDownloadUrl}
-                reviewPathPrefix={reviewPathPrefix}
-                downloadsAllowed={downloadsUnlocked}
-                onDownload={handleDownload}
-                isAdmin={!!isAdmin}
-                canAccessVideoReviews={canAccessVideoReviews || !!isAdmin}
-                compactInitialCount={4}
+            {videoEntries.length > 0 ? (
+              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+                <VideoGrid
+                  entries={videoEntries}
+                  projectId={project.id}
+                  reviewByAssetId={reviewByAssetId}
+                  getDownloadUrl={getDownloadUrl}
+                  reviewPathPrefix={reviewPathPrefix}
+                  downloadsAllowed={downloadsUnlocked}
+                  onDownload={handleDownload}
+                  isAdmin={!!isAdmin}
+                  canAccessVideoReviews={canAccessVideoReviews || !!isAdmin}
+                  compactInitialCount={4}
+                />
+              </div>
+            ) : (
+              <EmptyState
+                icon={Clapperboard}
+                title="No videos yet"
+                description="Videos will appear here once they're ready to review."
               />
-            </div>
+            )}
           </MicrositeSection>
         )}
 
-        {!isClientView && mediaVisible && showTours && tours.length > 0 && (
-          <MicrositeSection title="360° Virtual Tours" icon={Globe} subtitle="Explore immersive walkthroughs" hiddenFromClients={toursHidden}>
-            <div className="space-y-6">
-              {tours.map((tour) => (
-                <div key={tour.id} className="rounded-2xl overflow-hidden shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-                  <TourCard tour={tour} embedInPortal />
-                </div>
-              ))}
-            </div>
+        {!isClientView && showTours && (
+          <MicrositeSection
+            title="360° Virtual Tours"
+            icon={Globe}
+            subtitle={tours.length > 0 ? "Explore immersive walkthroughs" : undefined}
+            hiddenFromClients={toursHidden}
+          >
+            {tours.length > 0 ? (
+              <div className="space-y-6">
+                {tours.map((tour) => (
+                  <div key={tour.id} className="rounded-2xl overflow-hidden shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+                    <TourCard tour={tour} embedInPortal />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={Globe}
+                title="No 360° tours yet"
+                description="Interactive tour links will appear here when they're ready."
+              />
+            )}
           </MicrositeSection>
         )}
 
-        {!isClientView && mediaVisible && showDocuments && documents.length > 0 && (
+        {!isClientView && showDocuments && (
           <MicrositeSection
             id="documents"
             title="Documents"
             icon={FileText}
             hiddenFromClients={documentsHidden}
             subtitle={
-              downloadsUnlocked
-                ? "Download your files below"
-                : downloadLockMessage
-                  ? `Preview available. ${downloadLockMessage}`
-                  : undefined
+              documents.length > 0
+                ? downloadsUnlocked
+                  ? "Download your files below"
+                  : downloadLockMessage
+                    ? `Preview available. ${downloadLockMessage}`
+                    : undefined
+                : undefined
             }
           >
-            <div className="grid gap-3 sm:grid-cols-2">
-              {documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex flex-col gap-3 rounded-xl bg-white p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-primary">{mediaDisplayName(doc)}</p>
-                    {!downloadsUnlocked && !isPreview && downloadLockMessage && (
-                      <p className="text-xs text-muted mt-1 flex items-center gap-1">
-                        <Lock className="h-3 w-3" /> {downloadLockMessage}
-                      </p>
-                    )}
-                  </div>
-                  {!isPreview && (
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      {isPdf(doc) && (
-                        <Button variant="outline" size="sm" className="min-h-11 flex-1 sm:flex-none" onClick={() => handleView(doc)}>
-                          <Eye className="h-4 w-4" /> Preview
-                        </Button>
-                      )}
-                      {downloadsUnlocked && (
-                        <Button variant="accent" size="sm" className="min-h-11 flex-1 sm:flex-none" onClick={() => handleDownload(doc)}>
-                          <Download className="h-4 w-4" />
-                        </Button>
+            {documents.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex flex-col gap-3 rounded-xl bg-white p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-primary">{mediaDisplayName(doc)}</p>
+                      {!downloadsUnlocked && !isPreview && downloadLockMessage && (
+                        <p className="text-xs text-muted mt-1 flex items-center gap-1">
+                          <Lock className="h-3 w-3" /> {downloadLockMessage}
+                        </p>
                       )}
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                    {!isPreview && (
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        {isPdf(doc) && (
+                          <Button variant="outline" size="sm" className="min-h-11 flex-1 sm:flex-none" onClick={() => handleView(doc)}>
+                            <Eye className="h-4 w-4" /> Preview
+                          </Button>
+                        )}
+                        {downloadsUnlocked && (
+                          <Button variant="accent" size="sm" className="min-h-11 flex-1 sm:flex-none" onClick={() => handleDownload(doc)}>
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={FileText}
+                title="No documents yet"
+                description="Project documents will appear here when they're ready."
+              />
+            )}
           </MicrositeSection>
         )}
 
-        {!isPreview && status === "ready_for_review" && (isClientView || mediaVisible) && canViewFinancials && (
+        {!isPreview && status === "ready_for_review" && (isClientView || hasAnyMedia) && canViewFinancials && (
           <DeliverableReview
             projectId={project.id}
             photos={photos}

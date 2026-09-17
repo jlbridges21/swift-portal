@@ -898,6 +898,22 @@ export function AdminSettingsClient({
                 </div>
               </CardContent>
             </Card>
+            {!settings.setupAcceptedDefaults?.stripe ? (
+              <AcceptSetupDefaultButton acceptKey="stripe" />
+            ) : (
+              <p className="text-xs text-muted">
+                You chose to connect payments later. Client invoices stay unavailable until Stripe is connected.
+              </p>
+            )}
+          </div>
+        </SettingsPanel>
+
+        <SettingsPanel id="new_project_setup" active={section}>
+          <div id="settings-new-project-setup" tabIndex={-1} className="scroll-mt-24 space-y-4">
+            <h2 className="text-lg font-semibold text-primary">New project setup</h2>
+            <p className="mt-1 mb-4 text-sm text-muted">
+              Defaults applied when a new project is created. Existing projects keep their own settings.
+            </p>
             <Card className="shadow-sm" id="settings-media-section-defaults">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Client media sections</CardTitle>
@@ -934,13 +950,6 @@ export function AdminSettingsClient({
                 </div>
               </CardContent>
             </Card>
-            {!settings.setupAcceptedDefaults?.stripe ? (
-              <AcceptSetupDefaultButton acceptKey="stripe" />
-            ) : (
-              <p className="text-xs text-muted">
-                You chose to connect payments later. Client invoices stay unavailable until Stripe is connected.
-              </p>
-            )}
           </div>
         </SettingsPanel>
 
@@ -948,7 +957,6 @@ export function AdminSettingsClient({
           <div id="settings-services" tabIndex={-1} className="scroll-mt-24 space-y-4">
             <h2 className="text-lg font-semibold text-primary">Services</h2>
             <p className="mt-1 mb-4 text-sm text-muted">Catalog and preliminary estimate prices for this business.</p>
-            {services}
             <Card className="shadow-sm" id="settings-instant-preliminary">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Request form</CardTitle>
@@ -975,6 +983,7 @@ export function AdminSettingsClient({
                 </div>
               </CardContent>
             </Card>
+            {services}
           </div>
         </SettingsPanel>
 

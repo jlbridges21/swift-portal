@@ -19,6 +19,11 @@ import { DownloadQualityDialog } from "@/components/projects/download-quality-di
 import type { HeroMedia } from "@/lib/cover";
 import type { MediaAsset, MediaFolder, Project, Tour } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
+import {
+  isMediaSectionVisibleForClient,
+  type ProjectMediaSections,
+  DEFAULT_PROJECT_MEDIA_SECTIONS,
+} from "@/lib/project-media-sections";
 import { formatDate } from "@/lib/utils";
 import { Clapperboard, Download, FileText, Globe, Images, Lock, LogIn } from "lucide-react";
 import { toast } from "sonner";
@@ -43,6 +48,7 @@ export function PublicProjectPageClient({
   tours,
   mediaFolders = [],
   videoReviews = [],
+  mediaSections = DEFAULT_PROJECT_MEDIA_SECTIONS,
   requireDeliveredForDownloads,
   viewCount,
 }: {
@@ -58,6 +64,7 @@ export function PublicProjectPageClient({
   tours: Tour[];
   mediaFolders?: MediaFolder[];
   videoReviews?: VideoReviewListItem[];
+  mediaSections?: ProjectMediaSections;
   requireDeliveredForDownloads: boolean;
   viewCount: number;
   rateLimitPagePerMinute: number;
@@ -84,10 +91,12 @@ export function PublicProjectPageClient({
     requireDeliveredForDownloads,
   });
   const downloadLockMessage = clientDownloadLockMessage(status, requireDeliveredForDownloads);
-  const uploadedVideos = videos.filter((v) => v.media_source !== "youtube");
-  const youtubeVideos = videos.filter((v) => v.media_source === "youtube");
   const videoEntries = useMemo(() => videosToGridEntries(videos), [videos]);
-  const hasMedia = photos.length > 0 || videos.length > 0 || tours.length > 0 || documents.length > 0;
+  const showPhotos = isMediaSectionVisibleForClient(mediaSections, "photos");
+  const showVideos = isMediaSectionVisibleForClient(mediaSections, "videos");
+  const showTours = isMediaSectionVisibleForClient(mediaSections, "tours");
+  const showDocuments = isMediaSectionVisibleForClient(mediaSections, "documents");
+  const anySectionVisible = showPhotos || showVideos || showTours || showDocuments;
 
   async function getDownloadUrl(asset: MediaAsset, thumb = false): Promise<string | null> {
     try {
@@ -199,110 +208,150 @@ export function PublicProjectPageClient({
           audience="client"
         />
 
-        {!hasMedia ? (
+        {!anySectionVisible ? (
           <EmptyState
             title="No media available"
-            description="There are no media sections available for this project right now."
+            description="Media sections for this project aren’t visible right now."
           />
         ) : null}
 
-        {photos.length > 0 && (
+        {showPhotos && (
           <section id="photos" className="scroll-mt-24 space-y-4">
             <h2 className="flex items-center gap-2 text-xl font-bold text-primary">
               <Images className="h-5 w-5 text-accent" /> Photos
             </h2>
-            <ClientPhotoFolders
-              projectId={project.id}
-              zipApiBase={downloadsUnlocked ? `${apiBase}/projects/download-zip` : undefined}
-              downloadApiBase={`${apiBase}/media/download`}
-              photos={photos}
-              folders={mediaFolders}
-              downloadsAllowed={downloadsUnlocked}
-              getDownloadUrl={getDownloadUrl}
-            />
+            {photos.length > 0 ? (
+              <ClientPhotoFolders
+                projectId={project.id}
+                zipApiBase={downloadsUnlocked ? `${apiBase}/projects/download-zip` : undefined}
+                downloadApiBase={`${apiBase}/media/download`}
+                photos={photos}
+                folders={mediaFolders}
+                downloadsAllowed={downloadsUnlocked}
+                getDownloadUrl={getDownloadUrl}
+              />
+            ) : (
+              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+                <EmptyState
+                  icon={Images}
+                  title="No photos yet"
+                  description="Photos will appear here once your shoot is ready."
+                />
+              </div>
+            )}
           </section>
         )}
 
-        {videoEntries.length > 0 && (
+        {showVideos && (
           <section id="video" className="scroll-mt-24 space-y-4">
             <h2 className="flex items-center gap-2 text-xl font-bold text-primary">
               <Clapperboard className="h-5 w-5 text-accent" /> Video
             </h2>
-            <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
-              <VideoGrid
-                entries={videoEntries}
-                projectId={project.id}
-                reviewByAssetId={reviewByAssetId}
-                getDownloadUrl={getDownloadUrl}
-                reviewPathPrefix="/dashboard/projects"
-                downloadsAllowed={downloadsUnlocked}
-                onDownload={handleDownload}
-                signInHref={signInHref}
-              />
-            </div>
+            {videoEntries.length > 0 ? (
+              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+                <VideoGrid
+                  entries={videoEntries}
+                  projectId={project.id}
+                  reviewByAssetId={reviewByAssetId}
+                  getDownloadUrl={getDownloadUrl}
+                  reviewPathPrefix="/dashboard/projects"
+                  downloadsAllowed={downloadsUnlocked}
+                  onDownload={handleDownload}
+                  signInHref={signInHref}
+                />
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+                <EmptyState
+                  icon={Clapperboard}
+                  title="No videos yet"
+                  description="Videos will appear here once they're ready to review."
+                />
+              </div>
+            )}
           </section>
         )}
 
-        {tours.length > 0 && (
+        {showTours && (
           <section id="tours" className="scroll-mt-24 space-y-4">
             <h2 className="flex items-center gap-2 text-xl font-bold text-primary">
               <Globe className="h-5 w-5 text-accent" /> Virtual tours
             </h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {tours.map((t) => (
-                <TourCard key={t.id} tour={t} />
-              ))}
-            </div>
+            {tours.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {tours.map((t) => (
+                  <TourCard key={t.id} tour={t} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+                <EmptyState
+                  icon={Globe}
+                  title="No 360° tours yet"
+                  description="Interactive tour links will appear here when they're ready."
+                />
+              </div>
+            )}
           </section>
         )}
 
-        {documents.length > 0 && (
+        {showDocuments && (
           <section id="documents" className="scroll-mt-24 space-y-4">
             <h2 className="flex items-center gap-2 text-xl font-bold text-primary">
               <FileText className="h-5 w-5 text-accent" /> Documents
             </h2>
-            <ExpandableMediaList
-              items={documents}
-              initialCount={4}
-              labelSingular="document"
-              labelPlural="documents"
-              renderItem={(doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-white p-4"
-                >
-                  <span className="text-sm font-medium truncate">{mediaDisplayName(doc)}</span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={
-                      !downloadsUnlocked &&
-                      doc.mime_type !== "application/pdf" &&
-                      !doc.file_name.toLowerCase().endsWith(".pdf")
-                    }
-                    onClick={() => {
-                      if (
-                        doc.mime_type === "application/pdf" ||
-                        doc.file_name.toLowerCase().endsWith(".pdf")
-                      ) {
-                        void getDownloadUrl(doc, true).then(
-                          (u) => u && window.open(u, "_blank", "noopener,noreferrer")
-                        );
-                      } else {
-                        void handleDownload(doc);
-                      }
-                    }}
+            {documents.length > 0 ? (
+              <ExpandableMediaList
+                items={documents}
+                initialCount={4}
+                labelSingular="document"
+                labelPlural="documents"
+                renderItem={(doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-white p-4"
                   >
-                    <Download className="h-4 w-4 mr-1" />
-                    {doc.mime_type === "application/pdf" ||
-                    doc.file_name.toLowerCase().endsWith(".pdf")
-                      ? "View"
-                      : "Download"}
-                  </Button>
-                </div>
-              )}
-            />
+                    <span className="text-sm font-medium truncate">{mediaDisplayName(doc)}</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        !downloadsUnlocked &&
+                        doc.mime_type !== "application/pdf" &&
+                        !doc.file_name.toLowerCase().endsWith(".pdf")
+                      }
+                      onClick={() => {
+                        if (
+                          doc.mime_type === "application/pdf" ||
+                          doc.file_name.toLowerCase().endsWith(".pdf")
+                        ) {
+                          void getDownloadUrl(doc, true).then(
+                            (u) => u && window.open(u, "_blank", "noopener,noreferrer")
+                          );
+                        } else {
+                          void handleDownload(doc);
+                        }
+                      }}
+                    >
+                      <Download className="h-4 w-4 mr-1" />
+                      {doc.mime_type === "application/pdf" ||
+                      doc.file_name.toLowerCase().endsWith(".pdf")
+                        ? "View"
+                        : "Download"}
+                    </Button>
+                  </div>
+                )}
+              />
+            ) : (
+              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+                <EmptyState
+                  icon={FileText}
+                  title="No documents yet"
+                  description="Project documents will appear here when they're ready."
+                />
+              </div>
+            )}
           </section>
         )}
 
