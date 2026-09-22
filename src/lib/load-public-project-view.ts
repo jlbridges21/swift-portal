@@ -71,7 +71,9 @@ export async function loadPublicProjectView(
     mediaSections,
     false
   );
-  const hero = await getProjectHeroMedia(raw, ctx.project as never, businessId);
+  const hero = await getProjectHeroMedia(raw, ctx.project as never, businessId, {
+    photosSectionVisible: mediaSections.photos,
+  });
   const appSettings = await getAppSettings(businessId);
 
   return {

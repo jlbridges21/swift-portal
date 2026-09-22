@@ -1,12 +1,22 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MediaAsset, Project } from "@/lib/types";
 import { getYouTubeEmbedUrl, getYouTubeThumbnail } from "@/lib/youtube";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 
 export type HeroMedia =
   | { type: "image"; url: string }
   | { type: "video"; url: string }
   | { type: "youtube"; embedUrl: string; posterUrl: string | null }
   | null;
+
+export type GetProjectHeroOptions = {
+  /**
+   * When false, do not fall back to the first gallery photo.
+   * An explicitly set cover_image_id / cover_image_url still shows.
+   * Default true (legacy behavior).
+   */
+  photosSectionVisible?: boolean;
+};
 
 /**
  * Poster/thumbnail URL for dashboard cards (always an image, never a video file).
@@ -18,12 +28,14 @@ export type HeroMedia =
 export async function getProjectHeroPosterUrl(
   supabase: SupabaseClient,
   project: Pick<Project, "id" | "cover_image_id" | "cover_image_url">,
-  businessId: string
+  businessId: string,
+  options?: GetProjectHeroOptions
 ): Promise<string | null> {
-  const hero = await getProjectHeroMedia(supabase, project, businessId);
+  const hero = await getProjectHeroMedia(supabase, project, businessId, options);
   if (hero?.type === "image") return hero.url;
   if (hero?.type === "youtube") return hero.posterUrl;
   if (project.cover_image_url) return project.cover_image_url;
+  if (options?.photosSectionVisible === false) return null;
   return firstProjectPhotoUrl(supabase, project.id, businessId);
 }
 
@@ -36,16 +48,21 @@ export async function getProjectCoverUrl(
   return getProjectHeroPosterUrl(supabase, project, businessId);
 }
 
-async function signedPhotoUrl(
-  supabase: SupabaseClient,
-  filePath: string
-): Promise<string | null> {
-  // file_path is the absolute object key — legacy `{project}/…` or
-  // `{business}/{project}/…` / `{business}/library/…`. Do not rewrite it.
-  const { data } = await supabase.storage
+/**
+ * Sign with service role after the asset row was authorized via `supabase`.
+ * User-scoped createSignedUrl fails for many clients on tenant-prefixed paths
+ * (storage RLS / missing JWT business claim) while the gallery download API works.
+ */
+async function signedPhotoUrl(businessId: string, filePath: string): Promise<string | null> {
+  const db = await createTenantServiceClient(businessId);
+  const { data, error } = await db.raw.storage
     .from("project-media")
     .createSignedUrl(filePath, 3600);
-  return data?.signedUrl ?? null;
+  if (error || !data?.signedUrl) {
+    console.warn("[cover] signed URL failed", { filePath, error: error?.message });
+    return null;
+  }
+  return data.signedUrl;
 }
 
 async function firstProjectPhotoUrl(
@@ -65,18 +82,11 @@ async function firstProjectPhotoUrl(
     .maybeSingle();
 
   if (!firstPhoto?.file_path) return null;
-  return signedPhotoUrl(supabase, firstPhoto.file_path);
-}
-
-async function signedMediaUrl(
-  supabase: SupabaseClient,
-  filePath: string
-): Promise<string | null> {
-  return signedPhotoUrl(supabase, filePath);
+  return signedPhotoUrl(businessId, firstPhoto.file_path);
 }
 
 async function heroFromAsset(
-  supabase: SupabaseClient,
+  businessId: string,
   asset: Pick<
     MediaAsset,
     "file_path" | "media_type" | "media_source" | "embed_url" | "youtube_url"
@@ -91,7 +101,7 @@ async function heroFromAsset(
   }
 
   if (!asset.file_path) return null;
-  const url = await signedMediaUrl(supabase, asset.file_path);
+  const url = await signedPhotoUrl(businessId, asset.file_path);
   if (!url) return null;
 
   if (asset.media_type === "video") {
@@ -100,27 +110,61 @@ async function heroFromAsset(
   return { type: "image", url };
 }
 
+/**
+ * Resolve project hero media.
+ *
+ * Explicit cover (cover_image_id / cover_image_url) always wins when readable.
+ * First-photo fallback only runs when the photo gallery section is visible
+ * (or when visibility is unspecified — default true).
+ */
 export async function getProjectHeroMedia(
   supabase: SupabaseClient,
   project: Pick<Project, "id" | "cover_image_id" | "cover_image_url">,
-  businessId: string
+  businessId: string,
+  options?: GetProjectHeroOptions
 ): Promise<HeroMedia> {
+  const photosSectionVisible = options?.photosSectionVisible !== false;
+
   if (project.cover_image_id) {
-    const { data: asset } = await supabase
+    let asset:
+      | Pick<
+          MediaAsset,
+          "file_path" | "media_type" | "media_source" | "embed_url" | "youtube_url"
+        >
+      | null = null;
+
+    const { data: scoped } = await supabase
       .from("media_assets")
       .select("file_path, media_type, media_source, embed_url, youtube_url, mime_type")
       .eq("business_id", businessId)
       .eq("id", project.cover_image_id)
-      .single();
+      .maybeSingle();
+    asset = scoped;
+
+    // Project access is already authorized by the caller. If RLS hid the cover
+    // row (e.g. shared viewer edge cases), load it with tenant service role.
+    if (!asset) {
+      const db = await createTenantServiceClient(businessId);
+      const { data: privileged } = await db
+        .from("media_assets")
+        .select("file_path, media_type, media_source, embed_url, youtube_url, mime_type")
+        .eq("id", project.cover_image_id)
+        .maybeSingle();
+      asset = privileged;
+    }
 
     if (asset) {
-      const hero = await heroFromAsset(supabase, asset);
+      const hero = await heroFromAsset(businessId, asset);
       if (hero) return hero;
     }
   }
 
   if (project.cover_image_url) {
     return { type: "image", url: project.cover_image_url };
+  }
+
+  if (!photosSectionVisible) {
+    return null;
   }
 
   const { data: firstPhoto } = await supabase
@@ -135,7 +179,7 @@ export async function getProjectHeroMedia(
     .maybeSingle();
 
   if (firstPhoto) {
-    return heroFromAsset(supabase, firstPhoto);
+    return heroFromAsset(businessId, firstPhoto);
   }
 
   return null;

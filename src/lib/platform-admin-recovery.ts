@@ -22,7 +22,9 @@ async function assertBusinessAdmin(businessId: string, userId: string) {
   }
   const { data: business } = await raw
     .from("businesses")
-    .select("id, slug, custom_domain, name")
+    .select(
+      "id, slug, custom_domain, custom_domain_status, custom_domain_vercel_verified, custom_domain_misconfigured, name"
+    )
     .eq("id", businessId)
     .maybeSingle();
   if (!business) throw new Error("Business not found.");
@@ -41,6 +43,9 @@ export async function sendBusinessAdminPasswordReset(
   const portalUrl = getBusinessPortalOrigin({
     slug: business.slug,
     custom_domain: business.custom_domain,
+    custom_domain_status: business.custom_domain_status,
+    custom_domain_vercel_verified: business.custom_domain_vercel_verified,
+    custom_domain_misconfigured: business.custom_domain_misconfigured,
   });
   const redirectTo = authConfirmUrl(portalUrl);
 

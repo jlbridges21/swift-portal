@@ -256,15 +256,27 @@ export async function claimCustomDomain(options: {
     } else {
       const added = await vercelAddProjectDomain(domain);
       if (!added.ok) {
-        if (added.error.status === 409) {
-          throw new Error(
-            "This domain is already assigned to another Vercel project. Remove it there first, or contact support."
-          );
+        // Domain may already be on this project (race) or another project.
+        if (added.error.status === 409 || /already|conflict|taken/i.test(added.error.message)) {
+          const again = await vercelGetProjectDomain(domain);
+          if (again.ok) {
+            challenges = again.data.verification ?? [];
+            vercelVerified = again.data.verified === true;
+          } else {
+            throw new Error(
+              again.error.status === 404
+                ? "This domain is already assigned to another Vercel project. Remove it there first, or contact support."
+                : again.error.message ||
+                    "This domain could not be reconnected. Try Remove domain, then Continue again."
+            );
+          }
+        } else {
+          throw new Error(added.error.message || "Could not register the domain with Vercel.");
         }
-        throw new Error(added.error.message || "Could not register the domain with Vercel.");
+      } else {
+        challenges = added.data.verification ?? [];
+        vercelVerified = added.data.verified === true;
       }
-      challenges = added.data.verification ?? [];
-      vercelVerified = added.data.verified === true;
     }
 
     status = vercelVerified ? "verifying" : "pending";

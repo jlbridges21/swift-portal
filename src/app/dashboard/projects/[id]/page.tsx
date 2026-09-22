@@ -145,7 +145,6 @@ async function ProjectContent({
 
   const appSettings = await getAppSettings(tenant.businessId);
   const project = isSharedViewer ? sanitizeProjectForMediaViewer(projectRow) : projectRow;
-  const hero = await getProjectHeroMedia(supabase, projectRow, tenant.businessId);
   const db = await createTenantServiceClient(tenant.businessId);
   const versionMap = await loadVideoReviewVersionMap(db, id);
   const videoReviews = await listProjectVideoReviews(db, id);
@@ -163,6 +162,9 @@ async function ProjectContent({
     mediaSections,
     isAdminViewer
   );
+  const hero = await getProjectHeroMedia(supabase, projectRow, tenant.businessId, {
+    photosSectionVisible: isAdminViewer || mediaSections.photos,
+  });
   const photos = visibleMedia.filter((m) => m.media_type === "photo");
   const videos = visibleMedia.filter((m) => m.media_type === "video");
   const documents = visibleMedia.filter((m) => m.media_type === "document");

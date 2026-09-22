@@ -4,6 +4,10 @@ import { getPlatformRootDomain } from "@/lib/site-metadata";
 export type PortalUrlBusiness = {
   slug: string;
   custom_domain: string | null;
+  /** When present, custom domain is used only if verified + healthy. */
+  custom_domain_status?: string | null;
+  custom_domain_vercel_verified?: boolean | null;
+  custom_domain_misconfigured?: boolean | null;
 };
 
 function stripHost(value: string): string {
@@ -15,6 +19,37 @@ function serviceClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false, autoRefreshToken: false } }
+  );
+}
+
+/**
+ * True when the custom domain is safe to send users to.
+ * Missing health fields (legacy callers) → treat as unhealthy and use subdomain.
+ * That is the lockout-safe default: a set-but-unverified domain must never win.
+ */
+export function isCustomDomainHealthy(
+  business: Pick<
+    PortalUrlBusiness,
+    "custom_domain" | "custom_domain_status" | "custom_domain_vercel_verified" | "custom_domain_misconfigured"
+  >
+): boolean {
+  const custom = business.custom_domain?.trim();
+  if (!custom) return false;
+  if (business.custom_domain_status !== "connected") return false;
+  if (business.custom_domain_vercel_verified !== true) return false;
+  if (business.custom_domain_misconfigured === true) return false;
+  return true;
+}
+
+/** Always-working ShootPortal subdomain for a business slug. */
+export function getBusinessSubdomainOrigin(slug: string): string {
+  const clean = slug?.trim().toLowerCase() ?? "";
+  if (!clean) {
+    return assertPublicPortalOrigin(`https://${getPlatformApexHostname()}`, "getBusinessSubdomainOrigin.empty");
+  }
+  return assertPublicPortalOrigin(
+    `https://${clean}.${getPlatformRootDomain()}`,
+    "getBusinessSubdomainOrigin"
   );
 }
 
@@ -105,29 +140,44 @@ export function getPlatformApexOrigin(): string {
 
 /**
  * Canonical public origin for a business (emails, push, Stripe customer redirects).
- * Prefer `custom_domain`; otherwise `{slug}.{PLATFORM_ROOT_DOMAIN}`.
+ * Prefer a VERIFIED + HEALTHY custom domain; otherwise `{slug}.{PLATFORM_ROOT_DOMAIN}`.
+ * Never send users to a set-but-broken custom domain (login lockout).
  */
 export function getBusinessPortalOrigin(business: PortalUrlBusiness): string {
-  const custom = business.custom_domain?.trim();
-  if (custom) {
-    return assertPublicPortalOrigin(`https://${stripHost(custom)}`, "getBusinessPortalOrigin.custom_domain");
+  if (isCustomDomainHealthy(business)) {
+    const custom = business.custom_domain!.trim();
+    return assertPublicPortalOrigin(
+      `https://${stripHost(custom)}`,
+      "getBusinessPortalOrigin.custom_domain"
+    );
   }
+
   const slug = business.slug?.trim().toLowerCase() ?? "";
   if (!slug) {
-    console.error("[portal-url] getBusinessPortalOrigin: business has no slug or custom_domain", business);
+    console.error("[portal-url] getBusinessPortalOrigin: business has no slug", business);
     return assertPublicPortalOrigin(`https://${getPlatformApexHostname()}`, "getBusinessPortalOrigin.unresolved");
   }
-  return assertPublicPortalOrigin(
-    `https://${slug}.${getPlatformRootDomain()}`,
-    "getBusinessPortalOrigin.subdomain"
-  );
+
+  if (business.custom_domain?.trim()) {
+    console.warn("[portal-url] custom domain set but not healthy — using subdomain escape hatch", {
+      slug,
+      custom_domain: business.custom_domain,
+      custom_domain_status: business.custom_domain_status ?? null,
+      custom_domain_vercel_verified: business.custom_domain_vercel_verified ?? null,
+      custom_domain_misconfigured: business.custom_domain_misconfigured ?? null,
+    });
+  }
+
+  return getBusinessSubdomainOrigin(slug);
 }
 
 export async function getBusinessPortalOriginById(businessId: string): Promise<string> {
   const supabase = serviceClient();
   const { data } = await supabase
     .from("businesses")
-    .select("slug, custom_domain")
+    .select(
+      "slug, custom_domain, custom_domain_status, custom_domain_vercel_verified, custom_domain_misconfigured"
+    )
     .eq("id", businessId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -179,14 +229,13 @@ export async function businessPortalHref(businessId: string, path: string): Prom
  * Local `/b/{slug}` uses the same origin with the path prefix.
  *
  * Platform apex (www or bare): always send the user to their business portal
- * (custom domain or `{slug}.{root}`). The apex is only a destination when the
- * business has no resolvable portal host (handled inside getBusinessPortalOrigin).
+ * (healthy custom domain or `{slug}.{root}`). Never strand on a dead custom domain.
+ *
+ * Escape hatch: `{slug}.{PLATFORM_ROOT_DOMAIN}` always works via host resolution
+ * even when a custom_domain field is set but unhealthy.
  *
  * `foreignTenantHost`: the Host already resolved to a *different* business
  * (middleware / post-login). Always send the user to their canonical origin.
- * Without this flag, a business that has no custom_domain used to "stay" on
- * any host that is not `*.{PLATFORM_ROOT_DOMAIN}` — including another
- * tenant's custom domain (e.g. Test Pilot admin on portal.swiftaerialmedia.com).
  */
 export function getLoginRedirectOrigin(
   business: PortalUrlBusiness,
@@ -203,18 +252,24 @@ export function getLoginRedirectOrigin(
   const vercelPreview = host.endsWith(".vercel.app");
   const root = getPlatformRootDomain();
   const isApex = host === root || host === `www.${root}`;
-  const custom = business.custom_domain ? stripHost(business.custom_domain) : "";
+  const healthyCustom = isCustomDomainHealthy(business) ? stripHost(business.custom_domain!) : "";
   const firstLabel = host.endsWith(`.${root}`) ? host.slice(0, -(root.length + 1)).split(".")[0] : "";
-  const onOwnCustom = Boolean(custom && host === custom);
+  const onOwnHealthyCustom = Boolean(healthyCustom && host === healthyCustom);
   const onOwnSubdomain = firstLabel === business.slug && host === `${business.slug}.${root}`;
-  if (onOwnCustom || onOwnSubdomain) {
+  if (onOwnHealthyCustom || onOwnSubdomain) {
     return current.origin.replace(/\/$/, "");
   }
   // Apex login must never strand tenants on the marketing host.
   if (isApex) {
     return getBusinessPortalOrigin(business);
   }
-  if (vercelPreview || (!custom && !host.endsWith(`.${root}`))) {
+  // Already on a set-but-unhealthy custom host that somehow reached the app —
+  // bounce to the subdomain escape hatch instead of staying on a dead domain.
+  const rawCustom = business.custom_domain ? stripHost(business.custom_domain) : "";
+  if (rawCustom && host === rawCustom && !healthyCustom) {
+    return getBusinessSubdomainOrigin(business.slug);
+  }
+  if (vercelPreview || (!healthyCustom && !host.endsWith(`.${root}`))) {
     return current.origin.replace(/\/$/, "");
   }
   return getBusinessPortalOrigin(business);

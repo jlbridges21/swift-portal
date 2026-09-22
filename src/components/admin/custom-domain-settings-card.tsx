@@ -125,6 +125,22 @@ function DnsTable({ records }: { records: DnsRecordInstruction[] }) {
   );
 }
 
+async function readApiJson(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    const trimmed = text.trim().replace(/\s+/g, " ");
+    const preview = trimmed.length > 240 ? `${trimmed.slice(0, 237)}…` : trimmed;
+    throw new Error(
+      preview
+        ? `Server returned a non-JSON error (HTTP ${res.status}): ${preview}`
+        : `Server returned an empty or invalid response (HTTP ${res.status}).`
+    );
+  }
+}
+
 export function CustomDomainSettingsCard({
   entitled,
   initialState,
@@ -146,8 +162,8 @@ export function CustomDomainSettingsCard({
 
   const refresh = useCallback(async () => {
     const res = await fetch(apiBase, { credentials: "include" });
-    const data = await res.json();
-    if (res.ok && data.state) setState(data.state);
+    const data = await readApiJson(res);
+    if (res.ok && data.state) setState(data.state as CustomDomainPublicState);
   }, [apiBase]);
 
   async function run(action: "claim" | "check" | "remove", domain?: string) {
@@ -159,13 +175,19 @@ export function CustomDomainSettingsCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, domain }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Request failed");
-      setState(data.state);
+      const data = await readApiJson(res);
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === "string" && data.error
+            ? data.error
+            : `Request failed (HTTP ${res.status})`
+        );
+      }
+      if (data.state) setState(data.state as CustomDomainPublicState);
       if (action === "claim") toast.success("Domain saved — add the DNS record next");
       if (action === "check") toast.message("Status updated");
       if (action === "remove") {
-        toast.success("Custom domain removed");
+        toast.success("Custom domain removed — clients use your ShootPortal address again");
         setDomainInput("portal.");
       }
     } catch (e) {
@@ -213,6 +235,11 @@ export function CustomDomainSettingsCard({
             </p>
             <p className={`mt-3 text-sm font-medium ${status.tone}`}>{status.title}</p>
             <p className="mt-1 text-sm text-muted">{status.detail}</p>
+            <p className="mt-2 text-xs text-muted">
+              Your ShootPortal address{" "}
+              <span className="font-medium text-heading">{state.fallbackSubdomain}</span> always
+              works for sign-in, even while a custom domain is pending or broken.
+            </p>
           </div>
 
           {state.status === "connected" && state.portalUrl ? (

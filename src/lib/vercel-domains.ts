@@ -103,21 +103,48 @@ async function vercelFetch<T>(
 
     if (!res.ok) {
       const errObj = json as { error?: { code?: string; message?: string }; message?: string } | null;
+      const message =
+        errObj?.error?.message ||
+        errObj?.message ||
+        (text && !text.trimStart().startsWith("{") ? text.trim().slice(0, 300) : "") ||
+        `Vercel API ${res.status}`;
+      console.error("[vercel-domains] upstream error", {
+        method,
+        path,
+        status: res.status,
+        contentType: res.headers.get("content-type"),
+        bodyPreview: text.slice(0, 500),
+        parsed: Boolean(json),
+      });
       return {
         ok: false,
         error: {
           status: res.status,
           code: errObj?.error?.code,
-          message:
-            errObj?.error?.message ||
-            errObj?.message ||
-            text.slice(0, 200) ||
-            `Vercel API ${res.status}`,
+          message,
         },
       };
     }
 
-    return { ok: true, data: json as T };
+    if (json == null && text.trim()) {
+      console.error("[vercel-domains] non-JSON success body", {
+        method,
+        path,
+        status: res.status,
+        contentType: res.headers.get("content-type"),
+        bodyPreview: text.slice(0, 500),
+      });
+      return {
+        ok: false,
+        error: {
+          status: res.status,
+          code: "non_json_response",
+          message: text.trim().slice(0, 300) || `Unexpected response from Vercel (HTTP ${res.status})`,
+        },
+      };
+    }
+
+    return { ok: true, data: (json ?? {}) as T };
   } catch (e) {
     return {
       ok: false,

@@ -309,6 +309,9 @@ export async function resolvePartnerConnectOrigin(input: {
     const tenantOrigin = getBusinessPortalOrigin({
       slug: resolution.business.slug,
       custom_domain: resolution.business.custom_domain,
+      custom_domain_status: resolution.business.custom_domain_status,
+      custom_domain_vercel_verified: resolution.business.custom_domain_vercel_verified,
+      custom_domain_misconfigured: resolution.business.custom_domain_misconfigured,
     }).replace(/\/$/, "");
     return { origin: tenantOrigin, usedRequestHost: true, rejectedHostname: null };
   }
@@ -365,6 +368,9 @@ export async function resolvePartnerConnectCallbackOrigin(input: {
     return getBusinessPortalOrigin({
       slug: resolution.business.slug,
       custom_domain: resolution.business.custom_domain,
+      custom_domain_status: resolution.business.custom_domain_status,
+      custom_domain_vercel_verified: resolution.business.custom_domain_vercel_verified,
+      custom_domain_misconfigured: resolution.business.custom_domain_misconfigured,
     }).replace(/\/$/, "");
   }
 

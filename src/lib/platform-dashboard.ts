@@ -50,7 +50,7 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
   const { data: businesses, error } = await raw
     .from("businesses")
     .select(
-      "id, name, slug, custom_domain, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end, created_via, created_at, deleted_at, is_protected"
+      "id, name, slug, custom_domain, custom_domain_status, custom_domain_vercel_verified, custom_domain_misconfigured, status, plan, subscription_status, trial_ends_at, comped_until, comped_reason, subscription_current_period_end, subscription_cancel_at_period_end, created_via, created_at, deleted_at, is_protected"
     )
     .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
@@ -108,7 +108,13 @@ export async function loadPlatformBusinesses(): Promise<PlatformBusinessRow[]> {
         lifetimeRevenueCents,
         stripeStatus: integ.data?.stripe_account_status ?? "not_connected",
         lastActivityAt: activity.data?.created_at ?? b.created_at,
-        portalUrl: getBusinessPortalOrigin({ slug: b.slug, custom_domain: b.custom_domain }),
+    portalUrl: getBusinessPortalOrigin({
+      slug: b.slug,
+      custom_domain: b.custom_domain,
+      custom_domain_status: (b as { custom_domain_status?: string | null }).custom_domain_status,
+      custom_domain_vercel_verified: (b as { custom_domain_vercel_verified?: boolean }).custom_domain_vercel_verified,
+      custom_domain_misconfigured: (b as { custom_domain_misconfigured?: boolean | null }).custom_domain_misconfigured,
+    }),
         daysLeftInTrial: sub.daysLeftInTrial,
         daysLeftInComp: sub.daysLeftInComp,
         requiresPayment: sub.requiresPayment,
@@ -259,6 +265,9 @@ export async function loadBusinessDetail(id: string) {
     portalUrl: getBusinessPortalOrigin({
       slug: business.slug,
       custom_domain: business.custom_domain,
+      custom_domain_status: business.custom_domain_status,
+      custom_domain_vercel_verified: business.custom_domain_vercel_verified,
+      custom_domain_misconfigured: business.custom_domain_misconfigured,
     }),
     domainState: toPublicDomainState(domainRow),
     fallbackSubdomain: `${business.slug}.${getPlatformRootDomain()}`,

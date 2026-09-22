@@ -622,7 +622,9 @@ export async function inviteBusinessAdmin(
   const raw = await createServiceClient();
   const { data: business } = await raw
     .from("businesses")
-    .select("id, slug, name, custom_domain")
+    .select(
+      "id, slug, name, custom_domain, custom_domain_status, custom_domain_vercel_verified, custom_domain_misconfigured"
+    )
     .eq("id", businessId)
     .maybeSingle();
   if (!business) throw new Error("Business not found.");
@@ -630,6 +632,9 @@ export async function inviteBusinessAdmin(
   const portalUrl = getBusinessPortalOrigin({
     slug: business.slug,
     custom_domain: business.custom_domain,
+    custom_domain_status: business.custom_domain_status,
+    custom_domain_vercel_verified: business.custom_domain_vercel_verified,
+    custom_domain_misconfigured: business.custom_domain_misconfigured,
   });
   // Invite: RedirectTo = tenant /auth/confirm (TokenHash templates append ?token_hash=&type=invite).
   const redirectTo = authConfirmUrl(portalUrl);

@@ -96,7 +96,9 @@ export async function resendAuthLinkForEmail(options: {
   } else {
     const { data: business } = await raw
       .from("businesses")
-      .select("id, slug, custom_domain")
+      .select(
+        "id, slug, custom_domain, custom_domain_status, custom_domain_vercel_verified, custom_domain_misconfigured"
+      )
       .eq("id", profile.business_id!)
       .maybeSingle();
     if (!business) {
@@ -106,6 +108,9 @@ export async function resendAuthLinkForEmail(options: {
     portalUrl = getBusinessPortalOrigin({
       slug: business.slug,
       custom_domain: business.custom_domain,
+      custom_domain_status: business.custom_domain_status,
+      custom_domain_vercel_verified: business.custom_domain_vercel_verified,
+      custom_domain_misconfigured: business.custom_domain_misconfigured,
     });
   }
 

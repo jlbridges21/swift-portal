@@ -35,16 +35,33 @@ export function isPlatformStripeBusiness(businessId: string): boolean {
   return businessId === LEGACY_DEFAULT_BUSINESS_ID;
 }
 
-export function portalCheckoutBaseUrl(business?: { slug?: string; custom_domain?: string | null } | null): string {
+export function portalCheckoutBaseUrl(
+  business?: {
+    slug?: string;
+    custom_domain?: string | null;
+    custom_domain_status?: string | null;
+    custom_domain_vercel_verified?: boolean | null;
+    custom_domain_misconfigured?: boolean | null;
+  } | null
+): string {
   if (business?.slug) {
     return getBusinessPortalOrigin({
       slug: business.slug,
       custom_domain: business.custom_domain ?? null,
+      custom_domain_status: business.custom_domain_status,
+      custom_domain_vercel_verified: business.custom_domain_vercel_verified,
+      custom_domain_misconfigured: business.custom_domain_misconfigured,
     });
   }
   const custom = business?.custom_domain?.trim();
   if (custom) {
-    return getBusinessPortalOrigin({ slug: "unknown", custom_domain: custom });
+    return getBusinessPortalOrigin({
+      slug: "unknown",
+      custom_domain: custom,
+      custom_domain_status: business?.custom_domain_status,
+      custom_domain_vercel_verified: business?.custom_domain_vercel_verified,
+      custom_domain_misconfigured: business?.custom_domain_misconfigured,
+    });
   }
   return `https://${process.env.PLATFORM_ROOT_DOMAIN?.trim() || "shootportal.app"}`;
 }

@@ -32,6 +32,9 @@ export interface TenantContext {
     name: string;
     status: string;
     custom_domain: string | null;
+    custom_domain_status: string | null;
+    custom_domain_vercel_verified: boolean;
+    custom_domain_misconfigured: boolean | null;
     subscription_status: string;
     trial_ends_at: string | null;
     comped_until: string | null;
@@ -64,7 +67,7 @@ async function loadBusiness(id: string): Promise<TenantContext["business"] | nul
   const { data } = await supabase
     .from("businesses")
     .select(
-      "id, slug, name, status, custom_domain, subscription_status, trial_ends_at, comped_until, comped_reason, plan, subscription_current_period_end, subscription_cancel_at_period_end, onboarding_completed_at, onboarding_state"
+      "id, slug, name, status, custom_domain, custom_domain_status, custom_domain_vercel_verified, custom_domain_misconfigured, subscription_status, trial_ends_at, comped_until, comped_reason, plan, subscription_current_period_end, subscription_cancel_at_period_end, onboarding_completed_at, onboarding_state"
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -72,6 +75,10 @@ async function loadBusiness(id: string): Promise<TenantContext["business"] | nul
   if (!data) return null;
   return {
     ...data,
+    custom_domain_status: (data.custom_domain_status as string | null) ?? null,
+    custom_domain_vercel_verified: Boolean(data.custom_domain_vercel_verified),
+    custom_domain_misconfigured:
+      (data.custom_domain_misconfigured as boolean | null) ?? null,
     plan: typeof data.plan === "string" ? data.plan : "",
     subscription_current_period_end: data.subscription_current_period_end ?? null,
     subscription_cancel_at_period_end: Boolean(data.subscription_cancel_at_period_end),
