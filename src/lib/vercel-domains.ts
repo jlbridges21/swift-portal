@@ -204,6 +204,12 @@ export async function vercelGetDomainConfig(
   );
 }
 
-/** Fallback DNS targets when config API returns empty recommendations. */
+/**
+ * Documented public Vercel DNS fallbacks (not project-specific).
+ * Prefer GET /v6/domains/{domain}/config recommendedCNAME / recommendedIPv4.
+ * Only surface these in UI when explicitly marked isGenericFallback — never as
+ * the first “required” answer when the real config is unknown.
+ * @see https://vercel.com/docs/projects/domains/add-a-domain
+ */
 export const VERCEL_DEFAULT_CNAME = "cname.vercel-dns.com";
 export const VERCEL_DEFAULT_A = "76.76.21.21";

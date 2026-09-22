@@ -7,12 +7,12 @@ import {
   loadBusinessDomainState,
   removeCustomDomain,
   toPublicDomainState,
+  emptyPublicDomainState,
   EntitlementError,
 } from "@/lib/custom-domain";
 import { allowCustomDomainVerify } from "@/lib/custom-domain-rate-limit";
 import { hasEntitlement } from "@/lib/entitlements";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
-import { isVercelDomainApiConfigured } from "@/lib/vercel-domains";
 
 export async function GET() {
   const profile = await getProfile();
@@ -24,24 +24,12 @@ export async function GET() {
 
   const entitled = await hasEntitlement(tenant.businessId, "custom_domain");
   const row = await loadBusinessDomainState(tenant.businessId);
-  const emptyState = {
-    domain: null as string | null,
-    status: null,
-    vercelVerified: false,
-    misconfigured: null as boolean | null,
-    lastCheckedAt: null as string | null,
-    error: null as string | null,
-    dnsRecords: [] as [],
-    verification: [] as [],
-    portalUrl: null as string | null,
-    vercelApiConfigured: isVercelDomainApiConfigured(),
-    isApex: false,
-    fallbackSubdomain: `${tenant.business.slug}.${getPlatformRootDomain()}`,
-  };
 
   return NextResponse.json({
     entitled,
-    state: row ? toPublicDomainState(row) : emptyState,
+    state: row
+      ? toPublicDomainState(row)
+      : emptyPublicDomainState(`${tenant.business.slug}.${getPlatformRootDomain()}`),
   });
 }
 

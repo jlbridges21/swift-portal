@@ -14,9 +14,9 @@ import { loadSetupChecklistSnapshot } from "@/lib/setup-checklist";
 import {
   loadBusinessDomainState,
   toPublicDomainState,
+  emptyPublicDomainState,
 } from "@/lib/custom-domain";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
-import { isVercelDomainApiConfigured } from "@/lib/vercel-domains";
 
 export default async function AdminSettingsPage() {
   const { tenant } = await requireAdminPage();
@@ -39,20 +39,7 @@ export default async function AdminSettingsPage() {
   const serviceNames = serviceRows.filter((s) => s.is_active).map((s) => s.name);
   const customDomainState = domainRow
     ? toPublicDomainState(domainRow)
-    : {
-        domain: null,
-        status: null,
-        vercelVerified: false,
-        misconfigured: null,
-        lastCheckedAt: null,
-        error: null,
-        dnsRecords: [],
-        verification: [],
-        portalUrl: null,
-        vercelApiConfigured: isVercelDomainApiConfigured(),
-        isApex: false,
-        fallbackSubdomain: `${tenant.business.slug}.${getPlatformRootDomain()}`,
-      };
+    : emptyPublicDomainState(`${tenant.business.slug}.${getPlatformRootDomain()}`);
 
   return (
     <div className="min-h-screen bg-background">

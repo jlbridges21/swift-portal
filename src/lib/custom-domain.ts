@@ -15,8 +15,14 @@ import {
   vercelGetProjectDomain,
   vercelRemoveProjectDomain,
   vercelVerifyProjectDomain,
+  /**
+   * Documented Vercel public fallbacks only — never show these as if they were
+   * this project's required target. Prefer GET /v6/domains/{domain}/config.
+   * @see https://vercel.com/docs/projects/domains/add-a-domain
+   */
   VERCEL_DEFAULT_A,
   VERCEL_DEFAULT_CNAME,
+  type VercelDomainConfig,
   type VercelDomainVerification,
   type VercelProjectDomain,
 } from "@/lib/vercel-domains";
@@ -34,6 +40,17 @@ export type DnsRecordInstruction = {
   host: string;
   value: string;
   purpose: "routing" | "ownership";
+  /** True when value is Vercel's generic public fallback, not this project's config. */
+  isGenericFallback?: boolean;
+};
+
+export type DnsTargetSource = "vercel" | "missing" | "manual" | "fallback";
+
+export type DnsTargetChange = {
+  record: "CNAME" | "A";
+  from: string;
+  to: string;
+  message: string;
 };
 
 export type CustomDomainPublicState = {
@@ -49,82 +66,75 @@ export type CustomDomainPublicState = {
   vercelApiConfigured: boolean;
   isApex: boolean;
   fallbackSubdomain: string;
+  /** Where the routing DNS value came from. */
+  dnsTargetSource: DnsTargetSource;
+  /** Human message when the real Vercel target could not be loaded. */
+  dnsConfigMessage: string | null;
+  /** Set when Check status discovers a different required target than we showed before. */
+  dnsTargetChanged: DnsTargetChange | null;
+  recommendedCname: string | null;
+  recommendedA: string | null;
 };
 
-const DOMAIN_RE =
-  /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
+import {
+  normalizeCustomDomain,
+  isApexDomain,
+  dnsHostLabel,
+  validateCustomDomainCandidate,
+} from "@/lib/custom-domain-input";
 
-export function normalizeCustomDomain(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
-  let v = raw.trim().toLowerCase();
-  v = v.replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
-  v = v.split(":")[0] ?? v;
-  if (!v || !DOMAIN_RE.test(v)) return null;
-  return v;
-}
+export {
+  stripPastedHost,
+  composePortalDomainInput,
+  type DomainValidationResult,
+  type ComposePortalDomainResult,
+} from "@/lib/custom-domain-input";
 
-export function isApexDomain(domain: string): boolean {
-  return domain.split(".").length === 2;
-}
+export {
+  normalizeCustomDomain,
+  isApexDomain,
+  dnsHostLabel,
+  validateCustomDomainCandidate,
+};
 
-export function dnsHostLabel(domain: string): string {
-  if (isApexDomain(domain)) return "@";
-  const parts = domain.split(".");
-  return parts.slice(0, -2).join(".") || parts[0];
-}
-
-export type DomainValidationResult =
-  | { ok: true; domain: string; isApex: boolean }
-  | { ok: false; error: string };
-
-export function validateCustomDomainCandidate(raw: unknown): DomainValidationResult {
-  const domain = normalizeCustomDomain(raw);
-  if (!domain) {
-    return {
-      ok: false,
-      error: "Enter a valid domain like portal.yourstudio.com (letters, numbers, hyphens).",
-    };
-  }
-
-  const root = getPlatformRootDomain();
-  if (domain === root || domain.endsWith(`.${root}`)) {
-    return {
-      ok: false,
-      error: `Domains under ${root} are reserved for ShootPortal. Use your own domain (e.g. portal.yourstudio.com).`,
-    };
-  }
-
-  // Block obvious platform / mail hosts even on other registrars' typos
-  const first = domain.split(".")[0];
-  if (["www", "mail", "smtp", "ftp", "api"].includes(first) && isApexDomain(domain) === false) {
-    // www.example.com is fine for advanced; only warn via UI. Allow.
-  }
-
-  return { ok: true, domain, isApex: isApexDomain(domain) };
-}
+type StoredDnsVerification = {
+  challenges?: VercelDomainVerification[];
+  mode?: string;
+  recommendedCname?: string | null;
+  recommendedA?: string | null;
+  dnsTargetSource?: DnsTargetSource;
+};
 
 function buildDnsRecords(
   domain: string,
   verification: VercelDomainVerification[] = [],
-  recommendedCname?: string,
-  recommendedA?: string
+  opts: {
+    recommendedCname?: string | null;
+    recommendedA?: string | null;
+    dnsTargetSource?: DnsTargetSource;
+  } = {}
 ): DnsRecordInstruction[] {
   const records: DnsRecordInstruction[] = [];
   const host = dnsHostLabel(domain);
+  const source = opts.dnsTargetSource ?? "missing";
 
   if (isApexDomain(domain)) {
-    records.push({
-      type: "A",
-      host: "@",
-      value: recommendedA || VERCEL_DEFAULT_A,
-      purpose: "routing",
-    });
-  } else {
+    if (opts.recommendedA) {
+      records.push({
+        type: "A",
+        host: "@",
+        value: opts.recommendedA,
+        purpose: "routing",
+        isGenericFallback: source === "fallback",
+      });
+    }
+  } else if (opts.recommendedCname) {
     records.push({
       type: "CNAME",
       host,
-      value: recommendedCname || VERCEL_DEFAULT_CNAME,
+      value: opts.recommendedCname,
       purpose: "routing",
+      isGenericFallback: source === "fallback",
     });
   }
 
@@ -171,20 +181,153 @@ export async function loadBusinessDomainState(
   return (data as BusinessDomainRow | null) ?? null;
 }
 
-function verificationFromRow(
-  row: BusinessDomainRow
-): VercelDomainVerification[] {
-  const raw = row.custom_domain_verification as { challenges?: VercelDomainVerification[] } | null;
-  return Array.isArray(raw?.challenges) ? raw!.challenges! : [];
+function storedVerification(row: BusinessDomainRow): StoredDnsVerification {
+  const raw = row.custom_domain_verification as StoredDnsVerification | null;
+  return raw && typeof raw === "object" ? raw : {};
+}
+
+function verificationFromRow(row: BusinessDomainRow): VercelDomainVerification[] {
+  const raw = storedVerification(row);
+  return Array.isArray(raw.challenges) ? raw.challenges! : [];
+}
+
+function extractRecommendedFromConfig(config: VercelDomainConfig): {
+  cname: string | null;
+  a: string | null;
+} {
+  const cname =
+    config.recommendedCNAME?.find((r) => r.rank === 1)?.value ||
+    config.recommendedCNAME?.[0]?.value ||
+    null;
+  const a =
+    config.recommendedIPv4?.find((r) => r.rank === 1)?.value?.[0] ||
+    config.recommendedIPv4?.[0]?.value?.[0] ||
+    null;
+  return { cname, a };
+}
+
+/**
+ * Fetch the ACTUAL DNS targets Vercel requires for this domain on this project.
+ * Does not substitute hardcoded defaults.
+ */
+export async function fetchVercelDnsTargets(domain: string): Promise<{
+  ok: true;
+  cname: string | null;
+  a: string | null;
+  misconfigured: boolean | null;
+  source: DnsTargetSource;
+} | {
+  ok: false;
+  error: string;
+  misconfigured: boolean | null;
+}> {
+  const config = await vercelGetDomainConfig(domain);
+  if (!config.ok) {
+    return {
+      ok: false,
+      error:
+        config.error.message ||
+        "Could not load the required DNS record from our host. Tap Retry DNS lookup.",
+      misconfigured: null,
+    };
+  }
+  const { cname, a } = extractRecommendedFromConfig(config.data);
+  const needsA = isApexDomain(domain);
+  if (needsA && !a) {
+    return {
+      ok: false,
+      error:
+        "Our host did not return the A-record target for this domain yet. Wait a moment and tap Retry DNS lookup.",
+      misconfigured: config.data.misconfigured === true,
+    };
+  }
+  if (!needsA && !cname) {
+    return {
+      ok: false,
+      error:
+        "Our host did not return the CNAME target for this domain yet. Wait a moment and tap Retry DNS lookup.",
+      misconfigured: config.data.misconfigured === true,
+    };
+  }
+  return {
+    ok: true,
+    cname,
+    a,
+    misconfigured: config.data.misconfigured === true,
+    source: "vercel",
+  };
+}
+
+function dnsConfigMessageFor(
+  source: DnsTargetSource,
+  domain: string | null
+): string | null {
+  if (!domain) return null;
+  if (source === "missing") {
+    return "We could not load the exact DNS target from our host yet. Tap Retry DNS lookup — do not guess a value.";
+  }
+  if (source === "fallback") {
+    return `Showing Vercel’s public documented fallback (${isApexDomain(domain) ? VERCEL_DEFAULT_A : VERCEL_DEFAULT_CNAME}). Prefer Retry DNS lookup so we can show the project-specific target.`;
+  }
+  if (source === "manual") {
+    return "Automatic DNS lookup is unavailable. Contact support for the exact record, or ask a platform admin to finish connecting.";
+  }
+  return null;
+}
+
+export function emptyPublicDomainState(fallbackSubdomain: string): CustomDomainPublicState {
+  return {
+    domain: null,
+    status: null,
+    vercelVerified: false,
+    misconfigured: null,
+    lastCheckedAt: null,
+    error: null,
+    dnsRecords: [],
+    verification: [],
+    portalUrl: null,
+    vercelApiConfigured: isVercelDomainApiConfigured(),
+    isApex: false,
+    fallbackSubdomain,
+    dnsTargetSource: "missing",
+    dnsConfigMessage: null,
+    dnsTargetChanged: null,
+    recommendedCname: null,
+    recommendedA: null,
+  };
 }
 
 export function toPublicDomainState(
   row: BusinessDomainRow,
-  opts?: { recommendedCname?: string; recommendedA?: string }
+  opts?: {
+    recommendedCname?: string | null;
+    recommendedA?: string | null;
+    dnsTargetSource?: DnsTargetSource;
+    dnsTargetChanged?: DnsTargetChange | null;
+  }
 ): CustomDomainPublicState {
   const domain = row.custom_domain?.trim().toLowerCase() || null;
   const challenges = verificationFromRow(row);
+  const stored = storedVerification(row);
   const status = (row.custom_domain_status as CustomDomainStatus) ?? (domain ? "connected" : null);
+
+  const recommendedCname =
+    opts?.recommendedCname !== undefined
+      ? opts.recommendedCname
+      : typeof stored.recommendedCname === "string"
+        ? stored.recommendedCname
+        : null;
+  const recommendedA =
+    opts?.recommendedA !== undefined
+      ? opts.recommendedA
+      : typeof stored.recommendedA === "string"
+        ? stored.recommendedA
+        : null;
+  const dnsTargetSource: DnsTargetSource =
+    opts?.dnsTargetSource ??
+    stored.dnsTargetSource ??
+    (recommendedCname || recommendedA ? "vercel" : domain ? "missing" : "missing");
+
   return {
     domain,
     status,
@@ -193,13 +336,22 @@ export function toPublicDomainState(
     lastCheckedAt: row.custom_domain_last_checked_at,
     error: row.custom_domain_error,
     dnsRecords: domain
-      ? buildDnsRecords(domain, challenges, opts?.recommendedCname, opts?.recommendedA)
+      ? buildDnsRecords(domain, challenges, {
+          recommendedCname,
+          recommendedA,
+          dnsTargetSource,
+        })
       : [],
     verification: challenges,
     portalUrl: domain ? `https://${domain}` : null,
     vercelApiConfigured: isVercelDomainApiConfigured(),
     isApex: domain ? isApexDomain(domain) : false,
     fallbackSubdomain: `${row.slug}.${getPlatformRootDomain()}`,
+    dnsTargetSource,
+    dnsConfigMessage: dnsConfigMessageFor(dnsTargetSource, domain),
+    dnsTargetChanged: opts?.dnsTargetChanged ?? null,
+    recommendedCname,
+    recommendedA,
   };
 }
 
@@ -247,6 +399,10 @@ export async function claimCustomDomain(options: {
   let status: CustomDomainStatus = "pending";
   let error: string | null = null;
   let mode: "api" | "manual" = "api";
+  let recommendedCname: string | null = null;
+  let recommendedA: string | null = null;
+  let dnsTargetSource: DnsTargetSource = "missing";
+  let misconfigured: boolean | null = null;
 
   if (isVercelDomainApiConfigured()) {
     const existing = await vercelGetProjectDomain(domain);
@@ -256,7 +412,6 @@ export async function claimCustomDomain(options: {
     } else {
       const added = await vercelAddProjectDomain(domain);
       if (!added.ok) {
-        // Domain may already be on this project (race) or another project.
         if (added.error.status === 409 || /already|conflict|taken/i.test(added.error.message)) {
           const again = await vercelGetProjectDomain(domain);
           if (again.ok) {
@@ -279,19 +434,34 @@ export async function claimCustomDomain(options: {
       }
     }
 
+    // Fetch the real per-domain DNS target immediately — never show a hardcoded guess first.
+    const targets = await fetchVercelDnsTargets(domain);
+    if (targets.ok) {
+      recommendedCname = targets.cname;
+      recommendedA = targets.a;
+      dnsTargetSource = targets.source;
+      misconfigured = targets.misconfigured;
+    } else {
+      dnsTargetSource = "missing";
+      error = targets.error;
+      misconfigured = targets.misconfigured;
+    }
+
     status = vercelVerified ? "verifying" : "pending";
   } else {
     mode = "manual";
     status = "manual";
+    dnsTargetSource = "manual";
     error =
-      "Automatic domain registration is not configured. Follow the DNS steps, then contact support to finish connecting.";
+      "Automatic domain registration is not configured. Contact support for the exact DNS record — do not guess a CNAME value.";
   }
 
-  const verificationPayload = {
+  const verificationPayload: StoredDnsVerification = {
     challenges,
     mode,
-    recommendedCname: VERCEL_DEFAULT_CNAME,
-    recommendedA: VERCEL_DEFAULT_A,
+    recommendedCname,
+    recommendedA,
+    dnsTargetSource,
   };
 
   const supabase = await createServiceClient();
@@ -301,7 +471,7 @@ export async function claimCustomDomain(options: {
       custom_domain: domain,
       custom_domain_status: status,
       custom_domain_vercel_verified: vercelVerified,
-      custom_domain_misconfigured: null,
+      custom_domain_misconfigured: misconfigured,
       custom_domain_last_checked_at: new Date().toISOString(),
       custom_domain_error: error,
       custom_domain_verification: verificationPayload,
@@ -325,12 +495,16 @@ export async function claimCustomDomain(options: {
     targetBusinessId: options.businessId,
     targetType: "business",
     targetId: options.businessId,
-    metadata: { domain, status, mode },
+    metadata: { domain, status, mode, dnsTargetSource, recommendedCname, recommendedA },
   });
 
   const next = await loadBusinessDomainState(options.businessId);
   if (!next) throw new Error("Failed to reload domain state.");
-  return toPublicDomainState(next);
+  return toPublicDomainState(next, {
+    recommendedCname,
+    recommendedA,
+    dnsTargetSource,
+  });
 }
 
 export async function checkCustomDomainStatus(options: {
@@ -348,29 +522,62 @@ export async function checkCustomDomainStatus(options: {
     throw new Error("No custom domain is set up yet.");
   }
   const domain = row.custom_domain;
+  const previous = storedVerification(row);
 
   let challenges = verificationFromRow(row);
   let vercelVerified = row.custom_domain_vercel_verified;
   let misconfigured: boolean | null = row.custom_domain_misconfigured;
   let status: CustomDomainStatus = row.custom_domain_status ?? "pending";
   let error: string | null = null;
-  let recommendedCname = VERCEL_DEFAULT_CNAME;
-  let recommendedA = VERCEL_DEFAULT_A;
+  let recommendedCname: string | null =
+    typeof previous.recommendedCname === "string" ? previous.recommendedCname : null;
+  let recommendedA: string | null =
+    typeof previous.recommendedA === "string" ? previous.recommendedA : null;
+  let dnsTargetSource: DnsTargetSource = previous.dnsTargetSource ?? "missing";
+  let dnsTargetChanged: DnsTargetChange | null = null;
 
   if (!isVercelDomainApiConfigured()) {
     status = "manual";
+    dnsTargetSource = "manual";
     error =
       "Automatic checks are unavailable. Contact support after you add the DNS records — they will confirm the connection.";
   } else {
-    const config = await vercelGetDomainConfig(domain);
-    if (config.ok) {
-      misconfigured = config.data.misconfigured === true;
-      const cname = config.data.recommendedCNAME?.find((r) => r.rank === 1)?.value
-        || config.data.recommendedCNAME?.[0]?.value;
-      const a = config.data.recommendedIPv4?.find((r) => r.rank === 1)?.value?.[0]
-        || config.data.recommendedIPv4?.[0]?.value?.[0];
-      if (cname) recommendedCname = cname;
-      if (a) recommendedA = a;
+    const targets = await fetchVercelDnsTargets(domain);
+    if (targets.ok) {
+      if (
+        !isApexDomain(domain) &&
+        targets.cname &&
+        recommendedCname &&
+        targets.cname !== recommendedCname
+      ) {
+        dnsTargetChanged = {
+          record: "CNAME",
+          from: recommendedCname,
+          to: targets.cname,
+          message: `Our host updated the required CNAME target from ${recommendedCname} to ${targets.cname}. Update your DNS record to the new value — the old one will not finish connecting.`,
+        };
+      }
+      if (
+        isApexDomain(domain) &&
+        targets.a &&
+        recommendedA &&
+        targets.a !== recommendedA
+      ) {
+        dnsTargetChanged = {
+          record: "A",
+          from: recommendedA,
+          to: targets.a,
+          message: `Our host updated the required A-record target from ${recommendedA} to ${targets.a}. Update your DNS record to the new value.`,
+        };
+      }
+      recommendedCname = targets.cname;
+      recommendedA = targets.a;
+      dnsTargetSource = targets.source;
+      misconfigured = targets.misconfigured;
+    } else {
+      dnsTargetSource = recommendedCname || recommendedA ? dnsTargetSource : "missing";
+      error = targets.error;
+      misconfigured = targets.misconfigured;
     }
 
     let projectDomain: VercelProjectDomain | null = null;
@@ -388,7 +595,6 @@ export async function checkCustomDomainStatus(options: {
         vercelVerified = verified.data.verified === true;
         challenges = verified.data.verification ?? challenges;
       } else if (verified.error.status === 400) {
-        // TXT missing or mismatched — expected while DNS propagates
         error = verified.error.message;
         status = "pending";
       }
@@ -396,10 +602,11 @@ export async function checkCustomDomainStatus(options: {
 
     if (vercelVerified && misconfigured === false) {
       status = "connected";
-      error = null;
+      if (!dnsTargetChanged) error = null;
     } else if (vercelVerified && misconfigured === true) {
       status = "verifying";
       error =
+        error ||
         "Domain ownership looks good, but DNS is not pointing at ShootPortal yet (or Cloudflare proxy is on). Keep the CNAME/A record as shown, DNS-only.";
     } else if (!vercelVerified) {
       status = "pending";
@@ -408,6 +615,10 @@ export async function checkCustomDomainStatus(options: {
           "Waiting for DNS. This often takes a few minutes and can take up to 48 hours — that is normal, not a failure.";
       }
     }
+  }
+
+  if (dnsTargetChanged) {
+    error = dnsTargetChanged.message;
   }
 
   const supabase = await createServiceClient();
@@ -423,8 +634,9 @@ export async function checkCustomDomainStatus(options: {
         challenges,
         recommendedCname,
         recommendedA,
+        dnsTargetSource,
         mode: isVercelDomainApiConfigured() ? "api" : "manual",
-      },
+      } satisfies StoredDnsVerification,
       updated_at: new Date().toISOString(),
     })
     .eq("id", options.businessId);
@@ -436,12 +648,26 @@ export async function checkCustomDomainStatus(options: {
     targetBusinessId: options.businessId,
     targetType: "business",
     targetId: options.businessId,
-    metadata: { domain, status, vercelVerified, misconfigured },
+    metadata: {
+      domain,
+      status,
+      vercelVerified,
+      misconfigured,
+      dnsTargetSource,
+      recommendedCname,
+      recommendedA,
+      dnsTargetChanged,
+    },
   });
 
   const next = await loadBusinessDomainState(options.businessId);
   if (!next) throw new Error("Failed to reload domain state.");
-  return toPublicDomainState(next, { recommendedCname, recommendedA });
+  return toPublicDomainState(next, {
+    recommendedCname,
+    recommendedA,
+    dnsTargetSource,
+    dnsTargetChanged,
+  });
 }
 
 export async function removeCustomDomain(options: {
@@ -462,7 +688,6 @@ export async function removeCustomDomain(options: {
     const removed = await vercelRemoveProjectDomain(domain);
     if (!removed.ok && removed.error.status !== 404) {
       console.warn("[custom-domain] Vercel remove failed:", removed.error.message);
-      // Still clear DB so tenant falls back; operator can clean Vercel manually.
     }
   }
 
@@ -498,4 +723,4 @@ export async function removeCustomDomain(options: {
   return toPublicDomainState(next);
 }
 
-export { EntitlementError };
+export { EntitlementError, VERCEL_DEFAULT_A, VERCEL_DEFAULT_CNAME };
