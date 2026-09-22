@@ -18,8 +18,13 @@ import {
   contrastRatio,
   isSafeBrandAssetUrl,
   isSafeCssColor,
+  relativeLuminance,
   sanitizeCssColor,
 } from "@/lib/brand-color";
+import {
+  normalizeLandingLogoSizePx,
+  resolveLandingLogoHeightPx,
+} from "@/lib/brand-logo-size";
 
 export type { LandingAssets, LandingScreenshots };
 
@@ -197,6 +202,23 @@ export type LandingHeroContent = {
   overlayOpacity: number | null;
 };
 
+/**
+ * Landing-only chrome. NEVER applied to the signed-in portal app nav
+ * (`components/layout/header.tsx` stays on `bg-card` / theme tokens).
+ * Empty colors → legacy #0F172A (unchanged look for businesses that never set them).
+ */
+export type LandingChrome = {
+  /** Sticky public landing header / nav bar background. */
+  headerBgColor: string;
+  /** Hero section base fill (behind media / when media is none). */
+  heroBgColor: string;
+  /**
+   * Landing header logo height in px. null → default 32 (prior `h-8`).
+   * Independent of portal `business.portalLogoSizePx`.
+   */
+  logoHeightPx: number | null;
+};
+
 export type LandingHowItWorksStep = {
   label: string;
   description: string;
@@ -222,6 +244,8 @@ export type LandingSectionVisibility = {
 
 export type LandingContent = {
   hero: LandingHeroContent;
+  /** Public landing chrome only — never bleeds into portal app shell. */
+  chrome: LandingChrome;
   intro: { businessDescription: string };
   industries: string[];
   howItWorks: LandingHowItWorksStep[];
@@ -297,6 +321,11 @@ export const EMPTY_LANDING_CONTENT: LandingContent = {
     heroImageUrl: "",
     overlayColor: "",
     overlayOpacity: null,
+  },
+  chrome: {
+    headerBgColor: "",
+    heroBgColor: "",
+    logoHeightPx: null,
   },
   intro: { businessDescription: "" },
   industries: [],
@@ -484,6 +513,8 @@ function normalizeHeroMediaType(raw: unknown): "" | LandingHeroMediaType {
 export function mergeLandingContent(stored?: Partial<LandingContent> | null): LandingContent {
   const s = stored ?? {};
   const hero = (s.hero && typeof s.hero === "object" ? s.hero : {}) as Partial<LandingHeroContent>;
+  const chromeRaw =
+    s.chrome && typeof s.chrome === "object" ? (s.chrome as Partial<LandingChrome>) : {};
   const intro = (s.intro && typeof s.intro === "object" ? s.intro : {}) as {
     businessDescription?: unknown;
   };
@@ -504,6 +535,15 @@ export function mergeLandingContent(stored?: Partial<LandingContent> | null): La
       ? sanitizePlainText(imageRaw, LANDING_LIMITS.heroImageUrl)
       : "";
 
+  const headerBgRaw =
+    typeof chromeRaw.headerBgColor === "string" ? chromeRaw.headerBgColor.trim() : "";
+  const headerBgColor =
+    headerBgRaw && isSafeCssColor(headerBgRaw) ? sanitizeCssColor(headerBgRaw, "") : "";
+  const heroBgRaw =
+    typeof chromeRaw.heroBgColor === "string" ? chromeRaw.heroBgColor.trim() : "";
+  const heroBgColor =
+    heroBgRaw && isSafeCssColor(heroBgRaw) ? sanitizeCssColor(heroBgRaw, "") : "";
+
   return {
     hero: {
       headline: sanitizePlainText(hero.headline, LANDING_LIMITS.headline),
@@ -515,6 +555,11 @@ export function mergeLandingContent(stored?: Partial<LandingContent> | null): La
       heroImageUrl,
       overlayColor,
       overlayOpacity: normalizeOverlayOpacity(hero.overlayOpacity),
+    },
+    chrome: {
+      headerBgColor,
+      heroBgColor,
+      logoHeightPx: normalizeLandingLogoSizePx(chromeRaw.logoHeightPx),
     },
     intro: {
       businessDescription: sanitizeMultiline(
@@ -657,6 +702,15 @@ export function usesLegacyHeroOverlay(hero: LandingHeroContent): boolean {
  */
 export const HERO_OVERLAY_CONTRAST_MIN = 4.5;
 
+/** WCAG AA for landing header nav labels — same 4.5:1 bar as hero overlay warnings. */
+export const LANDING_HEADER_UI_CONTRAST_MIN = 4.5;
+
+/**
+ * Logo-vs-header heuristic: when header luminance is below this, treat as “dark”
+ * and warn that a dark logo may disappear (we cannot sample the PNG server-side).
+ */
+export const LANDING_HEADER_DARK_LUMINANCE_MAX = 0.22;
+
 function parseOverlayRgb(value: string): [number, number, number] | null {
   const v = value.trim();
   const hex = v.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
@@ -690,6 +744,62 @@ export function heroOverlayLeavesHeadlineUnreadable(args: {
     Math.round(255 + (overlay[2] - 255) * t),
   ];
   return contrastRatio(composite, [255, 255, 255]) < HERO_OVERLAY_CONTRAST_MIN;
+}
+
+const WHITE_RGB: [number, number, number] = [255, 255, 255];
+const INK_RGB: [number, number, number] = [15, 23, 42];
+
+/** Pick white or ink nav text for a landing header background. */
+export function landingHeaderNavForeground(headerBg: string): {
+  css: string;
+  rgb: [number, number, number];
+  ratio: number;
+} {
+  const bg = parseOverlayRgb(sanitizeCssColor(headerBg, "#0F172A")) ?? INK_RGB;
+  const whiteRatio = contrastRatio(bg, WHITE_RGB);
+  const inkRatio = contrastRatio(bg, INK_RGB);
+  if (whiteRatio >= inkRatio) {
+    return { css: "#ffffff", rgb: WHITE_RGB, ratio: whiteRatio };
+  }
+  return { css: "#0F172A", rgb: INK_RGB, ratio: inkRatio };
+}
+
+/**
+ * True when “Request a Shoot” / muted nav labels would fail WCAG AA UI contrast (3:1)
+ * even after picking the better of white vs ink.
+ */
+export function landingHeaderNavContrastFails(headerBg: string): boolean {
+  const { ratio } = landingHeaderNavForeground(headerBg);
+  return ratio + 1e-6 < LANDING_HEADER_UI_CONTRAST_MIN;
+}
+
+/**
+ * Logo-vs-header: warn when both surfaces are dark.
+ * Pass `logoLuminance` from a client canvas sample when available; otherwise
+ * fall back to path heuristics (navy/dark/black vs white/light).
+ * Threshold: relative luminance ≤ LANDING_HEADER_DARK_LUMINANCE_MAX (0.22).
+ */
+export function landingHeaderLogoVisibilityWarns(args: {
+  headerBg: string;
+  logoSrc: string;
+  /** 0–1 average relative luminance of the logo (transparent pixels ignored). */
+  logoLuminance?: number | null;
+}): boolean {
+  const bg = parseOverlayRgb(sanitizeCssColor(args.headerBg, "#0F172A"));
+  if (!bg) return false;
+  const headerLum = relativeLuminance(bg);
+  if (headerLum > LANDING_HEADER_DARK_LUMINANCE_MAX) return false;
+
+  if (typeof args.logoLuminance === "number" && Number.isFinite(args.logoLuminance)) {
+    return args.logoLuminance <= LANDING_HEADER_DARK_LUMINANCE_MAX;
+  }
+
+  const src = args.logoSrc.toLowerCase();
+  if (src.includes("white") || src.includes("light") || src.includes("logo-w")) return false;
+  if (src.includes("navy") || src.includes("dark") || src.includes("black") || src.includes("logo-n")) {
+    return true;
+  }
+  return false;
 }
 
 export type LandingServiceCard = {
@@ -728,6 +838,17 @@ export type ResolvedLandingPage = {
   heroOverlayColor: string;
   /** 0–100 when custom; ignored when heroOverlayLegacy. */
   heroOverlayOpacity: number;
+  /**
+   * Landing header background. Always a concrete color for render
+   * (legacy default #0F172A when unset). Portal app nav never reads this.
+   */
+  headerBgColor: string;
+  headerBgLegacy: boolean;
+  /** Hero section base fill behind media. */
+  heroBgColor: string;
+  heroBgLegacy: boolean;
+  /** Resolved landing header logo height (px). */
+  logoHeightPx: number;
   services: LandingServiceCard[];
   assets: LandingAssets;
 };
@@ -796,6 +917,16 @@ export function resolveLandingPage(input: {
       ? 80
       : landing.hero.overlayOpacity;
 
+  const headerBgLegacy = !landing.chrome.headerBgColor.trim();
+  const headerBgColor = headerBgLegacy
+    ? "#0F172A"
+    : sanitizeCssColor(landing.chrome.headerBgColor, "#0F172A");
+  const heroBgLegacy = !landing.chrome.heroBgColor.trim();
+  const heroBgColor = heroBgLegacy
+    ? "#0F172A"
+    : sanitizeCssColor(landing.chrome.heroBgColor, "#0F172A");
+  const logoHeightPx = resolveLandingLogoHeightPx(landing.chrome.logoHeightPx);
+
   const social = landing.social;
   const hasSocial = Object.values(social).some((v) => Boolean(v));
 
@@ -826,6 +957,11 @@ export function resolveLandingPage(input: {
     heroOverlayLegacy,
     heroOverlayColor,
     heroOverlayOpacity,
+    headerBgColor,
+    headerBgLegacy,
+    heroBgColor,
+    heroBgLegacy,
+    logoHeightPx,
     services: input.services,
     assets: {
       heroVideoId: landing.heroVideoId,

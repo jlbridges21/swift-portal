@@ -10,7 +10,7 @@ const LOGO_BUCKET = "business-logos";
 /** Stay under Vercel’s 4.5MB serverless body cap so the route actually runs. */
 const MAX_BYTES = 4 * 1024 * 1024;
 
-export const BRAND_ASSET_KINDS = ["logo", "emailLogo", "favicon", "heroImage", "howItWorksImage"] as const;
+export const BRAND_ASSET_KINDS = ["logo", "emailLogo", "favicon", "heroImage", "howItWorksImage", "landingLogo"] as const;
 export type BrandAssetKind = (typeof BRAND_ASSET_KINDS)[number];
 
 const KIND_CONFIG: Record<
@@ -67,6 +67,14 @@ const KIND_CONFIG: Record<
     resize: true,
     uniquePath: true,
   },
+  landingLogo: {
+    pathBase: "landing-logo",
+    field: null,
+    types: new Set(["image/png", "image/jpeg", "image/webp"]),
+    exts: ["jpg", "jpeg", "png", "webp"],
+    resize: false,
+    uniquePath: true,
+  },
 };
 
 function parseKind(value: FormDataEntryValue | null): BrandAssetKind {
@@ -75,7 +83,8 @@ function parseKind(value: FormDataEntryValue | null): BrandAssetKind {
     value === "favicon" ||
     value === "logo" ||
     value === "heroImage" ||
-    value === "howItWorksImage"
+    value === "howItWorksImage" ||
+    value === "landingLogo"
   ) {
     return value;
   }

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-export type BrandAssetKind = "logo" | "emailLogo" | "favicon" | "heroImage" | "howItWorksImage";
+export type BrandAssetKind = "logo" | "emailLogo" | "favicon" | "heroImage" | "howItWorksImage" | "landingLogo";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
@@ -46,6 +46,13 @@ const KIND_UI: Record<
     label: "Step image",
     accept: "image/png,image/jpeg,image/webp",
     hint: "Optional. PNG, JPEG, or WebP, under 4MB. Oversized images are resized. Paste an https URL or upload.",
+    types: new Set(["image/png", "image/jpeg", "image/webp"]),
+    extraExt: new Set(),
+  },
+  landingLogo: {
+    label: "Landing header logo",
+    accept: "image/png,image/jpeg,image/webp",
+    hint: "Optional. Transparent PNG recommended on dark headers. Under 4MB.",
     types: new Set(["image/png", "image/jpeg", "image/webp"]),
     extraExt: new Set(),
   },

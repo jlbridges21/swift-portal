@@ -601,7 +601,7 @@ export function CustomDomainSettingsCard({
                   <p className="font-medium">Connected</p>
                   <p className="mt-1">
                     Portal links in email and payments now use this domain. Sign-in, invites, password
-                    reset, and Google work as soon as DNS is live — no extra configuration.
+                    reset, and Google work as soon as DNS is live.
                   </p>
                 </div>
               ) : null}

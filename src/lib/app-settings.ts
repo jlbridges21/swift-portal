@@ -14,6 +14,7 @@ import { mergeLandingSettings, type LandingSettings } from "@/lib/landing-conten
 import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { brandingFieldsChanged, landingSettingsChanged, requireEntitlement } from "@/lib/entitlements";
 import { assertHowItWorksCount } from "@/lib/landing-content";
+import { normalizePortalLogoSizePx } from "@/lib/brand-logo-size";
 import {
   buildDefaultWorkflowSettings,
   mergeWorkflowSettings,
@@ -75,6 +76,11 @@ export interface BusinessSettings {
   phoneNumber: string;
   websiteUrl: string;
   logoUrl: string;
+  /**
+   * Portal app nav logo height for the desktop `md` breakpoint (px).
+   * Landing page logo size is separate (`landing.logoHeightPx`).
+   */
+  portalLogoSizePx: number;
   brandPrimaryColor: string;
   brandAccentColor: string;
   supportEmail: string;
@@ -306,7 +312,14 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
   return {
     notifications,
     email: { ...DEFAULT_APP_SETTINGS.email, ...(stored.email ?? {}) },
-    business: { ...DEFAULT_APP_SETTINGS.business, ...(stored.business ?? {}) },
+    business: {
+      ...DEFAULT_APP_SETTINGS.business,
+      ...(stored.business ?? {}),
+      portalLogoSizePx: normalizePortalLogoSizePx(
+        (stored.business as { portalLogoSizePx?: unknown } | undefined)?.portalLogoSizePx ??
+          DEFAULT_APP_SETTINGS.business.portalLogoSizePx
+      ),
+    },
     proposals: {
       ...DEFAULT_APP_SETTINGS.proposals,
       ...(stored.proposals ?? {}),

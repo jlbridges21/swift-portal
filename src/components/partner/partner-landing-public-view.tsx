@@ -7,6 +7,7 @@ import { BrandProvider } from "@/components/brand/brand-provider";
 import { SafeBrandImage } from "@/components/partner/safe-brand-image";
 import { PartnerLandingPhoto } from "@/components/partner/partner-landing-photo";
 import { PLATFORM_BUSINESS_DEFAULTS, type PortalBrand } from "@/lib/portal-brand";
+import { PORTAL_LOGO_SIZE } from "@/lib/brand-logo-size";
 import type { ResolvedPartnerLandingContent } from "@/lib/partner-landing-resolve";
 
 /** ShootPortal chrome for partner landings — client-safe (no host/headers). */
@@ -16,6 +17,7 @@ function shootPortalBrand(): PortalBrand {
     name: b.businessName,
     portalName: b.portalName,
     logoUrl: b.logoUrl,
+    logoSizePx: PORTAL_LOGO_SIZE.default,
     primaryColor: b.brandPrimaryColor,
     accentColor: b.brandAccentColor,
     websiteUrl: b.websiteUrl,

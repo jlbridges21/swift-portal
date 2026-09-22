@@ -4,11 +4,13 @@ import { createContext, useContext } from "react";
 import { brandThemeCss, sanitizeCssColor } from "@/lib/brand-color";
 import { PLATFORM_BUSINESS_DEFAULTS, type PortalBrand } from "@/lib/portal-brand";
 import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
+import { PORTAL_LOGO_SIZE } from "@/lib/brand-logo-size";
 
 const DEFAULT_BRAND: PortalBrand = {
   name: PLATFORM_BUSINESS_DEFAULTS.businessName,
   portalName: PLATFORM_BUSINESS_DEFAULTS.portalName,
   logoUrl: PLATFORM_BUSINESS_DEFAULTS.logoUrl,
+  logoSizePx: PORTAL_LOGO_SIZE.default,
   primaryColor: PLATFORM_BUSINESS_DEFAULTS.brandPrimaryColor,
   accentColor: PLATFORM_BUSINESS_DEFAULTS.brandAccentColor,
   websiteUrl: PLATFORM_BUSINESS_DEFAULTS.websiteUrl,

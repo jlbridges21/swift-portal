@@ -1,5 +1,6 @@
 import { getAppSettings } from "@/lib/app-settings";
 import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS, type PortalBrand } from "@/lib/portal-brand";
+import { PORTAL_LOGO_SIZE } from "@/lib/brand-logo-size";
 import { metadataFromBusiness, SITE } from "@/lib/site-metadata";
 import { getPublicHostContext, type PublicHostContext } from "@/lib/host-resolution";
 import type { Metadata } from "next";
@@ -10,6 +11,7 @@ export function platformPortalBrand(): PortalBrand {
     name: b.businessName,
     portalName: b.portalName,
     logoUrl: b.logoUrl,
+    logoSizePx: PORTAL_LOGO_SIZE.default,
     primaryColor: b.brandPrimaryColor,
     accentColor: b.brandAccentColor,
     websiteUrl: b.websiteUrl,

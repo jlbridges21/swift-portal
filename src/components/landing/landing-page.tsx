@@ -14,7 +14,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import type { PortalBrand } from "@/lib/portal-brand";
 import type { ResolvedLandingPage } from "@/lib/landing-content";
+import { landingHeaderNavForeground } from "@/lib/landing-content";
 import { LANDING_FEATURE_ICON_MAP } from "@/lib/landing-feature-icons";
+import { cn } from "@/lib/utils";
 import {
   CheckCircle2,
   ArrowRight,
@@ -99,20 +101,38 @@ function RequestShootButton({
 }
 
 function LandingLogo({
-  className = "h-8 w-auto",
+  heightPx,
   href,
   src,
   name,
+  onDarkHeader,
 }: {
-  className?: string;
+  heightPx: number;
   href: string;
   src: string;
   name: string;
+  onDarkHeader: boolean;
 }) {
-  if (!src) return <span className="text-sm font-semibold text-white">{name}</span>;
+  if (!src) {
+    return (
+      <span
+        className={cn("text-sm font-semibold", onDarkHeader ? "text-white" : "text-[#0F172A]")}
+      >
+        {name}
+      </span>
+    );
+  }
   return (
     <a href={href || undefined} aria-label={`Go to ${name} website`} className="inline-flex items-center">
-      <Image src={src} alt={name} width={180} height={52} className={className} priority />
+      <Image
+        src={src}
+        alt={name}
+        width={Math.round(heightPx * 3.5)}
+        height={heightPx}
+        className="w-auto object-contain object-left"
+        style={{ height: heightPx, width: "auto", maxWidth: Math.min(280, heightPx * 4) }}
+        priority
+      />
     </a>
   );
 }
@@ -177,17 +197,42 @@ export function LandingPage({
       ? page.industries[0] ?? ""
       : `${page.industries.slice(0, -1).join(", ")}, and ${page.industries[page.industries.length - 1]}`;
 
+  // Landing-only chrome — never read by portal app Header (bg-card).
+  const headerBg = page.headerBgColor;
+  const heroBg = page.heroBgColor;
+  const navFg = landingHeaderNavForeground(headerBg);
+  const navMuted =
+    navFg.css === "#ffffff" ? "rgb(203, 213, 225)" /* slate-300 */ : "rgb(71, 85, 105)"; /* slate-600 */
+  const headerOnDark = navFg.css === "#ffffff";
+  const headerMinH = Math.max(64, page.logoHeightPx + 24);
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#334155]">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0F172A]/90 backdrop-blur-xl safe-area-top safe-area-x">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <LandingLogo href={website} src={headerLogo} name={brand.name} />
+      <header
+        className="sticky top-0 z-50 border-b backdrop-blur-xl safe-area-top safe-area-x"
+        style={{
+          backgroundColor: overlayRgba(headerBg, 0.9),
+          borderColor: headerOnDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)",
+        }}
+      >
+        <div
+          className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8"
+          style={{ minHeight: headerMinH }}
+        >
+          <LandingLogo
+            href={website}
+            src={headerLogo}
+            name={brand.name}
+            heightPx={page.logoHeightPx}
+            onDarkHeader={headerOnDark}
+          />
 
           <nav className="flex items-center gap-2 sm:gap-3">
             {brand.websiteUrl ? (
               <a
                 href={brand.websiteUrl}
-                className="hidden items-center gap-1 text-sm font-medium text-slate-300 transition hover:text-white sm:flex"
+                className="hidden items-center gap-1 text-sm font-medium transition sm:flex"
+                style={{ color: navMuted }}
               >
                 <Home className="h-4 w-4" />
                 Main Website
@@ -195,7 +240,12 @@ export function LandingPage({
             ) : null}
 
             <Link href="/request">
-              <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hover:bg-black/5"
+                style={{ color: navFg.css }}
+              >
                 Request a Shoot
               </Button>
             </Link>
@@ -210,7 +260,10 @@ export function LandingPage({
       </header>
 
       <main>
-        <section className="relative flex min-h-[92vh] items-center overflow-hidden bg-[#0F172A]">
+        <section
+          className="relative flex min-h-[92vh] items-center overflow-hidden"
+          style={{ backgroundColor: heroBg }}
+        >
           <div className="absolute inset-0">
             {page.heroMediaKind === "showreel" && page.showreelVideoId ? (
               <iframe
@@ -554,12 +607,15 @@ export function LandingPage({
 
         <section className="bg-gradient-to-br from-[#0F172A] to-slate-900 py-24 sm:py-32">
           <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
-            <LandingLogo
-              className="mx-auto mb-8 h-12 w-auto opacity-95"
-              href={website}
-              src={page.assets.logoStackedWhite || headerLogo}
-              name={brand.name}
-            />
+            <div className="mx-auto mb-8 flex justify-center opacity-95">
+              <LandingLogo
+                href={website}
+                src={page.assets.logoStackedWhite || headerLogo}
+                name={brand.name}
+                heightPx={Math.max(48, page.logoHeightPx)}
+                onDarkHeader
+              />
+            </div>
 
             <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
               Ready to request your next shoot?

@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { Loader2, RotateCcw, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ColorField } from "@/components/ui/color-field";
+import { LogoSizeSlider } from "@/components/admin/logo-size-slider";
+import { PORTAL_LOGO_SIZE } from "@/lib/brand-logo-size";
 import { SettingsTabNav } from "@/components/admin/settings-tab-nav";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
@@ -192,25 +194,22 @@ function BrandSurfacePreview({
       className="overflow-hidden rounded-xl border scroll-mt-24"
       style={{ background: theme.background, borderColor: theme.border, color: theme.foreground }}
     >
-      <div
-        className="flex items-center gap-3 border-b px-4 py-3"
-        style={{ background: theme.card, borderColor: theme.border }}
-      >
         <div
-          className="flex h-10 w-10 items-center justify-center rounded-lg shadow-sm"
-          style={{ backgroundColor: theme.primary }}
+          className="flex items-center gap-3 border-b px-4 py-3"
+          style={{ background: theme.card, borderColor: theme.border }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={logoUrl} alt="" className="h-7 w-7 object-contain" />
-        </div>
-        <div className="min-w-0">
-          <p className="truncate font-semibold" style={{ color: theme.heading }}>
-            {portalName}
-          </p>
-          <p className="truncate text-[10px] font-medium uppercase tracking-wider" style={{ color: theme.muted }}>
-            {businessName}
-          </p>
-        </div>
+          <div className="flex h-10 max-w-[120px] items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={logoUrl} alt="" className="max-h-10 w-auto max-w-full object-contain object-left" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate font-semibold" style={{ color: theme.heading }}>
+              {portalName}
+            </p>
+            <p className="truncate text-[10px] font-medium uppercase tracking-wider" style={{ color: theme.muted }}>
+              {businessName}
+            </p>
+          </div>
         <span
           className="ml-auto rounded-lg px-3 py-1.5 text-sm font-medium"
           style={{ background: theme.accent, color: theme.accentForeground }}
@@ -571,6 +570,20 @@ export function AdminSettingsClient({
                       emailLogoUrl: settings.business.emailLogoUrl || logoUrl,
                     })
                   }
+                />
+                <p className="text-xs text-muted">
+                  Prefer a transparent PNG so the logo sits cleanly on the light grey portal nav. If
+                  your file has a white or solid background, that background will show — crop it out
+                  of the image file (we do not add a brand-color tile behind the logo).
+                </p>
+                <LogoSizeSlider
+                  id="portalLogoSizePx"
+                  label="Portal nav logo size"
+                  value={settings.business.portalLogoSizePx ?? PORTAL_LOGO_SIZE.default}
+                  min={PORTAL_LOGO_SIZE.min}
+                  max={PORTAL_LOGO_SIZE.max}
+                  help={`Height for the desktop nav logo (${PORTAL_LOGO_SIZE.min}–${PORTAL_LOGO_SIZE.max}px). Mobile uses 80% of this size; large breakpoint uses 115% (capped at ${PORTAL_LOGO_SIZE.max}px). Landing page logo size is set separately under Client Landing Page.`}
+                  onChange={(portalLogoSizePx) => patchBusiness({ portalLogoSizePx })}
                 />
                 {(() => {
                   const logo = settings.business.logoUrl;

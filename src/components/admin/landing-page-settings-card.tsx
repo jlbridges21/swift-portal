@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { LandingFeatureIconPicker } from "@/components/admin/landing-feature-icon-picker";
 import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
+import { LogoSizeSlider } from "@/components/admin/logo-size-slider";
 import { PartnerBrandColorField } from "@/components/partner/partner-brand-color-field";
 import { LandingPage } from "@/components/landing/landing-page";
 import { LandingEditorPreviewFrame } from "@/components/landing/landing-editor-preview-frame";
@@ -25,6 +26,10 @@ import {
   resolveHeroMediaKind,
   heroOverlayLeavesHeadlineUnreadable,
   HERO_OVERLAY_CONTRAST_MIN,
+  LANDING_HEADER_UI_CONTRAST_MIN,
+  LANDING_HEADER_DARK_LUMINANCE_MAX,
+  landingHeaderNavContrastFails,
+  landingHeaderLogoVisibilityWarns,
   type LandingSettings,
   type LandingHowItWorksStep,
   type LandingFeatureCard,
@@ -32,7 +37,10 @@ import {
   type LandingSocialLinks,
   type LandingSectionVisibility,
   type LandingHeroMediaType,
+  type LandingChrome,
 } from "@/lib/landing-content";
+import { LANDING_LOGO_SIZE, resolveLandingLogoHeightPx } from "@/lib/brand-logo-size";
+import { sampleImageAverageLuminance } from "@/lib/sample-image-luminance";
 import { ChevronDown, ChevronUp, ExternalLink, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 function sliceDirty(a: unknown, b: unknown): boolean {
@@ -127,6 +135,7 @@ export function LandingPageSettingsCard({
   const saved = baselineLanding ?? landing;
 
   const dirtyHero = sliceDirty(landing.hero, saved.hero);
+  const dirtyChrome = sliceDirty(landing.chrome, saved.chrome);
   const dirtyAbout = sliceDirty(landing.intro, saved.intro);
   const dirtyIndustries =
     sliceDirty(landing.industries, saved.industries) ||
@@ -162,6 +171,28 @@ export function LandingPageSettingsCard({
     overlayOpacity: overlayOpacityForEditor,
   });
 
+  const headerBgForEditor = landing.chrome.headerBgColor.trim() || "#0F172A";
+  const heroBgForEditor = landing.chrome.heroBgColor.trim() || "#0F172A";
+  const headerNavContrastFail = landingHeaderNavContrastFails(headerBgForEditor);
+  const headerLogoSrc = landing.logoHeader || brand.logoUrl;
+  const [logoLum, setLogoLum] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void sampleImageAverageLuminance(headerLogoSrc).then((lum) => {
+      if (!cancelled) setLogoLum(lum);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [headerLogoSrc]);
+
+  const logoVisibilityWarn = landingHeaderLogoVisibilityWarns({
+    headerBg: headerBgForEditor,
+    logoSrc: headerLogoSrc,
+    logoLuminance: logoLum,
+  });
+
   const draftPage = useMemo(() => {
     const merged = mergeLandingSettings(landing);
     return resolveLandingPage({
@@ -180,6 +211,10 @@ export function LandingPageSettingsCard({
 
   function patchHero(patch: Partial<LandingSettings["hero"]>) {
     onChange({ ...landing, hero: { ...landing.hero, ...patch } });
+  }
+
+  function patchChrome(patch: Partial<LandingChrome>) {
+    onChange({ ...landing, chrome: { ...landing.chrome, ...patch } });
   }
 
   function setMediaType(next: LandingHeroMediaType) {
@@ -522,6 +557,74 @@ export function LandingPageSettingsCard({
                   ) : null}
                 </div>
               ) : null}
+            </div>
+          </SettingsCollapsible>
+
+          <SettingsCollapsible
+            id="landing-section-chrome"
+            title="Header & colors"
+            description="Landing page only — does not change the signed-in portal nav."
+            defaultOpen={false}
+            storageKey="admin-settings-landing-chrome"
+            dirty={dirtyChrome}
+          >
+            <div className="space-y-4">
+              <p className="rounded-md border border-border bg-subtle/50 px-3 py-2 text-xs text-muted">
+                These colors apply only to your public landing page (
+                <code className="text-[11px]">{"{slug}"}.shootportal.app</code> / custom domain).
+                The signed-in portal navigation bar stays light grey for every business.
+              </p>
+              <PartnerBrandColorField
+                id="landing-header-bg"
+                label="Header / nav background"
+                value={landing.chrome.headerBgColor}
+                fallback="#0F172A"
+                help="Behind Request a Shoot and Client Login."
+                onChange={(v) => patchChrome({ headerBgColor: v })}
+                onReset={() => patchChrome({ headerBgColor: "" })}
+              />
+              {headerNavContrastFail ? (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  Header text may be hard to read: the better of white or dark ink is below{" "}
+                  {LANDING_HEADER_UI_CONTRAST_MIN}:1 contrast (WCAG AA) on this background. Choose a
+                  darker or lighter header color.
+                </p>
+              ) : null}
+              {logoVisibilityWarn ? (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  Your logo looks dark on this dark header (luminance ≤{" "}
+                  {LANDING_HEADER_DARK_LUMINANCE_MAX}). Use a light or transparent logo so it stays
+                  visible.
+                </p>
+              ) : null}
+              <PartnerBrandColorField
+                id="landing-hero-bg"
+                label="Hero background"
+                value={landing.chrome.heroBgColor}
+                fallback="#0F172A"
+                help="Base fill behind hero media (and when media is set to none)."
+                onChange={(v) => patchChrome({ heroBgColor: v })}
+                onReset={() => patchChrome({ heroBgColor: "" })}
+              />
+              <LogoSizeSlider
+                id="landing-logo-height"
+                label="Landing header logo size"
+                value={resolveLandingLogoHeightPx(landing.chrome.logoHeightPx)}
+                min={LANDING_LOGO_SIZE.min}
+                max={LANDING_LOGO_SIZE.max}
+                help={`Height of the logo in the public landing header (${LANDING_LOGO_SIZE.min}–${LANDING_LOGO_SIZE.max}px). Separate from the portal app nav logo size.`}
+                onChange={(logoHeightPx) => patchChrome({ logoHeightPx })}
+              />
+              <BrandAssetField
+                kind="landingLogo"
+                inputId="landing-logo-header"
+                value={landing.logoHeader}
+                onUrlChange={(logoHeader) => onChange({ ...landing, logoHeader })}
+              />
+              <p className="text-xs text-muted">
+                Optional landing-only logo. Leave blank to reuse your portal logo. Prefer a
+                transparent PNG on dark headers.
+              </p>
             </div>
           </SettingsCollapsible>
 

@@ -3,48 +3,47 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePortalBrand } from "@/components/brand/brand-provider";
+import { resolvePortalLogoHeightPx, type LogoSizeVariant } from "@/lib/brand-logo-size";
 import { cn } from "@/lib/utils";
 
 interface LogoProps {
   showText?: boolean;
   compact?: boolean;
-  size?: "sm" | "md" | "lg";
+  size?: LogoSizeVariant;
   href?: string;
   className?: string;
 }
 
-const sizes = {
-  sm: { box: "h-8 w-8 p-1", img: 24, text: "text-sm" },
-  md: { box: "h-10 w-10 p-1.5", img: 28, text: "text-lg" },
-  lg: { box: "h-12 w-12 p-2", img: 32, text: "text-xl" },
-};
-
 export function Logo({ showText = true, compact = false, size = "md", href = "/", className }: LogoProps) {
   const brand = usePortalBrand();
-  const s = sizes[compact ? "sm" : size];
+  const heightPx = resolvePortalLogoHeightPx(brand.logoSizePx, size, compact);
+  const textClass =
+    compact || size === "sm" ? "text-sm" : size === "lg" ? "text-xl" : "text-lg";
 
   const content = (
     <div className={cn("flex min-w-0 items-center gap-2", compact ? "gap-2" : "gap-2.5", className)}>
+      {/*
+        No brand-color tile: transparent PNGs sit on the nav bar.
+        Opaque logo files keep their own background — that is the uploaded asset.
+      */}
       <div
-        className={cn(
-          "flex shrink-0 items-center justify-center rounded-lg shadow-sm",
-          s.box
-        )}
-        style={{ backgroundColor: brand.primaryColor }}
+        className="relative flex shrink-0 items-center justify-center"
+        style={{ height: heightPx, width: "auto", maxWidth: Math.round(heightPx * 3.2) }}
       >
         <Image
           src={brand.logoUrl}
           alt={brand.name}
-          width={s.img}
-          height={s.img}
-          className="h-auto w-full object-contain"
+          width={Math.round(heightPx * 3)}
+          height={heightPx}
+          className="h-full w-auto max-w-full object-contain object-left"
+          style={{ height: heightPx, width: "auto" }}
           priority
           unoptimized={brand.logoUrl.startsWith("http")}
         />
       </div>
       {showText && (
         <div className="flex min-w-0 flex-col leading-tight">
-          <span className={cn("truncate font-semibold text-primary", compact ? "text-sm" : s.text)}>
+          <span className={cn("truncate font-semibold text-primary", compact ? "text-sm" : textClass)}>
             {brand.portalName}
           </span>
           {!compact && size !== "sm" && (

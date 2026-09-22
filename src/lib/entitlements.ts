@@ -208,6 +208,7 @@ const BRANDING_FIELDS = [
   "logoUrl",
   "emailLogoUrl",
   "faviconUrl",
+  "portalLogoSizePx",
   "brandPrimaryColor",
   "brandAccentColor",
 ] as const;

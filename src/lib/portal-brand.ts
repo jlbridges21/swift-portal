@@ -1,12 +1,15 @@
 import type { AppSettings } from "@/lib/app-settings";
 import { BRAND } from "@/lib/brand";
 import { sanitizeCssColor } from "@/lib/brand-color";
+import { normalizePortalLogoSizePx, PORTAL_LOGO_SIZE } from "@/lib/brand-logo-size";
 import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
 
 export interface PortalBrand {
   name: string;
   portalName: string;
   logoUrl: string;
+  /** Desktop nav logo height (md). Responsive sm/lg/compact scale from this. */
+  logoSizePx: number;
   primaryColor: string;
   accentColor: string;
   websiteUrl: string;
@@ -38,6 +41,7 @@ export const PLATFORM_BUSINESS_DEFAULTS: AppSettings["business"] = {
   phoneNumber: "",
   websiteUrl: "",
   logoUrl: BRAND.logoUrl,
+  portalLogoSizePx: PORTAL_LOGO_SIZE.default,
   brandPrimaryColor: "#0F172A",
   brandAccentColor: "#4F46E5",
   supportEmail: "",
@@ -61,6 +65,7 @@ export function getPortalBrandFromSettings(settings: AppSettings): PortalBrand {
     name: b.businessName || BRAND.name,
     portalName: b.portalName || BRAND.portalName,
     logoUrl: b.logoUrl || BRAND.logoUrl,
+    logoSizePx: normalizePortalLogoSizePx(b.portalLogoSizePx),
     primaryColor: sanitizeCssColor(b.brandPrimaryColor, PLATFORM_BUSINESS_DEFAULTS.brandPrimaryColor),
     accentColor: sanitizeCssColor(b.brandAccentColor, PLATFORM_BUSINESS_DEFAULTS.brandAccentColor),
     websiteUrl: b.websiteUrl || "",
