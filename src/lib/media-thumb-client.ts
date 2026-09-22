@@ -7,6 +7,9 @@ const BATCH_MAX = 48;
 /** Keep slightly under server TTL (7200s) so we refresh before the signed URL dies. */
 const CLIENT_CACHE_TTL_MS = 90 * 60 * 1000;
 
+/** Default authenticated batch endpoint. Public link pages pass their own. */
+export const DEFAULT_THUMBNAILS_ENDPOINT = "/api/media/thumbnails";
+
 type CacheEntry = { url: string; expiresAt: number };
 
 const urlCache = new Map<string, CacheEntry>();
@@ -32,8 +35,11 @@ function putCache(assetId: string, url: string | null) {
   urlCache.set(assetId, { url, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
 }
 
-async function fetchBatch(ids: string[]): Promise<Record<string, string | null>> {
-  const res = await fetch("/api/media/thumbnails", {
+async function fetchBatch(
+  ids: string[],
+  endpoint: string
+): Promise<Record<string, string | null>> {
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -47,8 +53,9 @@ async function fetchBatch(ids: string[]): Promise<Record<string, string | null>>
 /** Fetch thumbnail URLs for many assets in ≤48-id batches. Uses cache when warm. */
 export async function fetchThumbUrls(
   assetIds: string[],
-  options?: { force?: boolean }
+  options?: { force?: boolean; endpoint?: string }
 ): Promise<Record<string, string | null>> {
+  const endpoint = options?.endpoint?.trim() || DEFAULT_THUMBNAILS_ENDPOINT;
   const out: Record<string, string | null> = {};
   const need: string[] = [];
 
@@ -80,7 +87,7 @@ export async function fetchThumbUrls(
     });
 
     try {
-      const urls = await fetchBatch(chunk);
+      const urls = await fetchBatch(chunk, endpoint);
       for (const { id, resolve } of deferred) {
         const url = urls[id] ?? null;
         putCache(id, url);
@@ -105,8 +112,10 @@ export async function fetchThumbUrls(
  * covers the visible page.
  */
 export function createThumbRequestQueue(
-  onUrls: (urls: Record<string, string>) => void
+  onUrls: (urls: Record<string, string>, attemptedIds?: string[]) => void,
+  options?: { endpoint?: string }
 ): { request: (id: string) => void; flush: () => void; reset: () => void } {
+  const endpoint = options?.endpoint?.trim() || DEFAULT_THUMBNAILS_ENDPOINT;
   const pending = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -126,15 +135,16 @@ export function createThumbRequestQueue(
       if (cached) immediate[id] = cached;
       else toFetch.push(id);
     }
-    if (Object.keys(immediate).length) onUrls(immediate);
+    if (Object.keys(immediate).length) onUrls(immediate, Object.keys(immediate));
 
     if (!toFetch.length) return;
-    void fetchThumbUrls(toFetch).then((urls) => {
+    void fetchThumbUrls(toFetch, { endpoint }).then((urls) => {
       const found: Record<string, string> = {};
       for (const [id, url] of Object.entries(urls)) {
         if (url) found[id] = url;
       }
-      if (Object.keys(found).length) onUrls(found);
+      // Always settle — callers clear loading state even when signing returns nulls.
+      onUrls(found, toFetch);
     });
   };
 
@@ -143,7 +153,7 @@ export function createThumbRequestQueue(
       if (!id) return;
       const cached = getCachedThumbUrl(id);
       if (cached) {
-        onUrls({ [id]: cached });
+        onUrls({ [id]: cached }, [id]);
         return;
       }
       pending.add(id);

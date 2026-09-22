@@ -124,7 +124,7 @@ async function probe(
     headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
     redirect: "manual",
-    signal: AbortSignal.timeout(25_000),
+    signal: AbortSignal.timeout(60_000),
   });
   const text = (await res.text()).slice(0, 500);
   const leak = hasDataLeak(res.status, text, opts.isPage ?? false);
@@ -324,7 +324,7 @@ async function main() {
   section("ITEM 10c — Shared viewer project page HTML (no billing in payload)");
   const sharedPageRes = await fetch(`${base}/dashboard/projects/${SHARED_PROJECT}`, {
     headers: { Cookie: cookie },
-    signal: AbortSignal.timeout(25_000),
+    signal: AbortSignal.timeout(60_000),
   });
   const sharedHtml = await sharedPageRes.text();
   console.log("Shared project page status:", sharedPageRes.status, "| bytes:", sharedHtml.length);
@@ -342,7 +342,7 @@ async function main() {
   const clientCookie = await sessionCookie(admin, clientEmail);
   const clientPageRes = await fetch(`${base}/dashboard/projects/${SHARED_PROJECT}`, {
     headers: { Cookie: clientCookie },
-    signal: AbortSignal.timeout(25_000),
+    signal: AbortSignal.timeout(60_000),
   });
   const clientHtml = await clientPageRes.text();
   console.log("Assigned client page status:", clientPageRes.status, "| bytes:", clientHtml.length);

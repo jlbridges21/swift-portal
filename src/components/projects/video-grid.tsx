@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Clapperboard, Download, Loader2 } from "lucide-react";
@@ -38,6 +38,8 @@ export type VideoGridProps = {
   signInHref?: string;
   /** Show review entry on cards and in player (authenticated viewers with review access). */
   canAccessVideoReviews?: boolean;
+  /** Full POST URL for batch thumbnails (public link pages). */
+  thumbnailsEndpoint?: string;
   /** Admin: full card chrome (controls + review). Replaces default VideoCard + renderBelowCard. */
   renderAdminCard?: (
     entry: VideoGridEntry,
@@ -61,21 +63,29 @@ export function VideoGrid({
   compactInitialCount,
   signInHref,
   canAccessVideoReviews = false,
+  thumbnailsEndpoint,
   renderAdminCard,
   renderBelowCard,
 }: VideoGridProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
-  const thumbQueueRef = useRef(
-    createThumbRequestQueue((urls) => {
-      setThumbUrls((prev) => ({ ...prev, ...urls }));
-    })
+  const onThumbUrls = useCallback((urls: Record<string, string>) => {
+    setThumbUrls((prev) => ({ ...prev, ...urls }));
+  }, []);
+  const thumbQueue = useMemo(
+    () => createThumbRequestQueue(onThumbUrls, { endpoint: thumbnailsEndpoint }),
+    [onThumbUrls, thumbnailsEndpoint]
   );
 
-  const loadThumb = useCallback((video: MediaAsset) => {
-    if (video.media_source === "youtube") return;
-    thumbQueueRef.current.request(video.id);
-  }, []);
+  useEffect(() => () => thumbQueue.reset(), [thumbQueue]);
+
+  const loadThumb = useCallback(
+    (video: MediaAsset) => {
+      if (video.media_source === "youtube") return;
+      thumbQueue.request(video.id);
+    },
+    [thumbQueue]
+  );
 
   useEffect(() => {
     entries.forEach(({ video }) => loadThumb(video));

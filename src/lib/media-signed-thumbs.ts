@@ -42,6 +42,13 @@ export async function signMediaThumbnailUrl(
       .from(bucket)
       .createSignedUrl(asset.thumbnail_url, ttlSeconds);
     if (!error && data?.signedUrl) return data.signedUrl;
+    if (error) {
+      console.warn("[media-thumbs] thumbnail_url sign failed", {
+        assetId: asset.id,
+        path: asset.thumbnail_url,
+        message: error.message,
+      });
+    }
   }
 
   if (asset.media_type === "video") return null;
@@ -66,6 +73,15 @@ export async function signMediaThumbnailUrl(
       : undefined
   );
 
-  if (error || !data?.signedUrl) return null;
+  if (error || !data?.signedUrl) {
+    if (error) {
+      console.warn("[media-thumbs] file_path sign failed", {
+        assetId: asset.id,
+        path: asset.file_path,
+        message: error.message,
+      });
+    }
+    return null;
+  }
   return data.signedUrl;
 }

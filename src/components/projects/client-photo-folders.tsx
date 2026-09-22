@@ -20,6 +20,8 @@ interface ClientPhotoFoldersProps {
   projectId: string;
   zipApiBase?: string;
   downloadApiBase?: string;
+  /** Full POST URL for batch thumbnails (public link pages). */
+  thumbnailsEndpoint?: string;
   photos: MediaAsset[];
   folders: MediaFolder[];
   getDownloadUrl: (asset: MediaAsset, thumb?: boolean) => Promise<string | null>;
@@ -40,6 +42,7 @@ export function ClientPhotoFolders({
   projectId,
   zipApiBase,
   downloadApiBase,
+  thumbnailsEndpoint,
   photos,
   folders,
   getDownloadUrl,
@@ -100,6 +103,7 @@ export function ClientPhotoFolders({
         downloadsAllowed={downloadsAllowed}
         compactInitialCount={compactInitialCount}
         downloadApiBase={downloadApiBase}
+        thumbnailsEndpoint={thumbnailsEndpoint}
       />
     );
   }
@@ -251,6 +255,7 @@ export function ClientPhotoFolders({
         downloadsAllowed={downloadsAllowed}
         compactInitialCount={view === "all" ? compactInitialCount : undefined}
         downloadApiBase={downloadApiBase}
+        thumbnailsEndpoint={thumbnailsEndpoint}
       />
       {view === "folder" && list[0] && (
         <p className="sr-only">Folder starts with {mediaDisplayName(list[0])}</p>

@@ -21,6 +21,8 @@ interface ProjectHeroProps {
   microsite?: boolean;
   /** Optional payment status label shown beside project status */
   paymentStatus?: { label: string; variant: "default" | "success" | "warning" | "danger" };
+  /** Quiet access chip (e.g. shared viewer) — rendered with status badges */
+  accessChip?: ReactNode;
 }
 
 export function ProjectHero({
@@ -34,6 +36,7 @@ export function ProjectHero({
   audience = "client",
   microsite = false,
   paymentStatus,
+  accessChip,
 }: ProjectHeroProps) {
   const brand = usePortalBrand();
   const isMicrosite = microsite && audience === "client";
@@ -101,6 +104,7 @@ export function ProjectHero({
               {paymentStatus.label}
             </Badge>
           )}
+          {accessChip}
         </div>
         <h1
           className={`font-bold tracking-tight text-white break-words ${

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChevronLeft, ChevronRight, Download, ZoomIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SafeAreaCloseButton } from "@/components/ui/safe-area-close-button";
@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
 import { Images } from "lucide-react";
-import { createThumbRequestQueue } from "@/lib/media-thumb-client";
+import { createThumbRequestQueue, getCachedThumbUrl } from "@/lib/media-thumb-client";
 import { downloadMediaAsset } from "@/lib/download";
 import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
 import type { DownloadQuality } from "@/lib/download-quality";
@@ -29,6 +29,12 @@ interface PhotoGalleryProps {
   compactInitialCount?: number;
   /** Override download API base (public link: `/api/public/link/{token}/media/download`). */
   downloadApiBase?: string;
+  /**
+   * Full POST URL for batch thumbnails.
+   * Default `/api/media/thumbnails`. Public link:
+   * `/api/public/link/{token}/media/thumbnails`.
+   */
+  thumbnailsEndpoint?: string;
 }
 
 export function PhotoGallery({
@@ -37,28 +43,44 @@ export function PhotoGallery({
   downloadsAllowed = true,
   compactInitialCount,
   downloadApiBase,
+  thumbnailsEndpoint,
 }: PhotoGalleryProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   const [fullUrls, setFullUrls] = useState<Record<string, string>>({});
   const [loadErrors, setLoadErrors] = useState<Record<string, boolean>>({});
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
-  const thumbQueueRef = useRef(
-    createThumbRequestQueue((urls) => {
-      setThumbUrls((prev) => ({ ...prev, ...urls }));
+  const onThumbUrls = useCallback((urls: Record<string, string>, attemptedIds?: string[]) => {
+    setThumbUrls((prev) => ({ ...prev, ...urls }));
+    setLoadingIds((prev) => {
+      const next = new Set(prev);
+      for (const id of attemptedIds ?? Object.keys(urls)) next.delete(id);
+      return next;
+    });
+  }, []);
+  const thumbQueue = useMemo(
+    () => createThumbRequestQueue(onThumbUrls, { endpoint: thumbnailsEndpoint }),
+    [onThumbUrls, thumbnailsEndpoint]
+  );
+  useEffect(() => () => thumbQueue.reset(), [thumbQueue]);
+
+  const loadThumb = useCallback(
+    (asset: MediaAsset) => {
+      if (getCachedThumbUrl(asset.id)) {
+        thumbQueue.request(asset.id);
+        return;
+      }
       setLoadingIds((prev) => {
+        if (prev.has(asset.id)) return prev;
         const next = new Set(prev);
-        for (const id of Object.keys(urls)) next.delete(id);
+        next.add(asset.id);
         return next;
       });
-    })
+      // Queue dedupes via inFlight; safe to call repeatedly from IntersectionObserver.
+      thumbQueue.request(asset.id);
+    },
+    [thumbQueue]
   );
-
-  async function loadThumb(asset: MediaAsset) {
-    if (thumbUrls[asset.id] || loadErrors[asset.id] || loadingIds.has(asset.id)) return;
-    setLoadingIds((prev) => new Set(prev).add(asset.id));
-    thumbQueueRef.current.request(asset.id);
-  }
 
   async function loadFull(asset: MediaAsset): Promise<string | null> {
     if (fullUrls[asset.id]) return fullUrls[asset.id];

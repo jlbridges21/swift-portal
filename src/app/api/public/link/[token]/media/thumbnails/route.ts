@@ -27,7 +27,7 @@ export async function POST(
   const [{ data: assets }, { data: project }] = await Promise.all([
     db
       .from("media_assets")
-      .select("id, file_path, thumbnail_url, media_type, media_source, mime_type, file_name, file_size, business_id, project_id")
+      .select("id, file_path, thumbnail_url, media_type, media_source, mime_type, file_name, file_size, business_id, project_id, visibility")
       .eq("project_id", ctx.projectId)
       .in("id", ids),
     db

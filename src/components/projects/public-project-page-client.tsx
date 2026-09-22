@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import { ProjectHero } from "@/components/projects/project-hero";
 import { ClientPhotoFolders } from "@/components/projects/client-photo-folders";
 import { VideoGrid, videosToGridEntries } from "@/components/projects/video-grid";
 import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
 import { TourCard } from "@/components/projects/tour-card";
-import { Badge } from "@/components/ui/badge";
+import { ViewOnlyAccessChip } from "@/components/ui/view-only-access-chip";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { normalizeStatus } from "@/lib/constants";
@@ -98,21 +98,24 @@ export function PublicProjectPageClient({
   const showDocuments = isMediaSectionVisibleForClient(mediaSections, "documents");
   const anySectionVisible = showPhotos || showVideos || showTours || showDocuments;
 
-  async function getDownloadUrl(asset: MediaAsset, thumb = false): Promise<string | null> {
-    try {
-      const preview = !downloadsUnlocked && !thumb;
-      const qs = thumb ? "?thumb=1" : preview ? "?preview=1" : "";
-      const res = await fetch(`${apiBase}/media/download/${asset.id}${qs}`);
-      const data = await res.json();
-      if (!res.ok) {
-        if (res.status !== 404) toast.error(data.error || "Could not load media");
+  const getDownloadUrl = useCallback(
+    async (asset: MediaAsset, thumb = false): Promise<string | null> => {
+      try {
+        const preview = !downloadsUnlocked && !thumb;
+        const qs = thumb ? "?thumb=1" : preview ? "?preview=1" : "";
+        const res = await fetch(`${apiBase}/media/download/${asset.id}${qs}`);
+        const data = await res.json();
+        if (!res.ok) {
+          if (res.status !== 404) toast.error(data.error || "Could not load media");
+          return null;
+        }
+        return data.url as string;
+      } catch {
         return null;
       }
-      return data.url as string;
-    } catch {
-      return null;
-    }
-  }
+    },
+    [apiBase, downloadsUnlocked]
+  );
 
   async function handleDownload(asset: MediaAsset) {
     if (!downloadsUnlocked) {
@@ -175,9 +178,7 @@ export function PublicProjectPageClient({
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 space-y-10">
         <div className="space-y-3">
-          <Badge variant="default" className="text-xs bg-muted text-muted-foreground">
-            Shared project · view only
-          </Badge>
+          <ViewOnlyAccessChip />
           <h1 className="text-2xl font-bold tracking-tight text-primary sm:text-3xl">
             {project.project_name}
           </h1>
@@ -225,6 +226,7 @@ export function PublicProjectPageClient({
                 projectId={project.id}
                 zipApiBase={downloadsUnlocked ? `${apiBase}/projects/download-zip` : undefined}
                 downloadApiBase={`${apiBase}/media/download`}
+                thumbnailsEndpoint={`${apiBase}/media/thumbnails`}
                 photos={photos}
                 folders={mediaFolders}
                 downloadsAllowed={downloadsUnlocked}
@@ -258,6 +260,7 @@ export function PublicProjectPageClient({
                   downloadsAllowed={downloadsUnlocked}
                   onDownload={handleDownload}
                   signInHref={signInHref}
+                  thumbnailsEndpoint={`${apiBase}/media/thumbnails`}
                 />
               </div>
             ) : (

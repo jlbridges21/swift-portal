@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import type { HeroMedia } from "@/lib/cover";
 import { ProjectHero } from "@/components/projects/project-hero";
+import { ViewOnlyAccessChip } from "@/components/ui/view-only-access-chip";
 import { ProjectQuickActions } from "@/components/projects/project-quick-actions";
 import { ClientPricingCta } from "@/components/projects/client-pricing-cta";
 import { HashScrollHandler } from "@/components/ui/hash-scroll-handler";
@@ -311,6 +312,9 @@ export function ProjectPageClient({
         audience={isAdmin ? "admin" : "client"}
         microsite={isClientView || isPreview}
         paymentStatus={paymentStatus}
+        accessChip={
+          isSharedViewer ? <ViewOnlyAccessChip tone="onDark" /> : undefined
+        }
       >
         {(isClientView || isPreview) && canViewFinancials && (
           <ProjectQuickActions
