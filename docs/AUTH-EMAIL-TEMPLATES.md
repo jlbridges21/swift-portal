@@ -13,8 +13,8 @@ From [Auth email templates](https://supabase.com/docs/guides/auth/auth-email-tem
 | Variable | Use |
 |----------|-----|
 | `{{ .TokenHash }}` | Hashed OTP for custom links + `verifyOtp({ token_hash, type })` |
-| `{{ .RedirectTo }}` | Value of `redirectTo` / `emailRedirectTo` from the API (we set `{portal}/auth/confirm`) |
-| `{{ .SiteURL }}` | Project Site URL (apex). Prefer `RedirectTo` so tenants stay on their own origin. |
+| `{{ .RedirectTo }}` | Value of `redirectTo` / `emailRedirectTo` from the API (we set the **canonical** `https://www.shootportal.app/auth/confirm`) |
+| `{{ .SiteURL }}` | Project Site URL (apex www). Prefer `RedirectTo` for the confirm interstitial. |
 | `{{ .ConfirmationURL }}` | **Avoid** — GET verify, scanner-vulnerable |
 
 There is **no** documented `{{ .EmailActionType }}` template variable. Each template hardcodes its
@@ -29,20 +29,21 @@ and installed `node_modules/@supabase/auth-js`):
 
 | Property | Use |
 |----------|-----|
-| `properties.hashed_token` | **Required for custom emails** — build `{portal}/auth/confirm?token_hash=…&type=…` |
+| `properties.hashed_token` | **Required for custom emails** — build canonical `/auth/confirm?token_hash=…&type=…&return_to=…` |
 | `properties.action_link` | **Forbidden in emails** — `GET /auth/v1/verify?token=…` (prefetch-consumable) |
 
 `tenant-lint` rejects `action_link` and `/auth/v1/verify` under `src/`.
 
-App code sets `redirectTo` / `emailRedirectTo` to `{tenantOrigin}/auth/confirm` (see
-`authConfirmUrl()`). Templates append `?token_hash=…&type=…`.
+App code sets `redirectTo` / `emailRedirectTo` to **`https://www.shootportal.app/auth/confirm`**
+(`authConfirmUrl()` / `getCanonicalAuthConfirmUrl()`). Custom branded CTAs add `return_to` for the
+tenant origin; after POST verify, v68 handoffs establish the session on that host.
 
 Redirect URL allow list must include:
 
-- `https://*.shootportal.app/auth/confirm` (and related auth paths you use)
-- **Each connected custom domain:** `https://{custom_domain}/auth/confirm`
+- `https://www.shootportal.app/auth/confirm` (and `/auth/callback`, `/auth/oauth/start`)
+- `https://*.shootportal.app/**` for on-host OAuth on tenant subdomains
 
-A platform wildcard does **not** cover `portal.customer.com`. After a tenant connects a custom domain, add that exact origin or auth emails (reset / invite / confirm) fail on the new host. See `docs/TENANT-DOMAINS.md` § Custom domain (self-serve).
+**Do not** add each custom domain to the allow-list — handoff covers them.
 
 ---
 
@@ -112,4 +113,5 @@ Dashboard “send recovery” may omit RedirectTo. Use Site URL + type; apex
 >
 ```
 
-Prefer the RedirectTo forms above for app-triggered mail so users land on `{slug}.shootportal.app`.
+Prefer the RedirectTo forms above for app-triggered mail. RedirectTo is always the canonical
+www confirm URL; after Continue, the session handoff returns the user to their studio portal.

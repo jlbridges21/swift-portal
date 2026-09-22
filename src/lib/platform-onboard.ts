@@ -636,7 +636,7 @@ export async function inviteBusinessAdmin(
     custom_domain_vercel_verified: business.custom_domain_vercel_verified,
     custom_domain_misconfigured: business.custom_domain_misconfigured,
   });
-  // Invite: RedirectTo = tenant /auth/confirm (TokenHash templates append ?token_hash=&type=invite).
+  // Invite: RedirectTo = canonical www /auth/confirm (handoff to tenant after verify).
   const redirectTo = authConfirmUrl(portalUrl);
   const normalizedEmail = email.trim().toLowerCase();
 

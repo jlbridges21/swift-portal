@@ -29,13 +29,21 @@ function GoogleMark({ className }: { className?: string }) {
   );
 }
 
+function isPlatformTenantOrApexHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().split(":")[0]?.trim() ?? "";
+  const root = getPlatformRootDomain().toLowerCase();
+  if (!host) return false;
+  if (host === "localhost" || host === "127.0.0.1") return true;
+  if (host === root || host === `www.${root}`) return true;
+  return host.endsWith(`.${root}`);
+}
+
 /**
- * Google OAuth button. Hidden when the current host is not an allowlisted OAuth
- * origin (custom domains missing from NEXT_PUBLIC_OAUTH_ALLOWED_CUSTOM_HOSTS).
- * Password sign-in remains available.
+ * Google OAuth button.
  *
- * Never starts OAuth on the bare apex (shootportal.app) — navigates to www first
- * so the PKCE verifier cookie and /auth/callback stay on the same host.
+ * - Platform apex + `*.{root}`: start OAuth on this host (already allowlisted).
+ * - Custom domains: bounce to www `/auth/oauth/start` so PKCE + callback stay on
+ *   the permanently allowlisted host, then hand off to the tenant domain.
  */
 export function GoogleSignInButton({
   label = "Continue with Google",
@@ -70,11 +78,25 @@ export function GoogleSignInButton({
 
     const host = window.location.hostname.toLowerCase();
     const root = getPlatformRootDomain().toLowerCase();
+
     // Never begin OAuth on bare apex — Vercel 308 mid-flow would drop the PKCE cookie.
     if (host === root) {
       const www = new URL(window.location.href);
       www.hostname = `www.${root}`;
       window.location.assign(www.toString());
+      return;
+    }
+
+    // Custom domains are not in Supabase redirect allow-list — start on www.
+    if (!isPlatformTenantOrApexHost(host)) {
+      const start = new URL("/auth/oauth/start", `https://www.${root}`);
+      if (process.env.NODE_ENV !== "production") {
+        start.protocol = window.location.protocol;
+        start.host = window.location.host;
+        start.pathname = "/auth/oauth/start";
+      }
+      start.searchParams.set("return_to", window.location.origin);
+      window.location.assign(start.toString());
       return;
     }
 

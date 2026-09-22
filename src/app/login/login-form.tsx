@@ -16,6 +16,7 @@ import {
   type AuthLinkErrorKind,
 } from "@/lib/auth-fragment";
 import { AuthDivider, GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { getCanonicalAuthConfirmUrl } from "@/lib/auth-confirm";
 
 export function LoginForm({
   showRequestLink,
@@ -194,7 +195,9 @@ export function LoginForm({
     setError("");
     setNotice("");
     const supabase = createClient();
-    const redirectTo = `${window.location.origin}/auth/confirm`;
+    // Always use the permanently allowlisted canonical confirm host. After
+    // verifyOtp we hand off to this portal (return_to / business origin).
+    const redirectTo = getCanonicalAuthConfirmUrl();
     const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo,
     });
@@ -204,7 +207,9 @@ export function LoginForm({
       return;
     }
     setResetSent(true);
-    setNotice("If an account exists for that email, a reset link was sent. It returns to this portal.");
+    setNotice(
+      "If an account exists for that email, a reset link was sent. Open it, continue, and you’ll return to this portal."
+    );
   }
 
   if (mode === "oauth_error") {

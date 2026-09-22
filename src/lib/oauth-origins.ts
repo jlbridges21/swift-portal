@@ -1,13 +1,12 @@
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 
 /**
- * Hosts where Google OAuth may be initiated.
+ * Hosts where Google OAuth may be shown.
  *
- * Apex + `*.{PLATFORM_ROOT_DOMAIN}` are always allowed (Supabase can wildcard these).
- * Arbitrary custom domains cannot be wildcarded in Supabase redirect URLs — they must
- * be listed both in the Auth allowlist AND in NEXT_PUBLIC_OAUTH_ALLOWED_CUSTOM_HOSTS.
- * If a custom domain is missing from either, we hide the Google button so password
- * sign-in remains available instead of a silent wrong-host redirect.
+ * Apex + `*.{PLATFORM_ROOT_DOMAIN}` start OAuth on-host (Supabase wildcard).
+ * Arbitrary custom domains bounce to www `/auth/oauth/start` so PKCE + callback
+ * stay on the permanently allowlisted host, then hand off — no per-domain
+ * Supabase redirect entry required.
  *
  * Client-safe module — no server-only imports.
  */
@@ -26,6 +25,10 @@ export function isOAuthAllowedHostname(hostname: string): boolean {
   const root = getPlatformRootDomain().toLowerCase();
   if (host === root || host === `www.${root}`) return true;
   if (host.endsWith(`.${root}`)) return true;
+
+  // Custom domains: button shown; GoogleSignInButton routes via www oauth/start.
+  // Optional env list is legacy and no longer required for the button to appear.
+  if (host.includes(".") && !host.endsWith(".vercel.app")) return true;
 
   return parseOAuthAllowedCustomHosts().includes(host);
 }

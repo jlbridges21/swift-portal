@@ -81,6 +81,7 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/host-resolution.ts",
   "src/lib/portal-url.ts",
   "src/lib/auth-session-handoff.ts",
+  "src/lib/auth-return-to.ts",
   "src/lib/oauth-allowlist-audit.ts",
   "src/lib/capabilities.ts",
   "src/lib/stripe-webhook-events.ts",

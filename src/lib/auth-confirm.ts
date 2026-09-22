@@ -1,4 +1,5 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
+import { getPlatformRootDomain } from "@/lib/site-metadata";
 
 /**
  * Auth email confirm interstitial URL (token_hash + type).
@@ -11,37 +12,96 @@ import type { EmailOtpType } from "@supabase/supabase-js";
  * - Docs warn ConfirmationURL GETs are consumed by email scanners; Option 2 / custom
  *   TokenHash links + server verifyOtp (POST) is the recommended guard.
  *
- * We pass RedirectTo = `{tenantOrigin}/auth/confirm` so templates can build:
- *   {{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=…
- * and users land on their own portal, not only Site URL.
+ * RedirectTo / email links ALWAYS use the canonical platform host
+ * (`https://www.{PLATFORM_ROOT_DOMAIN}/auth/confirm`), which is permanently
+ * allowlisted. After verifyOtp we mint an auth_session_handoffs token and send
+ * the user to their tenant origin (custom domain or `{slug}.…`). Custom domains
+ * never need a per-tenant Supabase redirect allow-list entry.
  *
- * generateLink (auth-js GenerateLinkProperties, verified 2026-08 against
- * @supabase/auth-js types + https://supabase.github.io/auth-js/v2/types/GenerateLinkProperties.html):
+ * generateLink (auth-js GenerateLinkProperties):
  * - `properties.hashed_token` — use with verifyOtp / our /auth/confirm interstitial
  * - `properties.action_link` — GET /auth/v1/verify?token=… — NEVER put in emails (prefetch-consumable)
  */
-export function authConfirmUrl(portalOrigin: string): string {
-  return `${portalOrigin.replace(/\/$/, "")}/auth/confirm`;
+
+/** Permanent allowlisted confirm base (no query string — templates append ?token_hash=). */
+export function getCanonicalAuthConfirmUrl(): string {
+  if (process.env.NODE_ENV !== "production") {
+    const fromEnv = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+    if (fromEnv) return `${fromEnv}/auth/confirm`;
+  }
+  return `https://www.${getPlatformRootDomain()}/auth/confirm`;
+}
+
+/**
+ * @param _portalOrigin Ignored — kept for call-site compatibility. Confirm always
+ *   lands on the canonical host; pass portalOrigin to buildAuthConfirmLink instead.
+ */
+export function authConfirmUrl(_portalOrigin?: string): string {
+  return getCanonicalAuthConfirmUrl();
 }
 
 /**
  * Prefetch-safe invite/recovery CTA for custom (branded) emails.
  * Uses hashed_token from generateLink — never action_link.
+ * Links open on the canonical host; `return_to` carries the tenant origin for handoff.
  */
 export function buildAuthConfirmLink(options: {
+  /** Destination portal after session is established (tenant origin). */
   portalOrigin: string;
   tokenHash: string;
   type: EmailOtpType | "invite" | "recovery" | "email" | "magiclink" | "signup";
   nextPath?: string | null;
 }): string {
-  const base = authConfirmUrl(options.portalOrigin);
+  const base = getCanonicalAuthConfirmUrl();
   const params = new URLSearchParams({
     token_hash: options.tokenHash,
     type: options.type,
   });
   const next = safeAuthNext(options.nextPath ?? null);
   if (next) params.set("next", next);
+
+  const returnTo = safeAuthReturnToParam(options.portalOrigin);
+  if (returnTo) {
+    const canonicalHost = hostOf(base);
+    const returnHost = hostOf(returnTo);
+    if (canonicalHost && returnHost && canonicalHost !== returnHost) {
+      params.set("return_to", returnTo);
+    }
+  }
+
   return `${base}?${params.toString()}`;
+}
+
+function hostOf(originOrUrl: string): string | null {
+  try {
+    return new URL(originOrUrl.includes("://") ? originOrUrl : `https://${originOrUrl}`)
+      .hostname.toLowerCase()
+      .split(":")[0];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Client-safe parse of return_to for hidden form fields (full validation is server-side).
+ * Origin only (https://host), no path.
+ */
+export function safeAuthReturnToParam(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("//") || /[\s\\]/.test(trimmed)) return null;
+  try {
+    const url = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    if (url.username || url.password) return null;
+    if ((url.pathname && url.pathname !== "/") || url.search || url.hash) return null;
+    const host = url.hostname.toLowerCase().split(":")[0]?.trim() ?? "";
+    if (!host) return null;
+    return `${url.protocol}//${host}`;
+  } catch {
+    return null;
+  }
 }
 
 /** Relative in-app path only; rejects protocol-relative and absolute URLs. */

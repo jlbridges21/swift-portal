@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AuthLinkHelpCard } from "@/components/auth/auth-link-help-card";
 import { ConfirmInterstitial } from "./confirm-interstitial";
-import { isEmailOtpType, safeAuthNext } from "@/lib/auth-confirm";
+import { isEmailOtpType, safeAuthNext, safeAuthReturnToParam } from "@/lib/auth-confirm";
 
 export const dynamic = "force-dynamic";
 
@@ -20,15 +20,17 @@ export default async function AuthConfirmPage({
   const typeRaw = params.type;
   const errorRaw = params.error;
   const nextRaw = params.next;
+  const returnToRaw = params.return_to;
   const tokenHash = typeof tokenHashRaw === "string" ? tokenHashRaw : "";
   const type = typeof typeRaw === "string" ? typeRaw : "";
   const error = typeof errorRaw === "string" ? errorRaw : null;
-  const next =
-    typeof nextRaw === "string" ? safeAuthNext(nextRaw) : null;
+  const next = typeof nextRaw === "string" ? safeAuthNext(nextRaw) : null;
+  const returnTo =
+    typeof returnToRaw === "string" ? safeAuthReturnToParam(returnToRaw) : null;
 
   if (!tokenHash || !isEmailOtpType(type)) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#F8FAFC] px-4">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50 px-4">
         <AuthLinkHelpCard
           errorKind={error === "access_denied" ? "access_denied" : "otp_expired"}
           description={
@@ -37,7 +39,7 @@ export default async function AuthConfirmPage({
               : null
           }
         />
-        <Link href="/login" className="text-sm text-[#4F46E5] underline underline-offset-2">
+        <Link href="/login" className="text-sm text-slate-700 underline underline-offset-2">
           Go to sign in
         </Link>
       </div>
@@ -49,6 +51,7 @@ export default async function AuthConfirmPage({
       tokenHash={tokenHash}
       type={type}
       next={next}
+      returnTo={returnTo}
       error={
         error === "otp_expired"
           ? "That link was already used or expired. You can request a new one from the sign-in page."

@@ -170,10 +170,9 @@ Cursor could not run these — they need a browser, a real inbox, or live hosts.
 
 ## Operational gaps to know about
 
-**Custom domains require a manual step.** When a tenant connects one, you must add
-`https://{their-domain}/auth/confirm` to Supabase's redirect allowlist, or their clients cannot
-confirm email. The wildcard does not cover it. `/platform` should show a pending indicator — verify
-it does.
+**Custom domains need no Supabase allow-list entry.** Auth emails and OAuth complete on
+`www.shootportal.app`, then `auth_session_handoffs` (v68) continues the session to the tenant
+host. Once DNS verifies, sign-in just works.
 
 **Auth email templates are a shared dependency.** Five code paths are safe only because the
 Supabase Dashboard templates use `{{ .TokenHash }}`. If anyone reverts one to

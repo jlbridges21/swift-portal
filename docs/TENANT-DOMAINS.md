@@ -53,22 +53,28 @@ Flow:
 
 If any are missing, the UI still shows DNS instructions and a contact-support / platform-admin path (`status=manual`) — never a broken screen.
 
-### Auth redirect allow-list (critical)
+### Auth redirects (no per-domain allow-list)
 
-`https://*.shootportal.app/**` does **not** cover a customer hostname. After connect, add to Supabase Auth → URL Configuration → Redirect URLs:
+Auth email links and OAuth callbacks always use the permanently allowlisted canonical host:
 
 ```text
-https://{custom_domain}/auth/confirm
+https://www.shootportal.app/auth/confirm
+https://www.shootportal.app/auth/callback
 ```
 
-Also keep `https://*.shootportal.app/auth/confirm`. Without the custom entry, password reset / invite / confirm emails break for clients on that domain even though the portal loads over HTTPS. There is no safe wildcard for arbitrary customer domains; operators must add each connected hostname (or automate via Supabase Management API with a personal access token — not implemented in-app by default).
+After the session is established there, migration **v68** `auth_session_handoffs` mints a
+single-use, host-bound token and the browser continues to the tenant origin (healthy custom
+domain or `{slug}.shootportal.app`). Custom domains work as soon as DNS verifies — operators do
+**not** add each hostname to Supabase Redirect URLs.
+
+Keep `https://*.shootportal.app/**` (and the www Site URL) on the allow-list. Share links
+(`/{portal}/auth/share`) are app-owned tokens and do not use the Supabase redirect list.
 
 ### Operator / legacy manual path
 
 1. Registrar DNS → Vercel target.
 2. Vercel project Domains → add hostname (or self-serve API).
-3. `businesses.custom_domain` = hostname (unique).
-4. Supabase redirect allow-list entry as above.
+3. `businesses.custom_domain` = hostname (unique); status connected when verified.
 
 Swift (`portal.swiftaerialmedia.com`) already uses step (a) and must keep working; migration v55 backfills existing domains as `connected`.
 

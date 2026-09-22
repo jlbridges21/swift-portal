@@ -600,10 +600,8 @@ export function CustomDomainSettingsCard({
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
                   <p className="font-medium">Connected</p>
                   <p className="mt-1">
-                    Portal links in email and payments now use this domain. Ask ShootPortal support to
-                    confirm the Auth redirect allow-list includes{" "}
-                    <code className="text-xs">https://{state.domain}/auth/confirm</code> — without it,
-                    password reset and invites can break on the new host.
+                    Portal links in email and payments now use this domain. Sign-in, invites, password
+                    reset, and Google work as soon as DNS is live — no extra configuration.
                   </p>
                 </div>
               ) : null}

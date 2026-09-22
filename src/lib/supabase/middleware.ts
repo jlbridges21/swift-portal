@@ -272,6 +272,9 @@ export async function updateSession(request: NextRequest) {
     const passwordSetupExempt =
       path.startsWith("/auth/update-password") ||
       path.startsWith("/auth/confirm") ||
+      path.startsWith("/auth/handoff") ||
+      path.startsWith("/auth/oauth") ||
+      path.startsWith("/auth/share") ||
       path.startsWith("/api/auth/") ||
       path.startsWith("/_next") ||
       path === "/favicon.ico";

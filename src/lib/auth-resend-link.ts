@@ -20,7 +20,8 @@ const SHARE_RESENT = {
  * - Platform apex: look up email globally; send to their own portal (or apex for super_admin).
  * Never enumerates accounts in error responses; reasons are logged server-side.
  *
- * RedirectTo is `{portal}/auth/confirm` so TokenHash email templates land on the interstitial.
+ * RedirectTo is the canonical www `/auth/confirm` (permanently allowlisted).
+ * After verify, v68 handoff continues to the tenant portal origin.
  */
 export async function resendAuthLinkForEmail(options: {
   email: string;
