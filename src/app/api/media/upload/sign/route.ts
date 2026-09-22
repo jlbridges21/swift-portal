@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { formatFileSize } from "@/lib/brand";
-import { buildStoragePath } from "@/lib/media-upload";
+import { buildStoragePath, isTenantPrefixedStoragePath } from "@/lib/media-upload";
 import { validateMediaFileBeforeUpload } from "@/lib/upload/validation";
 import { MAX_VIDEO_FILE_SIZE_BYTES, shouldUseTusUpload } from "@/lib/upload/constants";
 import { logUploadStep } from "@/lib/upload/logger";
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { projectId, fileName, mimeType, fileSize, mediaType } = body;
+    const { projectId, fileName, mimeType, fileSize, mediaType, resumeFilePath } = body;
 
     if (!fileName || !mediaType || fileSize == null) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
@@ -49,11 +49,21 @@ export async function POST(request: Request) {
     }
 
     const bucket = mediaType === "document" ? "project-documents" : "project-media";
-    const filePath = buildStoragePath({
-      businessId: tenant.businessId,
-      projectId: projectId || null,
-      fileName,
-    });
+
+    // Retry path: re-upload binary to the same storage key after a failed save/verify.
+    let filePath: string;
+    if (typeof resumeFilePath === "string" && resumeFilePath.trim()) {
+      if (!isTenantPrefixedStoragePath(resumeFilePath, tenant.businessId)) {
+        return NextResponse.json({ error: "Invalid storage path." }, { status: 400 });
+      }
+      filePath = resumeFilePath.trim();
+    } else {
+      filePath = buildStoragePath({
+        businessId: tenant.businessId,
+        projectId: projectId || null,
+        fileName,
+      });
+    }
 
     let displayOrder = 0;
     if (projectId) {

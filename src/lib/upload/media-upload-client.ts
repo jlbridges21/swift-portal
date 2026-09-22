@@ -132,10 +132,14 @@ async function fetchSign(
   projectId: string | null,
   file: File,
   mediaType: string,
-  mimeType: string
+  mimeType: string,
+  resumeFilePath?: string
 ): Promise<SignResponse> {
   logUploadTimeline("sign_request");
-  logUploadStep("info", { step: "sign_request", ...uploadLogContext(file, mimeType, projectId) });
+  logUploadStep("info", {
+    step: "sign_request",
+    ...uploadLogContext(file, mimeType, projectId, resumeFilePath),
+  });
 
   const res = await fetch("/api/media/upload/sign", {
     method: "POST",
@@ -147,18 +151,19 @@ async function fetchSign(
       mimeType,
       fileSize: file.size,
       mediaType,
+      resumeFilePath: resumeFilePath || undefined,
     }),
   });
   const data = (await res.json()) as SignResponse & CompleteApiResponse;
   if (!res.ok) {
     logUploadStep("error", {
       step: "sign_request",
-      ...uploadLogContext(file, mimeType, projectId),
+      ...uploadLogContext(file, mimeType, projectId, resumeFilePath),
       statusCode: res.status,
       providerMessage: data.error,
     });
     throw binaryError(data.error || "Failed to prepare upload", {
-      ...uploadLogContext(file, mimeType, projectId),
+      ...uploadLogContext(file, mimeType, projectId, resumeFilePath),
       step: "sign_request",
       uploadMethod: "tus",
       statusCode: res.status,
@@ -172,7 +177,7 @@ async function fetchSign(
     ...uploadLogContext(file, mimeType, projectId, data.filePath),
     uploadMethod: data.resumable ? "tus" : "signed_put",
     bucket: data.bucket,
-    details: { resumable: data.resumable },
+    details: { resumable: data.resumable, resumedPath: !!resumeFilePath },
   });
 
   return data;
@@ -187,8 +192,12 @@ export async function completeUpload(payload: PendingSavePayload): Promise<Recor
     fileSize: payload.fileSize,
     fileType: payload.mimeType,
     filePath: payload.filePath,
-    details: { skipStorageVerify: payload.skipStorageVerify ?? false, diagnostic: UPLOAD_DIAGNOSTIC_MODE },
+    details: { diagnostic: UPLOAD_DIAGNOSTIC_MODE },
   });
+
+  // Never send skipStorageVerify — server always verifies the object exists.
+  const body: Record<string, unknown> = { ...payload };
+  delete body.skipStorageVerify;
 
   let res: Response;
   try {
@@ -196,24 +205,33 @@ export async function completeUpload(payload: PendingSavePayload): Promise<Recor
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
       signal: UPLOAD_DIAGNOSTIC_MODE ? undefined : AbortSignal.timeout(
         payload.mediaType === "video" ? 180_000 : 120_000
       ),
     });
   } catch (err) {
     const isAbort = err instanceof Error && err.name === "AbortError";
+    const cause =
+      err instanceof Error && err.cause instanceof Error
+        ? err.cause.message
+        : err instanceof Error && typeof err.cause === "string"
+          ? err.cause
+          : undefined;
     const message = isAbort
-      ? "Save request timed out. Retry save."
-      : err instanceof Error
-        ? err.message
-        : "Save request failed";
+      ? "Save request timed out while verifying storage / writing metadata. Retry save."
+      : cause
+        ? `Save request failed: ${cause}`
+        : err instanceof Error && err.message && err.message !== "Failed to fetch"
+          ? `Save request failed: ${err.message}`
+          : "Save request failed (network error or server unreachable). Check connection and retry.";
     logUploadStep("error", {
       step: "saving_metadata",
       projectId: payload.projectId,
       fileName: payload.fileName,
       filePath: payload.filePath,
       providerMessage: message,
+      details: { name: err instanceof Error ? err.name : typeof err, cause },
     });
     throw new UploadSaveError(message, payload, { step: "saving_metadata", rawDetails: err });
   }
@@ -222,15 +240,19 @@ export async function completeUpload(payload: PendingSavePayload): Promise<Recor
   try {
     data = (await res.json()) as CompleteApiResponse;
   } catch {
-    throw new UploadSaveError("Invalid server response while saving upload.", payload, {
-      step: "saving_metadata",
-      statusCode: res.status,
-    });
+    throw new UploadSaveError(
+      `Invalid server response while saving upload (HTTP ${res.status}).`,
+      payload,
+      {
+        step: "saving_metadata",
+        statusCode: res.status,
+      }
+    );
   }
 
   if (!res.ok || data.success === false) {
     throw new UploadSaveError(
-      data.error || "Failed to save upload",
+      data.error || `Failed to save upload (HTTP ${res.status})`,
       payload,
       { step: data.step, statusCode: res.status, rawDetails: data.details }
     );
@@ -507,21 +529,138 @@ function uploadViaTus(
   });
 }
 
-/** Retry metadata/database save only — does not re-upload the binary. */
+/**
+ * Retry metadata save after a successful (or claimed) binary upload.
+ * Always verifies the object exists server-side before inserting a row.
+ * If the object is missing and `file` is provided, re-uploads the binary first.
+ * Never reports Complete unless save succeeded after verification.
+ */
 export async function retryMediaSave(
   pending: PendingSavePayload,
-  onProgress?: (update: UploadProgressUpdate) => void
+  onProgress?: (update: UploadProgressUpdate) => void,
+  file?: File | null
 ): Promise<UploadMediaResult> {
-  onProgress?.({
-    phase: "saving",
-    progress: 96,
-    bytesLoaded: pending.fileSize,
-    bytesTotal: pending.fileSize,
-  });
-  const asset = await completeUpload(pending);
-  onProgress?.({ phase: "uploaded", progress: 100, bytesLoaded: pending.fileSize, bytesTotal: pending.fileSize });
-  logUploadTimeline("ui_complete");
-  return { asset };
+  const cleanPending: PendingSavePayload = {
+    ...pending,
+    skipStorageVerify: undefined,
+  };
+
+  const trySave = async () => {
+    onProgress?.({
+      phase: "saving",
+      progress: 96,
+      bytesLoaded: cleanPending.fileSize,
+      bytesTotal: cleanPending.fileSize,
+    });
+    return completeUpload(cleanPending);
+  };
+
+  try {
+    const asset = await trySave();
+    onProgress?.({
+      phase: "uploaded",
+      progress: 100,
+      bytesLoaded: cleanPending.fileSize,
+      bytesTotal: cleanPending.fileSize,
+    });
+    logUploadTimeline("ui_complete");
+    return { asset };
+  } catch (err) {
+    const isMissingObject =
+      err instanceof UploadSaveError &&
+      (err.step === "storage_verify" ||
+        /missing from storage|not readable yet|not visible yet/i.test(err.message));
+
+    if (!isMissingObject) {
+      throw err;
+    }
+
+    if (!file) {
+      throw new UploadSaveError(
+        "File is missing from storage and cannot be re-uploaded from this session. Upload the file again — Retry save will not create a gallery entry without the file.",
+        cleanPending,
+        { step: "storage_verify", statusCode: err instanceof UploadSaveError ? err.statusCode : 400 }
+      );
+    }
+
+    // Object missing — re-upload binary to the same path, then save (server verifies again).
+    onProgress?.({
+      phase: "uploading",
+      progress: 5,
+      bytesLoaded: 0,
+      bytesTotal: file.size,
+    });
+
+    const sign = await fetchSign(
+      cleanPending.projectId,
+      file,
+      cleanPending.mediaType,
+      cleanPending.mimeType,
+      cleanPending.filePath
+    );
+    const useTus = shouldUseTusUpload(file.size);
+
+    const onBinaryComplete = () => {
+      cleanPending.binaryUploaded = true;
+      onProgress?.({
+        phase: "finalizing",
+        progress: 92,
+        bytesLoaded: file.size,
+        bytesTotal: file.size,
+      });
+    };
+
+    const report = (pct: number, loaded: number, total: number, resuming?: boolean) => {
+      onProgress?.({
+        phase: "uploading",
+        progress: pct,
+        bytesLoaded: loaded,
+        bytesTotal: total,
+        resuming,
+      });
+    };
+
+    if (useTus) {
+      await uploadViaTus(
+        file,
+        sign.bucket,
+        cleanPending.filePath,
+        cleanPending.mimeType,
+        cleanPending.projectId,
+        report,
+        onBinaryComplete
+      );
+    } else if (sign.signedUrl) {
+      await uploadViaSignedPut(
+        sign.signedUrl,
+        file,
+        cleanPending.mimeType,
+        cleanPending.projectId,
+        sign.bucket,
+        cleanPending.filePath,
+        report,
+        onBinaryComplete
+      );
+    } else {
+      throw binaryError("No upload URL returned for retry.", {
+        ...uploadLogContext(file, cleanPending.mimeType, cleanPending.projectId, cleanPending.filePath),
+        step: "sign_request",
+        uploadMethod: "tus",
+        bucket: sign.bucket,
+        failurePhase: "during_binary",
+      });
+    }
+
+    const asset = await trySave();
+    onProgress?.({
+      phase: "uploaded",
+      progress: 100,
+      bytesLoaded: cleanPending.fileSize,
+      bytesTotal: cleanPending.fileSize,
+    });
+    logUploadTimeline("ui_complete");
+    return { asset };
+  }
 }
 
 /** Upload a media file directly to Supabase Storage with validation, progress, and finalize. */

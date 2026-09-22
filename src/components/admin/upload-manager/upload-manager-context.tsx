@@ -420,13 +420,21 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
 
       patchItem(id, { status: "processing", phase: "saving", progress: 96, error: undefined });
       try {
-        const retryPayload = {
-          ...item.pendingSave,
-          skipStorageVerify: item.pendingSave.failedStep === "storage_verify",
-        };
-        const { asset } = await retryMediaSave(retryPayload, ({ phase, progress }) => {
-          patchItem(id, { phase, progress, status: mapPhaseToStatus(phase, "processing") });
-        });
+        // Never skip storage verify. Pass the File so a missing object can be re-uploaded.
+        const { asset } = await retryMediaSave(
+          item.pendingSave,
+          ({ phase, progress, bytesLoaded, bytesTotal, resuming }) => {
+            patchItem(id, {
+              phase,
+              progress,
+              bytesLoaded,
+              bytesTotal,
+              resuming,
+              status: mapPhaseToStatus(phase, "processing"),
+            });
+          },
+          item.retryContext?.file ?? null
+        );
         const saved = asset as unknown as MediaAsset;
         patchItem(id, {
           progress: 100,

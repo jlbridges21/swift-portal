@@ -44,7 +44,6 @@ export async function POST(request: Request) {
     description,
     tags,
     thumbnailPath,
-    skipStorageVerify,
   } = body as {
     projectId?: string | null;
     filePath?: string;
@@ -57,7 +56,6 @@ export async function POST(request: Request) {
     description?: string;
     tags?: string[];
     thumbnailPath?: string | null;
-    skipStorageVerify?: boolean;
   };
 
   const logContext = {
@@ -110,7 +108,6 @@ export async function POST(request: Request) {
     description,
     tags,
     thumbnailPath,
-    skipStorageVerify,
   };
 
   const logContextValidated = {
@@ -123,6 +120,25 @@ export async function POST(request: Request) {
 
   const db = await createTenantServiceClient(tenant.businessId);
   const bucket = validated.mediaType === "document" ? "project-documents" : "project-media";
+
+  // Always prove the object exists before any insert. Client cannot skip this.
+  const verify = await verifyStorageObject(db.raw, bucket, validated.filePath, {
+    ...logContextValidated,
+    mediaType: validated.mediaType,
+  });
+  if (!verify.ok) {
+    logUploadStep("error", {
+      step: "storage_verify",
+      ...logContextValidated,
+      providerMessage: verify.error,
+      details: verify.details,
+    });
+    return NextResponse.json(
+      { success: false, error: verify.error, step: "storage_verify", details: verify.details },
+      { status: 400 }
+    );
+  }
+
   // file_path is unique per business after v30 (idx_media_assets_business_file_path).
   // Tenant from() already eq(business_id); keep .eq("file_path") for that composite index.
   const { data: existingAsset, error: existingError } = await db
@@ -150,25 +166,6 @@ export async function POST(request: Request) {
       details: { assetId: existingAsset.id },
     });
     return NextResponse.json({ success: true, media: existingAsset });
-  }
-
-  if (!validated.skipStorageVerify) {
-    const verify = await verifyStorageObject(db.raw, bucket, validated.filePath, {
-      ...logContextValidated,
-      mediaType: validated.mediaType,
-    });
-    if (!verify.ok) {
-      logUploadStep("error", {
-        step: "storage_verify",
-        ...logContextValidated,
-        providerMessage: verify.error,
-        details: verify.details,
-      });
-      return NextResponse.json(
-        { success: false, error: verify.error, step: "storage_verify", details: verify.details },
-        { status: 400 }
-      );
-    }
   }
 
   const { data: asset, error: dbError } = await db

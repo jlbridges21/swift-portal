@@ -1,0 +1,31 @@
+{
+  "scanned": 318,
+  "file_object_missing": 1,
+  "thumbnail_only_missing": 1,
+  "by_business": [
+    {
+      "business": "Swift Aerial Media",
+      "business_id": "00000000-0000-0000-0000-000000000001",
+      "orphan_count": 1,
+      "projects": [
+        {
+          "project_id": "5d5c11cc-b57e-4027-8ccb-fb3105af1350",
+          "project_name": "Jackson Bridges - Bay View - Custom Project",
+          "project_deleted": false,
+          "orphan_count": 1,
+          "files": [
+            {
+              "id": "1559325f-a01d-4b3f-8462-3d33edbdbb49",
+              "file_name": "30 seconds of boats.mov",
+              "media_type": "video",
+              "created_at": "2026-09-22T02:39:59.015136+00:00",
+              "file_size": 227653257,
+              "file_path": "00000000-0000-0000-0000-000000000001/5d5c11cc-b57e-4027-8ccb-fb3105af1350/1790043615884-9cd92d33-30_seconds_of_boats.mov",
+              "thumb_missing": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

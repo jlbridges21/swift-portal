@@ -11,6 +11,7 @@ export interface PendingSavePayload {
   tags?: string[];
   thumbnailPath?: string | null;
   binaryUploaded?: boolean;
+  /** @deprecated Ignored — complete always verifies storage server-side. */
   skipStorageVerify?: boolean;
   failedStep?: string;
 }

@@ -127,7 +127,12 @@ export function userFacingUploadError(technical: UploadTechnicalDetails): string
     return "Session expired or storage permission denied. Refresh and sign in again.";
   }
   if (technical.failurePhase === "after_binary" || step === "storage_verify" || step === "saving_metadata") {
-    return "Upload complete, save failed. Tap Retry save.";
+    // Surface the real cause (e.g. object missing) — never mask as a generic "save failed".
+    const detail = technical.error?.trim();
+    if (detail && !/^save request failed$/i.test(detail) && !/^failed to save upload$/i.test(detail)) {
+      return detail.length > 220 ? `${detail.slice(0, 217)}…` : detail;
+    }
+    return "Upload reached storage but metadata save failed. Tap Retry save.";
   }
   if (technical.failurePhase === "during_binary") {
     return "Video upload failed during storage upload. Check connection and tap Retry upload.";

@@ -1,0 +1,16 @@
+{
+  "mode": "dry_run",
+  "removed_count": 1,
+  "removed": [
+    {
+      "id": "1559325f-a01d-4b3f-8462-3d33edbdbb49",
+      "business": "Swift Aerial Media",
+      "project_id": "5d5c11cc-b57e-4027-8ccb-fb3105af1350",
+      "project_name": "Jackson Bridges - Bay View - Custom Project",
+      "file_name": "30 seconds of boats.mov",
+      "file_path": "00000000-0000-0000-0000-000000000001/5d5c11cc-b57e-4027-8ccb-fb3105af1350/1790043615884-9cd92d33-30_seconds_of_boats.mov",
+      "created_at": "2026-09-22T02:39:59.015136+00:00"
+    }
+  ],
+  "skipped": []
+}
