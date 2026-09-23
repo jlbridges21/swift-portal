@@ -45,8 +45,26 @@ async function fetchBatch(
     credentials: "include",
     body: JSON.stringify({ ids }),
   });
-  if (!res.ok) return Object.fromEntries(ids.map((id) => [id, null]));
-  const data = (await res.json()) as { urls?: Record<string, string | null> };
+  if (!res.ok) {
+    // Do not cache failures — callers may retry. Log so blank tiles are diagnosable.
+    console.warn("[media-thumbs] batch failed", {
+      endpoint,
+      status: res.status,
+      ids: ids.length,
+    });
+    return Object.fromEntries(ids.map((id) => [id, null]));
+  }
+  let data: { urls?: Record<string, string | null> };
+  try {
+    data = (await res.json()) as { urls?: Record<string, string | null> };
+  } catch {
+    console.warn("[media-thumbs] batch non-JSON response", {
+      endpoint,
+      status: res.status,
+      contentType: res.headers.get("content-type"),
+    });
+    return Object.fromEntries(ids.map((id) => [id, null]));
+  }
   return data.urls ?? {};
 }
 

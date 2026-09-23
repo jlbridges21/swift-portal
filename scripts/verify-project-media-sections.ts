@@ -345,7 +345,7 @@ async function main() {
   const { data: jacksonOff } = await admin
     .from("projects")
     .select(
-      "client_section_photos, client_section_videos, client_section_tours, client_section_documents"
+      "client_section_photos, client_section_videos, client_section_tours, client_section_models, client_section_documents"
     )
     .eq("id", TEST_PROJECT)
     .single();
@@ -474,8 +474,9 @@ async function main() {
     DEFAULT_APP_SETTINGS.mediaSectionDefaults.photos === true &&
       DEFAULT_APP_SETTINGS.mediaSectionDefaults.videos === true &&
       DEFAULT_APP_SETTINGS.mediaSectionDefaults.tours === true &&
+      DEFAULT_APP_SETTINGS.mediaSectionDefaults.models === true &&
       DEFAULT_APP_SETTINGS.mediaSectionDefaults.documents === true,
-    "platform defaults all four ON"
+    "platform defaults all five ON"
   );
 
   await saveAppSettings(
@@ -484,6 +485,7 @@ async function main() {
         photos: false,
         videos: true,
         tours: false,
+        models: true,
         documents: true,
       },
     },
@@ -494,7 +496,9 @@ async function main() {
 
   const { data: existingAfterDefaults } = await admin
     .from("projects")
-    .select("client_section_photos, client_section_videos, client_section_tours, client_section_documents")
+    .select(
+      "client_section_photos, client_section_videos, client_section_tours, client_section_models, client_section_documents"
+    )
     .eq("id", TEST_PROJECT)
     .single();
   assert(
@@ -531,6 +535,7 @@ async function main() {
     client_section_photos?: boolean;
     client_section_videos?: boolean;
     client_section_tours?: boolean;
+    client_section_models?: boolean;
     client_section_documents?: boolean;
   };
   console.log("New project create:", createRes.status, created);
@@ -539,6 +544,7 @@ async function main() {
   assert(created.client_section_photos === false, "new project photos OFF from defaults");
   assert(created.client_section_videos === true, "new project videos ON from defaults");
   assert(created.client_section_tours === false, "new project tours OFF from defaults");
+  assert(created.client_section_models === true, "new project models ON from defaults");
   assert(created.client_section_documents === true, "new project documents ON from defaults");
 
   section("8. Independent toggles + dual render branches (static)");
@@ -550,15 +556,17 @@ async function main() {
     (pageClient.match(/isClientView && showPhotos/g) ?? []).length >= 1 &&
       (pageClient.match(/isClientView && showVideos/g) ?? []).length >= 1 &&
       (pageClient.match(/isClientView && showTours/g) ?? []).length >= 1 &&
+      (pageClient.match(/isClientView && showModels/g) ?? []).length >= 1 &&
       (pageClient.match(/isClientView && showDocuments/g) ?? []).length >= 1,
-    "client branch gates all four sections"
+    "client branch gates all five sections"
   );
   assert(
     pageClient.includes("hiddenFromClients={photosHidden}") &&
       pageClient.includes("hiddenFromClients={videosHidden}") &&
       pageClient.includes("hiddenFromClients={toursHidden}") &&
+      pageClient.includes("hiddenFromClients={modelsHidden}") &&
       pageClient.includes("hiddenFromClients={documentsHidden}"),
-    "admin branch marks all four hidden badges"
+    "admin branch marks all five hidden badges"
   );
 
   section("9. Everything-off empty state present");

@@ -54,7 +54,10 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createThumbRequestQueue } from "@/lib/media-thumb-client";
+import {
+  createThumbRequestQueue,
+  getCachedThumbUrl,
+} from "@/lib/media-thumb-client";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { ProjectZipDownload } from "@/components/projects/project-zip-download";
 import {
@@ -134,11 +137,14 @@ function PhotoThumb({
   selected,
   url,
   onVisible,
+  scrollRoot,
 }: {
   assetId: string;
   selected: boolean;
   url: string | null;
   onVisible: (id: string) => void;
+  /** Nested overflow scroller — required so IO fires inside max-h overflow-auto. */
+  scrollRoot: Element | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -149,14 +155,22 @@ function PhotoThumb({
       (entries) => {
         if (entries[0]?.isIntersecting) onVisible(assetId);
       },
-      { rootMargin: "120px" }
+      // Root must be the grid scroller (not the viewport). Viewport-rooted IO
+      // often never crosses threshold for tiles inside max-h-[70vh] overflow-auto.
+      { root: scrollRoot, rootMargin: "160px" }
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [assetId, onVisible, url]);
+  }, [assetId, onVisible, url, scrollRoot]);
 
   return (
-    <div ref={ref} className="relative aspect-square w-full bg-slate-100">
+    <div
+      ref={ref}
+      className="relative aspect-square w-full bg-slate-100"
+      onMouseEnter={() => {
+        if (!url) onVisible(assetId);
+      }}
+    >
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -197,6 +211,7 @@ function SortablePhotoCard({
   showHandle,
   thumbUrl,
   onThumbVisible,
+  scrollRoot,
   onActivate,
   onOpen,
   onSetHero,
@@ -219,6 +234,7 @@ function SortablePhotoCard({
   showHandle: boolean;
   thumbUrl: string | null;
   onThumbVisible: (id: string) => void;
+  scrollRoot: Element | null;
   onActivate: (e: ReactMouseEvent, id: string, index: number) => void;
   onOpen: () => void;
   onSetHero: () => void;
@@ -402,6 +418,7 @@ function SortablePhotoCard({
         selected={selected}
         url={thumbUrl}
         onVisible={onThumbVisible}
+        scrollRoot={scrollRoot}
       />
       <div className="space-y-2 p-2">
         <p className="line-clamp-2 text-xs text-foreground">{mediaDisplayName(photo)}</p>
@@ -505,6 +522,7 @@ export function AdminPhotoGrid({
   const [selectMode, setSelectMode] = useState(false);
   const [placementMode, setPlacementMode] = useState(false);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
+  const [scrollRoot, setScrollRoot] = useState<Element | null>(null);
   const thumbQueueRef = useRef(
     createThumbRequestQueue((urls) => {
       setThumbUrls((prev) => ({ ...prev, ...urls }));
@@ -539,6 +557,24 @@ export function AdminPhotoGrid({
   }, [allProjectPhotos, folderFilter]);
 
   const visibleIds = useMemo(() => visiblePhotos.map((p) => p.id), [visiblePhotos]);
+
+  // Bind IO root once the overflow scroller mounts.
+  useEffect(() => {
+    setScrollRoot(scrollRef.current);
+  }, [visiblePhotos.length]);
+
+  // Eager batch (restore pre-IO mount fetch). Do not rely solely on IntersectionObserver
+  // inside max-h overflow-auto — a one-shot miss/failed batch left tiles blank forever.
+  useEffect(() => {
+    const ids = visiblePhotos.map((p) => p.id);
+    for (const id of ids) thumbQueueRef.current.request(id);
+    const retry = window.setTimeout(() => {
+      for (const id of ids) {
+        if (!getCachedThumbUrl(id)) thumbQueueRef.current.request(id);
+      }
+    }, 1500);
+    return () => window.clearTimeout(retry);
+  }, [visibleIds, visiblePhotos]);
 
   const folderCounts = useMemo(() => {
     const map = new Map<string | "null", number>();
@@ -1285,6 +1321,7 @@ export function AdminPhotoGrid({
                       showHandle
                       thumbUrl={thumbUrls[p.id] ?? null}
                       onThumbVisible={onThumbVisible}
+                      scrollRoot={scrollRoot}
                       onActivate={handleActivate}
                       onOpen={() => {
                         if (placementMode) return;
