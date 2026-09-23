@@ -109,6 +109,7 @@ DECLARE
   v_activity   uuid := '00000000-0000-0000-0000-0000000000bb';
   v_notif      uuid := '00000000-0000-0000-0000-0000000000bc';
   v_tour       uuid := '00000000-0000-0000-0000-0000000000bd';
+  v_model      uuid := '00000000-0000-0000-0000-0000000000d1';
   v_lead       uuid := '00000000-0000-0000-0000-0000000000be';
   v_proj_cli   uuid := '00000000-0000-0000-0000-0000000000bf';
   v_revision   uuid := '00000000-0000-0000-0000-0000000000c0';
@@ -185,6 +186,7 @@ BEGIN
   DELETE FROM shoot_proposals WHERE business_id = v_business;
   DELETE FROM revisions WHERE business_id = v_business;
   DELETE FROM tours WHERE business_id = v_business;
+  DELETE FROM project_3d_models WHERE business_id = v_business;
   DELETE FROM payments WHERE business_id = v_business;
   DELETE FROM project_quotes WHERE business_id = v_business;
   DELETE FROM media_assets WHERE business_id = v_business;
@@ -311,6 +313,9 @@ BEGIN
   INSERT INTO tours (id, business_id, project_id, tour_name, kuula_url)
   VALUES (v_tour, v_business, v_project, 'Tenant B Tour', 'https://example.test/kuula/tenant-b');
 
+  INSERT INTO project_3d_models (id, business_id, project_id, title, embed_url, provider)
+  VALUES (v_model, v_business, v_project, 'Tenant B Model', 'https://sketchfab.com/models/abc123/embed', 'sketchfab');
+
   INSERT INTO leads (id, business_id, name, email, property_address, service_requested, is_read)
   VALUES (v_lead, v_business, 'Tenant B Lead', 'lead@example.test', '999 Test Lane', 'Residential', false);
 
@@ -375,6 +380,7 @@ BEGIN
   PERFORM _tenant_test_assert_read_hidden('media_folders', v_folder);
   PERFORM _tenant_test_assert_read_hidden('media_asset_tags', v_tag);
   PERFORM _tenant_test_assert_read_hidden('tours', v_tour);
+  PERFORM _tenant_test_assert_read_hidden('project_3d_models', v_model);
   PERFORM _tenant_test_assert_read_hidden('revisions', v_revision);
   PERFORM _tenant_test_assert_read_hidden('shoot_proposals', v_shoot);
 
@@ -638,6 +644,7 @@ BEGIN
   PERFORM _tenant_test_assert_swift_hidden('media_folders', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('media_asset_tags', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('tours', v_swift_bid);
+  PERFORM _tenant_test_assert_swift_hidden('project_3d_models', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('revisions', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('shoot_proposals', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('business_integrations', v_swift_bid);
@@ -733,6 +740,7 @@ BEGIN
   DELETE FROM shoot_proposals WHERE business_id = v_teardown_business_id;
   DELETE FROM revisions WHERE business_id = v_teardown_business_id;
   DELETE FROM tours WHERE business_id = v_teardown_business_id;
+  DELETE FROM project_3d_models WHERE business_id = v_teardown_business_id;
   DELETE FROM payments WHERE business_id = v_teardown_business_id;
   DELETE FROM project_quotes WHERE business_id = v_teardown_business_id;
   DELETE FROM media_assets WHERE business_id = v_teardown_business_id;
@@ -783,6 +791,7 @@ BEGIN
   DELETE FROM shoot_proposals WHERE business_id = v_pentest_business_id;
   DELETE FROM revisions WHERE business_id = v_pentest_business_id;
   DELETE FROM tours WHERE business_id = v_pentest_business_id;
+  DELETE FROM project_3d_models WHERE business_id = v_pentest_business_id;
   DELETE FROM payments WHERE business_id = v_pentest_business_id;
   DELETE FROM project_quotes WHERE business_id = v_pentest_business_id;
   DELETE FROM media_assets WHERE business_id = v_pentest_business_id;

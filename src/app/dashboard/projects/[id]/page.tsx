@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { getProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getProjectHeroMedia } from "@/lib/cover";
-import { filterClientMedia, filterClientTours } from "@/lib/client-media";
+import { filterClientMedia, filterClientTours, filterClientModels } from "@/lib/client-media";
 import { redirect, notFound } from "next/navigation";
 import { filterClientVisibleActivities } from "@/lib/communications";
 import { getClientVisibleQuotes } from "@/lib/quote-display";
@@ -69,6 +69,7 @@ async function ProjectContent({
     { data: projectRow },
     { data: media },
     { data: tours },
+    { data: models },
     { data: mediaFolders },
   ] = await Promise.all([
     supabase.from("projects").select("*").eq("business_id", tenant.businessId).eq("id", id).single(),
@@ -79,6 +80,12 @@ async function ProjectContent({
       .eq("project_id", id)
       .order("display_order", { ascending: true }),
     supabase.from("tours").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order"),
+    supabase
+      .from("project_3d_models")
+      .select("*")
+      .eq("business_id", tenant.businessId)
+      .eq("project_id", id)
+      .order("display_order"),
     supabase.from("media_folders").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order", { ascending: true }),
   ]);
 
@@ -148,7 +155,7 @@ async function ProjectContent({
   const db = await createTenantServiceClient(tenant.businessId);
   const versionMap = await loadVideoReviewVersionMap(db, id);
   const videoReviews = await listProjectVideoReviews(db, id);
-  const { mediaSectionsFromProject, filterMediaByClientSections, filterToursByClientSections } =
+  const { mediaSectionsFromProject, filterMediaByClientSections, filterToursByClientSections, filterModelsByClientSections } =
     await import("@/lib/project-media-sections");
   const mediaSections = mediaSectionsFromProject(projectRow);
   const isAdminViewer = profile.role === "admin";
@@ -159,6 +166,11 @@ async function ProjectContent({
   );
   const visibleTours = filterToursByClientSections(
     filterClientTours(tours ?? []),
+    mediaSections,
+    isAdminViewer
+  );
+  const visibleModels = filterModelsByClientSections(
+    filterClientModels(models ?? []),
     mediaSections,
     isAdminViewer
   );
@@ -181,6 +193,7 @@ async function ProjectContent({
         videos={videos}
         documents={documents}
         tours={visibleTours}
+        models={visibleModels}
         mediaSections={mediaSections}
         payments={payments}
         revisions={revisions}

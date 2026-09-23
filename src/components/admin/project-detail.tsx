@@ -20,14 +20,18 @@ import { PROJECT_STATUSES } from "@/lib/constants";
 import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
 import { QuoteSection } from "@/components/projects/quote-section";
 import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
-import type { Project, Client, MediaAsset, Tour, Payment, ShootProposal, ActivityLog, Revision, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
+import type { Project, Client, MediaAsset, Tour, Project3dModel, Payment, ShootProposal, ActivityLog, Revision, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
 import { normalizeStatus } from "@/lib/constants";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
 import { NextStepBanner } from "@/components/projects/next-step-banner";
 import { getAdminNextStep } from "@/lib/journey";
 import {
-  Upload, CreditCard, Globe, Trash2, ChevronUp, ChevronDown,
+  EXTERNAL_3D_SUPPORTED_LIST,
+  normalizeExternal3dUrl,
+} from "@/lib/external-3d-models";
+import {
+  Upload, CreditCard, Globe, Box, Trash2, ChevronUp, ChevronDown,
   ExternalLink, Check, Video, ImageIcon, Eye, EyeOff, Link2, Pencil, Users, Plus, MapPin, Share2,
 } from "lucide-react";
 import { CreateClientModal } from "@/components/admin/create-client-modal";
@@ -97,6 +101,7 @@ interface AdminProjectDetailProps {
   project: Project & { clients: Client };
   media: MediaAsset[];
   tours: Tour[];
+  models: Project3dModel[];
   payments: Payment[];
   shootProposals: ShootProposal[];
   projectClients: { id: string; client_id: string; is_primary: boolean; clients: Client }[];
@@ -119,6 +124,7 @@ export function AdminProjectDetail({
   project: initialProject,
   media: initialMedia,
   tours: initialTours,
+  models: initialModels,
   payments,
   shootProposals,
   projectClients: initialProjectClients,
@@ -142,11 +148,15 @@ export function AdminProjectDetail({
   const [copied, setCopied] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [showTourForm, setShowTourForm] = useState(false);
+  const [showModelForm, setShowModelForm] = useState(false);
+  const [modelFormEmbedUrl, setModelFormEmbedUrl] = useState("");
   const [showYoutubeForm, setShowYoutubeForm] = useState(false);
   const [editingMedia, setEditingMedia] = useState<string | null>(null);
   const [editingTour, setEditingTour] = useState<string | null>(null);
+  const [editingModel, setEditingModel] = useState<string | null>(null);
   const [editMediaForm, setEditMediaForm] = useState({ title: "", youtube_url: "" });
   const [editTourForm, setEditTourForm] = useState({ tour_name: "", kuula_url: "", notes: "" });
+  const [editModelForm, setEditModelForm] = useState({ title: "", embed_url: "", description: "" });
   const [addClientId, setAddClientId] = useState("");
   const [showCreateClient, setShowCreateClient] = useState(false);
   const [projectClients, setProjectClients] = useState(initialProjectClients);
@@ -164,6 +174,8 @@ export function AdminProjectDetail({
   const [folders, setFolders] = useState(initialFolders);
   const [tourPendingDelete, setTourPendingDelete] = useState<Tour | null>(null);
   const [deletingTour, setDeletingTour] = useState(false);
+  const [modelPendingDelete, setModelPendingDelete] = useState<Project3dModel | null>(null);
+  const [deletingModel, setDeletingModel] = useState(false);
   const [videoReviews, setVideoReviews] = useState(initialVideoReviews);
   const [mediaSections, setMediaSections] = useState<ProjectMediaSections>(() =>
     mediaSectionsFromProject(initialProject)
@@ -237,6 +249,10 @@ export function AdminProjectDetail({
   }, [initialTours]);
 
   useEffect(() => {
+    setModels(initialModels);
+  }, [initialModels]);
+
+  useEffect(() => {
     setFolders(initialFolders);
   }, [initialFolders]);
 
@@ -246,6 +262,7 @@ export function AdminProjectDetail({
         client_section_photos: initialProject.client_section_photos,
         client_section_videos: initialProject.client_section_videos,
         client_section_tours: initialProject.client_section_tours,
+        client_section_models: initialProject.client_section_models,
         client_section_documents: initialProject.client_section_documents,
       })
     );
@@ -253,6 +270,7 @@ export function AdminProjectDetail({
     initialProject.client_section_photos,
     initialProject.client_section_videos,
     initialProject.client_section_tours,
+    initialProject.client_section_models,
     initialProject.client_section_documents,
   ]);
 
@@ -267,6 +285,17 @@ export function AdminProjectDetail({
 
   const [media, setMedia] = useState(initialMedia);
   const [tours, setTours] = useState(initialTours);
+  const [models, setModels] = useState(initialModels);
+
+  const modelEmbedPreview = useMemo(() => {
+    if (!modelFormEmbedUrl.trim()) return null;
+    return normalizeExternal3dUrl(modelFormEmbedUrl);
+  }, [modelFormEmbedUrl]);
+
+  const editModelEmbedPreview = useMemo(() => {
+    if (!editModelForm.embed_url.trim()) return null;
+    return normalizeExternal3dUrl(editModelForm.embed_url);
+  }, [editModelForm.embed_url]);
 
   const photos = dedupeMedia(
     media
@@ -405,16 +434,17 @@ export function AdminProjectDetail({
     }
   }
 
-  async function moveItem(type: "media" | "tour", id: string, direction: "up" | "down", list: { id: string; display_order: number }[]) {
+  async function moveItem(type: "media" | "tour" | "model", id: string, direction: "up" | "down", list: { id: string; display_order: number }[]) {
     const idx = list.findIndex((i) => i.id === id);
     if (idx < 0) return;
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
     if (swapIdx < 0 || swapIdx >= list.length) return;
 
+    const itemType = type === "tour" ? "tour" : type === "model" ? "model" : "media";
     const items = list.map((item, i) => {
-      if (i === idx) return { id: item.id, display_order: swapIdx, type: type === "tour" ? "tour" : "media" };
-      if (i === swapIdx) return { id: item.id, display_order: idx, type: type === "tour" ? "tour" : "media" };
-      return { id: item.id, display_order: item.display_order, type: type === "tour" ? "tour" : "media" };
+      if (i === idx) return { id: item.id, display_order: swapIdx, type: itemType };
+      if (i === swapIdx) return { id: item.id, display_order: idx, type: itemType };
+      return { id: item.id, display_order: item.display_order, type: itemType };
     });
 
     await fetch("/api/media/reorder", {
@@ -504,6 +534,22 @@ export function AdminProjectDetail({
       toast.success(visible ? "Tour visible to client" : "Tour hidden from client");
     } else {
       toast.error("Failed to update tour visibility");
+    }
+  }
+
+  async function toggleModelVisibility(id: string, visible: boolean) {
+    const res = await fetch("/api/project-3d-models", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id, client_visible: visible }),
+    });
+    if (res.ok) {
+      const updated = (await res.json()) as Project3dModel;
+      setModels((prev) => prev.map((m) => (m.id === id ? updated : m)));
+      toast.success(visible ? "Model visible to client" : "Model hidden from client");
+    } else {
+      toast.error("Failed to update model visibility");
     }
   }
 
@@ -701,6 +747,79 @@ export function AdminProjectDetail({
       toast.success("Tour added");
       router.refresh();
     } else toast.error("Failed to add tour");
+  }
+
+  async function confirmDeleteModel() {
+    if (!modelPendingDelete) return;
+    setDeletingModel(true);
+    const deleted = modelPendingDelete;
+    setModels((prev) => prev.filter((m) => m.id !== deleted.id));
+    try {
+      const res = await fetch(
+        `/api/project-3d-models?id=${deleted.id}&project_id=${initialProject.id}`,
+        { method: "DELETE", credentials: "include" }
+      );
+      if (!res.ok) {
+        setModels((prev) => sortModels([...prev, deleted]));
+        const data = await res.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || "Failed to delete model");
+        return;
+      }
+      toast.success("Model deleted");
+      setModelPendingDelete(null);
+      router.refresh();
+    } finally {
+      setDeletingModel(false);
+    }
+  }
+
+  function sortModels(list: Project3dModel[]) {
+    return [...list].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+  }
+
+  async function saveModelEdit(id: string) {
+    const res = await fetch("/api/project-3d-models", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id, ...editModelForm }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setModels((prev) => prev.map((m) => (m.id === id ? updated : m)));
+      setEditingModel(null);
+      toast.success("Model updated");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error((data as { error?: string }).error || "Failed to update model");
+    }
+  }
+
+  async function handleCreateModel(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const res = await fetch("/api/project-3d-models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        project_id: initialProject.id,
+        title: fd.get("title"),
+        embed_url: fd.get("embed_url"),
+        description: fd.get("description") || null,
+      }),
+    });
+    if (res.ok) {
+      const newModel = await res.json();
+      setModels((prev) => [...prev, newModel as Project3dModel]);
+      setShowModelForm(false);
+      setModelFormEmbedUrl("");
+      toast.success("3D model added");
+      router.refresh();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error((data as { error?: string }).error || "Failed to add model");
+    }
   }
 
   async function handleCreatePayment(e: React.FormEvent<HTMLFormElement>) {
@@ -1175,6 +1294,121 @@ export function AdminProjectDetail({
         </CardContent>
       </Card>
 
+      {/* 3D Models */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <CardTitle className="flex items-center gap-2"><Box className="h-5 w-5" /> 3D Models</CardTitle>
+            <ClientSectionVisibilityToggle
+              sectionKey="models"
+              visible={mediaSections.models}
+              saving={sectionSaving === "models"}
+              onChange={(v) => void setClientSectionVisible("models", v)}
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              setShowModelForm(!showModelForm);
+              if (showModelForm) setModelFormEmbedUrl("");
+            }}
+          >
+            Add Model
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {showModelForm && (
+            <form onSubmit={handleCreateModel} className="mb-4 space-y-3 rounded-lg border border-border p-4">
+              <Input name="title" required placeholder="Model title" />
+              <Input
+                name="embed_url"
+                required
+                placeholder="https://… viewer / share URL"
+                value={modelFormEmbedUrl}
+                onChange={(e) => setModelFormEmbedUrl(e.target.value)}
+              />
+              {modelEmbedPreview ? (
+                <p className={`text-xs ${modelEmbedPreview.ok ? "text-muted" : "text-red-600"}`}>
+                  {modelEmbedPreview.ok ? modelEmbedPreview.message : modelEmbedPreview.error}
+                </p>
+              ) : (
+                <p className="text-xs text-muted">Supported: {EXTERNAL_3D_SUPPORTED_LIST}</p>
+              )}
+              <Textarea name="description" placeholder="Description (optional)" rows={2} />
+              <Button type="submit" variant="accent" size="sm">Save Model</Button>
+            </form>
+          )}
+          {models.sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)).map((m, i) => (
+            <div key={m.id} className="mb-2">
+              {editingModel === m.id ? (
+                <div className="space-y-2 rounded-lg border border-border p-3">
+                  <Input value={editModelForm.title} onChange={(e) => setEditModelForm({ ...editModelForm, title: e.target.value })} />
+                  <Input
+                    value={editModelForm.embed_url}
+                    onChange={(e) => setEditModelForm({ ...editModelForm, embed_url: e.target.value })}
+                  />
+                  {editModelEmbedPreview ? (
+                    <p className={`text-xs ${editModelEmbedPreview.ok ? "text-muted" : "text-red-600"}`}>
+                      {editModelEmbedPreview.ok ? editModelEmbedPreview.message : editModelEmbedPreview.error}
+                    </p>
+                  ) : null}
+                  <Textarea
+                    value={editModelForm.description}
+                    onChange={(e) => setEditModelForm({ ...editModelForm, description: e.target.value })}
+                    rows={2}
+                  />
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="accent" onClick={() => saveModelEdit(m.id)}>Save</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingModel(null)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <AssetRow
+                  name={m.title}
+                  badge={m.client_visible === false ? "Hidden" : undefined}
+                  onUp={() => moveItem("model", m.id, "up", models)}
+                  onDown={() => moveItem("model", m.id, "down", models)}
+                  canUp={i > 0}
+                  canDown={i < models.length - 1}
+                  extra={
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title={m.client_visible !== false ? "Hide from client" : "Show to client"}
+                        onClick={() => toggleModelVisibility(m.id, m.client_visible === false)}
+                      >
+                        {m.client_visible !== false ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditingModel(m.id);
+                          setEditModelForm({
+                            title: m.title,
+                            embed_url: m.embed_url,
+                            description: m.description || "",
+                          });
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <a href={m.embed_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4 text-accent" />
+                      </a>
+                    </>
+                  }
+                  onDelete={() => setModelPendingDelete(m)}
+                />
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
       {/* Documents */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
@@ -1359,6 +1593,28 @@ export function AdminProjectDetail({
         <p className="text-sm text-muted">
           This permanently deletes{" "}
           <strong>{tourPendingDelete?.tour_name}</strong>. The tour will disappear from the
+          client project page immediately. This cannot be undone.
+        </p>
+      </Modal>
+
+      <Modal
+        open={!!modelPendingDelete}
+        onClose={() => !deletingModel && setModelPendingDelete(null)}
+        title="Delete 3D model?"
+        footer={
+          <Button
+            variant="accent"
+            className="w-full min-h-11 bg-red-600 hover:bg-red-700"
+            disabled={deletingModel}
+            onClick={() => void confirmDeleteModel()}
+          >
+            {deletingModel ? "Deleting…" : "Delete permanently"}
+          </Button>
+        }
+      >
+        <p className="text-sm text-muted">
+          This permanently deletes{" "}
+          <strong>{modelPendingDelete?.title}</strong>. The model will disappear from the
           client project page immediately. This cannot be undone.
         </p>
       </Modal>

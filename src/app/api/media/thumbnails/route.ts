@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       const { data: projects } = await db
         .from("projects")
         .select(
-          "id, client_section_photos, client_section_videos, client_section_tours, client_section_documents"
+          "id, client_section_photos, client_section_videos, client_section_tours, client_section_models, client_section_documents"
         )
         .in("id", projectIds);
       const { mediaSectionsFromProject } = await import("@/lib/project-media-sections");

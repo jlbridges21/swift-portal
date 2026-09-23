@@ -36,7 +36,7 @@ export async function GET(
   const { data: project } = await db
     .from("projects")
     .select(
-      "status, link_access_mode, client_section_photos, client_section_videos, client_section_tours, client_section_documents"
+      "status, link_access_mode, client_section_photos, client_section_videos, client_section_tours, client_section_models, client_section_documents"
     )
     .eq("id", ctx.projectId)
     .maybeSingle();

@@ -1,4 +1,4 @@
-import type { MediaAsset, Tour } from "@/lib/types";
+import type { MediaAsset, Tour, Project3dModel } from "@/lib/types";
 
 /** Media the client portal should display (photos, videos, docs, YouTube). */
 export function isClientVisibleMedia(asset: Pick<MediaAsset, "visibility">): boolean {
@@ -13,10 +13,21 @@ export function isClientVisibleTour(tour: Pick<Tour, "client_visible">): boolean
   return tour.client_visible !== false;
 }
 
+/** External 3D models visible on the client project page. */
+export function isClientVisibleModel(model: Pick<Project3dModel, "client_visible">): boolean {
+  return model.client_visible !== false;
+}
+
 export function filterClientMedia<T extends Pick<MediaAsset, "visibility">>(items: T[]): T[] {
   return items.filter(isClientVisibleMedia);
 }
 
 export function filterClientTours<T extends Pick<Tour, "client_visible">>(items: T[]): T[] {
   return items.filter(isClientVisibleTour);
+}
+
+export function filterClientModels<T extends Pick<Project3dModel, "client_visible">>(
+  items: T[]
+): T[] {
+  return items.filter(isClientVisibleModel);
 }

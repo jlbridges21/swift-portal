@@ -18,6 +18,7 @@ export const ACTIVITY_CONFIG: Record<string, ActivityConfig> = {
   photos_uploaded: { icon: "📸", label: "Photos uploaded" },
   videos_uploaded: { icon: "🎥", label: "Videos uploaded" },
   tour_added: { icon: "🌐", label: "360° tour added" },
+  model_added: { icon: "📦", label: "3D model added" },
   documents_uploaded: { icon: "📄", label: "Documents uploaded" },
   media_uploaded: { icon: "📎", label: "Media uploaded" },
   invoice_sent: { icon: "💳", label: "Invoice sent" },

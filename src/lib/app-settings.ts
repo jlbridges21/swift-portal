@@ -129,6 +129,7 @@ export interface MediaSectionDefaultsSettings {
   photos: boolean;
   videos: boolean;
   tours: boolean;
+  models: boolean;
   documents: boolean;
 }
 
@@ -264,6 +265,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     photos: true,
     videos: true,
     tours: true,
+    models: true,
     documents: true,
   },
   workflow: buildDefaultWorkflowSettings(),
@@ -338,6 +340,7 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
       photos: stored.mediaSectionDefaults?.photos !== false,
       videos: stored.mediaSectionDefaults?.videos !== false,
       tours: stored.mediaSectionDefaults?.tours !== false,
+      models: stored.mediaSectionDefaults?.models !== false,
       documents: stored.mediaSectionDefaults?.documents !== false,
     },
     workflow: mergeWorkflowSettings(stored.workflow),

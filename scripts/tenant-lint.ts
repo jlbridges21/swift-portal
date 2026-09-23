@@ -64,6 +64,7 @@ const BUSINESS_OWNED_TABLES = new Set([
   "revisions",
   "shoot_proposals",
   "tours",
+  "project_3d_models",
   "video_review_comments",
   "video_review_notification_batches",
   "video_review_notification_sends",

@@ -955,6 +955,12 @@ export function AdminSettingsClient({
                     onChange={(v) => patchMediaSectionDefaults({ tours: v })}
                   />
                   <RowToggle
+                    id="mediaDefaultModels"
+                    label="3D Models visible to clients by default"
+                    checked={settings.mediaSectionDefaults.models}
+                    onChange={(v) => patchMediaSectionDefaults({ models: v })}
+                  />
+                  <RowToggle
                     id="mediaDefaultDocuments"
                     label="Documents visible to clients by default"
                     checked={settings.mediaSectionDefaults.documents}

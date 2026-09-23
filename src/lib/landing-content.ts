@@ -376,6 +376,62 @@ function sanitizeMultiline(raw: unknown, maxLen: number): string {
   return stripped.slice(0, maxLen);
 }
 
+export type StrictHttpsUrlRejectReason =
+  | "empty"
+  | "invalid"
+  | "scheme"
+  | "credentials"
+  | "localhost"
+  | "host";
+
+/**
+ * Shared strict URL gate used by landing social links and external 3D embeds.
+ * Rejects javascript:/data:/protocol-relative, credentials, localhost, and
+ * (when allowedHosts is non-empty) hosts outside the allowlist.
+ * Prefer https; http is accepted then upgraded.
+ */
+export function parseStrictHttpsUrl(
+  raw: unknown,
+  options?: {
+    /** Empty / omitted → any non-local https host (website-style). */
+    allowedHosts?: readonly string[];
+    maxLen?: number;
+  }
+):
+  | { ok: true; url: URL; host: string; href: string }
+  | { ok: false; reason: StrictHttpsUrlRejectReason } {
+  const maxLen = options?.maxLen ?? LANDING_LIMITS.socialUrl;
+  const text = sanitizePlainText(raw, maxLen);
+  if (!text) return { ok: false, reason: "empty" };
+  // Protocol-relative and other schemes that URL() may still parse.
+  if (text.startsWith("//") || /^javascript:/i.test(text) || /^data:/i.test(text)) {
+    return { ok: false, reason: "scheme" };
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(text);
+  } catch {
+    return { ok: false, reason: "invalid" };
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return { ok: false, reason: "scheme" };
+  }
+  if (parsed.username || parsed.password) {
+    return { ok: false, reason: "credentials" };
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".local")) {
+    return { ok: false, reason: "localhost" };
+  }
+  const allowed = options?.allowedHosts;
+  if (allowed && allowed.length > 0) {
+    const allowedLower = allowed.map((a) => a.toLowerCase());
+    if (!allowedLower.includes(host)) return { ok: false, reason: "host" };
+  }
+  parsed.protocol = "https:";
+  return { ok: true, url: parsed, host, href: parsed.toString() };
+}
+
 /**
  * Validate social / website URLs. Rejects javascript:, data:, non-http(s),
  * and hosts outside the allowlist (except website → any https host).
@@ -384,23 +440,11 @@ export function sanitizeSocialUrl(
   kind: keyof LandingSocialLinks,
   raw: unknown
 ): string {
-  const text = sanitizePlainText(raw, LANDING_LIMITS.socialUrl);
-  if (!text) return "";
-  let parsed: URL;
-  try {
-    parsed = new URL(text);
-  } catch {
-    return "";
-  }
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return "";
-  if (parsed.username || parsed.password) return "";
-  const host = parsed.hostname.toLowerCase();
-  if (host === "localhost" || host.endsWith(".local")) return "";
   const allowed = SOCIAL_HOSTS[kind];
-  if (allowed.length > 0 && !allowed.includes(host)) return "";
-  // Prefer https
-  parsed.protocol = "https:";
-  return parsed.toString();
+  const result = parseStrictHttpsUrl(raw, {
+    allowedHosts: allowed.length > 0 ? allowed : undefined,
+  });
+  return result.ok ? result.href : "";
 }
 
 function normalizeHowItWorks(raw: unknown): LandingHowItWorksStep[] {

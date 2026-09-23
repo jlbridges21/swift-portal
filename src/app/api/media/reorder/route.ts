@@ -95,7 +95,12 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Invalid reorder item" }, { status: 400 });
     }
 
-    const table = item.type === "tour" ? "tours" : "media_assets";
+    const table =
+      item.type === "tour"
+        ? "tours"
+        : item.type === "model"
+          ? "project_3d_models"
+          : "media_assets";
     const { data: row, error: lookupError } = await db
       .from(table)
       .select("id, project_id")

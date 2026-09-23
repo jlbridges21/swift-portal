@@ -157,7 +157,7 @@ async function main() {
   }
   assert(true, "typecheck + lint + build + tenant-lint passed");
 
-  section("2. Migration counts — every project all four ON");
+  section("2. Migration counts — every project all five ON");
   // Ensure fixture starts clean (prior failed runs may have left Photos off).
   await admin
     .from("projects")
@@ -168,7 +168,7 @@ async function main() {
   const { data: projects, error: projErr } = await admin
     .from("projects")
     .select(
-      "id, client_section_photos, client_section_videos, client_section_tours, client_section_documents"
+      "id, client_section_photos, client_section_videos, client_section_tours, client_section_models, client_section_documents"
     );
   if (projErr) throw projErr;
   const total = projects?.length ?? 0;
@@ -177,6 +177,7 @@ async function main() {
       p.client_section_photos !== false &&
       p.client_section_videos !== false &&
       p.client_section_tours !== false &&
+      p.client_section_models !== false &&
       p.client_section_documents !== false
   ).length;
   const anyOff = total - allOn;
@@ -184,7 +185,7 @@ async function main() {
     JSON.stringify(
       {
         total_projects: total,
-        all_four_visible: allOn,
+        all_five_visible: allOn,
         any_section_off: anyOff,
       },
       null,
@@ -192,12 +193,12 @@ async function main() {
     )
   );
   assert(total > 0, "projects exist");
-  assert(anyOff === 0, "every existing project has all four sections visible");
+  assert(anyOff === 0, "every existing project has all five sections visible");
 
   const { data: jacksonBefore } = await admin
     .from("projects")
     .select(
-      "id, project_name, client_section_photos, client_section_videos, client_section_tours, client_section_documents"
+      "id, project_name, client_section_photos, client_section_videos, client_section_tours, client_section_models, client_section_documents"
     )
     .eq("id", TEST_PROJECT)
     .single();

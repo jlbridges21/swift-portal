@@ -22,6 +22,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
     { data: project },
     { data: media },
     { data: tours },
+    { data: models },
     { data: payments },
     { data: shootProposals },
     { data: projectClients },
@@ -40,6 +41,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
       .eq("project_id", id)
       .order("display_order", { ascending: true }),
     supabase.from("tours").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order"),
+    supabase.from("project_3d_models").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order"),
     supabase.from("payments").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
     supabase.from("shoot_proposals").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("proposed_at", { ascending: true }),
     supabase.from("project_clients").select("*, clients(id, name, email, company, phone, full_name, user_id)").eq("business_id", tenant.businessId).eq("project_id", id),
@@ -70,6 +72,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
           project={project}
           media={media ?? []}
           tours={tours ?? []}
+          models={models ?? []}
           payments={payments ?? []}
           shootProposals={shootProposals ?? []}
           projectClients={projectClients ?? []}

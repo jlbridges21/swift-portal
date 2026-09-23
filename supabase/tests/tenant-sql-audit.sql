@@ -390,6 +390,7 @@ FROM unnest(ARRAY[
   'trg_media_asset_events_media_asset_id_same_business',
   'trg_media_asset_events_project_id_same_business',
   'trg_tours_project_id_same_business',
+  'trg_project_3d_models_project_id_same_business',
   'trg_revisions_project_id_same_business',
   'trg_revisions_client_id_same_business',
   'trg_shoot_proposals_project_id_same_business',

@@ -6,12 +6,13 @@
  * sections that are ON for the project.
  */
 
-export type MediaSectionKey = "photos" | "videos" | "tours" | "documents";
+export type MediaSectionKey = "photos" | "videos" | "tours" | "models" | "documents";
 
 export type ProjectMediaSections = {
   photos: boolean;
   videos: boolean;
   tours: boolean;
+  models: boolean;
   documents: boolean;
 };
 
@@ -20,6 +21,7 @@ export const DEFAULT_PROJECT_MEDIA_SECTIONS: ProjectMediaSections = {
   photos: true,
   videos: true,
   tours: true,
+  models: true,
   documents: true,
 };
 
@@ -27,6 +29,7 @@ export const MEDIA_SECTION_KEYS: MediaSectionKey[] = [
   "photos",
   "videos",
   "tours",
+  "models",
   "documents",
 ];
 
@@ -34,6 +37,7 @@ export const MEDIA_SECTION_LABELS: Record<MediaSectionKey, string> = {
   photos: "Photo Gallery",
   videos: "Video",
   tours: "360° Virtual Tours",
+  models: "3D Models",
   documents: "Documents",
 };
 
@@ -41,6 +45,7 @@ export type ProjectMediaSectionColumns = {
   client_section_photos?: boolean | null;
   client_section_videos?: boolean | null;
   client_section_tours?: boolean | null;
+  client_section_models?: boolean | null;
   client_section_documents?: boolean | null;
 };
 
@@ -51,6 +56,7 @@ export function normalizeProjectMediaSections(
     photos: raw?.photos !== false,
     videos: raw?.videos !== false,
     tours: raw?.tours !== false,
+    models: raw?.models !== false,
     documents: raw?.documents !== false,
   };
 }
@@ -63,6 +69,7 @@ export function mediaSectionsFromProject(
     photos: project.client_section_photos !== false,
     videos: project.client_section_videos !== false,
     tours: project.client_section_tours !== false,
+    models: project.client_section_models !== false,
     documents: project.client_section_documents !== false,
   };
 }
@@ -74,6 +81,7 @@ export function projectColumnsFromMediaSections(
     client_section_photos: sections.photos,
     client_section_videos: sections.videos,
     client_section_tours: sections.tours,
+    client_section_models: sections.models,
     client_section_documents: sections.documents,
   };
 }
@@ -85,10 +93,10 @@ export function isMediaSectionVisibleForClient(
   return sections[key] !== false;
 }
 
-/** Map a media asset to its client-facing section (tours are not media_assets). */
+/** Map a media asset to its client-facing section (tours/models are not media_assets). */
 export function mediaTypeToSection(
   mediaType: string | null | undefined
-): Exclude<MediaSectionKey, "tours"> | null {
+): Exclude<MediaSectionKey, "tours" | "models"> | null {
   if (mediaType === "photo") return "photos";
   if (mediaType === "video") return "videos";
   if (mediaType === "document") return "documents";
@@ -120,6 +128,16 @@ export function filterToursByClientSections<T>(
   return tours;
 }
 
+export function filterModelsByClientSections<T>(
+  models: T[],
+  sections: ProjectMediaSections,
+  isAdmin: boolean
+): T[] {
+  if (isAdmin) return models;
+  if (!isMediaSectionVisibleForClient(sections, "models")) return [];
+  return models;
+}
+
 /**
  * Whether a non-admin may access this media asset for download / thumb / preview.
  * Admins always may.
@@ -145,12 +163,17 @@ export function parseMediaSectionsPatch(
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   const o = body as Record<string, unknown>;
   const hasAny =
-    "photos" in o || "videos" in o || "tours" in o || "documents" in o;
+    "photos" in o ||
+    "videos" in o ||
+    "tours" in o ||
+    "models" in o ||
+    "documents" in o;
   if (!hasAny) return null;
   return normalizeProjectMediaSections({
     photos: typeof o.photos === "boolean" ? o.photos : undefined,
     videos: typeof o.videos === "boolean" ? o.videos : undefined,
     tours: typeof o.tours === "boolean" ? o.tours : undefined,
+    models: typeof o.models === "boolean" ? o.models : undefined,
     documents: typeof o.documents === "boolean" ? o.documents : undefined,
   });
 }

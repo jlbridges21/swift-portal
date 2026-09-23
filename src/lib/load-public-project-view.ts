@@ -5,11 +5,12 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProjectHeroMedia } from "@/lib/cover";
-import { filterClientMedia, filterClientTours } from "@/lib/client-media";
+import { filterClientMedia, filterClientTours, filterClientModels } from "@/lib/client-media";
 import { getAppSettings } from "@/lib/app-settings";
 import {
   filterMediaByClientSections,
   filterToursByClientSections,
+  filterModelsByClientSections,
   mediaSectionsFromProject,
   type ProjectMediaSections,
 } from "@/lib/project-media-sections";
@@ -19,7 +20,7 @@ import {
 } from "@/lib/video-review-media";
 import { listProjectVideoReviews } from "@/lib/video-reviews";
 import { resolvePublicLinkProject, type PublicLinkProjectContext } from "@/lib/project-link-access";
-import type { MediaAsset, MediaFolder, Tour } from "@/lib/types";
+import type { MediaAsset, MediaFolder, Tour, Project3dModel } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 
 export type PublicProjectViewData = {
@@ -29,6 +30,7 @@ export type PublicProjectViewData = {
   videos: MediaAsset[];
   documents: MediaAsset[];
   tours: Tour[];
+  models: Project3dModel[];
   mediaFolders: MediaFolder[];
   videoReviews: VideoReviewListItem[];
   requireDeliveredForDownloads: boolean;
@@ -46,17 +48,19 @@ export async function loadPublicProjectView(
   const raw = await createServiceClient();
   const db = await createTenantServiceClient(businessId);
 
-  const [{ data: media }, { data: tours }, { data: mediaFolders }] = await Promise.all([
-    db
-      .from("media_assets")
-      .select("*")
-      .eq("project_id", projectId)
-      .order("display_order", { ascending: true }),
-    db.from("tours").select("*").eq("project_id", projectId).order("display_order"),
-    db.from("media_folders").select("*").eq("project_id", projectId).order("display_order", {
-      ascending: true,
-    }),
-  ]);
+  const [{ data: media }, { data: tours }, { data: models }, { data: mediaFolders }] =
+    await Promise.all([
+      db
+        .from("media_assets")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("display_order", { ascending: true }),
+      db.from("tours").select("*").eq("project_id", projectId).order("display_order"),
+      db.from("project_3d_models").select("*").eq("project_id", projectId).order("display_order"),
+      db.from("media_folders").select("*").eq("project_id", projectId).order("display_order", {
+        ascending: true,
+      }),
+    ]);
 
   const versionMap = await loadVideoReviewVersionMap(db, projectId);
   const videoReviews = await listProjectVideoReviews(db, projectId);
@@ -68,6 +72,11 @@ export async function loadPublicProjectView(
   );
   const visibleTours = filterToursByClientSections(
     filterClientTours(tours ?? []),
+    mediaSections,
+    false
+  );
+  const visibleModels = filterModelsByClientSections(
+    filterClientModels(models ?? []),
     mediaSections,
     false
   );
@@ -83,6 +92,7 @@ export async function loadPublicProjectView(
     videos: visibleMedia.filter((m) => m.media_type === "video"),
     documents: visibleMedia.filter((m) => m.media_type === "document"),
     tours: visibleTours,
+    models: visibleModels,
     mediaFolders: mediaFolders ?? [],
     videoReviews,
     requireDeliveredForDownloads: appSettings.payments.requireDeliveredForDownloads,

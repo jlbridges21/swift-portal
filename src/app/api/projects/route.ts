@@ -157,6 +157,7 @@ export async function PATCH(request: Request) {
     delete updates.client_section_photos;
     delete updates.client_section_videos;
     delete updates.client_section_tours;
+    delete updates.client_section_models;
     delete updates.client_section_documents;
 
     if (media_sections !== undefined) {

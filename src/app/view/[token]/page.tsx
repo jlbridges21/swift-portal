@@ -79,6 +79,7 @@ export default async function PublicProjectViewPage({ params }: PageProps) {
         videos={data.videos}
         documents={data.documents}
         tours={data.tours}
+        models={data.models}
         mediaFolders={data.mediaFolders}
         videoReviews={data.videoReviews}
         mediaSections={data.mediaSections}

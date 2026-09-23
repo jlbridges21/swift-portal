@@ -13,6 +13,7 @@ import { ClientPhotoFolders } from "@/components/projects/client-photo-folders";
 import { VideoGrid, videosToGridEntries } from "@/components/projects/video-grid";
 import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
 import { TourCard } from "@/components/projects/tour-card";
+import { Model3dCard } from "@/components/projects/model-3d-card";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
 import { NextStepBanner } from "@/components/projects/next-step-banner";
@@ -25,13 +26,13 @@ import { DeliverableReview } from "@/components/projects/deliverable-review";
 import { EmptyState } from "@/components/ui/empty-state";
 import { normalizeStatus } from "@/lib/constants";
 import { clientDownloadLockMessage, resolveProjectDownloadAllowed } from "@/lib/deliverables";
-import type { Project, MediaAsset, Tour, Payment, Revision, ShootProposal, ActivityLog, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
+import type { Project, MediaAsset, Tour, Project3dModel, Payment, Revision, ShootProposal, ActivityLog, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import { formatDate } from "@/lib/utils";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import {
   Download, MessageSquare,
-  FileText, Clapperboard, Images, Globe, Eye, ArrowLeft, Lock,
+  FileText, Clapperboard, Images, Globe, Box, Eye, ArrowLeft, Lock,
 } from "lucide-react";
 import type { HeroMedia } from "@/lib/cover";
 import { ProjectHero } from "@/components/projects/project-hero";
@@ -56,6 +57,7 @@ interface ProjectPageClientProps {
   videos: MediaAsset[];
   documents: MediaAsset[];
   tours: Tour[];
+  models: Project3dModel[];
   payments: Payment[];
   revisions: Revision[];
   shootProposals: ShootProposal[];
@@ -126,6 +128,7 @@ export function ProjectPageClient({
   videos,
   documents,
   tours,
+  models,
   payments,
   revisions: initialRevisions,
   shootProposals,
@@ -174,18 +177,21 @@ export function ProjectPageClient({
   const showPhotos = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "photos");
   const showVideos = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "videos");
   const showTours = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "tours");
+  const showModels = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "models");
   const showDocuments = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "documents");
   const photosHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "photos");
   const videosHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "videos");
   const toursHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "tours");
+  const modelsHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "models");
   const documentsHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "documents");
   /** True when any visible section has files — used for Download All / deliverable review, not section chrome. */
   const hasAnyMedia =
     (showPhotos && photos.length > 0) ||
     (showVideos && videos.length > 0) ||
     (showTours && tours.length > 0) ||
+    (showModels && models.length > 0) ||
     (showDocuments && documents.length > 0);
-  const anySectionVisible = showPhotos || showVideos || showTours || showDocuments;
+  const anySectionVisible = showPhotos || showVideos || showTours || showModels || showDocuments;
   const pendingPayments = payments.filter((p) => p.status === "pending" || p.status === "sent");
   const clientStep = getClientNextStep(project, pendingPayments.length > 0, shootProposals, brand.name, {
     hasQuote: quotes.length > 0,
@@ -463,6 +469,31 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
+        {isClientView && showModels && (
+          <MicrositeSection
+            id="models"
+            title="3D Models"
+            icon={Box}
+            subtitle={models.length > 0 ? "Explore interactive 3D viewers" : undefined}
+          >
+            {models.length > 0 ? (
+              <div className="space-y-6">
+                {models.map((model) => (
+                  <div key={model.id} className="rounded-2xl overflow-hidden shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+                    <Model3dCard model={model} embedInPortal />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={Box}
+                title="No 3D models yet"
+                description="External 3D viewer links will appear here when they're ready."
+              />
+            )}
+          </MicrositeSection>
+        )}
+
         {isClientView && showDocuments && (
           <MicrositeSection
             id="documents"
@@ -627,6 +658,32 @@ export function ProjectPageClient({
                 icon={Globe}
                 title="No 360° tours yet"
                 description="Interactive tour links will appear here when they're ready."
+              />
+            )}
+          </MicrositeSection>
+        )}
+
+        {!isClientView && showModels && (
+          <MicrositeSection
+            id="models"
+            title="3D Models"
+            icon={Box}
+            subtitle={models.length > 0 ? "Explore interactive 3D viewers" : undefined}
+            hiddenFromClients={modelsHidden}
+          >
+            {models.length > 0 ? (
+              <div className="space-y-6">
+                {models.map((model) => (
+                  <div key={model.id} className="rounded-2xl overflow-hidden shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+                    <Model3dCard model={model} embedInPortal />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={Box}
+                title="No 3D models yet"
+                description="External 3D viewer links will appear here when they're ready."
               />
             )}
           </MicrositeSection>

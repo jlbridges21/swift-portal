@@ -28,6 +28,7 @@ export type PublicLinkProjectContext = {
     | "client_section_photos"
     | "client_section_videos"
     | "client_section_tours"
+    | "client_section_models"
     | "client_section_documents"
   >;
 };
@@ -52,7 +53,7 @@ export async function resolvePublicLinkProject(
   const { data: project, error } = await raw
     .from("projects")
     .select(
-      "id, business_id, project_name, property_address, service_type, status, delivery_date, cover_image_url, cover_image_id, link_access_mode, link_access_token, link_access_view_count, deleted_at, client_section_photos, client_section_videos, client_section_tours, client_section_documents"
+      "id, business_id, project_name, property_address, service_type, status, delivery_date, cover_image_url, cover_image_id, link_access_mode, link_access_token, link_access_view_count, deleted_at, client_section_photos, client_section_videos, client_section_tours, client_section_models, client_section_documents"
     )
     .eq("link_access_token", trimmed)
     .eq("link_access_mode", "anyone_with_link")
@@ -81,6 +82,7 @@ export async function resolvePublicLinkProject(
       client_section_photos: project.client_section_photos !== false,
       client_section_videos: project.client_section_videos !== false,
       client_section_tours: project.client_section_tours !== false,
+      client_section_models: project.client_section_models !== false,
       client_section_documents: project.client_section_documents !== false,
     },
   };

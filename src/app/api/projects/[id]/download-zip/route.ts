@@ -126,7 +126,7 @@ export async function GET(
     const { data: projectRow } = await db
       .from("projects")
       .select(
-        "client_section_photos, client_section_videos, client_section_tours, client_section_documents"
+        "client_section_photos, client_section_videos, client_section_tours, client_section_models, client_section_documents"
       )
       .eq("id", projectId)
       .maybeSingle();

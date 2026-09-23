@@ -939,6 +939,7 @@ export async function hardDeleteBusiness(
     "project_quotes",
     "project_clients",
     "tours",
+    "project_3d_models",
     "projects",
     "properties",
     "leads",

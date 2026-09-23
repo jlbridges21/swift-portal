@@ -68,6 +68,7 @@ export type ActivityType =
   | "photos_uploaded"
   | "videos_uploaded"
   | "tour_added"
+  | "model_added"
   | "documents_uploaded"
   | "payment_requested"
   | "invoice_sent"
@@ -198,6 +199,7 @@ export interface Project {
   client_section_photos?: boolean;
   client_section_videos?: boolean;
   client_section_tours?: boolean;
+  client_section_models?: boolean;
   client_section_documents?: boolean;
   created_at: string;
   updated_at: string;
@@ -274,6 +276,21 @@ export interface Tour {
   client_visible?: boolean;
   created_at: string;
   updated_at?: string;
+}
+
+/** External 3D viewer embed (third-party URL — not stored media). */
+export interface Project3dModel {
+  id: string;
+  business_id: string;
+  project_id: string;
+  title: string;
+  embed_url: string;
+  provider: string;
+  description: string | null;
+  display_order: number;
+  client_visible: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Payment {
@@ -525,6 +542,7 @@ export interface Database {
       media_assets: TableDef<MediaAsset>;
       media_folders: TableDef<MediaFolder>;
       tours: TableDef<Tour>;
+      project_3d_models: TableDef<Project3dModel>;
       payments: TableDef<Payment>;
       revisions: TableDef<Revision>;
       activity_logs: TableDef<ActivityLog>;

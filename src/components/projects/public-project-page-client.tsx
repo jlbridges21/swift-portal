@@ -8,6 +8,7 @@ import { ClientPhotoFolders } from "@/components/projects/client-photo-folders";
 import { VideoGrid, videosToGridEntries } from "@/components/projects/video-grid";
 import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
 import { TourCard } from "@/components/projects/tour-card";
+import { Model3dCard } from "@/components/projects/model-3d-card";
 import { ViewOnlyAccessChip } from "@/components/ui/view-only-access-chip";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,7 +18,7 @@ import { downloadFileName, mediaDisplayName } from "@/lib/media-display-name";
 import { DOWNLOAD_QUALITY_PARAM, type DownloadQuality } from "@/lib/download-quality";
 import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
 import type { HeroMedia } from "@/lib/cover";
-import type { MediaAsset, MediaFolder, Project, Tour } from "@/lib/types";
+import type { MediaAsset, MediaFolder, Project, Tour, Project3dModel } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import {
   isMediaSectionVisibleForClient,
@@ -25,14 +26,14 @@ import {
   DEFAULT_PROJECT_MEDIA_SECTIONS,
 } from "@/lib/project-media-sections";
 import { formatDate } from "@/lib/utils";
-import { Clapperboard, Download, FileText, Globe, Images, Lock, LogIn } from "lucide-react";
+import { Box, Clapperboard, Download, FileText, Globe, Images, Lock, LogIn } from "lucide-react";
 import { toast } from "sonner";
 
 /**
  * Anonymous public-link project view.
  *
  * INCLUDED (view/download only): project title, property address, service type, delivery
- * status badge, hero, photo/video/document galleries, tours, inline video playback.
+ * status badge, hero, photo/video/document galleries, tours, 3D models, inline video playback.
  *
  * EXCLUDED (not required for anonymous view/download): client contact details, project.notes,
  * payments/quotes/pricing, revisions, shoot scheduling, activity timeline, messages,
@@ -46,6 +47,7 @@ export function PublicProjectPageClient({
   videos,
   documents,
   tours,
+  models,
   mediaFolders = [],
   videoReviews = [],
   mediaSections = DEFAULT_PROJECT_MEDIA_SECTIONS,
@@ -62,6 +64,7 @@ export function PublicProjectPageClient({
   videos: MediaAsset[];
   documents: MediaAsset[];
   tours: Tour[];
+  models: Project3dModel[];
   mediaFolders?: MediaFolder[];
   videoReviews?: VideoReviewListItem[];
   mediaSections?: ProjectMediaSections;
@@ -95,8 +98,9 @@ export function PublicProjectPageClient({
   const showPhotos = isMediaSectionVisibleForClient(mediaSections, "photos");
   const showVideos = isMediaSectionVisibleForClient(mediaSections, "videos");
   const showTours = isMediaSectionVisibleForClient(mediaSections, "tours");
+  const showModels = isMediaSectionVisibleForClient(mediaSections, "models");
   const showDocuments = isMediaSectionVisibleForClient(mediaSections, "documents");
-  const anySectionVisible = showPhotos || showVideos || showTours || showDocuments;
+  const anySectionVisible = showPhotos || showVideos || showTours || showModels || showDocuments;
 
   const getDownloadUrl = useCallback(
     async (asset: MediaAsset, thumb = false): Promise<string | null> => {
@@ -292,6 +296,29 @@ export function PublicProjectPageClient({
                   icon={Globe}
                   title="No 360° tours yet"
                   description="Interactive tour links will appear here when they're ready."
+                />
+              </div>
+            )}
+          </section>
+        )}
+
+        {showModels && (
+          <section id="models" className="scroll-mt-24 space-y-4">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-primary">
+              <Box className="h-5 w-5 text-accent" /> 3D Models
+            </h2>
+            {models.length > 0 ? (
+              <div className="space-y-4">
+                {models.map((m) => (
+                  <Model3dCard key={m.id} model={m} embedInPortal />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+                <EmptyState
+                  icon={Box}
+                  title="No 3D models yet"
+                  description="External 3D viewer links will appear here when they're ready."
                 />
               </div>
             )}

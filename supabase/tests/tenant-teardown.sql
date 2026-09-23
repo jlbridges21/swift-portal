@@ -32,6 +32,7 @@ BEGIN
   DELETE FROM shoot_proposals WHERE business_id = v_teardown_business_id;
   DELETE FROM revisions WHERE business_id = v_teardown_business_id;
   DELETE FROM tours WHERE business_id = v_teardown_business_id;
+  DELETE FROM project_3d_models WHERE business_id = v_teardown_business_id;
   DELETE FROM payments WHERE business_id = v_teardown_business_id;
   DELETE FROM project_quotes WHERE business_id = v_teardown_business_id;
   DELETE FROM media_assets WHERE business_id = v_teardown_business_id;
@@ -86,6 +87,7 @@ BEGIN
   DELETE FROM shoot_proposals WHERE business_id = v_pentest_business_id;
   DELETE FROM revisions WHERE business_id = v_pentest_business_id;
   DELETE FROM tours WHERE business_id = v_pentest_business_id;
+  DELETE FROM project_3d_models WHERE business_id = v_pentest_business_id;
   DELETE FROM payments WHERE business_id = v_pentest_business_id;
   DELETE FROM project_quotes WHERE business_id = v_pentest_business_id;
   DELETE FROM media_assets WHERE business_id = v_pentest_business_id;
