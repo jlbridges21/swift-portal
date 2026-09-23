@@ -3,6 +3,13 @@
  * reuses the same signed URL (browser HTTP cache can hit) within the TTL window.
  */
 
+import {
+  IMPERSONATION_READONLY_CODE,
+  IMPERSONATION_READONLY_MESSAGE,
+  isImpersonationReadonlyPayload,
+  notifyImpersonationReadonlyBlocked,
+} from "@/lib/impersonation-readonly";
+
 const BATCH_MAX = 48;
 /** Keep slightly under server TTL (7200s) so we refresh before the signed URL dies. */
 const CLIENT_CACHE_TTL_MS = 90 * 60 * 1000;
@@ -45,25 +52,61 @@ async function fetchBatch(
     credentials: "include",
     body: JSON.stringify({ ids }),
   });
+
+  const contentType = res.headers.get("content-type") || "";
+  const rawText = await res.text();
+  let parsed: unknown = null;
+  if (rawText) {
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      parsed = null;
+    }
+  }
+
   if (!res.ok) {
-    // Do not cache failures — callers may retry. Log so blank tiles are diagnosable.
+    const message =
+      parsed && typeof parsed === "object" && parsed !== null && "error" in parsed
+        ? String((parsed as { error?: unknown }).error ?? "")
+        : "";
     console.warn("[media-thumbs] batch failed", {
       endpoint,
       status: res.status,
       ids: ids.length,
+      contentType,
+      bodyPreview: rawText.slice(0, 240),
+      code:
+        parsed && typeof parsed === "object" && parsed !== null && "code" in parsed
+          ? (parsed as { code?: unknown }).code
+          : undefined,
     });
+    if (isImpersonationReadonlyPayload(parsed) || message.includes("read-only")) {
+      notifyImpersonationReadonlyBlocked({
+        message: message || IMPERSONATION_READONLY_MESSAGE,
+        endpoint,
+        status: res.status,
+      });
+    }
     return Object.fromEntries(ids.map((id) => [id, null]));
   }
-  let data: { urls?: Record<string, string | null> };
-  try {
-    data = (await res.json()) as { urls?: Record<string, string | null> };
-  } catch {
+
+  if (!parsed || typeof parsed !== "object") {
     console.warn("[media-thumbs] batch non-JSON response", {
       endpoint,
       status: res.status,
-      contentType: res.headers.get("content-type"),
+      contentType,
+      bodyPreview: rawText.slice(0, 240),
     });
     return Object.fromEntries(ids.map((id) => [id, null]));
+  }
+
+  const data = parsed as { urls?: Record<string, string | null>; code?: string };
+  if (data.code === IMPERSONATION_READONLY_CODE) {
+    notifyImpersonationReadonlyBlocked({
+      message: IMPERSONATION_READONLY_MESSAGE,
+      endpoint,
+      status: res.status,
+    });
   }
   return data.urls ?? {};
 }

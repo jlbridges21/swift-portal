@@ -15,6 +15,11 @@ import {
 } from "@/lib/portal-url";
 import { verifyImpersonationCookie, SA_BUSINESS_CONTEXT_COOKIE } from "@/lib/platform-session";
 import {
+  IMPERSONATION_READONLY_CODE,
+  IMPERSONATION_READONLY_MESSAGE,
+  isReadOnlyPostExemptPath,
+} from "@/lib/impersonation-readonly";
+import {
   buildPartnerRefCookieValue,
   lookupActiveLandingReferralCode,
   PARTNER_REF_COOKIE,
@@ -688,12 +693,13 @@ export async function updateSession(request: NextRequest) {
         const mutating = method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
         const platformApi = path.startsWith("/api/platform");
         const authApi = path.startsWith("/api/auth");
-        if (mutating && !claims.allowWrites && !platformApi && !authApi) {
+        const readOnlyPostExempt = isReadOnlyPostExemptPath(path);
+        if (mutating && !claims.allowWrites && !platformApi && !authApi && !readOnlyPostExempt) {
           return applyPathCookie(
             NextResponse.json(
               {
-                error:
-                  "Impersonation is read-only. Confirm “allow writes” on the platform banner to change this business.",
+                error: IMPERSONATION_READONLY_MESSAGE,
+                code: IMPERSONATION_READONLY_CODE,
               },
               { status: 403 }
             ),
