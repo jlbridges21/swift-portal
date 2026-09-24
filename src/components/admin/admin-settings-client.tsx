@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, RotateCcw, Save } from "lucide-react";
+import { GoogleCalendarSettingsCard } from "@/components/admin/google-calendar-settings-card";
 import { cn } from "@/lib/utils";
 import { ColorField } from "@/components/ui/color-field";
 import { LogoSizeSlider } from "@/components/admin/logo-size-slider";
@@ -1195,7 +1196,8 @@ export function AdminSettingsClient({
         <SettingsPanel id="integrations" active={section}>
           <div id="settings-integrations" tabIndex={-1} className="scroll-mt-24 space-y-4">
             <h2 className="text-lg font-semibold text-primary">Integrations</h2>
-            <p className="mt-1 text-sm text-muted">GoHighLevel.</p>
+            <p className="mt-1 text-sm text-muted">Google Calendar and GoHighLevel.</p>
+            <GoogleCalendarSettingsCard />
             <Card className="shadow-sm">
               <CardContent className="space-y-4 pt-6">
                 <div className="space-y-2">

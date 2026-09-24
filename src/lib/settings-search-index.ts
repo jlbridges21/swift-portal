@@ -225,7 +225,7 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
     sectionId: "integrations",
     label: "Integrations",
     description: "GoHighLevel.",
-    keywords: ["integrations", "ghl", "gohighlevel"],
+    keywords: ["integrations", "ghl", "gohighlevel", "google calendar", "calendar"],
   },
   {
     id: "automated_emails",

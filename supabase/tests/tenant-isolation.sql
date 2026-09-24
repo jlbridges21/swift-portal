@@ -184,6 +184,7 @@ BEGIN
   DELETE FROM client_messages WHERE business_id = v_business;
   DELETE FROM project_messages WHERE business_id = v_business;
   DELETE FROM shoot_proposals WHERE business_id = v_business;
+  DELETE FROM google_calendar_connections WHERE business_id = v_business;
   DELETE FROM revisions WHERE business_id = v_business;
   DELETE FROM tours WHERE business_id = v_business;
   DELETE FROM project_3d_models WHERE business_id = v_business;
@@ -283,6 +284,12 @@ BEGIN
     business_id, stripe_account_id, stripe_account_status
   ) VALUES (
     v_business, 'acct_tenant_b_isolation', 'not_connected'
+  );
+
+  INSERT INTO google_calendar_connections (
+    business_id, access_token_ciphertext, refresh_token_ciphertext, calendar_id, status
+  ) VALUES (
+    v_business, 'ciphertext-not-a-token', 'ciphertext-not-a-token', 'primary', 'active'
   );
 
   INSERT INTO business_services (
@@ -388,6 +395,12 @@ BEGIN
   SELECT count(*) INTO v_n FROM business_integrations WHERE business_id = v_business;
   IF v_n > 0 THEN
     RAISE EXCEPTION 'READ LEAK: business_integrations Tenant B row visible (% rows)', v_n;
+  END IF;
+  PERFORM _tenant_test_bump();
+
+  SELECT count(*) INTO v_n FROM google_calendar_connections WHERE business_id = v_business;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'READ LEAK: google_calendar_connections Tenant B row visible (% rows)', v_n;
   END IF;
   PERFORM _tenant_test_bump();
 
@@ -648,6 +661,7 @@ BEGIN
   PERFORM _tenant_test_assert_swift_hidden('revisions', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('shoot_proposals', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('business_integrations', v_swift_bid);
+  PERFORM _tenant_test_assert_swift_hidden('google_calendar_connections', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('business_services', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('client_messages', v_swift_bid);
   PERFORM _tenant_test_assert_swift_hidden('project_messages', v_swift_bid);
@@ -748,6 +762,7 @@ BEGIN
   DELETE FROM project_clients WHERE business_id = v_teardown_business_id;
   DELETE FROM leads WHERE business_id = v_teardown_business_id;
   DELETE FROM business_integrations WHERE business_id = v_teardown_business_id;
+  DELETE FROM google_calendar_connections WHERE business_id = v_teardown_business_id;
   -- protect_objects_delete blocks SQL DELETE. Wrap so CRM teardown still runs.
   -- Then Storage API: DELETE /storage/v1/object/project-media/{id}/library/tenant-b-isolation.bin
   BEGIN
@@ -799,6 +814,7 @@ BEGIN
   DELETE FROM project_clients WHERE business_id = v_pentest_business_id;
   DELETE FROM leads WHERE business_id = v_pentest_business_id;
   DELETE FROM business_integrations WHERE business_id = v_pentest_business_id;
+  DELETE FROM google_calendar_connections WHERE business_id = v_pentest_business_id;
   BEGIN
     DELETE FROM storage.objects
       WHERE bucket_id IN ('project-media', 'project-documents')

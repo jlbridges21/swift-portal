@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -39,6 +39,7 @@ import {
   MapPin,
   Clock,
 } from "lucide-react";
+import { agendaShootsForMonth } from "@/lib/calendar-agenda";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -341,6 +342,8 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
     () => [...shoots].sort((a, b) => compareAsc(parseISO(a.proposed_at), parseISO(b.proposed_at))),
     [shoots]
   );
+  const agendaShoots = useMemo(() => agendaShootsForMonth(sortedShoots, anchor), [sortedShoots, anchor]);
+  const agendaRef = useRef<HTMLDivElement>(null);
 
   const shootsByDay = useMemo(() => {
     const map = new Map<string, CalendarShoot[]>();
@@ -372,6 +375,45 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
       setSelectedDayKey(format(monthStart, "yyyy-MM-dd"));
     }
   }, [anchor, monthStart]);
+
+  useLayoutEffect(() => {
+    if (view !== "agenda") return;
+    const root = agendaRef.current;
+    if (!root) return;
+    // Current month: put today at the top of the agenda scroller. Earlier days
+    // sit above it. Another month: start at the earliest day in that month.
+    // Cards load images after first paint, so realign until layout settles.
+    const align = () => {
+      if (!isSameMonth(anchor, new Date())) {
+        root.style.paddingBottom = "";
+        root.scrollTop = 0;
+        return;
+      }
+      const today = root.querySelector<HTMLElement>("[data-agenda-today]");
+      if (!today) {
+        root.style.paddingBottom = "";
+        root.scrollTop = 0;
+        return;
+      }
+      // Later days may be shorter than the scroller. Extra padding lets today
+      // sit at the top, with earlier days still reachable by scrolling up.
+      const pad = Math.max(0, root.clientHeight - today.offsetHeight);
+      const padPx = `${pad}px`;
+      if (root.style.paddingBottom !== padPx) root.style.paddingBottom = padPx;
+      const delta = today.getBoundingClientRect().top - root.getBoundingClientRect().top;
+      if (Math.abs(delta) > 1) root.scrollTop += delta;
+    };
+    align();
+    const raf = requestAnimationFrame(align);
+    const observer = new ResizeObserver(align);
+    observer.observe(root);
+    const stop = window.setTimeout(() => observer.disconnect(), 1200);
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+      window.clearTimeout(stop);
+    };
+  }, [view, anchor, agendaShoots]);
 
   const openShoot = useCallback((shoot: CalendarShoot) => {
     const d = parseISO(shoot.proposed_at);
@@ -703,29 +745,39 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
         )}
 
         {view === "agenda" && (
-          <div className="space-y-8 p-4 sm:p-6">
-            {sortedShoots.length === 0 ? (
+          <div ref={agendaRef} className="max-h-[70vh] space-y-8 overflow-y-auto p-4 sm:p-6">
+            {agendaShoots.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted">
-                No shoots in this period.
+                No shoots in {format(anchor, "MMMM yyyy")}.
               </p>
             ) : (
               (() => {
                 const groups = new Map<string, CalendarShoot[]>();
-                sortedShoots.forEach((s) => {
+                agendaShoots.forEach((s) => {
                   const key = format(parseISO(s.proposed_at), "yyyy-MM-dd");
                   if (!groups.has(key)) groups.set(key, []);
                   groups.get(key)!.push(s);
                 });
-                return Array.from(groups.entries()).map(([dateKey, items]) => (
-                  <section key={dateKey}>
+                const todayKey = format(new Date(), "yyyy-MM-dd");
+                const viewingCurrentMonth = isSameMonth(anchor, new Date());
+                if (viewingCurrentMonth && !groups.has(todayKey)) {
+                  groups.set(todayKey, []);
+                }
+                const entries = Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+                return entries.map(([dateKey, items]) => (
+                  <section key={dateKey} data-agenda-today={dateKey === todayKey ? "true" : undefined}>
                     <h3 className="mb-3 border-b border-border pb-2 text-sm font-semibold text-primary sm:text-base">
                       {format(parseISO(`${dateKey}T12:00:00`), "EEEE, MMMM d, yyyy")}
                     </h3>
-                    <div className="space-y-3">
-                      {items.map((shoot) => (
-                        <ShootEventCard key={shoot.id} shoot={shoot} onOpen={() => openShoot(shoot)} />
-                      ))}
-                    </div>
+                    {items.length === 0 ? (
+                      <p className="text-sm text-muted">No shoots today.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {items.map((shoot) => (
+                          <ShootEventCard key={shoot.id} shoot={shoot} onOpen={() => openShoot(shoot)} />
+                        ))}
+                      </div>
+                    )}
                   </section>
                 ));
               })()

@@ -276,6 +276,13 @@ export function normalizeExternal3dUrl(raw: unknown): External3dNormalizeResult 
   }
 
   const url = parsed.url;
+  // MipMap (and some other viewers) put the share id in the fragment
+  // (`#/share/…`). Dropping it loads the app shell, which routes to its
+  // not-found page. Keep the raw fragment if URL parsing lost it.
+  const hashAt = rawText.indexOf("#");
+  if (hashAt >= 0 && !url.hash) {
+    url.hash = rawText.slice(hashAt);
+  }
 
   switch (provider) {
     case "sketchfab":

@@ -46,6 +46,7 @@ const BUSINESS_OWNED_TABLES = new Set([
   "clients",
   "communications",
   "email_events",
+  "google_calendar_connections",
   "leads",
   "media_asset_events",
   "media_asset_tags",

@@ -42,6 +42,7 @@ BEGIN
   DELETE FROM project_staff WHERE business_id = v_teardown_business_id;
   DELETE FROM leads WHERE business_id = v_teardown_business_id;
   DELETE FROM business_integrations WHERE business_id = v_teardown_business_id;
+  DELETE FROM google_calendar_connections WHERE business_id = v_teardown_business_id;
   -- protect_objects_delete blocks SQL DELETE. Wrap so CRM teardown still runs.
   -- Then Storage API: DELETE /storage/v1/object/project-media/{id}/library/tenant-b-isolation.bin
   BEGIN
@@ -98,6 +99,7 @@ BEGIN
   DELETE FROM project_staff WHERE business_id = v_pentest_business_id;
   DELETE FROM leads WHERE business_id = v_pentest_business_id;
   DELETE FROM business_integrations WHERE business_id = v_pentest_business_id;
+  DELETE FROM google_calendar_connections WHERE business_id = v_pentest_business_id;
   BEGIN
     DELETE FROM storage.objects
       WHERE bucket_id IN ('project-media', 'project-documents')

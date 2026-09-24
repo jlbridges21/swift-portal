@@ -268,6 +268,8 @@ export async function PATCH(request: Request) {
           .update({ proposed_at: `${updates.shoot_date}T09:00:00.000Z` })
           .eq("id", confirmed.id)
           .eq("business_id", businessId);
+        const { syncShootToGoogleSafe } = await import("@/lib/google-calendar");
+        await syncShootToGoogleSafe(businessId, confirmed.id, "upsert");
       }
     }
 

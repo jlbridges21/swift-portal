@@ -11,6 +11,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { canAccessProject } from "@/lib/project-access";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
+import { syncShootToGoogleSafe } from "@/lib/google-calendar";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -305,6 +306,8 @@ export async function PATCH(request: Request) {
       businessId,
     });
 
+    await syncShootToGoogleSafe(businessId, id, "upsert");
+
     return NextResponse.json({ success: true, status: "confirmed" });
   }
 
@@ -368,6 +371,8 @@ export async function PATCH(request: Request) {
       );
     }
 
+    await syncShootToGoogleSafe(businessId, id, "upsert");
+
     return NextResponse.json({ success: true, proposed_at });
   }
 
@@ -393,6 +398,7 @@ export async function PATCH(request: Request) {
         .from("shoot_proposals")
         .update({ status: "superseded" })
         .eq("id", confirmedProposal.id);
+      await syncShootToGoogleSafe(businessId, confirmedProposal.id, "delete");
     }
 
     const { data: newProposal } = await db
@@ -497,6 +503,9 @@ export async function PATCH(request: Request) {
     }
 
     await db.from("shoot_proposals").update({ status: "declined" }).eq("id", id);
+    if (proposal.status === "confirmed") {
+      await syncShootToGoogleSafe(businessId, id, "delete");
+    }
 
     const dateStr = new Date(proposal.proposed_at).toLocaleString();
     const withdrawn = isAdmin && proposal.proposed_by === "admin";

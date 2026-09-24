@@ -73,6 +73,12 @@ function main() {
       provider: "mipmap",
       note: "MipMap pass-through",
     },
+    {
+      input: "https://na.mipmap3d.com/cloud3d/#/share/adsvsw21es",
+      expectOk: true,
+      provider: "mipmap",
+      note: "MipMap hash share id is preserved",
+    },
     { input: "https://evil.example.com/model", expectOk: false, note: "non-allowlisted" },
     { input: "https://www.mipmap3d.com/", expectOk: false, note: "mipmap marketing host" },
     { input: "https://eu.mipmap3d.com/viewer", expectOk: false, note: "mipmap eu host" },

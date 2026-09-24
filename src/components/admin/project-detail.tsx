@@ -809,7 +809,7 @@ export function AdminProjectDetail({
       body: JSON.stringify({
         project_id: initialProject.id,
         title: fd.get("title"),
-        embed_url: fd.get("embed_url"),
+        embed_url: modelFormEmbedUrl,
         description: fd.get("description") || null,
       }),
     });
