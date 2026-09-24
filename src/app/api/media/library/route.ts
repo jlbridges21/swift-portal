@@ -2,13 +2,17 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { getLibraryFilterOptions, queryMediaLibrary } from "@/lib/media-library";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { isOwnerAdmin, visibleProjectIdsFor } from "@/lib/staff-access";
 
 export async function GET(request: Request) {
   try {
-    const profile = await requireAdmin({ area: 'media' });
+    const profile = await requireAdmin({ area: "media" });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const { searchParams } = new URL(request.url);
+    const projectIds = isOwnerAdmin(profile)
+      ? ("all" as const)
+      : await visibleProjectIdsFor(tenant.businessId, profile);
 
     const result = await queryMediaLibrary(tenant.businessId, {
       q: searchParams.get("q") ?? undefined,
@@ -25,6 +29,7 @@ export async function GET(request: Request) {
       favoritesOnly: searchParams.get("favorites") === "1",
       page: Number(searchParams.get("page") ?? 1),
       limit: Number(searchParams.get("limit") ?? 48),
+      projectIds,
     });
 
     if (searchParams.get("options") === "1") {

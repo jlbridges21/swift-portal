@@ -45,15 +45,25 @@ function dedupeMeaningfulActivities(activities: ActivityLog[]): ActivityLog[] {
 
 export async function listAdminConversations(
   businessId: string,
-  adminUserId: string
+  adminUserId: string,
+  options?: { clientIds?: "all" | string[] }
 ): Promise<ConversationListItem[]> {
   const db = await createTenantServiceClient(businessId);
 
-  const { data: messages } = await db
+  if (options?.clientIds && options.clientIds !== "all" && options.clientIds.length === 0) {
+    return [];
+  }
+
+  let messagesQuery = db
     .from("client_messages")
     .select("id, client_id, body, created_at, sender_role, sender_user_id")
     .order("created_at", { ascending: false })
     .limit(500);
+  if (options?.clientIds && options.clientIds !== "all") {
+    messagesQuery = messagesQuery.in("client_id", options.clientIds);
+  }
+
+  const { data: messages } = await messagesQuery;
 
   if (!messages?.length) return [];
 

@@ -59,6 +59,8 @@ export interface LibraryFilters {
   favoritesOnly?: boolean;
   page?: number;
   limit?: number;
+  /** Staff scope: "all" or explicit project ids. Empty → no rows. */
+  projectIds?: "all" | string[];
 }
 
 export interface LibraryResult {
@@ -383,6 +385,10 @@ async function fetchMediaAssets(businessId: string, filters: LibraryFilters): Pr
     return [];
   }
 
+  if (filters.projectIds && filters.projectIds !== "all" && filters.projectIds.length === 0) {
+    return [];
+  }
+
   let query = db.from("media_assets").select("*").order("created_at", { ascending: false });
 
   if (filters.type && filters.type !== "tour") {
@@ -399,6 +405,9 @@ async function fetchMediaAssets(businessId: string, filters: LibraryFilters): Pr
   if (filters.propertyId) query = query.eq("property_id", filters.propertyId);
   if (from) query = query.gte("created_at", from);
   if (to) query = query.lte("created_at", to);
+  if (filters.projectIds && filters.projectIds !== "all") {
+    query = query.in("project_id", filters.projectIds);
+  }
 
   const { data, error } = await query.limit(2000);
 
@@ -431,6 +440,9 @@ async function fetchMediaAssets(businessId: string, filters: LibraryFilters): Pr
 async function fetchTourAssets(businessId: string, filters: LibraryFilters): Promise<LibraryAsset[]> {
   if (filters.type && filters.type !== "tour") return [];
   if (filters.source && filters.source !== "kuula") return [];
+  if (filters.projectIds && filters.projectIds !== "all" && filters.projectIds.length === 0) {
+    return [];
+  }
 
   const db = await createTenantServiceClient(businessId);
   const presetRange = dateRangeFromPreset(filters.datePreset);
@@ -440,6 +452,9 @@ async function fetchTourAssets(businessId: string, filters: LibraryFilters): Pro
   let query = db.from("tours").select("*").order("created_at", { ascending: false });
   if (from) query = query.gte("created_at", from);
   if (to) query = query.lte("created_at", to);
+  if (filters.projectIds && filters.projectIds !== "all") {
+    query = query.in("project_id", filters.projectIds);
+  }
 
   const { data, error } = await query.limit(500);
   if (error) {

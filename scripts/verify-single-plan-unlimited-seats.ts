@@ -1,10 +1,10 @@
 /**
- * Single-plan + dormant unlimited seats verification.
+ * Single-plan + admin-seat verification.
  *
  * 1. Confirm Solo/Agency inactive (rows + Stripe mappings kept)
- * 2. Studio admin_seats null (unlimited)
- * 3. Invite 10 staff on Bulk Test biz — none refused
- * 4. Temporarily set Studio admin_seats=2 — next invite refused; restore
+ * 2. Studio admin_seats = 3 (counts role=admin only; staff unlimited)
+ * 3. Invite 10 staff — none refused; admin seat count unchanged
+ * 4. Promote to admin hits the seat cap with a clear refuse message
  * 5. Staff with every permission still cannot manage staff (API refusals)
  * 6. Referral discount copy for monthly ($5×3) and annual ($15 once)
  *
@@ -19,6 +19,7 @@ import {
   inviteStaffMember,
   disableStaffMember,
   updateStaffMember,
+  promoteStaffToAdmin,
 } from "../src/lib/staff";
 import {
   NEVER_DELEGABLE_PERMISSION_KEYS,
@@ -102,8 +103,8 @@ async function main() {
   );
   assert(studio && studio.is_active === true && studio.is_public === true, "Studio must be active+public");
   assert(
-    (studio.limits as { admin_seats?: unknown }).admin_seats == null,
-    "Studio admin_seats must be null (unlimited)"
+    (studio.limits as { admin_seats?: unknown }).admin_seats === 3,
+    "Studio admin_seats must be 3"
   );
   assert(studio.price_monthly_cents === 2900, "Studio monthly $29");
   assert(solo.stripe_price_monthly_id && agency.stripe_price_monthly_id, "Stripe price ids kept");
@@ -138,7 +139,7 @@ async function main() {
   );
   assert(publicPlans.length === 1 && publicPlans[0].key === "studio", "one public plan: Studio");
 
-  console.log("\n=== 2. Unlimited: invite 10 staff ===");
+  console.log("\n=== 2. Staff unlimited: invite 10 staff (admin seats unchanged) ===");
   const { data: testAdmin } = await admin
     .from("profiles")
     .select("id, email")
@@ -151,9 +152,10 @@ async function main() {
 
   const before = await getBusinessSeatSnapshot(TEST_BIZ);
   console.log("Seats before:", before);
-  assert(before.limit == null, "test biz must see unlimited Studio seats");
+  assert(before.limit === 3, "test biz must see Studio admin_seats=3");
 
   const invitedEmails: string[] = [];
+  const invitedIds: string[] = [];
   for (let i = 0; i < 10; i++) {
     const email = `seat-flood-${stamp}-${i}@example.test`;
     invitedEmails.push(email);
@@ -164,51 +166,41 @@ async function main() {
       actor,
     });
     assert(result.ok, `invite ${i} refused: ${!result.ok ? result.error : ""}`);
+    if (result.ok) invitedIds.push(result.userId);
   }
   const afterFlood = await getBusinessSeatSnapshot(TEST_BIZ);
-  console.log("After 10 invites:", afterFlood);
-  assert(afterFlood.used === before.used + 10, `expected +10 seats used, got ${afterFlood.used - before.used}`);
-  console.log(`PASTE count: used=${afterFlood.used} limit=${afterFlood.limit} (10 added, none refused)`);
+  console.log("After 10 staff invites:", afterFlood);
+  assert(
+    afterFlood.used === before.used,
+    `admin seats must be unchanged, got delta ${afterFlood.used - before.used}`
+  );
+  console.log(
+    `PASTE count: used=${afterFlood.used} limit=${afterFlood.limit} (10 staff added, admin seats unchanged)`
+  );
 
-  console.log("\n=== 3. Temp admin_seats=2 enforcement, then restore ===");
-  const { data: studioRow } = await admin
-    .from("plans")
-    .select("limits")
-    .eq("key", "studio")
-    .single();
-  const originalLimits = { ...(studioRow!.limits as Record<string, unknown>) };
-  try {
-    await admin
-      .from("plans")
-      .update({
-        limits: { ...originalLimits, admin_seats: 2 },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("key", "studio");
-    const capped = await getBusinessSeatSnapshot(TEST_BIZ);
-    console.log("Capped state:", capped);
-    assert(capped.limit === 2, "limit must be 2");
-    const refuse = await inviteStaffMember({
+  console.log("\n=== 3. Admin seat cap via promoteStaffToAdmin ===");
+  let seatsNow = await getBusinessSeatSnapshot(TEST_BIZ);
+  let promoteIdx = 0;
+  while (seatsNow.used < (seatsNow.limit ?? 0) && promoteIdx < invitedIds.length) {
+    const promo = await promoteStaffToAdmin({
       businessId: TEST_BIZ,
-      email: `seat-cap-refuse-${stamp}@example.test`,
+      userId: invitedIds[promoteIdx],
       actor,
     });
-    console.log("Invite while capped:", refuse);
-    assert(!refuse.ok && refuse.code === "seat_limit", "expected seat_limit while capped");
-    console.log("PASTE capped refuse:", !refuse.ok ? refuse.error : "");
-  } finally {
-    await admin
-      .from("plans")
-      .update({
-        limits: { ...originalLimits, admin_seats: null },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("key", "studio");
-    const restored = await getBusinessSeatSnapshot(TEST_BIZ);
-    console.log("Restored state:", restored);
-    assert(restored.limit == null, "must restore unlimited");
-    console.log("PASTE restored: limit=null (unlimited)");
+    assert(promo.ok, `promote ${promoteIdx} failed: ${!promo.ok ? promo.error : ""}`);
+    promoteIdx++;
+    seatsNow = await getBusinessSeatSnapshot(TEST_BIZ);
   }
+  assert(seatsNow.used === seatsNow.limit, "should be at admin seat cap");
+  const leftover = invitedIds.slice(promoteIdx).find(Boolean);
+  assert(leftover, "need a staff id left to refuse");
+  const refuseResult = await promoteStaffToAdmin({
+    businessId: TEST_BIZ,
+    userId: leftover!,
+    actor,
+  });
+  assert(!refuseResult.ok && refuseResult.code === "seat_limit", "promote must refuse at cap");
+  console.log("PASTE seat refuse:", refuseResult.ok ? null : refuseResult.error);
 
   console.log("\n=== 4. Staff cannot manage staff ===");
   const staffEmail = `seat-staff-allperms-${stamp}@example.test`;
@@ -393,15 +385,15 @@ async function main() {
   const finalUsed = await countBusinessSeatsUsed(TEST_BIZ);
   console.log("Test biz seats after cleanup:", finalUsed);
 
-  // Ensure Studio still unlimited after all tests
+  // Ensure Studio still has admin_seats=3 after all tests
   const { data: finalStudio } = await admin
     .from("plans")
     .select("limits")
     .eq("key", "studio")
     .single();
   assert(
-    (finalStudio?.limits as { admin_seats?: unknown })?.admin_seats == null,
-    "Studio must end unlimited"
+    (finalStudio?.limits as { admin_seats?: unknown })?.admin_seats === 3,
+    "Studio must end with admin_seats=3"
   );
 
   console.log("\n✅ verify-single-plan-unlimited-seats PASS");

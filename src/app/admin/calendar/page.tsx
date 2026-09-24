@@ -4,18 +4,35 @@ import { requireAdminPage } from "@/lib/admin-access";
 import { getProjectHeroPosterUrl } from "@/lib/cover";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { ShootCalendar, type CalendarShoot } from "@/components/admin/shoot-calendar";
+import { isOwnerAdmin, visibleProjectIdsFor } from "@/lib/staff-access";
 
 export default async function AdminCalendarPage() {
-  const { tenant } = await requireAdminPage({ area: 'calendar' });
+  const { profile, tenant } = await requireAdminPage({ area: "calendar" });
   const db = await createTenantServiceClient(tenant.businessId);
 
-  const { data: confirmed } = await db
+  const projectIds = isOwnerAdmin(profile)
+    ? ("all" as const)
+    : await visibleProjectIdsFor(tenant.businessId, profile);
+
+  let proposalsQuery = db
     .from("shoot_proposals")
     .select(
       "id, project_id, proposed_at, projects(project_name, property_address, service_type, status, cover_image_id, cover_image_url, clients(name))"
     )
     .eq("status", "confirmed")
     .order("proposed_at", { ascending: true });
+
+  if (projectIds !== "all") {
+    if (projectIds.length === 0) {
+      proposalsQuery = proposalsQuery.in("project_id", [
+        "00000000-0000-0000-0000-000000000000",
+      ]);
+    } else {
+      proposalsQuery = proposalsQuery.in("project_id", projectIds);
+    }
+  }
+
+  const { data: confirmed } = await proposalsQuery;
 
   const shoots: CalendarShoot[] = await Promise.all(
     (confirmed ?? []).map(async (item) => {
@@ -57,7 +74,7 @@ export default async function AdminCalendarPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header variant="dashboard" userRole="admin" />
+      <Header variant="dashboard" userRole={profile.role === "staff" ? "staff" : "admin"} />
       <main className="mx-auto max-w-6xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-8">
         <PageHeader
           title="Shoot Calendar"

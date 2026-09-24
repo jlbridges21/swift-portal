@@ -109,11 +109,19 @@ export async function touchClientLogin(
 
 export async function getClientListRows(
   businessId: string,
-  options?: { includeDeleted?: boolean }
+  options?: {
+    includeDeleted?: boolean;
+    /** Staff scope: "all" or explicit client ids. Empty array → no rows. */
+    clientIds?: "all" | string[];
+  }
 ): Promise<ClientListRow[]> {
   // Cookie RLS client (not service role). Explicit business_id is defense in depth.
   const supabase = await createClient();
   const db = await createTenantServiceClient(businessId);
+
+  if (options?.clientIds && options.clientIds !== "all" && options.clientIds.length === 0) {
+    return [];
+  }
 
   let clientsQuery = supabase
     .from("clients")
@@ -124,6 +132,9 @@ export async function getClientListRows(
     clientsQuery = clientsQuery.not("deleted_at", "is", null);
   } else {
     clientsQuery = clientsQuery.is("deleted_at", null);
+  }
+  if (options?.clientIds && options.clientIds !== "all") {
+    clientsQuery = clientsQuery.in("id", options.clientIds);
   }
 
   const { data: clients } = await clientsQuery;

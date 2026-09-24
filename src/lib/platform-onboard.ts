@@ -166,6 +166,15 @@ async function clearPartnerRefCookieBestEffort() {
   }
 }
 
+async function ensureBusinessOwnerUserId(businessId: string, userId: string) {
+  const raw = await createServiceClient();
+  await raw
+    .from("businesses")
+    .update({ owner_user_id: userId })
+    .eq("id", businessId)
+    .is("owner_user_id", null);
+}
+
 /**
  * Attribution must never block business creation. Failures are logged and ignored.
  * Returns true only when partner_referrals + referred_by_partner_id were written.
@@ -556,6 +565,7 @@ export async function createBusinessForPlatform(
       if (profileErr) throw new Error(profileErr.message);
 
       requiresEmailConfirmation = false;
+      await ensureBusinessOwnerUserId(businessId, existingUserId);
 
       await writePlatformAudit({
         actorUserId: existingUserId,
@@ -638,6 +648,8 @@ export async function createBusinessForPlatform(
           email: adminEmail,
         })
         .eq("id", createdUserId);
+
+      await ensureBusinessOwnerUserId(businessId, createdUserId);
 
       await writePlatformAudit({
         actorUserId: null,
@@ -831,6 +843,10 @@ export async function inviteBusinessAdmin(
       });
     }
 
+    if (options?.isCreate) {
+      await ensureBusinessOwnerUserId(businessId, existing.id);
+    }
+
     return {
       inviteSent,
       userId: existing.id,
@@ -945,6 +961,9 @@ export async function inviteBusinessAdmin(
         email: normalizedEmail,
       })
       .eq("id", userId);
+    if (options?.isCreate) {
+      await ensureBusinessOwnerUserId(businessId, userId);
+    }
   }
 
   if (!options?.isCreate) {

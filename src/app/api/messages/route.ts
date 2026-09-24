@@ -15,7 +15,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import type { ClientMessage } from "@/lib/types";
-import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
+import { isOwnerAdmin, staffCan, canAccessClient, visibleClientIdsFor } from "@/lib/staff-access";
 
 /** Admin inbox list, or client gets their own thread via ?mine=1 */
 export async function GET(request: Request) {
@@ -32,13 +32,22 @@ export async function GET(request: Request) {
   const unreadOnly = searchParams.get("unread_count") === "1";
 
   if (isOwnerAdmin(profile) || staffCan(profile, "area.messages")) {
+    const clientScope = isOwnerAdmin(profile)
+      ? ("all" as const)
+      : await visibleClientIdsFor(businessId, profile);
+
     if (unreadOnly) {
-      const list = await listAdminConversations(businessId, profile.id);
+      const list = await listAdminConversations(businessId, profile.id, {
+        clientIds: clientScope,
+      });
       const count = list.reduce((s, c) => s + c.unread_count, 0);
       return NextResponse.json({ count });
     }
 
     if (clientId) {
+      if (!(await canAccessClient(businessId, profile, clientId))) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
       if (timeline) {
         const items = await buildClientCrmTimeline(businessId, clientId, profile.id);
         return NextResponse.json(items);
@@ -46,14 +55,16 @@ export async function GET(request: Request) {
       if (searchParams.get("stub") === "1") {
         const { getOrCreateConversationStub } = await import("@/lib/client-messaging");
         const stub = await getOrCreateConversationStub(businessId, clientId);
-        if (!stub) return NextResponse.json({ error: "Client not found" }, { status: 404 });
+        if (!stub) return NextResponse.json({ error: "Not found" }, { status: 404 });
         return NextResponse.json(stub);
       }
       const messages = await getClientMessages(businessId, clientId, profile.id);
       return NextResponse.json(messages);
     }
 
-    const conversations = await listAdminConversations(businessId, profile.id);
+    const conversations = await listAdminConversations(businessId, profile.id, {
+      clientIds: clientScope,
+    });
     return NextResponse.json(conversations);
   }
 
@@ -91,6 +102,9 @@ export async function POST(request: Request) {
   if (isAdmin) {
     if (!clientId) {
       return NextResponse.json({ error: "client_id required" }, { status: 400 });
+    }
+    if (!(await canAccessClient(businessId, profile, clientId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
   } else if (profile.role === "staff") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

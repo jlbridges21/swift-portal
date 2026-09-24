@@ -4,10 +4,13 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { isOwnerAdmin } from "@/lib/staff-access";
 import type { Profile } from "@/lib/types";
 import {
+  demoteAdminToStaff,
   disableStaffMember,
+  getBusinessOwnerUserId,
   getBusinessSeatSnapshot,
   inviteStaffMember,
-  listStaffMembers,
+  listTeamMembers,
+  promoteStaffToAdmin,
   resetStaffPassword,
   updateStaffMember,
 } from "@/lib/staff";
@@ -19,7 +22,7 @@ function requireBusinessAdmin(profile: Profile) {
   return null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
   const denied = requireBusinessAdmin(auth.profile);
@@ -28,12 +31,16 @@ export async function GET() {
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(auth.profile.role);
 
-  const [staff, seats] = await Promise.all([
-    listStaffMembers(tenant.businessId),
+  const includeDisabled =
+    new URL(request.url).searchParams.get("includeDisabled") === "1";
+
+  const [staff, seats, ownerUserId] = await Promise.all([
+    listTeamMembers(tenant.businessId, { includeDisabled }),
     getBusinessSeatSnapshot(tenant.businessId),
+    getBusinessOwnerUserId(tenant.businessId),
   ]);
 
-  return NextResponse.json({ staff, seats });
+  return NextResponse.json({ staff, seats, ownerUserId });
 }
 
 export async function POST(request: Request) {
@@ -50,9 +57,9 @@ export async function POST(request: Request) {
     email?: string;
     fullName?: string;
     userId?: string;
+    permissions?: unknown;
   };
 
-  // Password reset is a POST action (side-effect email).
   if (body.action === "reset_password") {
     const userId = typeof body.userId === "string" ? body.userId : "";
     if (!userId) {
@@ -67,6 +74,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
     return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === "promote_admin") {
+    const userId = typeof body.userId === "string" ? body.userId : "";
+    if (!userId) {
+      return NextResponse.json({ error: "userId required." }, { status: 400 });
+    }
+    const result = await promoteStaffToAdmin({
+      businessId: tenant.businessId,
+      userId,
+      actor: { id: auth.profile.id, email: auth.profile.email },
+    });
+    if (!result.ok) {
+      const status = result.code === "seat_limit" ? 402 : 400;
+      return NextResponse.json(
+        { error: result.error, code: result.code, seats: result.seats },
+        { status }
+      );
+    }
+    return NextResponse.json(result);
+  }
+
+  if (body.action === "demote_staff") {
+    const userId = typeof body.userId === "string" ? body.userId : "";
+    if (!userId) {
+      return NextResponse.json({ error: "userId required." }, { status: 400 });
+    }
+    const result = await demoteAdminToStaff({
+      businessId: tenant.businessId,
+      userId,
+      actor: { id: auth.profile.id, email: auth.profile.email },
+      permissions: body.permissions,
+    });
+    if (!result.ok) {
+      const status = result.code === "owner_protected" ? 403 : 400;
+      return NextResponse.json(
+        { error: result.error, code: result.code, seats: result.seats },
+        { status }
+      );
+    }
+    return NextResponse.json(result);
   }
 
   const email = typeof body.email === "string" ? body.email : "";
@@ -120,10 +168,9 @@ export async function PATCH(request: Request) {
   });
 
   if (!result.ok) {
-    const status = result.code === "never_delegable" ? 400 : 400;
     return NextResponse.json(
       { error: result.error, code: result.code, refusedKeys: result.refusedKeys },
-      { status }
+      { status: 400 }
     );
   }
 
@@ -152,7 +199,8 @@ export async function DELETE(request: Request) {
   });
 
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 404 });
+    const status = result.code === "owner_protected" ? 403 : 404;
+    return NextResponse.json({ error: result.error, code: result.code }, { status });
   }
 
   return NextResponse.json(result);

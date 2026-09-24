@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { getClientCrmProfile } from "@/lib/clients-crm";
 import { ClientCrmProfile } from "@/components/admin/clients-table";
 import { ChevronLeft } from "lucide-react";
-import { staffCan } from "@/lib/staff-access";
+import { canAccessClient, staffCan } from "@/lib/staff-access";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -16,6 +16,11 @@ export default async function AdminClientDetailPage({ params }: PageProps) {
   const { profile, tenant } = await requireAdminPage({ area: "clients" });
   const { id } = await params;
   const businessId = tenant.businessId;
+
+  if (!(await canAccessClient(businessId, profile, id))) {
+    notFound();
+  }
+
   const data = await getClientCrmProfile(id, businessId, { includeDeleted: true });
   if (!data) notFound();
 

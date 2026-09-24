@@ -202,6 +202,86 @@ export async function resolveVisibleProjectIds(
   return (data ?? []).map((r) => r.project_id as string);
 }
 
+/**
+ * Clients visible to staff = clients on assigned projects (projects.client_id +
+ * project_clients). Admins / projects.view_all → "all".
+ */
+export async function resolveVisibleClientIds(
+  businessId: string,
+  profile: Profile
+): Promise<"all" | string[]> {
+  const projects = await resolveVisibleProjectIds(businessId, profile);
+  if (projects === "all") return "all";
+  if (projects.length === 0) return [];
+
+  const { createServiceClient } = await import("@/lib/supabase/server");
+  const raw = await createServiceClient();
+  const ids = new Set<string>();
+
+  const { data: projectRows } = await raw
+    .from("projects")
+    .select("id, client_id")
+    .eq("business_id", businessId)
+    .in("id", projects)
+    .is("deleted_at", null);
+  for (const p of projectRows ?? []) {
+    if (p.client_id) ids.add(p.client_id as string);
+  }
+
+  const { data: junction } = await raw
+    .from("project_clients")
+    .select("client_id")
+    .eq("business_id", businessId)
+    .in("project_id", projects);
+  for (const j of junction ?? []) {
+    if (j.client_id) ids.add(j.client_id as string);
+  }
+
+  return [...ids];
+}
+
+export async function visibleClientIdsFor(
+  businessId: string,
+  profile: Profile
+): Promise<"all" | string[]> {
+  return resolveVisibleClientIds(businessId, profile);
+}
+
+/**
+ * Staff may access this client? Admins always. Else client must be on an
+ * assigned project (or view_all). Area gates stay at the route; this only scopes.
+ * False → caller should 404.
+ */
+export async function canAccessClient(
+  businessId: string,
+  profile: Profile,
+  clientId: string
+): Promise<boolean> {
+  if (isOwnerAdmin(profile)) return true;
+  if (!isActiveStaff(profile)) return false;
+  const visible = await visibleClientIdsFor(businessId, profile);
+  if (visible === "all") return true;
+  return visible.includes(clientId);
+}
+
+/**
+ * Staff may access this media asset? Admins always. Else asset.project_id must
+ * be in visible projects (unassigned media is denied for scoped staff).
+ * False → caller should 404.
+ */
+export async function canAccessMediaAsset(
+  businessId: string,
+  profile: Profile,
+  projectId: string | null | undefined
+): Promise<boolean> {
+  if (isOwnerAdmin(profile)) return true;
+  if (!isActiveStaff(profile)) return false;
+  const visible = await visibleProjectIdsFor(businessId, profile);
+  if (visible === "all") return true;
+  if (!projectId) return false;
+  return visible.includes(projectId);
+}
+
 /** Request-scoped memo of visible project ids. */
 export const getVisibleProjectIds = cache(
   async (businessId: string, profileId: string, role: string, permsJson: string) => {

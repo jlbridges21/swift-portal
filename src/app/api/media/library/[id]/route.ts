@@ -8,13 +8,14 @@ import {
 } from "@/lib/media-library";
 import type { LibraryAssetKind } from "@/lib/media-library";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { canAccessMediaAsset } from "@/lib/staff-access";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const profile = await requireAdmin({ area: 'media' });
+    const profile = await requireAdmin({ area: "media" });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const { id } = await params;
@@ -22,6 +23,10 @@ export async function GET(
 
     const asset = await getMediaAssetDetail(tenant.businessId, id, kind);
     if (!asset) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    if (!(await canAccessMediaAsset(tenant.businessId, profile, asset.project_id))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
     const [events, downloads, related] = await Promise.all([
       kind !== "tour" ? getMediaAssetEvents(tenant.businessId, id) : Promise.resolve([]),

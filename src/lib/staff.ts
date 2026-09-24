@@ -34,14 +34,14 @@ export function normalizeStaffEmail(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
-/** Active seat holders: admin + staff on this business, not disabled. Owner (admin) counts. */
+/** Active admin seats: role=admin on this business, not disabled. Staff are unlimited / uncounted. */
 export async function countBusinessSeatsUsed(businessId: string): Promise<number> {
   const raw = await createServiceClient();
   const { count, error } = await raw
     .from("profiles")
     .select("id", { count: "exact", head: true })
     .eq("business_id", businessId)
-    .in("role", ["admin", "staff"])
+    .eq("role", "admin")
     .is("disabled_at", null);
   if (error) throw new Error(error.message);
   return count ?? 0;
@@ -96,7 +96,7 @@ export async function getBusinessSeatSnapshot(businessId: string): Promise<Staff
 export function seatLimitUpgradeMessage(seats: StaffSeatSnapshot): string {
   const plan = seats.planName || seats.planKey || "your plan";
   const lim = seats.limit ?? 0;
-  return `You've used all ${lim} admin seat${lim === 1 ? "" : "s"} on the ${plan} plan (owner + staff). Remove a team member or raise the seat limit to invite more.`;
+  return `You've used all ${lim} admin seat${lim === 1 ? "" : "s"} on the ${plan} plan (including the owner). Demote or remove an admin, or raise the admin seat limit, to add another.`;
 }
 
 /**
@@ -235,27 +235,17 @@ export async function inviteStaffMember(args: {
     .maybeSingle();
   if (!business) return { ok: false, error: "Business not found." };
 
-  const seats = await getBusinessSeatSnapshot(args.businessId);
-
   const { profile: existingProfile, user: existingUser } = await findAuthUserByEmail(
     normalizedEmail
   );
 
-  // Re-invite existing staff on THIS business — no seat consume, no duplicate.
+  // Re-invite existing staff on THIS business — reactivate if disabled; no seat consume.
   if (
     existingProfile &&
     existingProfile.role === "staff" &&
     existingProfile.business_id === args.businessId
   ) {
     if (existingProfile.disabled_at) {
-      if (!mayAddSeat(seats)) {
-        return {
-          ok: false,
-          error: seatLimitUpgradeMessage(seats),
-          code: "seat_limit",
-          seats,
-        };
-      }
       await raw
         .from("profiles")
         .update({
@@ -332,15 +322,7 @@ export async function inviteStaffMember(args: {
     };
   }
 
-  if (!mayAddSeat(seats)) {
-    return {
-      ok: false,
-      error: seatLimitUpgradeMessage(seats),
-      code: "seat_limit",
-      seats,
-    };
-  }
-
+  // Staff seats are unlimited — only admin promotions consume admin_seats.
   const portalUrl = getBusinessPortalOrigin({
     slug: business.slug,
     custom_domain: business.custom_domain,
@@ -468,54 +450,286 @@ export async function inviteStaffMember(args: {
   };
 }
 
-/** Soft-disable staff — releases seat. Does not delete auth user. */
+/** Soft-disable staff — releases nothing for staff (unlimited). Does not delete auth user. */
 export async function disableStaffMember(args: {
   businessId: string;
   userId: string;
   actor: { id: string; email: string | null };
-}): Promise<{ ok: true; seats: StaffSeatSnapshot } | { ok: false; error: string }> {
+}): Promise<{ ok: true; seats: StaffSeatSnapshot } | { ok: false; error: string; code?: string }> {
   const raw = await createServiceClient();
+
+  if (await isBusinessOwner(args.businessId, args.userId)) {
+    return {
+      ok: false,
+      error: "The original business owner cannot be removed.",
+      code: "owner_protected",
+    };
+  }
+
   const { data: profile } = await raw
     .from("profiles")
     .select("id, role, business_id, disabled_at")
     .eq("id", args.userId)
     .maybeSingle();
-  if (!profile || profile.business_id !== args.businessId || profile.role !== "staff") {
-    return { ok: false, error: "Staff member not found." };
+  if (!profile || profile.business_id !== args.businessId) {
+    return { ok: false, error: "Team member not found." };
+  }
+  if (profile.role !== "staff" && profile.role !== "admin") {
+    return { ok: false, error: "Only staff or admins can be removed from the team." };
   }
   if (profile.disabled_at) {
     return { ok: true, seats: await getBusinessSeatSnapshot(args.businessId) };
   }
-  await raw
-    .from("profiles")
-    .update({ disabled_at: new Date().toISOString() })
-    .eq("id", args.userId);
+
+  // Admins: demote to staff when removing so the admin seat is freed, then soft-disable.
+  const patch: Record<string, unknown> = {
+    disabled_at: new Date().toISOString(),
+  };
+  if (profile.role === "admin") {
+    patch.role = "staff";
+    patch.staff_permissions = emptyStaffPermissions();
+  }
+
+  await raw.from("profiles").update(patch).eq("id", args.userId);
   // Drop project assignments so a re-enable starts clean.
   await raw.from("project_staff").delete().eq("user_id", args.userId).eq("business_id", args.businessId);
 
   void writePlatformAudit({
     actorUserId: args.actor.id,
     actorEmail: args.actor.email,
-    action: "staff.disabled",
+    action: profile.role === "admin" ? "admin.removed" : "staff.disabled",
     targetBusinessId: args.businessId,
     targetType: "profile",
     targetId: args.userId,
-    metadata: {},
+    metadata: { demotedFromAdmin: profile.role === "admin" },
   });
 
   return { ok: true, seats: await getBusinessSeatSnapshot(args.businessId) };
 }
 
-export async function listStaffMembers(businessId: string) {
+export async function listStaffMembers(
+  businessId: string,
+  options?: { includeDisabled?: boolean }
+) {
   const raw = await createServiceClient();
-  const { data, error } = await raw
+  let query = raw
     .from("profiles")
     .select("id, email, full_name, role, disabled_at, created_at, staff_permissions")
     .eq("business_id", businessId)
     .eq("role", "staff")
     .order("created_at", { ascending: true });
+  if (!options?.includeDisabled) {
+    query = query.is("disabled_at", null);
+  }
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+/** Active staff + admins for the team UI (excludes disabled unless includeDisabled). */
+export async function listTeamMembers(
+  businessId: string,
+  options?: { includeDisabled?: boolean }
+) {
+  const raw = await createServiceClient();
+  let query = raw
+    .from("profiles")
+    .select("id, email, full_name, role, disabled_at, created_at, staff_permissions")
+    .eq("business_id", businessId)
+    .in("role", ["staff", "admin"])
+    .order("created_at", { ascending: true });
+  if (!options?.includeDisabled) {
+    query = query.is("disabled_at", null);
+  }
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function getBusinessOwnerUserId(businessId: string): Promise<string | null> {
+  const raw = await createServiceClient();
+  const { data } = await raw
+    .from("businesses")
+    .select("owner_user_id")
+    .eq("id", businessId)
+    .maybeSingle();
+  return (data?.owner_user_id as string | null) ?? null;
+}
+
+export async function isBusinessOwner(
+  businessId: string,
+  userId: string
+): Promise<boolean> {
+  const ownerId = await getBusinessOwnerUserId(businessId);
+  return Boolean(ownerId && ownerId === userId);
+}
+
+/**
+ * Promote staff → role=admin. Consumes an admin seat.
+ * Project assignments are kept (harmless; admin sees all projects via role).
+ * This is NOT a staff permission — the Admin preset must call this.
+ */
+export async function promoteStaffToAdmin(args: {
+  businessId: string;
+  userId: string;
+  actor: { id: string; email: string | null };
+}): Promise<
+  | { ok: true; seats: StaffSeatSnapshot }
+  | { ok: false; error: string; code?: string; seats?: StaffSeatSnapshot }
+> {
+  const raw = await createServiceClient();
+  const seats = await getBusinessSeatSnapshot(args.businessId);
+  if (!mayAddSeat(seats)) {
+    return {
+      ok: false,
+      error: seatLimitUpgradeMessage(seats),
+      code: "seat_limit",
+      seats,
+    };
+  }
+
+  const { data: profile } = await raw
+    .from("profiles")
+    .select("id, role, business_id, disabled_at, email, full_name")
+    .eq("id", args.userId)
+    .maybeSingle();
+  if (!profile || profile.business_id !== args.businessId) {
+    return { ok: false, error: "Team member not found." };
+  }
+  if (profile.disabled_at) {
+    return { ok: false, error: "Reactivate this person before promoting them to admin." };
+  }
+  if (profile.role === "admin") {
+    return { ok: true, seats };
+  }
+  if (profile.role !== "staff") {
+    return { ok: false, error: "Only staff can be promoted to admin." };
+  }
+
+  await raw.auth.admin.updateUserById(args.userId, {
+    user_metadata: {
+      role: "admin",
+      business_id: args.businessId,
+      full_name: profile.full_name,
+    },
+  });
+  await raw
+    .from("profiles")
+    .update({
+      role: "admin",
+      staff_permissions: emptyStaffPermissions(),
+      client_id: null,
+      disabled_at: null,
+    })
+    .eq("id", args.userId);
+
+  void writePlatformAudit({
+    actorUserId: args.actor.id,
+    actorEmail: args.actor.email,
+    action: "staff.promoted_to_admin",
+    targetBusinessId: args.businessId,
+    targetType: "profile",
+    targetId: args.userId,
+    metadata: { email: profile.email },
+  });
+
+  return { ok: true, seats: await getBusinessSeatSnapshot(args.businessId) };
+}
+
+/**
+ * Demote admin → staff with an empty permission matrix (frees an admin seat).
+ * Project assignments are kept if any existed; otherwise the person starts with
+ * no assignments until an admin assigns projects. Owner cannot be demoted.
+ */
+export async function demoteAdminToStaff(args: {
+  businessId: string;
+  userId: string;
+  actor: { id: string; email: string | null };
+  permissions?: unknown;
+}): Promise<
+  | {
+      ok: true;
+      seats: StaffSeatSnapshot;
+      profile: {
+        id: string;
+        email: string;
+        full_name: string | null;
+        role: string;
+        staff_permissions: StaffPermissions;
+      };
+    }
+  | { ok: false; error: string; code?: string; seats?: StaffSeatSnapshot }
+> {
+  if (await isBusinessOwner(args.businessId, args.userId)) {
+    return {
+      ok: false,
+      error: "The original business owner cannot be demoted.",
+      code: "owner_protected",
+    };
+  }
+
+  const raw = await createServiceClient();
+  const { data: profile } = await raw
+    .from("profiles")
+    .select("id, email, full_name, role, business_id, disabled_at")
+    .eq("id", args.userId)
+    .maybeSingle();
+  if (!profile || profile.business_id !== args.businessId) {
+    return { ok: false, error: "Team member not found." };
+  }
+  if (profile.role !== "admin") {
+    return { ok: false, error: "Only admins can be demoted to staff." };
+  }
+  if (profile.disabled_at) {
+    return { ok: false, error: "This admin is already removed." };
+  }
+
+  const perms =
+    args.permissions != null
+      ? sanitizeStaffPermissions(args.permissions)
+      : { ok: true as const, permissions: emptyStaffPermissions() };
+  if (!perms.ok) {
+    return { ok: false, error: perms.error || "Invalid permissions." };
+  }
+
+  await raw.auth.admin.updateUserById(args.userId, {
+    user_metadata: {
+      role: "staff",
+      business_id: args.businessId,
+      full_name: profile.full_name,
+    },
+  });
+  await raw
+    .from("profiles")
+    .update({
+      role: "staff",
+      staff_permissions: perms.permissions,
+      client_id: null,
+      disabled_at: null,
+    })
+    .eq("id", args.userId);
+
+  void writePlatformAudit({
+    actorUserId: args.actor.id,
+    actorEmail: args.actor.email,
+    action: "admin.demoted_to_staff",
+    targetBusinessId: args.businessId,
+    targetType: "profile",
+    targetId: args.userId,
+    metadata: { email: profile.email },
+  });
+
+  return {
+    ok: true,
+    seats: await getBusinessSeatSnapshot(args.businessId),
+    profile: {
+      id: profile.id,
+      email: profile.email,
+      full_name: profile.full_name,
+      role: "staff",
+      staff_permissions: perms.permissions,
+    },
+  };
 }
 
 /** Exported for tests — builds the invite confirm URL with business return_to. */
@@ -539,7 +753,7 @@ export function staffInviteConfirmLink(opts: {
   });
 }
 
-async function assertActiveStaffOnBusiness(businessId: string, userId: string) {
+async function assertActiveTeamMemberOnBusiness(businessId: string, userId: string) {
   const raw = await createServiceClient();
   const { data: profile } = await raw
     .from("profiles")
@@ -549,11 +763,17 @@ async function assertActiveStaffOnBusiness(businessId: string, userId: string) {
   if (
     !profile ||
     profile.business_id !== businessId ||
-    profile.role !== "staff" ||
+    (profile.role !== "staff" && profile.role !== "admin") ||
     profile.disabled_at
   ) {
     return null;
   }
+  return profile;
+}
+
+async function assertActiveStaffOnBusiness(businessId: string, userId: string) {
+  const profile = await assertActiveTeamMemberOnBusiness(businessId, userId);
+  if (!profile || profile.role !== "staff") return null;
   return profile;
 }
 
@@ -577,8 +797,8 @@ export async function updateStaffMember(args: {
   | { ok: false; error: string; code?: string; refusedKeys?: string[] }
 > {
   const raw = await createServiceClient();
-  const profile = await assertActiveStaffOnBusiness(args.businessId, args.userId);
-  if (!profile) return { ok: false, error: "Staff member not found." };
+  const profile = await assertActiveTeamMemberOnBusiness(args.businessId, args.userId);
+  if (!profile) return { ok: false, error: "Team member not found." };
 
   const patch: Record<string, unknown> = {};
   let nextEmail = profile.email as string;
@@ -627,6 +847,12 @@ export async function updateStaffMember(args: {
   }
 
   if (args.permissions !== undefined) {
+    if (profile.role !== "staff") {
+      return {
+        ok: false,
+        error: "Admins do not use a staff permission matrix. Demote to staff first.",
+      };
+    }
     const sanitized = sanitizeStaffPermissions(args.permissions);
     if (!sanitized.ok) {
       return {

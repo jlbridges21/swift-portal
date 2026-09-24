@@ -5,21 +5,28 @@ import { requireAdminPage } from "@/lib/admin-access";
 import { Plus } from "lucide-react";
 import { ClientsTable } from "@/components/admin/clients-table";
 import { getClientListRows } from "@/lib/clients-crm";
+import { isOwnerAdmin, visibleClientIdsFor } from "@/lib/staff-access";
 
 interface PageProps {
   searchParams: Promise<{ view?: string }>;
 }
 
 export default async function AdminClientsPage({ searchParams }: PageProps) {
-  const { tenant } = await requireAdminPage({ area: 'clients' });
+  const { profile, tenant } = await requireAdminPage({ area: "clients" });
   const businessId = tenant.businessId;
   const { view } = await searchParams;
   const showDeleted = view === "deleted";
-  const rows = await getClientListRows(businessId, { includeDeleted: showDeleted });
+  const clientIds = isOwnerAdmin(profile)
+    ? ("all" as const)
+    : await visibleClientIdsFor(businessId, profile);
+  const rows = await getClientListRows(businessId, {
+    includeDeleted: showDeleted,
+    clientIds,
+  });
 
   return (
     <div className="min-h-screen bg-background">
-      <Header variant="dashboard" userRole="admin" />
+      <Header variant="dashboard" userRole={profile.role === "staff" ? "staff" : "admin"} />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <PageHeader
           title={showDeleted ? "Hidden Clients" : "Clients"}
