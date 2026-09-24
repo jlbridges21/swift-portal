@@ -11,7 +11,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: RouteParams) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();
@@ -27,7 +27,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 }
 
 export async function POST(request: Request, { params }: RouteParams) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();

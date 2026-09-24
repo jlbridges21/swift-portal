@@ -26,10 +26,7 @@ const BASE_CAPABILITIES = [
 function limitLines(plan: PlanRow): string[] {
   const limits = plan.limits as Record<string, unknown>;
   const lines: string[] = [];
-  const seats = limits.admin_seats;
-  if (typeof seats === "number") {
-    lines.push(seats === 1 ? "1 admin seat" : `${seats} admin seats`);
-  }
+  // Seat caps are dormant on the public catalog — do not advertise admin_seats.
   const storage = limits.storage_gb;
   if (typeof storage === "number") {
     lines.push(`${storage} GB media storage`);
@@ -74,7 +71,14 @@ export function MarketingPricingGrid({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-4">
+    <div
+      className={cn(
+        "grid gap-6",
+        plans.length === 1
+          ? "mx-auto max-w-md"
+          : "lg:grid-cols-2 xl:grid-cols-4"
+      )}
+    >
       {plans.map((plan) => {
         const recommended = isRecommendedPlan(plan) || plan.key === highlightKey;
         const features = [

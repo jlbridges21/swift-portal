@@ -2,12 +2,27 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { Profile } from "@/lib/types";
+import {
+  isActiveStaff,
+  isOwnerAdmin,
+  passesAccessGate,
+  type AccessGate,
+} from "@/lib/staff-access";
 
 type AdminResult =
   | { ok: true; profile: Profile; supabase: ReturnType<typeof createServerClient> }
   | { ok: false; response: NextResponse };
 
-export async function requireAdminApi(): Promise<AdminResult> {
+export type RequireAdminApiOpts = AccessGate;
+
+/**
+ * Business operator API gate.
+ *
+ * - Owner admin / super_admin: always ok (for operational routes).
+ * - Staff: MUST pass an AccessGate — no gate means DENY (nothing implicit).
+ * - Use `{ adminOnly: true }` for never-delegable / owner-only routes.
+ */
+export async function requireAdminApi(opts?: RequireAdminApiOpts): Promise<AdminResult> {
   const cookieStore = await cookies();
 
   const supabase = createServerClient(
@@ -59,18 +74,24 @@ export async function requireAdminApi(): Promise<AdminResult> {
     };
   }
 
-  if (profile.role !== "admin" && profile.role !== "super_admin") {
-    return {
-      ok: false,
-      response: NextResponse.json({ error: "Admin access required." }, { status: 403 }),
-    };
+  const p = profile as Profile;
+
+  if (isOwnerAdmin(p)) {
+    return { ok: true, profile: p, supabase };
   }
 
-  return { ok: true, profile: profile as Profile, supabase };
+  if (isActiveStaff(p) && opts && passesAccessGate(p, opts)) {
+    return { ok: true, profile: p, supabase };
+  }
+
+  return {
+    ok: false,
+    response: NextResponse.json({ error: "Admin access required." }, { status: 403 }),
+  };
 }
 
 export async function requireSuperAdminApi(): Promise<AdminResult> {
-  const result = await requireAdminApi();
+  const result = await requireAdminApi({ adminOnly: true });
   if (!result.ok) return result;
 
   if (result.profile.role !== "super_admin") {

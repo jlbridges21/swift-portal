@@ -25,6 +25,7 @@ import { sanitizeStorageFileName } from "@/lib/media-upload";
 import { resolveProjectAccess } from "@/lib/project-access";
 import { downloadFileName } from "@/lib/media-display-name";
 import type { MediaAsset, Profile } from "@/lib/types";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 const BUCKET = "project-media";
 const ZIP_FOLDER = "deliverables";
@@ -630,7 +631,7 @@ export async function authorizeProjectZipDownload(
     }
   | { ok: false; status: number; error: string; details: string }
 > {
-  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+  const isAdmin = isOwnerAdmin(profile) || staffCan(profile, "area.media") || staffCan(profile, "media.download_originals");
 
   const { data: project, error: projectError } = await supabase
     .from("projects")

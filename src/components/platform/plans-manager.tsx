@@ -106,7 +106,12 @@ export function PlansManager({
       is_public: fd.get("is_public") === "on",
       entitlements,
       limits: {
-        admin_seats: Number(fd.get("admin_seats") ?? 0),
+        admin_seats: (() => {
+          const raw = String(fd.get("admin_seats") ?? "").trim();
+          if (!raw) return null; // blank = unlimited
+          const n = Number(raw);
+          return Number.isFinite(n) ? n : null;
+        })(),
         storage_gb: Number(fd.get("storage_gb") ?? 0),
         projects_per_month: fd.get("projects_per_month")
           ? Number(fd.get("projects_per_month"))
@@ -350,14 +355,22 @@ export function PlansManager({
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
-            <Label htmlFor="admin_seats">Admin seats</Label>
+            <Label htmlFor="admin_seats">Admin seats (blank = unlimited)</Label>
             <Input
               id="admin_seats"
               name="admin_seats"
               type="number"
-              defaultValue={limits.admin_seats ?? 1}
+              min={0}
+              defaultValue={
+                limits.admin_seats == null ? "" : String(limits.admin_seats)
+              }
+              placeholder="Unlimited"
               className="mt-1"
             />
+            <p className="mt-1 text-xs text-muted">
+              Seat enforcement stays wired — leave blank to disable the cap without removing the
+              mechanism.
+            </p>
           </div>
           <div>
             <Label htmlFor="storage_gb">Storage (GB)</Label>
@@ -564,8 +577,11 @@ export function PlansManager({
               )}
             </div>
             <p className="text-muted">
-              Limits: {(plan.limits as { admin_seats?: number })?.admin_seats ?? "—"} seats ·{" "}
-              {(plan.limits as { storage_gb?: number })?.storage_gb ?? "—"} GB ·{" "}
+              Limits:{" "}
+              {(plan.limits as { admin_seats?: number | null })?.admin_seats == null
+                ? "Unlimited"
+                : `${(plan.limits as { admin_seats?: number | null }).admin_seats}`}{" "}
+              seats · {(plan.limits as { storage_gb?: number })?.storage_gb ?? "—"} GB ·{" "}
               {(plan.limits as { projects_per_month?: number | null })?.projects_per_month ??
                 "unlimited"}{" "}
               projects/mo

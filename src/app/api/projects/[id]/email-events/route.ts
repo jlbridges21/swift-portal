@@ -10,7 +10,7 @@ interface RouteParams {
 
 export async function GET(_request: Request, { params }: RouteParams) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ area: 'projects' });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const { id } = await params;

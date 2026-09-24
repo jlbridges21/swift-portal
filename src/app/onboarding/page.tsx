@@ -21,7 +21,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {
-  const { profile, tenant } = await requireAdminPage();
+  const { profile, tenant } = await requireAdminPage({ adminOnly: true });
 
   if (tenant.impersonating) redirect("/admin");
 

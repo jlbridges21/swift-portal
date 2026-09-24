@@ -18,6 +18,7 @@ import {
   THUMB_SIGNED_TTL_SECONDS,
 } from "@/lib/media-signed-thumbs";
 import { serveMediaFileDownload } from "@/lib/serve-media-file-download";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 export async function GET(
   request: Request,
@@ -57,7 +58,8 @@ export async function GET(
     return NextResponse.json({ error: "Media not found or access denied" }, { status: 404 });
   }
 
-  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+  const isAdmin = isOwnerAdmin(profile) || staffCan(profile, "area.media");
+  const canDownloadOriginals = isOwnerAdmin(profile) || staffCan(profile, "media.download_originals");
   const appSettings = await getAppSettings(tenant.businessId);
   const requireDeliveredForDownloads = appSettings.payments.requireDeliveredForDownloads;
 
@@ -104,7 +106,7 @@ export async function GET(
 
   const downloadsAllowed = resolveProjectDownloadAllowed({
     projectStatus,
-    isAdmin,
+    isAdmin: canDownloadOriginals,
     requireDeliveredForDownloads,
   });
 

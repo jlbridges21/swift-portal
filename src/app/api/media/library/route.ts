@@ -5,7 +5,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ area: 'media' });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const { searchParams } = new URL(request.url);

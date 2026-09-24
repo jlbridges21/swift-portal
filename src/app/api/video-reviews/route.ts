@@ -3,7 +3,7 @@ import { getProfile } from "@/lib/auth";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { canAccessProject } from "@/lib/project-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { isReviewAdmin } from "@/lib/video-review-access";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 import {
   createVideoReviewFromAsset,
   listProjectVideoReviews,
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const profile = await getProfile();
-  if (!profile || !isReviewAdmin(profile)) {
+  if (!profile || !(isOwnerAdmin(profile) || staffCan(profile, "video_review.upload_versions"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

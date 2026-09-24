@@ -12,7 +12,7 @@ interface RouteParams {
 }
 
 export async function GET(_request: Request, { params }: RouteParams) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
@@ -35,7 +35,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 }
 
 export async function POST(request: Request, { params }: RouteParams) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
 
   const { id } = await params;

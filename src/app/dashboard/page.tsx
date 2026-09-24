@@ -32,6 +32,8 @@ export default async function ClientDashboard() {
   const profile = await getProfile();
   if (!profile) redirect("/login");
   if (profile.role === "admin") redirect("/admin");
+  if (profile.role === "staff") redirect("/staff");
+  if (profile.disabled_at) redirect("/login?error=unavailable");
 
   const supabase = await createClient();
   const tenant = await requireTenantContext();

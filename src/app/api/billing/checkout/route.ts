@@ -25,7 +25,7 @@ type CheckoutSessionParams = Stripe.Checkout.SessionCreateParams;
 
 export async function POST(request: Request) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ adminOnly: true });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
 

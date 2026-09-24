@@ -1,9 +1,27 @@
+import { cache } from "react";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 import { touchClientLogin } from "@/lib/clients-crm";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
+import { logProjectActivity } from "@/lib/activity";
+import {
+  isOwnerAdmin,
+  isActiveStaff,
+  passesAccessGate,
+  staffHasAnyArea,
+  type AccessGate,
+} from "@/lib/staff-access";
 
-export async function getProfile(): Promise<Profile | null> {
+/**
+ * Profile query counter for Phase 3 memoization measurement.
+ * `loads` increments only when the DB round-trip runs (cache miss).
+ * React.cache is request-scoped — a new HTTP request always reloads.
+ */
+export const profileQueryStats = { loads: 0 };
+
+async function loadProfileFromDb(): Promise<Profile | null> {
+  profileQueryStats.loads += 1;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -116,6 +134,20 @@ export async function getProfile(): Promise<Profile | null> {
   return profile as Profile | null;
 }
 
+/**
+ * Request-scoped profile loader (React cache).
+ *
+ * React.cache is per-request only — each HTTP request gets a fresh memoization
+ * scope and a fresh DB read. Phase 2 guarantee preserved: permission changes
+ * apply on the staff member's NEXT request.
+ */
+export const getProfile: () => Promise<Profile | null> = cache(loadProfileFromDb);
+
+/** Uncached loader for before/after measurement scripts. */
+export async function getProfileUncached(): Promise<Profile | null> {
+  return loadProfileFromDb();
+}
+
 export async function requireAuth(): Promise<Profile> {
   const profile = await getProfile();
   if (!profile) {
@@ -124,12 +156,17 @@ export async function requireAuth(): Promise<Profile> {
   return profile;
 }
 
-export async function requireAdmin(): Promise<Profile> {
+/**
+ * Business operator gate for server actions / API helpers that throw.
+ * Default (no gate): admin only — staff must pass an explicit AccessGate.
+ */
+export async function requireAdmin(gate?: AccessGate): Promise<Profile> {
   const profile = await requireAuth();
-  if (profile.role !== "admin" && profile.role !== "super_admin") {
-    throw new Error("Forbidden");
+  if (isOwnerAdmin(profile)) return profile;
+  if (isActiveStaff(profile) && gate && passesAccessGate(profile, gate)) {
+    return profile;
   }
-  return profile;
+  throw new Error("Forbidden");
 }
 
 export async function requireSuperAdmin(): Promise<Profile> {
@@ -140,7 +177,11 @@ export async function requireSuperAdmin(): Promise<Profile> {
   return profile;
 }
 
-import { logProjectActivity } from "@/lib/activity";
+/** True when profile may enter the /admin shell (any area for staff). */
+export function canEnterAdminShell(profile: Profile): boolean {
+  if (isOwnerAdmin(profile)) return true;
+  return isActiveStaff(profile) && staffHasAnyArea(profile);
+}
 
 export async function logActivity(
   activityType: string,

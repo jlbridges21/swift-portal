@@ -40,7 +40,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function BillingPage() {
-  const { tenant } = await requireAdminPage();
+  const { tenant } = await requireAdminPage({ adminOnly: true });
 
   let settings;
   try {
@@ -222,7 +222,9 @@ export default async function BillingPage() {
 
           {!sub.isComped && (
             <>
-              <h2 className="mb-3 text-lg font-semibold text-heading">Plans</h2>
+              <h2 className="mb-3 text-lg font-semibold text-heading">
+                {publicPlans.length === 1 ? "Plan" : "Plans"}
+              </h2>
               {!anyModePriceConfigured ? (
                 <p className="mb-8 text-sm text-muted">
                   Billing isn&apos;t set up for this studio yet. Contact ShootPortal support.

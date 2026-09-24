@@ -6,7 +6,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { ShootCalendar, type CalendarShoot } from "@/components/admin/shoot-calendar";
 
 export default async function AdminCalendarPage() {
-  const { tenant } = await requireAdminPage();
+  const { tenant } = await requireAdminPage({ area: 'calendar' });
   const db = await createTenantServiceClient(tenant.businessId);
 
   const { data: confirmed } = await db

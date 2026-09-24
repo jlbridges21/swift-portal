@@ -15,6 +15,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import type { ClientMessage } from "@/lib/types";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 /** Admin inbox list, or client gets their own thread via ?mine=1 */
 export async function GET(request: Request) {
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
   const timeline = searchParams.get("timeline") === "1";
   const unreadOnly = searchParams.get("unread_count") === "1";
 
-  if (profile.role === "admin" || profile.role === "super_admin") {
+  if (isOwnerAdmin(profile) || staffCan(profile, "area.messages")) {
     if (unreadOnly) {
       const list = await listAdminConversations(businessId, profile.id);
       const count = list.reduce((s, c) => s + c.unread_count, 0);
@@ -84,13 +85,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Message is too long" }, { status: 400 });
   }
 
-  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+  const isAdmin = isOwnerAdmin(profile) || staffCan(profile, "messages.send");
   let clientId = typeof body.client_id === "string" ? body.client_id : null;
 
   if (isAdmin) {
     if (!clientId) {
       return NextResponse.json({ error: "client_id required" }, { status: 400 });
     }
+  } else if (profile.role === "staff") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   } else {
     if (!profile.client_id) {
       return NextResponse.json({ error: "No client profile linked" }, { status: 403 });
@@ -219,7 +222,7 @@ export async function PATCH(request: Request) {
   if (profile.role === "client") {
     clientId = profile.client_id;
   } else {
-    const auth = await requireAdminApi();
+    const auth = await requireAdminApi({ area: 'messages' });
     if (!auth.ok) return auth.response;
     if (!clientId) {
       return NextResponse.json({ error: "client_id required" }, { status: 400 });

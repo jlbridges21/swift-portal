@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import { isOwnerAdmin } from "@/lib/staff-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getBusinessPortalOrigin, getDeploymentOrigin } from "@/lib/portal-url";
 import {
@@ -27,13 +28,13 @@ function postConnectRedirect(
 export async function GET() {
   const fallback = getDeploymentOrigin();
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ adminOnly: true });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
 
     const origin = getBusinessPortalOrigin(tenant.business);
     const toOnboarding =
-      profile.role === "admin" &&
+      isOwnerAdmin(profile) &&
       needsOnboardingRedirect({
         onboardingCompletedAt: tenant.business.onboarding_completed_at,
         onboardingState: tenant.business.onboarding_state,

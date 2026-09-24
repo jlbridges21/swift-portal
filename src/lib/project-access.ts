@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
+import { canAccessProject as staffCanAccessAssignedProject, isActiveStaff, isOwnerAdmin } from "@/lib/staff-access";
 
 export type ProjectAccessKind = "admin" | "assigned_client" | "share" | "denied";
 
@@ -16,10 +17,7 @@ function normalizeEmail(email: string | null | undefined): string | null {
 }
 
 function isBusinessAdmin(profile: Profile, businessId: string): boolean {
-  return (
-    (profile.role === "admin" || profile.role === "super_admin") &&
-    profile.business_id === businessId
-  );
+  return isOwnerAdmin(profile) && profile.business_id === businessId;
 }
 
 async function assignedClientHasProject(
@@ -82,6 +80,14 @@ export async function resolveProjectAccess(
   }
 
   if (isBusinessAdmin(profile, businessId)) {
+    return { allowed: true, kind: "admin", businessId };
+  }
+
+  if (
+    isActiveStaff(profile) &&
+    profile.business_id === businessId &&
+    (await staffCanAccessAssignedProject(businessId, profile, projectId))
+  ) {
     return { allowed: true, kind: "admin", businessId };
   }
 

@@ -9,7 +9,7 @@ interface RouteParams {
 
 export async function DELETE(_request: Request, { params }: RouteParams) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ permission: 'clients.edit' });
     const { id } = await params;
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
@@ -33,7 +33,7 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
 
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ permission: 'clients.edit' });
     const { id } = await params;
     const body = await request.json();
 

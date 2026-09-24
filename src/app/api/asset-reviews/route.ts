@@ -8,6 +8,7 @@ import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 import { portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { canAccessProject } from "@/lib/project-access";
 
@@ -165,7 +166,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const profile = await getProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
+  if (!profile || !(isOwnerAdmin(profile) || staffCan(profile, "projects.edit"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

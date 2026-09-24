@@ -3,7 +3,7 @@ import { getProfile } from "@/lib/auth";
 import { canAccessProject } from "@/lib/project-access";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { isReviewAdmin } from "@/lib/video-review-access";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 import { enrichVideoReviewComments } from "@/lib/video-review-comments";
 import { createLazyVideoReviewComment, VideoReviewError } from "@/lib/video-reviews";
 import { notifyVideoReviewEvent } from "@/lib/video-review-notifications";
@@ -41,7 +41,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Project not found or access denied." }, { status: 404 });
   }
 
-  const authorKind = isReviewAdmin(profile) ? "admin" : "client";
+  const isTeam = isOwnerAdmin(profile) || staffCan(profile, "video_review.comment");
+  if (profile.role === "staff" && !isTeam) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const authorKind = isTeam ? "admin" : "client";
   const isSharedCommenter = Boolean(tenant.isSharedViewer);
   if (authorKind === "client" && !profile.client_id && !isSharedCommenter) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

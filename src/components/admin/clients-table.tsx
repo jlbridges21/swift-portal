@@ -312,9 +312,14 @@ function clientInitials(name: string): string {
 
 interface ClientCrmProfileProps {
   data: ClientCrmProfile;
+  /** Hide payment / money sections when false (staff without money.view). */
+  canViewMoney?: boolean;
 }
 
-export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
+export function ClientCrmProfile({
+  data: initialData,
+  canViewMoney = true,
+}: ClientCrmProfileProps) {
   const router = useRouter();
   const [data, setData] = useState(initialData);
   const [notes, setNotes] = useState<ClientNote[]>(initialData.notes);
@@ -509,7 +514,15 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
           { label: "Avg Project Value", value: stats.average_project_value ? formatCurrency(stats.average_project_value) : "—", icon: DollarSign },
           { label: "Last Payment", value: stats.last_payment_at ? formatDate(stats.last_payment_at) : "—", icon: Clock },
           { label: "Last Contact", value: lastContact ? formatDate(lastContact) : "—", icon: Mail },
-        ].map((card) => (
+        ]
+          .filter((card) =>
+            canViewMoney
+              ? true
+              : !["Lifetime Revenue", "Outstanding", "Avg Project Value", "Last Payment"].includes(
+                  card.label
+                )
+          )
+          .map((card) => (
           <div key={card.label} className="rounded-xl border border-border bg-white p-4 shadow-sm">
             <p className="text-xs font-medium uppercase tracking-wide text-muted">{card.label}</p>
             <p className={`mt-1 text-lg font-bold ${card.warn ? "text-amber-700" : "text-primary"}`}>{card.value}</p>
@@ -542,7 +555,9 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
                 <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted">
                   <span>{property.project_count} project{property.project_count !== 1 ? "s" : ""}</span>
                   {property.last_project_at && <span>Last project {formatDate(property.last_project_at)}</span>}
-                  {property.revenue_cents > 0 && <span>{formatCurrency(property.revenue_cents)} revenue</span>}
+                  {canViewMoney && property.revenue_cents > 0 && (
+                    <span>{formatCurrency(property.revenue_cents)} revenue</span>
+                  )}
                 </div>
               </div>
             ))}
@@ -561,33 +576,43 @@ export function ClientCrmProfile({ data: initialData }: ClientCrmProfileProps) {
       </section>
 
       {/* Payments */}
-      <section>
-        <h2 className="text-base font-semibold text-primary mb-3">Payments</h2>
-        <PaymentGroup
-          title="Outstanding"
-          payments={outstandingPayments}
-          onPaymentUpdated={(updated) =>
-            setPayments((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
-          }
-        />
-        <PaymentGroup
-          title="Paid"
-          payments={paidPayments}
-          onPaymentUpdated={(updated) =>
-            setPayments((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
-          }
-        />
-        {failedPayments.length > 0 && (
+      {canViewMoney && (
+        <section>
+          <h2 className="text-base font-semibold text-primary mb-3">Payments</h2>
           <PaymentGroup
-            title="Failed / Expired"
-            payments={failedPayments}
+            title="Outstanding"
+            payments={outstandingPayments}
             onPaymentUpdated={(updated) =>
-              setPayments((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
+              setPayments((prev) =>
+                prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
+              )
             }
           />
-        )}
-        {payments.length === 0 && <p className="text-sm text-muted py-4 text-center">No payments yet.</p>}
-      </section>
+          <PaymentGroup
+            title="Paid"
+            payments={paidPayments}
+            onPaymentUpdated={(updated) =>
+              setPayments((prev) =>
+                prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
+              )
+            }
+          />
+          {failedPayments.length > 0 && (
+            <PaymentGroup
+              title="Failed / Expired"
+              payments={failedPayments}
+              onPaymentUpdated={(updated) =>
+                setPayments((prev) =>
+                  prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
+                )
+              }
+            />
+          )}
+          {payments.length === 0 && (
+            <p className="text-sm text-muted py-4 text-center">No payments yet.</p>
+          )}
+        </section>
+      )}
 
       {/* Notes */}
       <section>

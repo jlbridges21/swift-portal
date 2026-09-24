@@ -458,7 +458,7 @@ export function LandingPageSettingsCard({
                 </FieldShell>
               </div>
 
-              <div className="space-y-3">
+              <div id="settings-hero-media" tabIndex={-1} className="scroll-mt-24 space-y-3">
                 <Label>Hero media</Label>
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   {(
@@ -513,7 +513,11 @@ export function LandingPageSettingsCard({
               ) : null}
 
               {resolvedMediaType !== "none" ? (
-                <div className="space-y-4 rounded-lg border border-border bg-subtle/40 p-4">
+                <div
+                  id="settings-hero-overlay"
+                  tabIndex={-1}
+                  className="scroll-mt-24 space-y-4 rounded-lg border border-border bg-subtle/40 p-4"
+                >
                   <p className="text-sm font-medium text-heading">Media overlay</p>
                   <p className="text-xs text-muted">
                     Darkens video or image so the white headline stays readable. Defaults to your brand
@@ -568,7 +572,7 @@ export function LandingPageSettingsCard({
             storageKey="admin-settings-landing-chrome"
             dirty={dirtyChrome}
           >
-            <div className="space-y-4">
+            <div id="settings-landing-colors" tabIndex={-1} className="scroll-mt-24 space-y-4">
               <p className="rounded-md border border-border bg-subtle/50 px-3 py-2 text-xs text-muted">
                 These colors apply only to your public landing page (
                 <code className="text-[11px]">{"{slug}"}.shootportal.app</code> / custom domain).
@@ -606,15 +610,17 @@ export function LandingPageSettingsCard({
                 onChange={(v) => patchChrome({ heroBgColor: v })}
                 onReset={() => patchChrome({ heroBgColor: "" })}
               />
-              <LogoSizeSlider
-                id="landing-logo-height"
-                label="Landing header logo size"
-                value={resolveLandingLogoHeightPx(landing.chrome.logoHeightPx)}
-                min={LANDING_LOGO_SIZE.min}
-                max={LANDING_LOGO_SIZE.max}
-                help={`Height of the logo in the public landing header (${LANDING_LOGO_SIZE.min}–${LANDING_LOGO_SIZE.max}px). Separate from the portal app nav logo size.`}
-                onChange={(logoHeightPx) => patchChrome({ logoHeightPx })}
-              />
+              <div id="settings-landing-logo-size" tabIndex={-1} className="scroll-mt-24">
+                <LogoSizeSlider
+                  id="landing-logo-height"
+                  label="Landing header logo size"
+                  value={resolveLandingLogoHeightPx(landing.chrome.logoHeightPx)}
+                  min={LANDING_LOGO_SIZE.min}
+                  max={LANDING_LOGO_SIZE.max}
+                  help={`Height of the logo in the public landing header (${LANDING_LOGO_SIZE.min}–${LANDING_LOGO_SIZE.max}px). Separate from the portal app nav logo size.`}
+                  onChange={(logoHeightPx) => patchChrome({ logoHeightPx })}
+                />
+              </div>
               <BrandAssetField
                 kind="landingLogo"
                 inputId="landing-logo-header"

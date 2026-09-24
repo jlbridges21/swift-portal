@@ -96,7 +96,15 @@ async function tryResolveClient(
       if (!profile.business_id) {
         await raw
           .from("profiles")
-          .update({ business_id: client.business_id, role: profile.role === "admin" ? "admin" : "client" })
+          .update({
+            business_id: client.business_id,
+            role:
+              profile.role === "admin"
+                ? "admin"
+                : profile.role === "staff"
+                  ? "staff"
+                  : "client",
+          })
           .eq("id", userId);
       }
       return { businessId: client.business_id, clientId: client.id };
@@ -121,7 +129,12 @@ async function tryResolveClient(
       .update({
         business_id: byUser[0].business_id,
         client_id: byUser[0].id,
-        role: profile.role === "admin" ? "admin" : "client",
+        role:
+          profile.role === "admin"
+            ? "admin"
+            : profile.role === "staff"
+              ? "staff"
+              : "client",
       })
       .eq("id", userId);
     return { businessId: byUser[0].business_id, clientId: byUser[0].id };
@@ -150,7 +163,12 @@ async function tryResolveClient(
       .update({
         business_id: byEmail[0].business_id,
         client_id: byEmail[0].id,
-        role: profile.role === "admin" ? "admin" : "client",
+        role:
+          profile.role === "admin"
+            ? "admin"
+            : profile.role === "staff"
+              ? "staff"
+              : "client",
       })
       .eq("id", userId);
     return { businessId: byEmail[0].business_id, clientId: byEmail[0].id };
@@ -206,6 +224,9 @@ export async function resolveLoginDestination(
 
   // (a) Existing business
   if (profile.business_id) {
+    if (profile.disabled_at) {
+      return portalUnavailableError();
+    }
     const own = await lookupBusinessById(profile.business_id);
     if (!own || own.status !== "active") {
       return portalUnavailableError();
@@ -217,7 +238,13 @@ export async function resolveLoginDestination(
       role: profile.role,
     });
     const destPath =
-      profile.role === "admin" ? (needsWizard ? "/onboarding" : "/admin") : "/dashboard";
+      profile.role === "admin"
+        ? needsWizard
+          ? "/onboarding"
+          : "/admin"
+        : profile.role === "staff"
+          ? "/staff"
+          : "/dashboard";
     const onOwnTenant = publicHost.kind === "tenant" && publicHost.businessId === own.id;
     const destOrigin = getLoginRedirectOrigin(
       own,

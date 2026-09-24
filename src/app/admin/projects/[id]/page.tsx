@@ -8,15 +8,22 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { listProjectVideoReviews } from "@/lib/video-reviews";
 import { listProjectShares } from "@/lib/project-shares";
 import { getProjectLinkAccessState } from "@/lib/project-link-access";
+import { canAccessProject, staffCan } from "@/lib/staff-access";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
 export default async function AdminProjectPage({ params }: PageProps) {
-  const { tenant } = await requireAdminPage();
+  const { profile, tenant } = await requireAdminPage({ area: "projects" });
   const { id } = await params;
   const supabase = await createClient();
+
+  // Staff: 404 (not 403) when not assigned / no view_all — do not confirm existence.
+  if (profile.role === "staff") {
+    const allowed = await canAccessProject(tenant.businessId, profile, id);
+    if (!allowed) notFound();
+  }
 
   const [
     { data: project },
@@ -33,27 +40,87 @@ export default async function AdminProjectPage({ params }: PageProps) {
     { data: assetReviews },
     { data: mediaFolders },
   ] = await Promise.all([
-    supabase.from("projects").select("*, clients(*), properties(*)").eq("business_id", tenant.businessId).eq("id", id).single(),
+    supabase
+      .from("projects")
+      .select("*, clients(*), properties(*)")
+      .eq("business_id", tenant.businessId)
+      .eq("id", id)
+      .single(),
     supabase
       .from("media_assets")
       .select("*")
       .eq("business_id", tenant.businessId)
       .eq("project_id", id)
       .order("display_order", { ascending: true }),
-    supabase.from("tours").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order"),
-    supabase.from("project_3d_models").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order"),
-    supabase.from("payments").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("shoot_proposals").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("proposed_at", { ascending: true }),
-    supabase.from("project_clients").select("*, clients(id, name, email, company, phone, full_name, user_id)").eq("business_id", tenant.businessId).eq("project_id", id),
-    supabase.from("clients").select("id, name, email, company, phone, full_name, user_id").eq("business_id", tenant.businessId).is("deleted_at", null).order("name"),
-    supabase.from("activity_logs").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("revisions").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("project_quotes").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("created_at", { ascending: false }),
-    supabase.from("asset_reviews").select("*").eq("business_id", tenant.businessId).eq("project_id", id),
-    supabase.from("media_folders").select("*").eq("business_id", tenant.businessId).eq("project_id", id).order("display_order", { ascending: true }),
+    supabase
+      .from("tours")
+      .select("*")
+      .eq("business_id", tenant.businessId)
+      .eq("project_id", id)
+      .order("display_order"),
+    supabase
+      .from("project_3d_models")
+      .select("*")
+      .eq("business_id", tenant.businessId)
+      .eq("project_id", id)
+      .order("display_order"),
+    supabase
+      .from("payments")
+      .select("*")
+      .eq("business_id", tenant.businessId)
+      .eq("project_id", id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("shoot_proposals")
+      .select("*")
+      .eq("business_id", tenant.businessId)
+      .eq("project_id", id)
+      .order("proposed_at", { ascending: true }),
+    supabase
+      .from("project_clients")
+      .select("*, clients(id, name, email, company, phone, full_name, user_id)")
+      .eq("business_id", tenant.businessId)
+      .eq("project_id", id),
+    supabase
+      .from("clients")
+      .select("id, name, email, company, phone, full_name, user_id")
+      .eq("business_id", tenant.businessId)
+      .is("deleted_at", null)
+      .order("name"),
+    supabase
+      .from("activity_logs")
+      .select("*")
+      .eq("business_id", tenant.businessId)
+      .eq("project_id", id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("revisions")
+      .select("*")
+      .eq("business_id", tenant.businessId)
+      .eq("project_id", id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("project_quotes")
+      .select("*")
+      .eq("business_id", tenant.businessId)
+      .eq("project_id", id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("asset_reviews")
+      .select("*")
+      .eq("business_id", tenant.businessId)
+      .eq("project_id", id),
+    supabase
+      .from("media_folders")
+      .select("*")
+      .eq("business_id", tenant.businessId)
+      .eq("project_id", id)
+      .order("display_order", { ascending: true }),
   ]);
 
   if (!project) notFound();
+
+  const canViewMoney = staffCan(profile, "money.view");
 
   const db = await createTenantServiceClient(tenant.businessId);
   const videoReviews = await listProjectVideoReviews(db, id);
@@ -63,23 +130,24 @@ export default async function AdminProjectPage({ params }: PageProps) {
   const appUrl = getBusinessPortalOrigin(tenant.business);
   const clientProjectUrl = `${appUrl}/dashboard/projects/${id}`;
   const portalUrl = `${clientProjectUrl}?preview=1`;
+  const isStaff = profile.role === "staff";
 
   return (
     <div className="min-h-screen bg-background">
-      <Header variant="dashboard" userRole="admin" />
+      <Header variant="dashboard" userRole={isStaff ? "staff" : "admin"} />
       <main className="mx-auto max-w-4xl px-4 py-4 pb-6 sm:px-6 sm:pb-8 lg:px-8 md:pb-8">
         <AdminProjectDetail
           project={project}
           media={media ?? []}
           tours={tours ?? []}
           models={models ?? []}
-          payments={payments ?? []}
+          payments={canViewMoney ? (payments ?? []) : []}
           shootProposals={shootProposals ?? []}
           projectClients={projectClients ?? []}
           allClients={allClients ?? []}
           activities={activities ?? []}
           revisions={revisions ?? []}
-          quotes={quotes ?? []}
+          quotes={canViewMoney ? (quotes ?? []) : []}
           assetReviews={assetReviews ?? []}
           mediaFolders={mediaFolders ?? []}
           portalUrl={portalUrl}
@@ -89,6 +157,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
           linkAccessMode={linkAccess.mode}
           linkAccessPublicUrl={linkAccess.publicUrl}
           linkAccessViewCount={linkAccess.viewCount}
+          canViewMoney={canViewMoney}
         />
       </main>
     </div>

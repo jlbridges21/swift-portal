@@ -8,7 +8,7 @@ import { normalizeExternal3dUrl } from "@/lib/external-3d-models";
 import { sanitizePlainText } from "@/lib/landing-content";
 
 export async function POST(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'media.upload' });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'media.organize' });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();
@@ -129,7 +129,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'media.delete' });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();

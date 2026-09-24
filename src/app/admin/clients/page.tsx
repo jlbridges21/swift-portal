@@ -11,7 +11,7 @@ interface PageProps {
 }
 
 export default async function AdminClientsPage({ searchParams }: PageProps) {
-  const { tenant } = await requireAdminPage();
+  const { tenant } = await requireAdminPage({ area: 'clients' });
   const businessId = tenant.businessId;
   const { view } = await searchParams;
   const showDeleted = view === "deleted";

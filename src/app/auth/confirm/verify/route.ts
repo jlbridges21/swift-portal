@@ -118,10 +118,13 @@ export async function POST(request: Request) {
           onboardingCompletedAt: biz?.onboarding_completed_at,
           onboardingState: biz?.onboarding_state,
         });
+      } else if (profile?.role === "staff") {
+        destPath = "/staff";
       } else if (profile?.role === "client") {
         destPath = "/dashboard";
       } else {
-        destPath = "/admin";
+        // Unknown / unset — never default to /admin (would grant staff-like orphans admin UI).
+        destPath = "/dashboard";
       }
     } catch (err) {
       console.error("[auth/confirm/verify] role resolve failed", err);

@@ -2,7 +2,7 @@
  * Derived identity capabilities — one authenticated identity, multiple surfaces.
  *
  * Two independent axes (do not conflate):
- *   - profiles.role (admin | client | super_admin) = position WITHIN one business
+ *   - profiles.role (admin | client | super_admin | staff) = position WITHIN one business
  *   - capabilities = which platform surfaces this identity may reach (DERIVED)
  *
  * Never store capabilities in a join table — each capability owns its source row.
@@ -20,7 +20,7 @@ export type Capabilities = {
   business: {
     active: boolean;
     businessId: string | null;
-    role: "admin" | "client" | null;
+    role: "admin" | "client" | "staff" | null;
   };
   partner: {
     active: boolean;
@@ -78,13 +78,22 @@ async function resolveCapabilities(): Promise<Capabilities> {
   }
 
   // Business — profiles.business_id → businesses active
-  if (profile.business_id && (profile.role === "admin" || profile.role === "client")) {
+  if (
+    profile.business_id &&
+    (profile.role === "admin" || profile.role === "client" || profile.role === "staff") &&
+    !profile.disabled_at
+  ) {
     const biz = await lookupBusinessById(profile.business_id);
     const active = Boolean(biz && biz.status === "active" && !biz.deleted_at);
     caps.business = {
       active,
       businessId: active ? profile.business_id : profile.business_id,
-      role: profile.role === "admin" ? "admin" : "client",
+      role:
+        profile.role === "admin"
+          ? "admin"
+          : profile.role === "staff"
+            ? "staff"
+            : "client",
     };
     if (!active) {
       caps.business.active = false;

@@ -6,7 +6,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { EntitlementError, requireEntitlement } from "@/lib/entitlements";
 
 export async function PATCH(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(auth.profile.role);

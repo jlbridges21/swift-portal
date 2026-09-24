@@ -1,3 +1,4 @@
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 import type { TenantServiceClient } from "@/lib/supabase/tenant-service";
 import { canAccessProject } from "@/lib/project-access";
 import type { Profile, VideoReview, VideoReviewComment, VideoReviewVersion } from "@/lib/types";
@@ -12,17 +13,19 @@ export class VideoReviewAccessError extends Error {
   }
 }
 
+/** Owner admin or staff with projects area (team-side review access). */
 export function isReviewAdmin(profile: Profile): boolean {
-  return profile.role === "admin" || profile.role === "super_admin";
+  return isOwnerAdmin(profile) || staffCan(profile, "area.projects");
 }
 
 export function assertCanResolveComment(profile: Profile): void {
-  if (!isReviewAdmin(profile)) {
-    throw new VideoReviewAccessError(
-      "Only the business team can mark feedback as resolved.",
-      403
-    );
+  if (isOwnerAdmin(profile) || staffCan(profile, "video_review.resolve")) {
+    return;
   }
+  throw new VideoReviewAccessError(
+    "Only the business team can mark feedback as resolved.",
+    403
+  );
 }
 
 export async function assertReviewProjectAccess(

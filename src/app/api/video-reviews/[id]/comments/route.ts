@@ -3,11 +3,11 @@ import { getProfile } from "@/lib/auth";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import {
-  isReviewAdmin,
   loadReviewForAccess,
   loadVersionForReview,
   VideoReviewAccessError,
 } from "@/lib/video-review-access";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 import {
   buildCommentThreads,
   createVideoReviewReply,
@@ -22,6 +22,10 @@ import { notifyVideoReviewEvent } from "@/lib/video-review-notifications";
 function parseView(raw: string | null): VideoReviewCommentView {
   if (raw === "resolved" || raw === "all") return raw;
   return "unresolved";
+}
+
+function isTeamCommenter(profile: Parameters<typeof isOwnerAdmin>[0]): boolean {
+  return isOwnerAdmin(profile) || staffCan(profile, "video_review.comment");
 }
 
 export async function GET(
@@ -121,11 +125,14 @@ export async function POST(
     } else {
       review = await loadReviewForAccess(db, profile, reviewId);
     }
-    const authorKind = isReviewAdmin(profile) ? "admin" : "client";
+    const authorKind = isTeamCommenter(profile) ? "admin" : "client";
     const isSharedCommenter = Boolean(tenant?.isSharedViewer);
     const isPublicLinkCommenter = Boolean(
       publicLinkProjectId && review.project_id === publicLinkProjectId
     );
+    if (profile.role === "staff" && !isTeamCommenter(profile)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     if (authorKind === "client" && !profile.client_id && !isSharedCommenter && !isPublicLinkCommenter) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

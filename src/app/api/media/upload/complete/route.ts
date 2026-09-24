@@ -11,7 +11,7 @@ import { isTenantPrefixedStoragePath } from "@/lib/media-upload";
 
 export async function POST(request: Request) {
   try {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'media.upload' });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();

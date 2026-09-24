@@ -8,7 +8,7 @@ interface PageProps {
 }
 
 export default async function AdminMediaPage({ searchParams }: PageProps) {
-  const { tenant } = await requireAdminPage();
+  const { tenant } = await requireAdminPage({ area: 'media' });
   const sp = await searchParams;
   const initialQuery = (sp.q ?? "").trim().slice(0, 80);
 

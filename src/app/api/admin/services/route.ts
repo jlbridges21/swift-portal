@@ -27,7 +27,7 @@ function parseLineItems(value: unknown): { description: string; amount_cents: nu
 }
 
 export async function GET() {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(auth.profile.role);
@@ -37,7 +37,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(auth.profile.role);

@@ -8,7 +8,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
  * Only updates folder_id — project-wide display_order is untouched.
  */
 export async function POST(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'media.organize' });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();

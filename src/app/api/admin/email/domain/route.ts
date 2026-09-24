@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
+import { isOwnerAdmin } from "@/lib/staff-access";
 import { getAppSettings, saveAppSettings } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import {
@@ -19,7 +20,7 @@ function getResendClient() {
 
 async function requireAdminTenant() {
   const profile = await getProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
+  if (!profile || !isOwnerAdmin(profile)) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
   const tenant = await getTenantContext();

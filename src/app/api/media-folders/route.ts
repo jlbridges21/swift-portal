@@ -65,7 +65,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'media.organize' });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'media.organize' });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();
@@ -171,7 +171,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'media.organize' });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();

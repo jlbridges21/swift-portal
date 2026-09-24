@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import type { StaffArea } from "@/lib/staff-access";
 
 type AdminCapabilitiesContextValue = {
   showPartner: boolean;
@@ -10,6 +11,9 @@ type AdminCapabilitiesContextValue = {
   partnerSuspended: boolean;
   partnerNavLabel: string;
   partnerNavHref: string;
+  /** When set (staff), Header filters admin links to these areas. */
+  staffAreas: StaffArea[] | null;
+  userRole: "admin" | "staff" | "client" | null;
 };
 
 const AdminCapabilitiesContext = createContext<AdminCapabilitiesContextValue>({
@@ -18,6 +22,8 @@ const AdminCapabilitiesContext = createContext<AdminCapabilitiesContextValue>({
   partnerSuspended: false,
   partnerNavLabel: "Partner Program",
   partnerNavHref: "/partner",
+  staffAreas: null,
+  userRole: null,
 });
 
 export function AdminCapabilitiesProvider({
@@ -26,6 +32,8 @@ export function AdminCapabilitiesProvider({
   partnerSuspended = false,
   partnerNavLabel,
   partnerNavHref,
+  staffAreas = null,
+  userRole = null,
   children,
 }: {
   showPartner: boolean;
@@ -33,6 +41,8 @@ export function AdminCapabilitiesProvider({
   partnerSuspended?: boolean;
   partnerNavLabel: string;
   partnerNavHref: string;
+  staffAreas?: StaffArea[] | null;
+  userRole?: "admin" | "staff" | "client" | null;
   children: React.ReactNode;
 }) {
   return (
@@ -43,6 +53,8 @@ export function AdminCapabilitiesProvider({
         partnerSuspended,
         partnerNavLabel,
         partnerNavHref,
+        staffAreas,
+        userRole,
       }}
     >
       {children}

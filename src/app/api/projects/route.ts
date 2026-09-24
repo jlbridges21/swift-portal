@@ -38,7 +38,7 @@ function clientEventKeyForStatus(status: string): NotificationEventKey | undefin
 
 export async function POST(request: Request) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ permission: 'projects.create' });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
@@ -106,6 +106,15 @@ export async function POST(request: Request) {
       { onConflict: "project_id,client_id" }
     );
 
+    // Phase 3 model: staff creators are auto-assigned. Inert until staff can create projects.
+    const { autoAssignCreatorToProject } = await import("@/lib/staff");
+    await autoAssignCreatorToProject({
+      businessId,
+      projectId: project.id,
+      creatorUserId: profile.id,
+      creatorRole: profile.role,
+    });
+
     await createPreliminaryEstimate(project.id, body.service_type, {
       userId: profile.id,
       skipIfExists: true,
@@ -145,7 +154,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ permission: 'projects.edit' });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;

@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
-import { requireBusinessAdmin, requireTenantContext } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getProjectLinkAccessState, setProjectLinkAccessMode, type ProjectLinkAccessMode } from "@/lib/project-link-access";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await getProfile();
-    const tenant = await requireBusinessAdmin();
+    const profile = await getProfile();
+    if (!profile || !(isOwnerAdmin(profile) || staffCan(profile, "sharing.anyone_with_link"))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
     const { id: projectId } = await params;
     const state = await getProjectLinkAccessState(tenant.businessId, projectId);
     return NextResponse.json(state);
@@ -26,8 +31,11 @@ export async function PATCH(
 ) {
   try {
     const profile = await getProfile();
-    if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const tenant = await requireBusinessAdmin();
+    if (!profile || !(isOwnerAdmin(profile) || staffCan(profile, "sharing.anyone_with_link"))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
     const { id: projectId } = await params;
     const body = (await request.json()) as { mode?: ProjectLinkAccessMode };
     if (body.mode !== "restricted" && body.mode !== "anyone_with_link") {

@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "client" | "super_admin";
+export type UserRole = "admin" | "client" | "super_admin" | "staff";
 
 export type NotificationType =
   | "proposal_submitted"
@@ -102,6 +102,10 @@ export interface Profile {
   avatar_url: string | null;
   role: UserRole;
   client_id: string | null;
+  /** Staff permission flags (phase 2+). Always present for staff; defaults deny. */
+  staff_permissions?: import("@/lib/staff-permissions").StaffPermissions | Record<string, unknown>;
+  /** Soft-disable — releases seat; blocks staff sign-in. */
+  disabled_at?: string | null;
   push_notifications_enabled?: boolean;
   onesignal_subscription_id?: string | null;
   email_notifications_enabled?: boolean;

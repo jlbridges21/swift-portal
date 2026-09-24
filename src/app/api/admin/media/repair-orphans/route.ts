@@ -15,7 +15,7 @@ import {
  *        Default apply=false (dry run). Never deletes a row whose file still exists.
  */
 export async function GET() {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();
@@ -26,7 +26,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();

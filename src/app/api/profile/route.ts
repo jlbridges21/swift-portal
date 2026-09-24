@@ -36,7 +36,8 @@ export async function PATCH(request: Request) {
 
   const profileUpdates: Record<string, string | boolean> = {};
   if (full_name !== undefined) profileUpdates.full_name = full_name;
-  if (profile.role === "client") {
+  // Clients and staff manage their own email / in-app channel prefs.
+  if (profile.role === "client" || profile.role === "staff" || profile.role === "admin") {
     if (email_notifications_enabled !== undefined) {
       profileUpdates.email_notifications_enabled = Boolean(email_notifications_enabled);
     }

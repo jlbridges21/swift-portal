@@ -5,7 +5,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ area: 'clients' });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ permission: 'clients.create' });
     const body = await request.json();
 
     if (!body.name || !body.email) {
@@ -126,7 +126,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ permission: 'clients.edit' });
     const body = await request.json();
     const { id, ...updates } = body;
 

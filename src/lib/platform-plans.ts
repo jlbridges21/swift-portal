@@ -46,7 +46,8 @@ function normalizeLimits(raw: Record<string, unknown> | undefined): Record<strin
     return Number.isFinite(n) ? Math.trunc(n) : null;
   };
   return {
-    admin_seats: intOrNull(raw?.admin_seats) ?? 0,
+    // null = unlimited (dormant seat caps). Do NOT coerce blank to 0.
+    admin_seats: intOrNull(raw?.admin_seats),
     storage_gb: intOrNull(raw?.storage_gb) ?? 0,
     projects_per_month: intOrNull(raw?.projects_per_month),
   };

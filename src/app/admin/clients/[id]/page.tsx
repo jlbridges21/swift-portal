@@ -6,21 +6,25 @@ import { notFound } from "next/navigation";
 import { getClientCrmProfile } from "@/lib/clients-crm";
 import { ClientCrmProfile } from "@/components/admin/clients-table";
 import { ChevronLeft } from "lucide-react";
+import { staffCan } from "@/lib/staff-access";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
 export default async function AdminClientDetailPage({ params }: PageProps) {
-  const { tenant } = await requireAdminPage();
+  const { profile, tenant } = await requireAdminPage({ area: "clients" });
   const { id } = await params;
   const businessId = tenant.businessId;
   const data = await getClientCrmProfile(id, businessId, { includeDeleted: true });
   if (!data) notFound();
 
+  const isStaff = profile.role === "staff";
+  const canViewMoney = staffCan(profile, "money.view");
+
   return (
     <div className="min-h-screen bg-background">
-      <Header variant="dashboard" userRole="admin" />
+      <Header variant="dashboard" userRole={isStaff ? "staff" : "admin"} />
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <Link href="/admin/clients">
@@ -30,7 +34,7 @@ export default async function AdminClientDetailPage({ params }: PageProps) {
             </Button>
           </Link>
         </div>
-        <ClientCrmProfile data={data} />
+        <ClientCrmProfile data={data} canViewMoney={canViewMoney} />
       </main>
     </div>
   );

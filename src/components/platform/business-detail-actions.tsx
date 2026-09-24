@@ -542,8 +542,11 @@ export function BusinessDetailActions({
                 )}
               </div>
               <p className="text-muted">
-                Limits: {(currentPlan.limits as { admin_seats?: number })?.admin_seats ?? "—"} seats ·{" "}
-                {(currentPlan.limits as { storage_gb?: number })?.storage_gb ?? "—"} GB ·{" "}
+                Limits:{" "}
+                {(currentPlan.limits as { admin_seats?: number | null })?.admin_seats == null
+                  ? "Unlimited"
+                  : `${(currentPlan.limits as { admin_seats?: number | null }).admin_seats}`}{" "}
+                seats · {(currentPlan.limits as { storage_gb?: number })?.storage_gb ?? "—"} GB ·{" "}
                 {(currentPlan.limits as { projects_per_month?: number | null })?.projects_per_month ??
                   "unlimited"}{" "}
                 projects/mo

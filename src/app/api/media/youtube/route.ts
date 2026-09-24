@@ -6,7 +6,7 @@ import { extractYouTubeId, getYouTubeEmbedUrl } from "@/lib/youtube";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function POST(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'media.upload' });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();

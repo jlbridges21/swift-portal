@@ -19,6 +19,12 @@ async function authorizeProject(projectId: string) {
   if (!allowed) {
     return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
+  if (profile.role === "staff") {
+    const { staffCan } = await import("@/lib/staff-access");
+    if (!staffCan(profile, "money.view")) {
+      return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    }
+  }
 
   const tenant = await requireTenantContext();
   return { ok: true as const, profile, tenant };

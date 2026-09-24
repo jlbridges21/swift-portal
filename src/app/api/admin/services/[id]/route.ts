@@ -14,7 +14,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(auth.profile.role);
@@ -77,7 +77,7 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(auth.profile.role);

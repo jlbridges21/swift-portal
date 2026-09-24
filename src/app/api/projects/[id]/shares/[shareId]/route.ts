@@ -1,20 +1,25 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
-import { requireBusinessAdmin } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import {
   resolveShareAccessWindow,
   revokeProjectShare,
   updateProjectShareExpiry,
   type ShareExpiryPreset,
 } from "@/lib/project-shares";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string; shareId: string }> }
 ) {
   try {
-    await getProfile();
-    const tenant = await requireBusinessAdmin();
+    const profile = await getProfile();
+    if (!profile || !(isOwnerAdmin(profile) || staffCan(profile, "sharing.email"))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
     const { id: projectId, shareId } = await params;
     await revokeProjectShare(tenant.businessId, projectId, shareId);
     return NextResponse.json({ ok: true });
@@ -29,8 +34,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; shareId: string }> }
 ) {
   try {
-    await getProfile();
-    const tenant = await requireBusinessAdmin();
+    const profile = await getProfile();
+    if (!profile || !(isOwnerAdmin(profile) || staffCan(profile, "sharing.email"))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
     const { id: projectId, shareId } = await params;
     const body = (await request.json()) as {
       expiryPreset?: ShareExpiryPreset;

@@ -5,6 +5,7 @@ import { isClientVisibleMedia } from "@/lib/client-media";
 import { assertMediaAssetProjectAccess } from "@/lib/media-asset-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { signMediaThumbnailUrl, type ThumbSignAsset } from "@/lib/media-signed-thumbs";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 const BATCH_MAX = 48;
 
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   }
 
   const db = await createTenantServiceClient(tenant.businessId);
-  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+  const isAdmin = isOwnerAdmin(profile) || staffCan(profile, "area.media");
 
   const { data: rows, error } = await db
     .from("media_assets")

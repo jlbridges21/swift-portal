@@ -46,7 +46,7 @@ export interface TenantContext {
     onboarding_completed_at: string | null;
     onboarding_state: unknown;
   };
-  role: "super_admin" | "admin" | "client";
+  role: "super_admin" | "admin" | "client" | "staff";
   isSuperAdmin: boolean;
   impersonating: boolean;
   allowWrites: boolean;

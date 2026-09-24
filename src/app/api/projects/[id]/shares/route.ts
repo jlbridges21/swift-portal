@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
-import { requireBusinessAdmin } from "@/lib/tenant";
+import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { listProjectShares } from "@/lib/project-shares";
 import type { ShareExpiryPreset } from "@/lib/project-share-expiry";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await getProfile();
-    const tenant = await requireBusinessAdmin();
+    const profile = await getProfile();
+    if (!profile || !(isOwnerAdmin(profile) || staffCan(profile, "sharing.email"))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
     const { id: projectId } = await params;
     const shares = await listProjectShares(tenant.businessId, projectId);
     return NextResponse.json({ shares });
@@ -27,10 +32,11 @@ export async function POST(
 ) {
   try {
     const profile = await getProfile();
-    if (!profile) {
+    if (!profile || !(isOwnerAdmin(profile) || staffCan(profile, "sharing.email"))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const tenant = await requireBusinessAdmin();
+    const tenant = await getTenantContext();
+    if (!tenant) return missingTenantResponse(profile.role);
     const { id: projectId } = await params;
     const body = (await request.json()) as {
       emails?: string[];

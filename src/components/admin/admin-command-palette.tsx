@@ -13,9 +13,12 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   Building2,
+  Box,
+  Clapperboard,
   FolderKanban,
   Handshake,
   ImageIcon,
+  Link2,
   Loader2,
   Search,
   Settings,
@@ -106,17 +109,19 @@ export function AdminCommandPalette({
     return () => window.clearTimeout(t);
   }, [open]);
 
-  const settingsHits = useMemo(
-    () => (query.trim().length >= ADMIN_SEARCH_MIN_CHARS ? searchSettingsIndex(query, 8) : []),
-    [query]
-  );
+  const settingsHits = useMemo(() => {
+    if (query.trim().length < ADMIN_SEARCH_MIN_CHARS) return [];
+    // Staff cannot open /admin/settings — hide destinations entirely.
+    if (caps.userRole === "staff") return [];
+    return searchSettingsIndex(query, 10);
+  }, [query, caps.userRole]);
 
   const partnerHits = useMemo(
     () =>
-      query.trim().length >= ADMIN_SEARCH_MIN_CHARS
+      query.trim().length >= ADMIN_SEARCH_MIN_CHARS && caps.userRole !== "staff"
         ? searchPartnerIndex(query, partnerMode, 8)
         : [],
-    [query, partnerMode]
+    [query, partnerMode, caps.userRole]
   );
 
   // Debounced server search
@@ -201,6 +206,10 @@ export function AdminCommandPalette({
       pushGroup("Projects", serverResults.projects, "projects", seeAll.projects);
       pushGroup("Leads", serverResults.leads, "leads", seeAll.leads);
       pushGroup("Media", serverResults.media, "media", seeAll.media);
+      pushGroup("Staff", serverResults.staff ?? [], "staff");
+      pushGroup("Video reviews", serverResults.videoReviews ?? [], "video_reviews");
+      pushGroup("3D models", serverResults.models3d ?? [], "models3d");
+      pushGroup("Shared links", serverResults.shares ?? [], "shares");
     }
 
     if (settingsHits.length) {
@@ -413,6 +422,14 @@ export function AdminCommandPalette({
                 <UserPlus className="h-4 w-4 shrink-0 text-muted" />
               ) : item.hit.type === "media" ? (
                 <ImageIcon className="h-4 w-4 shrink-0 text-muted" />
+              ) : item.hit.type === "staff" ? (
+                <Users className="h-4 w-4 shrink-0 text-muted" />
+              ) : item.hit.type === "video_review" ? (
+                <Clapperboard className="h-4 w-4 shrink-0 text-muted" />
+              ) : item.hit.type === "model_3d" ? (
+                <Box className="h-4 w-4 shrink-0 text-muted" />
+              ) : item.hit.type === "share" ? (
+                <Link2 className="h-4 w-4 shrink-0 text-muted" />
               ) : (
                 <Building2 className="h-4 w-4 shrink-0 text-muted" />
               );

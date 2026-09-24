@@ -11,6 +11,8 @@ import { getStatusOrder } from "@/lib/constants";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import { isLiveBusiness } from "@/lib/business-live";
+import { staffShouldReceiveNotification } from "@/lib/staff-access";
+import { hasStaffPermission } from "@/lib/staff-permissions";
 
 export type { NotificationType };
 
@@ -35,7 +37,7 @@ interface NotificationRecipient {
   id: string;
   email: string;
   full_name: string | null;
-  role: "admin" | "client";
+  role: "admin" | "staff" | "client";
   client_id?: string | null;
   email_notifications_enabled: boolean;
   in_app_notifications_enabled: boolean;
@@ -102,17 +104,20 @@ async function loadProfiles(businessId: string, userIds: string[]): Promise<Prof
   return (fallback ?? []) as ProfileRow[];
 }
 
-async function getAdminRecipients(businessId: string): Promise<NotificationRecipient[]> {
+async function getAdminRecipients(
+  businessId: string,
+  options: { type: string; projectId?: string }
+): Promise<NotificationRecipient[]> {
   const db = await createTenantServiceClient(businessId);
   // profiles is unscoped in the tenant wrapper — filter role AND business_id here.
   // super_admin rows (NULL business_id) are intentionally excluded.
-  const { data } = await db.raw
+  const { data: admins } = await db.raw
     .from("profiles")
     .select("id, email, full_name, email_notifications_enabled, in_app_notifications_enabled")
     .eq("role", "admin")
     .eq("business_id", businessId);
 
-  return (data ?? []).map((profile) => ({
+  const recipients: NotificationRecipient[] = (admins ?? []).map((profile) => ({
     id: profile.id,
     email: profile.email,
     full_name: profile.full_name,
@@ -120,6 +125,60 @@ async function getAdminRecipients(businessId: string): Promise<NotificationRecip
     email_notifications_enabled: profile.email_notifications_enabled !== false,
     in_app_notifications_enabled: profile.in_app_notifications_enabled !== false,
   }));
+
+  // Active staff who should receive this notification type.
+  const { data: staffRows } = await db.raw
+    .from("profiles")
+    .select(
+      "id, email, full_name, staff_permissions, disabled_at, email_notifications_enabled, in_app_notifications_enabled"
+    )
+    .eq("role", "staff")
+    .eq("business_id", businessId)
+    .is("disabled_at", null);
+
+  if (!staffRows?.length) return recipients;
+
+  // Project-scoped: only assigned staff (or view_all).
+  let assignedStaffIds: Set<string> | null = null;
+  if (options.projectId) {
+    const { data: assignments } = await db.raw
+      .from("project_staff")
+      .select("user_id")
+      .eq("business_id", businessId)
+      .eq("project_id", options.projectId);
+    assignedStaffIds = new Set((assignments ?? []).map((a) => a.user_id as string));
+  }
+
+  for (const row of staffRows) {
+    if (
+      !staffShouldReceiveNotification(
+        {
+          role: "staff",
+          staff_permissions: row.staff_permissions,
+          disabled_at: row.disabled_at,
+        },
+        options.type
+      )
+    ) {
+      continue;
+    }
+
+    if (assignedStaffIds) {
+      const viewAll = hasStaffPermission(row.staff_permissions, "projects.view_all");
+      if (!viewAll && !assignedStaffIds.has(row.id)) continue;
+    }
+
+    recipients.push({
+      id: row.id,
+      email: row.email,
+      full_name: row.full_name,
+      role: "staff",
+      email_notifications_enabled: row.email_notifications_enabled !== false,
+      in_app_notifications_enabled: row.in_app_notifications_enabled !== false,
+    });
+  }
+
+  return recipients;
 }
 
 async function getSingleClientRecipient(
@@ -287,7 +346,12 @@ export async function notifyUsers(options: NotifyOptions) {
   }
 
   if (options.notifyAdmins) {
-    recipients.push(...(await getAdminRecipients(businessId)));
+    recipients.push(
+      ...(await getAdminRecipients(businessId, {
+        type: options.type,
+        projectId: options.projectId,
+      }))
+    );
   }
 
   if (options.clientId) {
@@ -324,7 +388,7 @@ export async function notifyUsers(options: NotifyOptions) {
     }
 
     const shouldCreateInApp =
-      allowInApp && (user.role === "admin" || user.in_app_notifications_enabled !== false);
+      allowInApp && user.in_app_notifications_enabled !== false;
 
     let notificationId: string | null = null;
 
@@ -352,7 +416,15 @@ export async function notifyUsers(options: NotifyOptions) {
       continue;
     }
 
-    if (user.role === "admin") {
+    // Honor per-user email preference for admin + staff (clients checked in sendClientEmailNotification).
+    if (
+      (user.role === "admin" || user.role === "staff") &&
+      user.email_notifications_enabled === false
+    ) {
+      continue;
+    }
+
+    if (user.role === "admin" || user.role === "staff") {
       try {
         await sendBrandedEmail({
           businessId,

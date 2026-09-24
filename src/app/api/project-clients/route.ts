@@ -6,7 +6,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { notifyClientAddedToProject } from "@/lib/client-added-notification";
 
 export async function GET(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ area: 'clients' });
   if (!auth.ok) return auth.response;
 
   const { searchParams } = new URL(request.url);
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'clients.add_to_projects' });
   if (!auth.ok) return auth.response;
 
   const body = await request.json();
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'clients.add_to_projects' });
   if (!auth.ok) return auth.response;
 
   const { searchParams } = new URL(request.url);

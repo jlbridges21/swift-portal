@@ -7,6 +7,7 @@ import { idempotencyKey } from "@/lib/idempotency";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { canAccessProject, canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 import { getAppSettings } from "@/lib/app-settings";
 
 export async function GET(request: Request) {
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const profile = await getProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
+  if (!profile || !(isOwnerAdmin(profile) || staffCan(profile, "projects.edit"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

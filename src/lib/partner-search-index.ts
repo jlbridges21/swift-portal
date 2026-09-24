@@ -109,6 +109,11 @@ export const PARTNER_PROGRAM_PITCH_ENTRY: PartnerSearchEntry = {
     "payout",
     "landing page",
     "referral link",
+    "partner tabs",
+    "partner overview",
+    "partner referrals",
+    "partner commissions",
+    "partner payouts",
   ],
 };
 

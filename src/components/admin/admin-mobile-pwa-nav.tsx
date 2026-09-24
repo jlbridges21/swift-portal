@@ -19,11 +19,11 @@ import { cn } from "@/lib/utils";
 import { useAdminSearch } from "@/components/admin/admin-search-context";
 
 const BASE_NAV = [
-  { href: "/admin", label: "Home", icon: Home, exact: true },
-  { href: "/admin/projects", label: "Projects", icon: FolderKanban },
-  { href: "__action__", label: "Add", icon: Plus, isAction: true as const },
-  { href: "/admin/messages", label: "Messages", icon: MessageSquare },
-  { href: "/admin/clients", label: "Clients", icon: Users },
+  { href: "/admin", label: "Home", icon: Home, exact: true, area: "shell" as const },
+  { href: "/admin/projects", label: "Projects", icon: FolderKanban, area: "projects" as const },
+  { href: "__action__", label: "Add", icon: Plus, isAction: true as const, area: "shell" as const },
+  { href: "/admin/messages", label: "Messages", icon: MessageSquare, area: "messages" as const },
+  { href: "/admin/clients", label: "Clients", icon: Users, area: "clients" as const },
 ] as const;
 
 function isActive(pathname: string, href: string, exact?: boolean) {
@@ -35,23 +35,40 @@ export function AdminMobilePwaNav({
   showPartner = false,
   partnerNavLabel = "Partner Program",
   partnerNavHref = "/partner",
+  staffAreas,
 }: {
   showPartner?: boolean;
   partnerNavLabel?: string;
   partnerNavHref?: string;
+  staffAreas?: import("@/lib/staff-access").StaffArea[];
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const { openSearch } = useAdminSearch();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const isStaff = Boolean(staffAreas);
+  const allowed = staffAreas ? new Set(staffAreas) : null;
 
-  const navItems = showPartner
-    ? [
-        ...BASE_NAV.slice(0, 4),
-        { href: partnerNavHref, label: partnerNavLabel, icon: Handshake },
-        BASE_NAV[4],
-      ]
-    : [...BASE_NAV];
+  const filteredBase = BASE_NAV.filter((item) => {
+    if (!allowed) return true;
+    if ("isAction" in item && item.isAction) {
+      // Keep create action only if they have projects or clients or media
+      return (
+        allowed.has("projects") || allowed.has("clients") || allowed.has("media")
+      );
+    }
+    if (item.area === "shell") return false;
+    return allowed.has(item.area as import("@/lib/staff-access").StaffArea);
+  });
+
+  const navItems =
+    showPartner && !isStaff
+      ? [
+          ...filteredBase.slice(0, Math.min(4, filteredBase.length)),
+          { href: partnerNavHref, label: partnerNavLabel, icon: Handshake },
+          ...filteredBase.slice(Math.min(4, filteredBase.length)),
+        ]
+      : [...filteredBase];
 
   return (
     <>
@@ -118,7 +135,7 @@ export function AdminMobilePwaNav({
                   openSearch();
                 }}
               />
-              {showPartner ? (
+              {showPartner && !isStaff ? (
                 <ActionSheetButton
                   icon={Handshake}
                   label={partnerNavLabel}
@@ -128,30 +145,36 @@ export function AdminMobilePwaNav({
                   }}
                 />
               ) : null}
-              <ActionSheetButton
-                icon={FolderPlus}
-                label="Add New Project"
-                onClick={() => {
-                  setSheetOpen(false);
-                  router.push("/admin/projects/new");
-                }}
-              />
-              <ActionSheetButton
-                icon={UserPlus}
-                label="Add New Client"
-                onClick={() => {
-                  setSheetOpen(false);
-                  router.push("/admin/clients/new");
-                }}
-              />
-              <ActionSheetButton
-                icon={ImagePlus}
-                label="Add Media"
-                onClick={() => {
-                  setSheetOpen(false);
-                  router.push("/admin/media?upload=1");
-                }}
-              />
+              {(!allowed || allowed.has("projects")) && (
+                <ActionSheetButton
+                  icon={FolderPlus}
+                  label="Add New Project"
+                  onClick={() => {
+                    setSheetOpen(false);
+                    router.push("/admin/projects/new");
+                  }}
+                />
+              )}
+              {(!allowed || allowed.has("clients")) && (
+                <ActionSheetButton
+                  icon={UserPlus}
+                  label="Add New Client"
+                  onClick={() => {
+                    setSheetOpen(false);
+                    router.push("/admin/clients/new");
+                  }}
+                />
+              )}
+              {(!allowed || allowed.has("media")) && (
+                <ActionSheetButton
+                  icon={ImagePlus}
+                  label="Add Media"
+                  onClick={() => {
+                    setSheetOpen(false);
+                    router.push("/admin/media?upload=1");
+                  }}
+                />
+              )}
               <button
                 type="button"
                 onClick={() => setSheetOpen(false)}

@@ -44,6 +44,8 @@ export function SafeHomeLink({
           setTarget({ href: "/platform", label: "Back to platform" });
         } else if (profile.role === "admin") {
           setTarget({ href: "/admin", label: "Back to admin" });
+        } else if (profile.role === "staff") {
+          setTarget({ href: "/staff", label: "Back to staff home" });
         } else {
           setTarget({ href: "/dashboard", label: "Back to dashboard" });
         }

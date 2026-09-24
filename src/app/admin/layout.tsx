@@ -11,6 +11,7 @@ import { getCapabilities, partnerNavHref, partnerNavLabel, showPartnerNavItem } 
 import { getTenantContext } from "@/lib/tenant";
 import { metadataFromBusiness } from "@/lib/site-metadata";
 import { showFinishSetupBanner } from "@/lib/onboarding";
+import { staffVisibleNavAreas } from "@/lib/staff-access";
 import type { Metadata } from "next";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -25,15 +26,21 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const settings = await getAppSettings(tenant.businessId);
   const brand = getPortalBrandFromSettings(settings);
   const caps = await getCapabilities();
-  const showPartner = showPartnerNavItem(caps);
+  const isStaff = profile.role === "staff";
+  // Force showPartner false when profile.role === 'staff'.
+  const showPartner = isStaff ? false : showPartnerNavItem(caps);
   const navPartnerLabel = partnerNavLabel(caps);
   const navPartnerHref = partnerNavHref(caps);
-  const finishBanner = showFinishSetupBanner({
-    onboardingCompletedAt: tenant.business.onboarding_completed_at,
-    onboardingState: tenant.business.onboarding_state,
-    role: profile.role,
-    impersonating: tenant.impersonating,
-  });
+  const staffAreas = isStaff ? staffVisibleNavAreas(profile) : null;
+  const headerRole = isStaff ? ("staff" as const) : ("admin" as const);
+  const finishBanner =
+    !isStaff &&
+    showFinishSetupBanner({
+      onboardingCompletedAt: tenant.business.onboarding_completed_at,
+      onboardingState: tenant.business.onboarding_state,
+      role: profile.role,
+      impersonating: tenant.impersonating,
+    });
 
   return (
     <BrandProvider brand={brand}>
@@ -43,6 +50,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         partnerSuspended={caps.partner.suspended}
         partnerNavLabel={navPartnerLabel}
         partnerNavHref={navPartnerHref}
+        staffAreas={staffAreas}
+        userRole={headerRole}
       >
         {tenant.impersonating && (
           <ImpersonationBanner
@@ -55,18 +64,22 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             compedReason={tenant.business.comped_reason}
           />
         )}
-        <SubscriptionBanner
-          subscriptionStatus={tenant.business.subscription_status}
-          trialEndsAt={tenant.business.trial_ends_at}
-          compedUntil={tenant.business.comped_until}
-          subscriptionCurrentPeriodEnd={tenant.business.subscription_current_period_end}
-          subscriptionCancelAtPeriodEnd={tenant.business.subscription_cancel_at_period_end}
-        />
+        {!isStaff && (
+          <SubscriptionBanner
+            subscriptionStatus={tenant.business.subscription_status}
+            trialEndsAt={tenant.business.trial_ends_at}
+            compedUntil={tenant.business.comped_until}
+            subscriptionCurrentPeriodEnd={tenant.business.subscription_current_period_end}
+            subscriptionCancelAtPeriodEnd={tenant.business.subscription_cancel_at_period_end}
+          />
+        )}
         {finishBanner ? <FinishSetupBanner /> : null}
         <AdminShell
           showPartner={showPartner}
           partnerNavLabel={navPartnerLabel}
           partnerNavHref={navPartnerHref}
+          staffAreas={staffAreas ?? undefined}
+          userRole={headerRole}
         >
           {children}
         </AdminShell>

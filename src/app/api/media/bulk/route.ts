@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import { staffCan } from "@/lib/staff-access";
 import { downloadFileName } from "@/lib/media-display-name";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { logMediaEvent, setMediaTags } from "@/lib/media-library";
@@ -7,7 +8,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function PATCH(request: Request) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ permission: ['media.delete', 'media.organize'] });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
 
@@ -25,6 +26,18 @@ export async function PATCH(request: Request) {
 
     if (!action || !ids?.length) {
       return NextResponse.json({ error: "action and ids required" }, { status: 400 });
+    }
+
+    if (action === "delete") {
+      if (!staffCan(profile, "media.delete")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    } else if (action === "download_urls") {
+      if (!staffCan(profile, "media.download_originals") && profile.role === "staff") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    } else if (profile.role === "staff" && !staffCan(profile, "media.organize")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const db = await createTenantServiceClient(tenant.businessId);

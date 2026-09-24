@@ -11,6 +11,7 @@ import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { archivePreviousOfficialQuotes } from "@/lib/quote-archive";
 import { canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -34,6 +35,9 @@ export async function GET(request: Request) {
   if (!allowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (profile.role === "staff" && !staffCan(profile, "money.view")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const supabase = await createClient();
   const query = supabase
@@ -50,7 +54,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const profile = await getProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
+  if (!profile || !(isOwnerAdmin(profile) || staffCan(profile, "money.create_send_estimates"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -149,7 +153,7 @@ export async function PATCH(request: Request) {
   }
 
   const db = await createTenantServiceClient(businessId);
-  const cookie = (profile.role === "admin" || profile.role === "super_admin") ? null : await createClient();
+  const cookie = (isOwnerAdmin(profile) || staffCan(profile, "money.view") || staffCan(profile, "money.create_send_estimates")) ? null : await createClient();
 
   const { data: quote } = cookie
     ? await cookie.from("project_quotes").select("*").eq("id", id).eq("business_id", businessId).single()
@@ -159,7 +163,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (action === "send" && (profile.role === "admin" || profile.role === "super_admin")) {
+  if (action === "send" && (isOwnerAdmin(profile) || staffCan(profile, "money.create_send_estimates"))) {
     if (quote.quote_kind === "preliminary") {
       return NextResponse.json(
         { error: "Use Convert to Official Proposal for preliminary estimates." },
@@ -228,7 +232,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json(updated);
   }
 
-  if (action === "convert_to_official" && (profile.role === "admin" || profile.role === "super_admin")) {
+  if (action === "convert_to_official" && (isOwnerAdmin(profile) || staffCan(profile, "money.create_send_estimates"))) {
     if (quote.quote_kind !== "preliminary") {
       return NextResponse.json({ error: "Only preliminary estimates can be converted." }, { status: 400 });
     }
@@ -404,7 +408,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json(updated);
   }
 
-  if (action === "update" && (profile.role === "admin" || profile.role === "super_admin")) {
+  if (action === "update" && (isOwnerAdmin(profile) || staffCan(profile, "money.create_send_estimates"))) {
     const isPreliminary = quote.quote_kind === "preliminary";
     if (!isPreliminary && quote.status !== "draft") {
       return NextResponse.json(
@@ -441,7 +445,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json(updated);
   }
 
-  if (action === "duplicate" && (profile.role === "admin" || profile.role === "super_admin")) {
+  if (action === "duplicate" && (isOwnerAdmin(profile) || staffCan(profile, "money.create_send_estimates"))) {
     const revisionNumber = body.revision_label || "Revised";
     const { data: newQuote, error } = await db
       .from("project_quotes")

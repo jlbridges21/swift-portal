@@ -12,7 +12,7 @@ import { idempotencyKey } from "@/lib/idempotency";
 
 export async function POST(request: Request) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ permission: 'money.send_payment_links' });
     const body = await request.json();
 
     if (!body.project_id || !body.client_id || !body.amount || !body.description) {

@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 
 export async function POST() {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ adminOnly: true });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
 

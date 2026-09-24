@@ -13,6 +13,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { ensureClientPortalLink } from "@/lib/client-portal-link";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import type { ClientMessage } from "@/lib/types";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -33,7 +34,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Project not found or access denied" }, { status: 404 });
   }
 
-  if (profile.role === "admin" || profile.role === "super_admin") {
+  if (isOwnerAdmin(profile) || staffCan(profile, "area.messages")) {
     return NextResponse.json(
       {
         error: "Use /api/messages?client_id=… for admin messaging",
@@ -77,7 +78,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Message is too long (max 5000 characters)" }, { status: 400 });
   }
 
-  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+  const isAdmin = isOwnerAdmin(profile) || staffCan(profile, "messages.send");
   let clientId: string | null =
     typeof body.client_id === "string" ? body.client_id : null;
 
@@ -88,6 +89,8 @@ export async function POST(request: Request, { params }: RouteParams) {
         { status: 400 }
       );
     }
+  } else if (profile.role === "staff") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   } else {
     if (!profile.client_id) {
       return NextResponse.json({ error: "No client profile linked" }, { status: 403 });
@@ -195,7 +198,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if (!tenant) return missingTenantResponse(profile.role);
   const businessId = tenant.businessId;
 
-  if (profile.role === "admin" || profile.role === "super_admin") {
+  if (isOwnerAdmin(profile) || staffCan(profile, "area.messages")) {
     const body = await request.json().catch(() => ({}));
     const clientId = typeof body.client_id === "string" ? body.client_id : null;
     if (!clientId) {

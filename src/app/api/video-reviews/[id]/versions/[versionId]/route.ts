@@ -3,7 +3,8 @@ import { getProfile } from "@/lib/auth";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { canAccessProject } from "@/lib/project-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { isReviewAdmin, loadReviewForAccess, VideoReviewAccessError } from "@/lib/video-review-access";
+import { loadReviewForAccess, VideoReviewAccessError } from "@/lib/video-review-access";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 import {
   getVideoReviewVersionLink,
   removeVideoReviewVersionAndAsset,
@@ -15,7 +16,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; versionId: string }> }
 ) {
   const profile = await getProfile();
-  if (!profile || !isReviewAdmin(profile)) {
+  if (!profile || !(isOwnerAdmin(profile) || staffCan(profile, "video_review.upload_versions"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

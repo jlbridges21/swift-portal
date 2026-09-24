@@ -1,4 +1,5 @@
 import { resolveProjectAccess } from "@/lib/project-access";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 import type { TenantContext } from "@/lib/tenant";
 import type { Profile } from "@/lib/types";
 
@@ -12,8 +13,8 @@ export type MediaAssetAccessResult =
   | { ok: true; shareId: string | null }
   | { ok: false; status: 403 | 404; message: string };
 
-function isAdminProfile(profile: Profile): boolean {
-  return profile.role === "admin" || profile.role === "super_admin";
+function isTeamMediaAccess(profile: Profile): boolean {
+  return isOwnerAdmin(profile) || staffCan(profile, "area.media");
 }
 
 /**
@@ -29,7 +30,7 @@ export async function assertMediaAssetProjectAccess(
     return { ok: false, status: 404, message: "Media not found or access denied" };
   }
 
-  const isAdmin = isAdminProfile(profile);
+  const isAdmin = isTeamMediaAccess(profile);
   if (!asset.project_id) {
     if (isAdmin) return { ok: true, shareId: null };
     return { ok: false, status: 404, message: "Media not found or access denied" };

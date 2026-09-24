@@ -10,7 +10,7 @@ import { Mail, Phone, Building, MapPin } from "lucide-react";
 import { MarkLeadReadButton } from "@/components/admin/mark-lead-read";
 
 export default async function AdminLeadsPage() {
-  const { tenant } = await requireAdminPage();
+  const { tenant } = await requireAdminPage({ adminOnly: true });
   const supabase = await createClient();
   const { data: leads } = await supabase
     .from("leads")

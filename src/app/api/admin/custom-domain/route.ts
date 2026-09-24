@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
+import { isOwnerAdmin } from "@/lib/staff-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import {
   claimCustomDomain,
@@ -16,7 +17,7 @@ import { getPlatformRootDomain } from "@/lib/site-metadata";
 
 export async function GET() {
   const profile = await getProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
+  if (!profile || !isOwnerAdmin(profile)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const tenant = await getTenantContext();
@@ -35,7 +36,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const profile = await getProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
+  if (!profile || !isOwnerAdmin(profile)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const tenant = await getTenantContext();

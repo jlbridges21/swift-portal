@@ -12,7 +12,7 @@ interface PageProps {
 }
 
 export default async function AdminLazyVideoReviewPage({ params }: PageProps) {
-  const { tenant, profile } = await requireAdminPage();
+  const { tenant, profile } = await requireAdminPage({ area: 'projects' });
   const { id: projectId, assetId } = await params;
   const db = await createTenantServiceClient(tenant.businessId);
 

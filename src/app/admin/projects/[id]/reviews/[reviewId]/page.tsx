@@ -11,7 +11,7 @@ interface PageProps {
 }
 
 export default async function AdminVideoReviewPage({ params }: PageProps) {
-  const { tenant, profile } = await requireAdminPage();
+  const { tenant, profile } = await requireAdminPage({ area: 'projects' });
   const { id: projectId, reviewId } = await params;
   const db = await createTenantServiceClient(tenant.businessId);
 

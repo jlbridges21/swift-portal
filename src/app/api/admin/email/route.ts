@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
+import { isOwnerAdmin } from "@/lib/staff-access";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getEmailConfigStatus, getLastEmailSendResult, sendTestEmail } from "@/lib/email";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
+  if (!profile || !isOwnerAdmin(profile)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -116,7 +117,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const profile = await getProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
+  if (!profile || !isOwnerAdmin(profile)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

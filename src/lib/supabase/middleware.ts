@@ -35,6 +35,13 @@ import {
 } from "@/lib/subscription";
 import { NEEDS_PASSWORD_COOKIE } from "@/lib/auth-password-gate";
 import { needsOnboardingRedirect } from "@/lib/onboarding";
+import {
+  isActiveStaff,
+  staffHasAnyArea,
+  staffHomePath,
+  staffMayAccessAdminPath,
+} from "@/lib/staff-access";
+import type { Profile } from "@/lib/types";
 
 function inboundHost(request: NextRequest): string {
   return request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
@@ -205,6 +212,7 @@ export async function updateSession(request: NextRequest) {
   const protectedPaths = [
     "/dashboard",
     "/admin",
+    "/staff",
     "/platform",
     "/billing",
     "/onboarding",
@@ -266,9 +274,38 @@ export async function updateSession(request: NextRequest) {
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, business_id, client_id, email")
+      .select("role, business_id, client_id, email, staff_permissions, disabled_at")
       .eq("id", user.id)
       .single();
+
+    // Build a minimal Profile for staff path checks (middleware select is partial).
+    const staffProfile = profile
+      ? ({
+          id: user.id,
+          role: profile.role,
+          business_id: profile.business_id,
+          client_id: profile.client_id,
+          email: profile.email,
+          staff_permissions: profile.staff_permissions,
+          disabled_at: profile.disabled_at,
+        } as Profile)
+      : null;
+
+    // Disabled staff — same soft lockout as unavailable business (no portal_unavailable loop).
+    if (
+      profile?.role === "staff" &&
+      profile.disabled_at &&
+      !path.startsWith("/login") &&
+      !path.startsWith("/api/auth/") &&
+      !isApi
+    ) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = `${resolution.pathPrefix}/login`;
+      url.searchParams.set("error", "unavailable");
+      url.searchParams.delete("redirect");
+      return applyPathCookie(NextResponse.redirect(url), resolution);
+    }
 
     // Invite / recovery / temp-password: must set password before using the app.
     const mustChangePassword =
@@ -415,7 +452,9 @@ export async function updateSession(request: NextRequest) {
           ? "/onboarding"
           : profile?.role === "admin"
             ? "/admin"
-            : "/dashboard";
+            : profile?.role === "staff" && staffProfile
+              ? staffHomePath(staffProfile)
+              : "/dashboard";
 
       if (ownBusiness) {
         const onOwnTenant =
@@ -497,11 +536,39 @@ export async function updateSession(request: NextRequest) {
     }
 
     if (path.startsWith("/admin")) {
-      if (profile?.role !== "admin" && profile?.role !== "super_admin") {
+      const isOwner =
+        profile?.role === "admin" || profile?.role === "super_admin";
+      const isStaffOk =
+        staffProfile &&
+        isActiveStaff(staffProfile) &&
+        staffMayAccessAdminPath(staffProfile, path);
+
+      if (!isOwner && !isStaffOk) {
         const url = request.nextUrl.clone();
-        url.pathname = `${resolution.pathPrefix}/dashboard`;
+        if (staffProfile && profile?.role === "staff") {
+          // Zero areas or denied path → staff home (never error/sign-out).
+          url.pathname = `${resolution.pathPrefix}${staffHomePath(staffProfile)}`;
+        } else {
+          url.pathname = `${resolution.pathPrefix}/dashboard`;
+        }
         return applyPathCookie(NextResponse.redirect(url), resolution);
       }
+
+      // Staff with areas but hitting shell /admin → bounce to first area home.
+      if (
+        staffProfile &&
+        isActiveStaff(staffProfile) &&
+        (path === "/admin" || path === "/admin/") &&
+        staffHasAnyArea(staffProfile)
+      ) {
+        const home = staffHomePath(staffProfile);
+        if (home !== "/admin" && home !== "/staff") {
+          const url = request.nextUrl.clone();
+          url.pathname = `${resolution.pathPrefix}${home}`;
+          return applyPathCookie(NextResponse.redirect(url), resolution);
+        }
+      }
+
       if (profile?.role === "super_admin" && !isApi) {
         const claims = verifyImpersonationCookie(request.cookies.get(SA_BUSINESS_CONTEXT_COOKIE)?.value);
         if (!claims) {
@@ -547,7 +614,10 @@ export async function updateSession(request: NextRequest) {
     if (path.startsWith("/onboarding")) {
       if (profile?.role !== "admin" && profile?.role !== "super_admin") {
         const url = request.nextUrl.clone();
-        url.pathname = `${resolution.pathPrefix}/dashboard`;
+        url.pathname =
+          staffProfile && profile?.role === "staff"
+            ? `${resolution.pathPrefix}${staffHomePath(staffProfile)}`
+            : `${resolution.pathPrefix}/dashboard`;
         return applyPathCookie(NextResponse.redirect(url), resolution);
       }
       if (profile?.role === "super_admin" && !isApi) {
@@ -567,7 +637,10 @@ export async function updateSession(request: NextRequest) {
     if (path.startsWith("/billing")) {
       if (profile?.role !== "admin" && profile?.role !== "super_admin") {
         const url = request.nextUrl.clone();
-        url.pathname = `${resolution.pathPrefix}/dashboard`;
+        url.pathname =
+          staffProfile && profile?.role === "staff"
+            ? `${resolution.pathPrefix}${staffHomePath(staffProfile)}`
+            : `${resolution.pathPrefix}/dashboard`;
         return applyPathCookie(NextResponse.redirect(url), resolution);
       }
       if (profile?.role === "super_admin" && !isApi) {
@@ -579,6 +652,19 @@ export async function updateSession(request: NextRequest) {
           return applyPathCookie(NextResponse.redirect(url), resolution);
         }
       }
+    }
+
+    // Staff hitting /admin/settings is covered by staffMayAccessAdminPath (adminOnly).
+    // Explicit settings redirect for clarity when somehow past the gate:
+    if (
+      !isApi &&
+      staffProfile &&
+      isActiveStaff(staffProfile) &&
+      path.startsWith("/admin/settings")
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = `${resolution.pathPrefix}${staffHomePath(staffProfile)}`;
+      return applyPathCookie(NextResponse.redirect(url), resolution);
     }
 
     // -------------------------------------------------------------------------
@@ -636,7 +722,9 @@ export async function updateSession(request: NextRequest) {
         url.pathname =
           profile?.role === "admin"
             ? `${resolution.pathPrefix}/admin`
-            : `${resolution.pathPrefix}/dashboard`;
+            : staffProfile && profile?.role === "staff"
+              ? `${resolution.pathPrefix}${staffHomePath(staffProfile)}`
+              : `${resolution.pathPrefix}/dashboard`;
         return applyPathCookie(NextResponse.redirect(url), resolution);
       }
     }

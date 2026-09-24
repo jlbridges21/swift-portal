@@ -10,6 +10,7 @@ import { getAppSettings } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { canAccessProject } from "@/lib/project-access";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -64,8 +65,8 @@ export async function POST(request: Request) {
   }
   const proposedAtIso = new Date(proposedAtMs).toISOString();
 
-  // Admins and impersonating super-admins both propose as "admin".
-  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+  // Admins / staff with scheduling.propose act as the business team.
+  const isAdmin = isOwnerAdmin(profile) || staffCan(profile, "scheduling.propose");
   const proposedBy = isAdmin ? "admin" : "client";
 
   if (!isAdmin && !profile.client_id) {
@@ -210,7 +211,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Missing project_id" }, { status: 400 });
   }
 
-  const isAdmin = profile.role === "admin" || profile.role === "super_admin";
+  const isAdmin =
+    isOwnerAdmin(profile) ||
+    staffCan(profile, "scheduling.propose") ||
+    staffCan(profile, "scheduling.confirm");
+  const canConfirm = isOwnerAdmin(profile) || staffCan(profile, "scheduling.confirm");
   const db = await createTenantServiceClient(businessId);
 
   const { data: proposal } = id
@@ -282,7 +287,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: true, status: "confirmed" });
   }
 
-  if (action === "update_date" && isAdmin) {
+  if (action === "update_date" && canConfirm) {
     if (!id || !proposed_at) {
       return NextResponse.json({ error: "id and proposed_at required" }, { status: 400 });
     }
@@ -346,7 +351,7 @@ export async function PATCH(request: Request) {
   }
 
   if (action === "reschedule") {
-    if (!isAdmin) {
+    if (!canConfirm) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (!proposed_at) {

@@ -10,7 +10,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ permission: 'money.mark_paid' });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
@@ -68,7 +68,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ permission: 'money.send_payment_links' });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
 

@@ -3,6 +3,7 @@ import { getProfile } from "@/lib/auth";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import {
+  assertCanResolveComment,
   isReviewAdmin,
   loadCommentForReview,
   loadReviewForAccess,
@@ -22,6 +23,18 @@ export async function POST(
   const profile = await getProfile();
   if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Staff need video_review.resolve; clients may reopen their own feedback.
+  if (profile.role === "staff" || isReviewAdmin(profile)) {
+    try {
+      assertCanResolveComment(profile);
+    } catch (err) {
+      if (err instanceof VideoReviewAccessError) {
+        return NextResponse.json({ error: err.message }, { status: err.status });
+      }
+      throw err;
+    }
   }
 
   const tenant = await getTenantContext();

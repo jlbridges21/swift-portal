@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
+import { isOwnerAdmin } from "@/lib/staff-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getAppSettings, saveAppSettings } from "@/lib/app-settings";
 import { EntitlementError, requireEntitlement } from "@/lib/entitlements";
@@ -93,7 +94,7 @@ function parseKind(value: FormDataEntryValue | null): BrandAssetKind {
 
 export async function POST(request: Request) {
   const profile = await getProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
+  if (!profile || !isOwnerAdmin(profile)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

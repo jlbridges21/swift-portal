@@ -23,6 +23,7 @@ import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
 import type { Project, Client, MediaAsset, Tour, Project3dModel, Payment, ShootProposal, ActivityLog, Revision, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
 import { normalizeStatus } from "@/lib/constants";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
+import { ProjectStaffCard } from "@/components/admin/project-staff-card";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
 import { NextStepBanner } from "@/components/projects/next-step-banner";
 import { getAdminNextStep } from "@/lib/journey";
@@ -118,6 +119,8 @@ interface AdminProjectDetailProps {
   linkAccessMode?: ProjectLinkAccessMode;
   linkAccessPublicUrl?: string | null;
   linkAccessViewCount?: number;
+  /** Hide estimates / payments / payment links when false (staff without money.view). */
+  canViewMoney?: boolean;
 }
 
 export function AdminProjectDetail({
@@ -141,6 +144,7 @@ export function AdminProjectDetail({
   linkAccessMode = "restricted",
   linkAccessPublicUrl = null,
   linkAccessViewCount = 0,
+  canViewMoney = true,
 }: AdminProjectDetailProps) {
   const router = useRouter();
   const { enqueueUploads } = useUploadManager();
@@ -981,7 +985,22 @@ export function AdminProjectDetail({
         </Button>
       </div>
 
-      <NextStepBanner step={adminStep} />
+      <NextStepBanner
+        step={
+          !canViewMoney &&
+          (adminStep.actionHref === "#quote" ||
+            adminStep.actionHref === "#payments" ||
+            /quote|payment|invoice/i.test(adminStep.title + adminStep.description))
+            ? {
+                ...adminStep,
+                title: "Continue this project",
+                description: "Review deliverables and scheduling below.",
+                actionHref: undefined,
+                actionLabel: undefined,
+              }
+            : adminStep
+        }
+      />
 
       {/* Project details */}
       <Card>
@@ -1026,6 +1045,8 @@ export function AdminProjectDetail({
         </CardContent>
       </Card>
 
+      <ProjectStaffCard projectId={initialProject.id} />
+
       <ProjectClientsCard
         primaryClient={initialProject.clients as Client}
         primaryClientId={initialProject.client_id}
@@ -1049,19 +1070,25 @@ export function AdminProjectDetail({
         />
       </Suspense>
 
-      <QuoteSection
-        projectId={initialProject.id}
-        quotes={quotes}
-        isAdmin
-        clientId={initialProject.client_id}
-        clientName={initialProject.clients?.full_name || initialProject.clients?.name || "Client"}
-        projectName={initialProject.project_name}
-        propertyAddress={initialProject.property_address}
-        serviceType={initialProject.service_type}
-        payments={paymentList}
-        onPaymentCreated={(payment) => setPaymentList((prev) => [payment, ...prev])}
-        onStatusChange={(status) => setForm((f) => ({ ...f, status: status as Project["status"] }))}
-      />
+      {canViewMoney && (
+        <QuoteSection
+          projectId={initialProject.id}
+          quotes={quotes}
+          isAdmin
+          clientId={initialProject.client_id}
+          clientName={
+            initialProject.clients?.full_name || initialProject.clients?.name || "Client"
+          }
+          projectName={initialProject.project_name}
+          propertyAddress={initialProject.property_address}
+          serviceType={initialProject.service_type}
+          payments={paymentList}
+          onPaymentCreated={(payment) => setPaymentList((prev) => [payment, ...prev])}
+          onStatusChange={(status) =>
+            setForm((f) => ({ ...f, status: status as Project["status"] }))
+          }
+        />
+      )}
 
       {normalizeStatus(form.status) === "shoot_complete_editing" && (
         <div id="deliverables-admin" className="flex justify-end">
@@ -1457,41 +1484,63 @@ export function AdminProjectDetail({
         </Card>
       )}
 
-      {/* Payments */}
-      <Card id="payments">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2"><CreditCard className="h-5 w-5" /> Payments</CardTitle>
-          <Button variant="outline" size="sm" onClick={() => setShowPaymentForm(!showPaymentForm)}>Create Payment</Button>
-        </CardHeader>
-        <CardContent>
-          {showPaymentForm && (
-            <form onSubmit={handleCreatePayment} className="mb-4 space-y-3 rounded-lg border border-border p-4">
-              <Input name="amount" type="number" step="0.01" min="0" required placeholder="Amount (USD)" />
-              <Input name="description" required placeholder="Description" />
-              <Input name="due_date" type="date" />
-              <Button type="submit" variant="accent" size="sm" disabled={creatingPayment}>
-                {creatingPayment ? "Creating…" : "Create Payment Link"}
-              </Button>
-            </form>
-          )}
-          {paymentList.map((p) => (
-            <div key={`payment-${p.id}`} className="border-b border-border py-4 last:border-0">
-              <AdminPaymentActions
-                payment={p}
-                showProjectLink={false}
-                showDelete
-                onUpdated={(updated) =>
-                  setPaymentList((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
-                }
-                onDeleted={deletePayment}
-              />
-            </div>
-          ))}
-          {paymentList.length === 0 && (
-            <p className="text-sm text-muted text-center py-4">No payment links yet</p>
-          )}
-        </CardContent>
-      </Card>
+      {/* Payments — hidden when staff lacks money.view */}
+      {canViewMoney && (
+        <Card id="payments">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" /> Payments
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPaymentForm(!showPaymentForm)}
+            >
+              Create Payment
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {showPaymentForm && (
+              <form
+                onSubmit={handleCreatePayment}
+                className="mb-4 space-y-3 rounded-lg border border-border p-4"
+              >
+                <Input
+                  name="amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required
+                  placeholder="Amount (USD)"
+                />
+                <Input name="description" required placeholder="Description" />
+                <Input name="due_date" type="date" />
+                <Button type="submit" variant="accent" size="sm" disabled={creatingPayment}>
+                  {creatingPayment ? "Creating…" : "Create Payment Link"}
+                </Button>
+              </form>
+            )}
+            {paymentList.map((p) => (
+              <div key={`payment-${p.id}`} className="border-b border-border py-4 last:border-0">
+                <AdminPaymentActions
+                  payment={p}
+                  showProjectLink={false}
+                  showDelete
+                  onUpdated={(updated) =>
+                    setPaymentList((prev) =>
+                      prev.map((x) => (x.id === updated.id ? updated : x))
+                    )
+                  }
+                  onDeleted={deletePayment}
+                />
+              </div>
+            ))}
+            {paymentList.length === 0 && (
+              <p className="text-sm text-muted text-center py-4">No payment links yet</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="rounded-xl border border-border bg-slate-50/80 px-4 py-3 text-sm text-muted">
         Client messaging lives in the{" "}

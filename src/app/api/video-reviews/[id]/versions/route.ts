@@ -4,13 +4,14 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { addVideoReviewVersion, VideoReviewError } from "@/lib/video-reviews";
 import { notifyVideoReviewEvent } from "@/lib/video-review-notifications";
+import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const profile = await getProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "super_admin")) {
+  if (!profile || !(isOwnerAdmin(profile) || staffCan(profile, "video_review.upload_versions"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

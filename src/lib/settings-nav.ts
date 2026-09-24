@@ -12,6 +12,7 @@ export const SETTINGS_SECTION_IDS = [
   "workflow",
   "notifications",
   "integrations",
+  "staff",
 ] as const;
 
 export type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number];
@@ -102,6 +103,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: "Integrations",
     description: "GoHighLevel.",
     hashes: ["settings-integrations"],
+  },
+  {
+    id: "staff",
+    label: "Staff & Permissions",
+    description: "Invite teammates and set what each staff member can do.",
+    hashes: ["settings-staff", "settings-staff-permissions"],
   },
 ];
 

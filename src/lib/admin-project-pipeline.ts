@@ -9,7 +9,9 @@ import {
   isUpcomingShoot,
   type ProjectAdminContext,
 } from "@/lib/admin-project-status";
-import type { Payment, ProjectQuote } from "@/lib/types";
+import type { Payment, Profile, ProjectQuote } from "@/lib/types";
+import { getProfile } from "@/lib/auth";
+import { visibleProjectIdsFor } from "@/lib/staff-access";
 
 export type PipelineStageParam =
   | "new_request"
@@ -241,10 +243,13 @@ export interface PipelineContext {
   payments: Pick<Payment, "project_id" | "status">[];
 }
 
-export async function buildPipelineContext(): Promise<PipelineContext> {
+export async function buildPipelineContext(
+  profileOverride?: Profile | null
+): Promise<PipelineContext> {
   const supabase = await createClient();
   const tenant = await requireTenantContext();
   const bid = tenant.businessId;
+  const profile = profileOverride ?? (await getProfile());
 
   const [
     { data: allProjects },
@@ -269,14 +274,22 @@ export async function buildPipelineContext(): Promise<PipelineContext> {
     supabase.from("project_quotes").select("*").eq("business_id", bid),
     supabase.from("payments").select("project_id, status").eq("business_id", bid),
     loadUpcomingProjectIds(supabase, bid),
-    supabase.from("payments").select("project_id, status").eq("business_id", bid).in("status", ["pending", "sent"]),
+    supabase
+      .from("payments")
+      .select("project_id, status")
+      .eq("business_id", bid)
+      .in("status", ["pending", "sent"]),
     supabase
       .from("activity_logs")
       .select("project_id, description, created_at")
       .eq("business_id", bid)
       .order("created_at", { ascending: false })
       .limit(200),
-    supabase.from("shoot_proposals").select("project_id, proposed_at").eq("business_id", bid).eq("status", "confirmed"),
+    supabase
+      .from("shoot_proposals")
+      .select("project_id, proposed_at")
+      .eq("business_id", bid)
+      .eq("status", "confirmed"),
   ]);
 
   const quotes = (quoteRows ?? []) as ProjectQuote[];
@@ -289,14 +302,25 @@ export async function buildPipelineContext(): Promise<PipelineContext> {
       latestActivity.set(a.project_id, a.description);
     }
   });
-  const confirmedShootMap = new Map(confirmedShoots?.map((s) => [s.project_id, s.proposed_at]));
+  const confirmedShootMap = new Map(
+    confirmedShoots?.map((s) => [s.project_id, s.proposed_at])
+  );
 
-  const activeProjects = enrichProjects(
+  let activeProjects = enrichProjects(
     (allProjects ?? []).filter(isActiveProject),
     pendingSet,
     latestActivity,
     confirmedShootMap
   );
+
+  // Staff: scope to assigned projects (or all if projects.view_all).
+  if (profile && profile.role === "staff") {
+    const visible = await visibleProjectIdsFor(bid, profile);
+    if (visible !== "all") {
+      const allow = new Set(visible);
+      activeProjects = activeProjects.filter((p) => allow.has(p.id));
+    }
+  }
 
   const adminContext = buildAdminContextMap(
     activeProjects.map((p) => p.id),
@@ -318,6 +342,7 @@ export async function buildPipelineContext(): Promise<PipelineContext> {
 export async function loadPipelinePageProjects(options: {
   showDeleted: boolean;
   stage: PipelineStageParam | null;
+  profile?: Profile | null;
 }): Promise<{
   projects: PipelineProjectRow[];
   activeCount: number;
@@ -325,12 +350,13 @@ export async function loadPipelinePageProjects(options: {
   stageCounts: Record<PipelineStageParam, number>;
   stage: PipelineStageParam | null;
 }> {
-  const ctx = await buildPipelineContext();
+  const ctx = await buildPipelineContext(options.profile);
 
   if (options.showDeleted) {
     const supabase = await createClient();
     const tenant = await requireTenantContext();
     const bid = tenant.businessId;
+    const profile = options.profile ?? (await getProfile());
     const [{ data: hiddenProjects }, { data: payments }, { data: activities }, { data: confirmedShoots }] =
       await Promise.all([
         supabase
@@ -339,14 +365,22 @@ export async function loadPipelinePageProjects(options: {
           .eq("business_id", bid)
           .not("deleted_at", "is", null)
           .order("updated_at", { ascending: false }),
-        supabase.from("payments").select("project_id, status").eq("business_id", bid).in("status", ["pending", "sent"]),
+        supabase
+          .from("payments")
+          .select("project_id, status")
+          .eq("business_id", bid)
+          .in("status", ["pending", "sent"]),
         supabase
           .from("activity_logs")
           .select("project_id, description, created_at")
           .eq("business_id", bid)
           .order("created_at", { ascending: false })
           .limit(200),
-        supabase.from("shoot_proposals").select("project_id, proposed_at").eq("business_id", bid).eq("status", "confirmed"),
+        supabase
+          .from("shoot_proposals")
+          .select("project_id, proposed_at")
+          .eq("business_id", bid)
+          .eq("status", "confirmed"),
       ]);
 
     const pendingSet = new Set((payments ?? []).map((p) => p.project_id));
@@ -356,10 +390,26 @@ export async function loadPipelinePageProjects(options: {
         latestActivity.set(a.project_id, a.description);
       }
     });
-    const confirmedShootMap = new Map(confirmedShoots?.map((s) => [s.project_id, s.proposed_at]));
+    const confirmedShootMap = new Map(
+      confirmedShoots?.map((s) => [s.project_id, s.proposed_at])
+    );
+
+    let projects = enrichProjects(
+      hiddenProjects ?? [],
+      pendingSet,
+      latestActivity,
+      confirmedShootMap
+    );
+    if (profile && profile.role === "staff") {
+      const visible = await visibleProjectIdsFor(bid, profile);
+      if (visible !== "all") {
+        const allow = new Set(visible);
+        projects = projects.filter((p) => allow.has(p.id));
+      }
+    }
 
     return {
-      projects: enrichProjects(hiddenProjects ?? [], pendingSet, latestActivity, confirmedShootMap),
+      projects,
       activeCount: ctx.activeProjects.length,
       hiddenCount: ctx.hiddenCount,
       stageCounts: ctx.stageCounts,

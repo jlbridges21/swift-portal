@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -12,25 +12,36 @@ import { Menu, Plus, Settings, X, RefreshCw, Loader2 } from "lucide-react";
 import { AdminSearchTrigger } from "@/components/admin/admin-command-palette";
 import { useAdminSearch } from "@/components/admin/admin-search-context";
 import { useAdminCapabilities } from "@/components/admin/admin-capabilities-context";
+import type { StaffArea } from "@/lib/staff-access";
 
 interface HeaderProps {
   variant?: "public" | "dashboard";
-  userRole?: "admin" | "client";
+  userRole?: "admin" | "staff" | "client";
   userName?: string | null;
   userAvatar?: string | null;
   /** Prefer layout-provided capability; falls back to AdminCapabilitiesContext. */
   showPartner?: boolean;
   partnerNavLabel?: string;
   partnerNavHref?: string;
+  /** When set, only these admin area links are shown (staff). */
+  staffAreas?: StaffArea[];
 }
 
-const adminLinks = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/projects", label: "Projects" },
-  { href: "/admin/messages", label: "Messages" },
-  { href: "/admin/media", label: "Media" },
-  { href: "/admin/calendar", label: "Calendar" },
-  { href: "/admin/clients", label: "Clients" },
+const STAFF_AREA_HOME: Record<StaffArea, string> = {
+  projects: "/admin/projects",
+  clients: "/admin/clients",
+  media: "/admin/media",
+  calendar: "/admin/calendar",
+  messages: "/admin/messages",
+};
+
+const ALL_ADMIN_LINKS: { href: string; label: string; area?: StaffArea | "shell" }[] = [
+  { href: "/admin", label: "Dashboard", area: "shell" },
+  { href: "/admin/projects", label: "Projects", area: "projects" },
+  { href: "/admin/messages", label: "Messages", area: "messages" },
+  { href: "/admin/media", label: "Media", area: "media" },
+  { href: "/admin/calendar", label: "Calendar", area: "calendar" },
+  { href: "/admin/clients", label: "Clients", area: "clients" },
 ];
 
 function ClientProfileNav({
@@ -51,7 +62,7 @@ function ClientProfileNav({
   useEffect(() => {
     if (propName !== undefined) return;
     fetch("/api/profile", { credentials: "include" })
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.profile) {
           setName(data.profile.full_name);
@@ -74,12 +85,13 @@ function ClientProfileNav({
 
 export function Header({
   variant = "public",
-  userRole,
+  userRole: userRoleProp,
   userName,
   userAvatar,
   showPartner: showPartnerProp,
   partnerNavLabel: partnerNavLabelProp,
   partnerNavHref: partnerNavHrefProp,
+  staffAreas: staffAreasProp,
 }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -87,11 +99,45 @@ export function Header({
   const [refreshing, setRefreshing] = useState(false);
   const [messagesUnread, setMessagesUnread] = useState(0);
   const caps = useAdminCapabilities();
-  const showPartnerLink = showPartnerProp ?? caps.showPartner;
+  // Layout context wins for staff so page-level userRole="admin" props don't leak chrome.
+  const userRole =
+    caps.userRole === "staff"
+      ? "staff"
+      : (userRoleProp ?? caps.userRole ?? undefined);
+  const staffAreas =
+    caps.userRole === "staff"
+      ? (caps.staffAreas ?? staffAreasProp ?? undefined)
+      : (staffAreasProp ?? caps.staffAreas ?? undefined);
+  const isStaff = userRole === "staff";
+  const isAdminChrome = userRole === "admin" || userRole === "staff" || Boolean(staffAreas);
+  // Staff never see Partner / Settings / Billing.
+  const showPartnerLink =
+    isStaff ? false : (showPartnerProp ?? caps.showPartner);
   const partnerLabel = partnerNavLabelProp ?? caps.partnerNavLabel;
   const partnerHref = partnerNavHrefProp ?? caps.partnerNavHref;
+
+  const adminLinks = useMemo(() => {
+    if (!staffAreas) return ALL_ADMIN_LINKS.map(({ href, label }) => ({ href, label }));
+    const allowed = new Set(staffAreas);
+    return ALL_ADMIN_LINKS.filter((link) => {
+      if (link.area === "shell") {
+        // Staff home is their first area — no generic Dashboard link.
+        return false;
+      }
+      return Boolean(link.area && allowed.has(link.area as StaffArea));
+    }).map(({ href, label }) => ({ href, label }));
+  }, [staffAreas]);
+
   const homeHref =
-    variant === "public" ? "/" : userRole === "admin" ? "/admin" : "/dashboard";
+    variant === "public"
+      ? "/"
+      : userRole === "admin"
+        ? "/admin"
+        : userRole === "staff"
+          ? staffAreas?.[0]
+            ? STAFF_AREA_HOME[staffAreas[0]]
+            : "/staff"
+          : "/dashboard";
 
   const clientMobileLinks = [
     { href: "/dashboard", label: "My Projects" },
@@ -103,11 +149,14 @@ export function Header({
   const adminMobileLinks = [
     ...adminLinks,
     ...(showPartnerLink ? [{ href: partnerHref, label: partnerLabel }] : []),
-    { href: "/admin/settings", label: "Settings" },
+    // Staff must not see studio Settings; they manage personal prefs at /staff/settings.
+    ...(!isStaff
+      ? [{ href: "/admin/settings", label: "Settings" }]
+      : [{ href: "/staff/settings", label: "Preferences" }]),
   ];
 
   useEffect(() => {
-    if (variant !== "dashboard" || userRole !== "admin") return;
+    if (variant !== "dashboard" || !isAdminChrome) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -122,7 +171,7 @@ export function Header({
     return () => {
       cancelled = true;
     };
-  }, [variant, userRole]);
+  }, [variant, isAdminChrome]);
 
   async function handleRefresh() {
     if (refreshing) return;
@@ -130,6 +179,8 @@ export function Header({
     router.refresh();
     window.setTimeout(() => setRefreshing(false), 600);
   }
+
+  const showAdminNav = variant === "dashboard" && isAdminChrome;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-card/90 backdrop-blur-lg safe-area-top safe-area-x relative">
@@ -140,7 +191,7 @@ export function Header({
           <Logo href={homeHref} size="md" className="hidden lg:flex" />
         </div>
 
-        {variant === "dashboard" && userRole === "admin" && (
+        {showAdminNav && (
           <nav className="hidden lg:flex flex-1 items-center justify-center gap-0.5">
             {adminLinks.map((link) => {
               const active =
@@ -148,24 +199,24 @@ export function Header({
                   ? pathname === "/admin"
                   : pathname === link.href || pathname.startsWith(`${link.href}/`);
               return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "relative rounded-md px-2.5 py-1.5 text-sm transition-colors xl:px-3",
-                  active
-                    ? "bg-accent-subtle font-medium text-accent"
-                    : "text-muted hover:bg-accent-subtle hover:text-foreground"
-                )}
-              >
-                {link.label}
-                {link.href === "/admin/messages" && messagesUnread > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-foreground">
-                    {messagesUnread > 9 ? "9+" : messagesUnread}
-                  </span>
-                )}
-              </Link>
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "relative rounded-md px-2.5 py-1.5 text-sm transition-colors xl:px-3",
+                    active
+                      ? "bg-accent-subtle font-medium text-accent"
+                      : "text-muted hover:bg-accent-subtle hover:text-foreground"
+                  )}
+                >
+                  {link.label}
+                  {link.href === "/admin/messages" && messagesUnread > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-foreground">
+                      {messagesUnread > 9 ? "9+" : messagesUnread}
+                    </span>
+                  )}
+                </Link>
               );
             })}
             {showPartnerLink && (
@@ -194,10 +245,12 @@ export function Header({
                 </Button>
               </Link>
               <Link href="/login">
-                <Button variant="accent" size="sm" className="min-h-11 px-4">Client Login</Button>
+                <Button variant="accent" size="sm" className="min-h-11 px-4">
+                  Client Login
+                </Button>
               </Link>
             </>
-          ) : userRole === "admin" ? (
+          ) : isAdminChrome ? (
             <>
               <AdminSearchTrigger />
               <div className="shrink-0">
@@ -213,15 +266,29 @@ export function Header({
                 aria-label="Refresh page"
                 title="Refresh"
               >
-                {refreshing ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
+                {refreshing ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-5 w-5" />
+                )}
               </Button>
-              <Link
-                href="/admin/settings"
-                className="hidden md:inline-flex rounded-md p-2 text-muted transition-colors hover:bg-slate-100 hover:text-foreground"
-                title="Settings"
-              >
-                <Settings className="h-5 w-5" />
-              </Link>
+              {!isStaff ? (
+                <Link
+                  href="/admin/settings"
+                  className="hidden md:inline-flex rounded-md p-2 text-muted transition-colors hover:bg-slate-100 hover:text-foreground"
+                  title="Settings"
+                >
+                  <Settings className="h-5 w-5" />
+                </Link>
+              ) : (
+                <Link
+                  href="/staff/settings"
+                  className="hidden md:inline-flex rounded-md p-2 text-muted transition-colors hover:bg-slate-100 hover:text-foreground"
+                  title="Notification preferences"
+                >
+                  <Settings className="h-5 w-5" />
+                </Link>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -233,7 +300,9 @@ export function Header({
                 {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
               <form action="/api/auth/signout" method="POST" className="hidden md:block">
-                <Button variant="ghost" size="sm" type="submit" className="min-h-11 px-3">Sign Out</Button>
+                <Button variant="ghost" size="sm" type="submit" className="min-h-11 px-3">
+                  Sign Out
+                </Button>
               </form>
             </>
           ) : (
@@ -253,7 +322,11 @@ export function Header({
                 aria-label="Refresh page"
                 title="Refresh"
               >
-                {refreshing ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
+                {refreshing ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-5 w-5" />
+                )}
               </Button>
               <div className="shrink-0">
                 <NotificationBell />
@@ -272,7 +345,9 @@ export function Header({
                 {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
               <form action="/api/auth/signout" method="POST" className="hidden sm:block">
-                <Button variant="ghost" size="sm" type="submit" className="min-h-11 px-3">Sign Out</Button>
+                <Button variant="ghost" size="sm" type="submit" className="min-h-11 px-3">
+                  Sign Out
+                </Button>
               </form>
             </>
           )}
@@ -282,10 +357,10 @@ export function Header({
       {variant === "dashboard" && menuOpen && (
         <div className="absolute left-0 right-0 top-full z-50 border-b border-border bg-card shadow-lg lg:hidden">
           <div className="mx-auto max-w-7xl space-y-1 px-4 py-3 safe-area-x sm:px-6 lg:px-8">
-            {userRole === "admin" ? (
+            {isAdminChrome ? (
               <AdminMobileMenuSearch onClose={() => setMenuOpen(false)} />
             ) : null}
-            {(userRole === "admin" ? adminMobileLinks : clientMobileLinks).map((link) => (
+            {(isAdminChrome ? adminMobileLinks : clientMobileLinks).map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -335,9 +410,16 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("mb-8 flex min-w-0 w-full max-w-full flex-col gap-4 sm:flex-row sm:items-start sm:justify-between", className)}>
+    <div
+      className={cn(
+        "mb-8 flex min-w-0 w-full max-w-full flex-col gap-4 sm:flex-row sm:items-start sm:justify-between",
+        className
+      )}
+    >
       <div className="min-w-0">
-        <h1 className="break-words text-2xl font-bold tracking-tight text-primary sm:text-3xl">{title}</h1>
+        <h1 className="break-words text-2xl font-bold tracking-tight text-primary sm:text-3xl">
+          {title}
+        </h1>
         {description && <p className="mt-1 break-words text-muted">{description}</p>}
       </div>
       {children && <div className="flex min-w-0 flex-wrap gap-2">{children}</div>}

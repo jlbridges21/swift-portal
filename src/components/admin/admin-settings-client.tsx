@@ -48,6 +48,7 @@ interface AdminSettingsClientProps {
   notificationEvents: NotificationEventDef[];
   payments: ReactNode;
   services: ReactNode;
+  staff: ReactNode;
   canCustomizeLanding: boolean;
   canUseCustomDomain: boolean;
   customDomainState: CustomDomainPublicState;
@@ -266,6 +267,7 @@ export function AdminSettingsClient({
   notificationEvents,
   payments,
   services,
+  staff,
   canCustomizeLanding,
   canUseCustomDomain,
   customDomainState,
@@ -576,15 +578,17 @@ export function AdminSettingsClient({
                   your file has a white or solid background, that background will show — crop it out
                   of the image file (we do not add a brand-color tile behind the logo).
                 </p>
-                <LogoSizeSlider
-                  id="portalLogoSizePx"
-                  label="Portal nav logo size"
-                  value={settings.business.portalLogoSizePx ?? PORTAL_LOGO_SIZE.default}
-                  min={PORTAL_LOGO_SIZE.min}
-                  max={PORTAL_LOGO_SIZE.max}
-                  help={`Height for the desktop nav logo (${PORTAL_LOGO_SIZE.min}–${PORTAL_LOGO_SIZE.max}px). Mobile uses 80% of this size; large breakpoint uses 115% (capped at ${PORTAL_LOGO_SIZE.max}px). Landing page logo size is set separately under Client Landing Page.`}
-                  onChange={(portalLogoSizePx) => patchBusiness({ portalLogoSizePx })}
-                />
+                <div id="settings-logo-size" tabIndex={-1} className="scroll-mt-24">
+                  <LogoSizeSlider
+                    id="portalLogoSizePx"
+                    label="Portal nav logo size"
+                    value={settings.business.portalLogoSizePx ?? PORTAL_LOGO_SIZE.default}
+                    min={PORTAL_LOGO_SIZE.min}
+                    max={PORTAL_LOGO_SIZE.max}
+                    help={`Height for the desktop nav logo (${PORTAL_LOGO_SIZE.min}–${PORTAL_LOGO_SIZE.max}px). Mobile uses 80% of this size; large breakpoint uses 115% (capped at ${PORTAL_LOGO_SIZE.max}px). Landing page logo size is set separately under Client Landing Page.`}
+                    onChange={(portalLogoSizePx) => patchBusiness({ portalLogoSizePx })}
+                  />
+                </div>
                 {(() => {
                   const logo = settings.business.logoUrl;
                   const stillDefault =
@@ -1221,6 +1225,10 @@ export function AdminSettingsClient({
           </div>
         </SettingsPanel>
 
+        <SettingsPanel id="staff" active={section}>
+          {staff}
+        </SettingsPanel>
+
         {restoreOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl">
@@ -1241,9 +1249,11 @@ export function AdminSettingsClient({
           </div>
         )}
 
-        <div className="sticky bottom-0 z-30 -mx-4 border-t border-border bg-card/95 px-4 py-4 backdrop-blur-md sm:-mx-6 sm:px-6 md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
-          {saveFooter}
-        </div>
+        {section !== "staff" ? (
+          <div className="sticky bottom-0 z-30 -mx-4 border-t border-border bg-card/95 px-4 py-4 backdrop-blur-md sm:-mx-6 sm:px-6 md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
+            {saveFooter}
+          </div>
+        ) : null}
       </div>
     </div>
   );

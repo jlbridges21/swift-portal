@@ -16,10 +16,11 @@ import {
   toPublicDomainState,
   emptyPublicDomainState,
 } from "@/lib/custom-domain";
+import { StaffPermissionsSettings } from "@/components/admin/staff-permissions-settings";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 
 export default async function AdminSettingsPage() {
-  const { tenant } = await requireAdminPage();
+  const { tenant } = await requireAdminPage({ adminOnly: true });
   const settings = await getAppSettings(tenant.businessId);
   const [
     canCustomizeLanding,
@@ -61,6 +62,7 @@ export default async function AdminSettingsPage() {
           customDomainState={customDomainState}
           portalPreviewUrl={portalPreviewUrl}
           serviceNames={serviceNames}
+          staff={<StaffPermissionsSettings />}
           payments={
             <Suspense fallback={null}>
               <StripeConnectCard />

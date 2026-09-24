@@ -4,7 +4,7 @@ import { Header } from "@/components/layout/header";
 import { AdminMessagesInbox } from "@/components/admin/admin-messages-inbox";
 
 export default async function AdminMessagesPage() {
-  await requireAdminPage();
+  await requireAdminPage({ area: 'messages' });
 
   return (
     <div className="min-h-screen bg-background">

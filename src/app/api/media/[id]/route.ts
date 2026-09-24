@@ -28,7 +28,7 @@ const ALLOWED_PATCH_FIELDS = [
 ] as const;
 
 export async function PATCH(request: Request) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'media.organize' });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();
@@ -133,7 +133,7 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdminApi();
+  const auth = await requireAdminApi({ permission: 'media.delete' });
   if (!auth.ok) return auth.response;
 
   const tenant = await getTenantContext();

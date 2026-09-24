@@ -14,7 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireAdmin({ area: 'media' });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const { id } = await params;

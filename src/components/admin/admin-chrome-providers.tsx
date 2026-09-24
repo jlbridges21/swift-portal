@@ -18,11 +18,15 @@ export function AdminChromeProviders({
   showPartner = false,
   partnerNavLabel = "Partner Program",
   partnerNavHref = "/partner",
+  staffAreas,
 }: {
   children: React.ReactNode;
   showPartner?: boolean;
   partnerNavLabel?: string;
   partnerNavHref?: string;
+  staffAreas?: import("@/lib/staff-access").StaffArea[];
+  /** Accepted for API parity with AdminShell; role lives in AdminCapabilitiesContext. */
+  userRole?: "admin" | "staff";
 }) {
   const showPwaNav = useIsStandalonePwaMobile();
   const [mounted, setMounted] = useState(false);
@@ -64,6 +68,7 @@ export function AdminChromeProviders({
               showPartner={showPartner}
               partnerNavLabel={partnerNavLabel}
               partnerNavHref={partnerNavHref}
+              staffAreas={staffAreas}
             />,
             document.body
           )}

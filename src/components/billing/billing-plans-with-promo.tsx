@@ -66,7 +66,11 @@ export function BillingPlansWithPromo({
         />
       )}
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-2">
+      <div
+        className={
+          plans.length === 1 ? "mb-8 mx-auto max-w-md" : "mb-8 grid gap-4 sm:grid-cols-2"
+        }
+      >
         {plans.map((plan) => {
           const isCurrent = plan.key === currentPlanKey;
           const canSubscribe = Boolean(plan.stripe_price_monthly_id);
