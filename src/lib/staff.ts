@@ -10,6 +10,7 @@ import { createClient as createSupabaseJsClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { authConfirmUrl, buildAuthConfirmLink } from "@/lib/auth-confirm";
 import { getBusinessPortalOrigin } from "@/lib/portal-url";
+import { sendBrandedEmail } from "@/lib/email";
 import { writePlatformAudit } from "@/lib/platform-audit";
 import {
   emptyStaffPermissions,
@@ -107,6 +108,81 @@ export function mayAddSeat(seats: StaffSeatSnapshot): boolean {
   return seats.used < seats.limit;
 }
 
+/**
+ * Prefetch-safe staff invite: generateLink creates the auth user (or refreshes
+ * the invite token) WITHOUT sending Supabase's default email. We email a
+ * hashed_token → /auth/confirm CTA via the business sender.
+ * Never use inviteUserByEmail or action_link here.
+ */
+async function generateAndSendStaffInviteEmail(args: {
+  businessId: string;
+  email: string;
+  fullName: string;
+  portalOrigin: string;
+}): Promise<{
+  userId: string | null;
+  inviteSent: boolean;
+  inviteUrl: string | null;
+  error: string | null;
+}> {
+  const raw = await createServiceClient();
+  const redirectTo = authConfirmUrl(args.portalOrigin);
+  const { data: linkData, error: linkError } = await raw.auth.admin.generateLink({
+    type: "invite",
+    email: args.email,
+    options: {
+      data: {
+        role: "staff",
+        business_id: args.businessId,
+        full_name: args.fullName,
+      },
+      redirectTo,
+    },
+  });
+
+  const hashedToken = linkData?.properties?.hashed_token?.trim() ?? null;
+  const userId = linkData?.user?.id ?? null;
+  if (linkError || !hashedToken) {
+    return {
+      userId,
+      inviteSent: false,
+      inviteUrl: null,
+      error: linkError?.message || "Could not generate staff invite link.",
+    };
+  }
+
+  const inviteUrl = staffInviteConfirmLink({
+    portalOrigin: args.portalOrigin,
+    tokenHash: hashedToken,
+  });
+
+  const emailResult = await sendBrandedEmail({
+    businessId: args.businessId,
+    to: args.email,
+    subject: "You're invited to join the team",
+    title: "Join your studio team",
+    body: `${args.fullName}, you've been invited as staff on ShootPortal. Use the button below to create your password and sign in. This link is prefetch-safe — email scanners will not consume it.`,
+    ctaLabel: "Set up your staff account",
+    ctaUrl: inviteUrl,
+    emailType: "staff_invite",
+    analytics: { emailType: "staff_invite" },
+  });
+
+  if (!emailResult.sent) {
+    return {
+      userId,
+      inviteSent: false,
+      inviteUrl,
+      error:
+        emailResult.error ||
+        emailResult.skipReason ||
+        "Invite link generated but the branded email failed to send.",
+    };
+  }
+
+  return { userId, inviteSent: true, inviteUrl, error: null };
+}
+
 async function findAuthUserByEmail(email: string) {
   const raw = await createServiceClient();
   const normalized = normalizeStaffEmail(email);
@@ -133,6 +209,8 @@ export type InviteStaffResult =
       attachedExisting: boolean;
       reinvited: boolean;
       seats: StaffSeatSnapshot;
+      /** Prefetch-safe /auth/confirm?token_hash= URL when an invite email was generated. */
+      inviteUrl?: string | null;
     }
   | { ok: false; error: string; code?: string; seats?: StaffSeatSnapshot };
 
@@ -190,8 +268,9 @@ export async function inviteStaffMember(args: {
         })
         .eq("id", existingProfile.id);
     }
-    // Resend invite email if unconfirmed.
+    // Resend invite email if unconfirmed (prefetch-safe hashed_token path).
     let inviteSent = false;
+    let inviteUrl: string | null = null;
     if (existingUser && !existingUser.email_confirmed_at) {
       const portalUrl = getBusinessPortalOrigin({
         slug: business.slug,
@@ -200,24 +279,20 @@ export async function inviteStaffMember(args: {
         custom_domain_vercel_verified: business.custom_domain_vercel_verified,
         custom_domain_misconfigured: business.custom_domain_misconfigured,
       });
-      const redirectTo = `${authConfirmUrl(portalUrl)}?${new URLSearchParams({
-        next: "/staff",
-        return_to: portalUrl,
-      }).toString()}`;
-      const { error } = await raw.auth.admin.inviteUserByEmail(normalizedEmail, {
-        redirectTo,
-        data: {
-          role: "staff",
-          business_id: args.businessId,
-          full_name: args.fullName?.trim() || "",
-        },
+      const sent = await generateAndSendStaffInviteEmail({
+        businessId: args.businessId,
+        email: normalizedEmail,
+        fullName: args.fullName?.trim() || existingProfile.email || normalizedEmail,
+        portalOrigin: portalUrl,
       });
-      inviteSent = !error;
+      inviteSent = sent.inviteSent;
+      inviteUrl = sent.inviteUrl;
     }
     return {
       ok: true,
       userId: existingProfile.id,
       inviteSent,
+      inviteUrl,
       attachedExisting: true,
       reinvited: true,
       seats: await getBusinessSeatSnapshot(args.businessId),
@@ -298,16 +373,16 @@ export async function inviteStaffMember(args: {
     });
 
     let inviteSent = false;
+    let inviteUrl: string | null = null;
     if (existingUser && !existingUser.email_confirmed_at) {
-      const redirectTo = `${authConfirmUrl(portalUrl)}?${new URLSearchParams({
-        next: "/staff",
-        return_to: portalUrl,
-      }).toString()}`;
-      const { error } = await raw.auth.admin.inviteUserByEmail(normalizedEmail, {
-        redirectTo,
-        data: { role: "staff", business_id: args.businessId, full_name: fullName },
+      const sent = await generateAndSendStaffInviteEmail({
+        businessId: args.businessId,
+        email: normalizedEmail,
+        fullName,
+        portalOrigin: portalUrl,
       });
-      inviteSent = !error;
+      inviteSent = sent.inviteSent;
+      inviteUrl = sent.inviteUrl;
     }
 
     void writePlatformAudit({
@@ -324,39 +399,30 @@ export async function inviteStaffMember(args: {
       ok: true,
       userId,
       inviteSent,
+      inviteUrl,
       attachedExisting: true,
       reinvited: false,
       seats: await getBusinessSeatSnapshot(args.businessId),
     };
   }
 
-  // Brand-new email — inviteUserByEmail (password set via invite → update-password).
-  // Do NOT call generateLink type:'invite' here; inviteUserByEmail creates the user.
-  const redirectTo = `${authConfirmUrl(portalUrl)}?${new URLSearchParams({
-    next: "/staff",
-    return_to: portalUrl,
-  }).toString()}`;
+  // Brand-new email — generateLink invite (creates auth user, no Supabase email)
+  // then branded /auth/confirm?token_hash= CTA. Never inviteUserByEmail / action_link.
+  const sent = await generateAndSendStaffInviteEmail({
+    businessId: args.businessId,
+    email: normalizedEmail,
+    fullName,
+    portalOrigin: portalUrl,
+  });
 
-  const { data: invited, error: inviteErr } = await raw.auth.admin.inviteUserByEmail(
-    normalizedEmail,
-    {
-      redirectTo,
-      data: {
-        role: "staff",
-        business_id: args.businessId,
-        full_name: fullName,
-      },
-    }
-  );
-
-  if (inviteErr || !invited.user) {
+  if (!sent.userId) {
     return {
       ok: false,
-      error: inviteErr?.message || "Could not send staff invite.",
+      error: sent.error || "Could not create staff invite.",
     };
   }
 
-  const userId = invited.user.id;
+  const userId = sent.userId;
   await raw
     .from("profiles")
     .upsert({
@@ -377,13 +443,25 @@ export async function inviteStaffMember(args: {
     targetBusinessId: args.businessId,
     targetType: "profile",
     targetId: userId,
-    metadata: { email: normalizedEmail, portalOrigin: portalUrl },
+    metadata: {
+      email: normalizedEmail,
+      portalOrigin: portalUrl,
+      inviteSent: sent.inviteSent,
+    },
   });
+
+  if (!sent.inviteSent) {
+    return {
+      ok: false,
+      error: sent.error || "Staff user created but invite email failed to send.",
+    };
+  }
 
   return {
     ok: true,
     userId,
     inviteSent: true,
+    inviteUrl: sent.inviteUrl,
     attachedExisting: false,
     reinvited: false,
     seats: await getBusinessSeatSnapshot(args.businessId),
@@ -448,7 +526,7 @@ export function staffInviteRedirectTo(portalOrigin: string): string {
   }).toString()}`;
 }
 
-/** Keep buildAuthConfirmLink available for branded emails later. */
+/** Prefetch-safe confirm URL: hashed_token → /auth/confirm (never action_link). */
 export function staffInviteConfirmLink(opts: {
   portalOrigin: string;
   tokenHash: string;

@@ -7,7 +7,8 @@ import { validateBusinessSlug } from "@/lib/reserved-subdomains";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { getBusinessPortalOrigin } from "@/lib/portal-url";
-import { authConfirmUrl } from "@/lib/auth-confirm";
+import { authConfirmUrl, buildAuthConfirmLink } from "@/lib/auth-confirm";
+import { sendBrandedEmail } from "@/lib/email";
 import { FALLBACK_SERVICE_TEMPLATES } from "@/lib/service-templates";
 import { invalidateHostLookupCache } from "@/lib/host-resolution";
 import {
@@ -28,6 +29,79 @@ import {
 } from "@/lib/partner-referral";
 import { cookies } from "next/headers";
 import { getPartnerById } from "@/lib/partners";
+
+/**
+ * Prefetch-safe admin invite: generateLink creates/refreshes the auth user WITHOUT
+ * sending Supabase's default email. We email hashed_token → /auth/confirm.
+ * Never use inviteUserByEmail or action_link.
+ */
+async function generateAndSendAdminInviteEmail(args: {
+  businessId: string;
+  email: string;
+  fullName: string;
+  portalOrigin: string;
+}): Promise<{
+  userId: string | null;
+  inviteSent: boolean;
+  inviteError: string | null;
+}> {
+  const raw = await createServiceClient();
+  const redirectTo = authConfirmUrl(args.portalOrigin);
+  const { data: linkData, error: linkError } = await raw.auth.admin.generateLink({
+    type: "invite",
+    email: args.email,
+    options: {
+      data: {
+        role: "admin",
+        business_id: args.businessId,
+        full_name: args.fullName,
+      },
+      redirectTo,
+    },
+  });
+
+  const hashedToken = linkData?.properties?.hashed_token?.trim() ?? null;
+  const userId = linkData?.user?.id ?? null;
+  if (linkError || !hashedToken) {
+    return {
+      userId,
+      inviteSent: false,
+      inviteError: linkError?.message || "Could not generate admin invite link.",
+    };
+  }
+
+  const inviteUrl = buildAuthConfirmLink({
+    portalOrigin: args.portalOrigin,
+    tokenHash: hashedToken,
+    type: "invite",
+    nextPath: "/admin",
+  });
+
+  const emailResult = await sendBrandedEmail({
+    businessId: args.businessId,
+    to: args.email,
+    subject: "You're invited to manage your studio",
+    title: "Set up your admin account",
+    body: `${args.fullName}, you've been invited as an admin on ShootPortal. Use the button below to create your password and sign in. This link is prefetch-safe — email scanners will not consume it.`,
+    ctaLabel: "Set up your admin account",
+    ctaUrl: inviteUrl,
+    emailType: "admin_invite",
+    analytics: { emailType: "admin_invite" },
+  });
+
+  if (!emailResult.sent) {
+    return {
+      userId,
+      inviteSent: false,
+      inviteError:
+        emailResult.error ||
+        emailResult.skipReason ||
+        "Invite link generated but the branded email failed to send.",
+    };
+  }
+
+  return { userId, inviteSent: true, inviteError: null };
+}
 
 const STARTER_SLUGS = [
   "aerial_photography",
@@ -636,8 +710,6 @@ export async function inviteBusinessAdmin(
     custom_domain_vercel_verified: business.custom_domain_vercel_verified,
     custom_domain_misconfigured: business.custom_domain_misconfigured,
   });
-  // Invite: RedirectTo = canonical www /auth/confirm (handoff to tenant after verify).
-  const redirectTo = authConfirmUrl(portalUrl);
   const normalizedEmail = email.trim().toLowerCase();
 
   // Look up existing auth user first so we can distinguish "already registered"
@@ -727,26 +799,14 @@ export async function inviteBusinessAdmin(
     let inviteSent = false;
     let inviteError: string | null = null;
     if (!existing.email_confirmed_at) {
-      const invited = await raw.auth.admin.inviteUserByEmail(normalizedEmail, {
-        data: { role: "admin", business_id: businessId, full_name: fullName },
-        redirectTo,
+      const sent = await generateAndSendAdminInviteEmail({
+        businessId,
+        email: normalizedEmail,
+        fullName,
+        portalOrigin: portalUrl,
       });
-      if (!invited.error) {
-        inviteSent = true;
-      } else {
-        const anon = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          { auth: { persistSession: false, autoRefreshToken: false } }
-        );
-        const { error: resendErr } = await anon.auth.resend({
-          type: "signup",
-          email: normalizedEmail,
-          options: { emailRedirectTo: redirectTo },
-        });
-        inviteSent = !resendErr;
-        inviteError = resendErr?.message || invited.error.message || null;
-      }
+      inviteSent = sent.inviteSent;
+      inviteError = sent.inviteError;
     } else {
       // Confirmed user attached — no invite email needed; they can sign in now.
       inviteSent = true;
@@ -783,27 +843,15 @@ export async function inviteBusinessAdmin(
     };
   }
 
-  // Brand-new email — invite (or force-fail for verification).
-  const invited =
-    process.env.PLATFORM_FORCE_INVITE_FAIL === "1"
-      ? {
-          data: { user: null },
-          error: { message: "Forced invite failure (verification)" },
-        }
-      : await raw.auth.admin.inviteUserByEmail(normalizedEmail, {
-          data: {
-            role: "admin",
-            business_id: businessId,
-            full_name: fullName,
-          },
-          redirectTo,
-        });
+  // Brand-new email — generateLink invite (creates auth user, no Supabase email)
+  // then branded /auth/confirm?token_hash= CTA. Never inviteUserByEmail / action_link.
+  let userId: string | null = null;
+  let inviteSent = false;
+  let inviteError: string | null = null;
 
-  let userId = invited.data.user?.id ?? null;
-  let inviteSent = !invited.error;
-  let inviteError: string | null = invited.error?.message ?? null;
-
-  if (invited.error) {
+  if (process.env.PLATFORM_FORCE_INVITE_FAIL === "1") {
+    inviteSent = false;
+    inviteError = "Forced invite failure (verification)";
     console.error("[platform-invite] reason=invite_email_failed", {
       event: "platform_invite_failure",
       businessId,
@@ -811,10 +859,8 @@ export async function inviteBusinessAdmin(
       email: normalizedEmail,
       resend: Boolean(options?.resend),
       isCreate: Boolean(options?.isCreate),
-      detail: invited.error.message,
+      detail: inviteError,
     });
-
-    // Send failure with no existing user — create unconfirmed so Resend has a target.
     const { data: created, error: createErr } = await raw.auth.admin.createUser({
       email: normalizedEmail,
       email_confirm: false,
@@ -825,8 +871,7 @@ export async function inviteBusinessAdmin(
       },
     });
     if (createErr || !created.user) {
-      inviteSent = false;
-      inviteError = invited.error.message || createErr?.message || "Invite email failed.";
+      inviteError = inviteError || createErr?.message || "Invite email failed.";
       if (!options?.isCreate) throw new Error(inviteError);
       console.error("[platform-invite] reason=user_create_after_invite_failed", {
         event: "platform_invite_failure",
@@ -835,10 +880,57 @@ export async function inviteBusinessAdmin(
       });
     } else {
       userId = created.user.id;
-      inviteSent = false;
       inviteError =
-        invited.error.message ||
         "Business created, but the invite email failed to send — resend it.";
+    }
+  } else {
+    const sent = await generateAndSendAdminInviteEmail({
+      businessId,
+      email: normalizedEmail,
+      fullName,
+      portalOrigin: portalUrl,
+    });
+    userId = sent.userId;
+    inviteSent = sent.inviteSent;
+    inviteError = sent.inviteError;
+
+    if (!inviteSent) {
+      console.error("[platform-invite] reason=invite_email_failed", {
+        event: "platform_invite_failure",
+        businessId,
+        slug: business.slug,
+        email: normalizedEmail,
+        resend: Boolean(options?.resend),
+        isCreate: Boolean(options?.isCreate),
+        detail: inviteError,
+      });
+
+      // Send failure with no user — create unconfirmed so Resend has a target.
+      if (!userId) {
+        const { data: created, error: createErr } = await raw.auth.admin.createUser({
+          email: normalizedEmail,
+          email_confirm: false,
+          user_metadata: {
+            role: "admin",
+            business_id: businessId,
+            full_name: fullName,
+          },
+        });
+        if (createErr || !created.user) {
+          inviteError = inviteError || createErr?.message || "Invite email failed.";
+          if (!options?.isCreate) throw new Error(inviteError);
+          console.error("[platform-invite] reason=user_create_after_invite_failed", {
+            event: "platform_invite_failure",
+            businessId,
+            detail: inviteError,
+          });
+        } else {
+          userId = created.user.id;
+          inviteError =
+            inviteError ||
+            "Business created, but the invite email failed to send — resend it.";
+        }
+      }
     }
   }
 

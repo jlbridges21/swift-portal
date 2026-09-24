@@ -473,6 +473,7 @@ function lintFile(abs: string): Finding[] {
 
   // Rule 8: never email or embed GET-consumable Supabase verify URLs (prefetch / scanners).
   // Use properties.hashed_token → /auth/confirm?token_hash=… instead of action_link.
+  // Also ban inviteUserByEmail — it sends Supabase's default invite with action_link.
   if (file.startsWith("src/")) {
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i].trim();
@@ -500,6 +501,15 @@ function lintFile(abs: string): Finding[] {
           rule: "8",
           detail:
             "Hand-built /auth/v1/verify URLs are GET-consumable. Use /auth/confirm?token_hash=…",
+        });
+      }
+      if (/\binviteUserByEmail\b/.test(lines[i])) {
+        findings.push({
+          file,
+          line: i + 1,
+          rule: "8",
+          detail:
+            "inviteUserByEmail sends Supabase's default invite with a GET-consumable action_link. Use generateLink({ type: \"invite\" }) + hashed_token → /auth/confirm + branded email",
         });
       }
     }

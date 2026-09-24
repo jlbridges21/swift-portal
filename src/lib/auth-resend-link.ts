@@ -1,7 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getBusinessPortalOrigin, getPlatformApexOrigin } from "@/lib/portal-url";
-import { authConfirmUrl } from "@/lib/auth-confirm";
+import { authConfirmUrl, buildAuthConfirmLink } from "@/lib/auth-confirm";
+import { sendBrandedEmail } from "@/lib/email";
+import { sendPlatformEmail } from "@/lib/platform-email";
 import { resendProjectShareAuthLink } from "@/lib/project-shares";
 
 const GENERIC = {
@@ -13,6 +15,69 @@ const SHARE_RESENT = {
   ok: true as const,
   message: "A new project sign-in link was sent to your email.",
 };
+
+/**
+ * Prefetch-safe re-invite for unconfirmed admins: generateLink + branded
+ * /auth/confirm?token_hash= CTA. Never inviteUserByEmail or action_link.
+ */
+async function resendUnconfirmedAdminInvite(args: {
+  email: string;
+  businessId: string;
+  fullName: string;
+  portalOrigin: string;
+}): Promise<boolean> {
+  const raw = await createServiceClient();
+  const redirectTo = authConfirmUrl(args.portalOrigin);
+  const { data: linkData, error: linkError } = await raw.auth.admin.generateLink({
+    type: "invite",
+    email: args.email,
+    options: {
+      data: {
+        role: "admin",
+        business_id: args.businessId,
+        full_name: args.fullName,
+      },
+      redirectTo,
+    },
+  });
+
+  const hashedToken = linkData?.properties?.hashed_token?.trim() ?? null;
+  if (linkError || !hashedToken) {
+    console.error(
+      "[auth-resend-link] generateLink invite failed",
+      linkError?.message || "missing hashed_token"
+    );
+    return false;
+  }
+
+  const ctaUrl = buildAuthConfirmLink({
+    portalOrigin: args.portalOrigin,
+    tokenHash: hashedToken,
+    type: "invite",
+    nextPath: "/admin",
+  });
+
+  const emailResult = await sendBrandedEmail({
+    businessId: args.businessId,
+    to: args.email,
+    subject: "Your admin invite link",
+    title: "Finish setting up your admin account",
+    body: "Use the button below to create your password and sign in. This link is prefetch-safe — email scanners will not consume it.",
+    ctaLabel: "Set up your admin account",
+    ctaUrl,
+    emailType: "admin_invite_resend",
+    analytics: { emailType: "admin_invite_resend" },
+  });
+
+  if (!emailResult.sent) {
+    console.error(
+      "[auth-resend-link] branded invite email failed",
+      emailResult.error || emailResult.skipReason
+    );
+    return false;
+  }
+  return true;
+}
 
 /**
  * Resend invite (unconfirmed) or password reset (confirmed).
@@ -117,29 +182,49 @@ export async function resendAuthLinkForEmail(options: {
 
   const confirmRedirect = authConfirmUrl(portalUrl);
 
-  if (!user.email_confirmed_at && profile.role === "admin") {
-    const invited = await raw.auth.admin.inviteUserByEmail(email, {
-      data: {
-        role: "admin",
-        business_id: profile.business_id,
-        full_name: user.user_metadata?.full_name,
-      },
-      redirectTo: confirmRedirect,
+  if (!user.email_confirmed_at && profile.role === "admin" && profile.business_id) {
+    await resendUnconfirmedAdminInvite({
+      email,
+      businessId: profile.business_id,
+      fullName: String(user.user_metadata?.full_name || email),
+      portalOrigin: portalUrl,
     });
-    if (invited.error) {
-      console.error("[auth-resend-link] inviteUserByEmail failed", invited.error.message);
-      const anon = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { auth: { persistSession: false, autoRefreshToken: false } }
+  } else if (!user.email_confirmed_at && profile.role === "super_admin") {
+    // Rare: unconfirmed platform super-admin — generateLink + platform email.
+    const { data: linkData, error: linkError } = await raw.auth.admin.generateLink({
+      type: "invite",
+      email,
+      options: {
+        data: {
+          role: "super_admin",
+          full_name: user.user_metadata?.full_name,
+        },
+        redirectTo: confirmRedirect,
+      },
+    });
+    const hashedToken = linkData?.properties?.hashed_token?.trim() ?? null;
+    if (linkError || !hashedToken) {
+      console.error(
+        "[auth-resend-link] super_admin generateLink failed",
+        linkError?.message || "missing hashed_token"
       );
-      const { error: resendErr } = await anon.auth.resend({
-        type: "signup",
-        email,
-        options: { emailRedirectTo: confirmRedirect },
+    } else {
+      const ctaUrl = buildAuthConfirmLink({
+        portalOrigin: portalUrl,
+        tokenHash: hashedToken,
+        type: "invite",
+        nextPath: "/platform",
       });
-      if (resendErr) {
-        console.error("[auth-resend-link] signup resend failed", resendErr.message);
+      const result = await sendPlatformEmail({
+        to: email,
+        subject: "Your ShootPortal invite",
+        title: "Finish setting up your account",
+        body: "Use the button below to create your password and sign in. This link is prefetch-safe — email scanners will not consume it.",
+        ctaLabel: "Set up your account",
+        ctaUrl,
+      });
+      if (!result.sent) {
+        console.error("[auth-resend-link] platform invite email failed", result.error);
       }
     }
   } else {

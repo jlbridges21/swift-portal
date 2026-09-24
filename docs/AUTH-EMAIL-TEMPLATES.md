@@ -32,7 +32,9 @@ and installed `node_modules/@supabase/auth-js`):
 | `properties.hashed_token` | **Required for custom emails** — build canonical `/auth/confirm?token_hash=…&type=…&return_to=…` |
 | `properties.action_link` | **Forbidden in emails** — `GET /auth/v1/verify?token=…` (prefetch-consumable) |
 
-`tenant-lint` rejects `action_link` and `/auth/v1/verify` under `src/`.
+`tenant-lint` rejects `action_link`, `/auth/v1/verify`, and `inviteUserByEmail` under `src/`.
+Never call `inviteUserByEmail` — it sends Supabase's default invite email with a GET-consumable
+`action_link`. Use `generateLink({ type: "invite" })` + `hashed_token` → `/auth/confirm` + branded email.
 
 App code sets `redirectTo` / `emailRedirectTo` to **`https://www.shootportal.app/auth/confirm`**
 (`authConfirmUrl()` / `getCanonicalAuthConfirmUrl()`). Custom branded CTAs add `return_to` for the
