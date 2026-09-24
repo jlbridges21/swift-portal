@@ -53,6 +53,13 @@ function iframeAttrs(provider: string): { sandbox: string; allow: string } {
     dronedeploy: fallback,
     cesium: fallback,
     arcgis: fallback,
+    // WebGL (mesh / Gaussian splat) loads tiles from na.mipmap3d.com, so scripts
+    // and same-origin are required. Shared links can be password-gated (forms).
+    // No documented popup chrome, so allow-popups is omitted.
+    mipmap: {
+      sandbox: "allow-scripts allow-same-origin allow-forms",
+      allow: "fullscreen; xr-spatial-tracking; accelerometer; gyroscope",
+    },
   };
   return defaults[provider];
 }

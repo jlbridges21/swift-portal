@@ -15,6 +15,7 @@ export const EXTERNAL_3D_PROVIDERS = [
   "dronedeploy",
   "cesium",
   "arcgis",
+  "mipmap",
 ] as const;
 
 export type External3dProvider = (typeof EXTERNAL_3D_PROVIDERS)[number];
@@ -28,6 +29,7 @@ export const EXTERNAL_3D_PROVIDER_LABELS: Record<External3dProvider, string> = {
   dronedeploy: "DroneDeploy",
   cesium: "Cesium ion",
   arcgis: "ArcGIS Scene Viewer",
+  mipmap: "MipMap",
 };
 
 /** Exact hostnames accepted for embeds (HTTPS only). */
@@ -45,6 +47,9 @@ export const EXTERNAL_3D_PROVIDER_HOSTS: Record<External3dProvider, readonly str
   ],
   cesium: ["ion.cesium.com", "sandcastle.cesium.com"],
   arcgis: ["www.arcgis.com", "arcgis.com", "scene.arcgis.com"],
+  // North America cloud instance only. eu/ap and bare mipmap3d.com do not
+  // resolve to a viewer (apex/www are the China marketing site).
+  mipmap: ["na.mipmap3d.com"],
 };
 
 const ALL_ALLOWED_HOSTS: readonly string[] = Array.from(
@@ -202,7 +207,9 @@ function normalizePolycam(url: URL): External3dNormalizeResult {
 function passThrough(
   provider: External3dProvider,
   url: URL,
-  note: string
+  note: string,
+  sandbox = "allow-scripts allow-same-origin allow-popups",
+  allow = "fullscreen; xr-spatial-tracking; accelerometer; gyroscope"
 ): External3dNormalizeResult {
   return {
     ok: true,
@@ -210,8 +217,8 @@ function passThrough(
     embedUrl: url.toString(),
     normalized: false,
     message: note,
-    sandbox: "allow-scripts allow-same-origin allow-popups",
-    allow: "fullscreen; xr-spatial-tracking; accelerometer; gyroscope",
+    sandbox,
+    allow,
   };
 }
 
@@ -310,6 +317,15 @@ export function normalizeExternal3dUrl(raw: unknown): External3dNormalizeResult 
         "arcgis",
         url,
         "ArcGIS Scene Viewer link — will embed as provided"
+      );
+    case "mipmap":
+      // No documented share→embed rewrite. Store the pasted URL unchanged.
+      return passThrough(
+        "mipmap",
+        url,
+        "MipMap — supported host, paste the embed URL MipMap gives you",
+        "allow-scripts allow-same-origin allow-forms",
+        "fullscreen; xr-spatial-tracking; accelerometer; gyroscope"
       );
     default:
       return {

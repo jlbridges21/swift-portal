@@ -67,7 +67,16 @@ function main() {
       provider: "arcgis",
       note: "ArcGIS pass-through",
     },
+    {
+      input: "https://na.mipmap3d.com/share/example",
+      expectOk: true,
+      provider: "mipmap",
+      note: "MipMap pass-through",
+    },
     { input: "https://evil.example.com/model", expectOk: false, note: "non-allowlisted" },
+    { input: "https://www.mipmap3d.com/", expectOk: false, note: "mipmap marketing host" },
+    { input: "https://eu.mipmap3d.com/viewer", expectOk: false, note: "mipmap eu host" },
+    { input: "https://notna.mipmap3d.com/viewer", expectOk: false, note: "mipmap suffix host" },
     { input: "javascript:alert(1)", expectOk: false, note: "javascript:" },
     { input: "data:text/html,hi", expectOk: false, note: "data:" },
     { input: "http://sketchfab.com/models/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", expectOk: false, note: "http" },
@@ -100,6 +109,56 @@ function main() {
   }
 
   console.log(`\nSupported list: ${EXTERNAL_3D_SUPPORTED_LIST}`);
+
+  const sketchfab = normalizeExternal3dUrl(
+    "https://sketchfab.com/models/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  );
+  assert(sketchfab.ok && sketchfab.normalized, "Sketchfab still normalizes");
+  if (sketchfab.ok) {
+    assert(
+      sketchfab.embedUrl ===
+        "https://sketchfab.com/models/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/embed",
+      `Sketchfab embed changed: ${sketchfab.embedUrl}`
+    );
+    assert(
+      sketchfab.sandbox === "allow-scripts allow-same-origin allow-popups",
+      "Sketchfab sandbox changed"
+    );
+  }
+
+  const matterport = normalizeExternal3dUrl(
+    "https://my.matterport.com/show/?m=AbCdEfGhIjK"
+  );
+  assert(matterport.ok, "Matterport still ok");
+  if (matterport.ok) {
+    assert(
+      matterport.embedUrl === "https://my.matterport.com/show/?m=AbCdEfGhIjK&play=1",
+      `Matterport embed changed: ${matterport.embedUrl}`
+    );
+    assert(
+      matterport.sandbox === "allow-scripts allow-same-origin allow-popups allow-forms",
+      "Matterport sandbox changed"
+    );
+  }
+
+  const mipmap = normalizeExternal3dUrl("https://na.mipmap3d.com/share/example");
+  assert(mipmap.ok && !mipmap.normalized, "MipMap is pass-through");
+  if (mipmap.ok) {
+    assert(
+      mipmap.embedUrl === "https://na.mipmap3d.com/share/example",
+      `MipMap URL rewritten: ${mipmap.embedUrl}`
+    );
+    assert(
+      mipmap.message.includes("supported host, paste the embed URL"),
+      `MipMap message: ${mipmap.message}`
+    );
+    assert(
+      mipmap.sandbox === "allow-scripts allow-same-origin allow-forms",
+      `MipMap sandbox: ${mipmap.sandbox}`
+    );
+    console.log(`mipmap msg: ${mipmap.message}`);
+  }
+
   console.log("verify-external-3d-models: passed");
 }
 
