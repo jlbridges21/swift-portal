@@ -2,7 +2,11 @@ import { Header, PageHeader } from "@/components/layout/header";
 import { requireAdminPage } from "@/lib/admin-access";
 import { MediaLibraryClient } from "@/components/admin/media-library-client";
 import { getLibraryFilterOptions, queryMediaLibrary } from "@/lib/media-library";
-import { isOwnerAdmin, visibleProjectIdsFor } from "@/lib/staff-access";
+import {
+  isOwnerAdmin,
+  visibleClientIdsFor,
+  visibleProjectIdsFor,
+} from "@/lib/staff-access";
 
 interface PageProps {
   searchParams: Promise<{ upload?: string; q?: string }>;
@@ -15,6 +19,9 @@ export default async function AdminMediaPage({ searchParams }: PageProps) {
   const projectIds = isOwnerAdmin(profile)
     ? ("all" as const)
     : await visibleProjectIdsFor(tenant.businessId, profile);
+  const clientIds = isOwnerAdmin(profile)
+    ? ("all" as const)
+    : await visibleClientIdsFor(tenant.businessId, profile);
 
   const [result, filterOptions] = await Promise.all([
     queryMediaLibrary(tenant.businessId, {
@@ -23,7 +30,7 @@ export default async function AdminMediaPage({ searchParams }: PageProps) {
       q: initialQuery || undefined,
       projectIds,
     }),
-    getLibraryFilterOptions(tenant.businessId),
+    getLibraryFilterOptions(tenant.businessId, { projectIds, clientIds }),
   ]);
 
   return (

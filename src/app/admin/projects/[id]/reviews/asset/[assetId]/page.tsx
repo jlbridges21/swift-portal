@@ -5,6 +5,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { VideoReviewView } from "@/components/video-review/video-review-view";
 import { getVideoReviewVersionLink } from "@/lib/video-reviews";
 import type { VideoReview, VideoReviewVersionRow } from "@/lib/video-reviews";
+import { canAccessProject } from "@/lib/staff-access";
 import { notFound, redirect } from "next/navigation";
 
 interface PageProps {
@@ -14,6 +15,11 @@ interface PageProps {
 export default async function AdminLazyVideoReviewPage({ params }: PageProps) {
   const { tenant, profile } = await requireAdminPage({ area: 'projects' });
   const { id: projectId, assetId } = await params;
+
+  if (!(await canAccessProject(tenant.businessId, profile, projectId))) {
+    notFound();
+  }
+
   const db = await createTenantServiceClient(tenant.businessId);
 
   const { data: asset, error: assetError } = await db
@@ -61,7 +67,7 @@ export default async function AdminLazyVideoReviewPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header variant="dashboard" userRole="admin" />
+      <Header variant="dashboard" userRole={profile.role === "staff" ? "staff" : "admin"} />
       <VideoReviewView
         projectId={projectId}
         reviewId="__lazy__"

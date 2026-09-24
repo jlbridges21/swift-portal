@@ -2,10 +2,15 @@ import { NextResponse } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdmin } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import {
+  canAccessClient,
+  isOwnerAdmin,
+  visibleClientIdsFor,
+} from "@/lib/staff-access";
 
 export async function GET(request: Request) {
   try {
-    const profile = await requireAdmin({ area: 'clients' });
+    const profile = await requireAdmin({ area: "clients" });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
@@ -15,7 +20,14 @@ export async function GET(request: Request) {
     const q = (searchParams.get("q") ?? "").trim();
     const clientId = searchParams.get("id");
 
+    const clientScope = isOwnerAdmin(profile)
+      ? ("all" as const)
+      : await visibleClientIdsFor(businessId, profile);
+
     if (clientId) {
+      if (!(await canAccessClient(businessId, profile, clientId))) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
       const { data, error } = await db
         .from("clients")
         .select("id, name, email, company")
@@ -26,11 +38,19 @@ export async function GET(request: Request) {
       return NextResponse.json(data ? [data] : []);
     }
 
+    if (clientScope !== "all" && clientScope.length === 0) {
+      return NextResponse.json([]);
+    }
+
     let query = db
       .from("clients")
       .select("id, name, email, company")
       .is("deleted_at", null)
       .order("name");
+
+    if (clientScope !== "all") {
+      query = query.in("id", clientScope);
+    }
 
     if (q) {
       const safe = q.replace(/[%_,]/g, "").slice(0, 80);

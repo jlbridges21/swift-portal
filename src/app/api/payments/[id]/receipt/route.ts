@@ -41,6 +41,15 @@ export async function GET(
     return NextResponse.json({ error: "Receipt not available" }, { status: 404 });
   }
 
+  if (payment.project_id) {
+    const { canAccessProject } = await import("@/lib/project-access");
+    if (!(await canAccessProject(profile, payment.project_id))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+  } else if (profile.role === "staff") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   if (payment.stripe_receipt_url) {
     return NextResponse.redirect(payment.stripe_receipt_url);
   }

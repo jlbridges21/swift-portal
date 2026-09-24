@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { staffCan } from "@/lib/staff-access";
+import { canAccessMediaAsset, staffCan } from "@/lib/staff-access";
 import { downloadFileName } from "@/lib/media-display-name";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { logMediaEvent, setMediaTags } from "@/lib/media-library";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { canAccessProject } from "@/lib/project-access";
 
 export async function PATCH(request: Request) {
   try {
@@ -42,8 +43,38 @@ export async function PATCH(request: Request) {
 
     const db = await createTenantServiceClient(tenant.businessId);
 
+    // Resolve each id → project, then enforce assignment before any mutate/sign.
+    const scopedIds: string[] = [];
+    for (const id of ids) {
+      if (kind === "tour") {
+        const { data: tour } = await db
+          .from("tours")
+          .select("id, project_id")
+          .eq("id", id)
+          .maybeSingle();
+        if (!tour?.project_id) continue;
+        if (!(await canAccessProject(profile, tour.project_id))) continue;
+        scopedIds.push(id);
+      } else {
+        const { data: asset } = await db
+          .from("media_assets")
+          .select("id, project_id")
+          .eq("id", id)
+          .maybeSingle();
+        if (!asset) continue;
+        if (!(await canAccessMediaAsset(tenant.businessId, profile, asset.project_id))) {
+          continue;
+        }
+        scopedIds.push(id);
+      }
+    }
+
+    if (scopedIds.length === 0) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     if (action === "delete") {
-      for (const id of ids) {
+      for (const id of scopedIds) {
         const { data: asset } = await db.from("media_assets").select("*").eq("id", id).maybeSingle();
         const hasStorageObject =
           Boolean(asset?.file_path) &&
@@ -64,23 +95,23 @@ export async function PATCH(request: Request) {
         });
         await db.from("media_assets").delete().eq("id", id);
       }
-      return NextResponse.json({ success: true, deleted: ids.length });
+      return NextResponse.json({ success: true, deleted: scopedIds.length });
     }
 
     if (action === "favorite") {
       const table = kind === "tour" ? "tours" : "media_assets";
-      await db.from(table).update({ is_favorite: true }).in("id", ids);
+      await db.from(table).update({ is_favorite: true }).in("id", scopedIds);
       return NextResponse.json({ success: true });
     }
 
     if (action === "unfavorite") {
       const table = kind === "tour" ? "tours" : "media_assets";
-      await db.from(table).update({ is_favorite: false }).in("id", ids);
+      await db.from(table).update({ is_favorite: false }).in("id", scopedIds);
       return NextResponse.json({ success: true });
     }
 
     if (action === "set_tags" && body.tags) {
-      for (const id of ids) {
+      for (const id of scopedIds) {
         await setMediaTags(tenant.businessId, id, body.tags);
         await logMediaEvent({
           businessId: tenant.businessId,
@@ -97,7 +128,7 @@ export async function PATCH(request: Request) {
       await db
         .from("media_assets")
         .update({ visibility: body.visibility })
-        .in("id", ids);
+        .in("id", scopedIds);
       return NextResponse.json({ success: true });
     }
 
@@ -105,11 +136,17 @@ export async function PATCH(request: Request) {
       await db
         .from("media_assets")
         .update({ downloadable: body.downloadable })
-        .in("id", ids);
+        .in("id", scopedIds);
       return NextResponse.json({ success: true });
     }
 
     if (action === "set_cover" && body.project_id && body.cover_asset_id) {
+      if (!(await canAccessProject(profile, body.project_id))) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      if (!scopedIds.includes(body.cover_asset_id)) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
       await db
         .from("projects")
         .update({ cover_image_id: body.cover_asset_id })
@@ -127,7 +164,7 @@ export async function PATCH(request: Request) {
 
     if (action === "download_urls") {
       const urls: { id: string; url: string; file_name: string }[] = [];
-      for (const id of ids) {
+      for (const id of scopedIds) {
         const { data: asset } = await db.from("media_assets").select("*").eq("id", id).maybeSingle();
         if (!asset?.file_path) continue;
         if (asset.business_id !== tenant.businessId) continue;

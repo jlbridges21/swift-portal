@@ -22,6 +22,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  const { canAccessProject } = await import("@/lib/project-access");
+  if (!(await canAccessProject(auth.profile, body.project_id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const normalized = normalizeExternal3dUrl(body.embed_url);
   if (!normalized.ok) {
     return NextResponse.json({ error: normalized.error }, { status: 400 });
@@ -87,6 +92,20 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Model id required" }, { status: 400 });
   }
 
+  const db = await createTenantServiceClient(tenant.businessId);
+  const { data: existing } = await db
+    .from("project_3d_models")
+    .select("id, project_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!existing?.project_id) {
+    return NextResponse.json({ error: "Model not found" }, { status: 404 });
+  }
+  const { canAccessProject } = await import("@/lib/project-access");
+  if (!(await canAccessProject(auth.profile, existing.project_id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const updates: Record<string, unknown> = {};
   if (typeof rest.title === "string") {
     updates.title = sanitizePlainText(rest.title, 200);
@@ -113,7 +132,6 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "No updates" }, { status: 400 });
   }
 
-  const db = await createTenantServiceClient(tenant.businessId);
   const { data, error } = await db
     .from("project_3d_models")
     .update(updates)
@@ -141,6 +159,11 @@ export async function DELETE(request: Request) {
 
   if (!id || !projectId) {
     return NextResponse.json({ error: "id and project_id are required" }, { status: 400 });
+  }
+
+  const { canAccessProject } = await import("@/lib/project-access");
+  if (!(await canAccessProject(auth.profile, projectId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const db = await createTenantServiceClient(tenant.businessId);

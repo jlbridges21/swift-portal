@@ -31,6 +31,13 @@ export async function PATCH(
       return NextResponse.json({ error: "Payment not found" }, { status: 404 });
     }
 
+    if (payment.project_id) {
+      const { canAccessProject } = await import("@/lib/project-access");
+      if (!(await canAccessProject(profile, payment.project_id))) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+    }
+
     if (projectId && payment.project_id !== projectId) {
       return NextResponse.json({ error: "Payment does not belong to this project" }, { status: 400 });
     }
@@ -74,6 +81,21 @@ export async function DELETE(
 
     const { id } = await params;
     const db = await createTenantServiceClient(tenant.businessId);
+
+    const { data: existing } = await db
+      .from("payments")
+      .select("id, project_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (!existing) {
+      return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+    }
+    if (existing.project_id) {
+      const { canAccessProject } = await import("@/lib/project-access");
+      if (!(await canAccessProject(profile, existing.project_id))) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+    }
 
     const { data, error } = await db.from("payments").delete().eq("id", id).select("id");
 

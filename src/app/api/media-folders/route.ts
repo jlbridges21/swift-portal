@@ -82,6 +82,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Folder name is too long" }, { status: 400 });
   }
 
+  if (!(await canAccessProject(auth.profile, projectId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const db = await createTenantServiceClient(tenant.businessId);
 
   const { data: project } = await db.from("projects").select("id").eq("id", projectId).maybeSingle();
@@ -127,6 +131,10 @@ export async function PATCH(request: Request) {
 
   if (!id || !projectId) {
     return NextResponse.json({ error: "id and project_id are required" }, { status: 400 });
+  }
+
+  if (!(await canAccessProject(auth.profile, projectId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const db = await createTenantServiceClient(tenant.businessId);
@@ -183,6 +191,10 @@ export async function DELETE(request: Request) {
 
   if (!id || !projectId) {
     return NextResponse.json({ error: "id and project_id are required" }, { status: 400 });
+  }
+
+  if (!(await canAccessProject(auth.profile, projectId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const db = await createTenantServiceClient(tenant.businessId);

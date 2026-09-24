@@ -103,6 +103,18 @@ export async function PATCH(request: Request) {
   }
 
   const { data: existing } = await db.from("media_assets").select("project_id, title").eq("id", id).single();
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const { canAccessMediaAsset } = await import("@/lib/staff-access");
+  if (!(await canAccessMediaAsset(tenant.businessId, auth.profile, existing.project_id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if ("project_id" in updates && updates.project_id) {
+    if (!(await canAccessMediaAsset(tenant.businessId, auth.profile, updates.project_id as string))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+  }
 
   const { data, error } = await db
     .from("media_assets")
@@ -145,6 +157,11 @@ export async function DELETE(
   const { data: asset } = await db.from("media_assets").select("*").eq("id", id).single();
 
   if (!asset) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const { canAccessMediaAsset } = await import("@/lib/staff-access");
+  if (!(await canAccessMediaAsset(tenant.businessId, auth.profile, asset.project_id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

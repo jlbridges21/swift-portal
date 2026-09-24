@@ -2,16 +2,19 @@ import { Readable } from "node:stream";
 import { PassThrough } from "node:stream";
 import { finished } from "node:stream/promises";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { MediaAsset, Profile } from "@/lib/types";
+import { resolveProjectAccess } from "@/lib/project-access";
+import { downloadFileName } from "@/lib/media-display-name";
+import {
+  DOWNLOAD_GATE_API_MESSAGE,
+  resolveProjectDownloadAllowed,
+} from "@/lib/deliverables";
 import { filterClientMedia, isClientVisibleMedia } from "@/lib/client-media";
 import {
   DEFAULT_PROJECT_MEDIA_SECTIONS,
   filterMediaByClientSections,
   type ProjectMediaSections,
 } from "@/lib/project-media-sections";
-import {
-  DOWNLOAD_GATE_API_MESSAGE,
-  resolveProjectDownloadAllowed,
-} from "@/lib/deliverables";
 import {
   appendZipQualitySuffix,
   canApplyMlsTransform,
@@ -22,10 +25,6 @@ import {
   type DownloadQuality,
 } from "@/lib/download-quality";
 import { sanitizeStorageFileName } from "@/lib/media-upload";
-import { resolveProjectAccess } from "@/lib/project-access";
-import { downloadFileName } from "@/lib/media-display-name";
-import type { MediaAsset, Profile } from "@/lib/types";
-import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 const BUCKET = "project-media";
 const ZIP_FOLDER = "deliverables";
@@ -631,8 +630,6 @@ export async function authorizeProjectZipDownload(
     }
   | { ok: false; status: number; error: string; details: string }
 > {
-  const isAdmin = isOwnerAdmin(profile) || staffCan(profile, "area.media") || staffCan(profile, "media.download_originals");
-
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .select("id, project_name, property_address, status, client_id, business_id, deleted_at")
@@ -652,6 +649,33 @@ export async function authorizeProjectZipDownload(
     return { ok: false, status: 404, error: "Project not found.", details: "project missing or deleted" };
   }
 
+  if (shareScope?.isSharedViewer) {
+    const allowed = shareScope.sharedProjectIds ?? [];
+    if (!allowed.includes(projectId)) {
+      return {
+        ok: false,
+        status: 403,
+        error: "You don't have access to this project.",
+        details: "unauthorized — shared viewer project scope",
+      };
+    }
+  }
+
+  // Area permission is not project scope — always resolve assignment / client / share.
+  const access = await resolveProjectAccess(profile, projectId, {
+    tenantBusinessId: project.business_id,
+  });
+  if (!access.allowed) {
+    return {
+      ok: false,
+      status: 404,
+      error: "Project not found.",
+      details: "unauthorized — project access denied",
+    };
+  }
+
+  const isAdmin = access.kind === "admin";
+
   if (
     !resolveProjectDownloadAllowed({
       projectStatus: project.status,
@@ -667,39 +691,12 @@ export async function authorizeProjectZipDownload(
     };
   }
 
-  if (!isAdmin) {
-    if (shareScope?.isSharedViewer) {
-      const allowed = shareScope.sharedProjectIds ?? [];
-      if (!allowed.includes(projectId)) {
-        return {
-          ok: false,
-          status: 403,
-          error: "You don't have access to this project.",
-          details: "unauthorized — shared viewer project scope",
-        };
-      }
-    }
-
-    const access = await resolveProjectAccess(profile, projectId, {
-      tenantBusinessId: project.business_id,
-    });
-    if (!access.allowed) {
-      return {
-        ok: false,
-        status: 403,
-        error: "You don't have access to this project.",
-        details: "unauthorized — not project client or share",
-      };
-    }
-    return {
-      ok: true,
-      isAdmin,
-      shareId: access.kind === "share" ? access.shareId ?? null : null,
-      project,
-    };
-  }
-
-  return { ok: true, isAdmin, shareId: null, project };
+  return {
+    ok: true,
+    isAdmin,
+    shareId: access.kind === "share" ? access.shareId ?? null : null,
+    project,
+  };
 }
 
 export function clientCanSeeAsset(asset: MediaAsset, isAdmin: boolean): boolean {

@@ -69,6 +69,11 @@ export async function POST(request: Request) {
   if (!tenant) return missingTenantResponse(profile.role);
   const businessId = tenant.businessId;
 
+  const { canAccessProject } = await import("@/lib/project-access");
+  if (!(await canAccessProject(profile, project_id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const total_cents = line_items.reduce(
     (sum: number, item: { amount_cents: number }) => sum + (item.amount_cents || 0),
     0
@@ -160,6 +165,11 @@ export async function PATCH(request: Request) {
     : await db.from("project_quotes").select("*").eq("id", id).single();
   if (!quote) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (quote.business_id && quote.business_id !== businessId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const { canAccessProject } = await import("@/lib/project-access");
+  if (!(await canAccessProject(profile, quote.project_id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

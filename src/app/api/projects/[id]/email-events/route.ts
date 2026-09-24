@@ -14,6 +14,10 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const { id } = await params;
+    const { canAccessProject } = await import("@/lib/project-access");
+    if (!(await canAccessProject(profile, id))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const db = await createTenantServiceClient(tenant.businessId);
     const { data: project } = await db.from("projects").select("id").eq("id", id).maybeSingle();
     if (!project) {

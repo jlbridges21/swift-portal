@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/api-auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { canAccessProject } from "@/lib/project-access";
 import {
   assignProjectStaff,
   listAssignableStaff,
@@ -21,6 +22,10 @@ export async function GET(request: Request) {
   const projectId = searchParams.get("project_id")?.trim() || "";
   if (!projectId) {
     return NextResponse.json({ error: "project_id required." }, { status: 400 });
+  }
+
+  if (!(await canAccessProject(auth.profile, projectId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const [assigned, assignable] = await Promise.all([
@@ -48,6 +53,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "project_id and user_id required." }, { status: 400 });
   }
 
+  if (!(await canAccessProject(auth.profile, projectId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const result = await assignProjectStaff({
     businessId: tenant.businessId,
     projectId,
@@ -73,6 +82,10 @@ export async function DELETE(request: Request) {
   const userId = url.searchParams.get("user_id")?.trim() || "";
   if (!projectId || !userId) {
     return NextResponse.json({ error: "project_id and user_id required." }, { status: 400 });
+  }
+
+  if (!(await canAccessProject(auth.profile, projectId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const result = await removeProjectStaff({

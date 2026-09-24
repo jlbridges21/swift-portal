@@ -19,6 +19,10 @@ export async function GET(request: Request) {
   const projectId = new URL(request.url).searchParams.get("project_id");
   if (!projectId) return NextResponse.json({ error: "project_id required" }, { status: 400 });
 
+  if (!(await canAccessProject(profile, projectId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const supabase = await createClient();
   let query = supabase
     .from("asset_reviews")

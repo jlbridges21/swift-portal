@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { getLibraryFilterOptions, queryMediaLibrary } from "@/lib/media-library";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { isOwnerAdmin, visibleProjectIdsFor } from "@/lib/staff-access";
+import { isOwnerAdmin, visibleClientIdsFor, visibleProjectIdsFor } from "@/lib/staff-access";
 
 export async function GET(request: Request) {
   try {
@@ -33,7 +33,13 @@ export async function GET(request: Request) {
     });
 
     if (searchParams.get("options") === "1") {
-      const options = await getLibraryFilterOptions(tenant.businessId);
+      const clientIds = isOwnerAdmin(profile)
+        ? ("all" as const)
+        : await visibleClientIdsFor(tenant.businessId, profile);
+      const options = await getLibraryFilterOptions(tenant.businessId, {
+        projectIds,
+        clientIds,
+      });
       return NextResponse.json({ ...result, filterOptions: options });
     }
 

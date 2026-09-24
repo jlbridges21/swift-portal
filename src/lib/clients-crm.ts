@@ -219,11 +219,59 @@ export async function getClientListRows(
 export async function getClientCrmProfile(
   clientId: string,
   businessId: string,
-  options?: { includeDeleted?: boolean }
+  options?: {
+    includeDeleted?: boolean;
+    /** Staff scope: limit projects/payments/activity to these project ids. */
+    projectIds?: "all" | string[];
+  }
 ): Promise<ClientCrmProfile | null> {
   // Cookie RLS client (not service role). Explicit business_id is defense in depth.
   const supabase = await createClient();
   const db = await createTenantServiceClient(businessId);
+  const projectScope = options?.projectIds ?? "all";
+  const emptyScope =
+    projectScope !== "all" && projectScope.length === 0
+      ? (["00000000-0000-0000-0000-000000000000"] as string[])
+      : null;
+
+  let projectsByClientQuery = supabase
+    .from("projects")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("business_id", businessId)
+    .order("updated_at", { ascending: false });
+  let junctionQuery = supabase
+    .from("project_clients")
+    .select("project_id, projects(*)")
+    .eq("client_id", clientId)
+    .eq("business_id", businessId);
+  let paymentsQuery = supabase
+    .from("payments")
+    .select("*, projects(project_name)")
+    .eq("client_id", clientId)
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false });
+  let activitiesQuery = supabase
+    .from("activity_logs")
+    .select("id, activity_type, description, project_id, created_at, visibility")
+    .eq("client_id", clientId)
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false })
+    .limit(25);
+  let allProjectsForPropsQuery = supabase
+    .from("projects")
+    .select("id, property_id, client_id, updated_at, status")
+    .eq("client_id", clientId)
+    .eq("business_id", businessId);
+
+  if (projectScope !== "all") {
+    const ids = emptyScope ?? projectScope;
+    projectsByClientQuery = projectsByClientQuery.in("id", ids);
+    junctionQuery = junctionQuery.in("project_id", ids);
+    paymentsQuery = paymentsQuery.in("project_id", ids);
+    activitiesQuery = activitiesQuery.in("project_id", ids);
+    allProjectsForPropsQuery = allProjectsForPropsQuery.in("id", ids);
+  }
 
   const [
     { data: client },
@@ -240,9 +288,9 @@ export async function getClientCrmProfile(
     supabase.from("clients").select("*").eq("id", clientId).eq("business_id", businessId).single(),
     supabase.from("client_stats").select("*").eq("client_id", clientId).maybeSingle(),
     supabase.from("properties").select("*").eq("client_id", clientId).eq("business_id", businessId).order("created_at", { ascending: false }),
-    supabase.from("projects").select("*").eq("client_id", clientId).eq("business_id", businessId).order("updated_at", { ascending: false }),
-    supabase.from("project_clients").select("project_id, projects(*)").eq("client_id", clientId).eq("business_id", businessId),
-    supabase.from("payments").select("*, projects(project_name)").eq("client_id", clientId).eq("business_id", businessId).order("created_at", { ascending: false }),
+    projectsByClientQuery,
+    junctionQuery,
+    paymentsQuery,
     supabase.from("client_notes").select("*").eq("client_id", clientId).eq("business_id", businessId).order("created_at", { ascending: false }),
     supabase
       .from("communications")
@@ -251,14 +299,8 @@ export async function getClientCrmProfile(
       .eq("business_id", businessId)
       .order("created_at", { ascending: false })
       .limit(40),
-    supabase
-      .from("activity_logs")
-      .select("id, activity_type, description, project_id, created_at, visibility")
-      .eq("client_id", clientId)
-      .eq("business_id", businessId)
-      .order("created_at", { ascending: false })
-      .limit(25),
-    supabase.from("projects").select("id, property_id, client_id, updated_at, status").eq("client_id", clientId).eq("business_id", businessId),
+    activitiesQuery,
+    allProjectsForPropsQuery,
   ]);
 
   if (!client) return null;
@@ -275,34 +317,38 @@ export async function getClientCrmProfile(
     .filter((p) => options?.includeDeleted || !p.deleted_at)
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
-  const stats: ClientFinancialStats = statsRow && !statsError
-    ? {
-        lifetime_revenue: Number(statsRow.lifetime_revenue ?? 0),
-        outstanding_balance: Number(statsRow.outstanding_balance ?? 0),
-        active_project_count: Number(statsRow.active_project_count ?? 0),
-        delivered_project_count: Number(statsRow.delivered_project_count ?? 0),
-        total_project_count: Number(statsRow.total_project_count ?? 0),
-        average_project_value: Number(statsRow.average_project_value ?? 0),
-        last_payment_at: (statsRow.last_payment_at as string | null) ?? null,
-      }
-    : computeFinancialFallback(projects, payments ?? []);
+  // Scoped staff must not see business-wide client_stats totals.
+  const stats: ClientFinancialStats =
+    projectScope === "all" && statsRow && !statsError
+      ? {
+          lifetime_revenue: Number(statsRow.lifetime_revenue ?? 0),
+          outstanding_balance: Number(statsRow.outstanding_balance ?? 0),
+          active_project_count: Number(statsRow.active_project_count ?? 0),
+          delivered_project_count: Number(statsRow.delivered_project_count ?? 0),
+          total_project_count: Number(statsRow.total_project_count ?? 0),
+          average_project_value: Number(statsRow.average_project_value ?? 0),
+          last_payment_at: (statsRow.last_payment_at as string | null) ?? null,
+        }
+      : computeFinancialFallback(projects, payments ?? []);
 
-  const propertySummaries: PropertySummary[] = (properties ?? []).map((property) => {
-    const propProjects = (allProjectsForProps ?? []).filter((p) => p.property_id === property.id);
-    const propPayments = (payments ?? []).filter(
-      (pay) => pay.status === "paid" && propProjects.some((pp) => pp.id === pay.project_id)
-    );
-    return {
-      ...(property as Property),
-      project_count: propProjects.length,
-      last_project_at: propProjects.length
-        ? propProjects.sort(
-            (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-          )[0].updated_at
-        : null,
-      revenue_cents: propPayments.reduce((sum, p) => sum + p.amount, 0),
-    };
-  });
+  const propertySummaries: PropertySummary[] = (properties ?? [])
+    .map((property) => {
+      const propProjects = (allProjectsForProps ?? []).filter((p) => p.property_id === property.id);
+      const propPayments = (payments ?? []).filter(
+        (pay) => pay.status === "paid" && propProjects.some((pp) => pp.id === pay.project_id)
+      );
+      return {
+        ...(property as Property),
+        project_count: propProjects.length,
+        last_project_at: propProjects.length
+          ? propProjects.sort(
+              (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+            )[0].updated_at
+          : null,
+        revenue_cents: propPayments.reduce((sum, p) => sum + p.amount, 0),
+      };
+    })
+    .filter((p) => projectScope === "all" || p.project_count > 0);
 
   let lastLogin: string | null = (client.last_login_at as string | null) ?? null;
   if (!lastLogin && client.user_id) {

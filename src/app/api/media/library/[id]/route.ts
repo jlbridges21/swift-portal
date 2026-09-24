@@ -8,7 +8,7 @@ import {
 } from "@/lib/media-library";
 import type { LibraryAssetKind } from "@/lib/media-library";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { canAccessMediaAsset } from "@/lib/staff-access";
+import { canAccessMediaAsset, isOwnerAdmin, visibleProjectIdsFor } from "@/lib/staff-access";
 
 export async function GET(
   request: Request,
@@ -28,10 +28,14 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    const projectIds = isOwnerAdmin(profile)
+      ? ("all" as const)
+      : await visibleProjectIdsFor(tenant.businessId, profile);
+
     const [events, downloads, related] = await Promise.all([
       kind !== "tour" ? getMediaAssetEvents(tenant.businessId, id) : Promise.resolve([]),
       kind !== "tour" ? getMediaDownloadHistory(tenant.businessId, id) : Promise.resolve([]),
-      getRelatedAssets(tenant.businessId, asset),
+      getRelatedAssets(tenant.businessId, asset, 6, projectIds),
     ]);
 
     return NextResponse.json({ asset, events, downloads, related });

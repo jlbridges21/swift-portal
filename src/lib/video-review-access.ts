@@ -32,7 +32,7 @@ export async function assertReviewProjectAccess(
   profile: Profile,
   projectId: string
 ): Promise<void> {
-  if (isReviewAdmin(profile)) return;
+  // Area permission (isReviewAdmin) is not project scope — always resolve assignment.
   const ok = await canAccessProject(profile, projectId);
   if (!ok) {
     throw new VideoReviewAccessError("Review not found or access denied.", 404);

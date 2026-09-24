@@ -4,12 +4,11 @@ import { requireAdminApi } from "@/lib/api-auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { canAccessProject } from "@/lib/project-access";
 
 function storagePathFromPublicUrl(url: string): { bucket: string; path: string } | null {
   try {
     const parsed = new URL(url);
-    // https://<ref>.supabase.co/storage/v1/object/public/<bucket>/<path>
-    // https://<ref>.supabase.co/storage/v1/object/sign/<bucket>/<path>?...
     const match = parsed.pathname.match(
       /\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/(.+)$/
     );
@@ -31,6 +30,10 @@ export async function POST(request: Request) {
 
   if (!body.project_id || !body.tour_name || !body.kuula_url) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  if (!(await canAccessProject(auth.profile, body.project_id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const db = await createTenantServiceClient(tenant.businessId);
@@ -94,6 +97,18 @@ export async function PATCH(request: Request) {
   }
 
   const db = await createTenantServiceClient(tenant.businessId);
+  const { data: existing } = await db
+    .from("tours")
+    .select("id, project_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!existing?.project_id) {
+    return NextResponse.json({ error: "Tour not found" }, { status: 404 });
+  }
+  if (!(await canAccessProject(auth.profile, existing.project_id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const { data, error } = await db.from("tours").update(updates).eq("id", id).select().single();
 
   if (error) {
@@ -116,6 +131,10 @@ export async function DELETE(request: Request) {
 
   if (!id || !projectId) {
     return NextResponse.json({ error: "id and project_id are required" }, { status: 400 });
+  }
+
+  if (!(await canAccessProject(auth.profile, projectId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const db = await createTenantServiceClient(tenant.businessId);

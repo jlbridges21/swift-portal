@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdmin } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { canAccessClient } from "@/lib/staff-access";
 
 export async function GET(
   _request: Request,
@@ -13,6 +14,9 @@ export async function GET(
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
+    if (!(await canAccessClient(businessId, profile, clientId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const db = await createTenantServiceClient(businessId);
     const { data: client } = await db.from("clients").select("id").eq("id", clientId).maybeSingle();
     if (!client) {
@@ -47,6 +51,9 @@ export async function POST(
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
+    if (!(await canAccessClient(businessId, profile, clientId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const db = await createTenantServiceClient(businessId);
     const { data, error } = await db
       .from("client_notes")
@@ -81,6 +88,9 @@ export async function PATCH(
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
+    if (!(await canAccessClient(businessId, profile, clientId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const db = await createTenantServiceClient(businessId);
     const { data, error } = await db
       .from("client_notes")
@@ -114,6 +124,9 @@ export async function DELETE(
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
+    if (!(await canAccessClient(businessId, profile, clientId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const db = await createTenantServiceClient(businessId);
     const { error } = await db
       .from("client_notes")

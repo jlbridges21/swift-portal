@@ -6,7 +6,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { notifyClientAddedToProject } from "@/lib/client-added-notification";
 
 export async function GET(request: Request) {
-  const auth = await requireAdminApi({ area: 'clients' });
+  const auth = await requireAdminApi({ area: "clients" });
   if (!auth.ok) return auth.response;
 
   const { searchParams } = new URL(request.url);
@@ -17,16 +17,21 @@ export async function GET(request: Request) {
   const businessId = tenant.businessId;
   const db = await createTenantServiceClient(businessId);
 
-  let query = db
-    .from("project_clients")
-    .select("*, clients(id, name, email, company, user_id)")
-    .order("is_primary", { ascending: false });
-
-  if (projectId) {
-    query = query.eq("project_id", projectId);
+  // Require a project_id so this never returns every junction row business-wide.
+  if (!projectId) {
+    return NextResponse.json({ error: "project_id required" }, { status: 400 });
   }
 
-  const { data, error } = await query;
+  const { canAccessProject } = await import("@/lib/project-access");
+  if (!(await canAccessProject(auth.profile, projectId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const { data, error } = await db
+    .from("project_clients")
+    .select("*, clients(id, name, email, company, user_id)")
+    .eq("project_id", projectId)
+    .order("is_primary", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

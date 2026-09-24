@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdmin } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import {
+  canAccessClient,
+  isOwnerAdmin,
+  visibleProjectIdsFor,
+} from "@/lib/staff-access";
 
 /** Projects linked to a client (primary or project_clients) for compose UI. */
 export async function GET(
@@ -9,11 +14,16 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const profile = await requireAdmin({ area: 'clients' });
+    const profile = await requireAdmin({ area: "clients" });
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
     const { id: clientId } = await context.params;
+
+    if (!(await canAccessClient(businessId, profile, clientId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const db = await createTenantServiceClient(businessId);
 
     const { data: client } = await db
@@ -40,7 +50,16 @@ export async function GET(
       if (proj?.id) byId.set(proj.id, { id: proj.id, project_name: proj.project_name });
     }
 
-    return NextResponse.json(Array.from(byId.values()));
+    let rows = Array.from(byId.values());
+    if (!isOwnerAdmin(profile)) {
+      const visible = await visibleProjectIdsFor(businessId, profile);
+      if (visible !== "all") {
+        const set = new Set(visible);
+        rows = rows.filter((r) => set.has(r.id));
+      }
+    }
+
+    return NextResponse.json(rows);
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

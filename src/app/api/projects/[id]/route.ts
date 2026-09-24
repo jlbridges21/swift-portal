@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { restoreProject, softDeleteProject, TenantRecordNotFoundError } from "@/lib/soft-delete";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { canAccessProject } from "@/lib/project-access";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -13,6 +14,9 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     const { id } = await params;
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
+    if (!(await canAccessProject(profile, id))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const businessId = tenant.businessId;
     await softDeleteProject(id, profile.id, businessId);
     return NextResponse.json({ success: true });
@@ -40,6 +44,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (body.action === "restore") {
       const tenant = await getTenantContext();
       if (!tenant) return missingTenantResponse(profile.role);
+      if (!(await canAccessProject(profile, id))) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
       const businessId = tenant.businessId;
       await restoreProject(id, businessId);
       return NextResponse.json({ success: true, restored: true });

@@ -22,6 +22,12 @@ export async function POST(request: Request) {
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
+
+    const { canAccessProject } = await import("@/lib/project-access");
+    if (!(await canAccessProject(profile, body.project_id))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const db = await createTenantServiceClient(businessId);
     const appSettings = await getAppSettings(businessId);
 

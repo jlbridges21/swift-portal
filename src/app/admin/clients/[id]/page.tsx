@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { getClientCrmProfile } from "@/lib/clients-crm";
 import { ClientCrmProfile } from "@/components/admin/clients-table";
 import { ChevronLeft } from "lucide-react";
-import { canAccessClient, staffCan } from "@/lib/staff-access";
+import { canAccessClient, isOwnerAdmin, staffCan, visibleProjectIdsFor } from "@/lib/staff-access";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -21,7 +21,14 @@ export default async function AdminClientDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const data = await getClientCrmProfile(id, businessId, { includeDeleted: true });
+  const projectIds = isOwnerAdmin(profile)
+    ? ("all" as const)
+    : await visibleProjectIdsFor(businessId, profile);
+
+  const data = await getClientCrmProfile(id, businessId, {
+    includeDeleted: true,
+    projectIds,
+  });
   if (!data) notFound();
 
   const isStaff = profile.role === "staff";

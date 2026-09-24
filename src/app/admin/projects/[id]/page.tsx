@@ -8,7 +8,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { listProjectVideoReviews } from "@/lib/video-reviews";
 import { listProjectShares } from "@/lib/project-shares";
 import { getProjectLinkAccessState } from "@/lib/project-link-access";
-import { canAccessProject, staffCan } from "@/lib/staff-access";
+import { canAccessProject, staffCan, isOwnerAdmin, visibleClientIdsFor } from "@/lib/staff-access";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -23,6 +23,24 @@ export default async function AdminProjectPage({ params }: PageProps) {
   if (profile.role === "staff") {
     const allowed = await canAccessProject(tenant.businessId, profile, id);
     if (!allowed) notFound();
+  }
+
+  const clientPickerIds = isOwnerAdmin(profile)
+    ? ("all" as const)
+    : await visibleClientIdsFor(tenant.businessId, profile);
+
+  let clientsQuery = supabase
+    .from("clients")
+    .select("id, name, email, company, phone, full_name, user_id")
+    .eq("business_id", tenant.businessId)
+    .is("deleted_at", null)
+    .order("name");
+  if (clientPickerIds !== "all") {
+    if (clientPickerIds.length === 0) {
+      clientsQuery = clientsQuery.in("id", ["00000000-0000-0000-0000-000000000000"]);
+    } else {
+      clientsQuery = clientsQuery.in("id", clientPickerIds);
+    }
   }
 
   const [
@@ -81,12 +99,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
       .select("*, clients(id, name, email, company, phone, full_name, user_id)")
       .eq("business_id", tenant.businessId)
       .eq("project_id", id),
-    supabase
-      .from("clients")
-      .select("id, name, email, company, phone, full_name, user_id")
-      .eq("business_id", tenant.businessId)
-      .is("deleted_at", null)
-      .order("name"),
+    clientsQuery,
     supabase
       .from("activity_logs")
       .select("*")

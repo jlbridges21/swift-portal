@@ -635,11 +635,13 @@ export async function getMediaDownloadHistory(
 export async function getRelatedAssets(
   businessId: string,
   asset: LibraryAsset,
-  limit = 6
+  limit = 6,
+  projectIds: "all" | string[] = "all"
 ): Promise<LibraryAsset[]> {
   const result = await queryMediaLibrary(businessId, {
     propertyId: asset.property_id ?? undefined,
     limit: limit + 1,
+    projectIds,
   });
   return result.assets.filter((a) => a.id !== asset.id).slice(0, limit);
 }
@@ -664,40 +666,95 @@ export async function setMediaTags(businessId: string, assetId: string, tags: st
   }
 }
 
-export async function getLibraryFilterOptions(businessId: string) {
+export async function getLibraryFilterOptions(
+  businessId: string,
+  scope?: {
+    projectIds?: "all" | string[];
+    clientIds?: "all" | string[];
+  }
+) {
   const db = await createTenantServiceClient(businessId);
+  const projectIds = scope?.projectIds ?? "all";
+  const clientIds = scope?.clientIds ?? "all";
+
+  if (
+    (projectIds !== "all" && projectIds.length === 0) ||
+    (clientIds !== "all" && clientIds.length === 0)
+  ) {
+    return {
+      clients: [],
+      properties: [],
+      projects: [],
+      services: [] as string[],
+      tags: [] as string[],
+    };
+  }
+
+  let clientsQuery = db.from("clients").select("id, name, full_name, company").order("name");
+  if (clientIds !== "all") clientsQuery = clientsQuery.in("id", clientIds);
+
+  let projectsQuery = db
+    .from("projects")
+    .select("id, project_name, property_address, service_type, client_id, property_id")
+    .order("updated_at", { ascending: false })
+    .limit(500);
+  if (projectIds !== "all") projectsQuery = projectsQuery.in("id", projectIds);
+
   const [
     { data: clients },
-    { data: properties },
     { data: projects },
     { data: catalogRows },
-    { data: projectServiceRows },
     { data: tagRows },
   ] = await Promise.all([
-    db.from("clients").select("id, name, full_name, company").order("name"),
-    db.from("properties").select("id, address, nickname").order("address").limit(200),
-    db
-      .from("projects")
-      .select("id, project_name, property_address")
-      .order("updated_at", { ascending: false })
-      .limit(500),
+    clientsQuery,
+    projectsQuery,
     db.from("business_services").select("name, aliases").eq("is_active", true),
-    db.from("projects").select("service_type"),
     db.from("media_asset_tags").select("tag"),
   ]);
+
+  const propertyIdSet = new Set<string>();
+  for (const p of projects ?? []) {
+    if (p.property_id) propertyIdSet.add(p.property_id as string);
+  }
+
+  let properties: { id: string; address: string | null; nickname: string | null }[] = [];
+  if (propertyIdSet.size > 0) {
+    const { data } = await db
+      .from("properties")
+      .select("id, address, nickname")
+      .in("id", [...propertyIdSet])
+      .order("address")
+      .limit(200);
+    properties = data ?? [];
+  } else if (projectIds === "all") {
+    const { data } = await db
+      .from("properties")
+      .select("id, address, nickname")
+      .order("address")
+      .limit(200);
+    properties = data ?? [];
+  }
 
   const fromCatalog = (catalogRows ?? []).flatMap((row) => {
     const aliases = Array.isArray(row.aliases) ? row.aliases.map(String) : [];
     return [row.name, ...aliases];
   });
-  const fromProjects = (projectServiceRows ?? []).map((row) => row.service_type).filter(Boolean);
-  const services = [...new Set([...fromCatalog, ...fromProjects].filter(Boolean))].sort();
-  const tags = [...new Set((tagRows ?? []).map((row) => row.tag).filter(Boolean))].sort();
+  const fromProjects = (projects ?? []).map((row) => row.service_type).filter(Boolean);
+  const services = [...new Set([...fromCatalog, ...fromProjects].filter(Boolean))].sort() as string[];
+  const tags = [...new Set((tagRows ?? []).map((row) => row.tag).filter(Boolean))].sort() as string[];
 
   return {
     clients: clients ?? [],
-    properties: properties ?? [],
-    projects: projects ?? [],
+    properties: properties.map((p) => ({
+      id: p.id,
+      address: p.address ?? "",
+      nickname: p.nickname,
+    })),
+    projects: (projects ?? []).map((p) => ({
+      id: p.id,
+      project_name: p.project_name,
+      property_address: p.property_address,
+    })),
     services,
     tags,
   };

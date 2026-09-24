@@ -7,6 +7,7 @@ import {
   updateProjectShareExpiry,
   type ShareExpiryPreset,
 } from "@/lib/project-shares";
+import { canAccessProject } from "@/lib/project-access";
 import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 
 export async function DELETE(
@@ -21,6 +22,9 @@ export async function DELETE(
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const { id: projectId, shareId } = await params;
+    if (!(await canAccessProject(profile, projectId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     await revokeProjectShare(tenant.businessId, projectId, shareId);
     return NextResponse.json({ ok: true });
   } catch (error) {
@@ -41,6 +45,9 @@ export async function PATCH(
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const { id: projectId, shareId } = await params;
+    if (!(await canAccessProject(profile, projectId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const body = (await request.json()) as {
       expiryPreset?: ShareExpiryPreset;
       customAccessStartsAt?: string | null;

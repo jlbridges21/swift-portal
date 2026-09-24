@@ -36,7 +36,25 @@ export async function GET(request: Request) {
     .order("proposed_at", { ascending: true });
 
   if (projectId) {
+    if (!(await canAccessProject(profile, projectId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     query = query.eq("project_id", projectId);
+  } else if (profile.role === "staff") {
+    const { isOwnerAdmin, visibleProjectIdsFor } = await import("@/lib/staff-access");
+    if (!isOwnerAdmin(profile)) {
+      const visible = await visibleProjectIdsFor(tenant.businessId, profile);
+      if (visible === "all") {
+        // view_all — business-wide OK
+      } else if (visible.length === 0) {
+        return NextResponse.json([]);
+      } else {
+        query = query.in("project_id", visible);
+      }
+    }
+  } else if (profile.role === "client" && profile.client_id) {
+    // Clients should only see proposals for their projects — require project_id.
+    return NextResponse.json({ error: "project_id required" }, { status: 400 });
   }
 
   const { data, error } = await query;
@@ -77,7 +95,7 @@ export async function POST(request: Request) {
   if (!tenant) return missingTenantResponse(profile.role);
   const businessId = tenant.businessId;
 
-  if (!isAdmin && !(await canAccessProject(profile, body.project_id))) {
+  if (!(await canAccessProject(profile, body.project_id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -226,7 +244,10 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (!isAdmin && proposal && !(await canAccessProject(profile, proposal.project_id))) {
+  if (proposal && !(await canAccessProject(profile, proposal.project_id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (action === "reschedule" && project_id && !(await canAccessProject(profile, project_id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
