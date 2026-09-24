@@ -100,6 +100,10 @@ function main() {
       if (r.ok) {
         assert(r.provider === c.provider, `${c.note}: provider ${r.provider} != ${c.provider}`);
         assert(r.embedUrl.startsWith("https://"), `${c.note}: embed not https`);
+        if (c.input.includes("#")) {
+          const fragment = c.input.slice(c.input.indexOf("#"));
+          assert(r.embedUrl.includes(fragment), `${c.note}: fragment dropped from ${r.embedUrl}`);
+        }
         console.log(`ok  ${c.note}`);
         console.log(`    in:  ${c.input}`);
         console.log(`    out: ${r.embedUrl}`);

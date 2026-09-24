@@ -1351,7 +1351,11 @@ export function AdminProjectDetail({
               <Input name="title" required placeholder="Model title" />
               <Input
                 name="embed_url"
+                type="text"
                 required
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder="https://… viewer / share URL"
                 value={modelFormEmbedUrl}
                 onChange={(e) => setModelFormEmbedUrl(e.target.value)}
