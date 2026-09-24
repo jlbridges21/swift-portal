@@ -1,3 +1,4 @@
+import { addMonths, endOfMonth, startOfMonth, subMonths } from "date-fns";
 import { Header, PageHeader } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { requireAdminPage } from "@/lib/admin-access";
@@ -5,7 +6,13 @@ import { getProjectHeroPosterUrl } from "@/lib/cover";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { ShootCalendar, type CalendarShoot } from "@/components/admin/shoot-calendar";
 import { isOwnerAdmin, visibleProjectIdsFor } from "@/lib/staff-access";
-import { retryAttentionSyncs } from "@/lib/google-calendar";
+import { getAppSettings } from "@/lib/app-settings";
+import {
+  loadExternalEventsForOwner,
+  resolveBusinessTimeZone,
+  retryAttentionSyncs,
+} from "@/lib/google-calendar";
+import { externalEventsVisibleTo, type ExternalCalendarEvent } from "@/lib/google-calendar-pull";
 import Link from "next/link";
 
 export default async function AdminCalendarPage() {
@@ -54,6 +61,23 @@ export default async function AdminCalendarPage() {
   }
 
   const { data: confirmed } = await proposalsQuery;
+
+  const settings = await getAppSettings(tenant.businessId);
+  const businessTimeZone = resolveBusinessTimeZone(settings.workflow.businessDefaults.timezone).timeZone;
+  const windowStart = startOfMonth(subMonths(new Date(), 1));
+  const windowEnd = endOfMonth(addMonths(new Date(), 1));
+
+  let externalEvents: ExternalCalendarEvent[] = [];
+  let externalDegraded = false;
+  if (owner && gcalStatus === "active") {
+    const loaded = await loadExternalEventsForOwner(
+      tenant.businessId,
+      windowStart.toISOString(),
+      windowEnd.toISOString()
+    );
+    externalEvents = externalEventsVisibleTo(profile.role, loaded.events);
+    externalDegraded = loaded.degraded;
+  }
 
   const shoots: CalendarShoot[] = await Promise.all(
     (confirmed ?? []).map(async (item) => {
@@ -117,7 +141,18 @@ export default async function AdminCalendarPage() {
           </div>
         ) : null}
 
-        <ShootCalendar shoots={shoots} />
+        <ShootCalendar
+          shoots={shoots}
+          externalEvents={externalEvents}
+          externalDegraded={externalDegraded}
+          canLoadExternal={owner && gcalStatus === "active"}
+          businessTimeZone={businessTimeZone}
+          externalWindow={
+            owner && gcalStatus === "active"
+              ? { from: windowStart.toISOString(), to: windowEnd.toISOString() }
+              : null
+          }
+        />
       </main>
     </div>
   );

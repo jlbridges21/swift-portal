@@ -18,6 +18,10 @@
       "schedule": "0 16 * * *"
     },
     {
+      "path": "/api/cron/google-calendar",
+      "schedule": "15 16 * * *"
+    },
+    {
       "path": "/api/cron/video-review-notifications",
       "schedule": "* * * * *"
     }

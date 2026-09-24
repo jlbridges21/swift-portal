@@ -1,6 +1,6 @@
 /**
- * Phase 1 Google Calendar — per-business OAuth and ShootPortal → Google push.
- * Pulling Google events into ShootPortal is Phase 2 and is not implemented here.
+ * Google Calendar — per-business OAuth, ShootPortal → Google push, and a live
+ * owner-only pull of external events. Event bodies are not stored.
  *
  * OAuth client is GOOGLE_CALENDAR_CLIENT_ID / GOOGLE_CALENDAR_CLIENT_SECRET.
  * Do not reuse the Supabase Auth Google client (different scopes and consent).
@@ -16,6 +16,12 @@ import { getAppSettings } from "@/lib/app-settings";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { isPlatformApexHostname } from "@/lib/portal-url";
 import { decryptCalendarSecret, encryptCalendarSecret } from "@/lib/google-calendar-crypto";
+import {
+  listGoogleEvents,
+  resolveReadCalendarIds,
+  validateReadCalendarSelection,
+  type ExternalCalendarEvent,
+} from "@/lib/google-calendar-pull";
 
 export const GOOGLE_CALENDAR_SCOPES = [
   // Create, update, delete, and read events. Narrower than full `calendar`
@@ -40,6 +46,8 @@ export type GoogleCalendarPublicStatus = {
   lastError: string | null;
   attentionCount: number;
   calendars: { id: string; summary: string; primary: boolean }[];
+  /** Calendars pulled onto the owner calendar. Independent of calendarId. */
+  readCalendarIds: string[];
 };
 
 type ConnectionRow = {
@@ -50,6 +58,8 @@ type ConnectionRow = {
   token_expires_at: string | null;
   calendar_id: string;
   calendar_summary: string | null;
+  read_calendar_ids: string[] | null;
+  read_sync_tokens: Record<string, string> | null;
   status: "active" | "needs_reconnect";
   last_error: string | null;
 };
@@ -176,7 +186,7 @@ async function readConnection(businessId: string): Promise<ConnectionRow | null>
   const { data } = await db
     .from("google_calendar_connections")
     .select(
-      "business_id, connected_email, access_token_ciphertext, refresh_token_ciphertext, token_expires_at, calendar_id, calendar_summary, status, last_error"
+      "business_id, connected_email, access_token_ciphertext, refresh_token_ciphertext, token_expires_at, calendar_id, calendar_summary, read_calendar_ids, read_sync_tokens, status, last_error"
     )
     .maybeSingle();
   return (data as ConnectionRow | null) ?? null;
@@ -193,7 +203,12 @@ function bundleFromRow(row: ConnectionRow): TokenBundle {
 async function saveTokens(
   businessId: string,
   tokens: TokenBundle,
-  patch: Partial<Pick<ConnectionRow, "connected_email" | "calendar_id" | "calendar_summary" | "status" | "last_error">> & {
+  patch: Partial<
+    Pick<
+      ConnectionRow,
+      "connected_email" | "calendar_id" | "calendar_summary" | "status" | "last_error" | "read_calendar_ids" | "read_sync_tokens"
+    >
+  > & {
     connectedBy?: string | null;
   }
 ) {
@@ -208,6 +223,8 @@ async function saveTokens(
     status: patch.status ?? "active",
     last_error: patch.last_error ?? null,
   };
+  if (patch.read_calendar_ids) row.read_calendar_ids = patch.read_calendar_ids;
+  if (patch.read_sync_tokens) row.read_sync_tokens = patch.read_sync_tokens;
   if (patch.connectedBy) row.connected_by = patch.connectedBy;
   const { error } = await db.from("google_calendar_connections").upsert(row);
   if (error) throw new Error(redact(error.message));
@@ -654,6 +671,7 @@ export async function getGoogleCalendarPublicStatus(businessId: string): Promise
     lastError: null,
     attentionCount: 0,
     calendars: [],
+    readCalendarIds: [],
   };
   const row = await readConnection(businessId);
   const db = await createTenantServiceClient(businessId);
@@ -683,6 +701,7 @@ export async function getGoogleCalendarPublicStatus(businessId: string): Promise
     lastError: fresh.last_error,
     attentionCount: count ?? 0,
     calendars,
+    readCalendarIds: resolveReadCalendarIds(fresh.read_calendar_ids, fresh.calendar_id),
   };
 }
 
@@ -703,6 +722,8 @@ export async function completeGoogleCalendarConnect(args: {
       connected_email: email,
       calendar_id: primary?.id || "primary",
       calendar_summary: primary?.summary || "Primary",
+      read_calendar_ids: [primary?.id || "primary"],
+      read_sync_tokens: {},
       status: "active",
       last_error: null,
       connectedBy: args.userId,
@@ -726,6 +747,137 @@ export async function updateSelectedCalendar(
     .eq("business_id", businessId);
   if (error) throw new Error(redact(error.message));
   return { calendarId: match.id, calendarSummary: match.summary };
+}
+
+/** Read selection is independent of the write target. Clears sync cursors for a clean next pull. */
+export async function updateReadCalendars(
+  businessId: string,
+  calendarIds: string[]
+): Promise<{ readCalendarIds: string[] }> {
+  const auth = await accessTokenFor(businessId, fetch);
+  if (!auth.ok) throw new Error(auth.error);
+  const calendars = await listWritableCalendars(auth.token);
+  const picked = validateReadCalendarSelection(
+    calendarIds,
+    calendars.map((c) => c.id)
+  );
+  if (!picked.length) throw new Error("Select at least one calendar to show.");
+  const db = await createTenantServiceClient(businessId);
+  const { error } = await db
+    .from("google_calendar_connections")
+    .update({ read_calendar_ids: picked, read_sync_tokens: {} })
+    .eq("business_id", businessId);
+  if (error) throw new Error(redact(error.message));
+  return { readCalendarIds: picked };
+}
+
+/**
+ * Live events for the owner calendar window. Never throws.
+ * Does not use syncToken — a stale cursor must not blank the page.
+ * 429 comes back as degraded with whatever events were collected.
+ */
+export async function loadExternalEventsForOwner(
+  businessId: string,
+  timeMin: string,
+  timeMax: string
+): Promise<{ events: ExternalCalendarEvent[]; degraded: boolean; timeZone: string }> {
+  try {
+    const settings = await getAppSettings(businessId);
+    const timeZone = resolveBusinessTimeZone(settings.workflow.businessDefaults.timezone).timeZone;
+    const row = await readConnection(businessId);
+    if (!row || row.status !== "active") return { events: [], degraded: false, timeZone };
+    const auth = await accessTokenFor(businessId, fetch);
+    if (!auth.ok) return { events: [], degraded: true, timeZone };
+    const ids = resolveReadCalendarIds(row.read_calendar_ids, row.calendar_id);
+    const summaries = new Map<string, string>();
+    try {
+      const calendars = await listWritableCalendars(auth.token);
+      for (const calendar of calendars) summaries.set(calendar.id, calendar.summary);
+    } catch {
+      // Calendar names fall back to the id. The page still renders shoots.
+    }
+    const events: ExternalCalendarEvent[] = [];
+    let degraded = false;
+    for (const id of ids) {
+      try {
+        const result = await listGoogleEvents({
+          accessToken: auth.token,
+          calendarId: id,
+          calendarSummary:
+            summaries.get(id) || (id === row.calendar_id ? row.calendar_summary || id : id),
+          timeZone,
+          timeMin,
+          timeMax,
+          syncToken: null,
+        });
+        events.push(...result.events);
+        if (result.degraded) degraded = true;
+      } catch {
+        degraded = true;
+      }
+    }
+    events.sort((a, b) => a.start.localeCompare(b.start) || a.title.localeCompare(b.title));
+    const capped = events.length > 500;
+    return { events: capped ? events.slice(0, 500) : events, degraded: degraded || capped, timeZone };
+  } catch {
+    return { events: [], degraded: true, timeZone: DEFAULT_TIMEZONE };
+  }
+}
+
+/**
+ * Daily cursor refresh. Stores nextSyncToken only — not event bodies.
+ * 410 drops the cursor and takes a fresh one from a full window list.
+ */
+export async function pollGoogleCalendarSync(businessId: string): Promise<{
+  skipped: boolean;
+  calendars: number;
+  resynced: number;
+  degraded: boolean;
+}> {
+  const quiet = { skipped: true, calendars: 0, resynced: 0, degraded: false };
+  try {
+    const row = await readConnection(businessId);
+    if (!row || row.status !== "active") return quiet;
+    const auth = await accessTokenFor(businessId, fetch);
+    if (!auth.ok) return { ...quiet, degraded: true };
+    const settings = await getAppSettings(businessId);
+    const timeZone = resolveBusinessTimeZone(settings.workflow.businessDefaults.timezone).timeZone;
+    const ids = resolveReadCalendarIds(row.read_calendar_ids, row.calendar_id);
+    const tokens: Record<string, string> = { ...(row.read_sync_tokens || {}) };
+    const now = Date.now();
+    const timeMin = new Date(now - 40 * 24 * 60 * 60 * 1000).toISOString();
+    const timeMax = new Date(now + 80 * 24 * 60 * 60 * 1000).toISOString();
+    let resynced = 0;
+    let degraded = false;
+    for (const id of ids) {
+      try {
+        const result = await listGoogleEvents({
+          accessToken: auth.token,
+          calendarId: id,
+          calendarSummary: id,
+          timeZone,
+          timeMin,
+          timeMax,
+          syncToken: tokens[id] || null,
+        });
+        if (result.resynced) resynced += 1;
+        if (result.degraded) degraded = true;
+        if (!result.degraded && result.nextSyncToken) tokens[id] = result.nextSyncToken;
+        else if (result.resynced) delete tokens[id];
+      } catch {
+        degraded = true;
+      }
+    }
+    const kept: Record<string, string> = {};
+    for (const id of ids) {
+      if (tokens[id]) kept[id] = tokens[id];
+    }
+    const db = await createTenantServiceClient(businessId);
+    await db.from("google_calendar_connections").update({ read_sync_tokens: kept }).eq("business_id", businessId);
+    return { skipped: false, calendars: ids.length, resynced, degraded };
+  } catch {
+    return { skipped: false, calendars: 0, resynced: 0, degraded: true };
+  }
 }
 
 export async function disconnectGoogleCalendar(businessId: string): Promise<{

@@ -40,6 +40,8 @@ import {
   Clock,
 } from "lucide-react";
 import { agendaShootsForMonth } from "@/lib/calendar-agenda";
+import type { ExternalCalendarEvent } from "@/lib/google-calendar-pull";
+import { zonedDayKey } from "@/lib/google-calendar-pull";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +62,11 @@ type EventCardVariant = "full" | "compact" | "pill" | "week";
 
 interface ShootCalendarProps {
   shoots: CalendarShoot[];
+  externalEvents?: ExternalCalendarEvent[];
+  externalDegraded?: boolean;
+  canLoadExternal?: boolean;
+  businessTimeZone?: string;
+  externalWindow?: { from: string; to: string } | null;
 }
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -207,9 +214,57 @@ function ShootEventCard({
   );
 }
 
+function GoogleEventCard({
+  event,
+  variant = "full",
+  onOpen,
+}: {
+  event: ExternalCalendarEvent;
+  variant?: EventCardVariant;
+  onOpen: () => void;
+}) {
+  const when = event.allDay ? "All day" : event.timeLabel;
+  if (variant === "pill") {
+    return (
+      <button
+        type="button"
+        data-external-event={event.id}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen();
+        }}
+        className="block w-full truncate rounded-full border border-dashed border-indigo-400 bg-indigo-50 px-2 py-0.5 text-center text-[10px] font-semibold text-indigo-800"
+      >
+        {when}
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      data-external-event={event.id}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+      className={cn(
+        "flex w-full min-w-0 flex-col rounded-lg border border-dashed border-indigo-400 bg-indigo-50 px-2 py-1.5 text-left text-indigo-950",
+        variant === "full" && "px-3 py-3"
+      )}
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
+        Google · {event.calendarSummary}
+      </span>
+      <span className={cn("truncate font-medium", variant === "full" ? "text-sm" : "text-[11px]")}>{event.title}</span>
+      <span className="text-[10px] tabular-nums text-indigo-800">{when}</span>
+    </button>
+  );
+}
+
 function MonthDayCell({
   day,
   dayShoots,
+  dayExternal,
   isSelected,
   isDraggingOver,
   variant,
@@ -217,12 +272,14 @@ function MonthDayCell({
   onSelectDay,
   onDrop,
   onOpenShoot,
+  onOpenExternal,
   onDragStart,
   onDragEnd,
   draggingId,
 }: {
   day: Date;
   dayShoots: CalendarShoot[];
+  dayExternal: ExternalCalendarEvent[];
   isSelected: boolean;
   isDraggingOver: boolean;
   variant: "mobile" | "desktop";
@@ -230,6 +287,7 @@ function MonthDayCell({
   onSelectDay: () => void;
   onDrop: (e: React.DragEvent) => void;
   onOpenShoot: (shoot: CalendarShoot) => void;
+  onOpenExternal: (event: ExternalCalendarEvent) => void;
   onDragStart: (e: React.DragEvent, shoot: CalendarShoot) => void;
   onDragEnd: () => void;
   draggingId: string | null;
@@ -237,6 +295,8 @@ function MonthDayCell({
   const today = isToday(day);
   const visible = dayShoots.slice(0, maxVisible);
   const overflow = dayShoots.length - visible.length;
+  const externalPreview = dayExternal.slice(0, variant === "desktop" ? 3 : 1);
+  const externalOverflow = dayExternal.length - externalPreview.length;
 
   return (
     <div
@@ -268,9 +328,18 @@ function MonthDayCell({
         >
           {format(day, "d")}
         </span>
-        {variant === "mobile" && dayShoots.length > 0 && (
-          <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-            {dayShoots.length}
+        {variant === "mobile" && (dayShoots.length > 0 || dayExternal.length > 0) && (
+          <span className="flex items-center gap-0.5">
+            {dayShoots.length > 0 ? (
+              <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                {dayShoots.length}
+              </span>
+            ) : null}
+            {dayExternal.length > 0 ? (
+              <span className="rounded-full border border-dashed border-indigo-400 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-800">
+                {dayExternal.length}
+              </span>
+            ) : null}
           </span>
         )}
       </div>
@@ -279,6 +348,9 @@ function MonthDayCell({
         <div className="mt-1 space-y-0.5">
           {visible.map((shoot) => (
             <ShootEventCard key={shoot.id} shoot={shoot} variant="pill" onOpen={() => onOpenShoot(shoot)} />
+          ))}
+          {externalPreview.map((event) => (
+            <GoogleEventCard key={event.id} event={event} variant="pill" onOpen={() => onOpenExternal(event)} />
           ))}
         </div>
       ) : (
@@ -295,6 +367,21 @@ function MonthDayCell({
               onDragEnd={onDragEnd}
             />
           ))}
+          {externalPreview.map((event) => (
+            <GoogleEventCard key={event.id} event={event} variant="compact" onOpen={() => onOpenExternal(event)} />
+          ))}
+          {externalOverflow > 0 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectDay();
+              }}
+              className="w-full rounded-md px-1 py-0.5 text-left text-[10px] font-medium text-indigo-800 hover:bg-indigo-50"
+            >
+              +{externalOverflow} Google
+            </button>
+          )}
           {overflow > 0 && (
             <button
               type="button"
@@ -313,11 +400,23 @@ function MonthDayCell({
   );
 }
 
-export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
+export function ShootCalendar({
+  shoots: initialShoots,
+  externalEvents: initialExternal = [],
+  externalDegraded: initialDegraded = false,
+  canLoadExternal = false,
+  businessTimeZone = "America/New_York",
+  externalWindow: initialWindow = null,
+}: ShootCalendarProps) {
   const router = useRouter();
   const [view, setView] = useState<CalendarView>("month");
   const [anchor, setAnchor] = useState(new Date());
   const [shoots, setShoots] = useState(initialShoots);
+  const [externalEvents, setExternalEvents] = useState(initialExternal);
+  const [externalDegraded, setExternalDegraded] = useState(initialDegraded);
+  const [externalWindow, setExternalWindow] = useState(initialWindow);
+  const [hideGoogle, setHideGoogle] = useState(false);
+  const [openedExternal, setOpenedExternal] = useState<ExternalCalendarEvent | null>(null);
   const [selected, setSelected] = useState<CalendarShoot | null>(null);
   const [editDate, setEditDate] = useState("");
   const [editTime, setEditTime] = useState("");
@@ -343,6 +442,10 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
     [shoots]
   );
   const agendaShoots = useMemo(() => agendaShootsForMonth(sortedShoots, anchor), [sortedShoots, anchor]);
+  const shownExternal = useMemo(
+    () => (hideGoogle || !canLoadExternal ? [] : externalEvents),
+    [hideGoogle, canLoadExternal, externalEvents]
+  );
   const agendaRef = useRef<HTMLDivElement>(null);
 
   const shootsByDay = useMemo(() => {
@@ -355,6 +458,18 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
     map.forEach((list) => list.sort((a, b) => compareAsc(parseISO(a.proposed_at), parseISO(b.proposed_at))));
     return map;
   }, [shoots]);
+
+  const externalByDay = useMemo(() => {
+    const map = new Map<string, ExternalCalendarEvent[]>();
+    for (const event of shownExternal) {
+      for (const key of event.dayKeys) {
+        const list = map.get(key) ?? [];
+        list.push(event);
+        map.set(key, list);
+      }
+    }
+    return map;
+  }, [shownExternal]);
 
   const monthStart = startOfMonth(anchor);
   const monthEnd = endOfMonth(anchor);
@@ -375,6 +490,37 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
       setSelectedDayKey(format(monthStart, "yyyy-MM-dd"));
     }
   }, [anchor, monthStart]);
+
+  useEffect(() => {
+    if (!canLoadExternal || !externalWindow) return;
+    const start = startOfMonth(anchor).getTime();
+    const end = endOfMonth(anchor).getTime();
+    if (start >= new Date(externalWindow.from).getTime() && end <= new Date(externalWindow.to).getTime()) return;
+    let cancelled = false;
+    const from = startOfMonth(subMonths(anchor, 1)).toISOString();
+    const to = endOfMonth(addMonths(anchor, 1)).toISOString();
+    void fetch(
+      `/api/integrations/google-calendar/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      { credentials: "include" }
+    )
+      .then(async (res) => {
+        if (!res.ok) {
+          if (!cancelled) setExternalDegraded(true);
+          return;
+        }
+        const data = (await res.json()) as { events?: ExternalCalendarEvent[]; degraded?: boolean };
+        if (cancelled) return;
+        setExternalEvents(data.events ?? []);
+        setExternalDegraded(Boolean(data.degraded));
+        setExternalWindow({ from, to });
+      })
+      .catch(() => {
+        if (!cancelled) setExternalDegraded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [anchor, canLoadExternal, externalWindow]);
 
   useLayoutEffect(() => {
     if (view !== "agenda") return;
@@ -413,7 +559,7 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
       observer.disconnect();
       window.clearTimeout(stop);
     };
-  }, [view, anchor, agendaShoots]);
+  }, [view, anchor, agendaShoots, shownExternal]);
 
   const openShoot = useCallback((shoot: CalendarShoot) => {
     const d = parseISO(shoot.proposed_at);
@@ -527,11 +673,26 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
               </button>
             ))}
           </div>
-          <p className="text-xs leading-relaxed text-muted sm:max-w-sm sm:text-right">
-            <span className="hidden md:inline">Drag shoots to another day to reschedule. </span>
-            Tap any event to edit time or open the project.
-          </p>
+          <div className="flex flex-col gap-2 sm:items-end">
+            {canLoadExternal ? (
+              <label className="flex items-center gap-2 text-sm text-primary">
+                <input type="checkbox" checked={hideGoogle} onChange={(e) => setHideGoogle(e.target.checked)} />
+                Hide Google events
+              </label>
+            ) : null}
+            <p className="text-xs leading-relaxed text-muted sm:max-w-sm sm:text-right">
+              <span className="hidden md:inline">Drag shoots to another day to reschedule. </span>
+              {canLoadExternal
+                ? "Tap a shoot to edit it. Dashed events are from Google Calendar and open there."
+                : "Tap any event to edit time or open the project."}
+            </p>
+          </div>
         </div>
+        {canLoadExternal && externalDegraded ? (
+          <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            Google Calendar is rate limiting or unavailable. Shoots on this page are unchanged. Refresh later for the rest of your Google events.
+          </p>
+        ) : null}
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
@@ -579,11 +740,13 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
                 {monthDays.map((day) => {
                   const key = format(day, "yyyy-MM-dd");
                   const dayShoots = shootsByDay.get(key) ?? [];
+                  const dayExternal = externalByDay.get(key) ?? [];
                   return (
                     <MonthDayCell
                       key={`m-${key}`}
                       day={day}
                       dayShoots={dayShoots}
+                      dayExternal={dayExternal}
                       isSelected={selectedDayKey === key}
                       isDraggingOver={!!draggingId}
                       variant="mobile"
@@ -591,6 +754,7 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
                       onSelectDay={() => setSelectedDayKey(key)}
                       onDrop={(e) => handleDropOnDay(e, day)}
                       onOpenShoot={openShoot}
+                      onOpenExternal={setOpenedExternal}
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
                       draggingId={draggingId}
@@ -603,7 +767,7 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
                 <h3 className="mb-3 text-sm font-semibold text-primary">
                   {format(parseISO(`${selectedDayKey}T12:00:00`), "EEEE, MMMM d")}
                 </h3>
-                {selectedDayShoots.length === 0 ? (
+                {selectedDayShoots.length === 0 && (externalByDay.get(selectedDayKey) ?? []).length === 0 ? (
                   <p className="rounded-xl border border-dashed border-border bg-white px-4 py-8 text-center text-sm text-muted">
                     No shoots scheduled this day.
                   </p>
@@ -611,6 +775,9 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
                   <div className="space-y-3">
                     {selectedDayShoots.map((shoot) => (
                       <ShootEventCard key={shoot.id} shoot={shoot} onOpen={() => openShoot(shoot)} />
+                    ))}
+                    {(externalByDay.get(selectedDayKey) ?? []).map((event) => (
+                      <GoogleEventCard key={event.id} event={event} onOpen={() => setOpenedExternal(event)} />
                     ))}
                   </div>
                 )}
@@ -625,11 +792,13 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
               {monthDays.map((day) => {
                 const key = format(day, "yyyy-MM-dd");
                 const dayShoots = shootsByDay.get(key) ?? [];
+                const dayExternal = externalByDay.get(key) ?? [];
                 return (
                   <MonthDayCell
                     key={`d-${key}`}
                     day={day}
                     dayShoots={dayShoots}
+                    dayExternal={dayExternal}
                     isSelected={false}
                     isDraggingOver={!!draggingId}
                     variant="desktop"
@@ -637,6 +806,7 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
                     onSelectDay={() => setSelectedDayKey(key)}
                     onDrop={(e) => handleDropOnDay(e, day)}
                     onOpenShoot={openShoot}
+                    onOpenExternal={setOpenedExternal}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                     draggingId={draggingId}
@@ -654,6 +824,7 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
               {weekDays.map((day) => {
                 const key = format(day, "yyyy-MM-dd");
                 const dayShoots = shootsByDay.get(key) ?? [];
+                const dayExternal = externalByDay.get(key) ?? [];
                 const today = isToday(day);
                 return (
                   <section
@@ -676,7 +847,7 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
                         <p className="text-xs text-muted">{format(day, "MMMM d")}</p>
                       </div>
                     </div>
-                    {dayShoots.length === 0 ? (
+                    {dayShoots.length === 0 && dayExternal.length === 0 ? (
                       <p className="rounded-lg border border-dashed border-border bg-white px-3 py-4 text-center text-xs text-muted">
                         No shoots
                       </p>
@@ -684,6 +855,9 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
                       <div className="space-y-3">
                         {dayShoots.map((shoot) => (
                           <ShootEventCard key={shoot.id} shoot={shoot} onOpen={() => openShoot(shoot)} />
+                        ))}
+                        {dayExternal.map((event) => (
+                          <GoogleEventCard key={event.id} event={event} onOpen={() => setOpenedExternal(event)} />
                         ))}
                       </div>
                     )}
@@ -697,6 +871,7 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
               {weekDays.map((day) => {
                 const key = format(day, "yyyy-MM-dd");
                 const dayShoots = shootsByDay.get(key) ?? [];
+                const dayExternal = externalByDay.get(key) ?? [];
                 const today = isToday(day);
 
                 return (
@@ -718,23 +893,28 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
                       </p>
                     </div>
                     <div className="space-y-2">
-                      {dayShoots.length === 0 ? (
+                      {dayShoots.length === 0 && dayExternal.length === 0 ? (
                         <div className="rounded-md border border-dashed border-border/80 bg-slate-50/50 px-1 py-6 text-center text-[10px] text-muted">
                           —
                         </div>
                       ) : (
-                        dayShoots.map((shoot) => (
-                          <ShootEventCard
-                            key={shoot.id}
-                            shoot={shoot}
-                            variant="week"
-                            draggable
-                            isDragging={draggingId === shoot.id}
-                            onOpen={() => openShoot(shoot)}
-                            onDragStart={(e) => handleDragStart(e, shoot)}
-                            onDragEnd={handleDragEnd}
-                          />
-                        ))
+                        <>
+                          {dayShoots.map((shoot) => (
+                            <ShootEventCard
+                              key={shoot.id}
+                              shoot={shoot}
+                              variant="week"
+                              draggable
+                              isDragging={draggingId === shoot.id}
+                              onOpen={() => openShoot(shoot)}
+                              onDragStart={(e) => handleDragStart(e, shoot)}
+                              onDragEnd={handleDragEnd}
+                            />
+                          ))}
+                          {dayExternal.map((event) => (
+                            <GoogleEventCard key={event.id} event={event} variant="week" onOpen={() => setOpenedExternal(event)} />
+                          ))}
+                        </>
                       )}
                     </div>
                   </div>
@@ -746,42 +926,55 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
 
         {view === "agenda" && (
           <div ref={agendaRef} className="max-h-[70vh] space-y-8 overflow-y-auto p-4 sm:p-6">
-            {agendaShoots.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted">
-                No shoots in {format(anchor, "MMMM yyyy")}.
-              </p>
-            ) : (
-              (() => {
-                const groups = new Map<string, CalendarShoot[]>();
-                agendaShoots.forEach((s) => {
-                  const key = format(parseISO(s.proposed_at), "yyyy-MM-dd");
-                  if (!groups.has(key)) groups.set(key, []);
-                  groups.get(key)!.push(s);
+            {(() => {
+              const month = format(anchor, "yyyy-MM");
+              const groups = new Map<string, { shoots: CalendarShoot[]; external: ExternalCalendarEvent[] }>();
+              const ensure = (key: string) => {
+                if (!groups.has(key)) groups.set(key, { shoots: [], external: [] });
+                return groups.get(key)!;
+              };
+              agendaShoots.forEach((shoot) => {
+                ensure(format(parseISO(shoot.proposed_at), "yyyy-MM-dd")).shoots.push(shoot);
+              });
+              shownExternal.forEach((event) => {
+                event.dayKeys.forEach((key) => {
+                  if (key.startsWith(month)) ensure(key).external.push(event);
                 });
-                const todayKey = format(new Date(), "yyyy-MM-dd");
-                const viewingCurrentMonth = isSameMonth(anchor, new Date());
-                if (viewingCurrentMonth && !groups.has(todayKey)) {
-                  groups.set(todayKey, []);
-                }
-                const entries = Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
-                return entries.map(([dateKey, items]) => (
-                  <section key={dateKey} data-agenda-today={dateKey === todayKey ? "true" : undefined}>
-                    <h3 className="mb-3 border-b border-border pb-2 text-sm font-semibold text-primary sm:text-base">
-                      {format(parseISO(`${dateKey}T12:00:00`), "EEEE, MMMM d, yyyy")}
-                    </h3>
-                    {items.length === 0 ? (
-                      <p className="text-sm text-muted">No shoots today.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {items.map((shoot) => (
-                          <ShootEventCard key={shoot.id} shoot={shoot} onOpen={() => openShoot(shoot)} />
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                ));
-              })()
-            )}
+              });
+              const todayKey = zonedDayKey(new Date().toISOString(), businessTimeZone);
+              const viewingCurrentMonth = isSameMonth(anchor, new Date());
+              const hasContent =
+                agendaShoots.length > 0 ||
+                shownExternal.some((event) => event.dayKeys.some((key) => key.startsWith(month)));
+              if (!hasContent) {
+                return (
+                  <p className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted">
+                    No shoots in {format(anchor, "MMMM yyyy")}.
+                  </p>
+                );
+              }
+              if (viewingCurrentMonth && !groups.has(todayKey)) ensure(todayKey);
+              const entries = Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+              return entries.map(([dateKey, items]) => (
+                <section key={dateKey} data-agenda-today={dateKey === todayKey ? "true" : undefined}>
+                  <h3 className="mb-3 border-b border-border pb-2 text-sm font-semibold text-primary sm:text-base">
+                    {format(parseISO(`${dateKey}T12:00:00`), "EEEE, MMMM d, yyyy")}
+                  </h3>
+                  {items.shoots.length === 0 && items.external.length === 0 ? (
+                    <p className="text-sm text-muted">No shoots today.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {items.shoots.map((shoot) => (
+                        <ShootEventCard key={shoot.id} shoot={shoot} onOpen={() => openShoot(shoot)} />
+                      ))}
+                      {items.external.map((event) => (
+                        <GoogleEventCard key={event.id} event={event} onOpen={() => setOpenedExternal(event)} />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ));
+            })()}
           </div>
         )}
       </div>
@@ -841,6 +1034,29 @@ export function ShootCalendar({ shoots: initialShoots }: ShootCalendarProps) {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal open={!!openedExternal} onClose={() => setOpenedExternal(null)} title="Google Calendar">
+        {openedExternal ? (
+          <div className="space-y-4">
+            <p className="text-base font-semibold text-primary">{openedExternal.title}</p>
+            <p className="text-sm text-indigo-800">{openedExternal.allDay ? "All day" : openedExternal.timeLabel}</p>
+            <p className="text-sm text-muted">From {openedExternal.calendarSummary}</p>
+            <p className="text-sm text-muted">This event is read-only in ShootPortal.</p>
+            {openedExternal.htmlLink ? (
+              <a
+                href={openedExternal.htmlLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-indigo-300 bg-indigo-50 px-3 text-sm font-medium text-indigo-900"
+              >
+                Open in Google Calendar <ExternalLink className="h-4 w-4" />
+              </a>
+            ) : (
+              <p className="text-sm text-muted">Google did not provide a link for this event.</p>
+            )}
+          </div>
+        ) : null}
       </Modal>
     </>
   );

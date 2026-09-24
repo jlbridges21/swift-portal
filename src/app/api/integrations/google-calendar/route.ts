@@ -5,6 +5,7 @@ import { isOwnerAdmin } from "@/lib/staff-access";
 import {
   disconnectGoogleCalendar,
   getGoogleCalendarPublicStatus,
+  updateReadCalendars,
   updateSelectedCalendar,
 } from "@/lib/google-calendar";
 
@@ -44,9 +45,16 @@ export async function PATCH(request: Request) {
   if (!tenant) return missingTenantResponse(profile.role);
   const body = await request.json().catch(() => ({}));
   const calendarId = typeof body.calendarId === "string" ? body.calendarId.trim() : "";
-  if (!calendarId) return NextResponse.json({ error: "calendarId required" }, { status: 400 });
+  const readCalendarIds = Array.isArray(body.readCalendarIds)
+    ? body.readCalendarIds.filter((id: unknown): id is string => typeof id === "string")
+    : null;
+  if (!calendarId && !readCalendarIds) {
+    return NextResponse.json({ error: "calendarId or readCalendarIds required" }, { status: 400 });
+  }
   try {
-    const saved = await updateSelectedCalendar(tenant.businessId, calendarId);
+    const saved: { calendarId?: string; calendarSummary?: string; readCalendarIds?: string[] } = {};
+    if (calendarId) Object.assign(saved, await updateSelectedCalendar(tenant.businessId, calendarId));
+    if (readCalendarIds) Object.assign(saved, await updateReadCalendars(tenant.businessId, readCalendarIds));
     return NextResponse.json(saved);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not save calendar";
