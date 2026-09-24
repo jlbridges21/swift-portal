@@ -110,6 +110,24 @@ export async function POST(request: Request) {
     thumbnailPath,
   };
 
+  if (validated.projectId) {
+    const { canAccessProject } = await import("@/lib/project-access");
+    if (!(await canAccessProject(auth.profile, validated.projectId))) {
+      return NextResponse.json(
+        { success: false, error: "Not found", step: "authorize" },
+        { status: 404 }
+      );
+    }
+  } else {
+    const { isOwnerAdmin } = await import("@/lib/staff-access");
+    if (!isOwnerAdmin(auth.profile)) {
+      return NextResponse.json(
+        { success: false, error: "Not found", step: "authorize" },
+        { status: 404 }
+      );
+    }
+  }
+
   const logContextValidated = {
     projectId: validated.projectId,
     fileName: validated.fileName,

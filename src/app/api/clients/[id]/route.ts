@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { restoreClient, softDeleteClient, TenantRecordNotFoundError } from "@/lib/soft-delete";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { canAccessClient } from "@/lib/staff-access";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -14,6 +15,9 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
+    if (!(await canAccessClient(businessId, profile, id))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     await softDeleteClient(id, profile.id, businessId);
     return NextResponse.json({ success: true });
   } catch (err) {
@@ -41,6 +45,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       const tenant = await getTenantContext();
       if (!tenant) return missingTenantResponse(profile.role);
       const businessId = tenant.businessId;
+      if (!(await canAccessClient(businessId, profile, id))) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
       await restoreClient(id, businessId);
       return NextResponse.json({ success: true, restored: true });
     }

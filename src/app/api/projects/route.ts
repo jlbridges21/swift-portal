@@ -53,6 +53,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    const { canAccessClient } = await import("@/lib/staff-access");
+    if (!(await canAccessClient(businessId, profile, body.client_id))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const supabase = await createClient();
 
     const { data: client } = await supabase
@@ -179,6 +184,11 @@ export async function PATCH(request: Request) {
 
     if (typeof updates.service_type === "string") {
       updates.service_id = await resolveServiceId(businessId, updates.service_type);
+    }
+
+    const { canAccessProject } = await import("@/lib/project-access");
+    if (!(await canAccessProject(profile, id))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     const supabase = await createClient();

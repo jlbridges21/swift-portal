@@ -15,17 +15,20 @@ export async function POST(request: Request) {
     const profile = await requireAdmin({ permission: 'money.send_payment_links' });
     const body = await request.json();
 
-    if (!body.project_id || !body.client_id || !body.amount || !body.description) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
-
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
 
-    const { canAccessProject } = await import("@/lib/project-access");
-    if (!(await canAccessProject(profile, body.project_id))) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Scope before field validation — do not leak existence via 400 vs 404.
+    if (typeof body.project_id === "string" && body.project_id) {
+      const { canAccessProject } = await import("@/lib/project-access");
+      if (!(await canAccessProject(profile, body.project_id))) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+    }
+
+    if (!body.project_id || !body.client_id || !body.amount || !body.description) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     const db = await createTenantServiceClient(businessId);

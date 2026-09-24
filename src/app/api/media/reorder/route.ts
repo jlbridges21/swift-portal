@@ -33,6 +33,11 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: true });
     }
 
+    const { canAccessProject } = await import("@/lib/project-access");
+    if (!(await canAccessProject(auth.profile, projectId))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     // Tenant-scoped lookup: Tenant B ids are not found. RPC still runs as
     // service_role (v32 short-circuits JWT business check for service_role).
     const { data: rows, error: lookupError } = await db
@@ -106,6 +111,14 @@ export async function PATCH(request: Request) {
       .select("id, project_id")
       .eq("id", item.id)
       .maybeSingle();
+
+    if (lookupError || !row?.project_id) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    const { canAccessProject } = await import("@/lib/project-access");
+    if (!(await canAccessProject(auth.profile, row.project_id))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
     if (lookupError || !row) {
       return NextResponse.json({ error: "Item not found" }, { status: 404 });

@@ -5,6 +5,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { addVideoReviewVersion, VideoReviewError } from "@/lib/video-reviews";
 import { notifyVideoReviewEvent } from "@/lib/video-review-notifications";
 import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
+import { loadReviewForAccess, VideoReviewAccessError } from "@/lib/video-review-access";
 
 export async function POST(
   request: Request,
@@ -29,6 +30,8 @@ export async function POST(
   const db = await createTenantServiceClient(tenant.businessId);
 
   try {
+    await loadReviewForAccess(db, profile, reviewId);
+
     const version = await addVideoReviewVersion(db, {
       reviewId,
       mediaAssetId,
@@ -57,6 +60,9 @@ export async function POST(
 
     return NextResponse.json(version, { status: 201 });
   } catch (err) {
+    if (err instanceof VideoReviewAccessError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     if (err instanceof VideoReviewError) {
       const status = err.code === "review_not_found" || err.code === "asset_not_found" ? 404 : 400;
       return NextResponse.json({ error: err.message, code: err.code }, { status });

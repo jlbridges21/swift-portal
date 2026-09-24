@@ -18,6 +18,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Project and YouTube URL are required" }, { status: 400 });
   }
 
+  const { canAccessProject } = await import("@/lib/project-access");
+  if (!(await canAccessProject(auth.profile, body.project_id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const embedUrl = getYouTubeEmbedUrl(body.youtube_url);
   const videoId = extractYouTubeId(body.youtube_url);
   if (!embedUrl || !videoId) {

@@ -7,6 +7,8 @@ import { validateMediaFileBeforeUpload } from "@/lib/upload/validation";
 import { MAX_VIDEO_FILE_SIZE_BYTES, shouldUseTusUpload } from "@/lib/upload/constants";
 import { logUploadStep } from "@/lib/upload/logger";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { canAccessProject } from "@/lib/project-access";
+import { isOwnerAdmin } from "@/lib/staff-access";
 
 export async function POST(request: Request) {
   const auth = await requireAdminApi({ permission: 'media.upload' });
@@ -32,11 +34,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
+    // Scope before minting any signed URL — the URL is a write capability.
+    if (projectId) {
+      if (!(await canAccessProject(auth.profile, projectId))) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+    } else if (!isOwnerAdmin(auth.profile)) {
+      // Unassigned library uploads are owner-admin only — scoped staff cannot
+      // create assets that sit outside their assignment filter.
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const db = await createTenantServiceClient(tenant.businessId);
 
-    // Signed URLs are bearer capabilities: verify the project belongs to this
-    // business before minting. Unassigned library uploads have no project —
-    // tenant context is the ownership check.
     if (projectId) {
       const { data: project } = await db
         .from("projects")
@@ -50,7 +60,6 @@ export async function POST(request: Request) {
 
     const bucket = mediaType === "document" ? "project-documents" : "project-media";
 
-    // Retry path: re-upload binary to the same storage key after a failed save/verify.
     let filePath: string;
     if (typeof resumeFilePath === "string" && resumeFilePath.trim()) {
       if (!isTenantPrefixedStoragePath(resumeFilePath, tenant.businessId)) {
@@ -86,8 +95,6 @@ export async function POST(request: Request) {
 
     const useTus = shouldUseTusUpload(fileSize);
 
-    // TUS resumable uploads must NOT call createSignedUploadUrl — it can reserve the path
-    // and break large video uploads. Only sign a PUT URL for smaller direct uploads.
     let signedUrl: string | undefined;
     let token: string | undefined;
 

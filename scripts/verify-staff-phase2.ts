@@ -380,40 +380,52 @@ async function main() {
     await probe("/api/media/library"),
     await probe("/staff"),
   ];
+
+  // Staff with every delegable permission still cannot become owner-admin:
+  // - role stays staff (requireAdmin role gate false)
+  // - Command Center shell (/admin) redirects to an area home
+  // - settings + /api/admin/staff stay denied
+  // - area pages/APIs may return 200 (scoped) — that is intentional
   for (const s of samples) {
     console.log(
       `  ${s.method} ${s.path} → ${s.status}${s.location ? ` location=${s.location}` : ""}`
     );
   }
-  // Staff must not get 200 on admin APIs/pages with admin data.
-  for (const s of samples) {
-    if (s.path === "/staff") {
-      assert(s.status === 200 || s.status === 307 || s.status === 302, "/staff should be reachable");
-      continue;
-    }
-    if (s.path.startsWith("/api/")) {
-      assert(
-        s.status === 401 ||
-          s.status === 403 ||
-          s.status === 405 ||
-          s.status === 302 ||
-          s.status === 307,
-        `${s.path} must deny staff (got ${s.status})`
-      );
-    } else {
-      // Pages: redirect away from admin (to /staff or login), never 200 admin shell
-      assert(
-        s.status === 307 || s.status === 302 || s.status === 303,
-        `${s.path} must redirect staff away (got ${s.status})`
-      );
-      if (s.location) {
-        assert(
-          !s.location.includes("/admin") || s.location.includes("/staff"),
-          `${s.path} must not stay on admin (${s.location})`
-        );
-      }
-    }
-  }
+  const byPath = Object.fromEntries(samples.map((s) => [s.path, s]));
+  assert(
+    byPath["/admin"].status === 307 || byPath["/admin"].status === 302,
+    "/admin Command Center must redirect staff"
+  );
+  assert(
+    (byPath["/admin"].location || "").includes("/admin/projects") ||
+      (byPath["/admin"].location || "").includes("/staff"),
+    "/admin must bounce to staff area home"
+  );
+  assert(
+    byPath["/admin/settings"].status === 307 ||
+      byPath["/admin/settings"].status === 302 ||
+      byPath["/admin/settings"].status === 403,
+    "settings must stay denied for staff"
+  );
+  assert(
+    !(byPath["/admin/settings"].location || "").includes("/admin/settings"),
+    "settings redirect must leave settings"
+  );
+  assert(
+    byPath["/api/admin/staff"].status === 401 ||
+      byPath["/api/admin/staff"].status === 403,
+    "staff roster API must stay owner-only"
+  );
+  assert(
+    byPath["/admin/projects"].status === 200 ||
+      byPath["/admin/projects"].status === 307,
+    "projects area reachable when permissions enabled"
+  );
+  assert(
+    byPath["/admin/clients"].status === 200 ||
+      byPath["/admin/clients"].status === 307,
+    "clients area reachable when permissions enabled"
+  );
 
   // --- delete / seats ---
   const disabled = await disableStaffMember({

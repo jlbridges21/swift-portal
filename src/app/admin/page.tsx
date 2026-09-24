@@ -16,7 +16,9 @@ import { fetchAdminDashboardData } from "@/lib/admin-dashboard";
 import { loadSetupChecklistSnapshot } from "@/lib/setup-checklist";
 
 export default async function AdminDashboard() {
-  const { profile, tenant } = await requireAdminPage();
+  // Double-gate: middleware also redirects staff off /admin, but page must refuse
+  // independently so a middleware miss never loads business-wide command-center data.
+  const { profile, tenant } = await requireAdminPage({ adminOnly: true });
 
   const supabase = await createClient();
   const bid = tenant.businessId;

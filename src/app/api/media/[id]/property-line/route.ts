@@ -50,6 +50,11 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const { canAccessMediaAsset } = await import("@/lib/staff-access");
+  if (!(await canAccessMediaAsset(tenant.businessId, auth.profile, asset.project_id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const tags = await getMediaTags(tenant.businessId, asset.id);
   const annotation = parsePropertyLineAnnotation(asset.property_line_data);
 
@@ -137,11 +142,24 @@ export async function PUT(
     return NextResponse.json({ error: "At least three points are required." }, { status: 400 });
   }
 
+  const db = await createTenantServiceClient(tenant.businessId);
+  const { data: scopedBase } = await db
+    .from("media_assets")
+    .select("id, project_id")
+    .eq("id", baseMediaId)
+    .maybeSingle();
+  if (!scopedBase) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const { canAccessMediaAsset } = await import("@/lib/staff-access");
+  if (!(await canAccessMediaAsset(tenant.businessId, auth.profile, scopedBase.project_id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   if (!baseMediaId) {
     return NextResponse.json({ error: "Base media id is required." }, { status: 400 });
   }
 
-  const db = await createTenantServiceClient(tenant.businessId);
   const projectId = projectIdRaw && String(projectIdRaw) !== "" ? String(projectIdRaw) : null;
   const relations = await syncProjectRelations(db, projectId);
 

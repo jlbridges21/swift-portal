@@ -34,6 +34,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "photo_ids must be a non-empty string array" }, { status: 400 });
   }
 
+  const { canAccessProject } = await import("@/lib/project-access");
+  if (!(await canAccessProject(auth.profile, projectId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const db = await createTenantServiceClient(tenant.businessId);
 
   if (folderId) {

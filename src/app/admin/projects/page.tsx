@@ -11,7 +11,7 @@ import {
   type PipelineStageParam,
 } from "@/lib/admin-project-pipeline";
 import { listAssignableStaff, listProjectStaffUserIdsByBusiness } from "@/lib/staff";
-import { staffCan } from "@/lib/staff-access";
+import { isOwnerAdmin, staffCan, visibleProjectIdsFor } from "@/lib/staff-access";
 
 interface PageProps {
   searchParams: Promise<{ view?: string; stage?: string; status?: string }>;
@@ -36,7 +36,11 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
       : parsePipelineStageParam(stageParam) ??
         (legacyStatus ? LEGACY_STATUS_TO_STAGE[legacyStatus] ?? null : null);
 
-  const [{ projects, activeCount, hiddenCount, stageCounts }, staff, staffMap] =
+  const visibleProjectIds = isOwnerAdmin(profile)
+    ? ("all" as const)
+    : await visibleProjectIdsFor(tenant.businessId, profile);
+
+  const [{ projects, activeCount, hiddenCount, stageCounts }, staffAll, staffMap] =
     await Promise.all([
       loadPipelinePageProjects({
         showDeleted,
@@ -47,10 +51,20 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
       listProjectStaffUserIdsByBusiness(tenant.businessId),
     ]);
 
+  // Staff must not receive the full business assignment graph in SSR HTML —
+  // that leaks every project UUID and who is on it. Restrict to visible projects.
   const projectStaffIds: Record<string, string[]> = {};
+  const visibleStaffIds = new Set<string>();
   for (const [projectId, userIds] of staffMap.entries()) {
+    if (visibleProjectIds !== "all" && !visibleProjectIds.includes(projectId)) continue;
     projectStaffIds[projectId] = userIds;
+    for (const uid of userIds) visibleStaffIds.add(uid);
   }
+  // Same for the filter dropdown: staff must not see teammates on unseen projects.
+  const staff =
+    visibleProjectIds === "all"
+      ? staffAll
+      : staffAll.filter((s) => visibleStaffIds.has(s.id) || s.id === profile.id);
 
   const stageConfig = stage ? PIPELINE_STAGE_CONFIG[stage] : null;
   const filteredCount = stage ? stageCounts[stage] : null;

@@ -15,13 +15,23 @@ export async function POST(request: Request) {
   const tenant = await getTenantContext();
   if (!tenant) return missingTenantResponse(auth.profile.role);
 
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json({ error: "Expected multipart form data." }, { status: 400 });
+  }
   const projectId = formData.get("projectId") as string;
   const mediaType = formData.get("mediaType") as string;
   const files = formData.getAll("files") as File[];
 
   if (!projectId || !files.length) {
     return NextResponse.json({ error: "Missing project or files" }, { status: 400 });
+  }
+
+  const { canAccessProject } = await import("@/lib/project-access");
+  if (!(await canAccessProject(auth.profile, projectId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const db = await createTenantServiceClient(tenant.businessId);
