@@ -438,6 +438,92 @@ export function deriveBrandTheme(primaryRaw: string, accentRaw: string): BrandTh
   return sanitizeTheme(vars);
 }
 
+/**
+ * Event-chip text. Same WCAG 2.x formula as the hero overlay check, and the
+ * same 4.5:1 bar (`HERO_OVERLAY_CONTRAST_MIN` / `TEXT_CONTRAST`).
+ *
+ * Relative luminance:
+ *   s = channel/255
+ *   linear = s <= 0.04045 ? s/12.92 : ((s+0.055)/1.055)^2.4
+ *   L = 0.2126*R + 0.7152*G + 0.0722*B
+ * Contrast ratio = (Llighter + 0.05) / (Ldarker + 0.05)
+ *
+ * Candidates are #FFFFFF and #0F172A (the same ink the header nav uses).
+ * The higher ratio wins. A brightness cutoff is not used.
+ *
+ * Pure black vs white bottoms out near 4.58:1, but #0F172A is not pure black,
+ * so a band of mid-tones loses to both. When the winner is under 4.5, the fill
+ * is walked 12% at a time toward black (if the winner was white) or toward
+ * white (if the winner was ink) until the winner reaches 4.5, capped at 24
+ * steps. The picker says when that shift happens. Text, time, badges, and the
+ * Pending pill all use this paint.
+ */
+export const EVENT_TEXT_CONTRAST_MIN = TEXT_CONTRAST;
+export const SHOOTPORTAL_EVENT_COLOR = "#2563EB";
+
+export type EventChipPaint = {
+  /** Fill to paint. Differs from `requested` only when neither candidate reached 4.5:1. */
+  background: string;
+  foreground: string;
+  ratio: number;
+  adjusted: boolean;
+  requested: string;
+};
+
+function rgbToHex(rgb: Rgb): string {
+  return `#${rgb.map((n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
+}
+
+export function eventChipPaint(requested: string, fallback = SHOOTPORTAL_EVENT_COLOR): EventChipPaint {
+  const safe = isSafeCssColor(requested) ? requested.trim() : fallback;
+  const parsed = parseRgb(safe) ?? parseRgb(fallback) ?? [37, 99, 235];
+  const whiteRatio = contrastRatio(parsed, WHITE);
+  const inkRatio = contrastRatio(parsed, INK);
+  const useWhite = whiteRatio >= inkRatio;
+  const foreground = useWhite ? WHITE : INK;
+  const toward = useWhite ? INK : WHITE;
+  let fill = parsed;
+  let ratio = useWhite ? whiteRatio : inkRatio;
+  let adjusted = false;
+  if (ratio + 1e-6 < EVENT_TEXT_CONTRAST_MIN) {
+    adjusted = true;
+    for (let i = 0; i < 24; i++) {
+      fill = mix(fill, toward, 0.12);
+      ratio = contrastRatio(fill, foreground);
+      if (ratio + 1e-6 >= EVENT_TEXT_CONTRAST_MIN) break;
+    }
+  }
+  return {
+    background: rgbToHex(fill),
+    foreground: useWhite ? "#FFFFFF" : "#0F172A",
+    ratio,
+    adjusted,
+    requested: rgbToHex(parsed),
+  };
+}
+
+/** Pending fill is the chosen color mixed 62% toward white, then run through the same contrast paint. */
+export function pendingEventChipPaint(requested: string, fallback = SHOOTPORTAL_EVENT_COLOR): EventChipPaint {
+  const safe = isSafeCssColor(requested) ? requested.trim() : fallback;
+  const parsed = parseRgb(safe) ?? parseRgb(fallback) ?? [37, 99, 235];
+  return eventChipPaint(rgbToHex(mix(parsed, WHITE, 0.62)), fallback);
+}
+
+/** Dashed pending border. Pushed until it clears 3:1 against the pending fill. */
+export function pendingEventBorder(requested: string, pendingFill: string): string {
+  const safe = isSafeCssColor(requested) ? requested.trim() : SHOOTPORTAL_EVENT_COLOR;
+  const color = parseRgb(safe) ?? [37, 99, 235];
+  const against = parseRgb(pendingFill) ?? WHITE;
+  if (contrastRatio(color, against) >= UI_CONTRAST) return rgbToHex(color);
+  const toward = relativeLuminance(against) > 0.5 ? INK : WHITE;
+  let current = color;
+  for (let i = 0; i < 20; i++) {
+    if (contrastRatio(current, against) >= UI_CONTRAST) break;
+    current = mix(current, toward, 0.18);
+  }
+  return rgbToHex(current);
+}
+
 export function brandThemeCss(primary: string, accent: string): string {
   const t = deriveBrandTheme(primary, accent);
   return `:root {

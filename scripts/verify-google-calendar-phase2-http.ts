@@ -125,6 +125,9 @@ async function main() {
       "calendarSummary",
       "bg-violet",
       "Personal Calendar",
+      "Shoots color",
+      "data-color-trigger",
+      "Reset to default",
     ];
     for (const marker of markers) {
       assert(!html.includes(marker), `staff HTML contains ${marker}`);

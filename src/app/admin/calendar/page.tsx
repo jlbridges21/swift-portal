@@ -8,11 +8,13 @@ import { ShootCalendar, type CalendarShoot } from "@/components/admin/shoot-cale
 import { isOwnerAdmin, visibleProjectIdsFor } from "@/lib/staff-access";
 import { getAppSettings } from "@/lib/app-settings";
 import {
+  getViewerCalendarColors,
   listCalendarsForViewer,
   loadExternalEventsForOwner,
   resolveBusinessTimeZone,
   retryAttentionSyncs,
   type AccountCalendar,
+  type ViewerCalendarColorPrefs,
 } from "@/lib/google-calendar";
 import { externalEventsVisibleTo, type ExternalCalendarEvent } from "@/lib/google-calendar-pull";
 import Link from "next/link";
@@ -73,6 +75,14 @@ export default async function AdminCalendarPage() {
   let externalDegraded = false;
   let googleCalendars: AccountCalendar[] = [];
   let hiddenCalendarIds: string[] = [];
+  let calendarColors: ViewerCalendarColorPrefs = {};
+  if (owner) {
+    try {
+      calendarColors = await getViewerCalendarColors(tenant.businessId, profile.id);
+    } catch {
+      calendarColors = {};
+    }
+  }
   if (owner && gcalStatus === "active") {
     try {
       const listed = await listCalendarsForViewer(tenant.businessId, profile.id);
@@ -164,6 +174,8 @@ export default async function AdminCalendarPage() {
           canLoadExternal={owner && gcalStatus === "active"}
           googleCalendars={owner ? googleCalendars : []}
           hiddenCalendarIds={owner ? hiddenCalendarIds : []}
+          canChooseColors={owner}
+          calendarColors={owner ? calendarColors : {}}
           businessTimeZone={businessTimeZone}
           externalWindow={
             owner && gcalStatus === "active"

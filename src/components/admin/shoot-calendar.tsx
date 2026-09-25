@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -44,7 +44,16 @@ import {
 } from "lucide-react";
 import { agendaShootsForMonth } from "@/lib/calendar-agenda";
 import type { ExternalCalendarEvent } from "@/lib/google-calendar-pull";
-import type { AccountCalendar } from "@/lib/google-calendar";
+import type { AccountCalendar, ViewerCalendarColorPrefs } from "@/lib/google-calendar";
+import { PartnerBrandColorField } from "@/components/partner/partner-brand-color-field";
+import {
+  EVENT_TEXT_CONTRAST_MIN,
+  SHOOTPORTAL_EVENT_COLOR,
+  eventChipPaint,
+  isSafeCssColor,
+  pendingEventBorder,
+  pendingEventChipPaint,
+} from "@/lib/brand-color";
 import { zonedDayKey } from "@/lib/google-calendar-pull";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -72,11 +81,35 @@ interface ShootCalendarProps {
   externalEvents?: ExternalCalendarEvent[];
   externalDegraded?: boolean;
   canLoadExternal?: boolean;
+  canChooseColors?: boolean;
   googleCalendars?: AccountCalendar[];
   hiddenCalendarIds?: string[];
+  calendarColors?: ViewerCalendarColorPrefs;
   businessTimeZone?: string;
   externalWindow?: { from: string; to: string } | null;
 }
+
+const CalendarPaintContext = createContext({
+  shootColor: SHOOTPORTAL_EVENT_COLOR,
+  colorFor(calendarId: string, fallback?: string | null) {
+    return fallback || "#7C3AED";
+  },
+});
+
+const CALENDAR_COLOR_PRESETS = [
+  "#0F172A",
+  "#2563EB",
+  "#0891B2",
+  "#0F766E",
+  "#16A34A",
+  "#CA8A04",
+  "#EA580C",
+  "#DC2626",
+  "#7C3AED",
+  "#DB2777",
+  "#64748B",
+  "#F8FAFC",
+] as const;
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const DESKTOP_MONTH_VISIBLE = 2;
@@ -101,13 +134,23 @@ function ShootEventCard({
   const time = format(parseISO(shoot.proposed_at), "h:mm a");
   const pending = shoot.proposal_status === "pending";
   const title = `${shoot.client_name} - ${shoot.project_name}`;
-  const cardClass = pending
-    ? "border border-dashed border-blue-500 bg-blue-50 text-blue-950 hover:bg-blue-100 dark:border-blue-400 dark:bg-blue-950/40 dark:text-blue-50"
-    : "border border-blue-600/20 bg-blue-600 text-white hover:bg-blue-700";
+  const { shootColor } = useContext(CalendarPaintContext);
+  const solid = eventChipPaint(shootColor);
+  const pendingPaint = pendingEventChipPaint(shootColor);
+  const paint = pending ? pendingPaint : solid;
+  const border = pending ? pendingEventBorder(shootColor, pendingPaint.background) : paint.background;
+  const chipStyle = {
+    backgroundColor: paint.background,
+    color: paint.foreground,
+    borderColor: border,
+  };
 
   if (variant === "pill") {
     return (
-      <span className={cn("block truncate rounded px-1.5 py-0.5 text-center text-[10px] font-medium", cardClass)}>
+      <span
+        className={cn("block truncate rounded border px-1.5 py-0.5 text-center text-[10px] font-medium", pending && "border-dashed")}
+        style={chipStyle}
+      >
         {time}
       </span>
     );
@@ -125,19 +168,27 @@ function ShootEventCard({
           onOpen();
         }}
         className={cn(
-          "flex w-full min-w-0 flex-col rounded-md px-1.5 py-1 text-left touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-700",
-          cardClass,
+          "flex w-full min-w-0 flex-col rounded-md border px-1.5 py-1 text-left touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1",
+          pending && "border-dashed",
           isDragging && "opacity-40"
         )}
+        style={{ ...chipStyle, outlineColor: paint.foreground }}
       >
         <span className="truncate text-[11px] font-semibold leading-tight">{title}</span>
-        <span className={cn("mt-0.5 flex items-center gap-1 truncate text-[10px]", pending ? "text-blue-800 dark:text-blue-100" : "text-blue-50")}>
+        <span className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-[10px]">
           <span className="tabular-nums">{time}</span>
+          <span aria-hidden="true">·</span>
+          <span className="shrink-0 font-medium">Shoot</span>
           {pending ? (
-            <span className="rounded bg-white/80 px-1 text-[9px] font-medium text-blue-800">Pending</span>
+            <span
+              className="shrink-0 rounded border px-1 text-[9px] font-medium"
+              style={{ backgroundColor: solid.background, color: solid.foreground, borderColor: border }}
+            >
+              Pending
+            </span>
           ) : null}
           {shoot.google_sync_status === "error" ? (
-            <span className="text-[9px] font-medium text-amber-800" title={shoot.google_sync_error || "Google Calendar needs attention"}>
+            <span className="text-[9px] font-medium" title={shoot.google_sync_error || "Google Calendar needs attention"}>
               Sync
             </span>
           ) : null}
@@ -202,17 +253,18 @@ function GoogleEventCard({
   onOpen: () => void;
 }) {
   const when = event.allDay ? "All day" : event.timeLabel;
+  const { colorFor } = useContext(CalendarPaintContext);
+  const requested = colorFor(event.calendarId, event.calendarColor);
+  const paint = eventChipPaint(requested, "#7C3AED");
   const body = (
     <>
-      <span className="truncate text-[11px] font-semibold leading-tight text-violet-950 dark:text-violet-50">
-        {event.title}
-      </span>
-      <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-violet-800 dark:text-violet-200">
+      <span className="truncate text-[11px] font-semibold leading-tight">{event.title}</span>
+      <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px]">
         <span className="truncate tabular-nums">{when}</span>
         <span aria-hidden="true">·</span>
         <span
           className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-          style={{ backgroundColor: event.calendarColor || "#7c3aed" }}
+          style={{ backgroundColor: requested, boxShadow: `0 0 0 1px ${paint.foreground}` }}
         />
         <span className="shrink-0 font-medium">Google</span>
       </span>
@@ -227,9 +279,15 @@ function GoogleEventCard({
         onOpen();
       }}
       className={cn(
-        "flex w-full min-w-0 flex-col rounded-md border border-violet-300 bg-violet-100 px-1.5 py-1 text-left touch-manipulation hover:bg-violet-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-violet-700 dark:border-violet-700 dark:bg-violet-950/50",
+        "flex w-full min-w-0 flex-col rounded-md border px-1.5 py-1 text-left touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1",
         variant === "full" && "px-3 py-2"
       )}
+      style={{
+        backgroundColor: paint.background,
+        color: paint.foreground,
+        borderColor: paint.background,
+        outlineColor: paint.foreground,
+      }}
     >
       {body}
     </button>
@@ -375,13 +433,121 @@ function MonthDayCell({
   );
 }
 
+function CalendarColorMenu({
+  open,
+  top,
+  left,
+  label,
+  value,
+  fallback,
+  onChange,
+  onReset,
+  onClose,
+}: {
+  open: boolean;
+  top: number;
+  left: number;
+  label: string;
+  value: string;
+  fallback: string;
+  onChange: (color: string) => void;
+  onReset: () => void;
+  onClose: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  useEffect(() => {
+    if (!open) return;
+    panelRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    function onPointer(event: MouseEvent) {
+      const target = event.target as Node | null;
+      if (panelRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest("[data-color-trigger]")) return;
+      onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+    };
+  }, [open, onClose]);
+  if (!open) return null;
+  const shown = (isSafeCssColor(draft) ? draft.trim() : "") || fallback;
+  const paint = eventChipPaint(shown, fallback);
+  return (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label={`${label} color`}
+      data-color-menu
+      className="fixed z-50 w-60 rounded-lg border border-border bg-white p-2 shadow-lg"
+      style={{ top, left }}
+    >
+      <div className="grid grid-cols-6 gap-1">
+        {CALENDAR_COLOR_PRESETS.map((color) => {
+          const selected = shown.toUpperCase() === color;
+          return (
+            <button
+              key={color}
+              type="button"
+              aria-label={color}
+              aria-pressed={selected}
+              className="h-5 w-5 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+              style={{
+                backgroundColor: color,
+                boxShadow: selected ? "0 0 0 2px white, 0 0 0 3px #0F172A" : "inset 0 0 0 1px rgba(15,23,42,0.15)",
+              }}
+              onClick={() => {
+                setDraft(color);
+                onChange(color);
+              }}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-2">
+        <PartnerBrandColorField
+          id={`calendar-color-${label.replace(/\s+/g, "-").toLowerCase()}`}
+          label="Custom"
+          value={draft}
+          fallback={fallback}
+          help="Hex, or rgb() with 0–255 channels."
+          onChange={(next) => {
+            setDraft(next);
+            if (isSafeCssColor(next)) onChange(next.trim());
+          }}
+          onReset={() => {
+            setDraft("");
+            onReset();
+          }}
+        />
+      </div>
+      {paint.adjusted ? (
+        <p className="mt-1 text-[11px] leading-snug text-amber-900">
+          This color cannot reach {EVENT_TEXT_CONTRAST_MIN}:1 against light or dark text. Event fills shift slightly so the text stays readable.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function ShootCalendar({
   shoots: initialShoots,
   externalEvents: initialExternal = [],
   externalDegraded: initialDegraded = false,
   canLoadExternal = false,
+  canChooseColors = false,
   googleCalendars = [],
   hiddenCalendarIds: initialHidden = [],
+  calendarColors: initialColors = {},
   businessTimeZone = "America/New_York",
   externalWindow: initialWindow = null,
 }: ShootCalendarProps) {
@@ -393,6 +559,8 @@ export function ShootCalendar({
   const [externalDegraded, setExternalDegraded] = useState(initialDegraded);
   const [externalWindow, setExternalWindow] = useState(initialWindow);
   const [hiddenCalendarIds, setHiddenCalendarIds] = useState(initialHidden);
+  const [calendarColors, setCalendarColors] = useState<ViewerCalendarColorPrefs>(initialColors);
+  const [colorMenu, setColorMenu] = useState<{ key: string; top: number; left: number; label: string; fallback: string } | null>(null);
   const [showShoots, setShowShoots] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [googleOpen, setGoogleOpen] = useState(true);
@@ -634,6 +802,51 @@ export function ShootCalendar({
     else setAnchor(addDays(anchor, 1));
   }
 
+  const shootColor = canChooseColors && calendarColors.shoots ? calendarColors.shoots : SHOOTPORTAL_EVENT_COLOR;
+  const colorFor = useCallback(
+    (calendarId: string, fallback?: string | null) => {
+      const override = canChooseColors ? calendarColors.calendars?.[calendarId] : undefined;
+      return override || fallback || "#7C3AED";
+    },
+    [calendarColors.calendars, canChooseColors]
+  );
+
+  async function persistColor(key: string, value: string | null) {
+    setCalendarColors((current) => {
+      const next: ViewerCalendarColorPrefs = {
+        ...current,
+        calendars: { ...(current.calendars || {}) },
+      };
+      if (key === "shoots") {
+        if (value === null) delete next.shoots;
+        else next.shoots = value;
+      } else if (next.calendars) {
+        if (value === null) delete next.calendars[key];
+        else next.calendars[key] = value;
+      }
+      return next;
+    });
+    if (!canChooseColors) return;
+    const res = await fetch("/api/integrations/google-calendar/calendars", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ color: { key, value } }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => ({}))) as { error?: string };
+      toast.error(data.error || "Could not save calendar color");
+    }
+  }
+
+  function openColorMenu(event: React.MouseEvent<HTMLButtonElement>, key: string, label: string, fallback: string) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = 240;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+    const top = rect.bottom + 6;
+    setColorMenu({ key, label, fallback, top, left });
+  }
+
   async function persistHidden(next: string[]) {
     setHiddenCalendarIds(next);
     if (!canLoadExternal) return;
@@ -664,7 +877,15 @@ export function ShootCalendar({
   const hiddenSet = new Set(hiddenCalendarIds);
   const miniDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
+  const menuValue =
+    colorMenu?.key === "shoots"
+      ? calendarColors.shoots || ""
+      : colorMenu
+        ? calendarColors.calendars?.[colorMenu.key] || ""
+        : "";
+
   return (
+    <CalendarPaintContext.Provider value={{ shootColor, colorFor }}>
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
       {sidebarOpen ? (
         <aside className="min-w-0 shrink-0 border-b border-border bg-card lg:w-60 lg:overflow-y-auto lg:border-b-0 lg:border-r">
@@ -707,18 +928,34 @@ export function ShootCalendar({
 
             <div>
               <p className="mb-1 text-xs font-semibold text-primary">ShootPortal</p>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={showShoots}
-                  onChange={(e) => {
-                    setShowShoots(e.target.checked);
-                    window.localStorage.setItem("sp-calendar-show-shoots", e.target.checked ? "1" : "0");
-                  }}
-                />
-                <span className="h-2.5 w-2.5 rounded-sm bg-blue-600" aria-hidden="true" />
-                <span>Shoots</span>
-              </label>
+              <div className="flex h-8 min-w-0 items-center gap-2 text-sm">
+                <label className="flex min-w-0 flex-1 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={showShoots}
+                    onChange={(e) => {
+                      setShowShoots(e.target.checked);
+                      window.localStorage.setItem("sp-calendar-show-shoots", e.target.checked ? "1" : "0");
+                    }}
+                  />
+                  {canChooseColors ? null : (
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-blue-600" aria-hidden="true" />
+                  )}
+                  <span className="truncate">Shoots</span>
+                </label>
+                {canChooseColors ? (
+                  <button
+                    type="button"
+                    data-color-trigger
+                    className="h-3.5 w-3.5 shrink-0 rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+                    style={{ backgroundColor: shootColor }}
+                    aria-label="Shoots color"
+                    aria-haspopup="dialog"
+                    aria-expanded={colorMenu?.key === "shoots"}
+                    onClick={(event) => openColorMenu(event, "shoots", "Shoots", SHOOTPORTAL_EVENT_COLOR)}
+                  />
+                ) : null}
+              </div>
             </div>
 
             {canLoadExternal ? (
@@ -749,25 +986,39 @@ export function ShootCalendar({
                     {googleCalendars.map((calendar) => {
                       const checked = !hiddenSet.has(calendar.id);
                       return (
-                        <label key={calendar.id} className="flex min-w-0 items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              const next = checked
-                                ? [...hiddenCalendarIds, calendar.id]
-                                : hiddenCalendarIds.filter((id) => id !== calendar.id);
-                              void persistHidden(next);
-                            }}
+                        <div key={calendar.id} className="flex h-8 min-w-0 items-center gap-2 text-sm">
+                          <label className="flex min-w-0 flex-1 items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                const next = checked
+                                  ? [...hiddenCalendarIds, calendar.id]
+                                  : hiddenCalendarIds.filter((id) => id !== calendar.id);
+                                void persistHidden(next);
+                              }}
+                            />
+                            <span className="min-w-0 truncate">{calendar.summary}</span>
+                            {calendar.primary ? <span className="sr-only">Primary calendar</span> : null}
+                          </label>
+                          <button
+                            type="button"
+                            data-color-trigger
+                            className="h-3.5 w-3.5 shrink-0 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+                            style={{ backgroundColor: colorFor(calendar.id, calendar.backgroundColor) }}
+                            aria-label={`${calendar.summary} color`}
+                            aria-haspopup="dialog"
+                            aria-expanded={colorMenu?.key === calendar.id}
+                            onClick={(event) =>
+                              openColorMenu(
+                                event,
+                                calendar.id,
+                                calendar.summary,
+                                calendar.backgroundColor || "#7C3AED"
+                              )
+                            }
                           />
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full"
-                            style={{ backgroundColor: calendar.backgroundColor || "#7c3aed" }}
-                            aria-hidden="true"
-                          />
-                          <span className="min-w-0 truncate">{calendar.summary}</span>
-                          {calendar.primary ? <span className="sr-only">Primary calendar</span> : null}
-                        </label>
+                        </div>
                       );
                     })}
                   </div>
@@ -1213,5 +1464,19 @@ export function ShootCalendar({
       </Modal>
       </div>
     </div>
+    {colorMenu && canChooseColors ? (
+      <CalendarColorMenu
+        open
+        top={colorMenu.top}
+        left={colorMenu.left}
+        label={colorMenu.label}
+        value={menuValue}
+        fallback={colorMenu.fallback}
+        onChange={(color) => void persistColor(colorMenu.key, color)}
+        onReset={() => void persistColor(colorMenu.key, null)}
+        onClose={() => setColorMenu(null)}
+      />
+    ) : null}
+    </CalendarPaintContext.Provider>
   );
 }

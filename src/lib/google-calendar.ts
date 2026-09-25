@@ -16,6 +16,7 @@ import { getAppSettings } from "@/lib/app-settings";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { isPlatformApexHostname } from "@/lib/portal-url";
 import { decryptCalendarSecret, encryptCalendarSecret } from "@/lib/google-calendar-crypto";
+import { isSafeCssColor } from "@/lib/brand-color";
 import {
   listGoogleEvents,
   resolveReadCalendarIds,
@@ -50,6 +51,11 @@ export type GoogleCalendarPublicStatus = {
   readCalendarIds: string[];
 };
 
+export type ViewerCalendarColorPrefs = {
+  shoots?: string;
+  calendars?: Record<string, string>;
+};
+
 type ConnectionRow = {
   business_id: string;
   connected_email: string | null;
@@ -61,6 +67,7 @@ type ConnectionRow = {
   read_calendar_ids: string[] | null;
   read_sync_tokens: Record<string, string> | null;
   viewer_hidden_calendar_ids: Record<string, string[]> | null;
+  viewer_calendar_colors: Record<string, ViewerCalendarColorPrefs> | null;
   status: "active" | "needs_reconnect";
   last_error: string | null;
 };
@@ -187,7 +194,7 @@ async function readConnection(businessId: string): Promise<ConnectionRow | null>
   const { data } = await db
     .from("google_calendar_connections")
     .select(
-      "business_id, connected_email, access_token_ciphertext, refresh_token_ciphertext, token_expires_at, calendar_id, calendar_summary, read_calendar_ids, read_sync_tokens, viewer_hidden_calendar_ids, status, last_error"
+      "business_id, connected_email, access_token_ciphertext, refresh_token_ciphertext, token_expires_at, calendar_id, calendar_summary, read_calendar_ids, read_sync_tokens, viewer_hidden_calendar_ids, viewer_calendar_colors, status, last_error"
     )
     .maybeSingle();
   return (data as ConnectionRow | null) ?? null;
@@ -422,6 +429,69 @@ export async function setViewerHiddenCalendarIds(
     .eq("business_id", businessId);
   if (error) throw new Error(redact(error.message));
   return map[userId];
+}
+
+function sanitizeColorPrefs(raw: unknown): ViewerCalendarColorPrefs {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const record = raw as { shoots?: unknown; calendars?: unknown };
+  const prefs: ViewerCalendarColorPrefs = {};
+  if (typeof record.shoots === "string" && isSafeCssColor(record.shoots)) {
+    prefs.shoots = record.shoots.trim();
+  }
+  if (record.calendars && typeof record.calendars === "object" && !Array.isArray(record.calendars)) {
+    const calendars: Record<string, string> = {};
+    for (const [id, color] of Object.entries(record.calendars)) {
+      const key = id.trim();
+      if (!key || key.length > 256 || typeof color !== "string" || !isSafeCssColor(color)) continue;
+      calendars[key] = color.trim();
+    }
+    if (Object.keys(calendars).length) prefs.calendars = calendars;
+  }
+  return prefs;
+}
+
+export async function getViewerCalendarColors(
+  businessId: string,
+  userId: string
+): Promise<ViewerCalendarColorPrefs> {
+  const row = await readConnection(businessId);
+  return sanitizeColorPrefs(row?.viewer_calendar_colors?.[userId]);
+}
+
+export async function setViewerCalendarColor(
+  businessId: string,
+  userId: string,
+  key: string,
+  color: string | null
+): Promise<ViewerCalendarColorPrefs> {
+  const row = await readConnection(businessId);
+  if (!row) throw new Error("Google Calendar is not connected.");
+  const trimmedKey = key.trim();
+  if (!trimmedKey || trimmedKey.length > 256) throw new Error("Invalid calendar color target.");
+  if (color !== null && !isSafeCssColor(color)) {
+    throw new Error("Invalid color: use a hex color (#RGB or #RRGGBB) or rgb()/rgba() with 0–255 channels.");
+  }
+  const map = { ...(row.viewer_calendar_colors || {}) };
+  const current = sanitizeColorPrefs(map[userId]);
+  if (trimmedKey === "shoots") {
+    if (color === null) delete current.shoots;
+    else current.shoots = color.trim();
+  } else {
+    const calendars = { ...(current.calendars || {}) };
+    if (color === null) delete calendars[trimmedKey];
+    else calendars[trimmedKey] = color.trim();
+    if (Object.keys(calendars).length) current.calendars = calendars;
+    else delete current.calendars;
+  }
+  if (!current.shoots && !current.calendars) delete map[userId];
+  else map[userId] = current;
+  const db = await createTenantServiceClient(businessId);
+  const { error } = await db
+    .from("google_calendar_connections")
+    .update({ viewer_calendar_colors: map })
+    .eq("business_id", businessId);
+  if (error) throw new Error(redact(error.message));
+  return current;
 }
 
 async function markNeedsReconnect(businessId: string, message: string) {
