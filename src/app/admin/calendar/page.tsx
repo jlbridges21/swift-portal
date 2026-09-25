@@ -89,7 +89,6 @@ export default async function AdminCalendarPage() {
   const windowEnd = endOfMonth(addMonths(new Date(), 1));
 
   let externalEvents: ExternalCalendarEvent[] = [];
-  let externalDegraded = false;
   let googleCalendars: AccountCalendar[] = [];
   let hiddenCalendarIds: string[] = [];
   let calendarColors: ViewerCalendarColorPrefs = {};
@@ -106,7 +105,7 @@ export default async function AdminCalendarPage() {
       googleCalendars = listed.calendars;
       hiddenCalendarIds = listed.hiddenCalendarIds;
     } catch {
-      externalDegraded = true;
+      console.error("[google-calendar] calendar list unavailable", { businessId: tenant.businessId });
     }
     const ids = googleCalendars.map((calendar) => calendar.id);
     const loaded = await loadExternalEventsForOwner(
@@ -116,7 +115,6 @@ export default async function AdminCalendarPage() {
       ids
     );
     externalEvents = externalEventsVisibleTo(profile.role, loaded.events);
-    externalDegraded = externalDegraded || loaded.degraded;
   }
 
   const shoots: CalendarShoot[] = await Promise.all(
@@ -184,7 +182,6 @@ export default async function AdminCalendarPage() {
         <ShootCalendar
           shoots={shoots}
           externalEvents={owner ? externalEvents : []}
-          externalDegraded={owner ? externalDegraded : false}
           canLoadExternal={owner && gcalStatus === "active"}
           googleCalendars={owner ? googleCalendars : []}
           hiddenCalendarIds={owner ? hiddenCalendarIds : []}

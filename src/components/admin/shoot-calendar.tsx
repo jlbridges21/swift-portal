@@ -55,7 +55,6 @@ import {
   pendingEventChipPaint,
 } from "@/lib/brand-color";
 import { zonedDayKey } from "@/lib/google-calendar-pull";
-import { GoogleRateLimitIndicator } from "@/components/admin/google-rate-limit-indicator";
 import { MobileShootCalendar, type CalendarCreateProject } from "@/components/admin/shoot-calendar-mobile";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -81,7 +80,6 @@ type EventCardVariant = "full" | "compact" | "pill" | "week";
 interface ShootCalendarProps {
   shoots: CalendarShoot[];
   externalEvents?: ExternalCalendarEvent[];
-  externalDegraded?: boolean;
   canLoadExternal?: boolean;
   canChooseColors?: boolean;
   googleCalendars?: AccountCalendar[];
@@ -551,7 +549,6 @@ function CalendarColorMenu({
 export function ShootCalendar({
   shoots: initialShoots,
   externalEvents: initialExternal = [],
-  externalDegraded: initialDegraded = false,
   canLoadExternal = false,
   canChooseColors = false,
   googleCalendars = [],
@@ -567,7 +564,6 @@ export function ShootCalendar({
   const [anchor, setAnchor] = useState(new Date());
   const [shoots, setShoots] = useState(initialShoots);
   const [externalEvents, setExternalEvents] = useState(initialExternal);
-  const [externalDegraded, setExternalDegraded] = useState(initialDegraded);
   const [externalWindow, setExternalWindow] = useState(initialWindow);
   const [hiddenCalendarIds, setHiddenCalendarIds] = useState(initialHidden);
   const [calendarColors, setCalendarColors] = useState<ViewerCalendarColorPrefs>(initialColors);
@@ -673,18 +669,14 @@ export function ShootCalendar({
       { credentials: "include" }
     )
       .then(async (res) => {
-        if (!res.ok) {
-          if (!cancelled) setExternalDegraded(true);
-          return;
-        }
-        const data = (await res.json()) as { events?: ExternalCalendarEvent[]; degraded?: boolean };
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { events?: ExternalCalendarEvent[] };
         if (cancelled) return;
         setExternalEvents(data.events ?? []);
-        setExternalDegraded(Boolean(data.degraded));
         setExternalWindow({ from, to });
       })
       .catch(() => {
-        if (!cancelled) setExternalDegraded(true);
+        // Keep the shoots and events already on the page when Google is unavailable.
       });
     return () => {
       cancelled = true;
@@ -907,7 +899,6 @@ export function ShootCalendar({
           shoots={visibleShoots}
           externalEvents={shownExternal}
           businessTimeZone={businessTimeZone}
-          showDegraded={canLoadExternal && externalDegraded}
           canCreateShoot={canCreateShoot}
           createProjects={createProjects}
           shootColor={shootColor}
@@ -1114,7 +1105,7 @@ export function ShootCalendar({
           <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={navPrev} aria-label="Previous">
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <div className="relative min-w-0 text-center">
+          <div className="min-w-0 text-center">
             <h2 className="truncate text-base font-semibold text-primary sm:text-lg">{headerLabel}</h2>
             <Button
               variant="link"
@@ -1128,11 +1119,6 @@ export function ShootCalendar({
             >
               Today
             </Button>
-            {canLoadExternal && externalDegraded ? (
-              <span className="absolute left-full top-1/2 ml-1 -translate-y-1/2">
-                <GoogleRateLimitIndicator />
-              </span>
-            ) : null}
           </div>
           <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={navNext} aria-label="Next">
             <ChevronRight className="h-5 w-5" />

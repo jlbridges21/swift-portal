@@ -5,7 +5,6 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GoogleRateLimitIndicator } from "@/components/admin/google-rate-limit-indicator";
 import { zonedDayKey, type ExternalCalendarEvent } from "@/lib/google-calendar-pull";
 import { eventChipPaint, pendingEventChipPaint } from "@/lib/brand-color";
 import type { CalendarShoot } from "@/components/admin/shoot-calendar";
@@ -94,7 +93,6 @@ export function MobileShootCalendar({
   shoots,
   externalEvents,
   businessTimeZone,
-  showDegraded,
   canCreateShoot,
   createProjects,
   shootColor,
@@ -107,7 +105,6 @@ export function MobileShootCalendar({
   shoots: CalendarShoot[];
   externalEvents: ExternalCalendarEvent[];
   businessTimeZone: string;
-  showDegraded: boolean;
   canCreateShoot: boolean;
   createProjects: CalendarCreateProject[];
   shootColor: string;
@@ -162,8 +159,12 @@ export function MobileShootCalendar({
 
   useLayoutEffect(() => {
     const align = () => {
-      if (view !== "schedule") return;
       const root = scrollerRef.current;
+      if (!root) return;
+      if (view !== "schedule") {
+        root.scrollTop = 0;
+        return;
+      }
       const key = pendingScroll.current;
       if (!root || !key) return;
       const target = root.querySelector<HTMLElement>(`[data-schedule-day="${key}"]`);
@@ -376,7 +377,7 @@ export function MobileShootCalendar({
           <Button type="button" variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => go(-1)} aria-label="Previous">
             ‹
           </Button>
-          <div className="relative min-w-0 flex-1 px-8 text-center">
+          <div className="min-w-0 flex-1 text-center">
             <h2 className="truncate text-sm font-semibold text-primary">{headerLabel}</h2>
             <div className="flex items-center justify-center gap-1">
               <button type="button" className="min-h-11 px-2 text-xs font-medium text-muted" onClick={goToday}>
@@ -392,11 +393,6 @@ export function MobileShootCalendar({
                 <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
               </button>
             </div>
-            {showDegraded ? (
-              <span className="absolute right-0 top-1/2 -translate-y-1/2">
-                <GoogleRateLimitIndicator />
-              </span>
-            ) : null}
           </div>
           <Button type="button" variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => go(1)} aria-label="Next">
             ›

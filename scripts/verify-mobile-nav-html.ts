@@ -137,7 +137,7 @@ async function main() {
     assert(minimal.html.includes('data-mobile-calendar="schedule"'), "mobile calendar defaults to schedule");
     assert(!minimal.html.includes("data-create-shoot"), "staff without scheduling.propose has no create FAB");
     assert(!minimal.html.includes("Month, week, day, and agenda"), "subtitle removed");
-    assert(!minimal.html.includes("Google Calendar is rate limiting"), "rate-limit banner absent for staff");
+    assert(!minimal.html.includes("Refresh later for the rest"), "rate-limit copy absent for staff");
 
     console.log("\n--- no area.media (bar + sheet) ---");
     console.log(sliceAround(noMedia.html, 'data-nav-items="Home|Projects|Create|Messages"', 500));

@@ -258,7 +258,10 @@ async function collectWindow(args: {
   let degraded = false;
   for (let page = 0; page < MAX_PAGES; page++) {
     const result = await fetchEventPage({ ...args, pageToken, transport: args.transport });
-    if (result.status === 429) return { events, nextSyncToken: null, degraded: true };
+    if (result.status === 429) {
+      console.error("[google-calendar] events.list rate limited", { calendarId: args.calendarId });
+      return { events, nextSyncToken: null, degraded: true };
+    }
     if (result.status === 410) {
       const err = new Error("sync_token_gone");
       (err as Error & { gone?: boolean }).gone = true;
