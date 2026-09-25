@@ -11,7 +11,7 @@ import { getCapabilities, partnerNavHref, partnerNavLabel, showPartnerNavItem } 
 import { getTenantContext } from "@/lib/tenant";
 import { metadataFromBusiness } from "@/lib/site-metadata";
 import { showFinishSetupBanner } from "@/lib/onboarding";
-import { staffVisibleNavAreas } from "@/lib/staff-access";
+import { staffCan, staffVisibleNavAreas } from "@/lib/staff-access";
 import type { Metadata } from "next";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -29,9 +29,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const isStaff = profile.role === "staff";
   // Force showPartner false when profile.role === 'staff'.
   const showPartner = isStaff ? false : showPartnerNavItem(caps);
-  const navPartnerLabel = partnerNavLabel(caps);
-  const navPartnerHref = partnerNavHref(caps);
+  const navPartnerLabel = isStaff ? "" : partnerNavLabel(caps);
+  const navPartnerHref = isStaff ? "" : partnerNavHref(caps);
   const staffAreas = isStaff ? staffVisibleNavAreas(profile) : null;
+  const navCreate = {
+    project: staffCan(profile, "projects.create"),
+    client: staffCan(profile, "clients.create"),
+    media: staffCan(profile, "media.upload"),
+  };
   const headerRole = isStaff ? ("staff" as const) : ("admin" as const);
   const finishBanner =
     !isStaff &&
@@ -52,6 +57,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         partnerNavHref={navPartnerHref}
         staffAreas={staffAreas}
         userRole={headerRole}
+        navCreate={navCreate}
       >
         {tenant.impersonating && (
           <ImpersonationBanner

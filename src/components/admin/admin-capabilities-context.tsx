@@ -3,6 +3,14 @@
 import { createContext, useContext } from "react";
 import type { StaffArea } from "@/lib/staff-access";
 
+export type AdminNavCreate = {
+  project: boolean;
+  client: boolean;
+  media: boolean;
+};
+
+const FULL_NAV_CREATE: AdminNavCreate = { project: true, client: true, media: true };
+
 type AdminCapabilitiesContextValue = {
   showPartner: boolean;
   /** True when this identity is an active (non-suspended) partner. */
@@ -14,6 +22,8 @@ type AdminCapabilitiesContextValue = {
   /** When set (staff), Header filters admin links to these areas. */
   staffAreas: StaffArea[] | null;
   userRole: "admin" | "staff" | "client" | null;
+  /** Create actions for the mobile + sheet. Layout computes these with staffCan. */
+  navCreate: AdminNavCreate;
 };
 
 const AdminCapabilitiesContext = createContext<AdminCapabilitiesContextValue>({
@@ -24,6 +34,7 @@ const AdminCapabilitiesContext = createContext<AdminCapabilitiesContextValue>({
   partnerNavHref: "/partner",
   staffAreas: null,
   userRole: null,
+  navCreate: FULL_NAV_CREATE,
 });
 
 export function AdminCapabilitiesProvider({
@@ -34,6 +45,7 @@ export function AdminCapabilitiesProvider({
   partnerNavHref,
   staffAreas = null,
   userRole = null,
+  navCreate = FULL_NAV_CREATE,
   children,
 }: {
   showPartner: boolean;
@@ -43,6 +55,7 @@ export function AdminCapabilitiesProvider({
   partnerNavHref: string;
   staffAreas?: StaffArea[] | null;
   userRole?: "admin" | "staff" | "client" | null;
+  navCreate?: AdminNavCreate;
   children: React.ReactNode;
 }) {
   return (
@@ -55,6 +68,7 @@ export function AdminCapabilitiesProvider({
         partnerNavHref,
         staffAreas,
         userRole,
+        navCreate,
       }}
     >
       {children}

@@ -55,6 +55,8 @@ import {
   pendingEventChipPaint,
 } from "@/lib/brand-color";
 import { zonedDayKey } from "@/lib/google-calendar-pull";
+import { GoogleRateLimitIndicator } from "@/components/admin/google-rate-limit-indicator";
+import { MobileShootCalendar, type CalendarCreateProject } from "@/components/admin/shoot-calendar-mobile";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -87,6 +89,8 @@ interface ShootCalendarProps {
   calendarColors?: ViewerCalendarColorPrefs;
   businessTimeZone?: string;
   externalWindow?: { from: string; to: string } | null;
+  canCreateShoot?: boolean;
+  createProjects?: CalendarCreateProject[];
 }
 
 const CalendarPaintContext = createContext({
@@ -122,6 +126,7 @@ function ShootEventCard({
   onDragStart,
   onDragEnd,
   isDragging,
+  timeZone,
 }: {
   shoot: CalendarShoot;
   variant?: EventCardVariant;
@@ -130,8 +135,12 @@ function ShootEventCard({
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: () => void;
   isDragging?: boolean;
+  /** Business timezone. Omitted on desktop so existing local formatting stays. */
+  timeZone?: string;
 }) {
-  const time = format(parseISO(shoot.proposed_at), "h:mm a");
+  const time = timeZone
+    ? new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit" }).format(parseISO(shoot.proposed_at))
+    : format(parseISO(shoot.proposed_at), "h:mm a");
   const pending = shoot.proposal_status === "pending";
   const title = `${shoot.client_name} - ${shoot.project_name}`;
   const { shootColor } = useContext(CalendarPaintContext);
@@ -550,6 +559,8 @@ export function ShootCalendar({
   calendarColors: initialColors = {},
   businessTimeZone = "America/New_York",
   externalWindow: initialWindow = null,
+  canCreateShoot = false,
+  createProjects = [],
 }: ShootCalendarProps) {
   const router = useRouter();
   const [view, setView] = useState<CalendarView>("month");
@@ -635,8 +646,6 @@ export function ShootCalendar({
   const weekStart = startOfWeek(anchor, { weekStartsOn: 0 });
   const weekEnd = endOfWeek(anchor, { weekStartsOn: 0 });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
-
-  const selectedDayShoots = shootsByDay.get(selectedDayKey) ?? [];
 
   useEffect(() => {
     if (window.localStorage.getItem("sp-calendar-show-shoots") === "0") setShowShoots(false);
@@ -802,6 +811,12 @@ export function ShootCalendar({
     else setAnchor(addDays(anchor, 1));
   }
 
+  function handleMobileCursor(ymd: string) {
+    const [y, m, d] = ymd.split("-").map(Number);
+    const next = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0);
+    setAnchor((current) => (isSameDay(current, next) ? current : next));
+  }
+
   const shootColor = canChooseColors && calendarColors.shoots ? calendarColors.shoots : SHOOTPORTAL_EVENT_COLOR;
   const colorFor = useCallback(
     (calendarId: string, fallback?: string | null) => {
@@ -887,8 +902,33 @@ export function ShootCalendar({
   return (
     <CalendarPaintContext.Provider value={{ shootColor, colorFor }}>
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
+      <div className="min-w-0 md:hidden">
+        <MobileShootCalendar
+          shoots={visibleShoots}
+          externalEvents={shownExternal}
+          businessTimeZone={businessTimeZone}
+          showDegraded={canLoadExternal && externalDegraded}
+          canCreateShoot={canCreateShoot}
+          createProjects={createProjects}
+          shootColor={shootColor}
+          colorFor={colorFor}
+          onCursorChange={handleMobileCursor}
+          onRefresh={() => router.refresh()}
+          renderShoot={(shoot) => (
+            <ShootEventCard
+              shoot={shoot}
+              variant="compact"
+              timeZone={businessTimeZone}
+              onOpen={() => openShoot(shoot)}
+            />
+          )}
+          renderExternal={(event) => (
+            <GoogleEventCard event={event} variant="compact" onOpen={() => setOpenedExternal(event)} />
+          )}
+        />
+      </div>
       {sidebarOpen ? (
-        <aside className="min-w-0 shrink-0 border-b border-border bg-card lg:w-60 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+        <aside className="hidden min-w-0 shrink-0 border-b border-border bg-card md:block lg:w-60 lg:overflow-y-auto lg:border-b-0 lg:border-r">
           <div className="space-y-4 p-3">
             <div className="min-w-0">
               <div className="mb-2 flex items-center justify-between">
@@ -1029,7 +1069,7 @@ export function ShootCalendar({
         </aside>
       ) : null}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="hidden min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex">
       <div className="mb-3 space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-2">
@@ -1067,11 +1107,6 @@ export function ShootCalendar({
             {canLoadExternal ? " Google events open in Google Calendar." : ""}
           </p>
         </div>
-        {canLoadExternal && externalDegraded ? (
-          <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-            Google Calendar is rate limiting or unavailable. Shoots on this page are unchanged. Refresh later for the rest of your Google events.
-          </p>
-        ) : null}
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-2xl border border-border bg-white shadow-sm">
@@ -1079,7 +1114,7 @@ export function ShootCalendar({
           <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={navPrev} aria-label="Previous">
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <div className="min-w-0 text-center">
+          <div className="relative min-w-0 text-center">
             <h2 className="truncate text-base font-semibold text-primary sm:text-lg">{headerLabel}</h2>
             <Button
               variant="link"
@@ -1093,6 +1128,11 @@ export function ShootCalendar({
             >
               Today
             </Button>
+            {canLoadExternal && externalDegraded ? (
+              <span className="absolute left-full top-1/2 ml-1 -translate-y-1/2">
+                <GoogleRateLimitIndicator />
+              </span>
+            ) : null}
           </div>
           <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={navNext} aria-label="Next">
             <ChevronRight className="h-5 w-5" />
@@ -1110,61 +1150,7 @@ export function ShootCalendar({
               ))}
             </div>
 
-            {/* Mobile month grid — compact cells + selected-day list below */}
-            <div className="md:hidden">
-              <div className="grid grid-cols-7">
-                {Array.from({ length: leadingBlanks }).map((_, i) => (
-                  <div key={`m-blank-${i}`} className="min-h-[52px] border-b border-r border-border bg-slate-50/40" />
-                ))}
-                {monthDays.map((day) => {
-                  const key = format(day, "yyyy-MM-dd");
-                  const dayShoots = shootsByDay.get(key) ?? [];
-                  const dayExternal = externalByDay.get(key) ?? [];
-                  return (
-                    <MonthDayCell
-                      key={`m-${key}`}
-                      day={day}
-                      dayShoots={dayShoots}
-                      dayExternal={dayExternal}
-                      isSelected={selectedDayKey === key}
-                      isDraggingOver={!!draggingId}
-                      variant="mobile"
-                      maxVisible={2}
-                      onSelectDay={() => setSelectedDayKey(key)}
-                      onDrop={(e) => handleDropOnDay(e, day)}
-                      onOpenShoot={openShoot}
-                      onOpenExternal={setOpenedExternal}
-                      onDragStart={handleDragStart}
-                      onDragEnd={handleDragEnd}
-                      draggingId={draggingId}
-                    />
-                  );
-                })}
-              </div>
-
-              <div className="border-t border-border bg-slate-50/50 p-4">
-                <h3 className="mb-3 text-sm font-semibold text-primary">
-                  {format(parseISO(`${selectedDayKey}T12:00:00`), "EEEE, MMMM d")}
-                </h3>
-                {selectedDayShoots.length === 0 && (externalByDay.get(selectedDayKey) ?? []).length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-border bg-white px-4 py-8 text-center text-sm text-muted">
-                    No shoots scheduled this day.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {selectedDayShoots.map((shoot) => (
-                      <ShootEventCard key={shoot.id} shoot={shoot} onOpen={() => openShoot(shoot)} />
-                    ))}
-                    {(externalByDay.get(selectedDayKey) ?? []).map((event) => (
-                      <GoogleEventCard key={event.id} event={event} onOpen={() => setOpenedExternal(event)} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Desktop month grid — wider cells with compact draggable cards */}
-            <div className="hidden min-w-0 md:grid md:grid-cols-7">
+            <div className="min-w-0 grid grid-cols-7">
               {Array.from({ length: leadingBlanks }).map((_, i) => (
                 <div key={`d-blank-${i}`} className="min-h-[120px] border-b border-r border-border bg-slate-50/40 lg:min-h-[132px]" />
               ))}
@@ -1198,55 +1184,7 @@ export function ShootCalendar({
 
         {view === "week" && (
           <div className="p-3 sm:p-0">
-            {/* Mobile: stacked full-width day sections */}
-            <div className="space-y-5 md:hidden">
-              {weekDays.map((day) => {
-                const key = format(day, "yyyy-MM-dd");
-                const dayShoots = shootsByDay.get(key) ?? [];
-                const dayExternal = externalByDay.get(key) ?? [];
-                const today = isToday(day);
-                return (
-                  <section
-                    key={`wm-${key}`}
-                    className="rounded-xl border border-border bg-slate-50/40 p-3"
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => handleDropOnDay(e, day)}
-                  >
-                    <div className="mb-3 flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold",
-                          today ? "bg-accent text-accent-foreground" : "bg-white text-primary ring-1 ring-border"
-                        )}
-                      >
-                        {format(day, "d")}
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold text-primary">{format(day, "EEEE")}</p>
-                        <p className="text-xs text-muted">{format(day, "MMMM d")}</p>
-                      </div>
-                    </div>
-                    {dayShoots.length === 0 && dayExternal.length === 0 ? (
-                      <p className="rounded-lg border border-dashed border-border bg-white px-3 py-4 text-center text-xs text-muted">
-                        No shoots
-                      </p>
-                    ) : (
-                      <div className="space-y-3">
-                        {dayShoots.map((shoot) => (
-                          <ShootEventCard key={shoot.id} shoot={shoot} onOpen={() => openShoot(shoot)} />
-                        ))}
-                        {dayExternal.map((event) => (
-                          <GoogleEventCard key={event.id} event={event} onOpen={() => setOpenedExternal(event)} />
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                );
-              })}
-            </div>
-
-            {/* Desktop: 7-column week grid with compact vertical cards */}
-            <div className="hidden min-w-0 md:grid md:grid-cols-7 md:divide-x md:divide-border">
+            <div className="min-w-0 grid grid-cols-7 divide-x divide-border">
               {weekDays.map((day) => {
                 const key = format(day, "yyyy-MM-dd");
                 const dayShoots = shootsByDay.get(key) ?? [];
@@ -1372,6 +1310,7 @@ export function ShootCalendar({
           </div>
         )}
       </div>
+      </div>
 
       <Modal open={!!selected} onClose={() => setSelected(null)} title="Scheduled Shoot">
         {selected && (
@@ -1462,7 +1401,6 @@ export function ShootCalendar({
           </div>
         ) : null}
       </Modal>
-      </div>
     </div>
     {colorMenu && canChooseColors ? (
       <CalendarColorMenu

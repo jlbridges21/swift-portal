@@ -5,7 +5,7 @@ import { requireAdminPage } from "@/lib/admin-access";
 import { getProjectHeroPosterUrl } from "@/lib/cover";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { ShootCalendar, type CalendarShoot } from "@/components/admin/shoot-calendar";
-import { isOwnerAdmin, visibleProjectIdsFor } from "@/lib/staff-access";
+import { isOwnerAdmin, staffCan, visibleProjectIdsFor } from "@/lib/staff-access";
 import { getAppSettings } from "@/lib/app-settings";
 import {
   getViewerCalendarColors,
@@ -65,6 +65,23 @@ export default async function AdminCalendarPage() {
   }
 
   const { data: confirmed } = await proposalsQuery;
+
+  const canCreateShoot = staffCan(profile, "scheduling.propose");
+  let createProjects: { id: string; name: string }[] = [];
+  if (canCreateShoot) {
+    let projectQuery = db.from("projects").select("id, project_name").order("project_name").limit(100);
+    if (projectIds !== "all") {
+      projectQuery = projectQuery.in(
+        "id",
+        projectIds.length === 0 ? ["00000000-0000-0000-0000-000000000000"] : projectIds
+      );
+    }
+    const { data: projectRows } = await projectQuery;
+    createProjects = (projectRows ?? []).map((row) => ({
+      id: row.id as string,
+      name: (row.project_name as string) || "Untitled project",
+    }));
+  }
 
   const settings = await getAppSettings(tenant.businessId);
   const businessTimeZone = resolveBusinessTimeZone(settings.workflow.businessDefaults.timezone).timeZone;
@@ -147,10 +164,7 @@ export default async function AdminCalendarPage() {
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole={profile.role === "staff" ? "staff" : "admin"} />
       <main className="mx-auto flex min-h-0 min-w-0 max-w-none flex-col px-3 py-4 sm:px-4 lg:h-[calc(100dvh-4rem)] lg:overflow-hidden lg:px-6">
-        <PageHeader
-          title="Shoot Calendar"
-          description="Month, week, day, and agenda — drag a shoot to reschedule, or tap it to edit"
-        >
+        <PageHeader title="Shoot Calendar" className="mb-3">
           {owner && gcalStatus !== "active" ? (
             <Link href="/admin/settings#settings-integrations">
               <Button variant="outline" size="sm">
@@ -177,6 +191,8 @@ export default async function AdminCalendarPage() {
           canChooseColors={owner}
           calendarColors={owner ? calendarColors : {}}
           businessTimeZone={businessTimeZone}
+          canCreateShoot={canCreateShoot}
+          createProjects={createProjects}
           externalWindow={
             owner && gcalStatus === "active"
               ? { from: windowStart.toISOString(), to: windowEnd.toISOString() }
