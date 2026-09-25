@@ -17,6 +17,8 @@ import {
   endOfWeek,
   addWeeks,
   subWeeks,
+  addDays,
+  subDays,
   isToday,
   compareAsc,
 } from "date-fns";
@@ -38,9 +40,11 @@ import {
   GripVertical,
   MapPin,
   Clock,
+  PanelLeft,
 } from "lucide-react";
 import { agendaShootsForMonth } from "@/lib/calendar-agenda";
 import type { ExternalCalendarEvent } from "@/lib/google-calendar-pull";
+import type { AccountCalendar } from "@/lib/google-calendar";
 import { zonedDayKey } from "@/lib/google-calendar-pull";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -49,6 +53,9 @@ export interface CalendarShoot {
   id: string;
   project_id: string;
   proposed_at: string;
+  proposal_status?: "pending" | "confirmed";
+  google_sync_status?: string | null;
+  google_sync_error?: string | null;
   project_name: string;
   client_name: string;
   property_address: string;
@@ -57,7 +64,7 @@ export interface CalendarShoot {
   cover_url: string | null;
 }
 
-type CalendarView = "month" | "week" | "agenda";
+type CalendarView = "month" | "week" | "day" | "agenda";
 type EventCardVariant = "full" | "compact" | "pill" | "week";
 
 interface ShootCalendarProps {
@@ -65,6 +72,8 @@ interface ShootCalendarProps {
   externalEvents?: ExternalCalendarEvent[];
   externalDegraded?: boolean;
   canLoadExternal?: boolean;
+  googleCalendars?: AccountCalendar[];
+  hiddenCalendarIds?: string[];
   businessTimeZone?: string;
   externalWindow?: { from: string; to: string } | null;
 }
@@ -90,16 +99,21 @@ function ShootEventCard({
   isDragging?: boolean;
 }) {
   const time = format(parseISO(shoot.proposed_at), "h:mm a");
+  const pending = shoot.proposal_status === "pending";
+  const title = `${shoot.client_name} - ${shoot.project_name}`;
+  const cardClass = pending
+    ? "border border-dashed border-blue-500 bg-blue-50 text-blue-950 hover:bg-blue-100 dark:border-blue-400 dark:bg-blue-950/40 dark:text-blue-50"
+    : "border border-blue-600/20 bg-blue-600 text-white hover:bg-blue-700";
 
   if (variant === "pill") {
     return (
-      <span className="block truncate rounded-full bg-accent/15 px-2 py-0.5 text-center text-[10px] font-semibold text-accent">
+      <span className={cn("block truncate rounded px-1.5 py-0.5 text-center text-[10px] font-medium", cardClass)}>
         {time}
       </span>
     );
   }
 
-  if (variant === "compact") {
+  if (variant === "compact" || variant === "week") {
     return (
       <button
         type="button"
@@ -111,59 +125,23 @@ function ShootEventCard({
           onOpen();
         }}
         className={cn(
-          "flex w-full min-w-0 items-center gap-1.5 rounded-lg border border-accent/15 bg-white px-2 py-1.5 text-left shadow-sm transition hover:border-accent/35 hover:shadow touch-manipulation",
+          "flex w-full min-w-0 flex-col rounded-md px-1.5 py-1 text-left touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-700",
+          cardClass,
           isDragging && "opacity-40"
         )}
       >
-        {draggable && <GripVertical className="hidden h-3 w-3 shrink-0 text-muted sm:block" />}
-        <span className="shrink-0 text-[10px] font-semibold tabular-nums text-accent">{time}</span>
-        <span className="min-w-0 truncate text-[11px] font-medium text-primary">{shoot.project_name}</span>
-      </button>
-    );
-  }
-
-  if (variant === "week") {
-    return (
-      <button
-        type="button"
-        draggable={draggable}
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
-        onClick={onOpen}
-        className={cn(
-          "group relative flex w-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-white text-left shadow-sm transition hover:border-accent/35 hover:shadow-md touch-manipulation",
-          isDragging && "opacity-40"
-        )}
-      >
-        {draggable && (
-          <GripVertical className="absolute right-1 top-1 z-10 h-3.5 w-3.5 text-muted/60 group-hover:text-muted" />
-        )}
-        <div className="relative h-14 w-full shrink-0 overflow-hidden bg-slate-100">
-          {shoot.cover_url ? (
-            <RemoteImage src={shoot.cover_url} alt="" fill className="object-cover" sizes="120px" />
-          ) : (
-            <div className="flex h-full items-center justify-center text-[10px] text-muted">—</div>
-          )}
-        </div>
-        <div className="min-w-0 overflow-hidden p-2">
-          <p className="truncate text-xs font-semibold leading-tight text-primary">{shoot.project_name}</p>
-          <p className="mt-0.5 truncate text-[11px] leading-tight text-muted">{shoot.client_name}</p>
-          <p className="truncate text-[10px] leading-tight text-muted">{shoot.service_type}</p>
-          <div className="mt-1.5 min-w-0 overflow-hidden">
-            <Badge
-              className={cn(
-                "inline-block max-w-full truncate text-[9px] font-medium leading-tight",
-                getStatusColor(shoot.status)
-              )}
-            >
-              {getStatusLabel(shoot.status)}
-            </Badge>
-          </div>
-          <p className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold tabular-nums text-accent">
-            <Clock className="h-3 w-3 shrink-0 opacity-80" />
-            <span className="truncate">{time}</span>
-          </p>
-        </div>
+        <span className="truncate text-[11px] font-semibold leading-tight">{title}</span>
+        <span className={cn("mt-0.5 flex items-center gap-1 truncate text-[10px]", pending ? "text-blue-800 dark:text-blue-100" : "text-blue-50")}>
+          <span className="tabular-nums">{time}</span>
+          {pending ? (
+            <span className="rounded bg-white/80 px-1 text-[9px] font-medium text-blue-800">Pending</span>
+          ) : null}
+          {shoot.google_sync_status === "error" ? (
+            <span className="text-[9px] font-medium text-amber-800" title={shoot.google_sync_error || "Google Calendar needs attention"}>
+              Sync
+            </span>
+          ) : null}
+        </span>
       </button>
     );
   }
@@ -190,7 +168,7 @@ function ShootEventCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-2">
           <p className="min-w-0 flex-1 truncate text-sm font-semibold text-primary sm:text-base">
-            {shoot.project_name}
+            {title}
           </p>
           <Badge className={cn("shrink-0 text-[10px] font-medium", getStatusColor(shoot.status))}>
             {getStatusLabel(shoot.status)}
@@ -224,21 +202,22 @@ function GoogleEventCard({
   onOpen: () => void;
 }) {
   const when = event.allDay ? "All day" : event.timeLabel;
-  if (variant === "pill") {
-    return (
-      <button
-        type="button"
-        data-external-event={event.id}
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpen();
-        }}
-        className="block w-full truncate rounded-full border border-dashed border-indigo-400 bg-indigo-50 px-2 py-0.5 text-center text-[10px] font-semibold text-indigo-800"
-      >
-        {when}
-      </button>
-    );
-  }
+  const body = (
+    <>
+      <span className="truncate text-[11px] font-semibold leading-tight text-violet-950 dark:text-violet-50">
+        {event.title}
+      </span>
+      <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-violet-800 dark:text-violet-200">
+        <span className="truncate tabular-nums">{when}</span>
+        <span aria-hidden="true">·</span>
+        <span
+          className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ backgroundColor: event.calendarColor || "#7c3aed" }}
+        />
+        <span className="shrink-0 font-medium">Google</span>
+      </span>
+    </>
+  );
   return (
     <button
       type="button"
@@ -248,15 +227,11 @@ function GoogleEventCard({
         onOpen();
       }}
       className={cn(
-        "flex w-full min-w-0 flex-col rounded-lg border border-dashed border-indigo-400 bg-indigo-50 px-2 py-1.5 text-left text-indigo-950",
-        variant === "full" && "px-3 py-3"
+        "flex w-full min-w-0 flex-col rounded-md border border-violet-300 bg-violet-100 px-1.5 py-1 text-left touch-manipulation hover:bg-violet-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-violet-700 dark:border-violet-700 dark:bg-violet-950/50",
+        variant === "full" && "px-3 py-2"
       )}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
-        Google · {event.calendarSummary}
-      </span>
-      <span className={cn("truncate font-medium", variant === "full" ? "text-sm" : "text-[11px]")}>{event.title}</span>
-      <span className="text-[10px] tabular-nums text-indigo-800">{when}</span>
+      {body}
     </button>
   );
 }
@@ -336,7 +311,7 @@ function MonthDayCell({
               </span>
             ) : null}
             {dayExternal.length > 0 ? (
-              <span className="rounded-full border border-dashed border-indigo-400 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-800">
+              <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-900">
                 {dayExternal.length}
               </span>
             ) : null}
@@ -379,7 +354,7 @@ function MonthDayCell({
               }}
               className="w-full rounded-md px-1 py-0.5 text-left text-[10px] font-medium text-indigo-800 hover:bg-indigo-50"
             >
-              +{externalOverflow} Google
+              +{externalOverflow} more
             </button>
           )}
           {overflow > 0 && (
@@ -405,6 +380,8 @@ export function ShootCalendar({
   externalEvents: initialExternal = [],
   externalDegraded: initialDegraded = false,
   canLoadExternal = false,
+  googleCalendars = [],
+  hiddenCalendarIds: initialHidden = [],
   businessTimeZone = "America/New_York",
   externalWindow: initialWindow = null,
 }: ShootCalendarProps) {
@@ -415,7 +392,10 @@ export function ShootCalendar({
   const [externalEvents, setExternalEvents] = useState(initialExternal);
   const [externalDegraded, setExternalDegraded] = useState(initialDegraded);
   const [externalWindow, setExternalWindow] = useState(initialWindow);
-  const [hideGoogle, setHideGoogle] = useState(false);
+  const [hiddenCalendarIds, setHiddenCalendarIds] = useState(initialHidden);
+  const [showShoots, setShowShoots] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [googleOpen, setGoogleOpen] = useState(true);
   const [openedExternal, setOpenedExternal] = useState<ExternalCalendarEvent | null>(null);
   const [selected, setSelected] = useState<CalendarShoot | null>(null);
   const [editDate, setEditDate] = useState("");
@@ -441,23 +421,31 @@ export function ShootCalendar({
     () => [...shoots].sort((a, b) => compareAsc(parseISO(a.proposed_at), parseISO(b.proposed_at))),
     [shoots]
   );
-  const agendaShoots = useMemo(() => agendaShootsForMonth(sortedShoots, anchor), [sortedShoots, anchor]);
-  const shownExternal = useMemo(
-    () => (hideGoogle || !canLoadExternal ? [] : externalEvents),
-    [hideGoogle, canLoadExternal, externalEvents]
+  const agendaShoots = useMemo(
+    () => agendaShootsForMonth(showShoots ? sortedShoots : [], anchor),
+    [showShoots, sortedShoots, anchor]
+  );
+  const shownExternal = useMemo(() => {
+    if (!canLoadExternal) return [];
+    const hidden = new Set(hiddenCalendarIds);
+    return externalEvents.filter((event) => !hidden.has(event.calendarId));
+  }, [canLoadExternal, externalEvents, hiddenCalendarIds]);
+  const visibleShoots = useMemo(
+    () => (showShoots ? sortedShoots : []),
+    [showShoots, sortedShoots]
   );
   const agendaRef = useRef<HTMLDivElement>(null);
 
   const shootsByDay = useMemo(() => {
     const map = new Map<string, CalendarShoot[]>();
-    shoots.forEach((s) => {
+    visibleShoots.forEach((s) => {
       const key = format(parseISO(s.proposed_at), "yyyy-MM-dd");
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(s);
     });
     map.forEach((list) => list.sort((a, b) => compareAsc(parseISO(a.proposed_at), parseISO(b.proposed_at))));
     return map;
-  }, [shoots]);
+  }, [visibleShoots]);
 
   const externalByDay = useMemo(() => {
     const map = new Map<string, ExternalCalendarEvent[]>();
@@ -481,6 +469,10 @@ export function ShootCalendar({
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
   const selectedDayShoots = shootsByDay.get(selectedDayKey) ?? [];
+
+  useEffect(() => {
+    if (window.localStorage.getItem("sp-calendar-show-shoots") === "0") setShowShoots(false);
+  }, []);
 
   useEffect(() => {
     const today = new Date();
@@ -631,62 +623,198 @@ export function ShootCalendar({
   }
 
   function navPrev() {
-    if (view === "month") setAnchor(subMonths(anchor, 1));
+    if (view === "month" || view === "agenda") setAnchor(subMonths(anchor, 1));
     else if (view === "week") setAnchor(subWeeks(anchor, 1));
-    else setAnchor(subMonths(anchor, 1));
+    else setAnchor(subDays(anchor, 1));
   }
 
   function navNext() {
-    if (view === "month") setAnchor(addMonths(anchor, 1));
+    if (view === "month" || view === "agenda") setAnchor(addMonths(anchor, 1));
     else if (view === "week") setAnchor(addWeeks(anchor, 1));
-    else setAnchor(addMonths(anchor, 1));
+    else setAnchor(addDays(anchor, 1));
+  }
+
+  async function persistHidden(next: string[]) {
+    setHiddenCalendarIds(next);
+    if (!canLoadExternal) return;
+    await fetch("/api/integrations/google-calendar/calendars", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hiddenCalendarIds: next }),
+    }).catch(() => {
+      toast.error("Could not save calendar visibility");
+    });
   }
 
   const headerLabel =
     view === "week"
       ? `${format(weekStart, "MMM d")} – ${format(weekEnd, "MMM d, yyyy")}`
-      : format(anchor, "MMMM yyyy");
+      : view === "day"
+        ? format(anchor, "EEEE, MMMM d, yyyy")
+        : format(anchor, "MMMM yyyy");
 
   const viewOptions = [
     { id: "month" as const, label: "Month", icon: LayoutGrid },
     { id: "week" as const, label: "Week", icon: CalendarDays },
+    { id: "day" as const, label: "Day", icon: Clock },
     { id: "agenda" as const, label: "Agenda", icon: List },
   ];
 
+  const hiddenSet = new Set(hiddenCalendarIds);
+  const miniDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+
   return (
-    <>
-      <div className="mb-6 space-y-3">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
+      {sidebarOpen ? (
+        <aside className="min-w-0 shrink-0 border-b border-border bg-card lg:w-60 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+          <div className="space-y-4 p-3">
+            <div className="min-w-0">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold text-primary">{format(anchor, "MMMM yyyy")}</p>
+              </div>
+              <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] text-muted">
+                {WEEKDAY_LABELS.map((label) => (
+                  <div key={label}>{label.slice(0, 1)}</div>
+                ))}
+                {Array.from({ length: leadingBlanks }).map((_, i) => (
+                  <div key={`mini-blank-${i}`} />
+                ))}
+                {miniDays.map((day) => {
+                  const key = format(day, "yyyy-MM-dd");
+                  const today = isToday(day);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        setAnchor(day);
+                        setSelectedDayKey(key);
+                      }}
+                      className={cn(
+                        "rounded-full py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700",
+                        today && "bg-blue-600 text-white",
+                        !today && selectedDayKey === key && "bg-blue-100 text-blue-900",
+                        !today && selectedDayKey !== key && "hover:bg-slate-100"
+                      )}
+                    >
+                      {format(day, "d")}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1 text-xs font-semibold text-primary">ShootPortal</p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={showShoots}
+                  onChange={(e) => {
+                    setShowShoots(e.target.checked);
+                    window.localStorage.setItem("sp-calendar-show-shoots", e.target.checked ? "1" : "0");
+                  }}
+                />
+                <span className="h-2.5 w-2.5 rounded-sm bg-blue-600" aria-hidden="true" />
+                <span>Shoots</span>
+              </label>
+            </div>
+
+            {canLoadExternal ? (
+              <div>
+                <button
+                  type="button"
+                  className="mb-1 flex w-full items-center justify-between text-xs font-semibold text-primary"
+                  onClick={() => setGoogleOpen((open) => !open)}
+                  aria-expanded={googleOpen}
+                >
+                  Google calendars
+                  <ChevronRight className={cn("h-3.5 w-3.5 transition", googleOpen && "rotate-90")} />
+                </button>
+                {googleOpen ? (
+                  <div className="space-y-1">
+                    <div className="flex gap-2 text-[11px]">
+                      <button type="button" className="text-blue-700 underline" onClick={() => void persistHidden([])}>
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        className="text-blue-700 underline"
+                        onClick={() => void persistHidden(googleCalendars.map((calendar) => calendar.id))}
+                      >
+                        Hide all
+                      </button>
+                    </div>
+                    {googleCalendars.map((calendar) => {
+                      const checked = !hiddenSet.has(calendar.id);
+                      return (
+                        <label key={calendar.id} className="flex min-w-0 items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const next = checked
+                                ? [...hiddenCalendarIds, calendar.id]
+                                : hiddenCalendarIds.filter((id) => id !== calendar.id);
+                              void persistHidden(next);
+                            }}
+                          />
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: calendar.backgroundColor || "#7c3aed" }}
+                            aria-hidden="true"
+                          />
+                          <span className="min-w-0 truncate">{calendar.summary}</span>
+                          {calendar.primary ? <span className="sr-only">Primary calendar</span> : null}
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </aside>
+      ) : null}
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="mb-3 space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="inline-flex w-full rounded-xl border border-border bg-white p-1 shadow-sm sm:w-auto">
+          <div className="flex min-w-0 items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11 min-w-11"
+              aria-label={sidebarOpen ? "Hide calendars" : "Show calendars"}
+              title={sidebarOpen ? "Hide calendars" : "Show calendars"}
+              onClick={() => setSidebarOpen((open) => !open)}
+            >
+              <PanelLeft className="h-4 w-4" />
+            </Button>
+            <div className="inline-flex min-w-0 flex-1 rounded-xl border border-border bg-white p-1 shadow-sm sm:w-auto">
             {viewOptions.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setView(id)}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-medium transition touch-manipulation min-h-11 sm:flex-initial sm:px-4",
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-sm font-medium transition touch-manipulation min-h-11 sm:flex-initial sm:px-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700",
                   view === id ? "bg-accent text-accent-foreground shadow-sm" : "text-muted hover:bg-slate-50 hover:text-primary"
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
-                <span>{label}</span>
+                <span className="truncate">{label}</span>
               </button>
             ))}
+            </div>
           </div>
-          <div className="flex flex-col gap-2 sm:items-end">
-            {canLoadExternal ? (
-              <label className="flex items-center gap-2 text-sm text-primary">
-                <input type="checkbox" checked={hideGoogle} onChange={(e) => setHideGoogle(e.target.checked)} />
-                Hide Google events
-              </label>
-            ) : null}
-            <p className="text-xs leading-relaxed text-muted sm:max-w-sm sm:text-right">
-              <span className="hidden md:inline">Drag shoots to another day to reschedule. </span>
-              {canLoadExternal
-                ? "Tap a shoot to edit it. Dashed events are from Google Calendar and open there."
-                : "Tap any event to edit time or open the project."}
-            </p>
-          </div>
+          <p className="text-xs leading-relaxed text-muted sm:max-w-sm sm:text-right">
+            <span className="hidden md:inline">Drag shoots to another day to reschedule. </span>
+            Tap a ShootPortal event to edit it.
+            {canLoadExternal ? " Google events open in Google Calendar." : ""}
+          </p>
         </div>
         {canLoadExternal && externalDegraded ? (
           <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -695,7 +823,7 @@ export function ShootCalendar({
         ) : null}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-2xl border border-border bg-white shadow-sm">
         <div className="flex items-center justify-between gap-2 border-b border-border bg-slate-50/80 px-3 py-3 sm:px-4">
           <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={navPrev} aria-label="Previous">
             <ChevronLeft className="h-5 w-5" />
@@ -722,7 +850,7 @@ export function ShootCalendar({
 
         {view === "month" && (
           <>
-            <div className="grid grid-cols-7 border-b border-border bg-slate-50 text-center text-[11px] font-semibold uppercase tracking-wide text-muted sm:text-xs">
+            <div className="grid min-w-0 grid-cols-7 border-b border-border bg-slate-50 text-center text-[11px] font-semibold text-muted sm:text-xs">
               {WEEKDAY_LABELS.map((d) => (
                 <div key={d} className="py-2.5">
                   <span className="hidden sm:inline">{d}</span>
@@ -785,7 +913,7 @@ export function ShootCalendar({
             </div>
 
             {/* Desktop month grid — wider cells with compact draggable cards */}
-            <div className="hidden md:grid md:grid-cols-7">
+            <div className="hidden min-w-0 md:grid md:grid-cols-7">
               {Array.from({ length: leadingBlanks }).map((_, i) => (
                 <div key={`d-blank-${i}`} className="min-h-[120px] border-b border-r border-border bg-slate-50/40 lg:min-h-[132px]" />
               ))}
@@ -867,7 +995,7 @@ export function ShootCalendar({
             </div>
 
             {/* Desktop: 7-column week grid with compact vertical cards */}
-            <div className="hidden md:grid md:grid-cols-7 md:divide-x md:divide-border">
+            <div className="hidden min-w-0 md:grid md:grid-cols-7 md:divide-x md:divide-border">
               {weekDays.map((day) => {
                 const key = format(day, "yyyy-MM-dd");
                 const dayShoots = shootsByDay.get(key) ?? [];
@@ -924,8 +1052,23 @@ export function ShootCalendar({
           </div>
         )}
 
+        {view === "day" && (
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+            {(shootsByDay.get(format(anchor, "yyyy-MM-dd")) ?? []).map((shoot) => (
+              <ShootEventCard key={shoot.id} shoot={shoot} variant="full" onOpen={() => openShoot(shoot)} />
+            ))}
+            {(externalByDay.get(format(anchor, "yyyy-MM-dd")) ?? []).map((event) => (
+              <GoogleEventCard key={event.id} event={event} variant="full" onOpen={() => setOpenedExternal(event)} />
+            ))}
+            {(shootsByDay.get(format(anchor, "yyyy-MM-dd")) ?? []).length === 0 &&
+            (externalByDay.get(format(anchor, "yyyy-MM-dd")) ?? []).length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted">Nothing scheduled.</p>
+            ) : null}
+          </div>
+        )}
+
         {view === "agenda" && (
-          <div ref={agendaRef} className="max-h-[70vh] space-y-8 overflow-y-auto p-4 sm:p-6">
+          <div ref={agendaRef} className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4 sm:p-6">
             {(() => {
               const month = format(anchor, "yyyy-MM");
               const groups = new Map<string, { shoots: CalendarShoot[]; external: ExternalCalendarEvent[] }>();
@@ -982,6 +1125,16 @@ export function ShootCalendar({
       <Modal open={!!selected} onClose={() => setSelected(null)} title="Scheduled Shoot">
         {selected && (
           <div className="space-y-5">
+            <p className="text-xs font-medium text-blue-700">ShootPortal</p>
+            {selected.proposal_status === "pending" ? (
+              <p className="text-sm text-blue-800">Pending — waiting for the client to approve this time.</p>
+            ) : null}
+            {selected.google_sync_status === "error" ? (
+              <p className="text-sm text-amber-800">
+                Google Calendar needs attention{selected.google_sync_error ? `: ${selected.google_sync_error}` : ""}. The
+                shoot is still saved in ShootPortal.
+              </p>
+            ) : null}
             <div className="flex gap-4">
               <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-black/5 sm:h-20 sm:w-20">
                 {selected.cover_url ? (
@@ -1041,7 +1194,7 @@ export function ShootCalendar({
           <div className="space-y-4">
             <p className="text-base font-semibold text-primary">{openedExternal.title}</p>
             <p className="text-sm text-indigo-800">{openedExternal.allDay ? "All day" : openedExternal.timeLabel}</p>
-            <p className="text-sm text-muted">From {openedExternal.calendarSummary}</p>
+            <p className="text-sm text-muted">Google · {openedExternal.calendarSummary}</p>
             <p className="text-sm text-muted">This event is read-only in ShootPortal.</p>
             {openedExternal.htmlLink ? (
               <a
@@ -1058,6 +1211,7 @@ export function ShootCalendar({
           </div>
         ) : null}
       </Modal>
-    </>
+      </div>
+    </div>
   );
 }

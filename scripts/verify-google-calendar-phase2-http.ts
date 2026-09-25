@@ -101,17 +101,31 @@ async function main() {
     );
     const bare = await probe("/b/swift-aerial-media/api/integrations/google-calendar/events", "GET");
     const posted = await probe("/b/swift-aerial-media/api/integrations/google-calendar/events", "POST");
+    const calendars = await probe("/b/swift-aerial-media/api/integrations/google-calendar/calendars", "GET");
     const page = await probe("/b/swift-aerial-media/admin/calendar", "GET");
 
     assert(events.status === 403, `events expected 403, got ${events.status}`);
     assert(bare.status === 403, `bare events expected 403, got ${bare.status}`);
+    assert(calendars.status === 403, `calendars expected 403, got ${calendars.status}`);
     assert(events.text.includes("External Google events are visible to the business owner only."), "events refusal");
+    assert(calendars.text.includes("Only the business owner can view Google calendars."), "calendars refusal");
     assert(!events.text.includes("Dentist"), "events body has no fixture title");
     assert(!/"events"\s*:/.test(events.text), "events body has no events array");
+    assert(!/"calendars"\s*:/.test(calendars.text), "calendar list body has no calendar array");
     assert(posted.status === 403 || posted.status === 405, `POST events must be refused, got ${posted.status}`);
 
     const html = page.text;
-    const markers = ["data-external-event", "Hide Google events", "Dentist", "htmlLink", "timeLabel", "calendarSummary"];
+    const markers = [
+      "data-external-event",
+      "Hide Google events",
+      "Google calendars",
+      "Dentist",
+      "htmlLink",
+      "timeLabel",
+      "calendarSummary",
+      "bg-violet",
+      "Personal Calendar",
+    ];
     for (const marker of markers) {
       assert(!html.includes(marker), `staff HTML contains ${marker}`);
     }

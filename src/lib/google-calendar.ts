@@ -60,6 +60,7 @@ type ConnectionRow = {
   calendar_summary: string | null;
   read_calendar_ids: string[] | null;
   read_sync_tokens: Record<string, string> | null;
+  viewer_hidden_calendar_ids: Record<string, string[]> | null;
   status: "active" | "needs_reconnect";
   last_error: string | null;
 };
@@ -186,7 +187,7 @@ async function readConnection(businessId: string): Promise<ConnectionRow | null>
   const { data } = await db
     .from("google_calendar_connections")
     .select(
-      "business_id, connected_email, access_token_ciphertext, refresh_token_ciphertext, token_expires_at, calendar_id, calendar_summary, read_calendar_ids, read_sync_tokens, status, last_error"
+      "business_id, connected_email, access_token_ciphertext, refresh_token_ciphertext, token_expires_at, calendar_id, calendar_summary, read_calendar_ids, read_sync_tokens, viewer_hidden_calendar_ids, status, last_error"
     )
     .maybeSingle();
   return (data as ConnectionRow | null) ?? null;
@@ -330,6 +331,99 @@ export async function listWritableCalendars(
     }));
 }
 
+export type AccountCalendar = {
+  id: string;
+  summary: string;
+  primary: boolean;
+  backgroundColor: string | null;
+  accessRole: string | null;
+};
+
+/** Every calendar on the connected account. calendar.calendarlist.readonly — no new scope. */
+export async function listAccountCalendars(
+  accessToken: string,
+  transport: FetchLike = fetch
+): Promise<AccountCalendar[]> {
+  const calendars: AccountCalendar[] = [];
+  let pageToken = "";
+  for (let page = 0; page < 5; page++) {
+    const url = new URL("https://www.googleapis.com/calendar/v3/users/me/calendarList");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const res = await transport(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(redact(text || `calendarList ${res.status}`));
+    }
+    const json = (await res.json()) as {
+      nextPageToken?: string;
+      items?: {
+        id?: string;
+        summary?: string;
+        primary?: boolean;
+        backgroundColor?: string;
+        accessRole?: string;
+      }[];
+    };
+    for (const item of json.items ?? []) {
+      if (!item.id) continue;
+      calendars.push({
+        id: item.id,
+        summary: item.summary || item.id,
+        primary: Boolean(item.primary),
+        backgroundColor: item.backgroundColor || null,
+        accessRole: item.accessRole || null,
+      });
+    }
+    if (!json.nextPageToken) break;
+    pageToken = json.nextPageToken;
+  }
+  return calendars;
+}
+
+export async function listCalendarsForViewer(
+  businessId: string,
+  userId: string
+): Promise<{
+  connected: boolean;
+  calendars: AccountCalendar[];
+  hiddenCalendarIds: string[];
+}> {
+  const row = await readConnection(businessId);
+  if (!row || row.status !== "active") {
+    return { connected: false, calendars: [], hiddenCalendarIds: [] };
+  }
+  const auth = await accessTokenFor(businessId, fetch);
+  if (!auth.ok) return { connected: false, calendars: [], hiddenCalendarIds: [] };
+  const calendars = await listAccountCalendars(auth.token);
+  const hiddenCalendarIds = await getViewerHiddenCalendarIds(businessId, userId);
+  return { connected: true, calendars, hiddenCalendarIds };
+}
+
+export async function getViewerHiddenCalendarIds(businessId: string, userId: string): Promise<string[]> {
+  const row = await readConnection(businessId);
+  const map = row?.viewer_hidden_calendar_ids;
+  const hidden = map?.[userId];
+  return Array.isArray(hidden) ? hidden.filter((id) => typeof id === "string") : [];
+}
+
+export async function setViewerHiddenCalendarIds(
+  businessId: string,
+  userId: string,
+  hidden: string[]
+): Promise<string[]> {
+  const row = await readConnection(businessId);
+  if (!row) throw new Error("Google Calendar is not connected.");
+  const map = { ...(row.viewer_hidden_calendar_ids || {}) };
+  map[userId] = [...new Set(hidden.map((id) => id.trim()).filter(Boolean))];
+  const db = await createTenantServiceClient(businessId);
+  const { error } = await db
+    .from("google_calendar_connections")
+    .update({ viewer_hidden_calendar_ids: map })
+    .eq("business_id", businessId);
+  if (error) throw new Error(redact(error.message));
+  return map[userId];
+}
+
 async function markNeedsReconnect(businessId: string, message: string) {
   const db = await createTenantServiceClient(businessId);
   await db
@@ -421,13 +515,22 @@ export async function upsertGoogleEvent(
   transport: FetchLike = fetch
 ): Promise<{ eventId: string; created: boolean; htmlLink: string | null }> {
   const endIso = new Date(Date.parse(draft.startIso) + EVENT_DURATION_MS).toISOString();
-  const body = {
+  const schedule = {
+    start: { dateTime: formatGoogleDateTime(draft.startIso, draft.timeZone), timeZone: draft.timeZone },
+    end: { dateTime: formatGoogleDateTime(endIso, draft.timeZone), timeZone: draft.timeZone },
+  };
+  // Updates patch title and time only. Description, reminders, iCalUID, and
+  // other Google fields stay on the existing event.
+  const createBody = {
     summary: draft.summary,
     description: draft.description,
     iCalUID: shootIcalUid(draft.proposalId),
-    start: { dateTime: formatGoogleDateTime(draft.startIso, draft.timeZone), timeZone: draft.timeZone },
-    end: { dateTime: formatGoogleDateTime(endIso, draft.timeZone), timeZone: draft.timeZone },
+    ...schedule,
     extendedProperties: { private: { shootPortalProposalId: draft.proposalId } },
+  };
+  const updateBody = {
+    summary: draft.summary,
+    ...schedule,
   };
   const cal = encodeURIComponent(draft.calendarId || "primary");
   const headers = {
@@ -438,7 +541,7 @@ export async function upsertGoogleEvent(
   if (draft.existingEventId) {
     const res = await transport(
       `https://www.googleapis.com/calendar/v3/calendars/${cal}/events/${encodeURIComponent(draft.existingEventId)}`,
-      { method: "PATCH", headers, body: JSON.stringify(body) }
+      { method: "PATCH", headers, body: JSON.stringify(updateBody) }
     );
     if (res.ok) {
       const json = (await res.json()) as { id?: string; htmlLink?: string };
@@ -452,7 +555,7 @@ export async function upsertGoogleEvent(
   const insert = await transport(`https://www.googleapis.com/calendar/v3/calendars/${cal}/events`, {
     method: "POST",
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify(createBody),
   });
   if (insert.status === 409) {
     const found = await transport(
@@ -465,7 +568,7 @@ export async function upsertGoogleEvent(
     if (!existing?.id) throw new Error("Google reported a duplicate event but it could not be found.");
     const patch = await transport(
       `https://www.googleapis.com/calendar/v3/calendars/${cal}/events/${encodeURIComponent(existing.id)}`,
-      { method: "PATCH", headers, body: JSON.stringify(body) }
+      { method: "PATCH", headers, body: JSON.stringify(updateBody) }
     );
     if (!patch.ok) throw new Error(redact(await patch.text()));
     const patched = (await patch.json()) as { id?: string; htmlLink?: string };
@@ -504,6 +607,18 @@ async function setSync(
     .eq("id", proposalId);
 }
 
+export function shootGoogleEventSummary(args: {
+  status: string;
+  clientName?: string | null;
+  projectName?: string | null;
+}): string {
+  const client = args.clientName?.trim() || "Client";
+  const project = args.projectName?.trim() || "Project";
+  const base = `${client} - ${project}`;
+  if (args.status === "pending") return `PENDING - ${base}`;
+  return base;
+}
+
 export async function pushConfirmedShoot(
   businessId: string,
   proposalId: string,
@@ -523,21 +638,22 @@ export async function pushConfirmedShoot(
     .eq("id", proposalId)
     .maybeSingle();
   if (!proposal) return { ok: false, error: "not_found" };
-  if (proposal.status !== "confirmed") {
+  const syncable = proposal.status === "confirmed" || proposal.status === "pending";
+  if (!syncable) {
     if (proposal.google_event_id) {
       return removeShootEvent(businessId, proposalId, transport);
     }
-    return { ok: false, error: "not_confirmed" };
+    return { ok: false, error: "not_syncable" };
   }
 
   const auth = await accessTokenFor(businessId, transport);
   if (!auth.ok) {
-    if (auth.error === "not_connected") return { ok: false, error: auth.error };
+    const message = auth.error === "not_connected" ? "Google Calendar is not connected." : auth.error;
     await setSync(businessId, proposalId, {
       google_sync_status: "error",
-      google_sync_error: auth.error,
+      google_sync_error: message,
     });
-    return { ok: false, error: auth.error };
+    return { ok: false, error: message };
   }
 
   const settings = await getAppSettings(businessId);
@@ -547,7 +663,11 @@ export async function pushConfirmedShoot(
     property_address?: string;
     clients?: { name?: string } | null;
   } | null;
-  const summary = project?.project_name || "Shoot";
+  const summary = shootGoogleEventSummary({
+    status: proposal.status,
+    clientName: project?.clients?.name,
+    projectName: project?.project_name,
+  });
   const description = [
     project?.clients?.name ? `Client: ${project.clients.name}` : null,
     project?.property_address ? `Address: ${project.property_address}` : null,
@@ -653,7 +773,7 @@ export async function retryAttentionSyncs(businessId: string): Promise<number> {
     .limit(8);
   let n = 0;
   for (const row of data ?? []) {
-    if (row.status === "confirmed") await pushConfirmedShoot(businessId, row.id);
+    if (row.status === "confirmed" || row.status === "pending") await pushConfirmedShoot(businessId, row.id);
     else await removeShootEvent(businessId, row.id);
     n += 1;
   }
@@ -779,7 +899,8 @@ export async function updateReadCalendars(
 export async function loadExternalEventsForOwner(
   businessId: string,
   timeMin: string,
-  timeMax: string
+  timeMax: string,
+  calendarIds?: string[]
 ): Promise<{ events: ExternalCalendarEvent[]; degraded: boolean; timeZone: string }> {
   try {
     const settings = await getAppSettings(businessId);
@@ -788,14 +909,18 @@ export async function loadExternalEventsForOwner(
     if (!row || row.status !== "active") return { events: [], degraded: false, timeZone };
     const auth = await accessTokenFor(businessId, fetch);
     if (!auth.ok) return { events: [], degraded: true, timeZone };
-    const ids = resolveReadCalendarIds(row.read_calendar_ids, row.calendar_id);
+    const colors = new Map<string, string | null>();
     const summaries = new Map<string, string>();
     try {
-      const calendars = await listWritableCalendars(auth.token);
-      for (const calendar of calendars) summaries.set(calendar.id, calendar.summary);
+      const calendars = await listAccountCalendars(auth.token);
+      for (const calendar of calendars) {
+        summaries.set(calendar.id, calendar.summary);
+        colors.set(calendar.id, calendar.backgroundColor);
+      }
     } catch {
-      // Calendar names fall back to the id. The page still renders shoots.
+      // Names fall back to the stored summary. The page still renders shoots.
     }
+    const ids = calendarIds ?? resolveReadCalendarIds(row.read_calendar_ids, row.calendar_id);
     const events: ExternalCalendarEvent[] = [];
     let degraded = false;
     for (const id of ids) {
@@ -805,6 +930,7 @@ export async function loadExternalEventsForOwner(
           calendarId: id,
           calendarSummary:
             summaries.get(id) || (id === row.calendar_id ? row.calendar_summary || id : id),
+          calendarColor: colors.get(id) ?? null,
           timeZone,
           timeMin,
           timeMax,

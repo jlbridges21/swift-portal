@@ -202,6 +202,8 @@ export async function POST(request: Request) {
     });
   }
 
+  await syncShootToGoogleSafe(businessId, data.id, "upsert");
+
   return NextResponse.json(data);
 }
 
@@ -264,6 +266,13 @@ export async function PATCH(request: Request) {
       .update({ status: "confirmed" })
       .eq("id", id);
 
+    const { data: otherPending } = await db
+      .from("shoot_proposals")
+      .select("id, google_event_id")
+      .eq("project_id", proposal.project_id)
+      .neq("id", id)
+      .eq("status", "pending");
+
     await db
       .from("shoot_proposals")
       .update({ status: "declined" })
@@ -307,6 +316,9 @@ export async function PATCH(request: Request) {
     });
 
     await syncShootToGoogleSafe(businessId, id, "upsert");
+    for (const other of otherPending ?? []) {
+      if (other.google_event_id) await syncShootToGoogleSafe(businessId, other.id, "delete");
+    }
 
     return NextResponse.json({ success: true, status: "confirmed" });
   }
@@ -398,7 +410,6 @@ export async function PATCH(request: Request) {
         .from("shoot_proposals")
         .update({ status: "superseded" })
         .eq("id", confirmedProposal.id);
-      await syncShootToGoogleSafe(businessId, confirmedProposal.id, "delete");
     }
 
     const { data: newProposal } = await db
@@ -410,9 +421,20 @@ export async function PATCH(request: Request) {
         message: message || "Shoot rescheduled — please confirm the new date.",
         status: "pending",
         created_by: profile.id,
+        google_event_id: confirmedProposal?.google_event_id ?? null,
       })
       .select()
       .single();
+
+    if (confirmedProposal?.google_event_id && newProposal?.id) {
+      await db
+        .from("shoot_proposals")
+        .update({ google_event_id: null, google_sync_status: null, google_sync_error: null })
+        .eq("id", confirmedProposal.id);
+      await syncShootToGoogleSafe(businessId, newProposal.id, "upsert");
+    } else if (newProposal?.id) {
+      await syncShootToGoogleSafe(businessId, newProposal.id, "upsert");
+    }
 
     const dateStr = new Date(proposed_at).toLocaleString();
     await logProjectActivity("shoot_proposed", `New shoot date proposed: ${dateStr}`, {
@@ -458,9 +480,20 @@ export async function PATCH(request: Request) {
         message: message || null,
         status: "pending",
         created_by: profile.id,
+        google_event_id: proposal.google_event_id ?? null,
       })
       .select()
       .single();
+
+    if (proposal.google_event_id && counter?.id) {
+      await db
+        .from("shoot_proposals")
+        .update({ google_event_id: null, google_sync_status: null, google_sync_error: null })
+        .eq("id", id);
+      await syncShootToGoogleSafe(businessId, counter.id, "upsert");
+    } else if (counter?.id) {
+      await syncShootToGoogleSafe(businessId, counter.id, "upsert");
+    }
 
     const dateStr = new Date(proposed_at).toLocaleString();
     await logProjectActivity("shoot_proposed", `Alternative shoot date proposed: ${dateStr}`, {
@@ -503,7 +536,7 @@ export async function PATCH(request: Request) {
     }
 
     await db.from("shoot_proposals").update({ status: "declined" }).eq("id", id);
-    if (proposal.status === "confirmed") {
+    if (proposal.google_event_id) {
       await syncShootToGoogleSafe(businessId, id, "delete");
     }
 

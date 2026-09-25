@@ -27,7 +27,7 @@ export async function GET() {
       configured: status.configured,
       connected: status.connected,
       status: status.status,
-      calendarSummary: status.connected ? status.calendarSummary : null,
+      calendarSummary: null,
       attentionCount: 0,
       calendars: [],
       email: null,

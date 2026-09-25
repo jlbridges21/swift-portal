@@ -8,9 +8,11 @@ import { ShootCalendar, type CalendarShoot } from "@/components/admin/shoot-cale
 import { isOwnerAdmin, visibleProjectIdsFor } from "@/lib/staff-access";
 import { getAppSettings } from "@/lib/app-settings";
 import {
+  listCalendarsForViewer,
   loadExternalEventsForOwner,
   resolveBusinessTimeZone,
   retryAttentionSyncs,
+  type AccountCalendar,
 } from "@/lib/google-calendar";
 import { externalEventsVisibleTo, type ExternalCalendarEvent } from "@/lib/google-calendar-pull";
 import Link from "next/link";
@@ -45,9 +47,9 @@ export default async function AdminCalendarPage() {
   let proposalsQuery = db
     .from("shoot_proposals")
     .select(
-      "id, project_id, proposed_at, projects(project_name, property_address, service_type, status, cover_image_id, cover_image_url, clients(name))"
+      "id, project_id, proposed_at, status, google_sync_status, google_sync_error, projects(project_name, property_address, service_type, status, cover_image_id, cover_image_url, clients(name))"
     )
-    .eq("status", "confirmed")
+    .in("status", ["confirmed", "pending"])
     .order("proposed_at", { ascending: true });
 
   if (projectIds !== "all") {
@@ -69,14 +71,25 @@ export default async function AdminCalendarPage() {
 
   let externalEvents: ExternalCalendarEvent[] = [];
   let externalDegraded = false;
+  let googleCalendars: AccountCalendar[] = [];
+  let hiddenCalendarIds: string[] = [];
   if (owner && gcalStatus === "active") {
+    try {
+      const listed = await listCalendarsForViewer(tenant.businessId, profile.id);
+      googleCalendars = listed.calendars;
+      hiddenCalendarIds = listed.hiddenCalendarIds;
+    } catch {
+      externalDegraded = true;
+    }
+    const ids = googleCalendars.map((calendar) => calendar.id);
     const loaded = await loadExternalEventsForOwner(
       tenant.businessId,
       windowStart.toISOString(),
-      windowEnd.toISOString()
+      windowEnd.toISOString(),
+      ids
     );
     externalEvents = externalEventsVisibleTo(profile.role, loaded.events);
-    externalDegraded = loaded.degraded;
+    externalDegraded = externalDegraded || loaded.degraded;
   }
 
   const shoots: CalendarShoot[] = await Promise.all(
@@ -107,6 +120,9 @@ export default async function AdminCalendarPage() {
         id: item.id,
         project_id: item.project_id,
         proposed_at: item.proposed_at,
+        proposal_status: item.status === "pending" ? "pending" : "confirmed",
+        google_sync_status: item.google_sync_status,
+        google_sync_error: item.google_sync_error,
         project_name: project?.project_name ?? "Project",
         client_name: project?.clients?.name ?? "Client",
         property_address: project?.property_address ?? "",
@@ -120,10 +136,10 @@ export default async function AdminCalendarPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole={profile.role === "staff" ? "staff" : "admin"} />
-      <main className="mx-auto max-w-6xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-8">
+      <main className="mx-auto flex min-h-0 min-w-0 max-w-none flex-col px-3 py-4 sm:px-4 lg:h-[calc(100dvh-4rem)] lg:overflow-hidden lg:px-6">
         <PageHeader
           title="Shoot Calendar"
-          description="Month, week, and agenda views — drag to reschedule on desktop, tap to edit"
+          description="Month, week, day, and agenda — drag a shoot to reschedule, or tap it to edit"
         >
           {owner && gcalStatus !== "active" ? (
             <Link href="/admin/settings#settings-integrations">
@@ -136,16 +152,18 @@ export default async function AdminCalendarPage() {
 
         {owner && gcalStatus === "needs_reconnect" ? (
           <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-            Google Calendar is disconnected{gcalError ? ` (${gcalError})` : ""}. Confirmed shoots stay in
-            ShootPortal. Reconnect from Settings → Integrations to resume pushing events.
+            Google Calendar is disconnected{gcalError ? ` (${gcalError})` : ""}. Shoots stay in
+            ShootPortal. Reconnect from Settings → Integrations to resume sync.
           </div>
         ) : null}
 
         <ShootCalendar
           shoots={shoots}
-          externalEvents={externalEvents}
-          externalDegraded={externalDegraded}
+          externalEvents={owner ? externalEvents : []}
+          externalDegraded={owner ? externalDegraded : false}
           canLoadExternal={owner && gcalStatus === "active"}
+          googleCalendars={owner ? googleCalendars : []}
+          hiddenCalendarIds={owner ? hiddenCalendarIds : []}
           businessTimeZone={businessTimeZone}
           externalWindow={
             owner && gcalStatus === "active"

@@ -9,7 +9,6 @@ import type { GoogleCalendarPublicStatus } from "@/lib/google-calendar";
 export function GoogleCalendarSettingsCard() {
   const [status, setStatus] = useState<GoogleCalendarPublicStatus | null>(null);
   const [calendarId, setCalendarId] = useState("");
-  const [readIds, setReadIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +22,6 @@ export function GoogleCalendarSettingsCard() {
     const data = (await res.json()) as GoogleCalendarPublicStatus;
     setStatus(data);
     setCalendarId(data.calendarId || "");
-    setReadIds(data.readCalendarIds || []);
   }
 
   useEffect(() => {
@@ -50,29 +48,6 @@ export function GoogleCalendarSettingsCard() {
     }
     setMessage(`ShootPortal will write to ${data.calendarSummary || "that calendar"}. Calendars shown on the calendar page are unchanged.`);
     await load();
-  }
-
-  async function saveReadCalendars() {
-    setBusy(true);
-    setError(null);
-    const res = await fetch("/api/integrations/google-calendar", {
-      method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ readCalendarIds: readIds }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setBusy(false);
-    if (!res.ok) {
-      setError(data.error || "Could not save calendars to show.");
-      return;
-    }
-    setMessage("Those calendars will show on the owner calendar. The write target is unchanged.");
-    await load();
-  }
-
-  function toggleRead(id: string) {
-    setReadIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
 
   async function disconnect() {
@@ -105,9 +80,9 @@ export function GoogleCalendarSettingsCard() {
         <div>
           <h3 className="text-base font-semibold text-primary">Google Calendar</h3>
           <p className="mt-1 text-sm text-muted">
-            Connecting is owner-only. Confirmed shoots are pushed to the calendar you choose
-            (one hour). Events from the calendars you check below show on the owner calendar
-            only. Staff do not see them. They open in Google Calendar and cannot be edited here.
+            Connecting is owner-only. Proposed and confirmed shoots are written to the calendar you
+            choose (one hour). Which Google calendars appear is chosen on the Shoot Calendar, saved
+            for you, and hidden from staff. Those events open in Google Calendar and cannot be edited here.
           </p>
         </div>
 
@@ -157,41 +132,12 @@ export function GoogleCalendarSettingsCard() {
                 ))}
               </select>
               <p className="text-xs text-muted">
-                Defaults to the primary calendar at connect. Changing this does not change which calendars are shown.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>Show events from</Label>
-              <div className="space-y-2 rounded-md border border-border bg-white p-3">
-                {(status.calendars.length
-                  ? status.calendars
-                  : readIds.map((id) => ({ id, summary: id, primary: false }))
-                ).map((c) => (
-                  <label key={c.id} className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={readIds.includes(c.id)}
-                      onChange={() => toggleRead(c.id)}
-                    />
-                    <span>
-                      {c.summary}
-                      {c.primary ? " (primary)" : ""}
-                      {c.id === status.calendarId ? " — write target" : ""}
-                    </span>
-                  </label>
-                ))}
-              </div>
-              <p className="text-xs text-muted">
-                Choose one or more. A new connection starts with the write target only.
+                Defaults to the primary calendar at connect. Which calendars appear is chosen on the Shoot Calendar and saved for each admin.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="accent" size="sm" disabled={busy || !calendarId} onClick={() => void saveCalendar()}>
                 Save write calendar
-              </Button>
-              <Button type="button" variant="outline" size="sm" disabled={busy || readIds.length === 0} onClick={() => void saveReadCalendars()}>
-                Save calendars to show
               </Button>
               <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void disconnect()}>
                 Disconnect

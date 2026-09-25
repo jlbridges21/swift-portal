@@ -20,6 +20,8 @@ export type ExternalCalendarEvent = {
   /** Civil dates in the business timezone. All-day events use Google's date, not UTC midnight. */
   dayKeys: string[];
   timeLabel: string;
+  /** Google calendarList backgroundColor. Display only; not stored. */
+  calendarColor?: string | null;
 };
 
 type GoogleEvent = {
@@ -147,7 +149,8 @@ export function toExternalEvent(
   event: GoogleEvent,
   calendarId: string,
   calendarSummary: string,
-  timeZone: string
+  timeZone: string,
+  calendarColor?: string | null
 ): ExternalCalendarEvent | null {
   if (!shouldDisplayGoogleEvent(event)) return null;
   const allDay = Boolean(event.start?.date && !event.start?.dateTime);
@@ -167,6 +170,7 @@ export function toExternalEvent(
       end: event.end?.date || null,
       dayKeys,
       timeLabel: "All day",
+      calendarColor: calendarColor ?? null,
     };
   }
   const start = event.start?.dateTime as string;
@@ -191,6 +195,7 @@ export function toExternalEvent(
     end,
     dayKeys: datesInclusive(startKey, endKey),
     timeLabel,
+    calendarColor: calendarColor ?? null,
   };
 }
 
@@ -244,6 +249,7 @@ async function collectWindow(args: {
   timeMin: string;
   timeMax: string;
   syncToken: string | null;
+  calendarColor?: string | null;
   transport: FetchLike;
 }): Promise<{ events: ExternalCalendarEvent[]; nextSyncToken: string | null; degraded: boolean }> {
   const events: ExternalCalendarEvent[] = [];
@@ -261,7 +267,13 @@ async function collectWindow(args: {
     const body = result.page;
     if (!body) break;
     for (const item of body.items ?? []) {
-      const parsed = toExternalEvent(item, args.calendarId, args.calendarSummary, args.timeZone);
+      const parsed = toExternalEvent(
+        item,
+        args.calendarId,
+        args.calendarSummary,
+        args.timeZone,
+        args.calendarColor
+      );
       if (!parsed) continue;
       events.push(parsed);
       if (events.length >= MAX_EVENTS) {
@@ -289,6 +301,7 @@ export async function listGoogleEvents(args: {
   timeMin: string;
   timeMax: string;
   syncToken?: string | null;
+  calendarColor?: string | null;
   transport?: FetchLike;
 }): Promise<{
   events: ExternalCalendarEvent[];

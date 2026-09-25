@@ -18,7 +18,7 @@ export const metadata: Metadata = marketingPageMetadata({
 const TOC = [
   ["who", "1. Who this policy covers"],
   ["collect", "2. Information we collect"],
-  ["google", "3. Google sign-in"],
+  ["google", "3. Google sign-in and Calendar"],
   ["cookies", "4. Cookies and similar technologies"],
   ["use", "5. How we use information"],
   ["payments", "6. Payments and Stripe"],
@@ -174,18 +174,111 @@ export default async function PrivacyPage() {
               administrator turns on web push notifications, we store a OneSignal subscription
               identifier for that administrator.
             </p>
+            <p>
+              If a Tenant owner connects Google Calendar, we also process the calendar information
+              described in section 3. That connection is separate from Google sign-in and happens
+              only if the owner turns it on.
+            </p>
           </Section>
 
-          <Section id="google" title="3. Google sign-in">
+          <Section id="google" title="3. Google sign-in and Calendar">
+            <h3 className="text-base font-semibold text-[#0F172A]">Google sign-in</h3>
             <p>
-              You may sign in with Google. Google authentication is provided through our
-              authentication provider, Supabase. When you choose Google, we receive the identity
-              information needed to create or link your account and session, typically your name
-              and email address.
+              You may sign in with Google. That sign-in is provided through our authentication
+              provider, Supabase. When you choose it, we receive the identity information needed
+              to create or link your account and session, typically your name and email address.
+              The sign-in permission does not include Google Drive, Gmail, contacts, or Calendar.
+              Calendar access is a separate choice, described next.
+            </p>
+            <h3 className="pt-2 text-base font-semibold text-[#0F172A]">
+              Optional Google Calendar connection
+            </h3>
+            <p>
+              A Tenant owner may connect a Google account so ShootPortal can work with Google
+              Calendar. The owner must affirmatively opt in. ShootPortal does not connect Google
+              Calendar unless that owner chooses Connect Google Calendar in the Tenant’s settings
+              and approves the request on Google’s consent screen. Team members who are not the
+              owner cannot connect it. Connecting Calendar uses a separate Google permission from
+              sign-in.
+            </p>
+            <p>If the owner connects, Google’s consent screen asks for permission to:</p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>view and edit events on the calendars in that Google account; and</li>
+              <li>see the list of calendars on that account.</li>
+            </ul>
+            <p>
+              In ShootPortal, the owner chooses which calendar on that account receives shoot
+              events. Each owner admin separately chooses which calendars from that account are
+              shown on their Shoot Calendar. A newly discovered calendar is shown until that admin
+              hides it. We do not use the connection to change calendar settings, and we do not
+              request Google Drive, Gmail, or contacts.
+            </p>
+            <h3 className="pt-2 text-base font-semibold text-[#0F172A]">What we send to Google</h3>
+            <p>
+              When a shoot is proposed, ShootPortal creates or updates a one-hour event on the
+              calendar the owner selected. While the time is still awaiting approval, the event
+              title starts with “PENDING - ” followed by the Client’s name and the project name.
+              When the Client approves that time, ShootPortal updates that same Google event and
+              drops the pending prefix. The event includes the project name, the Client’s name,
+              the property address, and a note that it was scheduled in ShootPortal. If that shoot
+              is declined or cancelled, we delete the matching event from that Google calendar. The
+              owner can change which calendar receives these events. Until they choose another,
+              new connections write to the Google account’s primary calendar.
+            </p>
+            <h3 className="pt-2 text-base font-semibold text-[#0F172A]">What we read from Google</h3>
+            <p>
+              Each owner admin can choose which calendars on the connected account to display on
+              their Shoot Calendar. For the dates shown, we request the events on the calendars
+              that admin has left visible and use the event title, start and end time, whether it
+              is an all-day event, the calendar’s color, and a link that opens the event in Google
+              Calendar. Events the owner has declined, cancelled events, and events ShootPortal
+              itself created are not shown again in that view. Those events are not shown to staff
+              or Clients, and they cannot be edited inside ShootPortal.
+            </p>
+            <h3 className="pt-2 text-base font-semibold text-[#0F172A]">
+              What we store, and for how long
+            </h3>
+            <p>
+              We store the Google account email used for the connection, the calendars the owner
+              selected, encrypted access and refresh tokens, the connection status, and, for each
+              shoot we sync, the Google event identifier and whether the sync succeeded. We do not
+              keep a copy of the other events we read from Google. Those are requested when the
+              owner views the calendar.
             </p>
             <p>
-              Choosing Google sign-in does not give ShootPortal access to Google Calendar, Google
-              Drive, Gmail, contacts, or other Google products.
+              We keep the connection while it remains connected. If the owner disconnects, or the
+              Tenant account is closed, we delete the stored connection, including the tokens. A
+              project may still keep the sync status and event identifier for a shoot we created.
+              Events already written to Google Calendar stay in that Google account unless they are
+              deleted there or the related shoot is declined or cancelled while the connection is
+              still active.
+            </p>
+            <h3 className="pt-2 text-base font-semibold text-[#0F172A]">
+              Disconnecting and revoking access
+            </h3>
+            <p>
+              The Tenant owner can disconnect from the same settings page. Disconnect asks Google
+              to revoke ShootPortal’s token and deletes the connection we store. The owner can
+              also remove ShootPortal from the Google account’s third-party access page at{" "}
+              <a
+                className="font-medium text-[#4F46E5] hover:underline"
+                href="https://myaccount.google.com/permissions"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                myaccount.google.com/permissions
+              </a>
+              . If Google does not confirm revocation when we disconnect, that Google page is how
+              the owner can remove the permission. Google’s privacy policy is at{" "}
+              <a
+                className="font-medium text-[#4F46E5] hover:underline"
+                href="https://policies.google.com/privacy"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                policies.google.com/privacy
+              </a>
+              .
             </p>
           </Section>
 
@@ -252,7 +345,9 @@ export default async function PrivacyPage() {
               <li>create and authenticate accounts;</li>
               <li>manage projects and deliver media under a Tenant’s branding;</li>
               <li>
-                provide estimates, scheduling, review, communications, and payment features;
+                provide estimates, scheduling, review, communications, and payment features,
+                including sending proposed and confirmed shoots to Google Calendar and showing selected Google
+                events when a Tenant owner has connected Calendar;
               </li>
               <li>
                 process subscriptions, Client payments, Partner referrals, commissions, and payouts;
@@ -285,10 +380,11 @@ export default async function PrivacyPage() {
                 responding to lawful requests.
               </li>
               <li>
-                <strong>Consent.</strong> Where we ask for it, such as when a Tenant administrator
-                chooses to enable web push notifications. You may withdraw that consent by turning
-                the feature off or contacting us. Withdrawal does not affect processing that
-                already occurred.
+                <strong>Consent.</strong> Where we ask for it. A Tenant administrator chooses
+                whether to enable web push notifications, and a Tenant owner chooses whether to
+                connect Google Calendar and approves that access on Google’s consent screen. You
+                may withdraw that consent by turning the feature off, disconnecting Calendar, or
+                contacting us. Withdrawal does not affect processing that already occurred.
               </li>
             </ul>
           </Section>
@@ -354,8 +450,9 @@ export default async function PrivacyPage() {
                 <strong>Resend</strong> for transactional and notification email.
               </li>
               <li>
-                <strong>Google</strong> solely as a sign-in identity provider when you choose
-                Google, through Supabase.
+                <strong>Google</strong> as a sign-in identity provider when you choose Google,
+                through Supabase, and as a calendar provider when a Tenant owner connects Google
+                Calendar, as described in section 3.
               </li>
               <li>
                 <strong>OneSignal</strong> for optional web push notifications when a Tenant
@@ -437,6 +534,11 @@ export default async function PrivacyPage() {
                 <strong>The referral cookie</strong> expires within 90 days unless it is replaced
                 or you delete it sooner. A referral record created when a Tenant account is opened
                 is kept with that account’s business records.
+              </li>
+              <li>
+                <strong>A Google Calendar connection</strong> is kept until the Tenant owner
+                disconnects it or the Tenant account is closed, as described in section 3. Events
+                read from Google for the owner’s calendar view are not stored as a copy.
               </li>
               <li>
                 <strong>Backups</strong> may retain copies until the backup cycle overwrites them.

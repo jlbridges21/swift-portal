@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { isOwnerAdmin } from "@/lib/staff-access";
-import { loadExternalEventsForOwner } from "@/lib/google-calendar";
+import { listCalendarsForViewer, loadExternalEventsForOwner } from "@/lib/google-calendar";
 import { externalEventsVisibleTo } from "@/lib/google-calendar-pull";
 
 const MAX_SPAN_MS = 120 * 24 * 60 * 60 * 1000;
@@ -30,7 +30,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "from and to must be a range of at most 120 days." }, { status: 400 });
   }
 
-  const loaded = await loadExternalEventsForOwner(tenant.businessId, start.toISOString(), end.toISOString());
+  let calendarIds: string[] = [];
+  try {
+    const listed = await listCalendarsForViewer(tenant.businessId, profile.id);
+    calendarIds = listed.calendars.map((calendar) => calendar.id);
+  } catch {
+    return NextResponse.json({ events: [], degraded: true, timeZone: null });
+  }
+  const loaded = await loadExternalEventsForOwner(
+    tenant.businessId,
+    start.toISOString(),
+    end.toISOString(),
+    calendarIds
+  );
   return NextResponse.json({
     events: externalEventsVisibleTo(profile.role, loaded.events),
     degraded: loaded.degraded,
