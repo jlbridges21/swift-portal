@@ -4,6 +4,10 @@ import { SITE, SITE_ICONS } from "@/lib/site-metadata";
 import { MARKETING_BRAND } from "@/lib/marketing";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  MarketingMobileNav,
+  MarketingPartnersDesktop,
+} from "@/components/marketing/marketing-partners-nav";
 
 const NAV = [
   { href: "/#product-demo", label: "Product" },
@@ -35,15 +39,19 @@ export function MarketingHeader({ className }: { className?: string }) {
         </Link>
 
         <nav className="hidden items-center gap-6 md:flex" aria-label="Primary">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="text-sm font-medium text-[#475569] transition hover:text-[#0F172A]"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {NAV.map((item) =>
+            item.href === "/partners" ? (
+              <MarketingPartnersDesktop key={item.href} />
+            ) : (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="text-sm font-medium text-[#475569] transition hover:text-[#0F172A]"
+              >
+                {item.label}
+              </Link>
+            )
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -63,23 +71,7 @@ export function MarketingHeader({ className }: { className?: string }) {
         </div>
       </div>
 
-      <nav
-        className="flex gap-4 overflow-x-auto border-t border-[#E2E8F0] px-4 py-2 md:hidden"
-        aria-label="Mobile"
-      >
-        {NAV.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="shrink-0 text-sm font-medium text-[#475569]"
-          >
-            {item.label}
-          </Link>
-        ))}
-        <Link href="/login" className="shrink-0 text-sm font-medium text-[#475569] sm:hidden">
-          Log in
-        </Link>
-      </nav>
+      <MarketingMobileNav items={NAV} />
     </header>
   );
 }
@@ -117,6 +109,11 @@ export function MarketingFooter() {
             <li>
               <Link href="/partners" className="hover:text-white">
                 Partner Program
+              </Link>
+            </li>
+            <li>
+              <Link href="/strategic-partners" className="hover:text-white">
+                Strategic Partners
               </Link>
             </li>
             <li>
