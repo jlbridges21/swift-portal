@@ -18,6 +18,12 @@ const nextConfig = {
    * Canonical host is www.shootportal.app (Vercel already 308s apex → www).
    * Keep production NEXT_PUBLIC_APP_URL=https://www.shootportal.app so metadata matches.
    */
+  async rewrites() {
+    return [
+      { source: "/favicon.ico", destination: "/icons/icon-48.png" },
+      { source: "/icon.png", destination: "/icons/icon-48.png" },
+    ];
+  },
   async headers() {
     const staticAssetCache = [
       {

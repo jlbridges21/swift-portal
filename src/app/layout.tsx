@@ -42,10 +42,11 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: SITE_ICONS.favicon, sizes: "32x32", type: "image/png" },
-      { url: SITE_ICONS.icon48, sizes: "48x48", type: "image/png" },
+      { url: SITE_ICONS.favicon, sizes: "48x48", type: "image/png" },
       { url: SITE_ICONS.icon192, sizes: "192x192", type: "image/png" },
+      { url: SITE_ICONS.icon512, sizes: "512x512", type: "image/png" },
     ],
+    shortcut: [{ url: SITE_ICONS.favicon, sizes: "48x48", type: "image/png" }],
     apple: [{ url: SITE_ICONS.apple, sizes: "180x180", type: "image/png" }],
     other: [{ rel: "mask-icon", url: SITE_ICONS.icon192, color: SITE.themeColor }],
   },

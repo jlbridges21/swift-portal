@@ -11,13 +11,13 @@ export const DEFAULT_PLATFORM_FROM_ADDRESS = "noreply@shootportal.app";
 
 /**
  * Platform chrome icons (ShootPortal monogram).
- * `/icons/icon-*.png` are the legacy Swift Aerial Media files still referenced by
- * stored `business_settings` favicon/logo URLs — do not overwrite those paths.
+ * `favicon` is the global tab icon, set once on the root layout.
+ * `/icons/icon-*.png` paths are also stored on business settings — do not replace those files.
  */
 export const SITE_ICONS = {
-  favicon: "/icon.png",
+  favicon: "/icons/icon-48.png",
   apple: "/apple-icon.png",
-  icon48: "/icons/sp-icon-48.png",
+  icon48: "/icons/icon-48.png",
   icon192: "/icons/sp-icon-192.png",
   icon512: "/icons/sp-icon-512.png",
   icon512Maskable: "/icons/sp-icon-512-maskable.png",
