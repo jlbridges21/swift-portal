@@ -21,16 +21,16 @@ export const metadata: Metadata = marketingPageMetadata({
 
 const SKYYTASK_POINTS = [
   {
-    title: "Open Bid and Direct Bid",
-    body: "Clients post a project for any qualified pilot, or send it to pilots they choose.",
+    title: "Clients",
+    body: "Post drone jobs, receive bids from qualified local pilots, communicate directly, and manage projects from start to finish.",
   },
   {
-    title: "From profile to delivery",
-    body: "Pilots keep a profile, message the client, submit a bid, finish the job, and deliver the work.",
+    title: "Pilots",
+    body: "Build detailed profiles, showcase certifications, equipment, and experience, browse available jobs, and submit bids.",
   },
   {
-    title: "Professionalism first",
-    body: "Profiles, communication, and specialization count for more than the lowest price.",
+    title: "The right pilot",
+    body: "Professionalism, transparency, and fair pricing across real estate, inspections, mapping, and more.",
   },
 ] as const;
 
@@ -94,17 +94,23 @@ export default async function StrategicPartnersPage() {
                   SkyyTask
                 </h2>
                 <p className="mt-2 text-base font-medium text-[#0369A1]">
-                  Connecting certified drone pilots with real projects.
+                  Connecting clients with certified drone pilots nationwide.
                 </p>
                 <p className="mt-4 max-w-2xl text-base leading-relaxed text-[#475569]">
-                  SkyyTask is a marketplace that connects clients who need drone services with
-                  certified drone pilots. Clients post projects as Open Bid or Direct Bid
-                  opportunities. Pilots build profiles, talk with clients, submit bids, complete
-                  the job, and deliver their work on the platform.
+                  SkyyTask connects businesses and individuals with FAA Part 107 certified drone
+                  pilots across all 50 states. Clients can post drone jobs, receive bids from
+                  qualified local pilots, communicate directly, and manage projects from start to
+                  finish.
                 </p>
                 <p className="mt-3 max-w-2xl text-base leading-relaxed text-[#475569]">
-                  It is built to reward professionalism, strong profiles, communication, and
-                  specialization, rather than a race to the lowest price.
+                  Pilots can build detailed profiles, showcase their certifications, equipment, and
+                  experience, browse available jobs, submit bids, and connect directly with clients.
+                </p>
+                <p className="mt-3 max-w-2xl text-base leading-relaxed text-[#475569]">
+                  SkyyTask supports a wide range of drone services, including real estate
+                  photography, inspections, thermal imaging, agricultural work, aerial mapping,
+                  recovery services, and more. The platform is built around professionalism,
+                  transparency, fair pricing, and helping clients find the right pilot for the job.
                 </p>
                 <div className="mt-6">
                   <a
