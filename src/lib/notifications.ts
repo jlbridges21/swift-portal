@@ -376,7 +376,10 @@ export async function notifyUsers(options: NotifyOptions) {
     if (!user.id || user.id.includes("@")) continue;
     if (options.excludeUserIds?.includes(user.id)) continue;
 
-    if (options.paymentId && options.type === "payment_received") {
+    if (
+      options.paymentId &&
+      (options.type === "payment_received" || options.type === "payment_confirmed")
+    ) {
       const duplicate = await hasDuplicatePaymentNotification(businessId, user.id, options.paymentId);
       if (duplicate) {
         console.info("[notifications] skipped duplicate payment_received", {

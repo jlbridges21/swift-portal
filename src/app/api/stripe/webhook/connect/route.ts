@@ -19,6 +19,7 @@ import {
 } from "@/lib/stripe-payments";
 import { sanitizeMetadataForLog } from "@/lib/stripe-metadata";
 import { isStripeEventProcessed, markStripeEventProcessed } from "@/lib/stripe-webhook-events";
+import { loadStripeReceipt, stripeIdsFromInvoice } from "@/lib/stripe-receipt";
 import type { Payment } from "@/lib/types";
 import Stripe from "stripe";
 
@@ -36,6 +37,7 @@ async function processConnectPaymentSuccess(
     checkoutSessionId?: string;
     paymentIntentId?: string;
     receiptUrl?: string | null;
+    cardLast4?: string | null;
     metadata?: Stripe.Metadata | null;
   }
 ) {
@@ -78,6 +80,7 @@ async function processConnectPaymentSuccess(
     checkoutSessionId: options.checkoutSessionId,
     paymentIntentId: options.paymentIntentId,
     receiptUrl: options.receiptUrl,
+    cardLast4: options.cardLast4,
     source: eventType,
     metadata: options.metadata,
   });
@@ -178,15 +181,15 @@ export async function POST(request: Request) {
             ? session.payment_intent
             : session.payment_intent?.id;
         const payment = await resolvePaymentFromCheckoutSession(session, connectedAccountId);
-        const receiptUrl =
-          (session as { receipt_url?: string | null }).receipt_url ||
-          (typeof session.invoice === "object" && session.invoice
-            ? (session.invoice as Stripe.Invoice).hosted_invoice_url
-            : null);
+        const receipt = await loadStripeReceipt({
+          paymentIntentId,
+          stripeAccountId: connectedAccountId,
+        });
         await processConnectPaymentSuccess(event.type, connectBusinessId, payment, {
           checkoutSessionId: session.id,
           paymentIntentId,
-          receiptUrl,
+          receiptUrl: receipt.receiptUrl,
+          cardLast4: receipt.cardLast4,
           metadata: session.metadata,
         });
         recordEvent = true;
@@ -227,8 +230,14 @@ export async function POST(request: Request) {
           recordEvent = true;
           break;
         }
+        const receipt = await loadStripeReceipt({
+          paymentIntentId: intent.id,
+          stripeAccountId: connectedAccountId,
+        });
         await processConnectPaymentSuccess(event.type, connectBusinessId, payment, {
           paymentIntentId: intent.id,
+          receiptUrl: receipt.receiptUrl,
+          cardLast4: receipt.cardLast4,
           metadata: intent.metadata,
         });
         recordEvent = true;
@@ -266,8 +275,15 @@ export async function POST(request: Request) {
       case "invoice.paid": {
         const invoice = event.data.object as Stripe.Invoice;
         const payment = await findPaymentFromStripe({ metadata: invoice.metadata });
+        const invoiceIds = stripeIdsFromInvoice(invoice);
+        const receipt = await loadStripeReceipt({
+          paymentIntentId: invoiceIds.paymentIntentId,
+          chargeId: invoiceIds.chargeId,
+          stripeAccountId: connectedAccountId,
+        });
         await processConnectPaymentSuccess(event.type, connectBusinessId, payment, {
-          receiptUrl: invoice.hosted_invoice_url ?? invoice.invoice_pdf ?? null,
+          receiptUrl: receipt.receiptUrl,
+          cardLast4: receipt.cardLast4,
           metadata: invoice.metadata,
         });
         recordEvent = true;

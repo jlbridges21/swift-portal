@@ -189,6 +189,7 @@ export const EMAIL_TYPE_LABELS: Record<string, string> = {
   revision_requested: "Revision Response Email",
   invoice_available: "Payment Request Email",
   payment_confirmed: "Payment Received Email",
+  payment_receipt: "Payment Receipt Email",
   client_added_to_project: "Added to Project Email",
   video_review_activity: "Video Review Email",
   test: "Test Email",

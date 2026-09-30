@@ -3,16 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { getAppSettings } from "@/lib/app-settings";
-import { getStripeForStoredAccount } from "@/lib/stripe-connect";
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+import { resolveProjectAccess } from "@/lib/project-access";
+import { staffCan } from "@/lib/staff-access";
+import { resolveStripeReceipt } from "@/lib/stripe-receipt";
 
 export async function GET(
   _request: Request,
@@ -37,16 +30,17 @@ export async function GET(
     .eq("business_id", businessId)
     .single();
 
-  if (!payment || payment.status !== "paid") {
+  if (!payment || payment.status !== "paid" || !payment.project_id) {
     return NextResponse.json({ error: "Receipt not available" }, { status: 404 });
   }
 
-  if (payment.project_id) {
-    const { canAccessProject } = await import("@/lib/project-access");
-    if (!(await canAccessProject(profile, payment.project_id))) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-  } else if (profile.role === "staff") {
+  const access = await resolveProjectAccess(profile, payment.project_id, {
+    tenantBusinessId: businessId,
+  });
+  if (!access.allowed || access.kind === "share") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (profile.role === "staff" && !staffCan(profile, "money.view")) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -54,52 +48,28 @@ export async function GET(
     return NextResponse.redirect(payment.stripe_receipt_url);
   }
 
-  if (payment.stripe_checkout_session_id) {
-    try {
-      const { stripe, requestOptions } = getStripeForStoredAccount(payment.stripe_account_id);
-      const session = (
-        requestOptions
-          ? await stripe.checkout.sessions.retrieve(
-              payment.stripe_checkout_session_id,
-              {},
-              requestOptions
-            )
-          : await stripe.checkout.sessions.retrieve(payment.stripe_checkout_session_id)
-      ) as { receipt_url?: string | null };
-      if (session.receipt_url) {
-        const db = await createTenantServiceClient(businessId);
-        await db
-          .from("payments")
-          .update({ stripe_receipt_url: session.receipt_url })
-          .eq("id", id);
-        return NextResponse.redirect(session.receipt_url);
-      }
-    } catch {
-      // fall through to generated receipt
-    }
+  if (!payment.stripe_payment_intent_id) {
+    return NextResponse.json({ error: "Receipt not available" }, { status: 404 });
   }
 
-  const appSettings = await getAppSettings(businessId);
-  const businessName = appSettings.business.businessName || "Receipt";
-  const safeName = escapeHtml(businessName);
-  const safeDescription = escapeHtml(payment.description || "");
-
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Receipt — ${safeName}</title>
-<style>body{font-family:system-ui,sans-serif;max-width:480px;margin:40px auto;padding:24px;color:#0f172a}
-h1{font-size:20px;margin:0 0 8px}p{margin:4px 0;color:#64748b;font-size:14px}
-.amount{font-size:28px;font-weight:700;color:#0f172a;margin:16px 0}
-.badge{display:inline-block;background:#ecfdf5;color:#059669;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600}
-</style></head><body>
-<h1>${safeName}</h1><p>Payment Receipt</p>
-<div class="amount">$${(payment.amount / 100).toFixed(2)}</div>
-<p>${safeDescription}</p>
-<p>Paid: ${payment.paid_at ? new Date(payment.paid_at).toLocaleString() : "—"}</p>
-<p>Reference: ${payment.id.slice(0, 8).toUpperCase()}</p>
-<span class="badge">PAID</span>
-</body></html>`;
-
-  return new NextResponse(html, {
-    headers: { "Content-Type": "text/html" },
-  });
+  try {
+    const receipt = await resolveStripeReceipt({
+      paymentIntentId: payment.stripe_payment_intent_id,
+      stripeAccountId: payment.stripe_account_id,
+    });
+    if (!receipt.receiptUrl) {
+      return NextResponse.json({ error: "Receipt not available" }, { status: 404 });
+    }
+    const db = await createTenantServiceClient(businessId);
+    await db
+      .from("payments")
+      .update({
+        stripe_receipt_url: receipt.receiptUrl,
+        card_last4: payment.card_last4 ?? receipt.cardLast4,
+      })
+      .eq("id", id);
+    return NextResponse.redirect(receipt.receiptUrl);
+  } catch {
+    return NextResponse.json({ error: "Receipt not available" }, { status: 404 });
+  }
 }

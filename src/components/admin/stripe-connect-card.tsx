@@ -103,7 +103,11 @@ export function StripeConnectCard() {
           Clients pay you directly through Stripe. ShootPortal takes 0% of client payments —
           Stripe&apos;s processing fees apply (estimates for US domestic cards; international and
           other card types may differ). You keep your own Stripe Dashboard for payouts, refunds,
-          and tax forms.
+          and tax forms. ShootPortal emails a payment receipt from your business sender.
+          Stripe also emails one when “Successful payments” is on under Stripe Dashboard →
+          Settings → Customer emails. That switch is per Stripe account, so turn it off if
+          clients should get a single receipt from you. ShootPortal does not set a Stripe
+          receipt email address, so Stripe stays quiet unless that switch is on.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">

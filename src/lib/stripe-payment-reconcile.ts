@@ -4,6 +4,7 @@ import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins } from "@/lib/notifications";
 import { isPaymentComplete } from "@/lib/payment-status";
 import { getStripeForStoredAccount } from "@/lib/stripe-connect";
+import { resolveStripeReceipt } from "@/lib/stripe-receipt";
 import {
   findPaymentFromStripe,
   handlePaymentSuccess,
@@ -16,6 +17,7 @@ export type StripeSucceededPayment = {
   checkoutSessionId: string;
   paymentIntentId: string;
   receiptUrl: string | null;
+  cardLast4?: string | null;
   metadata: Stripe.Metadata;
   amountReceived: number;
   paidAt: string;
@@ -119,16 +121,24 @@ async function sessionToSucceededPayment(
     }
   }
 
-  const receiptUrl =
-    (session as { receipt_url?: string | null }).receipt_url ??
-    (typeof session.invoice === "object" && session.invoice
-      ? (session.invoice as Stripe.Invoice).hosted_invoice_url
-      : null);
+  let receiptUrl: string | null = null;
+  let cardLast4: string | null = null;
+  try {
+    const receipt = await resolveStripeReceipt({
+      paymentIntentId,
+      stripeAccountId: requestOptions?.stripeAccount,
+    });
+    receiptUrl = receipt.receiptUrl;
+    cardLast4 = receipt.cardLast4;
+  } catch {
+    receiptUrl = null;
+  }
 
   return {
     checkoutSessionId: session.id,
     paymentIntentId,
-    receiptUrl: receiptUrl ?? null,
+    receiptUrl,
+    cardLast4,
     metadata,
     amountReceived: session.amount_total ?? 0,
     paidAt: new Date((session.created ?? 0) * 1000).toISOString(),
@@ -175,10 +185,23 @@ export async function findSucceededStripePaymentForRecord(
         intent.status === "succeeded" &&
         !isChargeRefunded(intent.latest_charge as Stripe.Charge | string | null | undefined)
       ) {
+        let receiptUrl = payment.stripe_receipt_url;
+        let cardLast4 = payment.card_last4 ?? null;
+        try {
+          const receipt = await resolveStripeReceipt({
+            paymentIntentId: intent.id,
+            stripeAccountId: requestOptions?.stripeAccount,
+          });
+          receiptUrl = receipt.receiptUrl ?? receiptUrl;
+          cardLast4 = receipt.cardLast4 ?? cardLast4;
+        } catch {
+          // Keep the stored receipt. Do not invent one.
+        }
         return {
           checkoutSessionId: payment.stripe_checkout_session_id ?? "",
           paymentIntentId: intent.id,
-          receiptUrl: payment.stripe_receipt_url,
+          receiptUrl,
+          cardLast4,
           metadata: intent.metadata ?? {},
           amountReceived: intent.amount_received ?? payment.amount,
           paidAt: new Date(intent.created * 1000).toISOString(),
@@ -245,7 +268,9 @@ export async function backfillPaidPaymentStripeIds(payment: Payment): Promise<bo
 
   const needsUpdate = Boolean(
     !payment.stripe_payment_intent_id ||
-      (!payment.stripe_checkout_session_id && stripeMatch.checkoutSessionId)
+      (!payment.stripe_checkout_session_id && stripeMatch.checkoutSessionId) ||
+      (!payment.stripe_receipt_url && stripeMatch.receiptUrl) ||
+      (!payment.card_last4 && stripeMatch.cardLast4)
   );
 
   if (needsUpdate) {
@@ -257,6 +282,7 @@ export async function backfillPaidPaymentStripeIds(payment: Payment): Promise<bo
         stripe_checkout_session_id:
           payment.stripe_checkout_session_id || stripeMatch.checkoutSessionId || null,
         stripe_receipt_url: payment.stripe_receipt_url ?? stripeMatch.receiptUrl,
+        card_last4: payment.card_last4 ?? stripeMatch.cardLast4 ?? null,
       })
       .eq("id", payment.id);
   }

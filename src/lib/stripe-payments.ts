@@ -3,6 +3,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { logProjectActivity } from "@/lib/activity";
 import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
+import { sendPaymentReceiptEmails } from "@/lib/stripe-receipt-email";
 import { getAppSettings } from "@/lib/app-settings";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { getStripeForStoredAccount } from "@/lib/stripe-connect";
@@ -16,6 +17,7 @@ interface PaymentSuccessOptions {
   checkoutSessionId?: string;
   paymentIntentId?: string;
   receiptUrl?: string | null;
+  cardLast4?: string | null;
   source: string;
   metadata?: Stripe.Metadata | null;
 }
@@ -67,7 +69,7 @@ export function checkPaymentBusinessAttribution(
 
 /** Idempotent payment success — safe to call from multiple webhook events. */
 export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
-  const { payment, checkoutSessionId, paymentIntentId, receiptUrl, source } = options;
+  const { payment, checkoutSessionId, paymentIntentId, receiptUrl, cardLast4, source } = options;
 
   const attribution = checkPaymentBusinessAttribution(payment, options.metadata);
   if (!attribution.ok) {
@@ -86,6 +88,13 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
   const { payments: payWorkflow } = appSettings.workflow;
 
   if (isPaymentComplete(payment.status)) {
+    const receiptPatch: { stripe_receipt_url?: string; card_last4?: string } = {};
+    if (receiptUrl && !payment.stripe_receipt_url) receiptPatch.stripe_receipt_url = receiptUrl;
+    if (cardLast4 && !payment.card_last4) receiptPatch.card_last4 = cardLast4;
+    if (Object.keys(receiptPatch).length) {
+      const db = await createTenantServiceClient(businessId);
+      await db.from("payments").update(receiptPatch).eq("id", payment.id);
+    }
     return { alreadyPaid: true, paymentId: payment.id, updated: false, businessId };
   }
 
@@ -105,6 +114,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
       stripe_checkout_session_id: checkoutSessionId ?? payment.stripe_checkout_session_id,
       stripe_payment_intent_id: paymentIntentId ?? payment.stripe_payment_intent_id,
       stripe_receipt_url: receiptUrl ?? payment.stripe_receipt_url,
+      card_last4: cardLast4 ?? payment.card_last4 ?? null,
     })
     .eq("id", payment.id)
     .in("status", ["pending", "sent"])
@@ -197,15 +207,20 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
 
   const projectLabel = project?.project_name || payment.description;
 
+  const paidPayment = { ...payment, ...updated, paid_at: paidAt } as Payment;
+  const cardLast4Saved = cardLast4 ?? payment.card_last4 ?? null;
+  const receiptSaved = receiptUrl ?? payment.stripe_receipt_url ?? null;
+
   await notifyAdmins({
     businessId,
     type: "payment_received",
     eventKey: "payment_received",
-    title: "Payment Received",
-    body: `${amountStr} received for ${projectLabel}. Downloads are unlocked.`,
+    title: "Payment receipt",
+    body: `${amountStr} paid for ${projectLabel}.`,
     link: `/admin/projects/${payment.project_id}#payments`,
     projectId: payment.project_id,
     paymentId: payment.id,
+    sendEmail: false,
   });
 
   if (payWorkflow.autoSendReceipt) {
@@ -213,12 +228,24 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
       businessId,
       type: "payment_confirmed",
       eventKey: "project_delivered",
-      title: "Project Complete",
+      title: "Payment receipt",
       body: completedBody,
       link: `/dashboard/projects/${payment.project_id}#payments`,
       projectId: payment.project_id,
+      paymentId: payment.id,
+      sendEmail: false,
     });
   }
+
+  await sendPaymentReceiptEmails({
+    businessId,
+    payment: paidPayment,
+    amountLabel: amountStr,
+    projectLabel,
+    receiptUrl: receiptSaved,
+    cardLast4: cardLast4Saved,
+    sendClient: payWorkflow.autoSendReceipt,
+  });
 
   return { alreadyPaid: false, paymentId: payment.id, updated: true, businessId };
 }

@@ -47,6 +47,7 @@ export function AdminPaymentActions({
         <p className="text-xs text-muted mt-0.5">
           {formatDate(payment.created_at)}
           {payment.paid_at && ` · Paid ${formatDate(payment.paid_at)}`}
+          {payment.status === "paid" && payment.card_last4 ? ` · Card ending ${payment.card_last4}` : ""}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -74,6 +75,13 @@ export function AdminPaymentActions({
             {markingPaidId === payment.id ? "Marking…" : "Mark as Paid"}
           </Button>
         )}
+        {payment.status === "paid" && payment.stripe_receipt_url ? (
+          <a href={payment.stripe_receipt_url} target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="sm" className="min-h-11">
+              View receipt
+            </Button>
+          </a>
+        ) : null}
         {link && payment.status !== "paid" && (
           <>
             <a href={link} target="_blank" rel="noopener noreferrer">

@@ -5,7 +5,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, Download, Receipt } from "lucide-react";
+import { CreditCard, Receipt } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { paymentCheckoutPath } from "@/lib/payment-status";
 import { usePortalBrand } from "@/components/brand/brand-provider";
@@ -87,18 +87,19 @@ export function PaymentsSection({ payments, isPreview, alwaysShow }: PaymentsSec
                         <p className="text-sm text-muted">{p.description}</p>
                         <p className="text-xs text-muted mt-0.5">
                           Paid {p.paid_at ? formatDate(p.paid_at) : "—"}
+                          {p.card_last4 ? ` · Card ending ${p.card_last4}` : ""}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 sm:shrink-0">
                       <Badge variant="success">Paid</Badge>
-                      {!isPreview && (
-                        <a href={`/api/payments/${p.id}/receipt`} target="_blank" rel="noopener noreferrer">
+                      {!isPreview && p.stripe_receipt_url ? (
+                        <a href={p.stripe_receipt_url} target="_blank" rel="noopener noreferrer">
                           <Button variant="outline" size="sm">
-                            <Download className="h-4 w-4" /> Receipt
+                            View receipt
                           </Button>
                         </a>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 ))}
