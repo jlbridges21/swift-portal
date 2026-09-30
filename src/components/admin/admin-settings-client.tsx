@@ -439,6 +439,7 @@ export function AdminSettingsClient({
   }
 
   const isLandingEditor = section === "landing";
+  const isTaxEditor = section === "tax" && showTax;
 
   const saveFooter = (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -485,6 +486,46 @@ export function AdminSettingsClient({
             />
           }
           shellFooter={saveFooter}
+        />
+        {restoreOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-primary">Restore platform defaults?</h3>
+              <p className="mt-2 text-sm text-muted">
+                This resets business name, portal name, contact info, logo URL, and brand colors to generic
+                platform defaults and saves immediately.
+              </p>
+              <div className="mt-6 flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setRestoreOpen(false)} disabled={restoring}>
+                  Cancel
+                </Button>
+                <Button type="button" variant="accent" onClick={restorePlatformDefaults} disabled={restoring}>
+                  {restoring ? <Loader2 className="h-4 w-4 animate-spin" /> : "Restore & Save"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  if (isTaxEditor) {
+    return (
+      <>
+        <TaxInformationSettings
+          tax={settings.tax}
+          onChange={patchTax}
+          clients={w9Clients}
+          nav={
+            <SettingsTabNav
+              active={section}
+              onChange={selectSection}
+              accentColor={tabAccent}
+              sections={sections}
+            />
+          }
+          footer={saveFooter}
         />
         {restoreOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -1247,12 +1288,6 @@ export function AdminSettingsClient({
             </Card>
           </div>
         </SettingsPanel>
-
-        {showTax ? (
-          <SettingsPanel id="tax" active={section}>
-            <TaxInformationSettings tax={settings.tax} onChange={patchTax} clients={w9Clients} />
-          </SettingsPanel>
-        ) : null}
 
         <SettingsPanel id="staff" active={section}>
           {staff}

@@ -19,6 +19,13 @@ const SWIFT_ADMIN = "7d0957c6-6330-48ca-a530-f13d4dc15a84";
 const SWIFT_SLUG = "swift-aerial-media";
 /** Jackson Bridges test project — never use live client fixtures (Joy Sullivan, etc.). */
 const TEST_PROJECT = "933c476c-c1c4-4d8b-a5fa-aa556fcf640a";
+/**
+ * Live Jackson test project. TEST_PROJECT was soft-deleted (deleted_at
+ * 2026-09-30T17:22:09Z), so a client fetch of it is a 404 and cannot prove
+ * the Your Progress heading.
+ */
+const LIVE_PROGRESS_PROJECT = "5d5c11cc-b57e-4027-8ccb-fb3105af1350";
+const LIVE_PROGRESS_NAME = "Jackson Bridges - Bay View - Custom Project";
 const TEST_CLIENT_EMAIL = "jackson.bridges21@gmail.com";
 const OTHER_SWIFT_PROJECT = "26e65643-74d1-4c34-b085-0711c6e4b97c";
 const OTHER_BUSINESS_PROJECT = "f4a9a474-9470-4b5a-b998-8c9236b40b31";
@@ -86,11 +93,11 @@ function cookieFromSetCookies(cookies: string[]): string {
   return cookies.map((c) => c.split(";")[0]).join("; ");
 }
 
-async function cleanupShare(admin: SupabaseClient, email: string) {
+async function cleanupShare(admin: SupabaseClient, email: string, projectId = TEST_PROJECT) {
   await admin
     .from("project_shares")
     .update({ revoked_at: new Date().toISOString() })
-    .eq("project_id", TEST_PROJECT)
+    .eq("project_id", projectId)
     .eq("email", email);
 }
 
@@ -98,14 +105,15 @@ async function createShareWithLink(
   admin: SupabaseClient,
   email: string,
   preset: ShareExpiryPreset,
-  custom?: { startsAt?: string; expiresAt?: string }
+  custom?: { startsAt?: string; expiresAt?: string },
+  projectId = TEST_PROJECT
 ) {
   const { addProjectShare, buildShareMagicLinkForProject, resolveShareAccessWindow } =
     await import("../src/lib/project-shares");
   const accessFields = resolveShareAccessWindow(preset, custom);
   const added = await addProjectShare({
     businessId: SWIFT,
-    projectId: TEST_PROJECT,
+    projectId,
     email,
     invitedBy: SWIFT_ADMIN,
     notify: false,
@@ -117,7 +125,7 @@ async function createShareWithLink(
   });
   const link = await buildShareMagicLinkForProject({
     businessId: SWIFT,
-    projectId: TEST_PROJECT,
+    projectId,
     email,
     shareId: added.share.id,
     accessFields,
@@ -480,66 +488,159 @@ async function main() {
   );
 
   section("13–14. Your Progress HTML gating");
-  const sharedPage = await fetch(`${base}/dashboard/projects/${TEST_PROJECT}`, {
-    headers: { Cookie: shareCookie },
-  });
-  const sharedHtml = await sharedPage.text();
-  console.log(
-    "grep shared viewer Your Progress:",
-    sharedHtml.includes("Your Progress") ? "FOUND (fail)" : "absent (ok)"
-  );
-  assert(!sharedHtml.includes("Your Progress"), "shared viewer HTML lacks Your Progress");
+  // The old check signed in as jackson.bridges21@gmail.com (a Flyby admin; middleware
+  // sends that session off Swift) against TEST_PROJECT, which is now soft-deleted.
+  // Both fetches missed the client page. This section uses the live Bay View project.
+  const progressShareEmail = `progress-share-${ts}@example.test`;
+  const probeEmail = `progress-client-${ts}@example.test`;
+  let probeUserId: string | null = null;
+  let probeClientId: string | null = null;
+  let priorLiveLinkMode: string | null = null;
+  let openedLiveLink = false;
+  try {
+    await cleanupShare(admin, progressShareEmail, LIVE_PROGRESS_PROJECT);
+    const progressShare = await createShareWithLink(
+      admin,
+      progressShareEmail,
+      "30days",
+      undefined,
+      LIVE_PROGRESS_PROJECT
+    );
+    const progressConsume = await consumeShareToken(base, extractToken(progressShare.link));
+    const progressShareCookie = cookieFromSetCookies(progressConsume.cookies);
+    const sharedPage = await fetch(`${base}/dashboard/projects/${LIVE_PROGRESS_PROJECT}`, {
+      headers: { Cookie: progressShareCookie },
+    });
+    const sharedHtml = await sharedPage.text();
+    console.log("shared viewer status:", sharedPage.status, sharedPage.url);
+    console.log(
+      "grep shared viewer Your Progress:",
+      sharedHtml.includes("Your Progress") ? "FOUND (fail)" : "absent (ok)"
+    );
+    assert(sharedHtml.includes(LIVE_PROGRESS_NAME), "shared viewer rendered the live project");
+    assert(!sharedHtml.includes("NEXT_HTTP_ERROR_FALLBACK;404"), "shared viewer is not a 404");
+    assert(!sharedHtml.includes("Your Progress"), "shared viewer HTML lacks Your Progress");
 
-  if (publicUrl) {
-    const anonPage = await fetch(publicUrl);
+    const { data: liveProject } = await admin
+      .from("projects")
+      .select("link_access_mode, link_access_token")
+      .eq("id", LIVE_PROGRESS_PROJECT)
+      .single();
+    priorLiveLinkMode = liveProject?.link_access_mode || "restricted";
+    if (!liveProject?.link_access_token) throw new Error("live progress project has no public token");
+    if (priorLiveLinkMode !== "anyone_with_link") {
+      const { error: openErr } = await admin
+        .from("projects")
+        .update({ link_access_mode: "anyone_with_link" })
+        .eq("id", LIVE_PROGRESS_PROJECT);
+      if (openErr) throw new Error(openErr.message);
+      openedLiveLink = true;
+    }
+    const anonPage = await fetch(`${base}/view/${liveProject.link_access_token}`);
     const anonHtml = await anonPage.text();
+    console.log("anonymous status:", anonPage.status, anonPage.url);
     console.log(
       "grep anonymous Your Progress:",
       anonHtml.includes("Your Progress") ? "FOUND (fail)" : "absent (ok)"
     );
+    assert(anonHtml.includes(LIVE_PROGRESS_NAME), "anonymous visitor rendered the live project");
+    assert(!anonHtml.includes("NEXT_HTTP_ERROR_FALLBACK;404"), "anonymous page is not a 404");
     assert(!anonHtml.includes("Your Progress"), "anonymous HTML lacks Your Progress");
-  }
 
-  const { data: clientProfile } = await admin
-    .from("profiles")
-    .select("id")
-    .ilike("email", TEST_CLIENT_EMAIL)
-    .maybeSingle();
-  if (clientProfile?.id) {
-    const { data: linkData } = await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email: TEST_CLIENT_EMAIL,
+    const created = await admin.auth.admin.createUser({
+      email: probeEmail,
+      email_confirm: true,
+      user_metadata: { role: "client", full_name: "Progress probe" },
     });
+    if (!created.data.user) throw new Error(created.error?.message || "progress probe user");
+    probeUserId = created.data.user.id;
+    const { data: probeClient, error: clientErr } = await admin
+      .from("clients")
+      .insert({
+        business_id: SWIFT,
+        name: "Progress probe",
+        email: probeEmail,
+        user_id: probeUserId,
+      })
+      .select("id")
+      .single();
+    if (clientErr || !probeClient) throw new Error(clientErr?.message || "progress probe client");
+    probeClientId = probeClient.id as string;
+    const { error: junctionErr } = await admin.from("project_clients").insert({
+      business_id: SWIFT,
+      project_id: LIVE_PROGRESS_PROJECT,
+      client_id: probeClientId,
+    });
+    if (junctionErr) throw new Error(junctionErr.message);
+    const { error: profileErr } = await admin
+      .from("profiles")
+      .update({
+        role: "client",
+        business_id: SWIFT,
+        client_id: probeClientId,
+        full_name: "Progress probe",
+      })
+      .eq("id", probeUserId);
+    if (profileErr) throw new Error(profileErr.message);
+
+    const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email: probeEmail,
+    });
+    if (linkErr) throw new Error(linkErr.message);
     const hashed = linkData.properties?.hashed_token;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const userClient = createClient(url, anonKey, { auth: { persistSession: false } });
-    const { data: verified } = await userClient.auth.verifyOtp({
+    const { data: verified, error: otpErr } = await userClient.auth.verifyOtp({
       token_hash: hashed!,
       type: "email",
     });
+    if (otpErr || !verified.session) throw new Error(otpErr?.message || "progress probe session");
     const ref = new URL(url).hostname.split(".")[0];
     const clientCookie = `sb-${ref}-auth-token=${encodeURIComponent(
       JSON.stringify({
-        access_token: verified.session!.access_token,
-        refresh_token: verified.session!.refresh_token,
-        expires_at: verified.session!.expires_at,
-        expires_in: verified.session!.expires_in,
-        token_type: verified.session!.token_type,
+        access_token: verified.session.access_token,
+        refresh_token: verified.session.refresh_token,
+        expires_at: verified.session.expires_at,
+        expires_in: verified.session.expires_in,
+        token_type: verified.session.token_type,
         user: verified.user,
       })
     )}`;
-    const clientPage = await fetch(`${base}/dashboard/projects/${TEST_PROJECT}`, {
+    const clientPage = await fetch(`${base}/dashboard/projects/${LIVE_PROGRESS_PROJECT}`, {
       headers: { Cookie: clientCookie },
     });
     const clientHtml = await clientPage.text();
+    console.log("assigned client status:", clientPage.status, clientPage.url);
     console.log(
       "grep assigned client Your Progress:",
       clientHtml.includes("Your Progress") ? "present (ok)" : "absent (fail)"
     );
-    assert(clientHtml.includes("Your Progress"), "assigned client still sees Your Progress");
-  } else {
-    console.log("SKIP assigned client regression — test client profile not found");
+    const headingAt = clientHtml.indexOf("Your Progress");
+    if (headingAt >= 0) {
+      console.log(
+        "assigned client HTML:",
+        clientHtml.slice(Math.max(0, headingAt - 180), headingAt + 90).replace(/\s+/g, " ")
+      );
+    }
+    assert(clientHtml.includes(LIVE_PROGRESS_NAME), "assigned client rendered the live project");
+    assert(!clientHtml.includes("NEXT_HTTP_ERROR_FALLBACK;404"), "assigned client page is not a 404");
+    assert(clientHtml.includes("Your Progress"), "assigned client HTML includes Your Progress");
+  } finally {
+    if (openedLiveLink) {
+      await admin
+        .from("projects")
+        .update({ link_access_mode: priorLiveLinkMode })
+        .eq("id", LIVE_PROGRESS_PROJECT);
+      console.log(`Restored live project link_access_mode=${priorLiveLinkMode}`);
+    }
+    await cleanupShare(admin, progressShareEmail, LIVE_PROGRESS_PROJECT);
+    if (probeClientId) {
+      await admin.from("project_clients").delete().eq("client_id", probeClientId);
+      await admin.from("clients").delete().eq("id", probeClientId);
+    }
+    if (probeUserId) await admin.auth.admin.deleteUser(probeUserId);
   }
 
   section("15. Share with existing ShootPortal account");

@@ -53,6 +53,31 @@ export function takeTin(input: Record<string, unknown>): ParsedTin {
   return { kind, digits };
 }
 
+/**
+ * Preview must not accept a taxpayer identification number under any key,
+ * or a TIN-shaped string in any field. The message is fixed and does not
+ * include the submitted value.
+ */
+export function assertNoTinInPreview(value: unknown): void {
+  if (typeof value === "string") {
+    if (looksLikeStoredTin(value)) {
+      throw new W9InputError("A taxpayer identification number is not part of the preview.");
+    }
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) assertNoTinInPreview(item);
+    return;
+  }
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (key === "tinKind" || (TIN_STORAGE_KEYS as readonly string[]).includes(key)) {
+      throw new W9InputError("A taxpayer identification number is not part of the preview.");
+    }
+    assertNoTinInPreview(child);
+  }
+}
+
 export function logW9Failure(err: unknown): void {
   const message = err instanceof Error ? err.message : "W-9 request failed";
   console.error("[w9]", redactPossibleTin(message));

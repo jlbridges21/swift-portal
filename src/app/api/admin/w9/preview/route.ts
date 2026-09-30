@@ -4,9 +4,29 @@ import { isOwnerAdmin } from "@/lib/staff-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getAppSettings } from "@/lib/app-settings";
 import { w9CountryDecision } from "@/lib/w9-country";
-import { createW9Pdf, w9ErrorResponse, w9SignatureDate } from "@/lib/w9-generate";
-import { W9_DOWNLOAD_HEADERS } from "@/lib/w9-link";
+import { sanitizeTaxInformation } from "@/lib/w9-settings";
+import {
+  createW9PreviewPdf,
+  readPreviewSignature,
+  w9ErrorResponse,
+  w9SignatureDate,
+} from "@/lib/w9-generate";
+import { assertNoTinInPreview } from "@/lib/w9-tin";
 
+const PREVIEW_HEADERS = {
+  "Content-Type": "application/pdf",
+  "Content-Disposition": 'inline; filename="w-9-preview.pdf"',
+  "Cache-Control": "private, no-store, no-cache, max-age=0",
+  "CDN-Cache-Control": "no-store",
+  "Surrogate-Control": "no-store",
+  "X-Robots-Tag": "noindex, nofollow",
+  Pragma: "no-cache",
+} as const;
+
+/**
+ * In-memory preview. The bytes are returned once and are not written to
+ * storage. A taxpayer identification number is refused before the PDF is built.
+ */
 export async function POST(request: Request) {
   const profile = await getProfile();
   if (!profile || !isOwnerAdmin(profile)) {
@@ -27,12 +47,14 @@ export async function POST(request: Request) {
   }
 
   try {
+    assertNoTinInPreview(body);
     const country = await w9CountryDecision(tenant.businessId);
     if (!country.us) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const settings = await getAppSettings(tenant.businessId);
-    const date = w9SignatureDate(settings.workflow.businessDefaults.timezone);
-    const pdf = await createW9Pdf({ businessId: tenant.businessId, body, date });
-    return new NextResponse(Buffer.from(pdf), { headers: W9_DOWNLOAD_HEADERS });
+    const tax = sanitizeTaxInformation(body.tax, false);
+    const signature = readPreviewSignature(body, w9SignatureDate(settings.workflow.businessDefaults.timezone));
+    const pdf = await createW9PreviewPdf({ businessId: tenant.businessId, tax, signature });
+    return new NextResponse(Buffer.from(pdf), { headers: PREVIEW_HEADERS });
   } catch (err) {
     return w9ErrorResponse(err);
   }

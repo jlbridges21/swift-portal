@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
+import { ClientW9Panel } from "@/components/admin/client-w9-panel";
 import { ClientPortalRecoveryCard } from "@/components/admin/client-portal-recovery-card";
 import type { Payment } from "@/lib/types";
 
@@ -314,11 +315,14 @@ interface ClientCrmProfileProps {
   data: ClientCrmProfile;
   /** Hide payment / money sections when false (staff without money.view). */
   canViewMoney?: boolean;
+  /** Owner/admin on a US business. Staff and non-US businesses omit the panel. */
+  w9?: { taxReady: boolean } | null;
 }
 
 export function ClientCrmProfile({
   data: initialData,
   canViewMoney = true,
+  w9 = null,
 }: ClientCrmProfileProps) {
   const router = useRouter();
   const [data, setData] = useState(initialData);
@@ -502,6 +506,13 @@ export function ClientCrmProfile({
           )}
         </div>
       </div>
+
+      {w9 ? (
+        <ClientW9Panel
+          client={{ id: client.id, name: displayName, email: client.email || "" }}
+          taxReady={w9.taxReady}
+        />
+      ) : null}
 
       {/* Summary cards */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">

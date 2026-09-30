@@ -26,13 +26,15 @@ export function newW9Token(): string {
   return randomBytes(32).toString("base64url");
 }
 
-export async function listW9Sends(businessId: string): Promise<W9SendEvent[]> {
+export async function listW9Sends(businessId: string, clientId?: string): Promise<W9SendEvent[]> {
   const db = await createTenantServiceClient(businessId);
-  const { data, error } = await db
+  let query = db
     .from("w9_sends")
     .select("id, client_id, recipient_email, sender_user_id, expires_at, downloaded_at, revoked_at, created_at")
     .order("created_at", { ascending: false })
     .limit(50);
+  if (clientId) query = query.eq("client_id", clientId);
+  const { data, error } = await query;
   if (error) throw new Error("Could not load W-9 history");
   const rows = (data ?? []) as W9SendEvent[];
   const clientIds = [...new Set(rows.map((row) => row.client_id))];

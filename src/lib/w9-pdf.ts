@@ -20,7 +20,8 @@ export type W9Signature =
 export async function fillW9Pdf(args: {
   templateBytes: Uint8Array;
   tax: TaxInformationSettings;
-  tin: ParsedTin;
+  /** Null leaves the SSN and EIN boxes empty. Preview always passes null. */
+  tin: ParsedTin | null;
   signature: W9Signature;
 }): Promise<Uint8Array> {
   if (process.env.W9_FORCE_GENERATE_FAIL === "1") {
@@ -73,7 +74,7 @@ export async function fillW9Pdf(args: {
   form.getTextField(W9_FIELDS.ssn3).setText("");
   form.getTextField(W9_FIELDS.ein1).setText("");
   form.getTextField(W9_FIELDS.ein2).setText("");
-  writeTinBoxes(form, args.tin);
+  if (args.tin) writeTinBoxes(form, args.tin);
 
   try {
     form.updateFieldAppearances();

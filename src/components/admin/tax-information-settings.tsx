@@ -1,16 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { W9_LINK_TTL_DAYS, type TaxInformationSettings } from "@/lib/w9-fields";
+import { cn } from "@/lib/utils";
+import type { TaxInformationSettings } from "@/lib/w9-fields";
 import type { W9SendEvent } from "@/lib/w9-send";
+import { W9HistoryList } from "@/components/admin/w9-history-list";
+import { SignatureChoice, W9GenerateDialog, type W9ClientOption } from "@/components/admin/w9-generate-dialog";
+import { W9PdfPreview } from "@/components/admin/w9-pdf-preview";
 
-export type W9ClientOption = { id: string; name: string; email: string };
+export type { W9ClientOption };
 
 const CLASSIFICATIONS: { value: TaxInformationSettings["federalTaxClassification"]; label: string }[] = [
   { value: "", label: "Choose a classification" },
@@ -25,30 +28,23 @@ const CLASSIFICATIONS: { value: TaxInformationSettings["federalTaxClassification
 
 type SignatureMode = "typed" | "blank";
 
-function linkStatus(row: W9SendEvent): string {
-  if (row.revoked_at) return "Revoked";
-  if (row.downloaded_at) return "Downloaded";
-  if (new Date(row.expires_at).getTime() <= Date.now()) return "Expired";
-  return "Link active";
-}
-
 export function TaxInformationSettings({
   tax,
   onChange,
   clients,
+  nav,
+  footer,
 }: {
   tax: TaxInformationSettings;
   onChange: (patch: Partial<TaxInformationSettings>) => void;
   clients: W9ClientOption[];
+  nav: ReactNode;
+  footer?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [tinKind, setTinKind] = useState<"ssn" | "ein">("ssn");
-  const [tin, setTin] = useState("");
   const [signatureMode, setSignatureMode] = useState<SignatureMode>("typed");
-  const [attestation, setAttestation] = useState(false);
   const [typedName, setTypedName] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [busy, setBusy] = useState<"download" | "send" | null>(null);
+  const [pane, setPane] = useState<"form" | "preview">("form");
   const [history, setHistory] = useState<W9SendEvent[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -68,78 +64,6 @@ export function TaxInformationSettings({
     void loadHistory();
   }, [loadHistory]);
 
-  function closeModal() {
-    setOpen(false);
-    setTin("");
-    setAttestation(false);
-  }
-
-  function generationBody() {
-    return {
-      tinKind,
-      tin,
-      signatureMode,
-      attestation,
-      typedName,
-    };
-  }
-
-  async function downloadPdf() {
-    setBusy("download");
-    try {
-      const res = await fetch("/api/admin/w9/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(generationBody()),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error || "Could not generate the form.");
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = "w-9.pdf";
-      anchor.click();
-      URL.revokeObjectURL(url);
-      closeModal();
-      toast.success("W-9 downloaded. Nothing was saved.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not generate the form.");
-    } finally {
-      setBusy(null);
-      setTin("");
-    }
-  }
-
-  async function sendLink() {
-    if (!clientId) {
-      toast.error("Choose a client.");
-      return;
-    }
-    setBusy("send");
-    try {
-      const res = await fetch("/api/admin/w9", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ...generationBody(), clientId }),
-      });
-      const data = (await res.json().catch(() => null)) as { error?: string; recipientEmail?: string } | null;
-      if (!res.ok) throw new Error(data?.error || "Could not send the form.");
-      closeModal();
-      toast.success(`Link emailed to ${data?.recipientEmail ?? "the client"}. The PDF was not attached.`);
-      await loadHistory();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not send the form.");
-    } finally {
-      setBusy(null);
-      setTin("");
-    }
-  }
-
   async function revoke(id: string) {
     setRevoking(id);
     try {
@@ -155,8 +79,8 @@ export function TaxInformationSettings({
     }
   }
 
-  return (
-    <div id="settings-tax" tabIndex={-1} className="scroll-mt-24 space-y-4">
+  const form = (
+    <div id="settings-tax" tabIndex={-1} className="min-w-0 scroll-mt-24 space-y-4 [&_input]:min-w-0 [&_select]:min-w-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-primary">Tax information</h2>
@@ -304,153 +228,137 @@ export function TaxInformationSettings({
             Who was emailed a link, whether they downloaded it, and whether the link has expired. The form
             itself is not kept here.
           </p>
-          {historyError ? <p className="text-sm text-red-600">{historyError}</p> : null}
-          {history.length === 0 ? <p className="text-sm text-muted">No W-9 links sent yet.</p> : null}
-          <ul className="space-y-3">
-            {history.map((row) => {
-              const status = linkStatus(row);
-              const canRevoke = status === "Link active";
-              return (
-                <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3 text-sm">
-                  <div>
-                    <p className="font-medium text-primary">
-                      {row.client_name || "Client"} · {row.recipient_email}
-                    </p>
-                    <p className="text-muted">
-                      Sent {new Date(row.created_at).toLocaleString()} · Expires{" "}
-                      {new Date(row.expires_at).toLocaleString()} · {status}
-                    </p>
-                  </div>
-                  {canRevoke ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={revoking === row.id}
-                      onClick={() => revoke(row.id)}
-                    >
-                      {revoking === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Revoke link"}
-                    </Button>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
+          <W9HistoryList
+            rows={history}
+            error={historyError}
+            revoking={revoking}
+            onRevoke={(id) => void revoke(id)}
+            empty="No W-9 links sent yet."
+          />
         </CardContent>
       </Card>
 
-      {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-card p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-primary">Generate W-9</h3>
-            <p className="mt-2 text-sm text-muted">
-              The taxpayer identification number is not saved. It is held only long enough to fill this PDF.
-            </p>
-            <div className="mt-4 space-y-4">
-              <div className="flex gap-4 text-sm">
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="tin-kind" checked={tinKind === "ssn"} onChange={() => setTinKind("ssn")} />
-                  SSN
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="tin-kind" checked={tinKind === "ein"} onChange={() => setTinKind("ein")} />
-                  EIN
-                </label>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="w9-tin">Taxpayer identification number</Label>
-                <Input
-                  id="w9-tin"
-                  value={tin}
-                  onChange={(e) => setTin(e.target.value)}
-                  autoComplete="off"
-                  inputMode="numeric"
-                  spellCheck={false}
-                />
-              </div>
-              <div className="space-y-2 text-sm">
-                <label className="flex items-start gap-2">
-                  <input
-                    type="radio"
-                    name="w9-signature"
-                    checked={signatureMode === "typed"}
-                    onChange={() => setSignatureMode("typed")}
-                  />
-                  <span>
-                    Place a typed name and today&apos;s date on the signature line. This records that you
-                    confirmed the certification printed in Part II. It is not a representation about how a
-                    particular client will treat that signature.
-                  </span>
-                </label>
-                <label className="flex items-start gap-2">
-                  <input
-                    type="radio"
-                    name="w9-signature"
-                    checked={signatureMode === "blank"}
-                    onChange={() => setSignatureMode("blank")}
-                  />
-                  <span>Leave the signature line blank so it can be signed by hand.</span>
-                </label>
-              </div>
-              {signatureMode === "typed" ? (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="w9-typed-name">Name on the signature line</Label>
-                    <Input
-                      id="w9-typed-name"
-                      value={typedName}
-                      onChange={(e) => setTypedName(e.target.value)}
-                      autoComplete="name"
-                    />
-                  </div>
-                  <label className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={attestation}
-                      onChange={(e) => setAttestation(e.target.checked)}
-                    />
-                    <span>I confirm the certification in Part II of Form W-9.</span>
-                  </label>
-                </>
-              ) : null}
-              <div className="space-y-2">
-                <Label htmlFor="w9-client">Email a one-time link to a client</Label>
-                <select
-                  id="w9-client"
-                  className="flex h-11 w-full rounded-md border border-border bg-background px-3 text-sm"
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                >
-                  <option value="">Choose a client</option>
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id} disabled={!client.email}>
-                      {client.name}
-                      {client.email ? ` · ${client.email}` : " · no email"}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted">
-                  The email contains a link, not the PDF. The link works once, expires in {W9_LINK_TTL_DAYS}{" "}
-                  days, and does not require a portal sign-in. Anyone who has the link can download the file.
-                  Sending again asks for the taxpayer identification number again.
-                </p>
-              </div>
-            </div>
-            <div className="mt-6 flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="outline" onClick={closeModal} disabled={busy !== null}>
-                Cancel
-              </Button>
-              <Button type="button" variant="outline" onClick={downloadPdf} disabled={busy !== null}>
-                {busy === "download" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Download"}
-              </Button>
-              <Button type="button" variant="accent" onClick={sendLink} disabled={busy !== null}>
-                {busy === "send" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Email link"}
-              </Button>
-            </div>
-          </div>
+      <Card className="shadow-sm">
+        <CardContent className="space-y-3 pt-6">
+          <h3 className="text-sm font-semibold text-primary">Signature on the preview</h3>
+          <p className="text-sm text-muted">
+            A typed name and today&apos;s date appear on the preview. Generating the form still asks you to confirm
+            Part II, and still asks for the taxpayer identification number, which is not shown here.
+          </p>
+          <SignatureChoice
+            radioName="w9-signature-form"
+            signatureMode={signatureMode}
+            setSignatureMode={setSignatureMode}
+            typedName={typedName}
+            setTypedName={setTypedName}
+            attestation={false}
+            setAttestation={() => undefined}
+            showAttestation={false}
+            nameInputId="w9-preview-typed-name"
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  return (
+    <TaxEditorShell
+      nav={nav}
+      form={form}
+      preview={<W9PdfPreview tax={tax} signatureMode={signatureMode} typedName={typedName} />}
+      footer={footer}
+      pane={pane}
+      onPane={setPane}
+      dialog={
+        <W9GenerateDialog
+          open={open}
+          onClose={() => setOpen(false)}
+          clients={clients}
+          lockedClient={null}
+          showDownload
+          signatureMode={signatureMode}
+          setSignatureMode={setSignatureMode}
+          typedName={typedName}
+          setTypedName={setTypedName}
+          onSent={() => void loadHistory()}
+        />
+      }
+    />
+  );
+}
+
+function TaxEditorShell({
+  nav,
+  form,
+  preview,
+  footer,
+  pane,
+  onPane,
+  dialog,
+}: {
+  nav: ReactNode;
+  form: ReactNode;
+  preview: ReactNode;
+  footer?: ReactNode;
+  pane: "form" | "preview";
+  onPane: (pane: "form" | "preview") => void;
+  dialog: ReactNode;
+}) {
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => {
+      if (mq.matches) {
+        document.documentElement.style.overflow = "hidden";
+        document.body.style.overflow = "hidden";
+      } else {
+        document.documentElement.style.overflow = "";
+        document.body.style.overflow = "";
+      }
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => {
+      mq.removeEventListener("change", sync);
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow = "";
+    };
+  }, []);
+
+  return (
+    <div
+      className="flex min-w-0 flex-col lg:fixed lg:inset-x-0 lg:bottom-0 lg:top-16 lg:z-40 lg:flex-row lg:overflow-hidden lg:bg-background"
+      data-w9-editor-shell=""
+    >
+      <aside className="min-w-0 shrink-0 lg:flex lg:w-56 lg:flex-col lg:overflow-y-scroll lg:border-r lg:border-border lg:bg-card lg:px-3 lg:py-4">
+        <div className="min-w-0">{nav}</div>
+      </aside>
+      <div className="flex min-w-0 flex-col lg:w-[28rem] lg:shrink-0 lg:overflow-hidden lg:border-r lg:border-border">
+        <div className="flex shrink-0 gap-2 border-b border-border p-3 lg:hidden">
+          <Button type="button" size="sm" variant={pane === "form" ? "accent" : "outline"} onClick={() => onPane("form")}>
+            Form
+          </Button>
+          <Button type="button" size="sm" variant={pane === "preview" ? "accent" : "outline"} onClick={() => onPane("preview")}>
+            Preview
+          </Button>
         </div>
-      ) : null}
+        <div
+          className={cn(
+            "min-h-0 min-w-0 flex-1 space-y-4 overflow-y-scroll px-1 py-1 lg:px-4 lg:py-4",
+            pane === "preview" && "hidden lg:block"
+          )}
+        >
+          {form}
+        </div>
+        {footer ? (
+          <div className={cn("shrink-0 border-t border-border bg-card/95 px-3 py-3 backdrop-blur-md lg:px-4", pane === "preview" && "hidden lg:block")}>
+            {footer}
+          </div>
+        ) : null}
+      </div>
+      <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden", pane === "form" && "hidden lg:flex")}>
+        {preview}
+      </div>
+      {dialog}
     </div>
   );
 }

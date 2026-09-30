@@ -7,6 +7,9 @@ import { getClientCrmProfile } from "@/lib/clients-crm";
 import { ClientCrmProfile } from "@/components/admin/clients-table";
 import { ChevronLeft } from "lucide-react";
 import { canAccessClient, isOwnerAdmin, staffCan, visibleProjectIdsFor } from "@/lib/staff-access";
+import { w9CountryDecision } from "@/lib/w9-country";
+import { getAppSettings } from "@/lib/app-settings";
+import { isTaxInformationReady } from "@/lib/w9-generate";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -33,6 +36,9 @@ export default async function AdminClientDetailPage({ params }: PageProps) {
 
   const isStaff = profile.role === "staff";
   const canViewMoney = staffCan(profile, "money.view");
+  const country = isOwnerAdmin(profile) ? await w9CountryDecision(businessId) : null;
+  const taxReady =
+    country?.us === true ? isTaxInformationReady((await getAppSettings(businessId)).tax) : false;
 
   return (
     <div className="min-h-screen bg-background">
@@ -46,7 +52,11 @@ export default async function AdminClientDetailPage({ params }: PageProps) {
             </Button>
           </Link>
         </div>
-        <ClientCrmProfile data={data} canViewMoney={canViewMoney} />
+        <ClientCrmProfile
+          data={data}
+          canViewMoney={canViewMoney}
+          w9={country?.us ? { taxReady } : null}
+        />
       </main>
     </div>
   );

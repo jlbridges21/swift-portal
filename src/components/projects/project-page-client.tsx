@@ -74,8 +74,11 @@ interface ProjectPageClientProps {
   isSharedViewer?: boolean;
   /** Assigned client + admin only — quotes, payments, estimates, proposals. */
   canViewFinancials?: boolean;
-  /** Assigned client + admin only — "Your Progress" timeline and next-step banner. */
-  canViewProjectProgress?: boolean;
+  /**
+   * Assigned client + admin only — "Your Progress" timeline and next-step banner.
+   * Required. A default of false hid the section whenever a caller forgot the prop.
+   */
+  canViewProjectProgress: boolean;
   /** Authenticated project viewers — video review links and comment UI. */
   canAccessVideoReviews?: boolean;
 }
@@ -144,7 +147,7 @@ export function ProjectPageClient({
   requireDeliveredForDownloads = true,
   isSharedViewer = false,
   canViewFinancials = false,
-  canViewProjectProgress = false,
+  canViewProjectProgress,
   canAccessVideoReviews = false,
 }: ProjectPageClientProps) {
   const router = useRouter();
