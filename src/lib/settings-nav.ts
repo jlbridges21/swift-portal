@@ -12,6 +12,7 @@ export const SETTINGS_SECTION_IDS = [
   "workflow",
   "notifications",
   "integrations",
+  "tax",
   "staff",
 ] as const;
 
@@ -105,12 +106,22 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     hashes: ["settings-integrations"],
   },
   {
+    id: "tax",
+    label: "Tax information",
+    description: "Form W-9 identity fields. The taxpayer identification number is not saved.",
+    hashes: ["settings-tax"],
+  },
+  {
     id: "staff",
     label: "Staff & Permissions",
     description: "Invite teammates and set what each staff member can do.",
     hashes: ["settings-staff", "settings-staff-permissions"],
   },
 ];
+
+export function visibleSettingsSections(includeTax: boolean): SettingsSection[] {
+  return includeTax ? SETTINGS_SECTIONS : SETTINGS_SECTIONS.filter((section) => section.id !== "tax");
+}
 
 export function sectionForHash(hash: string): SettingsSectionId | null {
   const normalized = hash.replace(/^#/, "").trim();

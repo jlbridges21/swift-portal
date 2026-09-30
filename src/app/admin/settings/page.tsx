@@ -18,6 +18,8 @@ import {
 } from "@/lib/custom-domain";
 import { StaffPermissionsSettings } from "@/components/admin/staff-permissions-settings";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
+import { w9CountryDecision } from "@/lib/w9-country";
+import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 
 export default async function AdminSettingsPage() {
   const { tenant } = await requireAdminPage({ adminOnly: true });
@@ -41,6 +43,22 @@ export default async function AdminSettingsPage() {
   const customDomainState = domainRow
     ? toPublicDomainState(domainRow)
     : emptyPublicDomainState(`${tenant.business.slug}.${getPlatformRootDomain()}`);
+  const country = await w9CountryDecision(tenant.businessId);
+  let w9Clients: { id: string; name: string; email: string }[] = [];
+  if (country.us) {
+    const db = await createTenantServiceClient(tenant.businessId);
+    const { data: clientRows } = await db
+      .from("clients")
+      .select("id, name, email")
+      .is("deleted_at", null)
+      .order("name")
+      .limit(200);
+    w9Clients = (clientRows ?? []).map((client) => ({
+      id: client.id as string,
+      name: (client.name as string) || "Client",
+      email: (client.email as string) || "",
+    }));
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -69,6 +87,8 @@ export default async function AdminSettingsPage() {
             </Suspense>
           }
           services={<ServicesSettingsCard />}
+          showTax={country.us}
+          w9Clients={w9Clients}
         />
       </main>
     </div>

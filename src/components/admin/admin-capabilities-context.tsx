@@ -24,6 +24,8 @@ type AdminCapabilitiesContextValue = {
   userRole: "admin" | "staff" | "client" | null;
   /** Create actions for the mobile + sheet. Layout computes these with staffCan. */
   navCreate: AdminNavCreate;
+  /** Owner/admin on a US business. Staff never receive this, even with every permission. */
+  showTax: boolean;
 };
 
 const AdminCapabilitiesContext = createContext<AdminCapabilitiesContextValue>({
@@ -35,6 +37,7 @@ const AdminCapabilitiesContext = createContext<AdminCapabilitiesContextValue>({
   staffAreas: null,
   userRole: null,
   navCreate: FULL_NAV_CREATE,
+  showTax: false,
 });
 
 export function AdminCapabilitiesProvider({
@@ -46,6 +49,7 @@ export function AdminCapabilitiesProvider({
   staffAreas = null,
   userRole = null,
   navCreate = FULL_NAV_CREATE,
+  showTax = false,
   children,
 }: {
   showPartner: boolean;
@@ -56,6 +60,7 @@ export function AdminCapabilitiesProvider({
   staffAreas?: StaffArea[] | null;
   userRole?: "admin" | "staff" | "client" | null;
   navCreate?: AdminNavCreate;
+  showTax?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -69,6 +74,7 @@ export function AdminCapabilitiesProvider({
         staffAreas,
         userRole,
         navCreate,
+        showTax,
       }}
     >
       {children}

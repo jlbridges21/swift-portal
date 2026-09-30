@@ -72,6 +72,8 @@ const BUSINESS_OWNED_TABLES = new Set([
   "video_review_notification_sends",
   "video_review_versions",
   "video_reviews",
+  "w9_sends",
+  "w9_send_files",
 ]);
 
 /** createServiceClient() / SERVICE_ROLE_KEY — each file is justified in SERVICE-ROLE-MIGRATION.md */
@@ -179,6 +181,9 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/staff.ts",
   "src/lib/staff-access.ts",
   "src/lib/project-link-access.ts",
+  "src/lib/w9-template.ts",
+  "src/lib/w9-link.ts",
+  "src/app/api/cron/w9-purge/route.ts",
   "src/lib/load-public-project-view.ts",
   "src/app/api/projects/[id]/shares/route.ts",
   "src/app/api/projects/[id]/shares/[shareId]/route.ts",
@@ -225,6 +230,8 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/lib/project-share-access.ts",
   "src/lib/staff.ts",
   "src/lib/project-link-access.ts",
+  "src/lib/w9-link.ts",
+  "src/app/api/cron/w9-purge/route.ts",
   "src/lib/load-public-project-view.ts",
   "src/lib/project-zip-download.ts",
   "src/lib/video-review-media.ts",

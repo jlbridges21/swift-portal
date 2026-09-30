@@ -815,8 +815,9 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  if (path.startsWith("/view/")) {
+  if (path.startsWith("/view/") || path.startsWith("/w9/")) {
     supabaseResponse.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+    supabaseResponse.headers.set("Cache-Control", "private, no-store");
   }
 
   return applyPathCookie(supabaseResponse, resolution);

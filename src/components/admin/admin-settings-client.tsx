@@ -27,7 +27,8 @@ import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
 import { BRAND } from "@/lib/brand";
 import { brandContrastWarnings, deriveBrandTheme, sanitizeCssColor } from "@/lib/brand-color";
-import { SETTINGS_SECTIONS, sectionForHash, type SettingsSectionId } from "@/lib/settings-nav";
+import { sectionForHash, visibleSettingsSections, type SettingsSectionId } from "@/lib/settings-nav";
+import { TaxInformationSettings, type W9ClientOption } from "@/components/admin/tax-information-settings";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import type {
   AppSettings,
@@ -55,6 +56,8 @@ interface AdminSettingsClientProps {
   customDomainState: CustomDomainPublicState;
   portalPreviewUrl: string;
   serviceNames: string[];
+  showTax: boolean;
+  w9Clients: W9ClientOption[];
 }
 
 async function parseApiResponse(res: Response): Promise<Record<string, unknown>> {
@@ -274,6 +277,8 @@ export function AdminSettingsClient({
   customDomainState,
   portalPreviewUrl,
   serviceNames,
+  showTax,
+  w9Clients,
 }: AdminSettingsClientProps) {
   const router = useRouter();
   const liveBrand = usePortalBrand();
@@ -290,6 +295,7 @@ export function AdminSettingsClient({
     settings.business.brandAccentColor
   );
   const tabAccent = sanitizeCssColor(settings.business.brandAccentColor, "#4F46E5");
+  const sections = visibleSettingsSections(showTax);
 
   useEffect(() => {
     if (skipNextPropSync.current) {
@@ -303,7 +309,7 @@ export function AdminSettingsClient({
   useEffect(() => {
     const applyHash = () => {
       const id = sectionForHash(window.location.hash);
-      if (id) setSection(id);
+      if (id && (id !== "tax" || showTax)) setSection(id);
     };
     applyHash();
     window.addEventListener("hashchange", applyHash);
@@ -312,7 +318,7 @@ export function AdminSettingsClient({
       window.removeEventListener("hashchange", applyHash);
       window.removeEventListener("portal:hash-target", applyHash);
     };
-  }, []);
+  }, [showTax]);
 
   useEffect(() => {
     setDirty(JSON.stringify(settings) !== baseline);
@@ -421,9 +427,14 @@ export function AdminSettingsClient({
     setSettings((prev) => ({ ...prev, landing }));
   }, []);
 
+  const patchTax = useCallback((patch: Partial<AppSettings["tax"]>) => {
+    setSettings((prev) => ({ ...prev, tax: { ...prev.tax, ...patch } }));
+  }, []);
+
   function selectSection(id: SettingsSectionId) {
+    if (id === "tax" && !showTax) return;
     setSection(id);
-    const hash = SETTINGS_SECTIONS.find((s) => s.id === id)?.hashes[0];
+    const hash = sections.find((s) => s.id === id)?.hashes[0];
     if (hash) window.history.replaceState(null, "", `#${hash}`);
   }
 
@@ -466,7 +477,12 @@ export function AdminSettingsClient({
           brand={liveBrand}
           onChange={patchLanding}
           shellNav={
-            <SettingsTabNav active={section} onChange={selectSection} accentColor={tabAccent} />
+            <SettingsTabNav
+              active={section}
+              onChange={selectSection}
+              accentColor={tabAccent}
+              sections={sections}
+            />
           }
           shellFooter={saveFooter}
         />
@@ -496,7 +512,12 @@ export function AdminSettingsClient({
   return (
     <div className="flex flex-col gap-6 md:flex-row md:items-start">
       <aside className="w-full shrink-0 md:sticky md:top-20 md:w-56">
-        <SettingsTabNav active={section} onChange={selectSection} accentColor={tabAccent} />
+        <SettingsTabNav
+          active={section}
+          onChange={selectSection}
+          accentColor={tabAccent}
+          sections={sections}
+        />
       </aside>
 
       <div className="min-w-0 flex-1 space-y-4">
@@ -1226,6 +1247,12 @@ export function AdminSettingsClient({
             </Card>
           </div>
         </SettingsPanel>
+
+        {showTax ? (
+          <SettingsPanel id="tax" active={section}>
+            <TaxInformationSettings tax={settings.tax} onChange={patchTax} clients={w9Clients} />
+          </SettingsPanel>
+        ) : null}
 
         <SettingsPanel id="staff" active={section}>
           {staff}

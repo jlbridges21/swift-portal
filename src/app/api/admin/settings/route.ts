@@ -11,6 +11,7 @@ import { InvalidBrandAssetUrlError, InvalidBrandColorError } from "@/lib/brand-c
 import { InvalidEmailSenderError } from "@/lib/email-sender-policy";
 import { EntitlementError } from "@/lib/entitlements";
 import { InvalidLandingHowItWorksError } from "@/lib/landing-content";
+import { redactPossibleTin, W9InputError } from "@/lib/w9-tin";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET() {
@@ -55,13 +56,16 @@ export async function PATCH(request: Request) {
     if (error instanceof InvalidLandingHowItWorksError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
+    if (error instanceof W9InputError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     if (error instanceof InvalidEmailSenderError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error instanceof EntitlementError) {
       return NextResponse.json({ error: error.message }, { status: 403 });
     }
-    const message = error instanceof Error ? error.message : "Failed to save settings";
+    const message = error instanceof Error ? redactPossibleTin(error.message) : "Failed to save settings";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

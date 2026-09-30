@@ -113,8 +113,8 @@ export function AdminCommandPalette({
     if (query.trim().length < ADMIN_SEARCH_MIN_CHARS) return [];
     // Staff cannot open /admin/settings — hide destinations entirely.
     if (caps.userRole === "staff") return [];
-    return searchSettingsIndex(query, 10);
-  }, [query, caps.userRole]);
+    return searchSettingsIndex(query, 10, { includeTax: caps.showTax });
+  }, [query, caps.userRole, caps.showTax]);
 
   const partnerHits = useMemo(
     () =>

@@ -376,6 +376,22 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
       "download size",
     ],
   },
+  {
+    id: "tax",
+    sectionId: "tax",
+    label: "Tax information",
+    description: "Form W-9 identity fields. The taxpayer identification number is not saved.",
+    keywords: [
+      "tax",
+      "w-9",
+      "w9",
+      "irs",
+      "tax classification",
+      "exempt payee",
+      "fatca",
+      "taxpayer",
+    ],
+  },
 ];
 
 const HASH_BY_ENTRY: Record<string, string> = {
@@ -408,6 +424,7 @@ const HASH_BY_ENTRY: Record<string, string> = {
   integrations: "settings-integrations",
   automated_emails: "settings-automated-emails",
   staff: "settings-staff",
+  tax: "settings-tax",
 };
 
 function buildIndex(): SettingsSearchEntry[] {
@@ -464,8 +481,14 @@ function scoreSettingsHit(query: string, entry: SettingsSearchEntry): number {
   return 0;
 }
 
-export function searchSettingsIndex(query: string, limit = 10): SettingsSearchEntry[] {
-  const scored = SETTINGS_SEARCH_INDEX.map((entry) => ({
+export function searchSettingsIndex(
+  query: string,
+  limit = 10,
+  options?: { includeTax?: boolean }
+): SettingsSearchEntry[] {
+  const scored = SETTINGS_SEARCH_INDEX.filter(
+    (entry) => options?.includeTax || entry.sectionId !== "tax"
+  ).map((entry) => ({
     entry,
     score: scoreSettingsHit(query, entry),
   }))

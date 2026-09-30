@@ -12,6 +12,7 @@ import { getTenantContext } from "@/lib/tenant";
 import { metadataFromBusiness } from "@/lib/site-metadata";
 import { showFinishSetupBanner } from "@/lib/onboarding";
 import { staffCan, staffVisibleNavAreas } from "@/lib/staff-access";
+import { w9CountryDecision } from "@/lib/w9-country";
 import type { Metadata } from "next";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -38,6 +39,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     media: staffCan(profile, "media.upload"),
   };
   const headerRole = isStaff ? ("staff" as const) : ("admin" as const);
+  const showTax = isStaff ? false : (await w9CountryDecision(tenant.businessId)).us;
   const finishBanner =
     !isStaff &&
     showFinishSetupBanner({
@@ -58,6 +60,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         staffAreas={staffAreas}
         userRole={headerRole}
         navCreate={navCreate}
+        showTax={showTax}
       >
         {tenant.impersonating && (
           <ImpersonationBanner

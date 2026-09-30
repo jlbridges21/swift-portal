@@ -11,6 +11,7 @@ const links = [
   { href: "/platform/plans", label: "Plans" },
   { href: "/platform/partners", label: "Partners" },
   { href: "/platform/lifecycle-emails", label: "Lifecycle emails" },
+  { href: "/platform/w9", label: "W-9 form" },
   { href: "/platform/audit", label: "Audit log" },
 ];
 

@@ -11,6 +11,8 @@ import {
 } from "@/lib/email-sender-policy";
 import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
 import { mergeLandingSettings, type LandingSettings } from "@/lib/landing-content";
+import { sanitizeTaxInformation } from "@/lib/w9-settings";
+import { DEFAULT_TAX_INFORMATION, type TaxInformationSettings } from "@/lib/w9-fields";
 import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { brandingFieldsChanged, landingSettingsChanged, requireEntitlement } from "@/lib/entitlements";
 import { assertHowItWorksCount } from "@/lib/landing-content";
@@ -150,6 +152,11 @@ export interface AppSettings {
   integrations: IntegrationSettings;
   landing: LandingSettings;
   /**
+   * W-9 identity fields. The taxpayer identification number is not part of this
+   * object and is rejected if a client sends one.
+   */
+  tax: TaxInformationSettings;
+  /**
    * Explicit “use ShootPortal default” acknowledgements for optional setup items.
    * Persisted in business_settings so the checklist banner can clear across devices.
    */
@@ -274,6 +281,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     ghlLeadSource: "ShootPortal",
   },
   landing: mergeLandingSettings(null),
+  tax: { ...DEFAULT_TAX_INFORMATION },
   setupAcceptedDefaults: {
     logo: false,
     colors: false,
@@ -349,6 +357,7 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
       ...(stored.integrations ?? {}),
     },
     landing: mergeLandingSettings(stored.landing as Partial<LandingSettings> | null | undefined),
+    tax: sanitizeTaxInformation(stored.tax, false),
     setupAcceptedDefaults: {
       ...DEFAULT_APP_SETTINGS.setupAcceptedDefaults,
       ...(stored.setupAcceptedDefaults ?? {}),
@@ -424,6 +433,10 @@ export async function saveAppSettings(
 ): Promise<AppSettings> {
   if (patch.landing && Object.prototype.hasOwnProperty.call(patch.landing, "howItWorks")) {
     assertHowItWorksCount(patch.landing.howItWorks);
+  }
+
+  if (patch.tax) {
+    patch = { ...patch, tax: sanitizeTaxInformation(patch.tax, true) };
   }
 
   const current = await loadAppSettingsFromDb(businessId);
