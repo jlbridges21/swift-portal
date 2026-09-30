@@ -12,11 +12,13 @@ import { usePortalBrand } from "@/components/brand/brand-provider";
 interface ClientMessagesChatProps {
   /** Optional project context when composing from a project page */
   projectId?: string;
+  /** Loads this client's thread. Admins otherwise receive the inbox list. */
+  clientId?: string;
   className?: string;
   compact?: boolean;
 }
 
-export function ClientMessagesChat({ projectId, className, compact }: ClientMessagesChatProps) {
+export function ClientMessagesChat({ projectId, clientId, className, compact }: ClientMessagesChatProps) {
   const brand = usePortalBrand();
   const [messages, setMessages] = useState<ClientMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,13 +30,17 @@ export function ClientMessagesChat({ projectId, className, compact }: ClientMess
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/messages", { credentials: "include" });
+      const params = new URLSearchParams();
+      if (clientId) params.set("client_id", clientId);
+      const qs = params.toString();
+      const res = await fetch(`/api/messages${qs ? `?${qs}` : ""}`, { credentials: "include" });
       if (!res.ok) return;
-      setMessages(await res.json());
+      const data = await res.json();
+      setMessages(Array.isArray(data) ? data.filter((message) => message && typeof message.body === "string" && message.created_at) : []);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [clientId]);
 
   useEffect(() => {
     void load();

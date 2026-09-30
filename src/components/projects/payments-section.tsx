@@ -93,13 +93,19 @@ export function PaymentsSection({ payments, isPreview, alwaysShow }: PaymentsSec
                     </div>
                     <div className="flex items-center gap-2 sm:shrink-0">
                       <Badge variant="success">Paid</Badge>
-                      {!isPreview && p.stripe_receipt_url ? (
+                      {p.stripe_receipt_url ? (
                         <a href={p.stripe_receipt_url} target="_blank" rel="noopener noreferrer">
                           <Button variant="outline" size="sm">
                             View receipt
                           </Button>
                         </a>
-                      ) : null}
+                      ) : (
+                        <a href={`/api/payments/${p.id}/receipt`}>
+                          <Button variant="outline" size="sm">
+                            Payment record
+                          </Button>
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))}

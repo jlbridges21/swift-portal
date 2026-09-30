@@ -174,16 +174,18 @@ export function ProjectPageClient({
       requireDeliveredForDownloads,
     });
   const downloadLockMessage = clientDownloadLockMessage(status, requireDeliveredForDownloads);
-  const showPhotos = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "photos");
-  const showVideos = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "videos");
-  const showTours = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "tours");
-  const showModels = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "models");
-  const showDocuments = !!isAdmin || isMediaSectionVisibleForClient(mediaSections, "documents");
-  const photosHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "photos");
-  const videosHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "videos");
-  const toursHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "tours");
-  const modelsHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "models");
-  const documentsHidden = !!isAdmin && !isMediaSectionVisibleForClient(mediaSections, "documents");
+  const revealHiddenSections = !!isAdmin && !isPreview;
+  const showPhotos = revealHiddenSections || isMediaSectionVisibleForClient(mediaSections, "photos");
+  const showVideos = revealHiddenSections || isMediaSectionVisibleForClient(mediaSections, "videos");
+  const showTours = revealHiddenSections || isMediaSectionVisibleForClient(mediaSections, "tours");
+  const showModels = revealHiddenSections || isMediaSectionVisibleForClient(mediaSections, "models");
+  const showDocuments = revealHiddenSections || isMediaSectionVisibleForClient(mediaSections, "documents");
+  const photosHidden = revealHiddenSections && !isMediaSectionVisibleForClient(mediaSections, "photos");
+  const videosHidden = revealHiddenSections && !isMediaSectionVisibleForClient(mediaSections, "videos");
+  const toursHidden = revealHiddenSections && !isMediaSectionVisibleForClient(mediaSections, "tours");
+  const modelsHidden = revealHiddenSections && !isMediaSectionVisibleForClient(mediaSections, "models");
+  const documentsHidden = revealHiddenSections && !isMediaSectionVisibleForClient(mediaSections, "documents");
+  const mirrorClient = !isAdmin || !!isPreview;
   /** True when any visible section has files — used for Download All / deliverable review, not section chrome. */
   const hasAnyMedia =
     (showPhotos && photos.length > 0) ||
@@ -362,7 +364,7 @@ export function ProjectPageClient({
         />
         )}
 
-        {!isPreview && canViewFinancials && (
+        {canViewFinancials && (
           <Suspense fallback={null}>
             <ShootScheduling
               projectId={project.id}
@@ -373,7 +375,7 @@ export function ProjectPageClient({
           </Suspense>
         )}
 
-        {isClientView && showPhotos && (
+        {mirrorClient && showPhotos && (
           <MicrositeSection
             id="photo-gallery"
             title="Photo Gallery"
@@ -410,7 +412,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {isClientView && showVideos && (
+        {mirrorClient && showVideos && (
           <MicrositeSection
             id="video"
             title="Video"
@@ -449,7 +451,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {isClientView && showTours && (
+        {mirrorClient && showTours && (
           <MicrositeSection title="360° Virtual Tours" icon={Globe} subtitle={tours.length > 0 ? "Explore immersive walkthroughs" : undefined}>
             {tours.length > 0 ? (
               <div className="space-y-6">
@@ -469,7 +471,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {isClientView && showModels && (
+        {mirrorClient && showModels && (
           <MicrositeSection
             id="models"
             title="3D Models"
@@ -494,7 +496,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {isClientView && showDocuments && (
+        {mirrorClient && showDocuments && (
           <MicrositeSection
             id="documents"
             title="Documents"
@@ -551,7 +553,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {isClientView && !anySectionVisible && (
+        {mirrorClient && !anySectionVisible && (
           <EmptyState
             icon={Images}
             title="No media available"
@@ -559,7 +561,7 @@ export function ProjectPageClient({
           />
         )}
 
-        {!isClientView && showPhotos && (
+        {!mirrorClient && showPhotos && (
           <MicrositeSection
             id="photo-gallery"
             title="Photo Gallery"
@@ -597,7 +599,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {!isClientView && showVideos && (
+        {!mirrorClient && showVideos && (
           <MicrositeSection
             id="video"
             title="Video"
@@ -638,7 +640,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {!isClientView && showTours && (
+        {!mirrorClient && showTours && (
           <MicrositeSection
             title="360° Virtual Tours"
             icon={Globe}
@@ -663,7 +665,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {!isClientView && showModels && (
+        {!mirrorClient && showModels && (
           <MicrositeSection
             id="models"
             title="3D Models"
@@ -689,7 +691,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {!isClientView && showDocuments && (
+        {!mirrorClient && showDocuments && (
           <MicrositeSection
             id="documents"
             title="Documents"
@@ -747,7 +749,7 @@ export function ProjectPageClient({
           </MicrositeSection>
         )}
 
-        {!isPreview && status === "ready_for_review" && (isClientView || hasAnyMedia) && canViewFinancials && (
+        {status === "ready_for_review" && (mirrorClient || hasAnyMedia) && canViewFinancials && (
           <DeliverableReview
             projectId={project.id}
             photos={photos}
@@ -762,11 +764,11 @@ export function ProjectPageClient({
         <PaymentsSection payments={payments} isPreview={isPreview} alwaysShow={isClientView} />
         )}
 
-        {!isPreview && canViewFinancials && (
-          <ClientMessagesChat projectId={project.id} compact />
+        {canViewFinancials && (
+          <ClientMessagesChat projectId={project.id} clientId={project.client_id} compact />
         )}
 
-        {!isPreview && canViewFinancials && status !== "ready_for_review" && status !== "awaiting_payment" && (
+        {canViewFinancials && status !== "ready_for_review" && status !== "awaiting_payment" && (
           <Card className="border-0 shadow-lg rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-base">

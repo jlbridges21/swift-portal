@@ -159,23 +159,24 @@ async function ProjectContent({
     await import("@/lib/project-media-sections");
   const mediaSections = mediaSectionsFromProject(projectRow);
   const isAdminViewer = profile.role === "admin";
+  const revealHiddenSections = isAdminViewer && !preview;
   const visibleMedia = filterMediaByClientSections(
-    filterClientMedia(filterMediaForVideoReviewDelivery(media ?? [], versionMap, isAdminViewer)),
+    filterClientMedia(filterMediaForVideoReviewDelivery(media ?? [], versionMap, revealHiddenSections)),
     mediaSections,
-    isAdminViewer
+    revealHiddenSections
   );
   const visibleTours = filterToursByClientSections(
     filterClientTours(tours ?? []),
     mediaSections,
-    isAdminViewer
+    revealHiddenSections
   );
   const visibleModels = filterModelsByClientSections(
     filterClientModels(models ?? []),
     mediaSections,
-    isAdminViewer
+    revealHiddenSections
   );
   const hero = await getProjectHeroMedia(supabase, projectRow, tenant.businessId, {
-    photosSectionVisible: isAdminViewer || mediaSections.photos,
+    photosSectionVisible: revealHiddenSections || mediaSections.photos,
   });
   const photos = visibleMedia.filter((m) => m.media_type === "photo");
   const videos = visibleMedia.filter((m) => m.media_type === "video");

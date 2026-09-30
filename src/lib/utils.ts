@@ -40,8 +40,10 @@ export function getPublicUrl(
 }
 
 /** Human-friendly relative time, e.g. "2h ago", "Yesterday", "Mar 4". */
-export function formatRelativeTime(iso: string | Date): string {
+export function formatRelativeTime(iso: string | Date | null | undefined): string {
+  if (!iso) return "";
   const date = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(date.getTime())) return "";
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffSec = Math.floor(diffMs / 1000);

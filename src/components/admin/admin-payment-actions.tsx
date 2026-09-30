@@ -82,6 +82,13 @@ export function AdminPaymentActions({
             </Button>
           </a>
         ) : null}
+        {payment.status === "paid" && !payment.stripe_receipt_url ? (
+          <a href={`/api/payments/${payment.id}/receipt`}>
+            <Button variant="outline" size="sm" className="min-h-11">
+              Payment record
+            </Button>
+          </a>
+        ) : null}
         {link && payment.status !== "paid" && (
           <>
             <a href={link} target="_blank" rel="noopener noreferrer">
