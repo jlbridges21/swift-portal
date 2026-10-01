@@ -20,6 +20,24 @@ function isBusinessAdmin(profile: Profile, businessId: string): boolean {
   return isOwnerAdmin(profile) && profile.business_id === businessId;
 }
 
+/** Deleted rows are visible only to an owner/admin of that business. */
+function adminAccessForDeletedProject(
+  profile: Profile,
+  businessId: string,
+  tenantBusinessId: string | null | undefined
+): ProjectAccessResult {
+  if (profile.role === "super_admin") {
+    if (tenantBusinessId && tenantBusinessId === businessId) {
+      return { allowed: true, kind: "admin", businessId };
+    }
+    return { allowed: false, kind: "denied" };
+  }
+  if (isBusinessAdmin(profile, businessId)) {
+    return { allowed: true, kind: "admin", businessId };
+  }
+  return { allowed: false, kind: "denied" };
+}
+
 async function assignedClientHasProject(
   raw: Awaited<ReturnType<typeof createServiceClient>>,
   profile: Profile,
@@ -53,11 +71,15 @@ async function assignedClientHasProject(
  * Single project access resolver — admin, assigned client (no share row required),
  * or active project_shares email match. Uses service client because shared viewers
  * sit outside tenant RLS (profiles.business_id NULL).
+ *
+ * Soft-deleted projects are denied unless `includeDeleted` is set. That option
+ * exists for the admin restore route only. Even then, staff, assigned clients,
+ * and share viewers stay denied.
  */
 export async function resolveProjectAccess(
   profile: Profile,
   projectId: string,
-  options?: { tenantBusinessId?: string | null }
+  options?: { tenantBusinessId?: string | null; includeDeleted?: boolean }
 ): Promise<ProjectAccessResult> {
   const raw = await createServiceClient();
   const { data: project, error } = await raw
@@ -66,11 +88,15 @@ export async function resolveProjectAccess(
     .eq("id", projectId)
     .maybeSingle();
 
-  if (error || !project || project.deleted_at) {
+  if (error || !project) {
     return { allowed: false, kind: "denied" };
   }
 
   const businessId = project.business_id as string;
+  if (project.deleted_at) {
+    if (!options?.includeDeleted) return { allowed: false, kind: "denied" };
+    return adminAccessForDeletedProject(profile, businessId, options.tenantBusinessId);
+  }
 
   if (profile.role === "super_admin") {
     if (options?.tenantBusinessId && options.tenantBusinessId === businessId) {

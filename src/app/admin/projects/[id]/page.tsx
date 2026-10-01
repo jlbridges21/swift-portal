@@ -132,6 +132,9 @@ export default async function AdminProjectPage({ params }: PageProps) {
   ]);
 
   if (!project) notFound();
+  // Owner/admin may open a hidden project to restore it. Staff RLS does not
+  // filter deleted_at, so refuse that row here.
+  if (project.deleted_at && profile.role === "staff") notFound();
 
   const canViewMoney = staffCan(profile, "money.view");
 

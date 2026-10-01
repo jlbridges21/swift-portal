@@ -122,11 +122,11 @@ export function W9GenerateDialog({
         <div className="mt-4 space-y-4">
           <div className="flex gap-4 text-sm">
             <label className="flex items-center gap-2">
-              <input type="radio" name="tin-kind" checked={tinKind === "ssn"} onChange={() => setTinKind("ssn")} />
+              <input type="radio" name="tin-kind" className="size-4 shrink-0 accent-accent" checked={tinKind === "ssn"} onChange={() => setTinKind("ssn")} />
               SSN
             </label>
             <label className="flex items-center gap-2">
-              <input type="radio" name="tin-kind" checked={tinKind === "ein"} onChange={() => setTinKind("ein")} />
+              <input type="radio" name="tin-kind" className="size-4 shrink-0 accent-accent" checked={tinKind === "ein"} onChange={() => setTinKind("ein")} />
               EIN
             </label>
           </div>
@@ -226,6 +226,7 @@ export function SignatureChoice({
         <input
           type="radio"
           name={radioName}
+          className="mt-1 size-4 shrink-0 accent-accent"
           checked={signatureMode === "typed"}
           onChange={() => setSignatureMode("typed")}
         />
@@ -239,6 +240,7 @@ export function SignatureChoice({
         <input
           type="radio"
           name={radioName}
+          className="mt-1 size-4 shrink-0 accent-accent"
           checked={signatureMode === "blank"}
           onChange={() => setSignatureMode("blank")}
         />

@@ -475,6 +475,7 @@ export function LandingPageSettingsCard({
                       <input
                         type="radio"
                         name="landing-hero-media"
+                        className="size-4 shrink-0 accent-accent"
                         checked={resolvedMediaType === value}
                         onChange={() => setMediaType(value)}
                       />

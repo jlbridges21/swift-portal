@@ -228,6 +228,19 @@ export default async function ClientProjectPage({ params, searchParams }: PagePr
   const { preview } = await searchParams;
   const isPreview = preview === "1";
 
+  // notFound() inside the Suspense boundary below does not set the HTTP status.
+  // Deny deleted and unauthorized projects here so the response is a real 404.
+  const profile = await getProfile();
+  if (!profile) redirect("/login");
+  if (profile.role === "admin" && !isPreview) {
+    redirect(`/admin/projects/${id}`);
+  }
+  const tenant = await requireTenantContext();
+  const access = await resolveProjectAccess(profile, id, {
+    tenantBusinessId: tenant.businessId,
+  });
+  if (!access.allowed) notFound();
+
   return (
     <Suspense>
       <ProjectContent id={id} preview={isPreview} />

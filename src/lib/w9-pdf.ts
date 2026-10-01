@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import * as fontkitNs from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import {
   W9_FIELDS,
@@ -111,26 +114,60 @@ function writeTinBoxes(form: ReturnType<PDFDocument["getForm"]>, tin: ParsedTin)
 }
 
 /**
- * Rev. March 2024 page 1: "Sign Here" / "Signature of U.S. person" sits just
- * above y≈180pt, and "Date" is to the right. Coordinates are PDF user space
- * (origin bottom-left) measured from that revision's media box.
+ * Rev. March 2024 page 1, PDF user space (origin bottom-left, 612×792).
+ * Measured from the template's rules, not from a screenshot:
+ * the Sign Here row runs from y=216 (top rule) to y=192.5 (bottom rule).
+ * "Signature of U.S. person" ends near x=116. "Date" ends near x=400.
+ * Both sit on the bottom rule (y=192.5). The script baseline is y=196 so Great Vibes
+ * descenders land on that rule. The date is Helvetica with baseline y=192.5, on
+ * the same rule, because a date has no descenders.
+ *
+ * These numbers live only in this file. The platform template uploader
+ * checks AcroForm field names and does not move this drawing. A future IRS
+ * revision that shifts the signature row needs them updated.
  */
+const W9_SIGNATURE_NAME_X = 124;
+const W9_SIGNATURE_DATE_X = 408;
+const W9_SIGNATURE_BASELINE_Y = 196;
+/** Helvetica has no descenders in a date, so its baseline is the rule. */
+const W9_SIGNATURE_DATE_Y = 192.5;
+const W9_SIGNATURE_NAME_SIZE = 16;
+const W9_SIGNATURE_DATE_SIZE = 10;
+
+type FontkitLike = {
+  create: (buffer: Uint8Array | ArrayBuffer, postscriptName?: string) => unknown;
+};
+
+/** tsx exposes create on the module. Next's server bundle puts it on default. */
+function resolveFontkit(): FontkitLike {
+  const ns = fontkitNs as unknown as FontkitLike & { default?: FontkitLike };
+  if (typeof ns.create === "function") return ns;
+  if (ns.default && typeof ns.default.create === "function") return ns.default;
+  throw new Error("W-9 signature font could not be loaded");
+}
+
+function loadScriptFont(): Uint8Array {
+  return readFileSync(join(process.cwd(), "src/lib/fonts/GreatVibes-Regular.ttf"));
+}
+
 async function drawTypedSignature(pdf: PDFDocument, name: string, date: string): Promise<void> {
   const page = pdf.getPages()[0];
-  const signatureFont = await pdf.embedFont(StandardFonts.HelveticaOblique);
+  pdf.registerFontkit(resolveFontkit() as unknown as Parameters<PDFDocument["registerFontkit"]>[0]);
+  const signatureFont = await pdf.embedFont(loadScriptFont(), { subset: true });
   const dateFont = await pdf.embedFont(StandardFonts.Helvetica);
+  const color = rgb(0.05, 0.08, 0.2);
   page.drawText(name.slice(0, 80), {
-    x: 112,
-    y: 178,
-    size: 12,
+    x: W9_SIGNATURE_NAME_X,
+    y: W9_SIGNATURE_BASELINE_Y,
+    size: W9_SIGNATURE_NAME_SIZE,
     font: signatureFont,
-    color: rgb(0.05, 0.08, 0.2),
+    color,
   });
   page.drawText(date, {
-    x: 400,
-    y: 180,
-    size: 10,
+    x: W9_SIGNATURE_DATE_X,
+    y: W9_SIGNATURE_DATE_Y,
+    size: W9_SIGNATURE_DATE_SIZE,
     font: dateFont,
-    color: rgb(0.05, 0.08, 0.2),
+    color,
   });
 }

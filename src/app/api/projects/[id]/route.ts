@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { restoreProject, softDeleteProject, TenantRecordNotFoundError } from "@/lib/soft-delete";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { canAccessProject } from "@/lib/project-access";
+import { canAccessProject, resolveProjectAccess } from "@/lib/project-access";
+import { isOwnerAdmin } from "@/lib/staff-access";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -44,11 +45,19 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (body.action === "restore") {
       const tenant = await getTenantContext();
       if (!tenant) return missingTenantResponse(profile.role);
-      if (!(await canAccessProject(profile, id))) {
+      // Staff can hold projects.edit. Restore stays owner/admin only, and the
+      // deleted-row exception is this call — nowhere else.
+      if (!isOwnerAdmin(profile)) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
-      const businessId = tenant.businessId;
-      await restoreProject(id, businessId);
+      const access = await resolveProjectAccess(profile, id, {
+        includeDeleted: true,
+        tenantBusinessId: tenant.businessId,
+      });
+      if (!access.allowed || access.kind !== "admin") {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      await restoreProject(id, tenant.businessId);
       return NextResponse.json({ success: true, restored: true });
     }
 

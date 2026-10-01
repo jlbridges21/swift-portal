@@ -123,6 +123,12 @@ interface AdminProjectDetailProps {
   canViewMoney?: boolean;
 }
 
+async function readServerError(res: Response, fallback: string): Promise<string> {
+  const data = (await res.json().catch(() => null)) as { error?: string } | null;
+  const message = data?.error?.trim();
+  return message || fallback;
+}
+
 export function AdminProjectDetail({
   project: initialProject,
   media: initialMedia,
@@ -231,7 +237,10 @@ export function AdminProjectDetail({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "restore" }),
     });
-    if (!res.ok) throw new Error("Failed to restore project");
+    if (!res.ok) {
+      toast.error(await readServerError(res, "Failed to restore project"));
+      return;
+    }
     toast.success("Project restored");
     router.refresh();
   }, { loadingLabel: "Restoring..." });
@@ -337,7 +346,7 @@ export function AdminProjectDetail({
         router.refresh();
       }
     } else {
-      toast.error("Failed to save project");
+      toast.error(await readServerError(res, "Failed to save project"));
     }
   }
 
