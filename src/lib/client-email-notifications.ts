@@ -1,11 +1,11 @@
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
-import { sendBrandedEmail } from "@/lib/email";
-import { getAppSettings, type NotificationEventKey } from "@/lib/app-settings";
+import { composeBrandedEmailHtml, sendBrandedEmail, type EmailPreviewDraft } from "@/lib/email";
+import { getAppSettings, type AppSettings, type NotificationEventKey } from "@/lib/app-settings";
 import { getStatusOrder } from "@/lib/constants";
 import type { PremiumEmailContent, PremiumEmailTemplate } from "@/lib/email-templates";
 import type { NotificationType } from "@/lib/types";
 import { renderWorkflowTemplate } from "@/lib/workflow-template-render";
-import { businessPortalHref } from "@/lib/portal-url";
+import { businessPortalHref, getBusinessPortalOriginById } from "@/lib/portal-url";
 import { resolveClientEmailMapping } from "@/lib/client-email-event-map";
 
 /** Payment-related emails always send even if the client opted out of marketing-style emails. */
@@ -231,6 +231,107 @@ export async function getClientNotificationPreferences(userId: string, businessI
 }
 
 /**
+ * Subject, body, and presentation for a client email. sendClientEmailNotification
+ * and the settings preview both use this so a custom workflow template cannot
+ * appear in one and not the other.
+ */
+export function assembleClientEmailPresentation(
+  appSettings: AppSettings,
+  options: {
+    eventType: NotificationType;
+    eventKey?: NotificationEventKey | null;
+    title: string;
+    message: string;
+    url?: string;
+    projectName?: string;
+    projectStatus?: string;
+    subject?: string;
+    resolvedUrl?: string;
+    brandNames: { businessName: string; portalName: string };
+  }
+): PremiumEmailContent {
+  const mapping = resolveClientEmailMapping(options.eventKey);
+  const brandNames = options.brandNames;
+  const merge = {
+    client_name: "",
+    project_name: options.projectName ?? "",
+    property_address: "",
+    portal_link: options.url ?? "",
+    portal_name: brandNames.portalName,
+    business_name: brandNames.businessName,
+  };
+
+  let subjectOverride = options.subject?.trim() || undefined;
+  if (!subjectOverride && mapping.messageKey) {
+    const customSubject = appSettings.workflow.messages[mapping.messageKey]?.subject?.trim();
+    if (customSubject) {
+      subjectOverride = renderWorkflowTemplate(customSubject, merge, {
+        workflowKey: mapping.messageKey,
+      });
+    }
+  }
+
+  let body = options.message;
+  let title = options.title;
+  if (mapping.messageKey) {
+    const customBody = appSettings.workflow.messages[mapping.messageKey]?.body?.trim();
+    if (customBody) {
+      body = renderWorkflowTemplate(customBody, merge, { workflowKey: mapping.messageKey });
+    }
+  }
+
+  return getClientEmailPresentation(
+    options.eventType,
+    title,
+    body,
+    options.resolvedUrl,
+    options.projectStatus,
+    brandNames,
+    subjectOverride,
+    options.eventKey
+  );
+}
+
+const PREVIEW_PROJECT_NAME = "Sample project";
+
+/**
+ * Render the deliverables email a client would receive, with optional unsaved
+ * branding. Does not send mail or record an email event.
+ */
+export async function renderDeliverablesEmailPreviewHtml(
+  businessId: string,
+  draft?: EmailPreviewDraft
+): Promise<string> {
+  const appSettings = await getAppSettings(businessId);
+  const businessName = draft?.businessName?.trim() || appSettings.business.businessName;
+  const portalName = draft?.portalName?.trim() || appSettings.business.portalName;
+  const path = "/dashboard";
+  const presentation = assembleClientEmailPresentation(appSettings, {
+    eventType: "deliverables_uploaded",
+    eventKey: "deliverables_ready",
+    title: `New media — ${PREVIEW_PROJECT_NAME}`,
+    message: "Photos have been added to your project.",
+    url: path,
+    projectName: PREVIEW_PROJECT_NAME,
+    projectStatus: "ready_for_review",
+    resolvedUrl: await resolvePortalUrl(businessId, path),
+    brandNames: { businessName, portalName },
+  });
+  return composeBrandedEmailHtml({
+    settings: appSettings,
+    portalUrl: await getBusinessPortalOriginById(businessId),
+    title: presentation.title,
+    body: presentation.body,
+    projectName: PREVIEW_PROJECT_NAME,
+    secondaryInfo: presentation.secondaryInfo,
+    ctaLabel: presentation.ctaUrl ? presentation.ctaLabel : undefined,
+    ctaUrl: presentation.ctaUrl,
+    progressStep: presentation.progressStep,
+    draft: { ...draft, businessName, portalName },
+  });
+}
+
+/**
  * Send a branded client email via Resend. Never throws.
  */
 export async function sendClientEmailNotification(
@@ -253,63 +354,21 @@ export async function sendClientEmailNotification(
   }
 
   const appSettings = await getAppSettings(options.businessId);
-  const brandNames = {
-    businessName: appSettings.business.businessName,
-    portalName: appSettings.business.portalName,
-  };
-
-  const mapping = resolveClientEmailMapping(options.eventKey);
-
-  let subjectOverride = options.subject?.trim() || undefined;
-  if (!subjectOverride && mapping.messageKey) {
-    const customSubject = appSettings.workflow.messages[mapping.messageKey]?.subject?.trim();
-    if (customSubject) {
-      subjectOverride = renderWorkflowTemplate(
-        customSubject,
-        {
-          client_name: "",
-          project_name: options.projectName ?? "",
-          property_address: "",
-          portal_link: options.url ?? "",
-          portal_name: brandNames.portalName,
-          business_name: brandNames.businessName,
-        },
-        { workflowKey: mapping.messageKey }
-      );
-    }
-  }
-
-  // Prefer editable template body when present (still use notify title/body as fallback).
-  let body = options.message;
-  let title = options.title;
-  if (mapping.messageKey) {
-    const customBody = appSettings.workflow.messages[mapping.messageKey]?.body?.trim();
-    if (customBody) {
-      body = renderWorkflowTemplate(
-        customBody,
-        {
-          client_name: "",
-          project_name: options.projectName ?? "",
-          property_address: "",
-          portal_link: options.url ?? "",
-          portal_name: brandNames.portalName,
-          business_name: brandNames.businessName,
-        },
-        { workflowKey: mapping.messageKey }
-      );
-    }
-  }
-
-  const presentation = getClientEmailPresentation(
-    options.eventType,
-    title,
-    body,
-    await resolvePortalUrl(options.businessId, options.url),
-    options.projectStatus,
-    brandNames,
-    subjectOverride,
-    options.eventKey
-  );
+  const presentation = assembleClientEmailPresentation(appSettings, {
+    eventType: options.eventType,
+    eventKey: options.eventKey,
+    title: options.title,
+    message: options.message,
+    url: options.url,
+    projectName: options.projectName,
+    projectStatus: options.projectStatus,
+    subject: options.subject,
+    resolvedUrl: await resolvePortalUrl(options.businessId, options.url),
+    brandNames: {
+      businessName: appSettings.business.businessName,
+      portalName: appSettings.business.portalName,
+    },
+  });
 
   try {
     const result = await sendBrandedEmail({

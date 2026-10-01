@@ -25,6 +25,7 @@ interface ColorFieldProps {
   onChange: (value: string) => void;
   className?: string;
   warning?: string;
+  description?: string;
 }
 
 export function ColorField({
@@ -35,6 +36,7 @@ export function ColorField({
   onChange,
   className,
   warning,
+  description,
 }: ColorFieldProps) {
   const normalized = isValidHexColor(value) ? value : fallback;
   const invalid = value.trim().length > 0 && !isValidHexColor(value);
@@ -68,6 +70,7 @@ export function ColorField({
           spellCheck={false}
         />
       </div>
+      {description ? <p className="text-xs text-muted">{description}</p> : null}
       {invalid && <p className="text-xs text-amber-700">Enter a valid hex color like #3B82F6</p>}
       {warning && !invalid && (
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">

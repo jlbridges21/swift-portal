@@ -17,6 +17,7 @@ import { PORTAL_LOGO_SIZE } from "@/lib/brand-logo-size";
 import { SettingsTabNav } from "@/components/admin/settings-tab-nav";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
+import { EmailPreviewDialog } from "@/components/admin/email-preview-dialog";
 import { AcceptSetupDefaultButton } from "@/components/admin/accept-setup-default-button";
 import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
 import { EmailTemplatesSettingsCard } from "@/components/admin/email-templates-settings-card";
@@ -669,12 +670,21 @@ export function AdminSettingsClient({
                   return <AcceptSetupDefaultButton acceptKey="logo" />;
                 })()}
               </div>
-              <div id="settings-email-logo" tabIndex={-1} className="scroll-mt-24">
+              <div id="settings-email-logo" tabIndex={-1} className="scroll-mt-24 space-y-3">
                 <BrandAssetField
                   kind="emailLogo"
                   inputId="emailLogoUrl"
                   value={settings.business.emailLogoUrl ?? ""}
                   onUrlChange={(emailLogoUrl) => patchBusiness({ emailLogoUrl })}
+                />
+                <EmailPreviewDialog
+                  primaryColor={settings.business.brandPrimaryColor}
+                  accentColor={settings.business.brandAccentColor}
+                  emailLogoUrl={settings.business.emailLogoUrl ?? ""}
+                  logoUrl={settings.business.logoUrl ?? ""}
+                  businessName={settings.business.businessName}
+                  portalName={settings.business.portalName}
+                  footerText={settings.email.footerText}
                 />
               </div>
               <div id="settings-favicon" tabIndex={-1} className="scroll-mt-24">
@@ -690,6 +700,7 @@ export function AdminSettingsClient({
                   <ColorField
                     id="brandPrimaryColor"
                     label="Brand primary color"
+                    description="This color is the background of the email header. It is also the portal's dark color for headings, the project hero, and the main button."
                     value={settings.business.brandPrimaryColor}
                     fallback="#0F172A"
                     onChange={(v) => patchBusiness({ brandPrimaryColor: v })}
@@ -698,6 +709,7 @@ export function AdminSettingsClient({
                   <ColorField
                     id="brandAccentColor"
                     label="Brand accent color"
+                    description="In emails it fills the action button and the active step of the progress indicator, and it colors the footer link. In the portal it colors accent buttons, links, and focus rings."
                     value={settings.business.brandAccentColor}
                     fallback="#3B82F6"
                     onChange={(v) => patchBusiness({ brandAccentColor: v })}

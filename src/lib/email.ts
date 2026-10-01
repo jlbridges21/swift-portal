@@ -8,6 +8,7 @@ import {
   getPlatformFromAddress,
 } from "@/lib/email-sender-policy";
 import { isLiveBusiness } from "@/lib/business-live";
+import { isSafeCssColor } from "@/lib/brand-color";
 
 const resendClients = new Map<string, Resend>();
 
@@ -96,6 +97,70 @@ export async function getEmailConfigStatus(businessId: string) {
   };
 }
 
+/** Unsaved branding from the settings form. Omitted fields use the saved business. */
+export type EmailPreviewDraft = {
+  primaryColor?: string;
+  accentColor?: string;
+  emailLogoUrl?: string;
+  logoUrl?: string;
+  businessName?: string;
+  portalName?: string;
+  footerText?: string;
+};
+
+function draftText(value: string | undefined, max: number): string | undefined {
+  if (value === undefined) return undefined;
+  return value.trim().slice(0, max);
+}
+
+/**
+ * The HTML sendBrandedEmail hands to Resend. Preview uses this same function
+ * so a color or logo change cannot drift from what a client actually receives.
+ */
+export function composeBrandedEmailHtml(input: {
+  settings: AppSettings;
+  portalUrl: string;
+  title: string;
+  body: string;
+  projectName?: string;
+  secondaryInfo?: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  progressStep?: number;
+  draft?: EmailPreviewDraft;
+}): string {
+  const { settings, draft } = input;
+  const businessName = draftText(draft?.businessName, 200) || settings.business.businessName;
+  const portalName = draftText(draft?.portalName, 200) || settings.business.portalName;
+  return buildPremiumEmailHtml({
+    title: input.title,
+    body: input.body,
+    projectName: input.projectName,
+    secondaryInfo: input.secondaryInfo,
+    ctaLabel: input.ctaLabel,
+    ctaUrl: input.ctaUrl,
+    progressStep: input.progressStep,
+    branding: {
+      portalName,
+      businessName,
+      logoUrl: draft?.logoUrl !== undefined ? draft.logoUrl : settings.business.logoUrl,
+      emailLogoUrl:
+        draft?.emailLogoUrl !== undefined ? draft.emailLogoUrl : settings.business.emailLogoUrl,
+      footerText:
+        draft?.footerText !== undefined ? draft.footerText : settings.email.footerText,
+      accentColor:
+        draft?.accentColor && isSafeCssColor(draft.accentColor)
+          ? draft.accentColor
+          : settings.business.brandAccentColor,
+      primaryColor:
+        draft?.primaryColor && isSafeCssColor(draft.primaryColor)
+          ? draft.primaryColor
+          : settings.business.brandPrimaryColor,
+      portalUrl: input.portalUrl,
+    },
+  });
+}
+
 export interface SendEmailOptions {
   businessId: string;
   to: string;
@@ -168,7 +233,9 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
 
   const appSettings = await getAppSettings(businessId);
   const portalUrl = await getBusinessPortalOriginById(businessId);
-  const html = buildPremiumEmailHtml({
+  const html = composeBrandedEmailHtml({
+    settings: appSettings,
+    portalUrl,
     title: options.title,
     body: options.body,
     projectName: options.projectName,
@@ -176,16 +243,6 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
     ctaLabel: options.ctaLabel,
     ctaUrl: options.ctaUrl,
     progressStep: options.progressStep,
-    branding: {
-      portalName: appSettings.business.portalName,
-      businessName: appSettings.business.businessName,
-      logoUrl: appSettings.business.logoUrl,
-      emailLogoUrl: appSettings.business.emailLogoUrl,
-      footerText: appSettings.email.footerText,
-      accentColor: appSettings.business.brandAccentColor,
-      primaryColor: appSettings.business.brandPrimaryColor,
-      portalUrl,
-    },
   });
 
   const from = await getConfiguredFromEmail(businessId);
