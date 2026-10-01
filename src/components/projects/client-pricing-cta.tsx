@@ -62,7 +62,7 @@ export function ClientPricingCta({ project, quotes, payments }: ClientPricingCta
     ctaLabel = "Payment Complete";
     ctaHref = "#payments";
     ctaVariant = "outline";
-    statusLabel = "Paid in full";
+    statusLabel = "Paid";
     statusVariant = "success";
   } else if (active?.kind === "preliminary") {
     ctaLabel = "View Estimate";

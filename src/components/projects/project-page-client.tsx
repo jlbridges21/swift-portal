@@ -224,7 +224,7 @@ export function ProjectPageClient({
       return { label: "Payment due", variant: "warning" as const };
     }
     if (allPaid && payments.length > 0) {
-      return { label: "Paid in full", variant: "success" as const };
+      return { label: "Paid", variant: "success" as const };
     }
     return undefined;
   })();

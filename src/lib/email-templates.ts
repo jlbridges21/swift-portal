@@ -145,7 +145,10 @@ export function buildPremiumEmailHtml(options: {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
   <title>${title}</title>
+  <style>:root { color-scheme: light; supported-color-schemes: light; }</style>
   <!--[if mso]><style>table{border-collapse:collapse;}td{font-family:Arial,sans-serif;}</style><![endif]-->
 </head>
 <body style="margin:0;padding:0;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
