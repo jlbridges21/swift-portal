@@ -101,11 +101,87 @@ export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCar
       <SettingsCollapsible title="Payments" description="Payment links, delivery unlock, and receipts.">
         <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
           <RowToggle id="pay-link" label="Move to Awaiting Payment when payment link is created" checked={workflow.payments.autoMoveOnPaymentLink} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoMoveOnPaymentLink: v } })} />
+          <RowToggle id="pay-on-approval" label="Create a payment link when the client approves the proposal" checked={workflow.payments.autoCreatePaymentLinkOnApproval} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoCreatePaymentLinkOnApproval: v } })} />
           <RowToggle id="pay-stripe" label="Move to Delivered after successful Stripe payment" checked={workflow.payments.autoMoveOnStripePaid} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoMoveOnStripePaid: v } })} />
           <RowToggle id="pay-unlock" label="Unlock downloads after payment" checked={workflow.payments.autoUnlockDownloads} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoUnlockDownloads: v } })} />
           <RowToggle id="pay-receipt" label="Email the client a receipt after payment" checked={workflow.payments.autoSendReceipt} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoSendReceipt: v } })} />
           <RowToggle id="pay-fail" label="Notify admin when payment fails" checked={workflow.payments.notifyAdminOnFailure} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, notifyAdminOnFailure: v } })} />
+          <RowToggle id="pay-in-full" label="Let the client pay the full total instead of the deposit" checked={workflow.payments.allowClientPayInFull} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, allowClientPayInFull: v } })} />
         </div>
+        <fieldset className="mt-4 space-y-3 rounded-xl border border-border p-4">
+          <legend className="px-1 text-sm font-medium text-primary">Deposit collected on approval</legend>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="deposit-mode"
+              className="size-4 shrink-0 accent-accent"
+              checked={workflow.payments.depositMode === "none"}
+              onChange={() => onChange({ ...workflow, payments: { ...workflow.payments, depositMode: "none" } })}
+            />
+            Full project total
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="deposit-mode"
+              className="size-4 shrink-0 accent-accent"
+              checked={workflow.payments.depositMode === "percent"}
+              onChange={() => onChange({ ...workflow, payments: { ...workflow.payments, depositMode: "percent" } })}
+            />
+            Percent of the quote
+          </label>
+          {workflow.payments.depositMode === "percent" && (
+            <div className="space-y-2 pl-6">
+              <Label htmlFor="deposit-percent">Deposit percent (1–99)</Label>
+              <Input
+                id="deposit-percent"
+                type="number"
+                min={1}
+                max={99}
+                value={workflow.payments.depositPercent}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (!e.target.value || !Number.isFinite(n)) return;
+                  if (n < 1 || n > 99) return;
+                  onChange({
+                    ...workflow,
+                    payments: { ...workflow.payments, depositPercent: Math.round(n) },
+                  });
+                }}
+              />
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="deposit-mode"
+              className="size-4 shrink-0 accent-accent"
+              checked={workflow.payments.depositMode === "amount"}
+              onChange={() => onChange({ ...workflow, payments: { ...workflow.payments, depositMode: "amount" } })}
+            />
+            Fixed amount
+          </label>
+          {workflow.payments.depositMode === "amount" && (
+            <div className="space-y-2 pl-6">
+              <Label htmlFor="deposit-amount">Deposit amount (USD)</Label>
+              <Input
+                id="deposit-amount"
+                type="number"
+                min={0.01}
+                step={0.01}
+                value={workflow.payments.depositAmountCents / 100}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (!Number.isFinite(n) || n < 0) return;
+                  onChange({
+                    ...workflow,
+                    payments: { ...workflow.payments, depositAmountCents: Math.round(n * 100) },
+                  });
+                }}
+              />
+            </div>
+          )}
+        </fieldset>
       </SettingsCollapsible>
 
       <SettingsCollapsible title="Proposals" description="Official proposal versions and expiration behavior.">

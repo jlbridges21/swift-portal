@@ -36,12 +36,24 @@ export interface StageAutomationSettings {
   requireManualApproval: boolean;
 }
 
+export type DepositMode = "none" | "percent" | "amount";
+
 export interface PaymentAutomationSettings {
   autoMoveOnPaymentLink: boolean;
   autoMoveOnStripePaid: boolean;
   autoUnlockDownloads: boolean;
   autoSendReceipt: boolean;
   notifyAdminOnFailure: boolean;
+  /** Create the payment as soon as the client approves the official proposal. */
+  autoCreatePaymentLinkOnApproval: boolean;
+  /** One business-wide deposit rule. "none" charges the full quote total. */
+  depositMode: DepositMode;
+  /** Used only when depositMode is "percent". Must be 1–99. */
+  depositPercent: number;
+  /** Used only when depositMode is "amount". Cents, must be below the quote total. */
+  depositAmountCents: number;
+  /** When a deposit is due, the client may pay the full quote instead. */
+  allowClientPayInFull: boolean;
 }
 
 export interface ProposalAutomationSettings {
@@ -261,6 +273,11 @@ export function buildDefaultWorkflowSettings(): WorkflowSettings {
       autoUnlockDownloads: true,
       autoSendReceipt: true,
       notifyAdminOnFailure: true,
+      autoCreatePaymentLinkOnApproval: true,
+      depositMode: "none",
+      depositPercent: 50,
+      depositAmountCents: 0,
+      allowClientPayInFull: true,
     },
     proposals: {
       autoArchivePreviousVersions: true,
@@ -337,6 +354,22 @@ export function buildDefaultWorkflowSettings(): WorkflowSettings {
   };
 }
 
+/** Keep stored payment automation readable. Charge-time checks still refuse a deposit that is not below the quote. */
+export function sanitizePaymentAutomation(payments: PaymentAutomationSettings): PaymentAutomationSettings {
+  const mode: DepositMode =
+    payments.depositMode === "percent" || payments.depositMode === "amount" ? payments.depositMode : "none";
+  const percent = Number(payments.depositPercent);
+  const amount = Number(payments.depositAmountCents);
+  return {
+    ...payments,
+    autoCreatePaymentLinkOnApproval: payments.autoCreatePaymentLinkOnApproval !== false,
+    allowClientPayInFull: payments.allowClientPayInFull !== false,
+    depositMode: mode,
+    depositPercent: Number.isFinite(percent) ? Math.round(percent) : 50,
+    depositAmountCents: Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0,
+  };
+}
+
 export function mergeWorkflowSettings(
   stored: (Partial<Omit<WorkflowSettings, "messages">> & {
     messages?: Partial<Record<MessageTemplateKey, StoredMessageTemplate>>;
@@ -364,7 +397,7 @@ export function mergeWorkflowSettings(
 
   return {
     stages,
-    payments: { ...defaults.payments, ...(stored.payments ?? {}) },
+    payments: sanitizePaymentAutomation({ ...defaults.payments, ...(stored.payments ?? {}) }),
     proposals: { ...defaults.proposals, ...(stored.proposals ?? {}) },
     scheduling: mergeSchedulingSettings(stored.scheduling),
     deliverables: { ...defaults.deliverables, ...(stored.deliverables ?? {}) },

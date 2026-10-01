@@ -11,8 +11,10 @@ import { formatCurrency } from "@/lib/utils";
 import {
   canCreatePaymentFromQuote,
   defaultPaymentLinkDescription,
-  getPaymentForQuote,
+  isOpenPaymentStatus,
+  openPaymentForQuote,
   paymentLinkTitle,
+  quoteOutstandingBalanceCents,
 } from "@/lib/payment-quote";
 import { CreditCard, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
@@ -44,14 +46,14 @@ export function ProposalPaymentLinkActions({
   const [creating, setCreating] = useState(false);
   const [linkDescription, setLinkDescription] = useState("");
   const [localPayment, setLocalPayment] = useState<Payment | null>(() =>
-    getPaymentForQuote(payments, quote.id)
+    openPaymentForQuote(payments, quote.id)
   );
 
   const linkTitle = paymentLinkTitle(clientName, propertyAddress, serviceType || "Service");
+  const remainingCents = quoteOutstandingBalanceCents(quote, payments);
 
   useEffect(() => {
-    const fromProps = getPaymentForQuote(payments, quote.id);
-    if (fromProps) setLocalPayment(fromProps);
+    setLocalPayment(openPaymentForQuote(payments, quote.id));
   }, [payments, quote.id]);
 
   useEffect(() => {
@@ -60,11 +62,24 @@ export function ProposalPaymentLinkActions({
     }
   }, [showModal, serviceType]);
 
-  const linkedPayment = localPayment ?? getPaymentForQuote(payments, quote.id);
-  const paymentUrl = linkedPayment?.payment_link_url || linkedPayment?.stripe_payment_link_url;
-  const canCreate = canCreatePaymentFromQuote(quote);
+  const linkedPayment =
+    localPayment && isOpenPaymentStatus(localPayment.status)
+      ? localPayment
+      : openPaymentForQuote(payments, quote.id);
+  const settledPayment = [...payments]
+    .reverse()
+    .find(
+      (p) =>
+        p.quote_id === quote.id &&
+        p.status !== "cancelled" &&
+        (p.payment_link_url || p.stripe_payment_link_url)
+    );
+  const displayPayment = linkedPayment ?? (remainingCents <= 0 ? settledPayment ?? null : null);
+  const paymentUrl = displayPayment?.payment_link_url || displayPayment?.stripe_payment_link_url;
+  const canCreate = canCreatePaymentFromQuote(quote) && remainingCents > 0 && !linkedPayment;
+  const chargeCents = remainingCents > 0 ? remainingCents : quote.total_cents;
 
-  if (!canCreate && !linkedPayment) return null;
+  if (!canCreate && !displayPayment) return null;
 
   async function createPaymentLink() {
     if (creating || linkedPayment) return;
@@ -78,7 +93,7 @@ export function ProposalPaymentLinkActions({
           project_id: projectId,
           client_id: clientId,
           quote_id: quote.id,
-          amount: quote.total_cents,
+          amount: chargeCents,
           description: linkTitle,
           product_description: linkDescription.trim().slice(0, 250),
         }),
@@ -109,7 +124,7 @@ export function ProposalPaymentLinkActions({
     toast.success("Payment link copied");
   }
 
-  if (linkedPayment && paymentUrl) {
+  if (displayPayment && paymentUrl && !canCreate) {
     return (
       <div className="flex flex-wrap gap-2">
         <a href={paymentUrl} target="_blank" rel="noopener noreferrer">
@@ -137,7 +152,7 @@ export function ProposalPaymentLinkActions({
           <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm">
             <p className="text-xs font-medium uppercase tracking-wide text-muted">Payment title</p>
             <p className="mt-1 font-medium text-primary break-words">{linkTitle}</p>
-            <p className="mt-3 text-2xl font-bold text-primary">{formatCurrency(quote.total_cents)}</p>
+            <p className="mt-3 text-2xl font-bold text-primary">{formatCurrency(chargeCents)}</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="payment-link-description">Description</Label>

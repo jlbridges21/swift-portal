@@ -8,10 +8,18 @@ import { setProjectStatus, setProjectStatusForward } from "@/lib/status-automati
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
-import { portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
+import { portalLink, resolveProjectMessageTemplate, logWorkflowAudit, logWorkflowSkipped } from "@/lib/workflow";
 import { archivePreviousOfficialQuotes } from "@/lib/quote-archive";
 import { canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
 import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
+import { createPaymentLink } from "@/lib/create-payment-link";
+import {
+  canCreatePaymentFromQuote,
+  depositPaymentDescription,
+  paymentLinkTitle,
+  resolveDepositCharge,
+} from "@/lib/payment-quote";
+import { StripeConnectNotReadyError } from "@/lib/stripe-connect";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -355,8 +363,20 @@ export async function PATCH(request: Request) {
       .from("project_quotes")
       .update({ status: "approved", approved_at: new Date().toISOString() })
       .eq("id", id)
+      .neq("status", "approved")
       .select()
-      .single();
+      .maybeSingle();
+
+    if (!updated) {
+      const { data: current } = await db.from("project_quotes").select("*").eq("id", id).maybeSingle();
+      return NextResponse.json(current ?? quote);
+    }
+
+    const appSettings = await getAppSettings(businessId);
+    const approvedQuote = { ...quote, ...updated, status: "approved" as const };
+    const willAutoPay =
+      appSettings.workflow.payments.autoCreatePaymentLinkOnApproval &&
+      canCreatePaymentFromQuote(approvedQuote);
 
     await setProjectStatus({
       projectId: quote.project_id,
@@ -365,14 +385,92 @@ export async function PATCH(request: Request) {
       activityType: "quote_approved",
       activityDescription: "✅ Proposal approved",
       idempotencyKey: idempotencyKey("quote", id, "approve"),
+      skipWorkflowAudit: willAutoPay,
     });
+
+    let stripeNotReady = false;
+    if (willAutoPay) {
+      try {
+        const { data: project } = await db
+          .from("projects")
+          .select("id, client_id, project_name, property_address, service_type")
+          .eq("id", quote.project_id)
+          .maybeSingle();
+        if (!project?.client_id) {
+          await logWorkflowSkipped(
+            quote.project_id,
+            "Payment link was not created after approval because the project has no client.",
+            idempotencyKey("workflow", "approval-payment-skipped", id)
+          );
+        } else {
+          const { data: client } = await db
+            .from("clients")
+            .select("name")
+            .eq("id", project.client_id)
+            .maybeSingle();
+          const charge = resolveDepositCharge(approvedQuote.total_cents, appSettings.workflow.payments);
+          if (charge.fallback) {
+            console.warn("[payment] deposit fell back to the full quote total", {
+              businessId,
+              quoteId: id,
+              reason: charge.fallback,
+            });
+            await logWorkflowAudit(quote.project_id, charge.fallback, {
+              userId: profile.id,
+              idempotencyKey: idempotencyKey("workflow", "deposit-fallback", id),
+            });
+          }
+          const title = paymentLinkTitle(
+            client?.name || "Client",
+            project.property_address || "",
+            project.service_type || "Service"
+          );
+          const description = charge.isDeposit
+            ? depositPaymentDescription(charge.amountCents, approvedQuote.total_cents)
+            : title;
+          await createPaymentLink({
+            businessId,
+            projectId: quote.project_id,
+            clientId: project.client_id,
+            quoteId: id,
+            amount: charge.amountCents,
+            description,
+            actorUserId: profile.id,
+            origin: "approval",
+            followUpToApproval: true,
+            quoteTotalCents: approvedQuote.total_cents,
+            isDeposit: charge.isDeposit,
+          });
+        }
+      } catch (err) {
+        if (err instanceof StripeConnectNotReadyError) {
+          stripeNotReady = true;
+          await logWorkflowSkipped(
+            quote.project_id,
+            "Payment link was not created after approval because Stripe is not connected. Connect Stripe to let clients pay immediately when they approve.",
+            idempotencyKey("workflow", "approval-payment-stripe", id)
+          );
+        } else {
+          console.error("[payment] auto-create after approval failed", err);
+          await logWorkflowSkipped(
+            quote.project_id,
+            "Payment link was not created after approval. The proposal is still approved, and the payment can be created manually.",
+            idempotencyKey("workflow", "approval-payment-failed", id)
+          );
+        }
+      }
+    }
+
+    const adminBody = stripeNotReady
+      ? `The client approved the proposal for "${quote.title}". Connect Stripe to let clients pay immediately when they approve.`
+      : `The client approved the proposal for "${quote.title}".`;
 
     await notifyAdmins({
       businessId,
       type: "proposal_approved",
       eventKey: "proposal_approved",
       title: "Proposal Approved",
-      body: `The client approved the proposal for "${quote.title}".`,
+      body: adminBody,
       link: `/admin/projects/${quote.project_id}`,
       projectId: quote.project_id,
     });

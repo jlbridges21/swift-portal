@@ -17,6 +17,7 @@ import {
   type WorkflowStepStatus,
 } from "@/lib/pricing-workflow";
 import { isOutstandingPayment } from "@/components/projects/payments-section";
+import { quoteOutstandingBalanceCents } from "@/lib/payment-quote";
 import { ArrowDown, CreditCard, FileText, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -70,9 +71,14 @@ export function PricingPaymentWorkflow({
   const { preliminary, official } = getWorkflowQuotes(quotes);
   const prelimStatus = preliminaryStepStatus(preliminary);
   const officialStatus = officialStepStatus(quotes);
-  const payStatus = paymentStepStatus(payments);
+  const payQuote =
+    official && payments.some((payment) => payment.quote_id === official.id)
+      ? official
+      : quotes.find((quote) => payments.some((payment) => payment.quote_id === quote.id)) ?? official;
+  const payStatus = paymentStepStatus(payments, payQuote);
   const latestPayment = payments[0] ?? null;
   const outstanding = payments.find((p) => isOutstandingPayment(p.status));
+  const balance = payQuote ? quoteOutstandingBalanceCents(payQuote, payments) : 0;
 
   return (
     <Card id="pricing-payment" className="scroll-mt-24 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
@@ -128,13 +134,18 @@ export function PricingPaymentWorkflow({
           status={payStatus}
           summary={
             latestPayment
-              ? `${latestPayment.description} · ${paymentSummaryLabel(payments)}`
+              ? `${latestPayment.description} · ${paymentSummaryLabel(payments, payQuote)}`
               : "Create a payment link after approval"
           }
         >
           {outstanding && (
             <span className="text-sm font-medium text-amber-700">
               {formatCurrency(outstanding.amount)} outstanding
+            </span>
+          )}
+          {!outstanding && balance > 0 && (
+            <span className="text-sm font-medium text-amber-700">
+              {formatCurrency(balance)} still owed
             </span>
           )}
           <Button variant="outline" size="sm" className="min-h-10" onClick={onScrollToPayments} asChild>

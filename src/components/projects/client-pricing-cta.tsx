@@ -5,21 +5,55 @@ import type { Payment, Project, ProjectQuote } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getProjectActiveQuote, getQuotePriceDisplay } from "@/lib/quote-display";
-import { isOutstandingPayment } from "@/components/projects/payments-section";
+import { CheckoutChoiceButtons, isOutstandingPayment } from "@/components/projects/payments-section";
+import { clientPayChoice, paidCentsForQuote, quoteOutstandingBalanceCents } from "@/lib/payment-quote";
 import { formatCurrency } from "@/lib/utils";
+import type { PaymentAutomationSettings } from "@/lib/workflow-settings";
 import { CheckCircle2, CreditCard, FileText } from "lucide-react";
 
 interface ClientPricingCtaProps {
   project: Pick<Project, "project_name" | "property_address">;
   quotes: ProjectQuote[];
   payments: Payment[];
+  depositMode?: PaymentAutomationSettings["depositMode"];
+  depositPercent?: number;
+  depositAmountCents?: number;
+  allowClientPayInFull?: boolean;
 }
 
-export function ClientPricingCta({ project, quotes, payments }: ClientPricingCtaProps) {
+export function ClientPricingCta({
+  project,
+  quotes,
+  payments,
+  depositMode = "none",
+  depositPercent = 50,
+  depositAmountCents = 0,
+  allowClientPayInFull = false,
+}: ClientPricingCtaProps) {
   const active = getProjectActiveQuote(quotes, "client");
-  const outstanding = payments.filter((p) => isOutstandingPayment(p.status));
-  const allPaid = payments.length > 0 && payments.every((p) => p.status === "paid" || p.status === "cancelled");
-  const hasPaid = payments.some((p) => p.status === "paid");
+  const activeQuote = active?.kind === "official" ? active.quote : null;
+  const scoped = activeQuote ? payments.filter((p) => p.quote_id === activeQuote.id) : payments;
+  const outstanding = scoped.filter((p) => isOutstandingPayment(p.status));
+  const paidCents = activeQuote
+    ? paidCentsForQuote(payments, activeQuote.id)
+    : scoped.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amount, 0);
+  const balance = activeQuote ? quoteOutstandingBalanceCents(activeQuote, payments) : null;
+  const settled =
+    balance != null ? balance === 0 && paidCents > 0 : scoped.length > 0 && scoped.every((p) => p.status === "paid" || p.status === "cancelled") && paidCents > 0;
+  const hasPaid = paidCents > 0;
+  const openPayment = outstanding[0];
+  const payChoice =
+    activeQuote && openPayment
+      ? clientPayChoice({
+          depositMode,
+          depositPercent,
+          depositAmountCents,
+          allowClientPayInFull,
+          payment: openPayment,
+          quoteTotalCents: activeQuote.total_cents,
+          paidCents,
+        })
+      : null;
 
   if (!active && outstanding.length === 0 && !hasPaid) {
     return (
@@ -58,7 +92,13 @@ export function ClientPricingCta({ project, quotes, payments }: ClientPricingCta
     ctaHref = "#payments";
     statusLabel = `${formatCurrency(outstanding[0].amount)} due`;
     statusVariant = "warning";
-  } else if (hasPaid && allPaid) {
+  } else if (hasPaid && balance != null && balance > 0) {
+    ctaLabel = "View balance";
+    ctaHref = "#payments";
+    ctaVariant = "outline";
+    statusLabel = `${formatCurrency(balance)} still owed`;
+    statusVariant = "warning";
+  } else if (hasPaid && settled) {
     ctaLabel = "Payment Complete";
     ctaHref = "#payments";
     ctaVariant = "outline";
@@ -102,21 +142,35 @@ export function ClientPricingCta({ project, quotes, payments }: ClientPricingCta
             {outstanding.length > 0 && (
               <p className="flex items-center gap-2 text-sm text-muted">
                 <CreditCard className="h-4 w-4" />
-                Total due: {formatCurrency(outstanding.reduce((s, p) => s + p.amount, 0))}
+                {payChoice
+                  ? `Deposit due now: ${formatCurrency(payChoice.rowIsFull ? payChoice.depositCents : outstanding[0].amount)}. Full project total ${formatCurrency(payChoice.totalCents)}.`
+                  : `Total due: ${formatCurrency(outstanding.reduce((s, p) => s + p.amount, 0))}`}
               </p>
             )}
-            {hasPaid && !outstanding.length && (
+            {hasPaid && balance != null && balance > 0 && outstanding.length === 0 && (
+              <p className="flex items-center gap-2 text-sm text-amber-700">
+                <CreditCard className="h-4 w-4" />
+                {formatCurrency(balance)} still owed
+              </p>
+            )}
+            {hasPaid && settled && outstanding.length === 0 && (
               <p className="flex items-center gap-2 text-sm text-emerald-700">
                 <CheckCircle2 className="h-4 w-4" />
                 Payment complete
               </p>
             )}
           </div>
+          {payChoice && openPayment ? (
+            <div className="shrink-0">
+              <CheckoutChoiceButtons payment={openPayment} choice={payChoice} />
+            </div>
+          ) : (
           <Link href={ctaHref} className="shrink-0">
             <Button variant={ctaVariant} className="min-h-11 w-full sm:w-auto px-6">
               {ctaLabel}
             </Button>
           </Link>
+          )}
         </div>
       </div>
     </section>

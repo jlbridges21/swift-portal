@@ -28,7 +28,7 @@ import { normalizeStatus } from "@/lib/constants";
 import { clientDownloadLockMessage, resolveProjectDownloadAllowed } from "@/lib/deliverables";
 import type { Project, MediaAsset, Tour, Project3dModel, Payment, Revision, ShootProposal, ActivityLog, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
-import { formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import {
   Download, MessageSquare,
@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 import type { HeroMedia } from "@/lib/cover";
 import { ProjectHero } from "@/components/projects/project-hero";
+import { paidCentsForQuote, quoteOutstandingBalanceCents } from "@/lib/payment-quote";
+import type { PaymentAutomationSettings } from "@/lib/workflow-settings";
 import { ViewOnlyAccessChip } from "@/components/ui/view-only-access-chip";
 import { ProjectQuickActions } from "@/components/projects/project-quick-actions";
 import { ClientPricingCta } from "@/components/projects/client-pricing-cta";
@@ -81,6 +83,10 @@ interface ProjectPageClientProps {
   canViewProjectProgress: boolean;
   /** Authenticated project viewers — video review links and comment UI. */
   canAccessVideoReviews?: boolean;
+  depositMode?: PaymentAutomationSettings["depositMode"];
+  depositPercent?: number;
+  depositAmountCents?: number;
+  allowClientPayInFull?: boolean;
 }
 
 const REVISION_STATUS_LABEL: Record<string, string> = {
@@ -149,6 +155,10 @@ export function ProjectPageClient({
   canViewFinancials = false,
   canViewProjectProgress,
   canAccessVideoReviews = false,
+  depositMode = "none",
+  depositPercent = 50,
+  depositAmountCents = 0,
+  allowClientPayInFull = false,
 }: ProjectPageClientProps) {
   const router = useRouter();
   const brand = usePortalBrand();
@@ -218,12 +228,33 @@ export function ProjectPageClient({
   const paymentStatus = (() => {
     if (!canViewFinancials) return undefined;
     if (!isClientView && !isPreview) return undefined;
+    const linkedQuote = quotes.find((quote) =>
+      payments.some((payment) => payment.quote_id === quote.id && payment.status !== "cancelled")
+    );
+    if (linkedQuote) {
+      const balance = quoteOutstandingBalanceCents(linkedQuote, payments);
+      const paid = paidCentsForQuote(payments, linkedQuote.id);
+      const open = payments.filter(
+        (payment) => payment.quote_id === linkedQuote.id && (payment.status === "pending" || payment.status === "sent")
+      );
+      if (open.length > 0) {
+        return { label: `${formatCurrency(open[0].amount)} due`, variant: "warning" as const };
+      }
+      if (balance > 0 && paid > 0) {
+        return { label: `${formatCurrency(balance)} still owed`, variant: "warning" as const };
+      }
+      if (balance === 0 && paid > 0) {
+        return { label: "Paid", variant: "success" as const };
+      }
+      return undefined;
+    }
     const outstanding = pendingPayments.length;
+    const paidCents = payments.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amount, 0);
     const allPaid = payments.length > 0 && payments.every((p) => p.status === "paid" || p.status === "cancelled");
     if (outstanding > 0) {
       return { label: "Payment due", variant: "warning" as const };
     }
-    if (allPaid && payments.length > 0) {
+    if (allPaid && paidCents > 0) {
       return { label: "Paid", variant: "success" as const };
     }
     return undefined;
@@ -354,7 +385,15 @@ export function ProjectPageClient({
         )}
 
         {(isClientView || isPreview) && canViewFinancials && (
-          <ClientPricingCta project={project} quotes={quotes} payments={payments} />
+          <ClientPricingCta
+            project={project}
+            quotes={quotes}
+            payments={payments}
+            depositMode={depositMode}
+            depositPercent={depositPercent}
+            depositAmountCents={depositAmountCents}
+            allowClientPayInFull={allowClientPayInFull}
+          />
         )}
 
         {canViewFinancials && (
@@ -764,7 +803,16 @@ export function ProjectPageClient({
         )}
 
         {canViewFinancials && (
-        <PaymentsSection payments={payments} isPreview={isPreview} alwaysShow={isClientView} />
+        <PaymentsSection
+          payments={payments}
+          quotes={quotes}
+          isPreview={isPreview}
+          alwaysShow={isClientView}
+          depositMode={depositMode}
+          depositPercent={depositPercent}
+          depositAmountCents={depositAmountCents}
+          allowClientPayInFull={allowClientPayInFull}
+        />
         )}
 
         {canViewFinancials && (

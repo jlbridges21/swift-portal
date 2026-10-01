@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { setProjectStatus } from "@/lib/status-automation";
-import { getAppSettings } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
-import { getStripeForBusiness, portalCheckoutBaseUrl, StripeConnectNotReadyError } from "@/lib/stripe-connect";
-import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
-import { logProjectActivity } from "@/lib/activity";
-import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
-import { idempotencyKey } from "@/lib/idempotency";
+import { StripeConnectNotReadyError } from "@/lib/stripe-connect";
+import { createPaymentLink, PaymentLinkError } from "@/lib/create-payment-link";
 
 export async function POST(request: Request) {
   try {
-    const profile = await requireAdmin({ permission: 'money.send_payment_links' });
+    const profile = await requireAdmin({ permission: "money.send_payment_links" });
     const body = await request.json();
 
     const tenant = await getTenantContext();
@@ -31,170 +25,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const db = await createTenantServiceClient(businessId);
-    const appSettings = await getAppSettings(businessId);
-
-    const dueDate = body.due_date
-      ? body.due_date
-      : (() => {
-          const d = new Date();
-          d.setDate(d.getDate() + appSettings.workflow.businessDefaults.defaultPaymentDueDays);
-          return d.toISOString().split("T")[0];
-        })();
-
-    if (body.quote_id) {
-      const { data: existingForQuote } = await db
-        .from("payments")
-        .select("*")
-        .eq("quote_id", body.quote_id)
-        .maybeSingle();
-
-      if (existingForQuote) {
-        return NextResponse.json(existingForQuote);
-      }
-    }
-
-    const { stripe, requestOptions, stripeAccountId } = await getStripeForBusiness(businessId);
-
-    const { data: project } = await db
-      .from("projects")
-      .select("project_name")
-      .eq("id", body.project_id)
-      .single();
-
-    const { data: paymentRow, error: insertError } = await db
-      .from("payments")
-      .insert({
-        project_id: body.project_id,
-        client_id: body.client_id,
-        quote_id: body.quote_id || null,
-        amount: body.amount,
-        description: body.description,
-        due_date: dueDate,
-        status: "pending",
-        stripe_account_id: stripeAccountId,
-      })
-      .select()
-      .single();
-
-    if (insertError || !paymentRow) {
-      return NextResponse.json({ error: insertError?.message || "Failed to create payment" }, { status: 500 });
-    }
-
     const productDescription =
       typeof body.product_description === "string" && body.product_description.trim()
         ? body.product_description.trim().slice(0, 500)
         : undefined;
 
-    const stripeMetadata = buildStripePaymentMetadata({
-      paymentId: paymentRow.id,
+    const result = await createPaymentLink({
       businessId,
       projectId: body.project_id,
       clientId: body.client_id,
+      quoteId: body.quote_id || null,
+      amount: body.amount,
+      description: body.description,
+      productDescription,
+      actorUserId: profile.id,
+      origin: "manual",
     });
 
-    const successBase = portalCheckoutBaseUrl(tenant.business);
-
-    const paymentLinkParams = {
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: (body.description as string).slice(0, 250),
-              ...(productDescription ? { description: productDescription } : {}),
-            },
-            unit_amount: body.amount,
-          },
-          quantity: 1,
-        },
-      ],
-      metadata: {
-        ...stripeMetadata,
-        project_name: project?.project_name || "",
-        ...(body.quote_id ? { quote_id: body.quote_id } : {}),
-      },
-      payment_intent_data: {
-        metadata: stripeMetadata,
-      },
-      after_completion: {
-        type: "redirect" as const,
-        redirect: {
-          url: `${successBase}/dashboard/projects/${body.project_id}?payment=success#payments`,
-        },
-      },
-    };
-
-    const paymentLink = requestOptions
-      ? await stripe.paymentLinks.create(paymentLinkParams, requestOptions)
-      : await stripe.paymentLinks.create(paymentLinkParams);
-
-    const { data: payment, error } = await db
-      .from("payments")
-      .update({
-        stripe_payment_link_id: paymentLink.id,
-        stripe_payment_link_url: paymentLink.url,
-        payment_link_url: paymentLink.url,
-        status: "sent",
-      })
-      .eq("id", paymentRow.id)
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    const amountStr = `$${(body.amount / 100).toFixed(2)}`;
-    const payWorkflow = appSettings.workflow.payments;
-    if (payWorkflow.autoMoveOnPaymentLink) {
-      const clientBody = await resolveProjectMessageTemplate(
-        appSettings.workflow,
-        "payment_request",
-        body.project_id,
-        {
-          payment_amount: amountStr,
-          portal_link: await portalLink(`/dashboard/projects/${body.project_id}#payments`, businessId),
-        },
-        `Complete your ${amountStr} payment to unlock your final downloads.`
-      );
-
-      await setProjectStatus({
-        projectId: body.project_id,
-        status: "awaiting_payment",
-        activityType: "invoice_sent",
-        activityDescription: `Invoice sent for ${amountStr}`,
-        skipIfSame: true,
-        notifyClient: true,
-        clientEventKey: "payment_link_sent",
-        clientTitle: "Final Payment",
-        clientBody,
-        link: `/dashboard/projects/${body.project_id}#payments`,
-        idempotencyKey: `payment:link:${paymentRow.id}`,
-      });
-      await logWorkflowAudit(body.project_id, "Workflow automatically moved project to Approved – Awaiting Payment when payment link was created.", {
-        idempotencyKey: `workflow:payment-link:${paymentRow.id}`,
-      });
-    } else {
-      await logWorkflowSkipped(
-        body.project_id,
-        "Automatic move to Awaiting Payment skipped — disabled in Payment Automation settings.",
-        `workflow:payment-link-skipped:${paymentRow.id}`
-      );
-    }
-
-    await logProjectActivity("invoice_sent", `Payment link created for ${amountStr}`, {
-      businessId,
-      projectId: body.project_id,
-      userId: profile.id,
-      idempotencyKey: idempotencyKey("payment", "link", paymentRow.id),
-      metadata: { paymentId: paymentRow.id, amount: body.amount },
-    });
-
-    return NextResponse.json(payment);
+    return NextResponse.json(result.payment);
   } catch (err) {
     if (err instanceof StripeConnectNotReadyError) {
       return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+    if (err instanceof PaymentLinkError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error("Payment creation error:", err);
     return NextResponse.json({ error: "Failed to create payment link" }, { status: 500 });

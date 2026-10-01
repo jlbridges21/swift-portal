@@ -209,6 +209,10 @@ async function ProjectContent({
         }
         allowClientProposalChanges={canViewFinancials && appSettings.proposals.allowClientProposalChanges}
         requireDeliveredForDownloads={appSettings.payments.requireDeliveredForDownloads}
+        depositMode={appSettings.workflow.payments.depositMode}
+        depositPercent={appSettings.workflow.payments.depositPercent}
+        depositAmountCents={appSettings.workflow.payments.depositAmountCents}
+        allowClientPayInFull={appSettings.workflow.payments.allowClientPayInFull}
         assetReviews={canViewFinancials ? assetReviews : []}
         mediaFolders={mediaFolders ?? []}
         videoReviews={videoReviews}
