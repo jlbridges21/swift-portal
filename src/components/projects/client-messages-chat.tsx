@@ -24,8 +24,7 @@ export function ClientMessagesChat({ projectId, clientId, className, compact }: 
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const didInitialRenderRef = useRef(false);
+  const listRef = useRef<HTMLDivElement>(null);
   const markedRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -61,16 +60,12 @@ export function ClientMessagesChat({ projectId, clientId, className, compact }: 
   }, [loading, messages]);
 
   useEffect(() => {
-    // Embedded on the project page (compact), skip the initial jump: messages.length
-    // goes 0 -> N on load and scrolling then drags the viewport down past Payments.
-    // On the standalone /dashboard/messages page, starting at the newest message is
-    // the correct behavior, so only the embedded variant is guarded.
-    if (compact && !didInitialRenderRef.current) {
-      didInitialRenderRef.current = true;
-      return;
-    }
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [messages.length, compact]);
+    const list = listRef.current;
+    if (!list) return;
+    // Scroll the thread itself. scrollIntoView walks every ancestor, including the
+    // window, so the project page landed on Messages (just under Payments) on load.
+    list.scrollTop = list.scrollHeight;
+  }, [messages.length]);
 
   async function handleSend() {
     const text = draft.trim();
@@ -113,6 +108,7 @@ export function ClientMessagesChat({ projectId, clientId, className, compact }: 
         </div>
 
         <div
+          ref={listRef}
           className={cn(
             "space-y-2 overflow-y-auto bg-[#F2F2F7] px-3 py-4",
             compact ? "max-h-[360px]" : "max-h-[520px] min-h-[280px]"
@@ -154,7 +150,6 @@ export function ClientMessagesChat({ projectId, clientId, className, compact }: 
               );
             })
           )}
-          <div ref={bottomRef} />
         </div>
 
         <div className="border-t border-border/60 bg-white p-3">
