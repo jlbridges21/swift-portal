@@ -10,6 +10,7 @@ import {
   getQuotePriceDisplay,
   parseQuoteIncludes,
 } from "@/lib/quote-display";
+import { quotePaymentTermsText, resolveQuoteDepositTerms, type DepositTerms } from "@/lib/payment-quote";
 import { formatCurrency } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2 } from "lucide-react";
@@ -21,9 +22,11 @@ interface ProposalCardProps {
   isAdmin?: boolean;
   actions?: ReactNode;
   className?: string;
+  /** Business deposit setting, used only when this quote never captured terms. */
+  depositFallback?: DepositTerms;
 }
 
-export function ProposalCard({ quote, kind, isAdmin, actions, className }: ProposalCardProps) {
+export function ProposalCard({ quote, kind, isAdmin, actions, className, depositFallback }: ProposalCardProps) {
   const brand = usePortalBrand();
   const packageName = getQuotePackageName(quote);
   const { showPrice, priceLabel, priceCents } = getQuotePriceDisplay(quote);
@@ -32,6 +35,16 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
   const isApproved = quote.status === "approved";
   const isPreliminary = kind === "preliminary";
   const needsReview = !isAdmin && kind === "official" && quote.status === "sent";
+  const paymentTerms =
+    kind === "official" && quote.total_cents > 0
+      ? quotePaymentTermsText(
+          quote.total_cents,
+          resolveQuoteDepositTerms(
+            quote,
+            depositFallback ?? { depositMode: "none", depositPercent: 50, depositAmountCents: 0 }
+          )
+        )
+      : null;
 
   return (
     <div
@@ -79,6 +92,9 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className }: Propo
           )}
           {!showPrice && (
             <p className="text-lg font-semibold tracking-tight text-slate-700">{priceLabel}</p>
+          )}
+          {paymentTerms && (
+            <p className="max-w-md text-sm leading-relaxed text-slate-600">{paymentTerms}</p>
           )}
         </div>
         {isAdmin && (

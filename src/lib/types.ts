@@ -449,6 +449,10 @@ export interface ProjectQuote {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  /** NULL = terms were never captured. 'none' = this proposal charges the full total. */
+  deposit_mode?: "none" | "percent" | "amount" | null;
+  deposit_percent?: number | null;
+  deposit_amount_cents?: number | null;
 }
 
 export type AssetReviewStatus = "pending" | "approved" | "rejected";

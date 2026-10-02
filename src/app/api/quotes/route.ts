@@ -16,10 +16,27 @@ import { createPaymentLink } from "@/lib/create-payment-link";
 import {
   canCreatePaymentFromQuote,
   depositPaymentDescription,
+  depositTermColumns,
+  parseExplicitDepositTerms,
   paymentLinkTitle,
   resolveDepositCharge,
+  resolveQuoteDepositTerms,
 } from "@/lib/payment-quote";
+import type { PaymentAutomationSettings } from "@/lib/workflow-settings";
 import { StripeConnectNotReadyError } from "@/lib/stripe-connect";
+
+function depositColumnsForQuote(
+  body: { deposit_mode?: unknown; deposit_percent?: unknown; deposit_amount_cents?: unknown },
+  payments: Pick<PaymentAutomationSettings, "depositMode" | "depositPercent" | "depositAmountCents">
+) {
+  return depositTermColumns(
+    parseExplicitDepositTerms(body) ?? {
+      depositMode: payments.depositMode,
+      depositPercent: payments.depositPercent,
+      depositAmountCents: payments.depositAmountCents,
+    }
+  );
+}
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -110,6 +127,7 @@ export async function POST(request: Request) {
       quote_kind: "official",
       sent_at: willSend ? new Date().toISOString() : null,
       created_by: profile.id,
+      ...depositColumnsForQuote(body, appSettings.workflow.payments),
     })
     .select()
     .single();
@@ -200,11 +218,21 @@ export async function PATCH(request: Request) {
         ? addProposalExpiration(new Date(), appSettings.proposals.defaultProposalExpirationDays)
         : quote.expires_at;
 
+    const depositPatch =
+      quote.deposit_mode == null
+        ? depositTermColumns({
+            depositMode: appSettings.workflow.payments.depositMode,
+            depositPercent: appSettings.workflow.payments.depositPercent,
+            depositAmountCents: appSettings.workflow.payments.depositAmountCents,
+          })
+        : {};
+
     const { data: updated } = await db
       .from("project_quotes")
       .update({
         status: "sent",
         sent_at: new Date().toISOString(),
+        ...depositPatch,
         ...(expiresAt ? { expires_at: expiresAt } : {}),
       })
       .eq("id", id)
@@ -300,6 +328,7 @@ export async function PATCH(request: Request) {
         quote_kind: "official",
         sent_at: requireReview ? null : new Date().toISOString(),
         created_by: profile.id,
+        ...depositColumnsForQuote(body, appSettings.workflow.payments),
       })
       .select()
       .single();
@@ -408,7 +437,10 @@ export async function PATCH(request: Request) {
             .select("name")
             .eq("id", project.client_id)
             .maybeSingle();
-          const charge = resolveDepositCharge(approvedQuote.total_cents, appSettings.workflow.payments);
+          const charge = resolveDepositCharge(
+            approvedQuote.total_cents,
+            resolveQuoteDepositTerms(approvedQuote, appSettings.workflow.payments)
+          );
           if (charge.fallback) {
             console.warn("[payment] deposit fell back to the full quote total", {
               businessId,
@@ -534,6 +566,7 @@ export async function PATCH(request: Request) {
       (sum: number, item: { amount_cents: number }) => sum + (item.amount_cents || 0),
       0
     );
+    const explicitTerms = parseExplicitDepositTerms(body);
 
     const { data: updated, error } = await db
       .from("project_quotes")
@@ -544,6 +577,7 @@ export async function PATCH(request: Request) {
         total_cents,
         notes: notes || null,
         expires_at: expires_at || null,
+        ...(explicitTerms ? depositTermColumns(explicitTerms) : {}),
       })
       .eq("id", id)
       .select()
@@ -555,6 +589,7 @@ export async function PATCH(request: Request) {
 
   if (action === "duplicate" && (isOwnerAdmin(profile) || staffCan(profile, "money.create_send_estimates"))) {
     const revisionNumber = body.revision_label || "Revised";
+    const appSettings = await getAppSettings(businessId);
     const { data: newQuote, error } = await db
       .from("project_quotes")
       .insert({
@@ -568,6 +603,7 @@ export async function PATCH(request: Request) {
         status: "draft",
         quote_kind: "official",
         created_by: profile.id,
+        ...depositColumnsForQuote({}, appSettings.workflow.payments),
       })
       .select()
       .single();

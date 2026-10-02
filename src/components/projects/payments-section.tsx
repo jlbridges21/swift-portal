@@ -10,7 +10,7 @@ import { CreditCard, Receipt } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { paymentCheckoutPath } from "@/lib/payment-status";
 import { usePortalBrand } from "@/components/brand/brand-provider";
-import { clientPayChoice, paidCentsForQuote } from "@/lib/payment-quote";
+import { clientPayChoice, paidCentsForQuote, resolveQuoteDepositTerms } from "@/lib/payment-quote";
 import type { PaymentAutomationSettings } from "@/lib/workflow-settings";
 import { toast } from "sonner";
 
@@ -144,9 +144,7 @@ function PayChoices({
 }) {
   const choice = quote
     ? clientPayChoice({
-        depositMode,
-        depositPercent,
-        depositAmountCents,
+        terms: resolveQuoteDepositTerms(quote, { depositMode, depositPercent, depositAmountCents }),
         allowClientPayInFull,
         payment,
         quoteTotalCents: quote.total_cents,

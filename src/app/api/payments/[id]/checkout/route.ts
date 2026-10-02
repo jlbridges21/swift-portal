@@ -8,7 +8,7 @@ import { getStripeForBusiness, portalCheckoutBaseUrl, StripeConnectNotReadyError
 import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
 import { isPaymentComplete } from "@/lib/payment-status";
 import { ensureCheckoutNotAlreadyPaid } from "@/lib/stripe-payment-reconcile";
-import { depositPaymentDescription, fullPaymentDescription, resolveDepositCharge } from "@/lib/payment-quote";
+import { depositPaymentDescription, fullPaymentDescription, resolveDepositCharge, resolveQuoteDepositTerms } from "@/lib/payment-quote";
 import { getAppSettings } from "@/lib/app-settings";
 import type { Payment } from "@/lib/types";
 import type { StripeConnectRequestOptions } from "@/lib/stripe";
@@ -209,18 +209,22 @@ async function settlePayInFull(payment: Payment, businessId: string): Promise<Pa
   }
   const settings = await getAppSettings(businessId);
   const paySettings = settings.workflow.payments;
-  if (paySettings.depositMode === "none" || !paySettings.allowClientPayInFull) {
+  if (!paySettings.allowClientPayInFull) {
     throw new CheckoutChoiceError("Paying the full total is not available.", 400);
   }
 
   const db = await createTenantServiceClient(businessId);
   const { data: quote } = await db
     .from("project_quotes")
-    .select("id, project_id, total_cents")
+    .select("id, project_id, total_cents, deposit_mode, deposit_percent, deposit_amount_cents")
     .eq("id", payment.quote_id)
     .maybeSingle();
   if (!quote || quote.project_id !== payment.project_id || quote.total_cents <= 0) {
     throw new CheckoutChoiceError("Quote not found.", 404);
+  }
+  const terms = resolveQuoteDepositTerms(quote, paySettings);
+  if (terms.depositMode === "none") {
+    throw new CheckoutChoiceError("Paying the full total is not available.", 400);
   }
 
   const { data: rows } = await db
@@ -290,18 +294,19 @@ async function settleDeposit(payment: Payment, businessId: string): Promise<Paym
   }
   const settings = await getAppSettings(businessId);
   const paySettings = settings.workflow.payments;
-  if (paySettings.depositMode === "none") {
-    throw new CheckoutChoiceError("Switching to the deposit is not available.", 400);
-  }
 
   const db = await createTenantServiceClient(businessId);
   const { data: quote } = await db
     .from("project_quotes")
-    .select("id, project_id, total_cents")
+    .select("id, project_id, total_cents, deposit_mode, deposit_percent, deposit_amount_cents")
     .eq("id", payment.quote_id)
     .maybeSingle();
   if (!quote || quote.project_id !== payment.project_id || quote.total_cents <= 0) {
     throw new CheckoutChoiceError("Quote not found.", 404);
+  }
+  const terms = resolveQuoteDepositTerms(quote, paySettings);
+  if (terms.depositMode === "none") {
+    throw new CheckoutChoiceError("Switching to the deposit is not available.", 400);
   }
 
   const { data: rows } = await db
@@ -315,7 +320,7 @@ async function settleDeposit(payment: Payment, businessId: string): Promise<Paym
     throw new CheckoutChoiceError("A payment was already recorded for this quote.", 409);
   }
 
-  const charge = resolveDepositCharge(quote.total_cents, paySettings);
+  const charge = resolveDepositCharge(quote.total_cents, terms);
   const targetCents = charge.isDeposit ? charge.amountCents : quote.total_cents;
   const targetDescription = charge.isDeposit
     ? depositPaymentDescription(charge.amountCents, quote.total_cents)

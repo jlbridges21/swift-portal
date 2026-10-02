@@ -403,6 +403,9 @@ export function ProjectPageClient({
           isAdmin={!!isAdmin}
           previewMode={isPreview}
           allowClientProposalChanges={allowClientProposalChanges}
+          depositMode={depositMode}
+          depositPercent={depositPercent}
+          depositAmountCents={depositAmountCents}
         />
         )}
 

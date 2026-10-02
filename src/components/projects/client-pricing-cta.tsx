@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getProjectActiveQuote, getQuotePriceDisplay } from "@/lib/quote-display";
 import { CheckoutChoiceButtons, isOutstandingPayment } from "@/components/projects/payments-section";
-import { clientPayChoice, paidCentsForQuote, quoteOutstandingBalanceCents } from "@/lib/payment-quote";
+import { clientPayChoice, paidCentsForQuote, quoteOutstandingBalanceCents, resolveQuoteDepositTerms } from "@/lib/payment-quote";
 import { formatCurrency } from "@/lib/utils";
 import type { PaymentAutomationSettings } from "@/lib/workflow-settings";
 import { CheckCircle2, CreditCard, FileText } from "lucide-react";
@@ -45,9 +45,7 @@ export function ClientPricingCta({
   const payChoice =
     activeQuote && openPayment
       ? clientPayChoice({
-          depositMode,
-          depositPercent,
-          depositAmountCents,
+          terms: resolveQuoteDepositTerms(activeQuote, { depositMode, depositPercent, depositAmountCents }),
           allowClientPayInFull,
           payment: openPayment,
           quoteTotalCents: activeQuote.total_cents,

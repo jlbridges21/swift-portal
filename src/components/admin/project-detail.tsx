@@ -21,6 +21,7 @@ import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
 import { QuoteSection } from "@/components/projects/quote-section";
 import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
 import type { Project, Client, MediaAsset, Tour, Project3dModel, Payment, ShootProposal, ActivityLog, Revision, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
+import type { DepositMode } from "@/lib/workflow-settings";
 import { normalizeStatus } from "@/lib/constants";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
 import { ProjectStaffCard } from "@/components/admin/project-staff-card";
@@ -121,6 +122,9 @@ interface AdminProjectDetailProps {
   linkAccessViewCount?: number;
   /** Hide estimates / payments / payment links when false (staff without money.view). */
   canViewMoney?: boolean;
+  depositMode?: DepositMode;
+  depositPercent?: number;
+  depositAmountCents?: number;
 }
 
 async function readServerError(res: Response, fallback: string): Promise<string> {
@@ -151,6 +155,9 @@ export function AdminProjectDetail({
   linkAccessPublicUrl = null,
   linkAccessViewCount = 0,
   canViewMoney = true,
+  depositMode = "none",
+  depositPercent = 50,
+  depositAmountCents = 0,
 }: AdminProjectDetailProps) {
   const router = useRouter();
   const { enqueueUploads } = useUploadManager();
@@ -1092,6 +1099,9 @@ export function AdminProjectDetail({
           propertyAddress={initialProject.property_address}
           serviceType={initialProject.service_type}
           payments={paymentList}
+          depositMode={depositMode}
+          depositPercent={depositPercent}
+          depositAmountCents={depositAmountCents}
           onPaymentCreated={(payment) => setPaymentList((prev) => [payment, ...prev])}
           onStatusChange={(status) =>
             setForm((f) => ({ ...f, status: status as Project["status"] }))

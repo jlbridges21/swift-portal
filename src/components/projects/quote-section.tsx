@@ -19,7 +19,9 @@ import {
   isPreliminaryQuote,
   ARCHIVED_QUOTE_NOTE,
 } from "@/lib/quote-display";
+import { quotePaymentTermsText } from "@/lib/payment-quote";
 import { formatCurrency } from "@/lib/utils";
+import type { DepositMode } from "@/lib/workflow-settings";
 import {
   FileText, Plus, Trash2, Send, Check, MessageSquare,
   Copy, Pencil, AlertTriangle,
@@ -43,14 +45,21 @@ interface QuoteSectionProps {
   serviceType?: string;
   payments?: Payment[];
   onPaymentCreated?: (payment: Payment) => void;
+  /** Business default. The form pre-fills from this and can override it for one proposal. */
+  depositMode?: DepositMode;
+  depositPercent?: number;
+  depositAmountCents?: number;
 }
 
-const emptyForm = {
-  title: "",
-  description: "",
-  notes: "",
-  expires_at: "",
-  line_items: [{ description: "", amount_cents: 0 }] as QuoteLineItem[],
+type QuoteFormState = {
+  title: string;
+  description: string;
+  notes: string;
+  expires_at: string;
+  line_items: QuoteLineItem[];
+  deposit_mode: DepositMode;
+  deposit_percent: number;
+  deposit_amount_cents: number;
 };
 
 export function QuoteSection({
@@ -67,6 +76,9 @@ export function QuoteSection({
   serviceType,
   payments = [],
   onPaymentCreated,
+  depositMode = "none",
+  depositPercent = 50,
+  depositAmountCents = 0,
 }: QuoteSectionProps) {
   const router = useRouter();
   const brand = usePortalBrand();
@@ -79,7 +91,24 @@ export function QuoteSection({
   const [showChangeForm, setShowChangeForm] = useState(false);
   const [converting, setConverting] = useState(false);
   const [changeFeedback, setChangeFeedback] = useState("");
-  const [form, setForm] = useState(emptyForm);
+  const businessDeposit = {
+    deposit_mode: depositMode,
+    deposit_percent: depositPercent,
+    deposit_amount_cents: depositAmountCents,
+  };
+
+  function blankForm(): QuoteFormState {
+    return {
+      title: "",
+      description: "",
+      notes: "",
+      expires_at: "",
+      line_items: [{ description: "", amount_cents: 0 }],
+      ...businessDeposit,
+    };
+  }
+
+  const [form, setForm] = useState<QuoteFormState>(blankForm);
 
   useEffect(() => {
     setQuotes(initialQuotes);
@@ -108,10 +137,95 @@ export function QuoteSection({
   }
 
   const totalCents = form.line_items.reduce((s, i) => s + (Number(i.amount_cents) || 0), 0);
+  const formTerms =
+    totalCents > 0
+      ? quotePaymentTermsText(totalCents, {
+          depositMode: form.deposit_mode,
+          depositPercent: form.deposit_percent,
+          depositAmountCents: form.deposit_amount_cents,
+        })
+      : null;
+
+  function renderDepositControls() {
+    return (
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium text-primary">Deposit due on approval</legend>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name="quote-deposit-mode"
+            className="size-4 shrink-0 accent-accent"
+            checked={form.deposit_mode === "none"}
+            onChange={() => setForm((f) => ({ ...f, deposit_mode: "none" }))}
+          />
+          Full project total
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name="quote-deposit-mode"
+            className="size-4 shrink-0 accent-accent"
+            checked={form.deposit_mode === "percent"}
+            onChange={() => setForm((f) => ({ ...f, deposit_mode: "percent" }))}
+          />
+          Percent of the quote
+        </label>
+        {form.deposit_mode === "percent" && (
+          <div className="space-y-1 pl-6">
+            <Label htmlFor="quote-deposit-percent">Deposit percent (1–99)</Label>
+            <Input
+              id="quote-deposit-percent"
+              type="number"
+              min={1}
+              max={99}
+              value={form.deposit_percent}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (!e.target.value || !Number.isFinite(n)) return;
+                if (n < 1 || n > 99) return;
+                setForm((f) => ({ ...f, deposit_percent: Math.round(n) }));
+              }}
+              className="w-28"
+            />
+          </div>
+        )}
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name="quote-deposit-mode"
+            className="size-4 shrink-0 accent-accent"
+            checked={form.deposit_mode === "amount"}
+            onChange={() => setForm((f) => ({ ...f, deposit_mode: "amount" }))}
+          />
+          Fixed amount
+        </label>
+        {form.deposit_mode === "amount" && (
+          <div className="pl-6">
+            <CurrencyInput
+              valueCents={form.deposit_amount_cents}
+              onChangeCents={(cents) => setForm((f) => ({ ...f, deposit_amount_cents: cents }))}
+              className="w-32"
+            />
+          </div>
+        )}
+      </fieldset>
+    );
+  }
+
+  function depositFieldsFor(quote?: ProjectQuote) {
+    if (quote?.deposit_mode) {
+      return {
+        deposit_mode: quote.deposit_mode,
+        deposit_percent: quote.deposit_percent ?? depositPercent,
+        deposit_amount_cents: quote.deposit_amount_cents ?? depositAmountCents,
+      };
+    }
+    return businessDeposit;
+  }
 
   function openCreateForm() {
     setEditingId(null);
-    setForm(emptyForm);
+    setForm(blankForm());
     setShowForm(true);
   }
 
@@ -123,6 +237,7 @@ export function QuoteSection({
       notes: quote.notes || "",
       expires_at: quote.expires_at ? quote.expires_at.split("T")[0] : "",
       line_items: (quote.line_items as QuoteLineItem[]).map((i) => ({ ...i })),
+      ...depositFieldsFor(quote),
     });
     setShowForm(true);
   }
@@ -167,6 +282,9 @@ export function QuoteSection({
         description: i.description,
         amount_cents: Number(i.amount_cents) || 0,
       })),
+      deposit_mode: form.deposit_mode,
+      deposit_percent: form.deposit_percent,
+      deposit_amount_cents: form.deposit_amount_cents,
     };
 
     if (editingId) {
@@ -196,7 +314,7 @@ export function QuoteSection({
           toast.success("Revised proposal sent to client");
           setShowForm(false);
           setEditingId(null);
-          setForm(emptyForm);
+          setForm(blankForm());
           router.refresh();
         } else {
           toast.error("Failed to send proposal");
@@ -239,7 +357,7 @@ export function QuoteSection({
             : "Quote saved"
       );
       setShowForm(false);
-      setForm(emptyForm);
+      setForm(blankForm());
       router.refresh();
     } else {
       toast.error("Failed to save quote");
@@ -296,6 +414,9 @@ export function QuoteSection({
           description: i.description,
           amount_cents: Number(i.amount_cents) || 0,
         })),
+        deposit_mode: form.deposit_mode,
+        deposit_percent: form.deposit_percent,
+        deposit_amount_cents: form.deposit_amount_cents,
       }),
     });
     setConverting(false);
@@ -597,6 +718,8 @@ export function QuoteSection({
           </Button>
         </div>
         <p className="text-sm font-medium">Total: {formatCurrency(totalCents)}</p>
+        {formTerms && <p className="text-sm leading-relaxed text-slate-600">{formTerms}</p>}
+        {renderDepositControls()}
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Expiration Date</Label>
@@ -616,7 +739,7 @@ export function QuoteSection({
               {loading ? "Saving…" : "Save Draft"}
             </Button>
           )}
-          <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm); }}>
+          <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); setForm(blankForm()); }}>
             Cancel
           </Button>
         </div>
@@ -670,6 +793,11 @@ export function QuoteSection({
             quote={activeDisplay.quote}
             kind={activeDisplay.kind}
             isAdmin={asAdmin}
+            depositFallback={{
+              depositMode,
+              depositPercent,
+              depositAmountCents,
+            }}
             actions={
               asAdmin
                 ? renderAdminActions(activeDisplay.quote)
@@ -725,6 +853,8 @@ export function QuoteSection({
                   ))}
                 </div>
                 <p className="text-sm font-medium">Total: {formatCurrency(totalCents)}</p>
+                {formTerms && <p className="text-sm leading-relaxed text-slate-600">{formTerms}</p>}
+                {renderDepositControls()}
                 <div className="space-y-2">
                   <Label>Notes</Label>
                   <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
@@ -736,7 +866,7 @@ export function QuoteSection({
                   <Button variant="accent" disabled={converting || loading || !form.title} onClick={convertToOfficial}>
                     <Send className="h-4 w-4" /> Convert to Official Proposal
                   </Button>
-                  <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm); }}>
+                  <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); setForm(blankForm()); }}>
                     Cancel
                   </Button>
                 </div>

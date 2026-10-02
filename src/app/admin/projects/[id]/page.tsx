@@ -9,6 +9,7 @@ import { listProjectVideoReviews } from "@/lib/video-reviews";
 import { listProjectShares } from "@/lib/project-shares";
 import { getProjectLinkAccessState } from "@/lib/project-link-access";
 import { canAccessProject, staffCan, isOwnerAdmin, visibleClientIdsFor } from "@/lib/staff-access";
+import { getAppSettings } from "@/lib/app-settings";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -143,6 +144,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
   const projectShares = await listProjectShares(tenant.businessId, id);
   const linkAccess = await getProjectLinkAccessState(tenant.businessId, id);
 
+  const appSettings = await getAppSettings(tenant.businessId);
   const appUrl = getBusinessPortalOrigin(tenant.business);
   const clientProjectUrl = `${appUrl}/dashboard/projects/${id}`;
   const portalUrl = `${clientProjectUrl}?preview=1`;
@@ -174,6 +176,9 @@ export default async function AdminProjectPage({ params }: PageProps) {
           linkAccessPublicUrl={linkAccess.publicUrl}
           linkAccessViewCount={linkAccess.viewCount}
           canViewMoney={canViewMoney}
+          depositMode={appSettings.workflow.payments.depositMode}
+          depositPercent={appSettings.workflow.payments.depositPercent}
+          depositAmountCents={appSettings.workflow.payments.depositAmountCents}
         />
       </main>
     </div>
