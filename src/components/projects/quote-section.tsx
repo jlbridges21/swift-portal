@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,16 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ProposalPaymentLinkActions } from "@/components/admin/proposal-payment-link-actions";
+import {
+  DownloadEstimatePdfButton,
+  EstimatePdfPreview,
+} from "@/components/projects/estimate-pdf-preview";
+import {
+  estimateAddressLines,
+  estimateInputFromFields,
+  estimateIssuedAt,
+  type EstimatePdfInput,
+} from "@/lib/estimate-pdf";
 
 interface QuoteSectionProps {
   projectId: string;
@@ -90,6 +100,7 @@ export function QuoteSection({
   const [requestingChanges, setRequestingChanges] = useState(false);
   const [showChangeForm, setShowChangeForm] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [showMobilePreview, setShowMobilePreview] = useState(false);
   const [changeFeedback, setChangeFeedback] = useState("");
   const businessDeposit = {
     deposit_mode: depositMode,
@@ -127,6 +138,81 @@ export function QuoteSection({
 
   const editingQuote = editingId ? quotes.find((q) => q.id === editingId) ?? null : null;
   const editingPreliminary = !!editingQuote && isPreliminaryQuote(editingQuote);
+  const depositFallback = {
+    depositMode,
+    depositPercent,
+    depositAmountCents,
+  };
+
+  function estimateFields(quote: ProjectQuote): EstimatePdfInput {
+    return estimateInputFromFields({
+      businessName: brand.name,
+      legalName: brand.legalName,
+      addressLines: estimateAddressLines(brand),
+      phone: brand.phoneNumber,
+      email: brand.contactEmail,
+      website: brand.websiteUrl,
+      brandPrimaryColor: brand.primaryColor,
+      quoteId: quote.id,
+      issuedAt: estimateIssuedAt(quote.created_at),
+      expiresAt: quote.expires_at,
+      clientName: clientName || "Client",
+      projectName: projectName || "",
+      propertyAddress: propertyAddress || "",
+      title: quote.title,
+      description: quote.description || "",
+      notes: quote.notes || "",
+      lineItems: quote.line_items,
+      depositMode: quote.deposit_mode ?? null,
+      depositPercent: quote.deposit_percent ?? null,
+      depositAmountCents: quote.deposit_amount_cents ?? null,
+      depositFallback,
+      totalCents: quote.total_cents,
+    });
+  }
+
+  const previewInput = useMemo(
+    () =>
+      estimateInputFromFields({
+        businessName: brand.name,
+        legalName: brand.legalName,
+        addressLines: estimateAddressLines(brand),
+        phone: brand.phoneNumber,
+        email: brand.contactEmail,
+        website: brand.websiteUrl,
+        brandPrimaryColor: brand.primaryColor,
+        quoteId: editingId,
+        issuedAt: estimateIssuedAt(editingQuote?.created_at),
+        expiresAt: form.expires_at || null,
+        clientName: clientName || "Client",
+        projectName: projectName || "",
+        propertyAddress: propertyAddress || "",
+        title: form.title,
+        description: form.description,
+        notes: form.notes,
+        lineItems: form.line_items,
+        depositMode: form.deposit_mode,
+        depositPercent: form.deposit_percent,
+        depositAmountCents: form.deposit_amount_cents,
+        depositFallback: {
+          depositMode,
+          depositPercent,
+          depositAmountCents,
+        },
+      }),
+    [
+      brand,
+      clientName,
+      depositAmountCents,
+      depositMode,
+      depositPercent,
+      editingId,
+      editingQuote?.created_at,
+      form,
+      projectName,
+      propertyAddress,
+    ]
+  );
 
   function updateLineItem(index: number, field: keyof QuoteLineItem, value: string | number) {
     setForm((f) => {
@@ -539,6 +625,7 @@ export function QuoteSection({
           <Button variant="outline" size="sm" onClick={() => openEditForm(quote)}>
             <Pencil className="h-4 w-4" /> Edit Draft
           </Button>
+          <DownloadEstimatePdfButton input={estimateFields(quote)} logoUrl={brand.logoUrl} />
           <Button
             variant="accent"
             size="sm"
@@ -568,6 +655,7 @@ export function QuoteSection({
           <Button variant="outline" size="sm" disabled={loading} onClick={() => duplicateQuote(quote)}>
             <Copy className="h-4 w-4" /> Duplicate & Revise
           </Button>
+          <DownloadEstimatePdfButton input={estimateFields(quote)} logoUrl={brand.logoUrl} />
           {clientId && clientName && propertyAddress && (
             <ProposalPaymentLinkActions
               quote={quote}
@@ -587,6 +675,7 @@ export function QuoteSection({
 
     return (
       <>
+        <DownloadEstimatePdfButton input={estimateFields(quote)} logoUrl={brand.logoUrl} />
         {clientId && clientName && propertyAddress && (
           <ProposalPaymentLinkActions
             quote={quote}
@@ -634,6 +723,11 @@ export function QuoteSection({
                 <MessageSquare className="h-4 w-4" /> Request Changes
               </Button>
             )}
+            <DownloadEstimatePdfButton
+              input={estimateFields(quote)}
+              logoUrl={brand.logoUrl}
+              className="min-h-11"
+            />
           </div>
           {previewMode && (
             <p className="text-xs text-muted">
@@ -669,12 +763,22 @@ export function QuoteSection({
         </div>
       );
     }
+    if (quote.status === "approved") {
+      return (
+        <DownloadEstimatePdfButton
+          input={estimateFields(quote)}
+          logoUrl={brand.logoUrl}
+          className="min-h-11"
+        />
+      );
+    }
     return null;
   }
 
   function renderQuoteForm() {
     return (
-      <div className="space-y-4 rounded-2xl bg-slate-50/60 p-6 ring-1 ring-black/[0.04]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)] lg:items-start">
+      <div className="min-w-0 space-y-4 rounded-2xl bg-slate-50/60 p-6 ring-1 ring-black/[0.04]">
         <p className="text-sm font-medium text-primary">
           {editingId ? "Edit draft proposal" : "New proposal"}
         </p>
@@ -742,7 +846,14 @@ export function QuoteSection({
           <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); setForm(blankForm()); }}>
             Cancel
           </Button>
+          <Button type="button" variant="outline" className="lg:hidden" onClick={() => setShowMobilePreview((open) => !open)}>
+            {showMobilePreview ? "Hide preview" : "Preview"}
+          </Button>
         </div>
+      </div>
+      <div className={showMobilePreview ? "min-w-0" : "hidden min-w-0 lg:block"}>
+        <EstimatePdfPreview input={previewInput} logoUrl={brand.logoUrl} />
+      </div>
       </div>
     );
   }

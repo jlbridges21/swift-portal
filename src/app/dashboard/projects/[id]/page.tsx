@@ -72,7 +72,7 @@ async function ProjectContent({
     { data: models },
     { data: mediaFolders },
   ] = await Promise.all([
-    supabase.from("projects").select("*").eq("business_id", tenant.businessId).eq("id", id).single(),
+    supabase.from("projects").select("*, clients(*)").eq("business_id", tenant.businessId).eq("id", id).single(),
     supabase
       .from("media_assets")
       .select("*")

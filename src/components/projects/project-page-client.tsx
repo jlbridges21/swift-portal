@@ -403,6 +403,9 @@ export function ProjectPageClient({
           isAdmin={!!isAdmin}
           previewMode={isPreview}
           allowClientProposalChanges={allowClientProposalChanges}
+          clientName={project.clients?.full_name || project.clients?.name || "Client"}
+          projectName={project.project_name}
+          propertyAddress={project.property_address}
           depositMode={depositMode}
           depositPercent={depositPercent}
           depositAmountCents={depositAmountCents}
