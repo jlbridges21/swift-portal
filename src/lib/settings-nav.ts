@@ -85,7 +85,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: "services",
     label: "Services",
     description: "Catalog, request-form estimate toggle, and preliminary estimate prices.",
-    hashes: ["settings-services", "settings-instant-preliminary"],
+    hashes: [
+      "settings-services",
+      "settings-instant-preliminary",
+      "settings-service-catalog",
+      "settings-travel-fees",
+    ],
   },
   {
     id: "workflow",

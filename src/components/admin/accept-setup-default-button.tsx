@@ -12,6 +12,7 @@ const LABELS: Record<SetupAcceptDefaultKey, string> = {
   colors: "Use ShootPortal default colors",
   stripe: "Skip for now — connect payments later",
   custom_domain: "Keep ShootPortal address for now",
+  travel: "I don't charge a travel fee",
 };
 
 /**
@@ -60,7 +61,9 @@ export function AcceptSetupDefaultButton({
           ? "Payments marked for later — you can connect Stripe anytime in Settings."
           : acceptKey === "custom_domain"
             ? "You can connect your own web address anytime under Settings → Use your own web address."
-            : "Default saved. You can customize this anytime in Settings."
+            : acceptKey === "travel"
+              ? "Travel fees dismissed. You can turn them on anytime under Settings → Services."
+              : "Default saved. You can customize this anytime in Settings."
       );
       router.refresh();
     } catch (error) {

@@ -155,6 +155,14 @@ export async function setProjectStatus(options: SetStatusOptions) {
   if (options.notifyClient && allowNotify) {
     const clientMsg = clientStatusNotification(options.status, appSettings.business.businessName);
     const clientType = options.status === "awaiting_payment" ? "invoice_available" : "status_changed";
+    // Send for Review reuses one activity key per project. Tie its email claim
+    // to this status write so a later deliberate click still emails. Other
+    // callers keep their stable key, so a retry does not email twice.
+    const notifyKey = options.idempotencyKey
+      ? options.activityType === "sent_for_review"
+        ? `${options.idempotencyKey}:${data.updated_at ?? Date.now()}`
+        : options.idempotencyKey
+      : undefined;
     await notifyProjectClients({
       type: clientType,
       eventKey: options.clientEventKey,
@@ -163,6 +171,7 @@ export async function setProjectStatus(options: SetStatusOptions) {
       link: options.link || `/dashboard/projects/${options.projectId}`,
       projectId: options.projectId,
       businessId,
+      idempotencyKey: notifyKey,
     });
   } else if (options.notifyClient && !allowNotify) {
     await logWorkflowAudit(

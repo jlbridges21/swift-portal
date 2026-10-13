@@ -12,6 +12,7 @@ import { InvalidEmailSenderError } from "@/lib/email-sender-policy";
 import { EntitlementError } from "@/lib/entitlements";
 import { InvalidLandingHowItWorksError } from "@/lib/landing-content";
 import { redactPossibleTin, W9InputError } from "@/lib/w9-tin";
+import { TravelSettingsError } from "@/lib/travel-fee";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 export async function GET() {
@@ -59,7 +60,7 @@ export async function PATCH(request: Request) {
     if (error instanceof W9InputError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    if (error instanceof InvalidEmailSenderError) {
+    if (error instanceof InvalidEmailSenderError || error instanceof TravelSettingsError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error instanceof EntitlementError) {

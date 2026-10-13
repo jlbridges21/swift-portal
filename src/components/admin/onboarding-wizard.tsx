@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ColorField } from "@/components/ui/color-field";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { ServicesSettingsCard } from "@/components/admin/services-settings-card";
+import { TravelFeesOnboarding } from "@/components/admin/travel-fees-card";
 import { StripeConnectCard } from "@/components/admin/stripe-connect-card";
 import { LandingPage } from "@/components/landing/landing-page";
 import { LandingEditorPreviewFrame } from "@/components/landing/landing-editor-preview-frame";
@@ -537,6 +538,7 @@ export function OnboardingWizard({
                 </p>
               )}
               <ServicesSettingsCard />
+              <TravelFeesOnboarding />
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" disabled={busy} onClick={() => void runAction({ action: "goto", step: "branding" })}>
                   <ArrowLeft className="h-4 w-4" /> Back

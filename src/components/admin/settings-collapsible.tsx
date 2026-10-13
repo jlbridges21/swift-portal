@@ -60,14 +60,23 @@ export function SettingsCollapsible({
   }, [storageKey, open, storageReady]);
 
   useEffect(() => {
+    let timer = 0;
     const syncFromHash = () => {
       const hash = window.location.hash.replace("#", "");
-      if (hashTargetsThisSection(hash, id)) setOpen(true);
+      if (!hashTargetsThisSection(hash, id)) return;
+      setOpen(true);
+      // The section above may still be opening. Scroll after that layout settles
+      // so the target is not left below the fold.
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        document.getElementById(id ?? "")?.scrollIntoView({ block: "start" });
+      }, 200);
     };
     syncFromHash();
     window.addEventListener("hashchange", syncFromHash);
     window.addEventListener("portal:hash-target", syncFromHash);
     return () => {
+      window.clearTimeout(timer);
       window.removeEventListener("hashchange", syncFromHash);
       window.removeEventListener("portal:hash-target", syncFromHash);
     };

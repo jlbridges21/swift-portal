@@ -24,6 +24,29 @@ import {
 } from "@/lib/payment-quote";
 import type { PaymentAutomationSettings } from "@/lib/workflow-settings";
 import { StripeConnectNotReadyError } from "@/lib/stripe-connect";
+import { withManualTravelLine } from "@/lib/travel-fee";
+import type { AppSettings } from "@/lib/app-settings";
+
+function manualTravelLineItems(
+  lineItems: { description: string; amount_cents: number }[],
+  body: { travel_one_way_miles?: unknown },
+  settings: AppSettings
+): { lineItems: { description: string; amount_cents: number }[]; oneWayMiles: number | null | undefined } {
+  if (!Object.prototype.hasOwnProperty.call(body, "travel_one_way_miles")) {
+    return { lineItems, oneWayMiles: undefined };
+  }
+  if (!settings.travel.enabled || settings.travel.distanceMode !== "manual") {
+    return { lineItems, oneWayMiles: undefined };
+  }
+  const raw = body.travel_one_way_miles;
+  const miles = raw == null || raw === "" ? null : Number(raw);
+  const applied = withManualTravelLine(
+    lineItems,
+    miles != null && Number.isFinite(miles) && miles >= 0 ? miles : null,
+    settings.travel
+  );
+  return { lineItems: applied.lineItems, oneWayMiles: applied.oneWayMiles };
+}
 
 function depositColumnsForQuote(
   body: { deposit_mode?: unknown; deposit_percent?: unknown; deposit_amount_cents?: unknown },
@@ -74,6 +97,14 @@ export async function GET(request: Request) {
   const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (profile.role === "client") {
+    return NextResponse.json(
+      (data ?? []).map((row: { travel_one_way_miles?: unknown }) => {
+        const { travel_one_way_miles: _miles, ...rest } = row;
+        return rest;
+      })
+    );
+  }
   return NextResponse.json(data);
 }
 
@@ -99,13 +130,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const total_cents = line_items.reduce(
+  const db = await createTenantServiceClient(businessId);
+  const appSettings = await getAppSettings(businessId);
+  const manualTravel = manualTravelLineItems(line_items, body, appSettings);
+  const pricedLineItems = manualTravel.lineItems;
+  const total_cents = pricedLineItems.reduce(
     (sum: number, item: { amount_cents: number }) => sum + (item.amount_cents || 0),
     0
   );
-
-  const db = await createTenantServiceClient(businessId);
-  const appSettings = await getAppSettings(businessId);
   const requireReview = appSettings.proposals.requireAdminReviewBeforeOfficial;
   const willSend = Boolean(send) && !requireReview;
   const status = willSend ? "sent" : send ? "draft" : "draft";
@@ -119,8 +151,9 @@ export async function POST(request: Request) {
       project_id,
       title,
       description: description || null,
-      line_items,
+      line_items: pricedLineItems,
       total_cents,
+      ...(manualTravel.oneWayMiles !== undefined ? { travel_one_way_miles: manualTravel.oneWayMiles } : {}),
       notes: notes || null,
       expires_at: expires_at || expiresAt,
       status,
@@ -291,7 +324,9 @@ export async function PATCH(request: Request) {
     );
 
     const { title, description, line_items, notes, expires_at } = body;
-    const finalLineItems = line_items?.length ? line_items : quote.line_items;
+    const sourceLineItems = line_items?.length ? line_items : quote.line_items;
+    const manualTravel = manualTravelLineItems(sourceLineItems, body, appSettings);
+    const finalLineItems = manualTravel.lineItems;
     const finalTitle = title || quote.title.replace(/^Preliminary Estimate — /, "Official Proposal — ");
     const total_cents = finalLineItems.reduce(
       (sum: number, item: { amount_cents: number }) => sum + (item.amount_cents || 0),
@@ -328,6 +363,10 @@ export async function PATCH(request: Request) {
         quote_kind: "official",
         sent_at: requireReview ? null : new Date().toISOString(),
         created_by: profile.id,
+        travel_one_way_miles:
+          manualTravel.oneWayMiles !== undefined
+            ? manualTravel.oneWayMiles
+            : (quote.travel_one_way_miles ?? null),
         ...depositColumnsForQuote(body, appSettings.workflow.payments),
       })
       .select()
@@ -562,7 +601,10 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Title and line items required" }, { status: 400 });
     }
 
-    const total_cents = line_items.reduce(
+    const appSettings = await getAppSettings(businessId);
+    const manualTravel = manualTravelLineItems(line_items, body, appSettings);
+    const pricedLineItems = manualTravel.lineItems;
+    const total_cents = pricedLineItems.reduce(
       (sum: number, item: { amount_cents: number }) => sum + (item.amount_cents || 0),
       0
     );
@@ -573,9 +615,10 @@ export async function PATCH(request: Request) {
       .update({
         title,
         description: description || null,
-        line_items,
+        line_items: pricedLineItems,
         total_cents,
         notes: notes || null,
+        ...(manualTravel.oneWayMiles !== undefined ? { travel_one_way_miles: manualTravel.oneWayMiles } : {}),
         expires_at: expires_at || null,
         ...(explicitTerms ? depositTermColumns(explicitTerms) : {}),
       })
@@ -598,6 +641,7 @@ export async function PATCH(request: Request) {
         description: quote.description,
         line_items: quote.line_items,
         total_cents: quote.total_cents,
+        travel_one_way_miles: quote.travel_one_way_miles ?? null,
         notes: body.notes ?? quote.notes,
         expires_at: quote.expires_at,
         status: "draft",

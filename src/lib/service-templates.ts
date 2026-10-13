@@ -407,6 +407,7 @@ export function buildPreliminaryEstimatePayloadFromTemplate(
     total_cents,
     notes: noteParts.join("\n\n"),
     quote_kind: "preliminary" as const,
+    hidePricing: Boolean(branded.hidePricing),
   };
 }
 

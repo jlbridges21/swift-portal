@@ -127,6 +127,18 @@ There is no in-app “restore business from backup” button.
 
 ---
 
+## Travel fee ZIP centroids
+
+Migration v100 creates `zip_codes`. It does not load the rows. After that migration, run once:
+
+```
+npm run db:seed-zips
+```
+
+The script reads `data/us-zcta-centroids-2026.csv` and upserts on ZIP, so a second run does not insert duplicates. If this never runs, every ZIP lookup fails open: the estimate is still created, no travel fee is added, and nothing alerts. The feature stays silent until the table is seeded.
+
+Migration v101 drops `zip_codes.city` and `zip_codes.state`. Those columns were empty on every row. Seed after v101; the script no longer writes them.
+
 ## Manual SQL still required?
 
 | Task | SQL? |

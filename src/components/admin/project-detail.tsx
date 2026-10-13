@@ -125,6 +125,7 @@ interface AdminProjectDetailProps {
   depositMode?: DepositMode;
   depositPercent?: number;
   depositAmountCents?: number;
+  travel?: import("@/lib/travel-fee").TravelSettings | null;
 }
 
 async function readServerError(res: Response, fallback: string): Promise<string> {
@@ -158,6 +159,7 @@ export function AdminProjectDetail({
   depositMode = "none",
   depositPercent = 50,
   depositAmountCents = 0,
+  travel = null,
 }: AdminProjectDetailProps) {
   const router = useRouter();
   const { enqueueUploads } = useUploadManager();
@@ -1102,6 +1104,7 @@ export function AdminProjectDetail({
           depositMode={depositMode}
           depositPercent={depositPercent}
           depositAmountCents={depositAmountCents}
+          travel={travel}
           onPaymentCreated={(payment) => setPaymentList((prev) => [payment, ...prev])}
           onStatusChange={(status) =>
             setForm((f) => ({ ...f, status: status as Project["status"] }))

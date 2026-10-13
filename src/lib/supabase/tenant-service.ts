@@ -25,6 +25,7 @@ import {
  *   - businesses
  *   - processed_stripe_events
  *   - app_settings      (legacy singleton; live config is business_settings)
+ *   - zip_codes         (shared ZIP centroid reference; no business_id)
  *   - anything under storage (`raw.storage.from(...)`)
  *   - Auth admin APIs   (`raw.auth.admin.*`)
  *   - RPCs              (`raw.rpc(...)`) unless the function itself is tenant-aware

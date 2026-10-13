@@ -3,6 +3,10 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
+import {
+  deliverablesClientNotifyEnabled,
+  incidentalMediaNotificationKey,
+} from "@/lib/client-notification-window";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { normalizeExternal3dUrl } from "@/lib/external-3d-models";
 import { sanitizePlainText } from "@/lib/landing-content";
@@ -66,14 +70,17 @@ export async function POST(request: Request) {
     metadata: { modelId: data.id, provider: normalized.provider },
   });
 
-  await notifyProjectClients({
-    type: "deliverables_uploaded",
-    eventKey: "deliverables_ready",
-    title: "Media in Production",
-    body: `A 3D model "${title}" has been added to your project.`,
-    link: `/dashboard/projects/${body.project_id}`,
-    projectId: body.project_id,
-  });
+  if (await deliverablesClientNotifyEnabled(tenant.businessId)) {
+    await notifyProjectClients({
+      type: "deliverables_uploaded",
+      eventKey: "deliverables_ready",
+      title: "Media in Production",
+      body: `A 3D model "${title}" has been added to your project.`,
+      link: `/dashboard/projects/${body.project_id}`,
+      projectId: body.project_id,
+      idempotencyKey: incidentalMediaNotificationKey(body.project_id),
+    });
+  }
 
   return NextResponse.json({ ...data, normalizeMessage: normalized.message });
 }

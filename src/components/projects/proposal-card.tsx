@@ -112,6 +112,25 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
         <p className="mt-4 text-sm leading-relaxed text-slate-600">{intro}</p>
       )}
 
+      {(quote.line_items ?? []).filter((item) => item.amount_cents > 0).length > 1 && (
+        <ul className="mt-5 space-y-2">
+          {quote.line_items
+            .filter((item) => item.amount_cents > 0)
+            .map((item, index) => (
+              <li key={`${item.description}-${index}`} className="flex items-start justify-between gap-3 text-sm text-slate-700">
+                <span>{item.description}</span>
+                <span className="shrink-0 font-medium text-slate-900">{formatCurrency(item.amount_cents)}</span>
+              </li>
+            ))}
+        </ul>
+      )}
+
+      {isAdmin && quote.travel_one_way_miles != null && (
+        <p className="mt-3 text-xs text-slate-500">
+          Straight-line distance used: {quote.travel_one_way_miles} miles one way. Clients do not see this.
+        </p>
+      )}
+
       {includes.length > 0 && (
         <div className="mt-5">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Includes</p>

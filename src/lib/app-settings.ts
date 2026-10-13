@@ -22,6 +22,14 @@ import {
   mergeWorkflowSettings,
   type WorkflowSettings,
 } from "@/lib/workflow-settings";
+import {
+  assertTravelSettings,
+  defaultTravelSettings,
+  mergeTravelSettings,
+  parseTravelSettings,
+  TravelSettingsError,
+  type TravelSettings,
+} from "@/lib/travel-fee";
 
 export type { WorkflowSettings } from "@/lib/workflow-settings";
 
@@ -136,7 +144,7 @@ export interface MediaSectionDefaultsSettings {
 }
 
 /** Optional setup items a studio may keep as ShootPortal defaults (persisted). */
-export type SetupAcceptDefaultKey = "logo" | "colors" | "stripe" | "custom_domain";
+export type SetupAcceptDefaultKey = "logo" | "colors" | "stripe" | "custom_domain" | "travel";
 
 export type SetupAcceptedDefaults = Record<SetupAcceptDefaultKey, boolean>;
 
@@ -156,6 +164,8 @@ export interface AppSettings {
    * object and is rejected if a client sends one.
    */
   tax: TaxInformationSettings;
+  /** Travel fees for distant jobs. Off until a business turns it on. */
+  travel: TravelSettings;
   /**
    * Explicit “use ShootPortal default” acknowledgements for optional setup items.
    * Persisted in business_settings so the checklist banner can clear across devices.
@@ -282,11 +292,13 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   },
   landing: mergeLandingSettings(null),
   tax: { ...DEFAULT_TAX_INFORMATION },
+  travel: defaultTravelSettings(),
   setupAcceptedDefaults: {
     logo: false,
     colors: false,
     stripe: false,
     custom_domain: false,
+    travel: false,
   },
 };
 
@@ -358,6 +370,7 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
     },
     landing: mergeLandingSettings(stored.landing as Partial<LandingSettings> | null | undefined),
     tax: sanitizeTaxInformation(stored.tax, false),
+    travel: mergeTravelSettings(stored.travel),
     setupAcceptedDefaults: {
       ...DEFAULT_APP_SETTINGS.setupAcceptedDefaults,
       ...(stored.setupAcceptedDefaults ?? {}),
@@ -439,6 +452,12 @@ export async function saveAppSettings(
     patch = { ...patch, tax: sanitizeTaxInformation(patch.tax, true) };
   }
 
+  if (patch.travel) {
+    const parsed = parseTravelSettings(patch.travel);
+    if (!parsed.ok) throw new TravelSettingsError(parsed.error);
+    patch = { ...patch, travel: parsed.settings };
+  }
+
   const current = await loadAppSettingsFromDb(businessId);
   const merged = mergeAppSettings(
     deepMerge(current as unknown as Record<string, unknown>, patch as unknown as Record<string, unknown>) as unknown as AppSettings
@@ -448,6 +467,8 @@ export async function saveAppSettings(
     merged.email.domainVerificationStatus = current.email.domainVerificationStatus;
     merged.email.resendDomainId = current.email.resendDomainId;
   }
+
+  assertTravelSettings(merged.travel, merged.business.postalCode);
 
   const colorDelta = changedBrandColors(current.business, merged.business);
   assertSafeBrandColors(colorDelta);

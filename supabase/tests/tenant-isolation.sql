@@ -179,6 +179,7 @@ BEGIN
   DELETE FROM email_events WHERE business_id = v_business;
   DELETE FROM client_notes WHERE business_id = v_business;
   DELETE FROM communications WHERE business_id = v_business;
+  DELETE FROM client_notification_claims WHERE business_id = v_business;
   DELETE FROM notifications WHERE business_id = v_business;
   DELETE FROM activity_logs WHERE business_id = v_business;
   DELETE FROM client_messages WHERE business_id = v_business;
@@ -747,6 +748,7 @@ BEGIN
   DELETE FROM email_events WHERE business_id = v_teardown_business_id;
   DELETE FROM client_notes WHERE business_id = v_teardown_business_id;
   DELETE FROM communications WHERE business_id = v_teardown_business_id;
+  DELETE FROM client_notification_claims WHERE business_id = v_teardown_business_id;
   DELETE FROM notifications WHERE business_id = v_teardown_business_id;
   DELETE FROM activity_logs WHERE business_id = v_teardown_business_id;
   DELETE FROM client_messages WHERE business_id = v_teardown_business_id;
@@ -799,6 +801,7 @@ BEGIN
   DELETE FROM email_events WHERE business_id = v_pentest_business_id;
   DELETE FROM client_notes WHERE business_id = v_pentest_business_id;
   DELETE FROM communications WHERE business_id = v_pentest_business_id;
+  DELETE FROM client_notification_claims WHERE business_id = v_pentest_business_id;
   DELETE FROM notifications WHERE business_id = v_pentest_business_id;
   DELETE FROM activity_logs WHERE business_id = v_pentest_business_id;
   DELETE FROM client_messages WHERE business_id = v_pentest_business_id;

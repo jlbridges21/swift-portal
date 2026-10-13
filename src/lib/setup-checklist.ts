@@ -36,7 +36,23 @@ export async function loadSetupChecklistSnapshot(
 
   const completedAt = biz?.setup_checklist_completed_at ?? null;
   if (completedAt) {
-    return { items: [], incomplete: false, completedAt };
+    const travelDone =
+      appSettings.travel.enabled === true || appSettings.setupAcceptedDefaults.travel === true;
+    if (travelDone) return { items: [], incomplete: false, completedAt };
+    return {
+      items: [
+        {
+          id: "travel",
+          label: "Travel fees",
+          hash: "settings-travel-fees",
+          done: false,
+          acceptDefaultKey: "travel",
+          optional: true,
+        },
+      ],
+      incomplete: true,
+      completedAt,
+    };
   }
 
   let stripeOk = false;
@@ -68,6 +84,7 @@ export async function loadSetupChecklistSnapshot(
     services: serviceRows,
     customDomainConnected,
   });
+
   const incomplete = items.some((item) => !item.done);
 
   if (!incomplete) {

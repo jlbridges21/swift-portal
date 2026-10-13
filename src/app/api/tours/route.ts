@@ -3,6 +3,10 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyProjectClients } from "@/lib/notifications";
+import {
+  deliverablesClientNotifyEnabled,
+  incidentalMediaNotificationKey,
+} from "@/lib/client-notification-window";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { canAccessProject } from "@/lib/project-access";
 
@@ -70,14 +74,17 @@ export async function POST(request: Request) {
     metadata: { tourId: data.id },
   });
 
-  await notifyProjectClients({
-    type: "deliverables_uploaded",
-    eventKey: "deliverables_ready",
-    title: "Media in Production",
-    body: `A virtual tour "${body.tour_name}" has been added to your project.`,
-    link: `/dashboard/projects/${body.project_id}`,
-    projectId: body.project_id,
-  });
+  if (await deliverablesClientNotifyEnabled(tenant.businessId)) {
+    await notifyProjectClients({
+      type: "deliverables_uploaded",
+      eventKey: "deliverables_ready",
+      title: "Media in Production",
+      body: `A virtual tour "${body.tour_name}" has been added to your project.`,
+      link: `/dashboard/projects/${body.project_id}`,
+      projectId: body.project_id,
+      idempotencyKey: incidentalMediaNotificationKey(body.project_id),
+    });
+  }
 
   return NextResponse.json(data);
 }

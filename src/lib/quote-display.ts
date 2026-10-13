@@ -133,7 +133,8 @@ export function getClientVisibleQuotes(
   if (options?.showPreliminaryToClients === false && active.kind === "preliminary") {
     return [];
   }
-  return [active.quote];
+  const { travel_one_way_miles: _miles, ...clientQuote } = active.quote;
+  return [clientQuote];
 }
 
 export function parseQuoteIncludes(description: string | null | undefined): string[] {

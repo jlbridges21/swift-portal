@@ -1,9 +1,12 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { logProjectActivity } from "@/lib/activity";
-import { notifyProjectClients } from "@/lib/notifications";
+import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { buildPreliminaryEstimatePayload } from "@/lib/business-services";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
+import { decidePreliminaryTravel } from "@/lib/preliminary-travel";
+import type { ZipQuery } from "@/lib/zip-distance";
+import { logWorkflowSkipped } from "@/lib/workflow";
 
 async function resolveProjectBusinessId(projectId: string): Promise<string | null> {
   const raw = await createServiceClient();
@@ -36,14 +39,6 @@ export async function upsertPreliminaryEstimate(
   }
 
   const db = await createTenantServiceClient(businessId);
-  const payload = await buildPreliminaryEstimatePayload(serviceType, {
-    portalName: appSettings.business.portalName,
-    businessName: appSettings.business.businessName,
-  }, businessId);
-  const expiresAt = addProposalExpiration(
-    new Date(),
-    appSettings.proposals.defaultEstimateExpirationDays
-  );
 
   const { data: existing } = await db
     .from("project_quotes")
@@ -53,6 +48,17 @@ export async function upsertPreliminaryEstimate(
     .maybeSingle();
 
   if (existing) {
+    const payload = await buildPreliminaryEstimateWithTravel({
+      projectId,
+      serviceType,
+      businessId,
+      appSettings,
+      db: db as unknown as TravelEstimateDb,
+    });
+    const expiresAt = addProposalExpiration(
+      new Date(),
+      appSettings.proposals.defaultEstimateExpirationDays
+    );
     const { data: updated, error } = await db
       .from("project_quotes")
       .update({
@@ -64,6 +70,7 @@ export async function upsertPreliminaryEstimate(
         expires_at: expiresAt,
         status: "sent",
         sent_at: new Date().toISOString(),
+        ...(payload.travelActive ? { travel_one_way_miles: payload.oneWayMiles } : {}),
       })
       .eq("id", existing.id)
       .select()
@@ -115,10 +122,13 @@ export async function createPreliminaryEstimate(
     if (existing) return existing;
   }
 
-  const payload = await buildPreliminaryEstimatePayload(serviceType, {
-    portalName: appSettings.business.portalName,
-    businessName: appSettings.business.businessName,
-  }, businessId);
+  const payload = await buildPreliminaryEstimateWithTravel({
+    projectId,
+    serviceType,
+    businessId,
+    appSettings,
+    db: db as unknown as TravelEstimateDb,
+  });
   const expiresAt = addProposalExpiration(
     new Date(),
     appSettings.proposals.defaultEstimateExpirationDays
@@ -138,6 +148,7 @@ export async function createPreliminaryEstimate(
       sent_at: new Date().toISOString(),
       expires_at: expiresAt,
       created_by: options?.userId ?? null,
+      ...(payload.travelActive ? { travel_one_way_miles: payload.oneWayMiles } : {}),
     })
     .select()
     .single();
@@ -169,4 +180,76 @@ export async function createPreliminaryEstimate(
   });
 
   return quote;
+}
+
+type TravelEstimateDb = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (column: string, value: string) => {
+        eq: (column: string, value: string) => {
+          maybeSingle: () => PromiseLike<{ data: { property_address?: string | null } | null }>;
+        };
+      };
+    };
+  };
+  raw: ZipQuery;
+};
+
+async function buildPreliminaryEstimateWithTravel(input: {
+  projectId: string;
+  serviceType: string;
+  businessId: string;
+  appSettings: Awaited<ReturnType<typeof getAppSettings>>;
+  db: TravelEstimateDb;
+}) {
+  const { projectId, serviceType, businessId, appSettings, db } = input;
+  const built = await buildPreliminaryEstimatePayload(
+    serviceType,
+    {
+      portalName: appSettings.business.portalName,
+      businessName: appSettings.business.businessName,
+    },
+    businessId
+  );
+  const { data: project } = await db
+    .from("projects")
+    .select("property_address")
+    .eq("id", projectId)
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  const decision = await decidePreliminaryTravel({
+    settings: appSettings.travel,
+    businessPostalCode: appSettings.business.postalCode,
+    businessCountry: appSettings.business.country,
+    propertyAddress: project?.property_address ?? null,
+    hidePricing: built.hidePricing,
+    db: db.raw,
+  });
+
+  if (decision.notifyReason) {
+    await logWorkflowSkipped(projectId, decision.notifyReason);
+    await notifyAdmins({
+      businessId,
+      projectId,
+      type: "status_changed",
+      title: "Travel fee was not added",
+      body: decision.notifyReason,
+      link: `/admin/projects/${projectId}#quote`,
+    });
+  }
+
+  const lineItems = decision.lineItem
+    ? [...built.line_items, decision.lineItem]
+    : built.line_items;
+
+  return {
+    title: built.title,
+    description: built.description,
+    line_items: lineItems,
+    total_cents: built.total_cents + (decision.lineItem?.amount_cents ?? 0),
+    notes: built.notes,
+    travelActive: decision.active,
+    oneWayMiles: decision.oneWayMiles,
+  };
 }

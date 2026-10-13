@@ -4,7 +4,8 @@
  * Fails (exit 1) on:
  *   1. createServiceClient() / service-role createClient outside the allowlist
  *   2. .from('<business-owned table>') with no business_id filter and not via
- *      createTenantServiceClient
+ *      createTenantServiceClient. SHARED_REFERENCE_TABLES (zip_codes) are
+ *      platform reference data with no business_id and are allowed.
  *   3. module-scope let/var in src/lib not on the allowlist
  *   4. Swift / Jackson / phone literals outside documented fallbacks
  *   5. getAppSettings() called without a businessId argument
@@ -34,6 +35,12 @@ import { join, relative } from "node:path";
 const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
 
+/**
+ * Platform reference data shared by every tenant. These tables must not grow a
+ * business_id. zip_codes holds US Census ZCTA centroids for travel fees.
+ */
+const SHARED_REFERENCE_TABLES = new Set(["zip_codes"]);
+
 const BUSINESS_OWNED_TABLES = new Set([
   "activity_logs",
   "asset_reviews",
@@ -42,6 +49,7 @@ const BUSINESS_OWNED_TABLES = new Set([
   "business_settings",
   "client_message_reads",
   "client_messages",
+  "client_notification_claims",
   "client_notes",
   "clients",
   "communications",
@@ -383,6 +391,7 @@ function lintFile(abs: string): Finding[] {
     let m: RegExpExecArray | null;
     while ((m = fromRe.exec(source))) {
       const table = m[2];
+      if (SHARED_REFERENCE_TABLES.has(table)) continue;
       if (!BUSINESS_OWNED_TABLES.has(table)) continue;
       const lineNo = lineOf(source, m.index);
       const lineText = lines[lineNo - 1] ?? "";

@@ -179,6 +179,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
           depositMode={appSettings.workflow.payments.depositMode}
           depositPercent={appSettings.workflow.payments.depositPercent}
           depositAmountCents={appSettings.workflow.payments.depositAmountCents}
+          travel={appSettings.travel}
         />
       </main>
     </div>

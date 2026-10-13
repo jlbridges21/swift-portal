@@ -22,6 +22,7 @@ import {
 import { quotePaymentTermsText } from "@/lib/payment-quote";
 import { formatCurrency } from "@/lib/utils";
 import type { DepositMode } from "@/lib/workflow-settings";
+import { withManualTravelLine, type TravelSettings } from "@/lib/travel-fee";
 import {
   FileText, Plus, Trash2, Send, Check, MessageSquare,
   Copy, Pencil, AlertTriangle,
@@ -59,6 +60,8 @@ interface QuoteSectionProps {
   depositMode?: DepositMode;
   depositPercent?: number;
   depositAmountCents?: number;
+  /** Manual travel fees. Omitted on the client page. */
+  travel?: TravelSettings | null;
 }
 
 type QuoteFormState = {
@@ -89,6 +92,7 @@ export function QuoteSection({
   depositMode = "none",
   depositPercent = 50,
   depositAmountCents = 0,
+  travel = null,
 }: QuoteSectionProps) {
   const router = useRouter();
   const brand = usePortalBrand();
@@ -101,6 +105,8 @@ export function QuoteSection({
   const [showChangeForm, setShowChangeForm] = useState(false);
   const [converting, setConverting] = useState(false);
   const [showMobilePreview, setShowMobilePreview] = useState(false);
+  const [oneWayMiles, setOneWayMiles] = useState("");
+  const manualTravel = Boolean(travel?.enabled && travel.distanceMode === "manual");
   const [changeFeedback, setChangeFeedback] = useState("");
   const businessDeposit = {
     deposit_mode: depositMode,
@@ -309,14 +315,27 @@ export function QuoteSection({
     return businessDeposit;
   }
 
+  function applyManualMiles(milesText: string, items: QuoteLineItem[]) {
+    if (!travel || !manualTravel) return items;
+    const miles = milesText.trim() === "" ? null : Number(milesText);
+    return withManualTravelLine(
+      items,
+      miles != null && Number.isFinite(miles) ? miles : null,
+      travel
+    ).lineItems;
+  }
+
   function openCreateForm() {
     setEditingId(null);
+    setOneWayMiles("");
     setForm(blankForm());
     setShowForm(true);
   }
 
   function openEditForm(quote: ProjectQuote) {
     setEditingId(quote.id);
+    const miles = quote.travel_one_way_miles == null ? "" : String(quote.travel_one_way_miles);
+    setOneWayMiles(miles);
     setForm({
       title: quote.title,
       description: quote.description || "",
@@ -371,6 +390,14 @@ export function QuoteSection({
       deposit_mode: form.deposit_mode,
       deposit_percent: form.deposit_percent,
       deposit_amount_cents: form.deposit_amount_cents,
+      ...(manualTravel && !editingPreliminary
+        ? {
+            travel_one_way_miles:
+              oneWayMiles.trim() === "" || !Number.isFinite(Number(oneWayMiles))
+                ? null
+                : Number(oneWayMiles),
+          }
+        : {}),
     };
 
     if (editingId) {
@@ -503,6 +530,14 @@ export function QuoteSection({
         deposit_mode: form.deposit_mode,
         deposit_percent: form.deposit_percent,
         deposit_amount_cents: form.deposit_amount_cents,
+        ...(manualTravel
+          ? {
+              travel_one_way_miles:
+                oneWayMiles.trim() === "" || !Number.isFinite(Number(oneWayMiles))
+                  ? null
+                  : Number(oneWayMiles),
+            }
+          : {}),
       }),
     });
     setConverting(false);
@@ -795,6 +830,25 @@ export function QuoteSection({
             placeholder={"Optional intro paragraph\n\nIncludes\n• Deliverable one\n• Deliverable two"}
           />
         </div>
+        {manualTravel && !editingPreliminary && (
+          <div className="space-y-2">
+            <Label htmlFor="travel-one-way-miles">One-way miles</Label>
+            <Input
+              id="travel-one-way-miles"
+              type="number"
+              min={0}
+              value={oneWayMiles}
+              onChange={(e) => {
+                const value = e.target.value;
+                setOneWayMiles(value);
+                setForm((f) => ({ ...f, line_items: applyManualMiles(value, f.line_items) }));
+              }}
+            />
+            <p className="text-xs text-muted">
+              Straight-line miles from your business ZIP to the property. A per-mile fee uses the round trip. Clients never see this number.
+            </p>
+          </div>
+        )}
         <div className="space-y-2">
           <Label>Line Items</Label>
           {form.line_items.map((item, i) => (

@@ -31,6 +31,12 @@ interface NotifyOptions {
   excludeUserIds?: string[];
   eventKey?: NotificationEventKey;
   businessId?: string;
+  /**
+   * When set, email and push are sent only if this insert wins.
+   * A unique conflict means another request already sent them.
+   * In-app rows are still created.
+   */
+  idempotencyKey?: string;
 }
 
 interface NotificationRecipient {
@@ -311,6 +317,22 @@ async function hasDuplicatePaymentNotification(
   return !!data;
 }
 
+/** Insert-first guard. Duplicate means another request won the race. */
+async function claimClientNotification(
+  db: Awaited<ReturnType<typeof createTenantServiceClient>>,
+  projectId: string,
+  idempotencyKey: string
+): Promise<"claimed" | "duplicate" | "error"> {
+  const { error } = await db.from("client_notification_claims").insert({
+    project_id: projectId,
+    idempotency_key: idempotencyKey,
+  });
+  if (!error) return "claimed";
+  if (error.code === "23505") return "duplicate";
+  console.error("[notifications] idempotency claim failed:", error.message);
+  return "error";
+}
+
 export async function notifyUsers(options: NotifyOptions) {
   const businessId = await resolveNotifyBusinessId(options);
   if (!businessId) {
@@ -372,6 +394,18 @@ export async function notifyUsers(options: NotifyOptions) {
   const allowEmail = channelSettings?.email !== false;
   const allowPush = channelSettings?.push !== false;
 
+  let sendOutbound = true;
+  if (options.idempotencyKey && options.projectId) {
+    const claim = await claimClientNotification(db, options.projectId, options.idempotencyKey);
+    if (claim === "duplicate") {
+      sendOutbound = false;
+      console.info("[notifications] outbound suppressed by idempotency key", {
+        type: options.type,
+        projectId: options.projectId,
+      });
+    }
+  }
+
   for (const user of unique.values()) {
     if (!user.id || user.id.includes("@")) continue;
     if (options.excludeUserIds?.includes(user.id)) continue;
@@ -412,8 +446,8 @@ export async function notifyUsers(options: NotifyOptions) {
       notificationId = notification?.id ?? null;
     }
 
-    if (options.sendEmail === false || !user.email || !allowEmail) {
-      if (options.sendEmail !== false && !user.email) {
+    if (!sendOutbound || options.sendEmail === false || !user.email || !allowEmail) {
+      if (sendOutbound && options.sendEmail !== false && !user.email) {
         console.warn("[email] skipped — missing email for user:", user.id, options.type);
       }
       continue;
@@ -484,7 +518,7 @@ export async function notifyUsers(options: NotifyOptions) {
     }
   }
 
-  if (options.notifyAdmins && allowPush && options.sendPush !== false) {
+  if (sendOutbound && options.notifyAdmins && allowPush && options.sendPush !== false) {
     try {
       const pushResult = await sendAdminPushNotification({
         businessId,

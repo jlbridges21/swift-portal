@@ -22,6 +22,7 @@
     "test:plan-stripe-prices": "npx tsx scripts/verify-plan-stripe-price-consistency.ts",
     "setup:stripe-billing": "npx tsx scripts/setup-stripe-billing.ts",
     "tenant-lint": "npx tsx scripts/tenant-lint.ts",
+    "db:seed-zips": "npx tsx --env-file=.env.local scripts/seed-zip-centroids.ts",
     "tenant-pentest": "npx tsx scripts/tenant-pentest.ts",
     "backfill:photo-thumbs": "npx tsx scripts/backfill-photo-thumbnails.ts"
   },

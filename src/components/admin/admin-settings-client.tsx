@@ -30,6 +30,8 @@ import { BRAND } from "@/lib/brand";
 import { brandContrastWarnings, deriveBrandTheme, sanitizeCssColor } from "@/lib/brand-color";
 import { sectionForHash, visibleSettingsSections, type SettingsSectionId } from "@/lib/settings-nav";
 import { TaxInformationSettings, type W9ClientOption } from "@/components/admin/tax-information-settings";
+import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
+import { TravelFeesSettingsCard } from "@/components/admin/travel-fees-card";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import type {
   AppSettings,
@@ -295,6 +297,10 @@ export function AdminSettingsClient({
     settings.business.brandPrimaryColor,
     settings.business.brandAccentColor
   );
+  const savedSettings = JSON.parse(baseline) as AppSettings;
+  const requestFormDirty =
+    settings.proposals.autoPreliminaryEstimate !== savedSettings.proposals.autoPreliminaryEstimate;
+  const travelDirty = JSON.stringify(settings.travel) !== JSON.stringify(savedSettings.travel);
   const tabAccent = sanitizeCssColor(settings.business.brandAccentColor, "#4F46E5");
   const sections = visibleSettingsSections(showTax);
 
@@ -400,6 +406,10 @@ export function AdminSettingsClient({
       ...prev,
       integrations: { ...prev.integrations, ...patch },
     }));
+  }, []);
+
+  const patchTravel = useCallback((travel: AppSettings["travel"]) => {
+    setSettings((prev) => ({ ...prev, travel }));
   }, []);
 
   const patchProposals = useCallback((patch: Partial<AppSettings["proposals"]>) => {
@@ -1055,33 +1065,63 @@ export function AdminSettingsClient({
           <div id="settings-services" tabIndex={-1} className="scroll-mt-24 space-y-4">
             <h2 className="text-lg font-semibold text-primary">Services</h2>
             <p className="mt-1 mb-4 text-sm text-muted">Catalog and preliminary estimate prices for this business.</p>
-            <Card className="shadow-sm" id="settings-instant-preliminary">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Request form</CardTitle>
-                <p className="text-sm text-muted">
-                  Controls whether new public and portal requests collect a service and create an
-                  instant preliminary estimate.
-                </p>
-              </CardHeader>
-              <CardContent className="overflow-hidden rounded-xl border border-border p-0">
-                <div className="divide-y divide-border">
-                  <div className="px-4 py-3">
-                    <RowToggle
-                      id="autoPreliminaryEstimate"
-                      label="Provide instant preliminary estimate"
-                      checked={settings.proposals.autoPreliminaryEstimate}
-                      onChange={(v) => patchProposals({ autoPreliminaryEstimate: v })}
-                    />
-                    <p className="mt-2 px-4 text-xs text-muted">
-                      When off, the request form becomes an inquiry (no service selection) and no
-                      preliminary estimate is created. You can still send official estimates
-                      manually.
-                    </p>
+            <SettingsCollapsible
+              id="settings-instant-preliminary"
+              title="Request form"
+              description="Controls whether new public and portal requests collect a service and create an instant preliminary estimate."
+              defaultOpen
+              storageKey="admin-settings-request-form"
+              dirty={requestFormDirty}
+            >
+              <Card className="shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Request form</CardTitle>
+                  <p className="text-sm text-muted">
+                    Controls whether new public and portal requests collect a service and create an
+                    instant preliminary estimate.
+                  </p>
+                </CardHeader>
+                <CardContent className="overflow-hidden rounded-xl border border-border p-0">
+                  <div className="divide-y divide-border">
+                    <div className="px-4 py-3">
+                      <RowToggle
+                        id="autoPreliminaryEstimate"
+                        label="Provide instant preliminary estimate"
+                        checked={settings.proposals.autoPreliminaryEstimate}
+                        onChange={(v) => patchProposals({ autoPreliminaryEstimate: v })}
+                      />
+                      <p className="mt-2 px-4 text-xs text-muted">
+                        When off, the request form becomes an inquiry (no service selection) and no
+                        preliminary estimate is created. You can still send official estimates
+                        manually.
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-            {services}
+                </CardContent>
+              </Card>
+            </SettingsCollapsible>
+            <SettingsCollapsible
+              id="settings-service-catalog"
+              title="Services"
+              description="Catalog and preliminary estimate prices for this business."
+              defaultOpen
+              storageKey="admin-settings-service-catalog"
+            >
+              {services}
+            </SettingsCollapsible>
+            <SettingsCollapsible
+              id="settings-travel-fees"
+              title="Travel fees"
+              description="Charge for jobs outside the straight-line ZIP service area."
+              storageKey="admin-settings-travel-fees"
+              dirty={travelDirty}
+            >
+              <TravelFeesSettingsCard
+                travel={settings.travel}
+                postalCode={settings.business.postalCode}
+                onChange={patchTravel}
+              />
+            </SettingsCollapsible>
           </div>
         </SettingsPanel>
 

@@ -453,6 +453,8 @@ export interface ProjectQuote {
   deposit_mode?: "none" | "percent" | "amount" | null;
   deposit_percent?: number | null;
   deposit_amount_cents?: number | null;
+  /** One-way straight-line miles. Business trace only. Omitted from client views. */
+  travel_one_way_miles?: number | null;
 }
 
 export type AssetReviewStatus = "pending" | "approved" | "rejected";

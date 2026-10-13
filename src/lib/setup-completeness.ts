@@ -127,6 +127,7 @@ export type ChecklistItemId =
   | "email"
   | "stripe"
   | "services"
+  | "travel"
   | "custom_domain";
 
 export type ChecklistItem = {
@@ -191,9 +192,17 @@ export function buildSetupChecklistItems(input: {
     {
       id: "services",
       label: "Services",
-      hash: "settings-services",
+      hash: "settings-service-catalog",
       // Seeded starters with prices already satisfy this — no permanent nag.
       done: input.services == null ? false : hasActivePricedService(input.services),
+    },
+    {
+      id: "travel",
+      label: "Travel fees",
+      hash: "settings-travel-fees",
+      done: settings.travel.enabled === true || acceptedDefault(settings, "travel"),
+      acceptDefaultKey: "travel",
+      optional: true,
     },
     {
       id: "custom_domain",

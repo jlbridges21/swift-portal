@@ -59,6 +59,18 @@ WHERE table_schema = 'public'
   AND is_nullable = 'YES'
   AND table_name NOT IN ('profiles', 'processed_stripe_events', 'partner_commissions');
 
+-- zip_codes is shared Census reference data and must NOT have business_id
+INSERT INTO _tenant_sql_audit (check_name, detail)
+SELECT
+  '2b_zip_codes_has_business_id',
+  'zip_codes must remain shared reference data without business_id'
+WHERE EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'zip_codes'
+    AND column_name = 'business_id'
+);
+
 -- plans / platform_email_templates / partners tables must NOT have business_id
 -- (platform catalog / partner-program exceptions)
 INSERT INTO _tenant_sql_audit (check_name, detail)
