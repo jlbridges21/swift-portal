@@ -95,11 +95,11 @@ export function ClientMessagesChat({ projectId, clientId, className, compact }: 
     <section id="messages" className={cn("scroll-mt-24", className)}>
       <div
         className={cn(
-          "overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/50 ring-1 ring-black/5",
+          "overflow-hidden rounded-2xl bg-white surface-dark:bg-card shadow-lg shadow-slate-200/50 ring-1 ring-black/5",
           compact && "shadow-md"
         )}
       >
-        <div className="flex items-center gap-2 border-b border-border/60 bg-gradient-to-r from-slate-50 to-white px-4 py-3">
+        <div className="flex items-center gap-2 border-b border-border/60 bg-gradient-to-r from-slate-50 to-white surface-dark:from-background surface-dark:to-background px-4 py-3">
           <MessageSquare className="h-5 w-5 text-accent" />
           <div>
             <h2 className="text-base font-semibold text-primary">Messages</h2>
@@ -110,7 +110,7 @@ export function ClientMessagesChat({ projectId, clientId, className, compact }: 
         <div
           ref={listRef}
           className={cn(
-            "space-y-2 overflow-y-auto bg-[#F2F2F7] px-3 py-4",
+            "space-y-2 overflow-y-auto bg-[#F2F2F7] surface-dark:bg-subtle px-3 py-4",
             compact ? "max-h-[360px]" : "max-h-[520px] min-h-[280px]"
           )}
         >
@@ -132,7 +132,7 @@ export function ClientMessagesChat({ projectId, clientId, className, compact }: 
                       "max-w-[80%] rounded-[18px] px-3.5 py-2 text-[15px] leading-snug shadow-sm",
                       mine
                         ? "rounded-br-md bg-[#0A84FF] text-white"
-                        : "rounded-bl-md bg-white text-slate-900",
+                        : "rounded-bl-md bg-white text-slate-900 surface-dark:bg-card surface-dark:text-heading",
                       message.is_unread && !mine && "ring-2 ring-accent/30"
                     )}
                   >
@@ -152,13 +152,13 @@ export function ClientMessagesChat({ projectId, clientId, className, compact }: 
           )}
         </div>
 
-        <div className="border-t border-border/60 bg-white p-3">
+        <div className="border-t border-border/60 bg-white surface-dark:bg-card p-3">
           <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={2}
             placeholder="iMessage…"
-            className="rounded-2xl bg-slate-50"
+            className="rounded-2xl bg-slate-50 surface-dark:bg-subtle"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();

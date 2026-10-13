@@ -27,7 +27,8 @@ import type { CustomDomainPublicState } from "@/lib/custom-domain";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
 import { BRAND } from "@/lib/brand";
-import { brandContrastWarnings, deriveBrandTheme, sanitizeCssColor } from "@/lib/brand-color";
+import { brandContrastWarnings, deriveBrandTheme, parseSurfaceMode, sanitizeCssColor } from "@/lib/brand-color";
+import { logoLuminanceClass } from "@/lib/logo-luminance-class";
 import { sectionForHash, visibleSettingsSections, type SettingsSectionId } from "@/lib/settings-nav";
 import { TaxInformationSettings, type W9ClientOption } from "@/components/admin/tax-information-settings";
 import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
@@ -187,14 +188,16 @@ function BrandSurfacePreview({
   portalName,
   businessName,
   logoUrl,
+  surfaceMode = "light",
 }: {
   primary: string;
   accent: string;
   portalName: string;
   businessName: string;
   logoUrl: string;
+  surfaceMode?: "light" | "dark";
 }) {
-  const theme = deriveBrandTheme(primary, accent);
+  const theme = deriveBrandTheme(primary, accent, surfaceMode);
   return (
     <div
       id="settings-colors"
@@ -400,6 +403,24 @@ export function AdminSettingsClient({
   const patchBusiness = useCallback((patch: Partial<AppSettings["business"]>) => {
     setSettings((prev) => ({ ...prev, business: { ...prev.business, ...patch } }));
   }, []);
+
+  const dismissLogoSuggestion = useCallback(async () => {
+    const logoUrl = settings.business.logoUrl;
+    patchBusiness({ logoSuggestionDismissedFor: logoUrl });
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          settings: { business: { logoSuggestionDismissedFor: logoUrl } },
+        }),
+      });
+      if (!res.ok) throw new Error("Could not save");
+    } catch {
+      toast.error("Could not dismiss the suggestion. Try again.");
+    }
+  }, [patchBusiness, settings.business.logoUrl]);
 
   const patchIntegrations = useCallback((patch: Partial<AppSettings["integrations"]>) => {
     setSettings((prev) => ({
@@ -630,6 +651,7 @@ export function AdminSettingsClient({
                 portalName={settings.business.portalName}
                 businessName={settings.business.businessName}
                 logoUrl={settings.business.logoUrl}
+                surfaceMode={parseSurfaceMode(settings.business.surfaceMode)}
               />
               <p className="text-xs text-muted">
                 Header currently shows: {liveBrand.portalName} · {liveBrand.name}
@@ -646,12 +668,63 @@ export function AdminSettingsClient({
                       emailLogoUrl: settings.business.emailLogoUrl || logoUrl,
                     })
                   }
+                  onLogoMeasured={(logoLuminance) => patchBusiness({ logoLuminance })}
                 />
                 <p className="text-xs text-muted">
-                  Prefer a transparent PNG so the logo sits cleanly on the light grey portal nav. If
-                  your file has a white or solid background, that background will show — crop it out
-                  of the image file (we do not add a brand-color tile behind the logo).
+                  Prefer a transparent PNG. The logo sits directly on the portal nav, with no tile
+                  behind it. If your file has its own background, that background will show.
                 </p>
+                {logoLuminanceClass(settings.business.logoLuminance) === "light" &&
+                parseSurfaceMode(settings.business.surfaceMode) === "light" &&
+                settings.business.logoSuggestionDismissedFor !== settings.business.logoUrl ? (
+                  <div
+                    role="status"
+                    className="flex flex-col gap-3 rounded-lg border border-border bg-subtle px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p className="text-sm text-foreground">
+                      This logo may be hard to see on a light background. Switch your client portal to a dark background?
+                    </p>
+                    <div className="flex shrink-0 gap-2">
+                      <Button type="button" size="sm" onClick={() => patchBusiness({ surfaceMode: "dark" })}>
+                        Switch to dark
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => void dismissLogoSuggestion()}>
+                        Keep light
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+                <div id="settings-portal-background" tabIndex={-1} className="scroll-mt-24 space-y-2">
+                  <Label id="portal-background-label">Portal background</Label>
+                  <p className="text-xs text-muted">
+                    This changes what clients see in their portal and on shared project links. Your own admin pages stay light.
+                  </p>
+                  <div
+                    role="radiogroup"
+                    aria-labelledby="portal-background-label"
+                    className="flex flex-wrap gap-2"
+                  >
+                    {(["light", "dark"] as const).map((mode) => {
+                      const selected = parseSurfaceMode(settings.business.surfaceMode) === mode;
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => patchBusiness({ surfaceMode: mode })}
+                          className={`min-h-11 rounded-lg border px-4 text-sm font-medium ${
+                            selected
+                              ? "border-accent bg-accent-subtle text-heading"
+                              : "border-border bg-card text-foreground hover:bg-subtle"
+                          }`}
+                        >
+                          {mode === "light" ? "Light" : "Dark"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <div id="settings-logo-size" tabIndex={-1} className="scroll-mt-24">
                   <LogoSizeSlider
                     id="portalLogoSizePx"

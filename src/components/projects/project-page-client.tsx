@@ -331,7 +331,7 @@ export function ProjectPageClient({
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC] surface-dark:bg-background">
       <HashScrollHandler />
       {isPreview ? (
         <div className="sticky top-0 z-50 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900">
@@ -375,10 +375,10 @@ export function ProjectPageClient({
 
         {canViewProjectProgress && (
         <Card className="border-0 shadow-lg shadow-slate-200/50 rounded-2xl overflow-hidden">
-          <CardHeader className="bg-white border-b border-border/60 pb-4">
+          <CardHeader className="bg-white surface-dark:bg-card border-b border-border/60 pb-4">
             <CardTitle className="text-lg font-semibold">Your Progress</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 sm:p-8 bg-white">
+          <CardContent className="p-6 sm:p-8 bg-white surface-dark:bg-card">
             <StatusTimeline currentStatus={project.status} />
           </CardContent>
         </Card>
@@ -438,7 +438,7 @@ export function ProjectPageClient({
                 : undefined
             }
           >
-            <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+            <div className="rounded-2xl bg-white surface-dark:bg-card p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
               {photos.length > 0 ? (
                 <ClientPhotoFolders
                   projectId={project.id}
@@ -476,7 +476,7 @@ export function ProjectPageClient({
             }
           >
             {videoEntries.length > 0 ? (
-              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+              <div className="rounded-2xl bg-white surface-dark:bg-card p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
                 <VideoGrid
                   entries={videoEntries}
                   projectId={project.id}
@@ -564,7 +564,7 @@ export function ProjectPageClient({
                 {documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex flex-col gap-3 rounded-xl bg-white p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-3 rounded-xl bg-white surface-dark:bg-card p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium text-primary">{mediaDisplayName(doc)}</p>
@@ -625,7 +625,7 @@ export function ProjectPageClient({
                 : undefined
             }
           >
-            <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+            <div className="rounded-2xl bg-white surface-dark:bg-card p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
               {photos.length > 0 ? (
                 <ClientPhotoFolders
                   projectId={project.id}
@@ -664,7 +664,7 @@ export function ProjectPageClient({
             }
           >
             {videoEntries.length > 0 ? (
-              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+              <div className="rounded-2xl bg-white surface-dark:bg-card p-4 sm:p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
                 <VideoGrid
                   entries={videoEntries}
                   projectId={project.id}
@@ -760,7 +760,7 @@ export function ProjectPageClient({
                 {documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex flex-col gap-3 rounded-xl bg-white p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-3 rounded-xl bg-white surface-dark:bg-card p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium text-primary">{mediaDisplayName(doc)}</p>
@@ -870,7 +870,7 @@ export function ProjectPageClient({
 
         {canViewFinancials && (
           <MicrositeSection title="Project Activity" icon={MessageSquare}>
-            <div className="rounded-2xl bg-white p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
+            <div className="rounded-2xl bg-white surface-dark:bg-card p-6 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
               <ProjectActivityTimeline activities={activities} clientMode={isClientView} />
             </div>
           </MicrositeSection>

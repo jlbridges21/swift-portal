@@ -49,20 +49,20 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
   return (
     <div
       className={cn(
-        "rounded-2xl bg-gradient-to-b from-white via-white to-slate-50/60 p-5 sm:p-6",
+        "rounded-2xl bg-gradient-to-b from-white via-white to-slate-50/60 p-5 sm:p-6 surface-dark:from-background surface-dark:to-background",
         "shadow-[0_2px_24px_-10px_rgba(15,23,42,0.12)] ring-1 ring-black/[0.04]",
         className
       )}
     >
       {isPreliminary && !isAdmin && (
-        <div className="mb-5 space-y-2 rounded-xl bg-sky-50/70 px-4 py-3">
-          <p className="text-sm font-semibold tracking-tight text-slate-900">
+        <div className="mb-5 space-y-2 rounded-xl bg-sky-50/70 surface-dark:bg-subtle px-4 py-3">
+          <p className="text-sm font-semibold tracking-tight text-slate-900 surface-dark:text-heading">
             About this Preliminary Estimate
           </p>
-          <p className="text-sm leading-relaxed text-slate-600">
+          <p className="text-sm leading-relaxed text-slate-600 surface-dark:text-foreground">
             {preliminaryEstimateDisclaimer(brand.name, brand.preliminaryDisclaimer)}
           </p>
-          <p className="text-xs leading-relaxed text-slate-500">
+          <p className="text-xs leading-relaxed text-slate-500 surface-dark:text-muted">
             This is not the final proposal. Final pricing will be confirmed after {brand.name}
             reviews the property, schedules the shoot, and confirms the project scope.
           </p>
@@ -82,19 +82,19 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
               {priceLabel}
             </p>
           )}
-          <h3 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+          <h3 className="text-xl font-semibold tracking-tight text-slate-900 surface-dark:text-heading sm:text-2xl">
             {packageName}
           </h3>
           {showPrice && (
-            <p className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            <p className="text-3xl font-bold tracking-tight text-slate-900 surface-dark:text-heading sm:text-4xl">
               {priceLabel.toLowerCase().includes("starting") ? formatCurrency(priceCents) : priceLabel}
             </p>
           )}
           {!showPrice && (
-            <p className="text-lg font-semibold tracking-tight text-slate-700">{priceLabel}</p>
+            <p className="text-lg font-semibold tracking-tight text-slate-700 surface-dark:text-foreground">{priceLabel}</p>
           )}
           {paymentTerms && (
-            <p className="max-w-md text-sm leading-relaxed text-slate-600">{paymentTerms}</p>
+            <p className="max-w-md text-sm leading-relaxed text-slate-600 surface-dark:text-foreground">{paymentTerms}</p>
           )}
         </div>
         {isAdmin && (
@@ -109,7 +109,7 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
       </div>
 
       {intro && (
-        <p className="mt-4 text-sm leading-relaxed text-slate-600">{intro}</p>
+        <p className="mt-4 text-sm leading-relaxed text-slate-600 surface-dark:text-foreground">{intro}</p>
       )}
 
       {(quote.line_items ?? []).filter((item) => item.amount_cents > 0).length > 1 && (
@@ -117,26 +117,26 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
           {quote.line_items
             .filter((item) => item.amount_cents > 0)
             .map((item, index) => (
-              <li key={`${item.description}-${index}`} className="flex items-start justify-between gap-3 text-sm text-slate-700">
+              <li key={`${item.description}-${index}`} className="flex items-start justify-between gap-3 text-sm text-slate-700 surface-dark:text-foreground">
                 <span>{item.description}</span>
-                <span className="shrink-0 font-medium text-slate-900">{formatCurrency(item.amount_cents)}</span>
+                <span className="shrink-0 font-medium text-slate-900 surface-dark:text-heading">{formatCurrency(item.amount_cents)}</span>
               </li>
             ))}
         </ul>
       )}
 
       {isAdmin && quote.travel_one_way_miles != null && (
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-slate-500 surface-dark:text-muted">
           Straight-line distance used: {quote.travel_one_way_miles} miles one way. Clients do not see this.
         </p>
       )}
 
       {includes.length > 0 && (
         <div className="mt-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Includes</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 surface-dark:text-muted">Includes</p>
           <ul className="mt-3 space-y-2">
             {includes.map((item) => (
-              <li key={item} className="flex gap-2.5 text-sm leading-relaxed text-slate-700">
+              <li key={item} className="flex gap-2.5 text-sm leading-relaxed text-slate-700 surface-dark:text-foreground">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
                 <span>{item}</span>
               </li>
@@ -157,9 +157,9 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
           );
         if (!filteredNotes.length) return null;
         return (
-          <div className="mt-5 space-y-2 rounded-xl bg-slate-50/80 px-4 py-3">
+          <div className="mt-5 space-y-2 rounded-xl bg-slate-50/80 surface-dark:bg-subtle/80 px-4 py-3">
             {filteredNotes.map((note) => (
-              <p key={note.slice(0, 40)} className="text-sm leading-relaxed text-slate-600">
+              <p key={note.slice(0, 40)} className="text-sm leading-relaxed text-slate-600 surface-dark:text-foreground">
                 {note}
               </p>
             ))}
@@ -168,7 +168,7 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
       })()}
 
       {quote.expires_at && (
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-slate-500 surface-dark:text-muted">
           Valid until {new Date(quote.expires_at).toLocaleDateString()}
         </p>
       )}

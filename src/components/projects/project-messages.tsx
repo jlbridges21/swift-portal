@@ -111,7 +111,7 @@ export function ProjectMessages({
   return (
     <section id="messages" className={cn("scroll-mt-24", className)}>
       <Card className="border-0 shadow-lg shadow-slate-200/50 rounded-2xl overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 bg-gradient-to-r from-slate-50 to-white">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 bg-gradient-to-r from-slate-50 to-white surface-dark:from-background surface-dark:to-background">
           <CardTitle className="flex items-center gap-2 text-base">
             <MessageSquare className="h-5 w-5 text-accent" />
             Messages
@@ -150,7 +150,7 @@ export function ProjectMessages({
                         "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm",
                         mine
                           ? "rounded-br-md bg-accent text-accent-foreground"
-                          : "rounded-bl-md bg-slate-100 text-slate-900",
+                          : "rounded-bl-md bg-slate-100 text-slate-900 surface-dark:bg-subtle surface-dark:text-heading",
                         message.is_unread && !mine && "ring-2 ring-accent/40"
                       )}
                     >
@@ -174,7 +174,7 @@ export function ProjectMessages({
           </div>
 
           {!previewMode && (
-            <div className="border-t border-border/60 bg-slate-50/80 p-4 sm:p-5">
+            <div className="border-t border-border/60 bg-slate-50/80 surface-dark:bg-subtle/80 p-4 sm:p-5">
               <Textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -184,7 +184,7 @@ export function ProjectMessages({
                     ? "Write a reply to the client…"
                     : "Ask a question or leave a note for the team…"
                 }
-                className="bg-white"
+                className="bg-white surface-dark:bg-card"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                     e.preventDefault();

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import { brandThemeCss, sanitizeCssColor } from "@/lib/brand-color";
+import { brandThemeCss, sanitizeCssColor, type SurfaceMode } from "@/lib/brand-color";
 import { PLATFORM_BUSINESS_DEFAULTS, type PortalBrand } from "@/lib/portal-brand";
 import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
 import { PORTAL_LOGO_SIZE } from "@/lib/brand-logo-size";
@@ -42,17 +42,22 @@ export function usePortalBrand(): PortalBrand {
 export function BrandProvider({
   brand,
   children,
+  surfaceMode = "light",
 }: {
   brand: PortalBrand;
   children: React.ReactNode;
+  /** Client portal and share links pass the business setting. Every other surface stays light. */
+  surfaceMode?: SurfaceMode;
 }) {
   const primary = sanitizeCssColor(brand.primaryColor, PLATFORM_BUSINESS_DEFAULTS.brandPrimaryColor);
   const accent = sanitizeCssColor(brand.accentColor, PLATFORM_BUSINESS_DEFAULTS.brandAccentColor);
 
   return (
     <BrandContext.Provider value={{ ...brand, primaryColor: primary, accentColor: accent }}>
-      <style dangerouslySetInnerHTML={{ __html: brandThemeCss(primary, accent) }} />
-      {children}
+      <style dangerouslySetInnerHTML={{ __html: brandThemeCss(primary, accent, surfaceMode) }} />
+      <div data-surface={surfaceMode} className="contents">
+        {children}
+      </div>
     </BrandContext.Provider>
   );
 }

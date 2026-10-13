@@ -144,7 +144,7 @@ export function ClientPhotoFolders({
             return (
               <div
                 key={folder.id}
-                className="overflow-hidden rounded-xl border border-border bg-white text-left shadow-sm transition hover:border-accent/40 hover:shadow-md"
+                className="overflow-hidden rounded-xl border border-border bg-white surface-dark:bg-card text-left shadow-sm transition hover:border-accent/40 hover:shadow-md"
               >
                 <button
                   type="button"
@@ -154,7 +154,7 @@ export function ClientPhotoFolders({
                   }}
                   className="block w-full text-left"
                 >
-                  <div className="relative aspect-[4/3] bg-slate-100">
+                  <div className="relative aspect-[4/3] bg-slate-100 surface-dark:bg-subtle">
                     {covers[folder.id] ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={covers[folder.id]} alt="" className="h-full w-full object-cover" />

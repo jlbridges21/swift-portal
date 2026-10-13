@@ -111,7 +111,7 @@ function QualityOption({
       htmlFor={id}
       className={cn(
         "flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors",
-        checked ? "border-accent bg-accent/5" : "border-border hover:bg-slate-50"
+        checked ? "border-accent bg-accent/5" : "border-border hover:bg-slate-50 surface-dark:hover:bg-subtle"
       )}
     >
       <input

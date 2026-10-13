@@ -95,6 +95,7 @@ export function BrandAssetField({
   inputId,
   onUrlChange,
   onUploaded,
+  onLogoMeasured,
   refreshOnUpload = false,
 }: {
   kind: BrandAssetKind;
@@ -102,6 +103,8 @@ export function BrandAssetField({
   inputId: string;
   onUrlChange: (url: string) => void;
   onUploaded?: (url: string) => void;
+  /** Portal logo uploads include the opaque-pixel luminance, or null when unknown. */
+  onLogoMeasured?: (logoLuminance: number | null) => void;
   /** Opt-in. Default false so draft forms keep unsaved state. */
   refreshOnUpload?: boolean;
 }) {
@@ -158,6 +161,10 @@ export function BrandAssetField({
               const url = typeof data.url === "string" ? data.url : "";
               if (!url) throw new Error("Upload failed");
               onUrlChange(url);
+              if (kind === "logo" && onLogoMeasured) {
+                const measured = data.logoLuminance;
+                onLogoMeasured(typeof measured === "number" && Number.isFinite(measured) ? measured : null);
+              }
               onUploaded?.(url);
               toast.success(`${ui.label} uploaded`);
               if (refreshOnUpload) router.refresh();

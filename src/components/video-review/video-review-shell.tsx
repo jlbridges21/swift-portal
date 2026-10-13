@@ -47,7 +47,7 @@ export function VideoReviewShell({
     <div
       className={cn(
         "flex min-w-0 flex-col",
-        "lg:fixed lg:inset-x-0 lg:bottom-0 lg:top-16 lg:z-30 lg:overflow-hidden lg:bg-[#F8FAFC]",
+        "lg:fixed lg:inset-x-0 lg:bottom-0 lg:top-16 lg:z-30 lg:overflow-hidden lg:bg-[#F8FAFC] surface-dark:lg:bg-background",
         className
       )}
       data-video-review-shell=""

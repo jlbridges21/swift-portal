@@ -50,7 +50,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     });
 
   return (
-    <BrandProvider brand={brand}>
+    <BrandProvider brand={brand} surfaceMode="light">
       <AdminCapabilitiesProvider
         showPartner={showPartner}
         partnerActive={caps.partner.active}

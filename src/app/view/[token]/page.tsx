@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { getProfile } from "@/lib/auth";
@@ -17,9 +17,23 @@ import {
 import { resolveProjectAccess } from "@/lib/project-access";
 import { PublicProjectPageClient } from "@/components/projects/public-project-page-client";
 import { BrandProvider } from "@/components/brand/brand-provider";
+import { parseSurfaceMode } from "@/lib/brand-color";
 
 interface PageProps {
   params: Promise<{ token: string }>;
+}
+
+export async function generateViewport({ params }: PageProps): Promise<Viewport> {
+  const { token } = await params;
+  const host = await getPublicHostContext();
+  const ctx = await resolvePublicLinkProject(token, host.businessId);
+  if (!ctx) return { themeColor: "#F8FAFC", colorScheme: "light" };
+  const settings = await getAppSettings(ctx.businessId);
+  const dark = parseSurfaceMode(settings.business.surfaceMode) === "dark";
+  return {
+    themeColor: dark ? "#14181F" : "#F8FAFC",
+    colorScheme: dark ? "dark" : "light",
+  };
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -70,7 +84,7 @@ export default async function PublicProjectViewPage({ params }: PageProps) {
   const brand = getPortalBrandFromSettings(settings);
 
   return (
-    <BrandProvider brand={brand}>
+    <BrandProvider brand={brand} surfaceMode={parseSurfaceMode(settings.business.surfaceMode)}>
       <PublicProjectPageClient
         token={token}
         project={data.ctx.project}

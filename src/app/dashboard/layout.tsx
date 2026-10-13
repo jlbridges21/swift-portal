@@ -2,16 +2,28 @@ import { redirect } from "next/navigation";
 import { getAppSettings } from "@/lib/app-settings";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { BrandProvider } from "@/components/brand/brand-provider";
+import { parseSurfaceMode } from "@/lib/brand-color";
 import { ClientSubscriptionNotice } from "@/components/dashboard/client-subscription-notice";
 import { getTenantContext } from "@/lib/tenant";
 import { metadataFromBusiness } from "@/lib/site-metadata";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await getTenantContext();
   if (!tenant) return {};
   const settings = await getAppSettings(tenant.businessId);
   return metadataFromBusiness(settings.business);
+}
+
+export async function generateViewport(): Promise<Viewport> {
+  const tenant = await getTenantContext();
+  if (!tenant) return {};
+  const settings = await getAppSettings(tenant.businessId);
+  const dark = parseSurfaceMode(settings.business.surfaceMode) === "dark";
+  return {
+    themeColor: dark ? "#14181F" : "#F8FAFC",
+    colorScheme: dark ? "dark" : "light",
+  };
 }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -29,7 +41,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const brand = getPortalBrandFromSettings(settings);
 
   return (
-    <BrandProvider brand={brand}>
+    <BrandProvider brand={brand} surfaceMode={parseSurfaceMode(settings.business.surfaceMode)}>
       {tenant.role === "client" && (
         <ClientSubscriptionNotice
           businessName={tenant.business.name}

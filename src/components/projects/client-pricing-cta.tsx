@@ -56,8 +56,8 @@ export function ClientPricingCta({
   if (!active && outstanding.length === 0 && !hasPaid) {
     return (
       <section className="scroll-mt-24">
-        <div className="overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/50 ring-1 ring-black/5">
-          <div className="border-b border-border/60 bg-gradient-to-r from-slate-50 to-white px-5 py-4 sm:px-6">
+        <div className="overflow-hidden rounded-2xl bg-white surface-dark:bg-card shadow-lg shadow-slate-200/50 ring-1 ring-black/5">
+          <div className="border-b border-border/60 bg-gradient-to-r from-slate-50 to-white surface-dark:from-background surface-dark:to-background px-5 py-4 sm:px-6">
             <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-wider text-muted">Your Project</p>
               <h2 className="mt-1 text-lg font-semibold text-primary break-words">{project.project_name}</h2>
@@ -111,8 +111,8 @@ export function ClientPricingCta({
 
   return (
     <section className="scroll-mt-24">
-      <div className="overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/50 ring-1 ring-black/5">
-        <div className="border-b border-border/60 bg-gradient-to-r from-slate-50 to-white px-5 py-4 sm:px-6">
+      <div className="overflow-hidden rounded-2xl bg-white surface-dark:bg-card shadow-lg shadow-slate-200/50 ring-1 ring-black/5">
+        <div className="border-b border-border/60 bg-gradient-to-r from-slate-50 to-white surface-dark:from-background surface-dark:to-background px-5 py-4 sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-wider text-muted">Your Project</p>

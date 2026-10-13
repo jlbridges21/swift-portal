@@ -74,7 +74,7 @@ function ClientProfileNav({
   return (
     <Link
       href="/dashboard/settings"
-      className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-slate-100 transition-colors"
+      className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-slate-100 surface-dark:hover:bg-subtle transition-colors"
       title="Settings"
     >
       <Avatar name={name} src={avatar} size="sm" />
@@ -275,7 +275,7 @@ export function Header({
               {!isStaff ? (
                 <Link
                   href="/admin/settings"
-                  className="hidden md:inline-flex rounded-md p-2 text-muted transition-colors hover:bg-slate-100 hover:text-foreground"
+                  className="hidden md:inline-flex rounded-md p-2 text-muted transition-colors hover:bg-slate-100 surface-dark:hover:bg-subtle hover:text-foreground"
                   title="Settings"
                 >
                   <Settings className="h-5 w-5" />
@@ -283,7 +283,7 @@ export function Header({
               ) : (
                 <Link
                   href="/staff/settings"
-                  className="hidden md:inline-flex rounded-md p-2 text-muted transition-colors hover:bg-slate-100 hover:text-foreground"
+                  className="hidden md:inline-flex rounded-md p-2 text-muted transition-colors hover:bg-slate-100 surface-dark:hover:bg-subtle hover:text-foreground"
                   title="Notification preferences"
                 >
                   <Settings className="h-5 w-5" />
@@ -365,7 +365,7 @@ export function Header({
                 key={link.href}
                 href={link.href}
                 onClick={() => setMenuOpen(false)}
-                className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-foreground hover:bg-slate-100"
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-foreground hover:bg-slate-100 surface-dark:hover:bg-subtle"
               >
                 {link.label}
               </Link>
@@ -391,7 +391,7 @@ function AdminMobileMenuSearch({ onClose }: { onClose: () => void }) {
         onClose();
         openSearch();
       }}
-      className="flex min-h-11 w-full items-center rounded-lg px-3 text-sm font-medium text-foreground hover:bg-slate-100"
+      className="flex min-h-11 w-full items-center rounded-lg px-3 text-sm font-medium text-foreground hover:bg-slate-100 surface-dark:hover:bg-subtle"
     >
       Search
     </button>

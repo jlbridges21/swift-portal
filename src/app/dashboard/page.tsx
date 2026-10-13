@@ -124,7 +124,7 @@ export default async function ClientDashboard() {
     : null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white surface-dark:from-background surface-dark:to-background">
       <Suspense>
         <UrlToastHandler />
       </Suspense>
@@ -192,7 +192,7 @@ export default async function ClientDashboard() {
                         Invoice due: {formatCurrency(featuredPayment.amount)}
                       </p>
                     )}
-                    <div className="mt-4 rounded-lg bg-slate-50 border border-border p-4">
+                    <div className="mt-4 rounded-lg bg-slate-50 surface-dark:bg-subtle border border-border p-4">
                       <p className="font-medium text-sm text-primary">{featuredStep.title}</p>
                       <p className="text-sm text-muted mt-1">{featuredStep.description}</p>
                     </div>
@@ -234,7 +234,7 @@ export default async function ClientDashboard() {
                 return (
                   <Link key={`active-${project.id}`} href={`/dashboard/projects/${project.id}`}>
                     <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow h-full">
-                      <div className="relative aspect-video bg-slate-100">
+                      <div className="relative aspect-video bg-slate-100 surface-dark:bg-subtle">
                         {cover ? (
                           <Image src={cover} alt="" fill className="object-cover" sizes="33vw" />
                         ) : (
@@ -370,7 +370,7 @@ export default async function ClientDashboard() {
               {deliveredProjects.map((project) => (
                 <Link key={`delivered-${project.id}`} href={`/dashboard/projects/${project.id}`}>
                   <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow h-full">
-                    <div className="relative aspect-video bg-slate-100">
+                    <div className="relative aspect-video bg-slate-100 surface-dark:bg-subtle">
                       {coverMap.get(project.id) ? (
                         <Image src={coverMap.get(project.id)!} alt="" fill className="object-cover" sizes="33vw" />
                       ) : (

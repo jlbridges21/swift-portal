@@ -9,7 +9,7 @@ export default async function ClientMessagesPage() {
   if (profile.role === "admin") redirect("/admin/messages");
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC] surface-dark:bg-background">
       <Header variant="dashboard" userRole="client" />
       <main className="mobile-container py-8 pb-16">
         <ClientMessagesChat />

@@ -33,6 +33,40 @@
   --admin-pwa-nav-height: 72px;
 }
 
+@custom-variant surface-dark {
+  &:where([data-surface="dark"] *) {
+    @slot;
+  }
+}
+
+/*
+ * Portal-only overrides. The selector cannot contain a space or Tailwind
+ * splits the @custom-variant argument. These rules cover the same utilities
+ * so a dark portal still repaints when the variant is not emitted.
+ */
+[data-surface="dark"] .surface-dark\:bg-background { background-color: var(--color-background) !important; }
+[data-surface="dark"] .surface-dark\:bg-card { background-color: var(--color-card) !important; }
+[data-surface="dark"] .surface-dark\:bg-subtle { background-color: var(--color-subtle) !important; }
+[data-surface="dark"] .surface-dark\:bg-border { background-color: var(--color-border) !important; }
+[data-surface="dark"] .surface-dark\:text-heading { color: var(--color-heading) !important; }
+[data-surface="dark"] .surface-dark\:text-foreground { color: var(--color-foreground) !important; }
+[data-surface="dark"] .surface-dark\:text-muted { color: var(--color-muted) !important; }
+[data-surface="dark"] .surface-dark\:from-background.surface-dark\:to-background {
+  background-image: none !important;
+  background-color: var(--color-background) !important;
+}
+[data-surface="dark"] .surface-dark\:border-border { border-color: var(--color-border) !important; }
+[data-surface="dark"] .surface-dark\:bg-card\/90 { background-color: color-mix(in srgb, var(--color-card) 90%, transparent) !important; }
+[data-surface="dark"] .surface-dark\:bg-subtle\/50 { background-color: color-mix(in srgb, var(--color-subtle) 50%, transparent) !important; }
+[data-surface="dark"] .surface-dark\:bg-subtle\/60 { background-color: color-mix(in srgb, var(--color-subtle) 60%, transparent) !important; }
+[data-surface="dark"] .surface-dark\:bg-subtle\/80 { background-color: color-mix(in srgb, var(--color-subtle) 80%, transparent) !important; }
+[data-surface="dark"] .surface-dark\:bg-subtle\/95 { background-color: color-mix(in srgb, var(--color-subtle) 95%, transparent) !important; }
+[data-surface="dark"] .surface-dark\:hover\:bg-subtle:hover { background-color: var(--color-subtle) !important; }
+[data-surface="dark"] .surface-dark\:hover\:bg-subtle\/80:hover { background-color: color-mix(in srgb, var(--color-subtle) 80%, transparent) !important; }
+@media (min-width: 1024px) {
+  [data-surface="dark"] .surface-dark\:lg\:bg-background { background-color: var(--color-background) !important; }
+}
+
 html {
   overflow-x: clip;
   -webkit-text-size-adjust: 100%;
@@ -49,7 +83,7 @@ body {
 
 @media (display-mode: standalone) {
   html {
-    background-color: #0f172a;
+    background-color: var(--color-background);
   }
 }
 

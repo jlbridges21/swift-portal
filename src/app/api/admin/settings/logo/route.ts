@@ -6,6 +6,7 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getAppSettings, saveAppSettings } from "@/lib/app-settings";
 import { EntitlementError, requireEntitlement } from "@/lib/entitlements";
 import { preparePartnerLandingImage } from "@/lib/partner-landing-image";
+import { measureLogoLuminance } from "@/lib/logo-luminance";
 
 const LOGO_BUCKET = "business-logos";
 /** Stay under Vercel’s 4.5MB serverless body cap so the route actually runs. */
@@ -181,6 +182,12 @@ export async function POST(request: Request) {
 
   const current = await getAppSettings(tenant.businessId);
   const businessPatch = { ...current.business, [config.field]: assetUrl };
+  let logoLuminance: number | null = null;
+  if (kind === "logo") {
+    const measured = await measureLogoLuminance(buffer);
+    logoLuminance = measured.logoLuminance;
+    businessPatch.logoLuminance = measured.logoLuminance;
+  }
   const emailLogo = (current.business.emailLogoUrl || "").trim();
   if (
     kind === "logo" &&
@@ -195,6 +202,7 @@ export async function POST(request: Request) {
     kind,
     url: assetUrl,
     logoUrl: kind === "logo" ? assetUrl : saved.business.logoUrl,
+    logoLuminance: kind === "logo" ? logoLuminance : saved.business.logoLuminance,
     settings: saved,
   });
 }

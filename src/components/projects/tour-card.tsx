@@ -67,7 +67,7 @@ export function TourCard({ tour, embedInPortal }: TourCardProps) {
             )}
           </div>
 
-          <div className="rounded-lg bg-slate-50 p-4 text-sm text-muted">
+          <div className="rounded-lg bg-slate-50 surface-dark:bg-subtle p-4 text-sm text-muted">
             <p className="font-medium text-foreground mb-2">How to use your 360° tour:</p>
             {tour.notes && <p className="mb-2 text-foreground">{tour.notes}</p>}
             <ul className="list-disc list-inside space-y-1">

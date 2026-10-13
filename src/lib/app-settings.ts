@@ -1,6 +1,11 @@
 import { cache } from "react";
 import { createServiceClient } from "@/lib/supabase/server";
-import { assertSafeBrandAssetUrls, assertSafeBrandColors, changedBrandColors } from "@/lib/brand-color";
+import {
+  assertSafeBrandAssetUrls,
+  assertSafeBrandColors,
+  changedBrandColors,
+  parseSurfaceMode,
+} from "@/lib/brand-color";
 import {
   assertEmailSenderPolicy,
   emailSenderPolicyFieldsChanged,
@@ -93,6 +98,12 @@ export interface BusinessSettings {
   portalLogoSizePx: number;
   brandPrimaryColor: string;
   brandAccentColor: string;
+  /** Client portal and public share links. Admin, platform, and partner stay light. */
+  surfaceMode: "light" | "dark";
+  /** Mean luminance of opaque logo pixels, 0–255. Null when the file could not be read. */
+  logoLuminance: number | null;
+  /** Logo URL the business dismissed the light-logo suggestion for. */
+  logoSuggestionDismissedFor: string;
   supportEmail: string;
   addressLine1: string;
   addressLine2: string;
@@ -341,6 +352,16 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
         (stored.business as { portalLogoSizePx?: unknown } | undefined)?.portalLogoSizePx ??
           DEFAULT_APP_SETTINGS.business.portalLogoSizePx
       ),
+      surfaceMode: parseSurfaceMode(stored.business?.surfaceMode),
+      logoLuminance:
+        typeof stored.business?.logoLuminance === "number" &&
+        Number.isFinite(stored.business.logoLuminance)
+          ? stored.business.logoLuminance
+          : null,
+      logoSuggestionDismissedFor:
+        typeof stored.business?.logoSuggestionDismissedFor === "string"
+          ? stored.business.logoSuggestionDismissedFor
+          : "",
     },
     proposals: {
       ...DEFAULT_APP_SETTINGS.proposals,

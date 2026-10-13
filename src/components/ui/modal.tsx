@@ -41,11 +41,11 @@ export function Modal({ open, onClose, title, children, className, footer }: Mod
         className={cn(
           "relative z-10 flex w-full max-w-lg flex-col",
           "max-h-[calc(100dvh-120px)] sm:max-h-[min(90dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)))]",
-          "rounded-t-2xl sm:rounded-xl border border-border bg-white shadow-xl",
+          "rounded-t-2xl sm:rounded-xl border border-border bg-white surface-dark:bg-card shadow-xl",
           className
         )}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4 safe-area-top bg-white rounded-t-2xl sm:rounded-t-xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4 safe-area-top bg-white surface-dark:bg-card rounded-t-2xl sm:rounded-t-xl">
           <h2 id="modal-title" className="text-lg font-semibold text-primary pr-2">
             {title}
           </h2>
@@ -65,7 +65,7 @@ export function Modal({ open, onClose, title, children, className, footer }: Mod
         </div>
 
         {footer ? (
-          <div className="modal-footer-pad shrink-0 border-t border-border bg-white px-5 py-4 safe-area-bottom sm:safe-area-bottom">
+          <div className="modal-footer-pad shrink-0 border-t border-border bg-white surface-dark:bg-card px-5 py-4 safe-area-bottom sm:safe-area-bottom">
             {footer}
           </div>
         ) : null}

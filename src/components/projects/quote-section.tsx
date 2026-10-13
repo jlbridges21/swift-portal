@@ -770,7 +770,7 @@ export function QuoteSection({
             </p>
           )}
           {showChangeForm && allowClientProposalChanges && (
-            <div className="space-y-2 rounded-lg border border-border bg-white p-3">
+            <div className="space-y-2 rounded-lg border border-border bg-white surface-dark:bg-card p-3">
               <Label htmlFor="change-feedback">What would you like changed?</Label>
               <Textarea
                 id="change-feedback"
@@ -813,7 +813,7 @@ export function QuoteSection({
   function renderQuoteForm() {
     return (
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)] lg:items-start">
-      <div className="min-w-0 space-y-4 rounded-2xl bg-slate-50/60 p-6 ring-1 ring-black/[0.04]">
+      <div className="min-w-0 space-y-4 rounded-2xl bg-slate-50/60 surface-dark:bg-subtle/60 p-6 ring-1 ring-black/[0.04]">
         <p className="text-sm font-medium text-primary">
           {editingId ? "Edit draft proposal" : "New proposal"}
         </p>
@@ -921,7 +921,7 @@ export function QuoteSection({
   return (
     <section id="quote" className="scroll-mt-20">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+        <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900 surface-dark:text-heading sm:text-2xl">
           <FileText className="h-5 w-5 text-accent" />
           {sectionTitle}
         </h2>
@@ -975,7 +975,7 @@ export function QuoteSection({
         )}
 
         {!activeDisplay && !showForm && (
-          <Card className="border-0 bg-slate-50/50 shadow-none ring-1 ring-black/[0.04]">
+          <Card className="border-0 bg-slate-50/50 surface-dark:bg-subtle/50 shadow-none ring-1 ring-black/[0.04]">
             <CardContent className="py-12 text-center">
               <p className="text-sm text-muted">
                 {asAdmin
@@ -989,7 +989,7 @@ export function QuoteSection({
         {showForm && (
           <>
             {editingPreliminary ? (
-              <div className="space-y-4 rounded-2xl bg-slate-50/60 p-6 ring-1 ring-black/[0.04]">
+              <div className="space-y-4 rounded-2xl bg-slate-50/60 surface-dark:bg-subtle/60 p-6 ring-1 ring-black/[0.04]">
                 <p className="text-sm font-medium text-primary">Edit preliminary estimate</p>
                 <div className="space-y-2">
                   <Label>Title</Label>

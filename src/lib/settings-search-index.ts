@@ -71,7 +71,7 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
     sectionId: "branding",
     label: "Branding & Colors",
     description: "Logo, favicon, and brand colors.",
-    keywords: ["logo", "colors", "brand", "favicon", "branding", "accent", "theme"],
+    keywords: ["logo", "colors", "brand", "favicon", "branding", "accent", "portal background"],
   },
   {
     id: "logo",
@@ -79,6 +79,13 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
     label: "Logo",
     description: "Upload your studio logo.",
     keywords: ["logo", "mark", "wordmark"],
+  },
+  {
+    id: "portal-background",
+    sectionId: "branding",
+    label: "Portal background",
+    description: "Light or dark background for the client portal.",
+    keywords: ["portal background", "dark background", "light background", "logo visibility"],
   },
   {
     id: "colors",
@@ -439,6 +446,7 @@ const HASH_BY_ENTRY: Record<string, string> = {
   "from-name": "settings-from-name",
   branding: "settings-colors",
   logo: "settings-logo",
+  "portal-background": "settings-portal-background",
   colors: "settings-colors",
   notifications: "settings-notifications",
   landing: "settings-landing",

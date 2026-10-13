@@ -204,7 +204,7 @@ function PhotoThumbnail({
         onClick();
       }}
       className={cn(
-        "group relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100 shadow-sm ring-1 ring-black/5 transition-all hover:shadow-lg hover:ring-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
+        "group relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100 surface-dark:bg-subtle shadow-sm ring-1 ring-black/5 transition-all hover:shadow-lg hover:ring-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
         className
       )}
       aria-label={`View ${mediaDisplayName(photo)}`}

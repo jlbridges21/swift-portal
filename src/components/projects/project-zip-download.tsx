@@ -248,8 +248,8 @@ export function ProjectZipDownload({
           isHero
             ? "group inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20 hover:border-white/30 disabled:opacity-60"
             : compact
-              ? "inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-slate-50 disabled:opacity-60"
-              : "inline-flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-primary hover:bg-slate-50 disabled:opacity-60",
+              ? "inline-flex items-center gap-1.5 rounded-md border border-border bg-white surface-dark:bg-card px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-slate-50 surface-dark:hover:bg-subtle disabled:opacity-60"
+              : "inline-flex items-center gap-2 rounded-lg border border-border bg-white surface-dark:bg-card px-4 py-2 text-sm font-medium text-primary hover:bg-slate-50 surface-dark:hover:bg-subtle disabled:opacity-60",
           buttonClassName
         )}
       >
@@ -274,7 +274,7 @@ export function ProjectZipDownload({
         <div
           className={cn(
             "rounded-xl border p-4 space-y-3",
-            isHero ? "border-white/20 bg-black/30 text-white backdrop-blur-sm" : "border-border bg-slate-50"
+            isHero ? "border-white/20 bg-black/30 text-white backdrop-blur-sm" : "border-border bg-slate-50 surface-dark:bg-subtle"
           )}
           role="status"
           aria-live="polite"
@@ -301,7 +301,7 @@ export function ProjectZipDownload({
               <div
                 className={cn(
                   "relative h-2 w-full overflow-hidden rounded-full",
-                  isHero ? "bg-white/20" : "bg-slate-200"
+                  isHero ? "bg-white/20" : "bg-slate-200 surface-dark:bg-border"
                 )}
               >
                 <div

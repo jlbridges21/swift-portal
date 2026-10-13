@@ -201,7 +201,7 @@ export function PaymentsSection({
             <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">Outstanding</h3>
             <div className="space-y-3">
               {outstanding.map((p) => (
-                <Card key={p.id} className="border-orange-200 bg-gradient-to-r from-orange-50/80 to-white shadow-sm">
+                <Card key={p.id} className="border-orange-200 bg-gradient-to-r from-orange-50/80 to-white shadow-sm surface-dark:from-background surface-dark:to-background">
                   <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-xl font-bold text-primary">{formatCurrency(p.amount)}</p>

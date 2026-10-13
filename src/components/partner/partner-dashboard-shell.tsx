@@ -89,7 +89,7 @@ export async function PartnerShell({
             </aside>
           ) : null}
 
-          <BrandProvider brand={shootPortalBrand}>
+          <BrandProvider brand={shootPortalBrand} surfaceMode="light">
             <div
               className="min-w-0 flex-1 rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50/40 to-white p-4 sm:p-6"
               data-partner-program-surface
@@ -111,7 +111,7 @@ export async function PartnerShell({
   );
 
   return (
-    <BrandProvider brand={tenantBrand}>
+    <BrandProvider brand={tenantBrand} surfaceMode="light">
       <AdminCapabilitiesProvider
         showPartner={showPartner}
         partnerActive={caps.partner.active}

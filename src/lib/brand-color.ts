@@ -182,13 +182,23 @@ function pickForeground(bg: Rgb): { color: Rgb; css: string; usedDark: boolean }
   return { color: WHITE, css: "#ffffff", usedDark: false };
 }
 
+/**
+ * Walk `rgb` until it clears `minRatio` against `against`.
+ * Light surfaces mix toward ink. Dark surfaces mix toward white.
+ * A light page therefore still darkens, which is what every existing caller does.
+ */
+function contrastTarget(against: Rgb): Rgb {
+  return relativeLuminance(against) > 0.5 ? INK : WHITE;
+}
+
 function darkenUntilContrast(rgb: Rgb, against: Rgb, minRatio: number): Rgb {
+  const toward = contrastTarget(against);
   let current = rgb;
   for (let i = 0; i < 28; i++) {
     if (contrastRatio(current, against) >= minRatio) return current;
-    current = mix(current, INK, 0.14);
+    current = mix(current, toward, 0.14);
   }
-  return INK;
+  return toward;
 }
 
 export type BrandThemeVars = {
@@ -233,12 +243,13 @@ function rgbClose(a: Rgb, b: Rgb, tol = 4): boolean {
 }
 
 function ensureContrast(fg: Rgb, bg: Rgb, minRatio: number): Rgb {
+  const toward = contrastTarget(bg);
   let current = fg;
   for (let i = 0; i < 32; i++) {
     if (contrastRatio(current, bg) >= minRatio) return current;
-    current = mix(current, INK, 0.12);
+    current = mix(current, toward, 0.12);
   }
-  return INK;
+  return toward;
 }
 
 /**
@@ -352,7 +363,97 @@ export function brandContrastWarnings(primary: string, accent: string): BrandCon
   return warnings;
 }
 
-export function deriveBrandTheme(primaryRaw: string, accentRaw: string): BrandThemeVars {
+export type SurfaceMode = "light" | "dark";
+
+/** Missing or unexpected values stay light, which is today's portal. */
+export function parseSurfaceMode(value: unknown): SurfaceMode {
+  return value === "dark" ? "dark" : "light";
+}
+
+/**
+ * Client-portal dark surfaces. Inks are measured against these fills
+ * (heading 14.6–16.9:1, body 11.8–13.6:1, muted 6.2–7.2:1). Do not
+ * darken the inks or lighten the fills without re-checking those ratios.
+ */
+const DARK_SURFACES = {
+  background: "#14181F",
+  card: "#1C222B",
+  subtle: "#10141A",
+  border: "#2C333E",
+  heading: "#F1F5F9",
+  foreground: "#D6DEE8",
+  muted: "#94A3B8",
+} as const;
+
+const DARK_BACKGROUND: Rgb = [0x14, 0x18, 0x1f];
+const DARK_CARD: Rgb = [0x1c, 0x22, 0x2b];
+const DARK_SUBTLE: Rgb = [0x10, 0x14, 0x1a];
+const DARK_BORDER: Rgb = [0x2c, 0x33, 0x3e];
+
+function deriveDarkBrandTheme(primaryRaw: string, accentRaw: string): BrandThemeVars {
+  const primarySafe = sanitizeCssColor(primaryRaw, "#0F172A");
+  const accentSafe = sanitizeCssColor(accentRaw, "#3B82F6");
+  const primaryChosen = parseRgb(primarySafe) ?? INK;
+  const accentChosen = parseRgb(accentSafe) ?? [59, 130, 246];
+
+  let primaryRgb = ensureContrast(primaryChosen, DARK_CARD, TEXT_CONTRAST);
+  primaryRgb = ensureContrast(primaryRgb, DARK_BACKGROUND, TEXT_CONTRAST);
+
+  // Accent is also nav and link text, so it has to clear body contrast, not only the 3:1 UI bar.
+  let accentUi = darkenUntilContrast(accentChosen, DARK_BACKGROUND, TEXT_CONTRAST);
+  accentUi = darkenUntilContrast(accentUi, DARK_CARD, TEXT_CONTRAST);
+  const accentFg = pickForeground(accentUi);
+
+  // A pale wash (light mode's 90% white mix) is a bright block on charcoal.
+  // Start from the card and add a little of the accent, then pull back toward
+  // the darker subtle fill until both the accent and the accent foreground clear 4.5:1.
+  let accentSubtle = mix(DARK_CARD, accentUi, 0.22);
+  for (let i = 0; i < 16; i++) {
+    const accentOk = contrastRatio(accentUi, accentSubtle) >= TEXT_CONTRAST;
+    const fgOk = contrastRatio(accentFg.color, accentSubtle) >= TEXT_CONTRAST;
+    if (accentOk && fgOk) break;
+    accentSubtle = mix(accentSubtle, DARK_SUBTLE, 0.28);
+  }
+
+  const accentBorder = mix(DARK_BORDER, accentUi, 0.4);
+  const primaryFg = pickForeground(primaryRgb);
+
+  const vars: BrandThemeVars = {
+    primary: toCss(primaryRgb),
+    primaryForeground: primaryFg.css,
+    primaryHover: toCss(mix(primaryRgb, WHITE, 0.12)),
+    primaryActive: toCss(mix(primaryRgb, DARK_BACKGROUND, 0.16)),
+    accent: toCss(accentUi),
+    accentForeground: accentFg.css,
+    accentHover: toCss(mix(accentUi, WHITE, 0.1)),
+    accentActive: toCss(mix(accentUi, DARK_BACKGROUND, 0.16)),
+    accentSubtle: toCss(accentSubtle),
+    accentBorder: toCss(accentBorder),
+    ring: toCss(accentUi),
+    background: DARK_SURFACES.background,
+    card: DARK_SURFACES.card,
+    subtle: DARK_SURFACES.subtle,
+    border: DARK_SURFACES.border,
+    foreground: DARK_SURFACES.foreground,
+    muted: DARK_SURFACES.muted,
+    heading: DARK_SURFACES.heading,
+    backgroundForeground: DARK_SURFACES.foreground,
+    cardForeground: DARK_SURFACES.foreground,
+  };
+
+  return sanitizeTheme(vars);
+}
+
+export function deriveBrandTheme(
+  primaryRaw: string,
+  accentRaw: string,
+  surfaceMode: SurfaceMode = "light"
+): BrandThemeVars {
+  if (surfaceMode === "dark") return deriveDarkBrandTheme(primaryRaw, accentRaw);
+  return deriveLightBrandTheme(primaryRaw, accentRaw);
+}
+
+function deriveLightBrandTheme(primaryRaw: string, accentRaw: string): BrandThemeVars {
   const primarySafe = sanitizeCssColor(primaryRaw, "#0F172A");
   const accentSafe = sanitizeCssColor(accentRaw, "#3B82F6");
   const primaryRgb = parseRgb(primarySafe) ?? INK;
@@ -524,9 +625,15 @@ export function pendingEventBorder(requested: string, pendingFill: string): stri
   return rgbToHex(current);
 }
 
-export function brandThemeCss(primary: string, accent: string): string {
-  const t = deriveBrandTheme(primary, accent);
+export function brandThemeCss(
+  primary: string,
+  accent: string,
+  surfaceMode: SurfaceMode = "light"
+): string {
+  const t = deriveBrandTheme(primary, accent, surfaceMode);
+  const scheme = surfaceMode === "dark" ? "dark" : "light";
   return `:root {
+  color-scheme: ${scheme};
   --color-primary: ${t.primary};
   --color-primary-foreground: ${t.primaryForeground};
   --color-primary-hover: ${t.primaryHover};

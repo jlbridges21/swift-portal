@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { Toaster } from "sonner";
+import { SurfaceToaster } from "@/components/brand/surface-toaster";
 import { getCanonicalSiteUrl, SITE, SITE_ICONS } from "@/lib/site-metadata";
 import "./globals.css";
 
@@ -84,12 +84,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
         {children}
-        <Toaster
-          position="top-center"
-          richColors
-          offset={{ top: "max(1rem, env(safe-area-inset-top))" }}
-          mobileOffset={{ top: "max(1rem, env(safe-area-inset-top))" }}
-        />
+        <SurfaceToaster />
       </body>
     </html>
   );

@@ -51,7 +51,7 @@ export function VideoPlayer({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5",
+        "overflow-hidden rounded-2xl bg-white surface-dark:bg-card shadow-lg shadow-slate-200/40 ring-1 ring-black/5",
         compact && "rounded-xl"
       )}
     >

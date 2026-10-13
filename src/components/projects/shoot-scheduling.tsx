@@ -341,7 +341,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
         )}
 
         {isAdmin && pendingFromAdmin.length > 0 && pendingFromClient.length === 0 && (
-          <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-muted">
+          <div className="flex items-start gap-3 rounded-lg border border-slate-200 surface-dark:border-border bg-slate-50 surface-dark:bg-subtle p-4 text-sm text-muted">
             <Clock className="h-5 w-5 shrink-0 mt-0.5" />
             <p>Waiting for the client to respond to your proposed shoot time.</p>
           </div>

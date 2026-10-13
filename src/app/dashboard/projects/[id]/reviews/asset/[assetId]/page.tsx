@@ -73,7 +73,7 @@ export default async function ClientLazyVideoReviewPage({ params }: PageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC] surface-dark:bg-background">
       <Header variant="dashboard" userRole={profile.role === "admin" ? "admin" : "client"} />
       <VideoReviewView
         projectId={projectId}

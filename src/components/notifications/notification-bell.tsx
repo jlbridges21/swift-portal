@@ -220,7 +220,7 @@ export function NotificationBell() {
       {open && (
         <div
           className={cn(
-            "rounded-xl border border-border bg-white shadow-lg",
+            "rounded-xl border border-border bg-white surface-dark:bg-card shadow-lg",
             !useFixedPanel && "absolute right-0 top-full z-50 mt-2 w-80 sm:w-96"
           )}
           style={useFixedPanel ? panelStyle : undefined}
@@ -258,7 +258,7 @@ export function NotificationBell() {
             ) : (
               grouped.map(([label, items]) => (
                 <div key={label}>
-                  <p className="sticky top-0 z-10 bg-slate-50/95 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted backdrop-blur-sm">
+                  <p className="sticky top-0 z-10 bg-slate-50/95 surface-dark:bg-subtle/95 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted backdrop-blur-sm">
                     {label}
                   </p>
                   {items.map((n) => {
@@ -269,14 +269,14 @@ export function NotificationBell() {
                         type="button"
                         onClick={() => handleNotificationClick(n)}
                         className={cn(
-                          "flex w-full gap-3 text-left px-4 py-3 border-b border-border last:border-0 hover:bg-slate-50 transition-colors min-h-11",
+                          "flex w-full gap-3 text-left px-4 py-3 border-b border-border last:border-0 hover:bg-slate-50 surface-dark:hover:bg-subtle transition-colors min-h-11",
                           !n.read_at && "bg-sky-50/60"
                         )}
                       >
                         <div
                           className={cn(
                             "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-                            !n.read_at ? "bg-accent/10 text-accent" : "bg-slate-100 text-muted"
+                            !n.read_at ? "bg-accent/10 text-accent" : "bg-slate-100 text-muted surface-dark:bg-subtle"
                           )}
                         >
                           <Icon className="h-4 w-4" />

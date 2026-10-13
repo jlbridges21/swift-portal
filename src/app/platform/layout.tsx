@@ -14,7 +14,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   const brand = getPortalBrandFromSettings(DEFAULT_APP_SETTINGS);
 
   return (
-    <BrandProvider brand={brand}>
+    <BrandProvider brand={brand} surfaceMode="light">
       {tenant?.impersonating && (
         <ImpersonationBanner
           businessName={tenant.business.name}

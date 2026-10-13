@@ -160,8 +160,8 @@ export function PublicProjectPageClient({
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
-      <header className="border-b border-border/60 bg-white/90 backdrop-blur">
+    <div className="min-h-screen bg-[#F8FAFC] surface-dark:bg-background">
+      <header className="border-b border-border/60 bg-white/90 surface-dark:bg-card/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3 min-w-0">
             {brand.logoUrl ? (
@@ -237,7 +237,7 @@ export function PublicProjectPageClient({
                 getDownloadUrl={getDownloadUrl}
               />
             ) : (
-              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+              <div className="rounded-2xl bg-white surface-dark:bg-card p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
                 <EmptyState
                   icon={Images}
                   title="No photos yet"
@@ -254,7 +254,7 @@ export function PublicProjectPageClient({
               <Clapperboard className="h-5 w-5 text-accent" /> Video
             </h2>
             {videoEntries.length > 0 ? (
-              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+              <div className="rounded-2xl bg-white surface-dark:bg-card p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
                 <VideoGrid
                   entries={videoEntries}
                   projectId={project.id}
@@ -268,7 +268,7 @@ export function PublicProjectPageClient({
                 />
               </div>
             ) : (
-              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+              <div className="rounded-2xl bg-white surface-dark:bg-card p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
                 <EmptyState
                   icon={Clapperboard}
                   title="No videos yet"
@@ -291,7 +291,7 @@ export function PublicProjectPageClient({
                 ))}
               </div>
             ) : (
-              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+              <div className="rounded-2xl bg-white surface-dark:bg-card p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
                 <EmptyState
                   icon={Globe}
                   title="No 360° tours yet"
@@ -314,7 +314,7 @@ export function PublicProjectPageClient({
                 ))}
               </div>
             ) : (
-              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+              <div className="rounded-2xl bg-white surface-dark:bg-card p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
                 <EmptyState
                   icon={Box}
                   title="No 3D models yet"
@@ -339,7 +339,7 @@ export function PublicProjectPageClient({
                 renderItem={(doc) => (
                   <div
                     key={doc.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-white p-4"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-white surface-dark:bg-card p-4"
                   >
                     <span className="text-sm font-medium truncate">{mediaDisplayName(doc)}</span>
                     <Button
@@ -374,7 +374,7 @@ export function PublicProjectPageClient({
                 )}
               />
             ) : (
-              <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
+              <div className="rounded-2xl bg-white surface-dark:bg-card p-4 sm:p-6 shadow-lg ring-1 ring-black/5">
                 <EmptyState
                   icon={FileText}
                   title="No documents yet"
