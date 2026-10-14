@@ -123,7 +123,7 @@ export function PropertyLineToolButton({
 
           {urlError && !loadingUrl && (
             <div className="fixed inset-0 z-[299] flex items-center justify-center bg-black/80 px-6">
-              <div className="max-w-sm space-y-4 rounded-xl bg-white p-6 text-center text-primary shadow-lg">
+              <div className="max-w-sm space-y-4 rounded-xl bg-white surface-dark:bg-card p-6 text-center text-heading shadow-lg">
                 <p className="text-sm text-red-600">{urlError}</p>
                 <Button variant="accent" className="min-h-11 w-full" onClick={() => setOpen(false)}>
                   Close

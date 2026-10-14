@@ -200,10 +200,10 @@ export function ClientsTable({ clients, showDeleted = false }: ClientsTableProps
       </div>
 
       {/* Desktop table */}
-      <div className="hidden md:block overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
+      <div className="hidden md:block overflow-x-auto rounded-xl border border-border bg-white surface-dark:bg-card shadow-sm">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border bg-slate-50 text-left text-xs text-muted">
+            <tr className="border-b border-border bg-slate-50 surface-dark:bg-subtle text-left text-xs text-muted">
               <th className="px-3 py-2.5"><SortBtn label="Client" col="name" /></th>
               <th className="px-3 py-2.5">Email</th>
               <th className="px-3 py-2.5 hidden lg:table-cell">Phone</th>
@@ -223,10 +223,10 @@ export function ClientsTable({ clients, showDeleted = false }: ClientsTableProps
             {filtered.map((client) => (
               <tr
                 key={client.id}
-                className="border-b border-border last:border-0 hover:bg-slate-50/80 cursor-pointer"
+                className="border-b border-border last:border-0 hover:bg-slate-50/80 surface-dark:hover:bg-subtle/80 cursor-pointer"
                 onClick={() => { window.location.href = `/admin/clients/${client.id}`; }}
               >
-                <td className="px-3 py-2.5 font-medium text-primary">{client.name}</td>
+                <td className="px-3 py-2.5 font-medium text-heading">{client.name}</td>
                 <td className="px-3 py-2.5 text-muted text-xs">{client.email}</td>
                 <td className="px-3 py-2.5 hidden lg:table-cell text-muted text-xs">{client.phone || "—"}</td>
                 <td className="px-3 py-2.5 hidden xl:table-cell text-muted text-xs max-w-[120px] truncate">{client.company || "—"}</td>
@@ -268,11 +268,11 @@ export function ClientsTable({ clients, showDeleted = false }: ClientsTableProps
           <Link
             key={client.id}
             href={`/admin/clients/${client.id}`}
-            className="block rounded-xl border border-border bg-white p-4 shadow-sm hover:bg-slate-50/80"
+            className="block rounded-xl border border-border bg-white surface-dark:bg-card p-4 shadow-sm hover:bg-slate-50/80 surface-dark:hover:bg-subtle/80"
           >
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="font-medium text-primary">{client.name}</p>
+                <p className="font-medium text-heading">{client.name}</p>
                 <p className="text-xs text-muted">{client.email}</p>
               </div>
               {client.outstanding_balance > 0 && (
@@ -281,15 +281,15 @@ export function ClientsTable({ clients, showDeleted = false }: ClientsTableProps
             </div>
             <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
               <div>
-                <p className="font-semibold text-primary">{formatCurrency(client.lifetime_revenue)}</p>
+                <p className="font-semibold text-heading">{formatCurrency(client.lifetime_revenue)}</p>
                 <p className="text-muted">Revenue</p>
               </div>
               <div>
-                <p className="font-semibold text-primary">{client.active_projects}</p>
+                <p className="font-semibold text-heading">{client.active_projects}</p>
                 <p className="text-muted">Active</p>
               </div>
               <div>
-                <p className="font-semibold text-primary">{client.delivered_projects}</p>
+                <p className="font-semibold text-heading">{client.delivered_projects}</p>
                 <p className="text-muted">Delivered</p>
               </div>
             </div>
@@ -463,7 +463,7 @@ export function ClientCrmProfile({
             {clientInitials(displayName)}
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-primary">{displayName}</h1>
+            <h1 className="text-2xl font-bold text-heading">{displayName}</h1>
             {client.company && <p className="text-muted flex items-center gap-1.5"><Building className="h-4 w-4" />{client.company}</p>}
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
               <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />{client.email}</span>
@@ -471,14 +471,14 @@ export function ClientCrmProfile({
             </div>
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted">
               {client.referral_source && (
-                <span className="rounded-full bg-slate-100 px-2.5 py-1">Referral: {client.referral_source}</span>
+                <span className="rounded-full bg-slate-100 surface-dark:bg-subtle px-2.5 py-1">Referral: {client.referral_source}</span>
               )}
-              <span className="rounded-full bg-slate-100 px-2.5 py-1">Client since {formatDate(client.created_at)}</span>
+              <span className="rounded-full bg-slate-100 surface-dark:bg-subtle px-2.5 py-1">Client since {formatDate(client.created_at)}</span>
               {client.last_activity_at && (
-                <span className="rounded-full bg-slate-100 px-2.5 py-1">Last activity {formatDate(client.last_activity_at)}</span>
+                <span className="rounded-full bg-slate-100 surface-dark:bg-subtle px-2.5 py-1">Last activity {formatDate(client.last_activity_at)}</span>
               )}
               {lastLogin && (
-                <span className="rounded-full bg-slate-100 px-2.5 py-1">Last login {formatDate(lastLogin)}</span>
+                <span className="rounded-full bg-slate-100 surface-dark:bg-subtle px-2.5 py-1">Last login {formatDate(lastLogin)}</span>
               )}
             </div>
           </div>
@@ -534,9 +534,9 @@ export function ClientCrmProfile({
                 )
           )
           .map((card) => (
-          <div key={card.label} className="rounded-xl border border-border bg-white p-4 shadow-sm">
+          <div key={card.label} className="rounded-xl border border-border bg-white surface-dark:bg-card p-4 shadow-sm">
             <p className="text-xs font-medium uppercase tracking-wide text-muted">{card.label}</p>
-            <p className={`mt-1 text-lg font-bold ${card.warn ? "text-amber-700" : "text-primary"}`}>{card.value}</p>
+            <p className={`mt-1 text-lg font-bold ${card.warn ? "text-amber-700" : "text-heading"}`}>{card.value}</p>
           </div>
         ))}
       </div>
@@ -552,16 +552,16 @@ export function ClientCrmProfile({
       {/* Properties */}
       {properties.length > 0 && (
         <section>
-          <h2 className="text-base font-semibold text-primary mb-3">Properties</h2>
+          <h2 className="text-base font-semibold text-heading mb-3">Properties</h2>
           <div className="space-y-2">
             {properties.map((property) => (
-              <div key={property.id} className="rounded-xl border border-border bg-white p-4 shadow-sm">
+              <div key={property.id} className="rounded-xl border border-border bg-white surface-dark:bg-card p-4 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="font-medium text-primary">{formatPropertyLabel(property)}</p>
+                    <p className="font-medium text-heading">{formatPropertyLabel(property)}</p>
                     <p className="text-sm text-muted flex items-center gap-1.5 mt-1"><MapPin className="h-3.5 w-3.5" />{property.address}</p>
                   </div>
-                  <span className="text-xs rounded-full bg-slate-100 px-2.5 py-1 text-muted">{property.property_type}</span>
+                  <span className="text-xs rounded-full bg-slate-100 surface-dark:bg-subtle px-2.5 py-1 text-muted">{property.property_type}</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted">
                   <span>{property.project_count} project{property.project_count !== 1 ? "s" : ""}</span>
@@ -578,7 +578,7 @@ export function ClientCrmProfile({
 
       {/* Projects */}
       <section>
-        <h2 className="text-base font-semibold text-primary mb-3">Projects</h2>
+        <h2 className="text-base font-semibold text-heading mb-3">Projects</h2>
         <ProjectGroup title="Active" projects={activeProjects} empty="No active projects." />
         {awaitingPayment.length > 0 && (
           <ProjectGroup title="Awaiting Payment" projects={awaitingPayment} />
@@ -589,7 +589,7 @@ export function ClientCrmProfile({
       {/* Payments */}
       {canViewMoney && (
         <section>
-          <h2 className="text-base font-semibold text-primary mb-3">Payments</h2>
+          <h2 className="text-base font-semibold text-heading mb-3">Payments</h2>
           <PaymentGroup
             title="Outstanding"
             payments={outstandingPayments}
@@ -628,7 +628,7 @@ export function ClientCrmProfile({
       {/* Notes */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold text-primary">Internal Notes</h2>
+          <h2 className="text-base font-semibold text-heading">Internal Notes</h2>
           <Button variant="outline" size="sm" onClick={() => { setShowNoteForm(true); setEditingNote(null); setNoteText(""); }}>
             <Plus className="h-4 w-4" />Add
           </Button>
@@ -638,8 +638,8 @@ export function ClientCrmProfile({
         ) : (
           <div className="space-y-2">
             {notes.map((note) => (
-              <div key={note.id} className="rounded-xl border border-border bg-white p-4 shadow-sm">
-                <p className="text-sm text-primary whitespace-pre-wrap">{note.note}</p>
+              <div key={note.id} className="rounded-xl border border-border bg-white surface-dark:bg-card p-4 shadow-sm">
+                <p className="text-sm text-foreground whitespace-pre-wrap">{note.note}</p>
                 <div className="mt-2 flex items-center justify-between text-xs text-muted">
                   <span>{note.author_name || "Admin"} · {formatDate(note.created_at)}</span>
                   <div className="flex gap-1">
@@ -659,15 +659,15 @@ export function ClientCrmProfile({
 
       {/* Communications */}
       <section>
-        <h2 className="text-base font-semibold text-primary mb-3">Communication History</h2>
+        <h2 className="text-base font-semibold text-heading mb-3">Communication History</h2>
         {communications.length === 0 ? (
           <p className="text-sm text-muted py-4 text-center rounded-xl border border-dashed border-border">No communications logged yet.</p>
         ) : (
-          <div className="rounded-xl border border-border bg-white divide-y divide-border shadow-sm">
+          <div className="rounded-xl border border-border bg-white surface-dark:bg-card divide-y divide-border shadow-sm">
             {communications.slice(0, 20).map((comm) => (
               <div key={comm.id} className="px-4 py-3 text-sm">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-medium text-primary">{comm.title || commLabel(comm.comm_type)}</p>
+                  <p className="font-medium text-heading">{comm.title || commLabel(comm.comm_type)}</p>
                   <span className="text-xs text-muted shrink-0">{formatDate(comm.created_at)}</span>
                 </div>
                 {comm.message && <p className="text-muted mt-0.5 line-clamp-2">{comm.message}</p>}
@@ -680,14 +680,14 @@ export function ClientCrmProfile({
 
       {/* Recent Activity */}
       <section>
-        <h2 className="text-base font-semibold text-primary mb-3">Recent Activity</h2>
+        <h2 className="text-base font-semibold text-heading mb-3">Recent Activity</h2>
         {recentActivities.length === 0 ? (
           <p className="text-sm text-muted py-4 text-center">No activity yet.</p>
         ) : (
-          <div className="rounded-xl border border-border bg-white divide-y divide-border shadow-sm">
+          <div className="rounded-xl border border-border bg-white surface-dark:bg-card divide-y divide-border shadow-sm">
             {recentActivities.map((activity) => (
               <div key={activity.id} className="px-4 py-3 text-sm">
-                <p className="text-primary">{activity.description}</p>
+                <p className="text-foreground">{activity.description}</p>
                 <div className="flex items-center gap-2 mt-0.5 text-xs text-muted">
                   <span>{formatDate(activity.created_at)}</span>
                   {activity.project_id && (
@@ -805,10 +805,10 @@ function ProjectGroup({
       <div className="space-y-2">
         {projects.map((project) => (
           <Link key={project.id} href={`/admin/projects/${project.id}`}>
-            <div className="rounded-xl border border-border bg-white p-4 shadow-sm hover:bg-slate-50/80 transition-colors">
+            <div className="rounded-xl border border-border bg-white surface-dark:bg-card p-4 shadow-sm hover:bg-slate-50/80 surface-dark:hover:bg-subtle/80 transition-colors">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="font-medium text-primary">{project.project_name}</p>
+                  <p className="font-medium text-heading">{project.project_name}</p>
                   <p className="text-sm text-muted">{project.property_address}</p>
                   <p className="text-xs text-muted mt-0.5">{project.service_type}</p>
                 </div>
@@ -838,7 +838,7 @@ function PaymentGroup({
   return (
     <div className="mb-4">
       <h3 className="text-sm font-medium text-muted mb-2">{title} ({payments.length})</h3>
-      <div className="rounded-xl border border-border bg-white divide-y divide-border shadow-sm">
+      <div className="rounded-xl border border-border bg-white surface-dark:bg-card divide-y divide-border shadow-sm">
         {payments.map((payment) => (
           <div key={payment.id} className="px-4 py-3">
             <AdminPaymentActions

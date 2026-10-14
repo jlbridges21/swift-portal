@@ -212,11 +212,11 @@ function ShootEventCard({
       onDragEnd={onDragEnd}
       onClick={onOpen}
       className={cn(
-        "flex w-full min-w-0 gap-3 rounded-xl border border-border bg-white p-3 text-left shadow-sm transition hover:border-accent/30 hover:shadow-md touch-manipulation sm:gap-4 sm:p-4",
+        "flex w-full min-w-0 gap-3 rounded-xl border border-border bg-white surface-dark:bg-card p-3 text-left shadow-sm transition hover:border-accent/30 hover:shadow-md touch-manipulation sm:gap-4 sm:p-4",
         isDragging && "opacity-40"
       )}
     >
-      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-black/5 sm:h-16 sm:w-16">
+      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-slate-100 surface-dark:bg-subtle ring-1 ring-black/5 sm:h-16 sm:w-16">
         {shoot.cover_url ? (
           <RemoteImage src={shoot.cover_url} alt="" fill className="object-cover" sizes="64px" />
         ) : (
@@ -225,7 +225,7 @@ function ShootEventCard({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-2">
-          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-primary sm:text-base">
+          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-heading sm:text-base">
             {title}
           </p>
           <Badge className={cn("shrink-0 text-[10px] font-medium", getStatusColor(shoot.status))}>
@@ -495,7 +495,7 @@ function CalendarColorMenu({
       role="dialog"
       aria-label={`${label} color`}
       data-color-menu
-      className="fixed z-50 w-60 rounded-lg border border-border bg-white p-2 shadow-lg"
+      className="fixed z-50 w-60 rounded-lg border border-border bg-white surface-dark:bg-card p-2 shadow-lg"
       style={{ top, left }}
     >
       <div className="grid grid-cols-6 gap-1">
@@ -923,7 +923,7 @@ export function ShootCalendar({
           <div className="space-y-4 p-3">
             <div className="min-w-0">
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-semibold text-primary">{format(anchor, "MMMM yyyy")}</p>
+                <p className="text-xs font-semibold text-heading">{format(anchor, "MMMM yyyy")}</p>
               </div>
               <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] text-muted">
                 {WEEKDAY_LABELS.map((label) => (
@@ -947,7 +947,7 @@ export function ShootCalendar({
                         "rounded-full py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700",
                         today && "bg-blue-600 text-white",
                         !today && selectedDayKey === key && "bg-blue-100 text-blue-900",
-                        !today && selectedDayKey !== key && "hover:bg-slate-100"
+                        !today && selectedDayKey !== key && "hover:bg-slate-100 surface-dark:hover:bg-subtle"
                       )}
                     >
                       {format(day, "d")}
@@ -958,7 +958,7 @@ export function ShootCalendar({
             </div>
 
             <div>
-              <p className="mb-1 text-xs font-semibold text-primary">ShootPortal</p>
+              <p className="mb-1 text-xs font-semibold text-heading">ShootPortal</p>
               <div className="flex h-8 min-w-0 items-center gap-2 text-sm">
                 <label className="flex min-w-0 flex-1 items-center gap-2">
                   <input
@@ -993,7 +993,7 @@ export function ShootCalendar({
               <div>
                 <button
                   type="button"
-                  className="mb-1 flex w-full items-center justify-between text-xs font-semibold text-primary"
+                  className="mb-1 flex w-full items-center justify-between text-xs font-semibold text-heading"
                   onClick={() => setGoogleOpen((open) => !open)}
                   aria-expanded={googleOpen}
                 >
@@ -1075,7 +1075,7 @@ export function ShootCalendar({
             >
               <PanelLeft className="h-4 w-4" />
             </Button>
-            <div className="inline-flex min-w-0 flex-1 rounded-xl border border-border bg-white p-1 shadow-sm sm:w-auto">
+            <div className="inline-flex min-w-0 flex-1 rounded-xl border border-border bg-white surface-dark:bg-card p-1 shadow-sm sm:w-auto">
             {viewOptions.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -1083,7 +1083,7 @@ export function ShootCalendar({
                 onClick={() => setView(id)}
                 className={cn(
                   "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-sm font-medium transition touch-manipulation min-h-11 sm:flex-initial sm:px-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700",
-                  view === id ? "bg-accent text-accent-foreground shadow-sm" : "text-muted hover:bg-slate-50 hover:text-primary"
+                  view === id ? "bg-accent text-accent-foreground shadow-sm" : "text-muted hover:bg-slate-50 surface-dark:hover:bg-subtle hover:text-heading"
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
@@ -1100,13 +1100,13 @@ export function ShootCalendar({
         </div>
       </div>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-2xl border border-border bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-2 border-b border-border bg-slate-50/80 px-3 py-3 sm:px-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-2xl border border-border bg-white surface-dark:bg-card shadow-sm">
+        <div className="flex items-center justify-between gap-2 border-b border-border bg-slate-50/80 surface-dark:bg-subtle/80 px-3 py-3 sm:px-4">
           <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={navPrev} aria-label="Previous">
             <ChevronLeft className="h-5 w-5" />
           </Button>
           <div className="min-w-0 text-center">
-            <h2 className="truncate text-base font-semibold text-primary sm:text-lg">{headerLabel}</h2>
+            <h2 className="truncate text-base font-semibold text-heading sm:text-lg">{headerLabel}</h2>
             <Button
               variant="link"
               size="sm"
@@ -1127,7 +1127,7 @@ export function ShootCalendar({
 
         {view === "month" && (
           <>
-            <div className="grid min-w-0 grid-cols-7 border-b border-border bg-slate-50 text-center text-[11px] font-semibold text-muted sm:text-xs">
+            <div className="grid min-w-0 grid-cols-7 border-b border-border bg-slate-50 surface-dark:bg-subtle text-center text-[11px] font-semibold text-muted sm:text-xs">
               {WEEKDAY_LABELS.map((d) => (
                 <div key={d} className="py-2.5">
                   <span className="hidden sm:inline">{d}</span>
@@ -1138,7 +1138,7 @@ export function ShootCalendar({
 
             <div className="min-w-0 grid grid-cols-7">
               {Array.from({ length: leadingBlanks }).map((_, i) => (
-                <div key={`d-blank-${i}`} className="min-h-[120px] border-b border-r border-border bg-slate-50/40 lg:min-h-[132px]" />
+                <div key={`d-blank-${i}`} className="min-h-[120px] border-b border-r border-border bg-slate-50/40 surface-dark:bg-subtle/40 lg:min-h-[132px]" />
               ))}
               {monthDays.map((day) => {
                 const key = format(day, "yyyy-MM-dd");
@@ -1197,7 +1197,7 @@ export function ShootCalendar({
                     </div>
                     <div className="space-y-2">
                       {dayShoots.length === 0 && dayExternal.length === 0 ? (
-                        <div className="rounded-md border border-dashed border-border/80 bg-slate-50/50 px-1 py-6 text-center text-[10px] text-muted">
+                        <div className="rounded-md border border-dashed border-border/80 bg-slate-50/50 surface-dark:bg-subtle/50 px-1 py-6 text-center text-[10px] text-muted">
                           —
                         </div>
                       ) : (
@@ -1275,7 +1275,7 @@ export function ShootCalendar({
               const entries = Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
               return entries.map(([dateKey, items]) => (
                 <section key={dateKey} data-agenda-today={dateKey === todayKey ? "true" : undefined}>
-                  <h3 className="mb-3 border-b border-border pb-2 text-sm font-semibold text-primary sm:text-base">
+                  <h3 className="mb-3 border-b border-border pb-2 text-sm font-semibold text-heading sm:text-base">
                     {format(parseISO(`${dateKey}T12:00:00`), "EEEE, MMMM d, yyyy")}
                   </h3>
                   {items.shoots.length === 0 && items.external.length === 0 ? (
@@ -1312,7 +1312,7 @@ export function ShootCalendar({
               </p>
             ) : null}
             <div className="flex gap-4">
-              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-black/5 sm:h-20 sm:w-20">
+              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100 surface-dark:bg-subtle ring-1 ring-black/5 sm:h-20 sm:w-20">
                 {selected.cover_url ? (
                   <RemoteImage src={selected.cover_url} alt="" fill className="object-cover" sizes="80px" />
                 ) : (
@@ -1320,7 +1320,7 @@ export function ShootCalendar({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-base font-semibold text-primary">{selected.project_name}</p>
+                <p className="truncate text-base font-semibold text-heading">{selected.project_name}</p>
                 <p className="truncate text-sm text-muted">{selected.client_name}</p>
                 <p className="truncate text-sm text-muted">{selected.property_address}</p>
                 <p className="mt-1 text-xs text-muted">{selected.service_type}</p>
@@ -1368,7 +1368,7 @@ export function ShootCalendar({
       <Modal open={!!openedExternal} onClose={() => setOpenedExternal(null)} title="Google Calendar">
         {openedExternal ? (
           <div className="space-y-4">
-            <p className="text-base font-semibold text-primary">{openedExternal.title}</p>
+            <p className="text-base font-semibold text-heading">{openedExternal.title}</p>
             <p className="text-sm text-indigo-800">{openedExternal.allDay ? "All day" : openedExternal.timeLabel}</p>
             <p className="text-sm text-muted">Google · {openedExternal.calendarSummary}</p>
             <p className="text-sm text-muted">This event is read-only in ShootPortal.</p>

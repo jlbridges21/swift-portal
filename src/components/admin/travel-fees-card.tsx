@@ -39,11 +39,11 @@ function CompactToggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-        checked ? "bg-accent" : "bg-slate-200"
+        checked ? "bg-accent" : "bg-slate-200 surface-dark:bg-border"
       }`}
     >
       <span
-        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white surface-dark:bg-card shadow transition-transform ${
           checked ? "translate-x-4" : ""
         }`}
       />
@@ -127,7 +127,7 @@ export function TravelFeesEditor({
     <div className="space-y-4">
       {(heading || description) && (
         <div>
-          {heading ? <p className="text-sm font-medium text-primary">{heading}</p> : null}
+          {heading ? <p className="text-sm font-medium text-heading">{heading}</p> : null}
           {description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
         </div>
       )}
@@ -163,7 +163,7 @@ export function TravelFeesEditor({
             in mind. A 25 mile straight-line boundary is closer to about 31 miles by road.
           </p>
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-primary">How distance is entered</legend>
+            <legend className="text-sm font-medium text-heading">How distance is entered</legend>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="radio"
@@ -190,7 +190,7 @@ export function TravelFeesEditor({
             )}
           </fieldset>
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-primary">How the fee is calculated</legend>
+            <legend className="text-sm font-medium text-heading">How the fee is calculated</legend>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="radio"
@@ -212,7 +212,7 @@ export function TravelFeesEditor({
           </fieldset>
           {travel.pricingModel === "tiers" ? (
             <div className="space-y-2 @container">
-              <p className="text-sm font-medium text-primary">Tiers</p>
+              <p className="text-sm font-medium text-heading">Tiers</p>
               <p className="text-xs text-muted">
                 Ranges must touch, in order, with no overlap and no gap. Leave the last end blank
                 for “and beyond”. Fees are for the one-way distance.
@@ -221,7 +221,7 @@ export function TravelFeesEditor({
               <div className="min-w-0 flex-1 space-y-2">
               {travel.tiers.map((tier, index) => (
                 <div key={`tier-${index}`} className="rounded-lg border border-border p-3">
-                  <p className="mb-2 text-sm font-medium text-primary">Tier {index + 1}</p>
+                  <p className="mb-2 text-sm font-medium text-heading">Tier {index + 1}</p>
                   <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
                   <div className="space-y-1">
                     <Label htmlFor={`travel-from-${index}`}>From miles</Label>
@@ -341,7 +341,7 @@ export function TravelFeesEditor({
               fee is added.
             </p>
           </div>
-          <p className="text-sm font-medium text-primary">{example}</p>
+          <p className="text-sm font-medium text-heading">{example}</p>
         </div>
       )}
     </div>

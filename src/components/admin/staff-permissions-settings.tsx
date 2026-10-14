@@ -316,31 +316,31 @@ export function StaffPermissionsSettings() {
     <div id="settings-staff" tabIndex={-1} className="scroll-mt-24 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-primary">Staff & Permissions</h2>
+          <h2 className="text-lg font-semibold text-heading">Staff & Permissions</h2>
           <p className="mt-1 text-sm text-muted">
             Invite teammates and define what each can do. Promote someone to Admin for full
             owner-equivalent access (uses an admin seat). Staff seats are unlimited.
           </p>
         </div>
         {seats && seats.limit != null ? (
-          <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          <div className="rounded-md bg-slate-50 surface-dark:bg-subtle px-3 py-2 text-sm text-slate-700 surface-dark:text-foreground">
             <span className="font-medium">
               {seats.used} of {seats.limit} admin seats
             </span>
-            {seats.planName ? <span className="text-slate-500"> · {seats.planName}</span> : null}
-            <span className="block text-xs text-slate-500">Staff: unlimited</span>
+            {seats.planName ? <span className="text-slate-500 surface-dark:text-muted"> · {seats.planName}</span> : null}
+            <span className="block text-xs text-slate-500 surface-dark:text-muted">Staff: unlimited</span>
           </div>
         ) : seats ? (
-          <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          <div className="rounded-md bg-slate-50 surface-dark:bg-subtle px-3 py-2 text-sm text-slate-700 surface-dark:text-foreground">
             <span className="font-medium">Admin seats: unlimited</span>
-            <span className="block text-xs text-slate-500">Staff: unlimited</span>
+            <span className="block text-xs text-slate-500 surface-dark:text-muted">Staff: unlimited</span>
           </div>
         ) : null}
       </div>
 
       <Card className="shadow-sm">
         <CardContent className="space-y-4 pt-6">
-          <h3 className="text-sm font-semibold text-slate-900">Add staff</h3>
+          <h3 className="text-sm font-semibold text-slate-900 surface-dark:text-heading">Add staff</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="staff-invite-email">Email</Label>
@@ -373,9 +373,9 @@ export function StaffPermissionsSettings() {
       {notice ? <p className="text-sm text-emerald-700">{notice}</p> : null}
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
-      <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+      <ul className="divide-y divide-slate-100 surface-dark:divide-border rounded-lg border border-slate-200 surface-dark:border-border bg-white surface-dark:bg-card">
         {active.length === 0 ? (
-          <li className="px-4 py-6 text-sm text-slate-500">No team members yet.</li>
+          <li className="px-4 py-6 text-sm text-slate-500 surface-dark:text-muted">No team members yet.</li>
         ) : null}
         {active.map((s) => {
           const isOwner = ownerUserId === s.id;
@@ -383,8 +383,8 @@ export function StaffPermissionsSettings() {
           return (
             <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
               <div>
-                <p className="text-sm font-medium text-slate-900">{s.full_name || s.email}</p>
-                <p className="text-xs text-slate-500">{s.email}</p>
+                <p className="text-sm font-medium text-slate-900 surface-dark:text-heading">{s.full_name || s.email}</p>
+                <p className="text-xs text-slate-500 surface-dark:text-muted">{s.email}</p>
                 <p className="text-xs text-emerald-700">
                   {isOwner ? "Owner" : isAdmin ? "Admin" : "Staff"} · Active
                 </p>
@@ -428,10 +428,10 @@ export function StaffPermissionsSettings() {
         })}
       </ul>
 
-      <div className="rounded-lg border border-slate-200 bg-slate-50/60">
+      <div className="rounded-lg border border-slate-200 surface-dark:border-border bg-slate-50/60 surface-dark:bg-subtle/60">
         <button
           type="button"
-          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm text-slate-600"
+          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm text-slate-600 surface-dark:text-foreground"
           onClick={() => {
             const next = !showRemoved;
             setShowRemoved(next);
@@ -444,15 +444,15 @@ export function StaffPermissionsSettings() {
           />
         </button>
         {showRemoved && removedOpen ? (
-          <ul className="divide-y divide-slate-100 border-t border-slate-200 bg-white">
+          <ul className="divide-y divide-slate-100 surface-dark:divide-border border-t border-slate-200 surface-dark:border-border bg-white surface-dark:bg-card">
             {disabled.length === 0 ? (
-              <li className="px-4 py-4 text-sm text-slate-500">No removed members.</li>
+              <li className="px-4 py-4 text-sm text-slate-500 surface-dark:text-muted">No removed members.</li>
             ) : (
               disabled.map((s) => (
                 <li key={s.id} className="px-4 py-3 opacity-70">
-                  <p className="text-sm font-medium text-slate-900">{s.full_name || s.email}</p>
-                  <p className="text-xs text-slate-500">{s.email}</p>
-                  <p className="text-xs text-slate-500">Removed — re-invite to reactivate</p>
+                  <p className="text-sm font-medium text-slate-900 surface-dark:text-heading">{s.full_name || s.email}</p>
+                  <p className="text-xs text-slate-500 surface-dark:text-muted">{s.email}</p>
+                  <p className="text-xs text-slate-500 surface-dark:text-muted">Removed — re-invite to reactivate</p>
                 </li>
               ))
             )}
@@ -465,13 +465,13 @@ export function StaffPermissionsSettings() {
           id="settings-staff-permissions"
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
         >
-          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
-            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col rounded-t-2xl bg-white surface-dark:bg-card shadow-xl sm:rounded-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 surface-dark:border-border px-5 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">
+                <h3 className="text-lg font-semibold text-slate-900 surface-dark:text-heading">
                   Edit {edit.role === "admin" ? "admin" : "staff member"}
                 </h3>
-                <p className="mt-0.5 text-sm text-slate-500">
+                <p className="mt-0.5 text-sm text-slate-500 surface-dark:text-muted">
                   Changes apply on their next request.
                 </p>
               </div>
@@ -543,14 +543,14 @@ export function StaffPermissionsSettings() {
                         </Button>
                       ))}
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-slate-500 surface-dark:text-muted">
                       Admin promotes to role=admin (not a permission). Other presets are a starting
                       point — edit any toggle afterward.
                     </p>
                   </div>
 
                   <div className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 surface-dark:text-muted" />
                     <Input
                       value={edit.permissionSearch}
                       onChange={(e) => setEdit({ ...edit, permissionSearch: e.target.value })}
@@ -562,18 +562,18 @@ export function StaffPermissionsSettings() {
                   <div className="space-y-5">
                     {[...grouped.entries()].map(([group, items]) => (
                       <div key={group}>
-                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 surface-dark:text-muted">
                           {STAFF_PERMISSION_GROUP_LABELS[group]}
                         </h4>
                         <ul className="space-y-2">
                           {items.map((m) => (
                             <li
                               key={m.key}
-                              className="flex items-start justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2"
+                              className="flex items-start justify-between gap-3 rounded-lg border border-slate-100 surface-dark:border-border px-3 py-2"
                             >
                               <div className="min-w-0">
-                                <p className="text-sm font-medium text-slate-900">{m.label}</p>
-                                <p className="text-xs text-slate-500">{m.description}</p>
+                                <p className="text-sm font-medium text-slate-900 surface-dark:text-heading">{m.label}</p>
+                                <p className="text-xs text-slate-500 surface-dark:text-muted">{m.description}</p>
                               </div>
                               <Switch
                                 checked={edit.permissions[m.key] === true}
@@ -586,12 +586,12 @@ export function StaffPermissionsSettings() {
                       </div>
                     ))}
                     {filteredMeta.length === 0 ? (
-                      <p className="text-sm text-slate-500">No permissions match that search.</p>
+                      <p className="text-sm text-slate-500 surface-dark:text-muted">No permissions match that search.</p>
                     ) : null}
                   </div>
                 </>
               ) : (
-                <div className="space-y-3 rounded-md bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                <div className="space-y-3 rounded-md bg-slate-50 surface-dark:bg-subtle px-3 py-3 text-sm text-slate-700 surface-dark:text-foreground">
                   <p>
                     This person is an <strong>admin</strong> with full dashboard and settings access.
                     Demote to staff to restore a permission matrix and free an admin seat.
@@ -620,7 +620,7 @@ export function StaffPermissionsSettings() {
               </p>
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-5 py-4">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 surface-dark:border-border px-5 py-4">
               <Button type="button" variant="outline" onClick={() => setEdit(null)} disabled={busy}>
                 Cancel
               </Button>

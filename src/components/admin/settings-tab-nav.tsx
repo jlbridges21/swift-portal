@@ -96,7 +96,7 @@ export function SettingsTabNav<T extends string = SettingsSectionId>({
           id={selectId}
           value={active}
           onChange={(e) => onChange(e.target.value as T)}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium text-primary"
+          className="w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium text-heading"
         >
           {sections.map((section) => (
             <option key={section.id} value={section.id}>

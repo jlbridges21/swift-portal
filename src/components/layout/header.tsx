@@ -293,7 +293,7 @@ export function Header({
                 type="button"
                 variant="outline"
                 size="icon"
-                className="lg:hidden min-h-11 min-w-11 shrink-0 border-border text-primary"
+                className="lg:hidden min-h-11 min-w-11 shrink-0 border-border text-heading"
                 onClick={() => setMenuOpen((open) => !open)}
                 aria-label={menuOpen ? "Close menu" : "Open menu"}
               >
@@ -338,7 +338,7 @@ export function Header({
                 type="button"
                 variant="outline"
                 size="icon"
-                className="sm:hidden min-h-11 min-w-11 shrink-0 border-border text-primary"
+                className="sm:hidden min-h-11 min-w-11 shrink-0 border-border text-heading"
                 onClick={() => setMenuOpen((open) => !open)}
                 aria-label={menuOpen ? "Close menu" : "Open menu"}
               >
@@ -417,7 +417,7 @@ export function PageHeader({
       )}
     >
       <div className="min-w-0">
-        <h1 className="break-words text-2xl font-bold tracking-tight text-primary sm:text-3xl">
+        <h1 className="break-words text-2xl font-bold tracking-tight text-heading sm:text-3xl">
           {title}
         </h1>
         {description && <p className="mt-1 break-words text-muted">{description}</p>}

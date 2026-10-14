@@ -98,7 +98,7 @@ export interface BusinessSettings {
   portalLogoSizePx: number;
   brandPrimaryColor: string;
   brandAccentColor: string;
-  /** Client portal and public share links. Admin, platform, and partner stay light. */
+  /** This business's admin portal, client portal, and shared project links. Platform and partner stay light. */
   surfaceMode: "light" | "dark";
   /** Mean luminance of opaque logo pixels, 0–255. Null when the file could not be read. */
   logoLuminance: number | null;

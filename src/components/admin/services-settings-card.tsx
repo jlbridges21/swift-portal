@@ -87,7 +87,7 @@ function SortableService({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "rounded-xl border border-border bg-white p-4",
+        "rounded-xl border border-border bg-white surface-dark:bg-card p-4",
         isDragging && "opacity-70",
         !service.is_active && "opacity-60"
       )}
@@ -96,7 +96,7 @@ function SortableService({
         <button type="button" className="cursor-grab text-muted" {...attributes} {...listeners}>
           <GripVertical className="h-4 w-4" />
         </button>
-        <p className="flex-1 text-sm font-semibold text-primary">{service.name}</p>
+        <p className="flex-1 text-sm font-semibold text-heading">{service.name}</p>
         <Button type="button" variant="outline" size="sm" onClick={() => void onToggle(service.id, !service.is_active)}>
           {service.is_active ? "Deactivate" : "Activate"}
         </Button>

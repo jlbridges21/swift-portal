@@ -28,7 +28,7 @@ export function ActivityFeed({ logs, projectLinkPrefix = "/admin/projects", clie
           : getActivityDisplay(log.activity_type, log.description);
         return (
           <div key={`activity-${log.id}`} className="flex min-w-0 items-start gap-3 text-sm rounded-lg p-2 -mx-2 hover:bg-slate-50/80 surface-dark:hover:bg-subtle/80 transition-colors">
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base leading-none">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 surface-dark:bg-subtle text-base leading-none">
               {icon}
             </span>
             <div className="min-w-0 flex-1 overflow-hidden">

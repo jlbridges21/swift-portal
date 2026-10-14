@@ -104,7 +104,7 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
                 <div className={`mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg ${stat.color}`}>
                   <stat.icon className="h-4 w-4" />
                 </div>
-                <p className="text-2xl font-bold text-primary">{stat.value}</p>
+                <p className="text-2xl font-bold text-heading">{stat.value}</p>
                 <p className="mt-0.5 text-xs text-muted break-words">{stat.label}</p>
               </CardContent>
             </Card>
@@ -243,8 +243,8 @@ function DashboardSection({
     <Card className="w-full max-w-full overflow-hidden">
       <CardHeader className="flex min-w-0 flex-row items-center justify-between gap-2 pb-3">
         <CardTitle className="flex min-w-0 items-center gap-2 text-base">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100">
-            <Icon className="h-4 w-4 text-primary" />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 surface-dark:bg-subtle">
+            <Icon className="h-4 w-4 text-heading" />
           </div>
           <span className="truncate">{title}</span>
         </CardTitle>
@@ -272,9 +272,9 @@ function ProjectRow({
 }) {
   return (
     <Link href={`/admin/projects/${project.id}`} className="block min-w-0">
-      <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border p-3 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border p-3 transition-colors hover:bg-slate-50 surface-dark:hover:bg-subtle sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-primary break-words">{project.project_name}</p>
+          <p className="text-sm font-medium text-heading break-words">{project.project_name}</p>
           <p className="mt-0.5 text-xs text-muted break-words">
             {project.clients?.name}
             {meta ? ` · ${meta}` : ""}
@@ -291,9 +291,9 @@ function ProjectRow({
 function QuoteAttentionRow({ item }: { item: AdminQuoteAttentionRow }) {
   return (
     <Link href={`/admin/projects/${item.project_id}#quote`} className="block min-w-0">
-      <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border p-3 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border p-3 transition-colors hover:bg-slate-50 surface-dark:hover:bg-subtle sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-primary break-words">{item.project_name}</p>
+          <p className="text-sm font-medium text-heading break-words">{item.project_name}</p>
           <p className="mt-0.5 text-xs text-muted break-words">
             {item.client_name ?? "Unknown client"} · {formatRelativeTime(item.updated_at)}
           </p>
@@ -321,9 +321,9 @@ function PaymentRow({
       href={project ? `/admin/projects/${project.id}#payments` : "/admin/projects"}
       className="mb-2 block min-w-0 last:mb-0"
     >
-      <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-slate-50">
+      <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-slate-50 surface-dark:hover:bg-subtle">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-primary">{formatCurrency(payment.amount)}</p>
+          <p className="text-sm font-semibold text-heading">{formatCurrency(payment.amount)}</p>
           <p className="mt-0.5 truncate text-xs text-muted">
             {project?.project_name ?? payment.description}
           </p>

@@ -114,7 +114,7 @@ function MicrositeSection({
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-bold tracking-tight text-primary sm:text-2xl">{title}</h2>
+              <h2 className="text-xl font-bold tracking-tight text-heading sm:text-2xl">{title}</h2>
               {hiddenFromClients ? (
                 <Badge variant="warning" className="text-xs">
                   Hidden from clients
@@ -567,7 +567,7 @@ export function ProjectPageClient({
                     className="flex flex-col gap-3 rounded-xl bg-white surface-dark:bg-card p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-primary">{mediaDisplayName(doc)}</p>
+                      <p className="truncate font-medium text-heading">{mediaDisplayName(doc)}</p>
                       {!downloadsUnlocked && !isPreview && downloadLockMessage && (
                         <p className="text-xs text-muted mt-1 flex items-center gap-1">
                           <Lock className="h-3 w-3" /> {downloadLockMessage}
@@ -763,7 +763,7 @@ export function ProjectPageClient({
                     className="flex flex-col gap-3 rounded-xl bg-white surface-dark:bg-card p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-primary">{mediaDisplayName(doc)}</p>
+                      <p className="truncate font-medium text-heading">{mediaDisplayName(doc)}</p>
                       {!downloadsUnlocked && !isPreview && downloadLockMessage && (
                         <p className="text-xs text-muted mt-1 flex items-center gap-1">
                           <Lock className="h-3 w-3" /> {downloadLockMessage}

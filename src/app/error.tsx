@@ -21,7 +21,7 @@ export default function Error({
       <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
         <AlertTriangle className="h-7 w-7 text-red-500" />
       </div>
-      <h1 className="text-2xl font-bold text-primary">Something went wrong</h1>
+      <h1 className="text-2xl font-bold text-heading">Something went wrong</h1>
       <p className="mt-2 max-w-md text-muted">
         {error.message === "Not found"
           ? "We couldn't find what you're looking for. It may have been removed or you may not have access."

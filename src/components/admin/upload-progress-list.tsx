@@ -116,7 +116,7 @@ export function UploadProgressList({ items, className, onRetry, onRetrySave, onC
   if (!items.length) return null;
 
   return (
-    <div className={cn("space-y-2 rounded-lg border border-border bg-slate-50 p-3", className)}>
+    <div className={cn("space-y-2 rounded-lg border border-border bg-slate-50 surface-dark:bg-subtle p-3", className)}>
       {items.map((item) => {
         const eta = formatEta(item);
         const isLarge = (item.bytesTotal ?? 0) > 100 * 1024 * 1024;
@@ -130,7 +130,7 @@ export function UploadProgressList({ items, className, onRetry, onRetrySave, onC
               (item.status === "error" || item.status === "save_failed") && "bg-red-50/50"
             )}
           >
-            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-slate-200">
+            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-slate-200 surface-dark:bg-border">
               {item.previewUrl ? (
                 <Image src={item.previewUrl} alt="" fill className="object-cover" sizes="48px" />
               ) : (
@@ -139,7 +139,7 @@ export function UploadProgressList({ items, className, onRetry, onRetrySave, onC
             </div>
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex items-center justify-between gap-2 text-sm">
-                <span className="truncate font-medium text-primary">{item.fileName}</span>
+                <span className="truncate font-medium text-heading">{item.fileName}</span>
                 <div className="flex shrink-0 items-center gap-1">
                   {item.status === "uploading" && (
                     <>
@@ -154,7 +154,7 @@ export function UploadProgressList({ items, className, onRetry, onRetrySave, onC
                       </span>
                       {eta && <span className="hidden text-xs text-muted sm:inline">{eta}</span>}
                       {onCancel && (
-                        <button type="button" onClick={() => onCancel(item.id)} className="rounded p-0.5 hover:bg-slate-200">
+                        <button type="button" onClick={() => onCancel(item.id)} className="rounded p-0.5 hover:bg-slate-200 surface-dark:hover:bg-subtle">
                           <X className="h-3.5 w-3.5 text-muted" />
                         </button>
                       )}

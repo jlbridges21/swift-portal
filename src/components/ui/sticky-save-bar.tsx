@@ -16,8 +16,8 @@ export function StickySaveBar({ onSave, saving, label = "Save Project", classNam
   return (
     <div
       className={cn(
-        "border-t border-border bg-white px-4 py-4 safe-area-bottom safe-area-x",
-        "md:fixed md:bottom-0 md:left-0 md:right-0 md:z-40 md:bg-white/95 md:py-3 md:shadow-[0_-4px_20px_rgba(15,23,42,0.08)] md:backdrop-blur-md",
+        "border-t border-border bg-white surface-dark:bg-card px-4 py-4 safe-area-bottom safe-area-x",
+        "md:fixed md:bottom-0 md:left-0 md:right-0 md:z-40 md:bg-white/95 surface-dark:md:bg-card/95 md:py-3 md:shadow-[0_-4px_20px_rgba(15,23,42,0.08)] md:backdrop-blur-md",
         className
       )}
     >

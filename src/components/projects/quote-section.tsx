@@ -241,7 +241,7 @@ export function QuoteSection({
   function renderDepositControls() {
     return (
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium text-primary">Deposit due on approval</legend>
+        <legend className="text-sm font-medium text-heading">Deposit due on approval</legend>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="radio"
@@ -814,7 +814,7 @@ export function QuoteSection({
     return (
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)] lg:items-start">
       <div className="min-w-0 space-y-4 rounded-2xl bg-slate-50/60 surface-dark:bg-subtle/60 p-6 ring-1 ring-black/[0.04]">
-        <p className="text-sm font-medium text-primary">
+        <p className="text-sm font-medium text-heading">
           {editingId ? "Edit draft proposal" : "New proposal"}
         </p>
         <div className="space-y-2">
@@ -990,7 +990,7 @@ export function QuoteSection({
           <>
             {editingPreliminary ? (
               <div className="space-y-4 rounded-2xl bg-slate-50/60 surface-dark:bg-subtle/60 p-6 ring-1 ring-black/[0.04]">
-                <p className="text-sm font-medium text-primary">Edit preliminary estimate</p>
+                <p className="text-sm font-medium text-heading">Edit preliminary estimate</p>
                 <div className="space-y-2">
                   <Label>Title</Label>
                   <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />

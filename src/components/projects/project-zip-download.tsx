@@ -248,8 +248,8 @@ export function ProjectZipDownload({
           isHero
             ? "group inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20 hover:border-white/30 disabled:opacity-60"
             : compact
-              ? "inline-flex items-center gap-1.5 rounded-md border border-border bg-white surface-dark:bg-card px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-slate-50 surface-dark:hover:bg-subtle disabled:opacity-60"
-              : "inline-flex items-center gap-2 rounded-lg border border-border bg-white surface-dark:bg-card px-4 py-2 text-sm font-medium text-primary hover:bg-slate-50 surface-dark:hover:bg-subtle disabled:opacity-60",
+              ? "inline-flex items-center gap-1.5 rounded-md border border-border bg-white surface-dark:bg-card px-2.5 py-1.5 text-xs font-medium text-heading hover:bg-slate-50 surface-dark:hover:bg-subtle disabled:opacity-60"
+              : "inline-flex items-center gap-2 rounded-lg border border-border bg-white surface-dark:bg-card px-4 py-2 text-sm font-medium text-heading hover:bg-slate-50 surface-dark:hover:bg-subtle disabled:opacity-60",
           buttonClassName
         )}
       >
@@ -284,7 +284,7 @@ export function ProjectZipDownload({
           )}
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2 text-xs">
-              <span className={cn("font-medium", isHero ? "text-white" : "text-primary")}>
+              <span className={cn("font-medium", isHero ? "text-white" : "text-heading")}>
                 {stage === "packaging"
                   ? "Packaging on server"
                   : stage === "receiving"

@@ -168,7 +168,7 @@ export function PublicProjectPageClient({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={brand.logoUrl} alt="" className="h-8 w-auto max-w-[140px] object-contain" />
             ) : (
-              <span className="font-semibold text-primary truncate">{brand.portalName}</span>
+              <span className="font-semibold text-heading truncate">{brand.portalName}</span>
             )}
           </div>
           <Button asChild variant="outline" size="sm" className="shrink-0">
@@ -183,7 +183,7 @@ export function PublicProjectPageClient({
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 space-y-10">
         <div className="space-y-3">
           <ViewOnlyAccessChip />
-          <h1 className="text-2xl font-bold tracking-tight text-primary sm:text-3xl">
+          <h1 className="text-2xl font-bold tracking-tight text-heading sm:text-3xl">
             {project.project_name}
           </h1>
           <p className="text-muted">{project.property_address}</p>
@@ -222,7 +222,7 @@ export function PublicProjectPageClient({
 
         {showPhotos && (
           <section id="photos" className="scroll-mt-24 space-y-4">
-            <h2 className="flex items-center gap-2 text-xl font-bold text-primary">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-heading">
               <Images className="h-5 w-5 text-accent" /> Photos
             </h2>
             {photos.length > 0 ? (
@@ -250,7 +250,7 @@ export function PublicProjectPageClient({
 
         {showVideos && (
           <section id="video" className="scroll-mt-24 space-y-4">
-            <h2 className="flex items-center gap-2 text-xl font-bold text-primary">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-heading">
               <Clapperboard className="h-5 w-5 text-accent" /> Video
             </h2>
             {videoEntries.length > 0 ? (
@@ -281,7 +281,7 @@ export function PublicProjectPageClient({
 
         {showTours && (
           <section id="tours" className="scroll-mt-24 space-y-4">
-            <h2 className="flex items-center gap-2 text-xl font-bold text-primary">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-heading">
               <Globe className="h-5 w-5 text-accent" /> Virtual tours
             </h2>
             {tours.length > 0 ? (
@@ -304,7 +304,7 @@ export function PublicProjectPageClient({
 
         {showModels && (
           <section id="models" className="scroll-mt-24 space-y-4">
-            <h2 className="flex items-center gap-2 text-xl font-bold text-primary">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-heading">
               <Box className="h-5 w-5 text-accent" /> 3D Models
             </h2>
             {models.length > 0 ? (
@@ -327,7 +327,7 @@ export function PublicProjectPageClient({
 
         {showDocuments && (
           <section id="documents" className="scroll-mt-24 space-y-4">
-            <h2 className="flex items-center gap-2 text-xl font-bold text-primary">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-heading">
               <FileText className="h-5 w-5 text-accent" /> Documents
             </h2>
             {documents.length > 0 ? (

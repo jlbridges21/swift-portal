@@ -43,7 +43,7 @@ export function Logo({ showText = true, compact = false, size = "md", href = "/"
       </div>
       {showText && (
         <div className="flex min-w-0 flex-col leading-tight">
-          <span className={cn("truncate font-semibold text-primary", compact ? "text-sm" : textClass)}>
+          <span className={cn("truncate font-semibold text-heading", compact ? "text-sm" : textClass)}>
             {brand.portalName}
           </span>
           {!compact && size !== "sm" && (

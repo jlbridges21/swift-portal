@@ -53,10 +53,10 @@ export function ClientW9Panel({
   }
 
   return (
-    <section className="rounded-xl border border-border bg-white p-4 shadow-sm" data-w9-client-panel="">
+    <section className="rounded-xl border border-border bg-white surface-dark:bg-card p-4 shadow-sm" data-w9-client-panel="">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-primary">Form W-9</h2>
+          <h2 className="text-base font-semibold text-heading">Form W-9</h2>
           <p className="mt-1 text-sm text-muted">
             Send this client a one-time download link. The taxpayer identification number is typed when you send it
             and is not saved.
@@ -69,7 +69,7 @@ export function ClientW9Panel({
         ) : null}
       </div>
       {taxReady ? null : (
-        <p className="mt-3 text-sm text-primary" data-w9-tax-prompt="">
+        <p className="mt-3 text-sm text-foreground" data-w9-tax-prompt="">
           Add your tax information before sending a W-9.{" "}
           <Link href="/admin/settings#settings-tax" className="font-medium text-accent underline">
             Open tax information

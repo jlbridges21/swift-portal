@@ -242,6 +242,89 @@ function rgbClose(a: Rgb, b: Rgb, tol = 4): boolean {
   return Math.abs(a[0] - b[0]) <= tol && Math.abs(a[1] - b[1]) <= tol && Math.abs(a[2] - b[2]) <= tol;
 }
 
+/**
+ * Primary is a fill (buttons, badges, bars), not body text.
+ * It only has to read as a shape against the page and the card (3:1).
+ * The label on that fill still has to clear body contrast (4.5:1).
+ * The fill moves only when the raw brand color fails one of those bars,
+ * so a navy that already clears both stays the navy.
+ */
+function labelOnFill(fill: Rgb): { color: Rgb; css: string; usedDark: boolean } | null {
+  const whiteRatio = contrastRatio(fill, WHITE);
+  const inkRatio = contrastRatio(fill, INK);
+  if (whiteRatio + 1e-6 >= TEXT_CONTRAST) {
+    return { color: WHITE, css: "#ffffff", usedDark: false };
+  }
+  if (inkRatio + 1e-6 >= TEXT_CONTRAST) {
+    return { color: INK, css: "#0F172A", usedDark: true };
+  }
+  return null;
+}
+
+/**
+ * A dark brand lightened straight toward white turns into grey.
+ * Scale the original hue so the walk stays on that color (navy stays blue).
+ */
+function lightChromaTarget(original: Rgb): Rgb {
+  const max = Math.max(original[0], original[1], original[2]);
+  if (max < 8) return [176, 196, 230];
+  const scale = 220 / max;
+  return [
+    Math.min(255, Math.round(original[0] * scale)),
+    Math.min(255, Math.round(original[1] * scale)),
+    Math.min(255, Math.round(original[2] * scale)),
+  ];
+}
+
+function fitPrimaryFill(
+  color: Rgb,
+  surfaces: Rgb[]
+): { fill: Rgb; fg: { color: Rgb; css: string; usedDark: boolean } } {
+  const chroma = lightChromaTarget(color);
+  let current = color;
+  let best = current;
+  let bestLabel = -1;
+  for (let i = 0; i < 48; i++) {
+    const shapeFail = surfaces.find((surface) => contrastRatio(current, surface) + 1e-6 < UI_CONTRAST);
+    const whiteRatio = contrastRatio(current, WHITE);
+    const inkRatio = contrastRatio(current, INK);
+    const labelRatio = Math.max(whiteRatio, inkRatio);
+    if (!shapeFail && labelRatio > bestLabel) {
+      best = current;
+      bestLabel = labelRatio;
+    }
+    const fg = labelOnFill(current);
+    if (!shapeFail && fg) return { fill: current, fg };
+    if (shapeFail) {
+      const toward = relativeLuminance(shapeFail) > 0.5 ? INK : chroma;
+      current = mix(current, toward, 0.12);
+      continue;
+    }
+    current = mix(current, whiteRatio >= inkRatio ? INK : chroma, 0.12);
+  }
+  return { fill: best, fg: labelOnFill(best) ?? pickForeground(best) };
+}
+
+/**
+ * Active nav is accent text on the accent wash. Move the wash, not the accent.
+ * A darker accent that cannot clear 4.5:1 against any lighter color (Swift blue
+ * tops out near 3.7:1 on white, and about 4.4:1 on black) keeps the existing
+ * pale wash. Inverting that chip to near-black would repaint light mode.
+ * A lighter accent is pulled onto a darker wash until the pair clears 4.5:1.
+ */
+function tuneAccentSubtle(accent: Rgb, subtle: Rgb): Rgb {
+  if (contrastRatio(accent, subtle) + 1e-6 >= TEXT_CONTRAST) return subtle;
+  const accentIsDarker = relativeLuminance(accent) < relativeLuminance(subtle);
+  if (accentIsDarker && contrastRatio(accent, WHITE) + 1e-6 < TEXT_CONTRAST) return subtle;
+  const toward = accentIsDarker ? WHITE : INK;
+  let current = subtle;
+  for (let i = 0; i < 28; i++) {
+    if (contrastRatio(accent, current) + 1e-6 >= TEXT_CONTRAST) return current;
+    current = mix(current, toward, 0.14);
+  }
+  return current;
+}
+
 function ensureContrast(fg: Rgb, bg: Rgb, minRatio: number): Rgb {
   const toward = contrastTarget(bg);
   let current = fg;
@@ -322,7 +405,9 @@ export function themeContrastPairs(t: BrandThemeVars): { pair: string; ratio: nu
   add("body on card", t.cardForeground, t.card, TEXT_CONTRAST);
   add("accent on page (UI)", t.accent, t.background, UI_CONTRAST);
   add("accent fg on accent", t.accentForeground, t.accent, UI_CONTRAST);
-  add("primary fg on primary", t.primaryForeground, t.primary, UI_CONTRAST);
+  add("primary shape on page", t.primary, t.background, UI_CONTRAST);
+  add("primary shape on card", t.primary, t.card, UI_CONTRAST);
+  add("primary fg on primary", t.primaryForeground, t.primary, TEXT_CONTRAST);
   return pairs.map((p) => ({ ...p, ok: p.ratio + 1e-6 >= p.min }));
 }
 
@@ -396,8 +481,8 @@ function deriveDarkBrandTheme(primaryRaw: string, accentRaw: string): BrandTheme
   const primaryChosen = parseRgb(primarySafe) ?? INK;
   const accentChosen = parseRgb(accentSafe) ?? [59, 130, 246];
 
-  let primaryRgb = ensureContrast(primaryChosen, DARK_CARD, TEXT_CONTRAST);
-  primaryRgb = ensureContrast(primaryRgb, DARK_BACKGROUND, TEXT_CONTRAST);
+  const fittedPrimary = fitPrimaryFill(primaryChosen, [DARK_CARD, DARK_BACKGROUND]);
+  const primaryRgb = fittedPrimary.fill;
 
   // Accent is also nav and link text, so it has to clear body contrast, not only the 3:1 UI bar.
   let accentUi = darkenUntilContrast(accentChosen, DARK_BACKGROUND, TEXT_CONTRAST);
@@ -416,7 +501,7 @@ function deriveDarkBrandTheme(primaryRaw: string, accentRaw: string): BrandTheme
   }
 
   const accentBorder = mix(DARK_BORDER, accentUi, 0.4);
-  const primaryFg = pickForeground(primaryRgb);
+  const primaryFg = fittedPrimary.fg;
 
   const vars: BrandThemeVars = {
     primary: toCss(primaryRgb),
@@ -456,7 +541,7 @@ export function deriveBrandTheme(
 function deriveLightBrandTheme(primaryRaw: string, accentRaw: string): BrandThemeVars {
   const primarySafe = sanitizeCssColor(primaryRaw, "#0F172A");
   const accentSafe = sanitizeCssColor(accentRaw, "#3B82F6");
-  const primaryRgb = parseRgb(primarySafe) ?? INK;
+  const rawPrimary = parseRgb(primarySafe) ?? INK;
   const accentChosen = parseRgb(accentSafe) ?? [59, 130, 246];
 
   const accentForUi =
@@ -464,8 +549,7 @@ function deriveLightBrandTheme(primaryRaw: string, accentRaw: string): BrandThem
       ? accentChosen
       : darkenUntilContrast(accentChosen, WHITE, UI_CONTRAST);
 
-  const primaryFg = pickForeground(primaryRgb);
-  const swiftSurfaces = rgbClose(primaryRgb, SWIFT_PRIMARY) && rgbClose(accentChosen, SWIFT_ACCENT);
+  const swiftSurfaces = rgbClose(rawPrimary, SWIFT_PRIMARY) && rgbClose(accentChosen, SWIFT_ACCENT);
 
   let background: Rgb;
   let card: Rgb;
@@ -494,7 +578,7 @@ function deriveLightBrandTheme(primaryRaw: string, accentRaw: string): BrandThem
     subtle = mix(background, tintSource, 0.04);
     if (relativeLuminance(subtle) < 0.93) subtle = mix(CLOUD, tintSource, 0.03);
     border = mix(SLATE_200, tintSource, 0.1);
-    heading = ensureContrast(relativeLuminance(primaryRgb) < 0.35 ? primaryRgb : INK, background, TEXT_CONTRAST);
+    heading = ensureContrast(relativeLuminance(rawPrimary) < 0.35 ? rawPrimary : INK, background, TEXT_CONTRAST);
     foreground = ensureContrast(SLATE_600, background, TEXT_CONTRAST);
     muted = ensureContrast(MUTED, background, TEXT_CONTRAST);
   }
@@ -509,6 +593,9 @@ function deriveLightBrandTheme(primaryRaw: string, accentRaw: string): BrandThem
     }
   }
   const accentFg = pickForeground(accentUi);
+  const fittedPrimary = fitPrimaryFill(rawPrimary, [background, card]);
+  const primaryRgb = fittedPrimary.fill;
+  const primaryFg = fittedPrimary.fg;
 
   const bgFg = ensureContrast(foreground, background, TEXT_CONTRAST);
   const cardFg = ensureContrast(foreground, card, TEXT_CONTRAST);
@@ -522,7 +609,7 @@ function deriveLightBrandTheme(primaryRaw: string, accentRaw: string): BrandThem
     accentForeground: accentFg.css,
     accentHover: toCss(mix(accentUi, INK, 0.12)),
     accentActive: toCss(mix(accentUi, INK, 0.2)),
-    accentSubtle: toCss(mix(accentUi, WHITE, 0.9)),
+    accentSubtle: toCss(tuneAccentSubtle(accentUi, mix(accentUi, WHITE, 0.9))),
     accentBorder: toCss(mix(accentUi, WHITE, 0.55)),
     ring: toCss(accentUi),
     background: swiftSurfaces ? "#F8FAFC" : toCss(background),

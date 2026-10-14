@@ -937,10 +937,10 @@ export function AdminProjectDetail({
   return (
     <div className="space-y-6 pb-6 md:pb-24">
       {/* Sticky project header */}
-      <div className="sticky top-0 z-40 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-white/95 backdrop-blur-md border-b border-border shadow-sm">
+      <div className="sticky top-0 z-40 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-white/95 surface-dark:bg-card/95 backdrop-blur-md border-b border-border shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-lg font-bold text-primary truncate">{displayName}</h1>
+            <h1 className="text-lg font-bold text-heading truncate">{displayName}</h1>
             <p className="text-sm text-muted truncate">{form.property_address}</p>
             {initialProject.properties && (
               <p className="text-xs text-accent truncate flex items-center gap-1">
@@ -1133,7 +1133,7 @@ export function AdminProjectDetail({
             />
           </div>
           <label className="cursor-pointer shrink-0">
-            <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-medium hover:bg-slate-50">
+            <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white surface-dark:bg-card px-3 text-xs font-medium hover:bg-slate-50 surface-dark:hover:bg-subtle">
               <Upload className="h-4 w-4" /> Upload Photos
             </span>
             <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleUpload(e, "photo")} />
@@ -1194,7 +1194,7 @@ export function AdminProjectDetail({
               <Video className="h-4 w-4" /> YouTube Link
             </Button>
             <label className="cursor-pointer">
-              <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-medium hover:bg-slate-50">
+              <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white surface-dark:bg-card px-3 text-xs font-medium hover:bg-slate-50 surface-dark:hover:bg-subtle">
                 <Upload className="h-4 w-4" /> Upload Video
               </span>
               <input type="file" multiple accept={ALLOWED_VIDEO_MIME_TYPES.join(",")} className="hidden" onChange={(e) => handleUpload(e, "video")} />
@@ -1475,7 +1475,7 @@ export function AdminProjectDetail({
             />
           </div>
           <label className="cursor-pointer shrink-0">
-            <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-medium hover:bg-slate-50">
+            <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white surface-dark:bg-card px-3 text-xs font-medium hover:bg-slate-50 surface-dark:hover:bg-subtle">
               <Upload className="h-4 w-4" /> Upload
             </span>
             <input type="file" multiple accept="application/pdf,application/zip" className="hidden" onChange={(e) => handleUpload(e, "document")} />
@@ -1500,7 +1500,7 @@ export function AdminProjectDetail({
                 key={`rev-${rev.id}`}
                 type="button"
                 onClick={() => setSelectedRevision(rev)}
-                className="w-full rounded-lg border border-border p-4 text-left text-sm hover:bg-slate-50"
+                className="w-full rounded-lg border border-border p-4 text-left text-sm hover:bg-slate-50 surface-dark:hover:bg-subtle"
               >
                 <p className="text-muted line-clamp-2">{rev.description}</p>
                 <p className="text-xs text-muted mt-2">{rev.status.replace("_", " ")} · {new Date(rev.created_at).toLocaleDateString()}</p>
@@ -1568,7 +1568,7 @@ export function AdminProjectDetail({
         </Card>
       )}
 
-      <div className="rounded-xl border border-border bg-slate-50/80 px-4 py-3 text-sm text-muted">
+      <div className="rounded-xl border border-border bg-slate-50/80 surface-dark:bg-subtle/80 px-4 py-3 text-sm text-muted">
         Client messaging lives in the{" "}
         <Link href="/admin/messages" className="font-medium text-accent hover:underline">
           Messages
@@ -1770,13 +1770,13 @@ function ProjectClientsCard({
               return (
                 <div
                   key={pc.id}
-                  className="flex items-center gap-2 rounded-xl border border-border bg-white p-3 text-sm shadow-sm"
+                  className="flex items-center gap-2 rounded-xl border border-border bg-white surface-dark:bg-card p-3 text-sm shadow-sm"
                 >
                   <Link
                     href={`/admin/clients/${pc.client_id}`}
-                    className="min-h-11 min-w-0 flex-1 rounded-lg transition-colors hover:bg-slate-50 active:bg-slate-100 -m-1 p-1"
+                    className="min-h-11 min-w-0 flex-1 rounded-lg transition-colors hover:bg-slate-50 surface-dark:hover:bg-subtle active:bg-slate-100 surface-dark:active:bg-subtle -m-1 p-1"
                   >
-                    <p className="font-medium text-primary">{displayName}</p>
+                    <p className="font-medium text-heading">{displayName}</p>
                     {contact && <p className="text-xs text-muted truncate">{contact}</p>}
                     <p className={cn("mt-0.5 text-[11px] font-medium", hasPortal ? "text-emerald-700" : "text-amber-700")}>
                       {hasPortal ? "Portal access linked" : "No portal login — project hidden from them"}

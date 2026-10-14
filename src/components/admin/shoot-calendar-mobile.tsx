@@ -363,7 +363,7 @@ export function MobileShootCalendar({
               }}
               className={cn(
                 "shrink-0 rounded-full px-3 py-2 text-xs font-semibold touch-manipulation min-h-11",
-                view === option.id ? "bg-accent text-accent-foreground" : "bg-white text-muted ring-1 ring-border"
+                view === option.id ? "bg-accent text-accent-foreground" : "bg-white surface-dark:bg-card text-muted ring-1 ring-border"
               )}
             >
               {option.label}
@@ -372,13 +372,13 @@ export function MobileShootCalendar({
         </div>
       </div>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
-        <div className="flex items-center gap-1 border-b border-border bg-slate-50/80 px-2 py-2">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-white surface-dark:bg-card shadow-sm">
+        <div className="flex items-center gap-1 border-b border-border bg-slate-50/80 surface-dark:bg-subtle/80 px-2 py-2">
           <Button type="button" variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => go(-1)} aria-label="Previous">
             ‹
           </Button>
           <div className="min-w-0 flex-1 text-center">
-            <h2 className="truncate text-sm font-semibold text-primary">{headerLabel}</h2>
+            <h2 className="truncate text-sm font-semibold text-heading">{headerLabel}</h2>
             <div className="flex items-center justify-center gap-1">
               <button type="button" className="min-h-11 px-2 text-xs font-medium text-muted" onClick={goToday}>
                 Today
@@ -422,7 +422,7 @@ export function MobileShootCalendar({
                     data-schedule-day={dayKey}
                     data-schedule-today={dayKey === todayKey ? "true" : undefined}
                   >
-                    <h3 className="mb-2 border-b border-border pb-1 text-sm font-semibold text-primary">
+                    <h3 className="mb-2 border-b border-border pb-1 text-sm font-semibold text-heading">
                       {formatYmd(dayKey, businessTimeZone, { weekday: "long", month: "long", day: "numeric" })}
                     </h3>
                     {items.shoots.length === 0 && items.external.length === 0 ? (
@@ -454,7 +454,7 @@ export function MobileShootCalendar({
               </div>
               <div className="grid grid-cols-7">
                 {Array.from({ length: leading < 0 ? 0 : leading }).map((_, index) => (
-                  <div key={`blank-${index}`} className="min-h-11 border-b border-r border-border bg-slate-50/40" />
+                  <div key={`blank-${index}`} className="min-h-11 border-b border-r border-border bg-slate-50/40 surface-dark:bg-subtle/40" />
                 ))}
                 {daysInMonth.map((dayKey) => {
                   const dots = dotsFor(dayKey);
@@ -489,7 +489,7 @@ export function MobileShootCalendar({
                 })}
               </div>
               <div className="border-t border-border p-3" data-month-day-events={activeMonthDay}>
-                <h3 className="mb-2 text-sm font-semibold text-primary">
+                <h3 className="mb-2 text-sm font-semibold text-heading">
                   {formatYmd(activeMonthDay, businessTimeZone, { weekday: "long", month: "long", day: "numeric" })}
                 </h3>
                 <DayList dayKey={activeMonthDay} />
@@ -548,13 +548,13 @@ export function MobileShootCalendar({
         <>
           <button type="button" className="fixed inset-0 z-[120] bg-black/40" aria-label="Close create shoot" onClick={() => setCreateOpen(false)} />
           <div
-            className="fixed inset-x-0 bottom-0 z-[121] rounded-t-2xl bg-white px-4 pt-3 shadow-2xl"
+            className="fixed inset-x-0 bottom-0 z-[121] rounded-t-2xl bg-white surface-dark:bg-card px-4 pt-3 shadow-2xl"
             style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom, 0px))" }}
             role="dialog"
             aria-label="Create shoot"
           >
-            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200" />
-            <h2 className="mb-3 text-base font-semibold text-primary">New shoot</h2>
+            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200 surface-dark:bg-border" />
+            <h2 className="mb-3 text-base font-semibold text-heading">New shoot</h2>
             {createProjects.length === 0 ? (
               <p className="pb-4 text-sm text-muted">No projects are available to schedule.</p>
             ) : (
@@ -565,7 +565,7 @@ export function MobileShootCalendar({
                     id="mobile-shoot-project"
                     value={projectId}
                     onChange={(event) => setProjectId(event.target.value)}
-                    className="min-h-11 w-full rounded-md border border-border bg-white px-3 text-sm"
+                    className="min-h-11 w-full rounded-md border border-border bg-white surface-dark:bg-card px-3 text-sm"
                   >
                     {createProjects.map((project) => (
                       <option key={project.id} value={project.id}>

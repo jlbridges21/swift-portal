@@ -195,7 +195,7 @@ export function AdminMessagesInbox() {
   const showThreadOnMobile = !!selectedId;
 
   return (
-    <div className="flex h-[calc(100dvh-8rem)] min-h-[480px] overflow-hidden rounded-2xl border border-border bg-white shadow-sm lg:h-[calc(100dvh-7rem)]">
+    <div className="flex h-[calc(100dvh-8rem)] min-h-[480px] overflow-hidden rounded-2xl border border-border bg-white surface-dark:bg-card shadow-sm lg:h-[calc(100dvh-7rem)]">
       {/* Conversation list */}
       <aside
         className={cn(
@@ -205,7 +205,7 @@ export function AdminMessagesInbox() {
       >
         <div className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
           <div>
-            <h1 className="text-lg font-semibold text-primary">Messages</h1>
+            <h1 className="text-lg font-semibold text-heading">Messages</h1>
             <p className="text-xs text-muted">Client conversations</p>
           </div>
           <Button
@@ -235,22 +235,22 @@ export function AdminMessagesInbox() {
                 type="button"
                 onClick={() => selectClient(c.client_id)}
                 className={cn(
-                  "flex w-full items-start gap-3 border-b border-border/60 px-4 py-3 text-left transition hover:bg-slate-50",
+                  "flex w-full items-start gap-3 border-b border-border/60 px-4 py-3 text-left transition hover:bg-slate-50 surface-dark:hover:bg-subtle",
                   selectedId === c.client_id && "bg-accent/5"
                 )}
               >
-                <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-primary">
+                <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 surface-dark:bg-subtle text-sm font-semibold text-heading">
                   {c.client_name.slice(0, 1).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate font-medium text-primary">{c.client_name}</p>
+                    <p className="truncate font-medium text-heading">{c.client_name}</p>
                     <span className="shrink-0 text-[11px] text-muted">
                       {formatRelativeTime(c.last_message_at)}
                     </span>
                   </div>
                   <p className="truncate text-xs text-muted">{c.client_email}</p>
-                  <p className="mt-0.5 truncate text-sm text-slate-600">{c.last_message}</p>
+                  <p className="mt-0.5 truncate text-sm text-slate-600 surface-dark:text-foreground">{c.last_message}</p>
                 </div>
                 {c.unread_count > 0 && (
                   <span className="mt-1 inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-accent-foreground">
@@ -292,7 +292,7 @@ export function AdminMessagesInbox() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-primary">
+                <p className="truncate font-semibold text-heading">
                   {selected?.client_name ?? "Client"}
                 </p>
                 <p className="truncate text-xs text-muted">{selected?.client_email}</p>
@@ -309,7 +309,7 @@ export function AdminMessagesInbox() {
 
             <div
               ref={threadScrollRef}
-              className="flex-1 space-y-2 overflow-y-auto bg-[#F2F4F7] px-3 py-4 sm:px-5"
+              className="flex-1 space-y-2 overflow-y-auto bg-[#F2F4F7] surface-dark:bg-subtle px-3 py-4 sm:px-5"
             >
               {loadingThread ? (
                 <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted">
@@ -326,7 +326,7 @@ export function AdminMessagesInbox() {
               )}
             </div>
 
-            <div className="border-t border-border bg-white p-3 sm:p-4">
+            <div className="border-t border-border bg-white surface-dark:bg-card p-3 sm:p-4">
               <Textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -378,24 +378,24 @@ function TimelineRow({ item }: { item: CrmTimelineItem }) {
             "max-w-[min(92%,28rem)] px-4 py-2.5 text-[15px] leading-relaxed shadow-sm",
             mine
               ? "rounded-[20px] rounded-br-md bg-accent text-accent-foreground"
-              : "rounded-[20px] rounded-bl-md bg-white text-slate-900 ring-1 ring-black/[0.06]",
+              : "rounded-[20px] rounded-bl-md bg-white surface-dark:bg-card text-slate-900 surface-dark:text-heading ring-1 ring-black/[0.06]",
             item.is_unread && !mine && "ring-2 ring-accent/35"
           )}
         >
           <div
             className={cn(
               "mb-1 flex items-center gap-2 text-[11px] font-medium",
-              mine ? "text-white/75" : "text-slate-500"
+              mine ? "text-white/75" : "text-slate-500 surface-dark:text-muted"
             )}
           >
             <span>{mine ? "You" : "Client"}</span>
-            <span className={mine ? "text-white/55" : "text-slate-400"}>
+            <span className={mine ? "text-white/55" : "text-slate-400 surface-dark:text-muted"}>
               {formatRelativeTime(item.created_at)}
             </span>
           </div>
           <p className="whitespace-pre-wrap break-words">{item.body}</p>
           {item.project_name && (
-            <p className={cn("mt-1.5 text-[11px]", mine ? "text-white/60" : "text-slate-400")}>
+            <p className={cn("mt-1.5 text-[11px]", mine ? "text-white/60" : "text-slate-400 surface-dark:text-muted")}>
               Re: {item.project_name}
             </p>
           )}
@@ -414,17 +414,17 @@ function TimelineRow({ item }: { item: CrmTimelineItem }) {
 
   return (
     <div className="flex justify-center py-1.5">
-      <div className="flex max-w-full flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 px-2 text-center text-[12px] leading-snug text-slate-500">
+      <div className="flex max-w-full flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 px-2 text-center text-[12px] leading-snug text-slate-500 surface-dark:text-muted">
         <span className="shrink-0 text-[13px] leading-none" aria-hidden>
           {item.icon || "•"}
         </span>
-        <span className="font-medium text-slate-600">{item.title}</span>
-        <span className="text-slate-400">·</span>
-        <span className="text-slate-400">{formatTimelineStamp(item.created_at)}</span>
+        <span className="font-medium text-slate-600 surface-dark:text-foreground">{item.title}</span>
+        <span className="text-slate-400 surface-dark:text-muted">·</span>
+        <span className="text-slate-400 surface-dark:text-muted">{formatTimelineStamp(item.created_at)}</span>
         {item.project_name && (
           <>
             <span className="text-slate-300">·</span>
-            <span className="truncate text-slate-400">{item.project_name}</span>
+            <span className="truncate text-slate-400 surface-dark:text-muted">{item.project_name}</span>
           </>
         )}
       </div>

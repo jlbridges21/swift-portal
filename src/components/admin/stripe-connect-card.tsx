@@ -123,7 +123,7 @@ export function StripeConnectCard() {
         ) : (
           <>
             <p className="text-sm text-muted">
-              Status: <span className="font-medium text-primary">{statusLabel(state.status)}</span>
+              Status: <span className="font-medium text-heading">{statusLabel(state.status)}</span>
             </p>
             <p className="text-sm text-muted">
               Charges {state.chargesEnabled ? "enabled" : "disabled"}

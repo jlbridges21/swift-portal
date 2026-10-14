@@ -102,7 +102,7 @@ export function ClientMessagesChat({ projectId, clientId, className, compact }: 
         <div className="flex items-center gap-2 border-b border-border/60 bg-gradient-to-r from-slate-50 to-white surface-dark:from-background surface-dark:to-background px-4 py-3">
           <MessageSquare className="h-5 w-5 text-accent" />
           <div>
-            <h2 className="text-base font-semibold text-primary">Messages</h2>
+            <h2 className="text-base font-semibold text-heading">Messages</h2>
             <p className="text-xs text-muted">Chat with {brand.name}</p>
           </div>
         </div>

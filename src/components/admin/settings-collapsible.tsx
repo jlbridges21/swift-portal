@@ -87,7 +87,7 @@ export function SettingsCollapsible({
       id={id}
       tabIndex={-1}
       className={cn(
-        "rounded-xl border border-border bg-white shadow-sm overflow-hidden scroll-mt-24 outline-none",
+        "rounded-xl border border-border bg-white surface-dark:bg-card shadow-sm overflow-hidden scroll-mt-24 outline-none",
         className
       )}
     >
@@ -100,7 +100,7 @@ export function SettingsCollapsible({
       >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold text-primary">{title}</h2>
+            <h2 className="text-lg font-semibold text-heading">{title}</h2>
             {dirty ? (
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
                 Unsaved

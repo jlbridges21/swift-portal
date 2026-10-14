@@ -147,7 +147,7 @@ export function PushNotificationsCard() {
   const isEnabledOnDevice = Boolean(status?.enabled && status?.localOptedIn);
 
   return (
-    <Card className="mb-10 border-sky-100 bg-gradient-to-br from-sky-50/50 to-white">
+    <Card className="mb-10 border-sky-100 bg-gradient-to-br from-sky-50/50 to-white surface-dark:from-background surface-dark:to-background">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Bell className="h-5 w-5 text-accent" />
@@ -199,7 +199,7 @@ export function PushNotificationsCard() {
           )}
         </div>
 
-        <div className="flex items-start gap-2 rounded-lg border border-border bg-white/80 px-4 py-3 text-sm text-muted">
+        <div className="flex items-start gap-2 rounded-lg border border-border bg-white/80 surface-dark:bg-card/80 px-4 py-3 text-sm text-muted">
           <Smartphone className="h-4 w-4 shrink-0 mt-0.5" />
           <p>
             For iPhone lock-screen alerts, open {brand.portalName} from your Home Screen icon, then enable

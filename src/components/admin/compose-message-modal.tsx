@@ -198,11 +198,11 @@ export function ComposeMessageModal({
                         setQuery(c.company ? `${c.name} (${c.company})` : c.name);
                       }}
                       className={cn(
-                        "flex w-full flex-col items-start border-b border-border/60 px-3 py-2 text-left text-sm last:border-0 hover:bg-slate-50",
+                        "flex w-full flex-col items-start border-b border-border/60 px-3 py-2 text-left text-sm last:border-0 hover:bg-slate-50 surface-dark:hover:bg-subtle",
                         active && "bg-accent/10"
                       )}
                     >
-                      <span className="font-medium text-primary">{c.name}</span>
+                      <span className="font-medium text-heading">{c.name}</span>
                       <span className="text-xs text-muted">
                         {[c.email, c.company].filter(Boolean).join(" · ")}
                       </span>
@@ -213,7 +213,7 @@ export function ComposeMessageModal({
             </div>
             {selected ? (
               <p className="text-xs text-muted">
-                To: <span className="font-medium text-primary">{selected.name}</span>
+                To: <span className="font-medium text-heading">{selected.name}</span>
                 {selected.email ? ` · ${selected.email}` : ""}
               </p>
             ) : null}

@@ -28,7 +28,7 @@ export default async function NotFound() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
       <p className="text-sm font-medium uppercase tracking-widest text-accent">{label}</p>
-      <h1 className="mt-4 text-6xl font-bold tracking-tight text-primary">404</h1>
+      <h1 className="mt-4 text-6xl font-bold tracking-tight text-heading">404</h1>
       <p className="mt-3 max-w-sm text-lg text-muted">
         This page doesn&apos;t exist, or you may not have permission to view it.
       </p>

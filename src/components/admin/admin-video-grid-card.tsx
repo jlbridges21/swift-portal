@@ -103,7 +103,7 @@ export function AdminVideoGridCard({
   const duration = videoDurationBadge(video);
 
   return (
-    <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-white shadow-sm ring-1 ring-black/[0.04]">
+    <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-white surface-dark:bg-card shadow-sm ring-1 ring-black/[0.04]">
       <div className="relative aspect-video min-w-0 shrink-0 overflow-hidden bg-slate-900">
         <VideoPosterSurface
           asset={video}
@@ -145,7 +145,7 @@ export function AdminVideoGridCard({
       </div>
 
       <div className="min-w-0 px-3 pt-2.5">
-        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-primary">{title}</h3>
+        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-heading">{title}</h3>
       </div>
 
       {isEditing ? (

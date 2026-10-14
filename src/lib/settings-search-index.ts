@@ -84,7 +84,7 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
     id: "portal-background",
     sectionId: "branding",
     label: "Portal background",
-    description: "Light or dark background for the client portal.",
+    description: "Light or dark background for your portal and your clients' portal.",
     keywords: ["portal background", "dark background", "light background", "logo visibility"],
   },
   {

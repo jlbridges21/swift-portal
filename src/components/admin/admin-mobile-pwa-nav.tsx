@@ -157,12 +157,12 @@ export function AdminMobilePwaNav() {
       />
       <div
         hidden={!sheetOpen}
-        className="fixed inset-x-0 bottom-0 z-[111] rounded-t-2xl bg-white shadow-2xl"
+        className="fixed inset-x-0 bottom-0 z-[111] rounded-t-2xl bg-white surface-dark:bg-card shadow-2xl"
         style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom, 0px))" }}
         role="dialog"
         aria-label="Create"
       >
-        <div className="mx-auto mt-2 mb-4 w-10 rounded-full bg-slate-200 py-1" />
+        <div className="mx-auto mt-2 mb-4 w-10 rounded-full bg-slate-200 surface-dark:bg-border py-1" />
         <div className="space-y-1 px-4 pb-2">
           {sheet.map((item) => (
             <ActionSheetButton key={item.label} icon={item.icon} label={item.label} onClick={item.onClick} />
@@ -188,7 +188,7 @@ function NavItem({ item, pathname }: { item: NavLink; pathname: string }) {
       href={item.href}
       className={cn(
         "flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-medium transition",
-        active ? "text-accent" : "text-muted hover:text-primary"
+        active ? "text-accent" : "text-muted hover:text-heading"
       )}
     >
       <Icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
@@ -210,7 +210,7 @@ function ActionSheetButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-11 w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-primary hover:bg-slate-50 active:bg-slate-100"
+      className="flex min-h-11 w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-heading hover:bg-slate-50 surface-dark:hover:bg-subtle active:bg-slate-100 surface-dark:active:bg-subtle"
     >
       <Icon className="h-5 w-5 text-accent" />
       {label}

@@ -41,7 +41,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
     <div className="space-y-1">
       <p className="text-xs font-medium text-muted">{label}</p>
       <div className="flex gap-2">
-        <code className="min-w-0 flex-1 break-all rounded-md border border-border bg-slate-50 px-3 py-2 text-sm">
+        <code className="min-w-0 flex-1 break-all rounded-md border border-border bg-slate-50 surface-dark:bg-subtle px-3 py-2 text-sm">
           {value}
         </code>
         <Button
@@ -546,7 +546,7 @@ export function CustomDomainSettingsCard({
                 {state.dnsConfigMessage && routingRecords.length > 0 ? (
                   <p className="text-xs text-amber-800">{state.dnsConfigMessage}</p>
                 ) : null}
-                <div className="rounded-lg border border-border bg-slate-50 px-3 py-2 text-xs text-muted">
+                <div className="rounded-lg border border-border bg-slate-50 surface-dark:bg-subtle px-3 py-2 text-xs text-muted">
                   <p className="font-medium text-heading">Cloudflare users</p>
                   <p className="mt-1">
                     Set the record to <strong>DNS only</strong> (grey cloud). Proxying (orange cloud)

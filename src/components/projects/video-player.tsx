@@ -89,7 +89,7 @@ export function VideoPlayer({
         )}
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-3">
-        <p className="truncate text-sm font-medium text-primary">{mediaDisplayName(video)}</p>
+        <p className="truncate text-sm font-medium text-heading">{mediaDisplayName(video)}</p>
         {downloadsAllowed && onDownload && (
           <Button variant="outline" size="sm" className="min-h-11 shrink-0 gap-1.5" onClick={onDownload}>
             <Download className="h-3.5 w-3.5" />

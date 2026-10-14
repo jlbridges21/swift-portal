@@ -323,7 +323,7 @@ export function AdminCommandPalette({
         aria-modal="true"
         aria-label="Search"
         className={cn(
-          "relative z-[101] flex w-full flex-col overflow-hidden bg-white shadow-2xl",
+          "relative z-[101] flex w-full flex-col overflow-hidden bg-white surface-dark:bg-card shadow-2xl",
           mobile
             ? "h-full max-h-full rounded-none"
             : "max-h-[min(70vh,560px)] max-w-xl rounded-xl border border-border"
@@ -351,7 +351,7 @@ export function AdminCommandPalette({
           <button
             type="button"
             onClick={close}
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted hover:bg-slate-100 hover:text-primary"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted hover:bg-slate-100 surface-dark:hover:bg-subtle hover:text-heading"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
@@ -401,7 +401,7 @@ export function AdminCommandPalette({
                   className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted"
                 >
                   {item.label}
-                  <span className="ml-1 font-normal normal-case text-slate-400">({item.count})</span>
+                  <span className="ml-1 font-normal normal-case text-slate-400 surface-dark:text-muted">({item.count})</span>
                 </div>
               );
             }
@@ -455,7 +455,7 @@ export function AdminCommandPalette({
                 aria-selected={selected}
                 className={cn(
                   "flex w-full min-h-11 items-start gap-3 rounded-lg px-3 py-2.5 text-left transition",
-                  selected ? "bg-accent/10 text-heading" : "hover:bg-slate-50"
+                  selected ? "bg-accent/10 text-heading" : "hover:bg-slate-50 surface-dark:hover:bg-subtle"
                 )}
                 onMouseEnter={() => {
                   const selIdx = selectableIndexes.indexOf(i);
@@ -478,13 +478,13 @@ export function AdminCommandPalette({
         {!mobile ? (
           <div className="hidden border-t border-border px-3 py-2 text-[11px] text-muted sm:flex sm:gap-3">
             <span>
-              <kbd className="rounded border border-border bg-slate-50 px-1">↑↓</kbd> navigate
+              <kbd className="rounded border border-border bg-slate-50 surface-dark:bg-subtle px-1">↑↓</kbd> navigate
             </span>
             <span>
-              <kbd className="rounded border border-border bg-slate-50 px-1">Enter</kbd> open
+              <kbd className="rounded border border-border bg-slate-50 surface-dark:bg-subtle px-1">Enter</kbd> open
             </span>
             <span>
-              <kbd className="rounded border border-border bg-slate-50 px-1">Esc</kbd> close
+              <kbd className="rounded border border-border bg-slate-50 surface-dark:bg-subtle px-1">Esc</kbd> close
             </span>
           </div>
         ) : null}
@@ -503,12 +503,12 @@ export function AdminSearchTrigger() {
     <button
       type="button"
       onClick={openSearch}
-      className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-white px-2.5 text-sm text-muted transition hover:border-accent/40 hover:text-heading sm:min-w-[9.5rem] sm:px-3"
+      className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-white surface-dark:bg-card px-2.5 text-sm text-muted transition hover:border-accent/40 hover:text-heading sm:min-w-[9.5rem] sm:px-3"
       aria-label="Search (Command K)"
     >
       <Search className="h-4 w-4 shrink-0" aria-hidden />
       <span className="hidden sm:inline">Search</span>
-      <kbd className="ml-auto hidden rounded border border-border bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-muted sm:inline">
+      <kbd className="ml-auto hidden rounded border border-border bg-slate-50 surface-dark:bg-subtle px-1.5 py-0.5 text-[10px] font-medium text-muted sm:inline">
         ⌘K
       </kbd>
     </button>

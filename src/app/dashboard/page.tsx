@@ -139,7 +139,7 @@ export default async function ClientDashboard() {
         <div className="mb-10 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-start">
           <div className="min-w-0">
             <p className="text-sm font-medium text-accent uppercase tracking-wider">{brand.name}</p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-primary sm:text-4xl">
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-heading sm:text-4xl">
               Welcome back, {firstName}.
             </h1>
             <p className="mt-2 text-lg text-muted">
@@ -173,7 +173,7 @@ export default async function ClientDashboard() {
                     </div>
                   </div>
                   <CardContent className="md:col-span-3 p-6 sm:p-8 flex flex-col justify-center">
-                    <h2 className="text-2xl font-bold text-primary">{featured.project_name}</h2>
+                    <h2 className="text-2xl font-bold text-heading">{featured.project_name}</h2>
                     <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
                       <MapPin className="h-4 w-4 shrink-0" /> {featured.property_address}
                     </p>
@@ -193,7 +193,7 @@ export default async function ClientDashboard() {
                       </p>
                     )}
                     <div className="mt-4 rounded-lg bg-slate-50 surface-dark:bg-subtle border border-border p-4">
-                      <p className="font-medium text-sm text-primary">{featuredStep.title}</p>
+                      <p className="font-medium text-sm text-heading">{featuredStep.title}</p>
                       <p className="text-sm text-muted mt-1">{featuredStep.description}</p>
                     </div>
                     <Button variant="accent" className="mt-6 w-fit">
@@ -209,7 +209,7 @@ export default async function ClientDashboard() {
         {!featured && !isSharedViewer && (
           <Card className="mb-10 border-dashed shadow-sm">
             <CardContent className="py-16 text-center">
-              <p className="text-lg font-medium text-primary">No active projects yet</p>
+              <p className="text-lg font-medium text-heading">No active projects yet</p>
               <p className="text-muted mt-2">Request a shoot to get started with {brand.name}.</p>
               <Link href="/dashboard/request">
                 <Button variant="accent" className="mt-6">Request a Shoot</Button>
@@ -220,7 +220,7 @@ export default async function ClientDashboard() {
 
         {otherActive.length > 0 && (
           <section className="mb-10">
-            <h2 className="text-lg font-semibold text-primary mb-4">All Active Projects</h2>
+            <h2 className="text-lg font-semibold text-heading mb-4">All Active Projects</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {otherActive.map((project) => {
                 const cover = coverMap.get(project.id);
@@ -245,7 +245,7 @@ export default async function ClientDashboard() {
                         </div>
                       </div>
                       <CardContent className="p-4">
-                        <p className="font-medium text-sm text-primary">{project.project_name}</p>
+                        <p className="font-medium text-sm text-heading">{project.project_name}</p>
                         <p className="text-xs text-muted mt-1 line-clamp-1">{project.property_address}</p>
                         {step && (
                           <p className="text-xs text-accent mt-2 line-clamp-2">{step.title}</p>
@@ -261,7 +261,7 @@ export default async function ClientDashboard() {
 
         {activeProjects.length > 1 && otherActive.length === 0 && (
           <section className="mb-10">
-            <h2 className="text-lg font-semibold text-primary mb-4">All Active Projects</h2>
+            <h2 className="text-lg font-semibold text-heading mb-4">All Active Projects</h2>
             <p className="text-sm text-muted">Your featured project above is your only active project.</p>
           </section>
         )}
@@ -270,7 +270,7 @@ export default async function ClientDashboard() {
           <section className="lg:col-span-2 space-y-10">
             {!isSharedViewer && pendingEstimates.length > 0 && (
               <div>
-                <h2 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2">
                   <FileText className="h-5 w-5 text-accent" />
                   Estimates Awaiting Approval
                 </h2>
@@ -282,10 +282,10 @@ export default async function ClientDashboard() {
                         <Card className="border-amber-200/80 shadow-sm hover:shadow-md transition-shadow">
                           <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="min-w-0">
-                              <p className="font-medium text-primary">{project.project_name}</p>
+                              <p className="font-medium text-heading">{project.project_name}</p>
                               <p className="text-sm text-muted mt-0.5">{quote.title}</p>
                               {price.showPrice && (
-                                <p className="text-lg font-bold text-primary mt-1">{formatCurrency(price.priceCents)}</p>
+                                <p className="text-lg font-bold text-heading mt-1">{formatCurrency(price.priceCents)}</p>
                               )}
                             </div>
                             <Button variant="accent" size="sm" className="min-h-11 shrink-0 w-full sm:w-auto">
@@ -302,7 +302,7 @@ export default async function ClientDashboard() {
 
             {!isSharedViewer && (
             <div>
-              <h2 className="text-lg font-semibold text-primary mb-4">Recent Activity</h2>
+              <h2 className="text-lg font-semibold text-heading mb-4">Recent Activity</h2>
               <Card className="shadow-sm border-0 ring-1 ring-black/5">
                 <CardContent className="p-6">
                   <ActivityFeed
@@ -320,7 +320,7 @@ export default async function ClientDashboard() {
           <div className="space-y-8">
             {outstandingInvoices.length > 0 && (
               <section>
-                <h2 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2">
                   <CreditCard className="h-5 w-5 text-orange-600" />
                   Outstanding Payments
                 </h2>
@@ -328,7 +328,7 @@ export default async function ClientDashboard() {
                   {outstandingInvoices.map((payment) => (
                     <Card key={`payment-${payment.id}`} className="border-orange-200/80 shadow-sm">
                       <CardContent className="p-4">
-                        <p className="text-xl font-bold text-primary">{formatCurrency(payment.amount)}</p>
+                        <p className="text-xl font-bold text-heading">{formatCurrency(payment.amount)}</p>
                         <p className="text-sm text-muted mt-1">{payment.description}</p>
                         {(payment.projects as { project_name: string })?.project_name && (
                           <p className="text-xs text-muted mt-1">
@@ -365,7 +365,7 @@ export default async function ClientDashboard() {
 
         {deliveredProjects.length > 0 && (
           <section className="mt-12">
-            <h2 className="text-lg font-semibold text-primary mb-4">Delivered Projects</h2>
+            <h2 className="text-lg font-semibold text-heading mb-4">Delivered Projects</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {deliveredProjects.map((project) => (
                 <Link key={`delivered-${project.id}`} href={`/dashboard/projects/${project.id}`}>
@@ -378,7 +378,7 @@ export default async function ClientDashboard() {
                       )}
                     </div>
                     <CardContent className="p-4">
-                      <p className="font-medium text-sm text-primary">{project.project_name}</p>
+                      <p className="font-medium text-sm text-heading">{project.project_name}</p>
                       <p className="text-xs text-muted mt-1 line-clamp-1">{project.property_address}</p>
                     </CardContent>
                   </Card>

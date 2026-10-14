@@ -46,7 +46,7 @@ export function Modal({ open, onClose, title, children, className, footer }: Mod
         )}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4 safe-area-top bg-white surface-dark:bg-card rounded-t-2xl sm:rounded-t-xl">
-          <h2 id="modal-title" className="text-lg font-semibold text-primary pr-2">
+          <h2 id="modal-title" className="text-lg font-semibold text-heading pr-2">
             {title}
           </h2>
           <Button

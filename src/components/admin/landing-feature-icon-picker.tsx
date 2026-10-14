@@ -152,7 +152,7 @@ export function LandingFeatureIconPicker({
         aria-controls={`${listId}-panel`}
         onClick={() => setOpen((o) => !o)}
         onKeyDown={onTriggerKeyDown}
-        className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border bg-white px-3 py-2 text-left transition hover:border-accent/40"
+        className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border bg-white surface-dark:bg-card px-3 py-2 text-left transition hover:border-accent/40"
       >
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#3B82F6]/10">
           <SelectedIcon className="h-4 w-4 text-[#3B82F6]" aria-hidden />
@@ -176,7 +176,7 @@ export function LandingFeatureIconPicker({
               id={`${listId}-panel`}
               role="dialog"
               aria-label="Choose feature icon"
-              className="fixed z-[120] rounded-xl border border-border bg-white p-3 shadow-2xl"
+              className="fixed z-[120] rounded-xl border border-border bg-white surface-dark:bg-card p-3 shadow-2xl"
               style={{ top: coords.top, left: coords.left, width: coords.width }}
               onKeyDown={onPanelKeyDown}
             >
@@ -215,8 +215,8 @@ export function LandingFeatureIconPicker({
                         "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2.5 text-center transition",
                         selected
                           ? "border-accent bg-accent/10 ring-2 ring-accent/40"
-                          : "border-transparent hover:border-border hover:bg-slate-50",
-                        active && !selected && "border-border bg-slate-50"
+                          : "border-transparent hover:border-border hover:bg-slate-50 surface-dark:hover:bg-subtle",
+                        active && !selected && "border-border bg-slate-50 surface-dark:bg-subtle"
                       )}
                     >
                       <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#3B82F6]/10">

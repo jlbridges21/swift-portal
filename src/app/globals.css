@@ -56,12 +56,24 @@
   background-color: var(--color-background) !important;
 }
 [data-surface="dark"] .surface-dark\:border-border { border-color: var(--color-border) !important; }
+[data-surface="dark"] .surface-dark\:bg-card\/80 { background-color: color-mix(in srgb, var(--color-card) 80%, transparent) !important; }
 [data-surface="dark"] .surface-dark\:bg-card\/90 { background-color: color-mix(in srgb, var(--color-card) 90%, transparent) !important; }
+[data-surface="dark"] .surface-dark\:bg-card\/95 { background-color: color-mix(in srgb, var(--color-card) 95%, transparent) !important; }
+[data-surface="dark"] .surface-dark\:bg-subtle\/40 { background-color: color-mix(in srgb, var(--color-subtle) 40%, transparent) !important; }
 [data-surface="dark"] .surface-dark\:bg-subtle\/50 { background-color: color-mix(in srgb, var(--color-subtle) 50%, transparent) !important; }
 [data-surface="dark"] .surface-dark\:bg-subtle\/60 { background-color: color-mix(in srgb, var(--color-subtle) 60%, transparent) !important; }
 [data-surface="dark"] .surface-dark\:bg-subtle\/80 { background-color: color-mix(in srgb, var(--color-subtle) 80%, transparent) !important; }
 [data-surface="dark"] .surface-dark\:bg-subtle\/95 { background-color: color-mix(in srgb, var(--color-subtle) 95%, transparent) !important; }
+[data-surface="dark"] .surface-dark\:bg-border\/80 { background-color: color-mix(in srgb, var(--color-border) 80%, transparent) !important; }
+[data-surface="dark"] .surface-dark\:hover\:bg-card:hover { background-color: var(--color-card) !important; }
 [data-surface="dark"] .surface-dark\:hover\:bg-subtle:hover { background-color: var(--color-subtle) !important; }
+[data-surface="dark"] .surface-dark\:active\:bg-subtle:active { background-color: var(--color-subtle) !important; }
+@media (min-width: 768px) {
+  [data-surface="dark"] .surface-dark\:md\:bg-card\/95 { background-color: color-mix(in srgb, var(--color-card) 95%, transparent) !important; }
+}
+[data-surface="dark"] .surface-dark\:divide-border > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--color-border) !important;
+}
 [data-surface="dark"] .surface-dark\:hover\:bg-subtle\/80:hover { background-color: color-mix(in srgb, var(--color-subtle) 80%, transparent) !important; }
 @media (min-width: 1024px) {
   [data-surface="dark"] .surface-dark\:lg\:bg-background { background-color: var(--color-background) !important; }

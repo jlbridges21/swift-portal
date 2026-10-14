@@ -42,7 +42,7 @@ export function RemoteImage({ src, alt, fill, className, sizes, priority }: Remo
 
   if (!src || failed) {
     return (
-      <div className={cn("flex items-center justify-center bg-slate-100 text-xs text-muted", className, fill && "absolute inset-0")}>
+      <div className={cn("flex items-center justify-center bg-slate-100 surface-dark:bg-subtle text-xs text-muted", className, fill && "absolute inset-0")}>
         —
       </div>
     );

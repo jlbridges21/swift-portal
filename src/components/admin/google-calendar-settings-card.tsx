@@ -78,7 +78,7 @@ export function GoogleCalendarSettingsCard() {
     <Card className="shadow-sm">
       <CardContent className="space-y-4 pt-6">
         <div>
-          <h3 className="text-base font-semibold text-primary">Google Calendar</h3>
+          <h3 className="text-base font-semibold text-heading">Google Calendar</h3>
           <p className="mt-1 text-sm text-muted">
             Connecting is owner-only. Proposed and confirmed shoots are written to the calendar you
             choose (one hour). Which Google calendars appear is chosen on the Shoot Calendar, saved
@@ -120,7 +120,7 @@ export function GoogleCalendarSettingsCard() {
               <Label htmlFor="gcal-calendar">Write shoots to</Label>
               <select
                 id="gcal-calendar"
-                className="flex h-11 w-full rounded-md border border-border bg-white px-3 text-sm"
+                className="flex h-11 w-full rounded-md border border-border bg-white surface-dark:bg-card px-3 text-sm"
                 value={calendarId}
                 onChange={(e) => setCalendarId(e.target.value)}
               >

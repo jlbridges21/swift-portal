@@ -164,7 +164,7 @@ export function VideoReviewVersionPills({
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
               isActive
                 ? "bg-accent text-white shadow-sm"
-                : "bg-slate-100 text-primary hover:bg-slate-200"
+                : "bg-slate-100 text-heading hover:bg-slate-200"
             )}
             onClick={() => onVersionChange(version.id)}
           >

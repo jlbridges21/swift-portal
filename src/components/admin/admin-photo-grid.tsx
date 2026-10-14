@@ -166,7 +166,7 @@ function PhotoThumb({
   return (
     <div
       ref={ref}
-      className="relative aspect-square w-full bg-slate-100"
+      className="relative aspect-square w-full bg-slate-100 surface-dark:bg-subtle"
       onMouseEnter={() => {
         if (!url) onVisible(assetId);
       }}
@@ -180,7 +180,7 @@ function PhotoThumb({
           draggable={false}
         />
       ) : (
-        <div className="h-full w-full animate-pulse bg-slate-200" />
+        <div className="h-full w-full animate-pulse bg-slate-200 surface-dark:bg-border" />
       )}
       {selected && <div className="absolute inset-0 bg-slate-900/45" />}
     </div>
@@ -374,7 +374,7 @@ function SortablePhotoCard({
       onTouchEnd={onTouchEndTile}
       onTouchCancel={onTouchEndTile}
       className={cn(
-        "group relative overflow-hidden rounded-lg border bg-white transition-shadow select-none",
+        "group relative overflow-hidden rounded-lg border bg-white surface-dark:bg-card transition-shadow select-none",
         !coarsePointer && !placementMode && "cursor-grab active:cursor-grabbing",
         selected
           ? "border-accent ring-2 ring-accent shadow-md"
@@ -1048,7 +1048,7 @@ export function AdminPhotoGrid({
 
   const selectionActions = (
     <>
-      <span className="text-sm font-medium text-primary">
+      <span className="text-sm font-medium text-heading">
         {selectionCount} selected
       </span>
       <div className="flex flex-wrap items-center gap-2">
@@ -1136,7 +1136,7 @@ export function AdminPhotoGrid({
             "rounded-full px-3 py-1.5 text-xs font-medium transition",
             folderFilter === "all"
               ? "bg-accent text-accent-foreground"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              : "bg-slate-100 surface-dark:bg-subtle text-slate-700 surface-dark:text-foreground hover:bg-slate-200 surface-dark:hover:bg-subtle"
           )}
         >
           All photos ({allProjectPhotos.length})
@@ -1148,7 +1148,7 @@ export function AdminPhotoGrid({
             "rounded-full px-3 py-1.5 text-xs font-medium transition",
             folderFilter === "unfiled"
               ? "bg-accent text-accent-foreground"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              : "bg-slate-100 surface-dark:bg-subtle text-slate-700 surface-dark:text-foreground hover:bg-slate-200 surface-dark:hover:bg-subtle"
           )}
         >
           {UNFILED_FOLDER_LABEL} ({folderCounts.get("null") ?? 0})
@@ -1182,7 +1182,7 @@ export function AdminPhotoGrid({
                 "rounded-full px-3 py-1.5 text-xs font-medium transition",
                 folderFilter === folder.id
                   ? "bg-accent text-accent-foreground"
-                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  : "bg-slate-100 surface-dark:bg-subtle text-slate-700 surface-dark:text-foreground hover:bg-slate-200 surface-dark:hover:bg-subtle"
               )}
             >
               {folder.name} ({folderCounts.get(folder.id) ?? 0})
@@ -1257,7 +1257,7 @@ export function AdminPhotoGrid({
 
       {placementMode && (
         <div className="sticky top-2 z-30 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2">
-          <p className="text-sm font-medium text-primary">
+          <p className="text-sm font-medium text-heading">
             Tap where to move {selectionCount} photo{selectionCount === 1 ? "" : "s"}
           </p>
           <Button
@@ -1362,9 +1362,9 @@ export function AdminPhotoGrid({
             <DragOverlay dropAnimation={null}>
               {activeDragIds.length > 0 ? (
                 <div className="relative h-28 w-28 select-none">
-                  <div className="absolute inset-0 rotate-[-4deg] rounded-lg bg-slate-200 shadow" />
-                  <div className="absolute inset-0 rotate-[3deg] rounded-lg bg-slate-100 shadow" />
-                  <div className="absolute inset-0 flex items-center justify-center rounded-lg border-2 border-accent bg-white text-sm font-semibold text-primary shadow-lg">
+                  <div className="absolute inset-0 rotate-[-4deg] rounded-lg bg-slate-200 surface-dark:bg-border shadow" />
+                  <div className="absolute inset-0 rotate-[3deg] rounded-lg bg-slate-100 surface-dark:bg-subtle shadow" />
+                  <div className="absolute inset-0 flex items-center justify-center rounded-lg border-2 border-accent bg-white surface-dark:bg-card text-sm font-semibold text-heading shadow-lg">
                     {activeDragIds.length} photo{activeDragIds.length === 1 ? "" : "s"}
                   </div>
                 </div>

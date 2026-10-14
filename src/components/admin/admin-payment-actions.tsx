@@ -35,7 +35,7 @@ export function AdminPaymentActions({
   return (
     <div className={cn("flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between", className)}>
       <div className="min-w-0">
-        <p className="font-medium text-primary">{payment.description}</p>
+        <p className="font-medium text-heading">{payment.description}</p>
         {showProjectLink && payment.project_id && (
           <p className="text-xs text-muted mt-0.5">
             Project:{" "}

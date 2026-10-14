@@ -10,16 +10,28 @@ import { requireAdminPage } from "@/lib/admin-access";
 import { getCapabilities, partnerNavHref, partnerNavLabel, showPartnerNavItem } from "@/lib/capabilities";
 import { getTenantContext } from "@/lib/tenant";
 import { metadataFromBusiness } from "@/lib/site-metadata";
+import { parseSurfaceMode } from "@/lib/brand-color";
 import { showFinishSetupBanner } from "@/lib/onboarding";
 import { staffCan, staffVisibleNavAreas } from "@/lib/staff-access";
 import { w9CountryDecision } from "@/lib/w9-country";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await getTenantContext();
   if (!tenant) return {};
   const settings = await getAppSettings(tenant.businessId);
   return metadataFromBusiness(settings.business);
+}
+
+export async function generateViewport(): Promise<Viewport> {
+  const tenant = await getTenantContext();
+  if (!tenant) return {};
+  const settings = await getAppSettings(tenant.businessId);
+  const dark = parseSurfaceMode(settings.business.surfaceMode) === "dark";
+  return {
+    themeColor: dark ? "#14181F" : "#F8FAFC",
+    colorScheme: dark ? "dark" : "light",
+  };
 }
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -50,7 +62,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     });
 
   return (
-    <BrandProvider brand={brand} surfaceMode="light">
+    <BrandProvider brand={brand} surfaceMode={parseSurfaceMode(settings.business.surfaceMode)}>
       <AdminCapabilitiesProvider
         showPartner={showPartner}
         partnerActive={caps.partner.active}

@@ -33,7 +33,7 @@ export function Badge({
   className?: string;
 }) {
   const variants = {
-    default: "bg-slate-100 text-slate-700",
+    default: "bg-slate-100 surface-dark:bg-subtle text-slate-700 surface-dark:text-foreground",
     success: "bg-emerald-50 text-emerald-700",
     warning: "bg-amber-50 text-amber-700",
     danger: "bg-red-50 text-red-700",

@@ -165,7 +165,7 @@ export function ClientPhotoFolders({
                     )}
                   </div>
                   <div className="p-3">
-                    <p className="truncate font-medium text-primary">{folder.name}</p>
+                    <p className="truncate font-medium text-heading">{folder.name}</p>
                     <p className="text-xs text-muted">
                       {count} photo{count === 1 ? "" : "s"}
                     </p>
@@ -239,7 +239,7 @@ export function ClientPhotoFolders({
         >
           <ArrowLeft className="h-4 w-4" /> Folders
         </Button>
-        <p className={cn("text-sm font-medium text-primary")}>{title}</p>
+        <p className={cn("text-sm font-medium text-heading")}>{title}</p>
         {view !== "all" && (
           <Button variant="outline" size="sm" className="min-h-10 sm:ml-auto" onClick={() => setView("all")}>
             All photos

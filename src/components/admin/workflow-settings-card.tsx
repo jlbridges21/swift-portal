@@ -36,12 +36,12 @@ function CompactToggle({
       onClick={() => onChange(!checked)}
       className={cn(
         "relative mx-auto flex h-5 w-9 shrink-0 rounded-full transition-colors",
-        checked ? "bg-accent" : "bg-slate-200"
+        checked ? "bg-accent" : "bg-slate-200 surface-dark:bg-border"
       )}
     >
       <span
         className={cn(
-          "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
+          "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white surface-dark:bg-card shadow transition-transform",
           checked && "translate-x-4"
         )}
       />
@@ -63,7 +63,7 @@ function RowToggle({
   hint?: string;
 }) {
   return (
-    <label htmlFor={id} className="flex cursor-pointer items-start justify-between gap-3 rounded-lg px-4 py-3 hover:bg-slate-50">
+    <label htmlFor={id} className="flex cursor-pointer items-start justify-between gap-3 rounded-lg px-4 py-3 hover:bg-slate-50 surface-dark:hover:bg-subtle">
       <span className="min-w-0">
         <span className="text-sm text-foreground">{label}</span>
         {hint && <span className="mt-0.5 block text-xs text-muted">{hint}</span>}
@@ -109,7 +109,7 @@ export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCar
           <RowToggle id="pay-in-full" label="Let the client pay the full total instead of the deposit" checked={workflow.payments.allowClientPayInFull} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, allowClientPayInFull: v } })} />
         </div>
         <fieldset className="mt-4 space-y-3 rounded-xl border border-border p-4">
-          <legend className="px-1 text-sm font-medium text-primary">Deposit collected on approval</legend>
+          <legend className="px-1 text-sm font-medium text-heading">Deposit collected on approval</legend>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="radio"
@@ -252,8 +252,8 @@ export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCar
           <div className="space-y-4">
             {WORKFLOW_STAGE_DEFINITIONS.map((stage) => (
               <div key={stage.key} className="overflow-hidden rounded-xl border border-border">
-                <div className="border-b border-border bg-slate-50/80 px-4 py-3">
-                  <p className="font-medium text-primary">{stage.label}</p>
+                <div className="border-b border-border bg-slate-50/80 surface-dark:bg-subtle/80 px-4 py-3">
+                  <p className="font-medium text-heading">{stage.label}</p>
                   <p className="text-xs text-muted mt-0.5">{stage.description}</p>
                 </div>
                 <div className="hidden overflow-x-auto md:block">
@@ -315,7 +315,7 @@ export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCar
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-primary">Business Defaults</p>
+            <p className="text-sm font-medium text-heading">Business Defaults</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Default turnaround (days)</Label>

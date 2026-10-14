@@ -20,7 +20,7 @@ export function PartnerTabNav({ accentColor = "#4F46E5" }: { accentColor?: strin
           onChange={(e) => {
             window.location.href = e.target.value;
           }}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium text-primary"
+          className="w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium text-heading"
         >
           {PARTNER_NAV_SECTIONS.map((section) => (
             <option key={section.id} value={section.href}>

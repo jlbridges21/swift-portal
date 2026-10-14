@@ -83,7 +83,7 @@ export function TaxInformationSettings({
     <div id="settings-tax" tabIndex={-1} className="min-w-0 scroll-mt-24 space-y-4 [&_input]:min-w-0 [&_select]:min-w-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-primary">Tax information</h2>
+          <h2 className="text-lg font-semibold text-heading">Tax information</h2>
           <p className="mt-1 max-w-2xl text-sm text-muted">
             These are the identity lines on IRS Form W-9. Your SSN or EIN is not saved. You type it each
             time you generate the form, and it is used only to fill the PDF.
@@ -223,7 +223,7 @@ export function TaxInformationSettings({
 
       <Card className="shadow-sm">
         <CardContent className="space-y-3 pt-6">
-          <h3 className="text-sm font-semibold text-primary">W-9 history</h3>
+          <h3 className="text-sm font-semibold text-heading">W-9 history</h3>
           <p className="text-sm text-muted">
             Who was emailed a link, whether they downloaded it, and whether the link has expired. The form
             itself is not kept here.
@@ -240,7 +240,7 @@ export function TaxInformationSettings({
 
       <Card className="shadow-sm">
         <CardContent className="space-y-3 pt-6">
-          <h3 className="text-sm font-semibold text-primary">Signature on the preview</h3>
+          <h3 className="text-sm font-semibold text-heading">Signature on the preview</h3>
           <p className="text-sm text-muted">
             A typed name and today&apos;s date appear on the preview. Generating the form still asks you to confirm
             Part II, and still asks for the taxpayer identification number, which is not shown here.

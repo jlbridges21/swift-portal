@@ -51,14 +51,14 @@ export function StaffNotificationPrefs({ profile }: { profile: Profile }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-slate-600 surface-dark:text-foreground">
           Control how you hear about projects you&apos;re assigned to. Billing and subscription
           alerts stay with the studio owner.
         </p>
-        <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2">
+        <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-200 surface-dark:border-border px-3 py-2">
           <div>
-            <Label className="text-sm font-medium text-slate-900">Email notifications</Label>
-            <p className="text-xs text-slate-500">Project updates sent to {profile.email}</p>
+            <Label className="text-sm font-medium text-slate-900 surface-dark:text-heading">Email notifications</Label>
+            <p className="text-xs text-slate-500 surface-dark:text-muted">Project updates sent to {profile.email}</p>
           </div>
           <input
             type="checkbox"
@@ -67,10 +67,10 @@ export function StaffNotificationPrefs({ profile }: { profile: Profile }) {
             onChange={(e) => setEmailOn(e.target.checked)}
           />
         </label>
-        <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2">
+        <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-200 surface-dark:border-border px-3 py-2">
           <div>
-            <Label className="text-sm font-medium text-slate-900">In-app notifications</Label>
-            <p className="text-xs text-slate-500">Bell alerts while you&apos;re signed in</p>
+            <Label className="text-sm font-medium text-slate-900 surface-dark:text-heading">In-app notifications</Label>
+            <p className="text-xs text-slate-500 surface-dark:text-muted">Bell alerts while you&apos;re signed in</p>
           </div>
           <input
             type="checkbox"

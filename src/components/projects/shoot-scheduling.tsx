@@ -249,7 +249,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
       <CardContent className="space-y-4">
         {focusPending && actionablePending.length > 0 && (
           <div className="rounded-lg border border-accent/30 bg-accent/5 p-4">
-            <p className="font-semibold text-primary">Action needed — shoot time proposed</p>
+            <p className="font-semibold text-heading">Action needed — shoot time proposed</p>
             <p className="text-sm text-muted mt-1">
               Review the proposed time below. Approve, suggest another time, or decline.
             </p>
@@ -306,7 +306,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
 
         {showForm && canProposeNew && (
           <form onSubmit={proposeShoot} className="space-y-3 rounded-lg border border-border p-4">
-            <p className="text-sm font-medium text-primary">
+            <p className="text-sm font-medium text-heading">
               {isAdmin ? "Propose a shoot date and time for the client to review." : "Suggest a date and time that works for your shoot."}
             </p>
             <div className="space-y-2">
@@ -383,7 +383,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
 
             {showCounter === p.id && (
               <div className="mt-3 space-y-3 border-t border-border pt-3">
-                <p className="text-sm font-medium text-primary">Request a different time</p>
+                <p className="text-sm font-medium text-heading">Request a different time</p>
                 <Input type="datetime-local" value={counterAt} onChange={(e) => setCounterAt(e.target.value)} required />
                 <Textarea
                   value={counterMsg}

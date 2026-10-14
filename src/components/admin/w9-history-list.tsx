@@ -41,7 +41,7 @@ export function W9HistoryList({
               data-w9-history-row=""
             >
               <div className="min-w-0">
-                <p className="font-medium text-primary">
+                <p className="font-medium text-heading">
                   {showClient ? `${row.client_name || "Client"} · ` : ""}
                   {row.recipient_email}
                 </p>

@@ -771,7 +771,7 @@ export function VideoReviewView({
     <form onSubmit={handleSubmitComment} className="space-y-1.5">
       <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
         <span>
-          At <strong className="text-primary">{formatReviewTimestamp(composerDisplayTime)}</strong>
+          At <strong className="text-heading">{formatReviewTimestamp(composerDisplayTime)}</strong>
         </span>
         {pendingPoint && (
           <span className="inline-flex items-center gap-1 text-accent">
@@ -842,14 +842,14 @@ export function VideoReviewView({
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <Link
               href={backHref}
-              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted hover:text-primary sm:text-sm"
+              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted hover:text-heading sm:text-sm"
             >
               <ArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">{backLabel}</span>
             </Link>
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-baseline gap-1.5 sm:gap-2">
-                <h1 className="truncate text-sm font-semibold text-primary sm:text-base">{review.title}</h1>
+                <h1 className="truncate text-sm font-semibold text-heading sm:text-base">{review.title}</h1>
                 <span className="hidden shrink-0 text-[11px] text-muted sm:inline">
                   · Video review · {isAdmin ? "Admin" : "Client"}
                 </span>

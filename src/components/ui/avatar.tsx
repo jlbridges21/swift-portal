@@ -26,7 +26,7 @@ export function Avatar({ name, src, size = "md", className }: AvatarProps) {
 
   if (src) {
     return (
-      <div className={cn("relative shrink-0 overflow-hidden rounded-full bg-slate-100", dim, className)}>
+      <div className={cn("relative shrink-0 overflow-hidden rounded-full bg-slate-100 surface-dark:bg-subtle", dim, className)}>
         <Image src={src} alt="" fill className="object-cover" sizes="56px" />
       </div>
     );

@@ -21,7 +21,7 @@ export default async function RequestPage() {
       <div className="flex min-h-screen flex-col bg-background">
         <Header />
         <main className="flex flex-1 flex-col items-center justify-center px-4 py-20 text-center">
-          <h1 className="text-2xl font-bold text-primary">Request a shoot from a business portal</h1>
+          <h1 className="text-2xl font-bold text-heading">Request a shoot from a business portal</h1>
           <p className="mt-3 max-w-md text-muted">
             ShootPortal itself does not take project requests. Open your provider&apos;s portal
             (their custom domain or <code className="text-sm">{`{slug}.shootportal.app`}</code>) to

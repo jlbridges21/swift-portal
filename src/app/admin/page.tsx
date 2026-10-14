@@ -92,9 +92,9 @@ export default async function AdminDashboard() {
                   }
                   return visibleRecent.map((project) => (
                     <Link key={project.id} href={`/admin/projects/${project.id}`} className="block min-w-0">
-                      <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border p-4 transition-colors hover:bg-slate-50 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                      <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border p-4 transition-colors hover:bg-slate-50 surface-dark:hover:bg-subtle sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                         <div className="min-w-0 flex-1 overflow-hidden">
-                          <p className="font-medium text-primary break-words whitespace-normal">{project.project_name}</p>
+                          <p className="font-medium text-heading break-words whitespace-normal">{project.project_name}</p>
                           <p className="mt-0.5 text-xs text-muted break-words whitespace-normal">
                             {(project.clients as { name: string })?.name} · {formatDate(project.created_at)}
                           </p>

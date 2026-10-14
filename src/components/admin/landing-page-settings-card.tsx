@@ -323,7 +323,7 @@ export function LandingPageSettingsCard({
           <Card className="shadow-sm">
             <CardContent className="space-y-4 pt-6">
               <div>
-                <h2 className="text-lg font-semibold text-primary">Client Landing Page</h2>
+                <h2 className="text-lg font-semibold text-heading">Client Landing Page</h2>
                 <p className="mt-1 text-sm text-muted">
                   Customize the public page at your portal URL. Plain text only — layout stays locked.
                 </p>
@@ -364,7 +364,7 @@ export function LandingPageSettingsCard({
       form={
         <div id="settings-landing" tabIndex={-1} className="min-w-0 space-y-4">
           <div>
-            <h2 className="text-lg font-semibold text-primary">Client Landing Page</h2>
+            <h2 className="text-lg font-semibold text-heading">Client Landing Page</h2>
             <p className="mt-1 text-sm text-muted">
               Customize the public page at your portal URL. Plain text only — layout stays locked.
             </p>

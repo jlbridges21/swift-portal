@@ -138,7 +138,7 @@ export function SettingsClient({ profile: initialProfile, client: initialClient 
         userAvatar={profile.avatar_url}
       />
       <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-bold text-primary mb-8">Account Settings</h1>
+        <h1 className="text-2xl font-bold text-heading mb-8">Account Settings</h1>
 
         <Card className="mb-6 shadow-sm">
           <CardHeader>
@@ -205,7 +205,7 @@ export function SettingsClient({ profile: initialProfile, client: initialClient 
           <CardContent className="space-y-5">
             <label className="flex items-start justify-between gap-4 cursor-pointer">
               <div>
-                <p className="text-sm font-medium text-primary">Email notifications</p>
+                <p className="text-sm font-medium text-heading">Email notifications</p>
                 <p className="text-xs text-muted mt-1">
                   Receive project updates by email. Payment-related emails are always sent when
                   required.
@@ -220,7 +220,7 @@ export function SettingsClient({ profile: initialProfile, client: initialClient 
             </label>
             <label className="flex items-start justify-between gap-4 cursor-pointer">
               <div>
-                <p className="text-sm font-medium text-primary">In-app notifications</p>
+                <p className="text-sm font-medium text-heading">In-app notifications</p>
                 <p className="text-xs text-muted mt-1">
                   Show updates in your {brand.portalName} notification bell.
                 </p>

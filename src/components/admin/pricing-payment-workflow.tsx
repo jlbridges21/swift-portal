@@ -47,11 +47,11 @@ function WorkflowStep({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-border bg-white surface-dark:bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Step {step}</p>
-          <p className="mt-1 font-semibold text-primary">{title}</p>
+          <p className="mt-1 font-semibold text-heading">{title}</p>
           <p className="mt-1 text-sm text-muted truncate">{summary}</p>
         </div>
         <StepBadge status={status} />
@@ -82,7 +82,7 @@ export function PricingPaymentWorkflow({
 
   return (
     <Card id="pricing-payment" className="scroll-mt-24 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-      <CardHeader className="border-b border-border/60 bg-white pb-4">
+      <CardHeader className="border-b border-border/60 bg-white surface-dark:bg-card pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-lg font-semibold">
             <Receipt className="h-5 w-5 text-accent" />
@@ -91,7 +91,7 @@ export function PricingPaymentWorkflow({
           <p className="text-sm text-muted">{project.project_name}</p>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 bg-white p-4 sm:p-6">
+      <CardContent className="space-y-3 bg-white surface-dark:bg-card p-4 sm:p-6">
         <WorkflowStep
           step={1}
           title="Preliminary Quote"
@@ -99,7 +99,7 @@ export function PricingPaymentWorkflow({
           summary={preliminary ? preliminary.title : "No estimate yet — create one manually"}
         >
           {preliminary && (
-            <span className="text-sm font-medium text-primary">{quoteSummaryLabel(preliminary)}</span>
+            <span className="text-sm font-medium text-heading">{quoteSummaryLabel(preliminary)}</span>
           )}
           <Button variant="outline" size="sm" className="min-h-10" onClick={onScrollToQuote} asChild>
             <a href="#quote">View / Edit</a>
@@ -117,7 +117,7 @@ export function PricingPaymentWorkflow({
           summary={official ? official.title : "Convert preliminary or create proposal"}
         >
           {official && (
-            <span className="text-sm font-medium text-primary">{quoteSummaryLabel(official)}</span>
+            <span className="text-sm font-medium text-heading">{quoteSummaryLabel(official)}</span>
           )}
           <Button variant="outline" size="sm" className="min-h-10" onClick={onScrollToQuote} asChild>
             <a href="#quote">{official ? "Manage Estimate" : "Create Estimate"}</a>
@@ -160,7 +160,7 @@ export function PricingPaymentWorkflow({
           )}
         </WorkflowStep>
 
-        <div className="rounded-lg bg-slate-50 px-4 py-3 text-xs text-muted">
+        <div className="rounded-lg bg-slate-50 surface-dark:bg-subtle px-4 py-3 text-xs text-muted">
           <FileText className="mr-1 inline h-3.5 w-3.5" />
           Quote → Estimate → Payment — use the sections below to edit details and send to clients.
         </div>

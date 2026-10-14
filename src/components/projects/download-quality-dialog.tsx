@@ -123,7 +123,7 @@ function QualityOption({
         className="mt-1 h-4 w-4 shrink-0 accent-(--accent)"
       />
       <span className="min-w-0">
-        <span className="block text-sm font-medium text-primary">{label}</span>
+        <span className="block text-sm font-medium text-heading">{label}</span>
         <span className="mt-0.5 block text-xs text-muted leading-relaxed">{description}</span>
       </span>
     </label>

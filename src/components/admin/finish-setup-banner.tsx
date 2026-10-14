@@ -13,7 +13,7 @@ export function FinishSetupBanner() {
           steps when you can.
         </p>
         <Link href="/onboarding">
-          <Button type="button" size="sm" variant="outline" className="border-amber-300 bg-white">
+          <Button type="button" size="sm" variant="outline" className="border-amber-300 bg-white surface-dark:bg-card">
             Finish setup
           </Button>
         </Link>

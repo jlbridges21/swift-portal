@@ -308,7 +308,7 @@ export function MediaLibraryClient({
       </div>
 
       {showFilters && (
-        <div className="grid gap-3 rounded-xl border border-border bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 rounded-xl border border-border bg-white surface-dark:bg-card p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
           <Select value={type} onChange={(e) => setType(e.target.value)} options={TYPE_OPTIONS} />
           <Select
             value={service}
@@ -493,7 +493,7 @@ function AssetCard({
     <div
       ref={ref}
       className={cn(
-        "group relative overflow-hidden rounded-xl border bg-white shadow-sm transition hover:shadow-md",
+        "group relative overflow-hidden rounded-xl border bg-white surface-dark:bg-card shadow-sm transition hover:shadow-md",
         selected ? "border-accent ring-2 ring-accent/30" : "border-border"
       )}
     >
@@ -502,7 +502,7 @@ function AssetCard({
         className="block w-full text-left"
         onClick={() => (selectMode ? onSelect() : onOpen())}
       >
-        <div className="relative aspect-[4/3] bg-slate-100">
+        <div className="relative aspect-[4/3] bg-slate-100 surface-dark:bg-subtle">
           {isVideoLibraryAsset(asset) ? (
             <LibraryVideoPoster asset={asset} thumbUrl={thumbUrl} className="absolute inset-0" />
           ) : thumbUrl ? (
@@ -520,7 +520,7 @@ function AssetCard({
           )}
         </div>
         <div className="p-2.5">
-          <p className="truncate text-sm font-medium text-primary">{asset.title}</p>
+          <p className="truncate text-sm font-medium text-heading">{asset.title}</p>
           <p className="truncate text-xs text-muted">{asset.property_address}</p>
           <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-muted">
             <span>{asset.client_name}</span>
@@ -533,7 +533,7 @@ function AssetCard({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onFavorite(); }}
-          className="absolute right-2 top-2 rounded-full bg-white/90 p-1.5 opacity-0 shadow transition group-hover:opacity-100"
+          className="absolute right-2 top-2 rounded-full bg-white/90 surface-dark:bg-card/90 p-1.5 opacity-0 shadow transition group-hover:opacity-100"
         >
           <Star className={cn("h-3.5 w-3.5", asset.is_favorite ? "fill-amber-400 text-amber-400" : "text-muted")} />
         </button>
@@ -675,15 +675,15 @@ function AssetDrawer({
     <>
       <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose} />
       <aside
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col bg-white shadow-2xl safe-area-x"
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col bg-white surface-dark:bg-card shadow-2xl safe-area-x"
         style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="truncate pr-2 font-semibold text-primary">{asset.title}</h2>
+          <h2 className="truncate pr-2 font-semibold text-heading">{asset.title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg hover:bg-slate-100"
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg hover:bg-slate-100 surface-dark:hover:bg-subtle"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
@@ -692,7 +692,7 @@ function AssetDrawer({
         <div
           className={cn("flex-1 overflow-y-auto p-4 space-y-6", isPwaMobile && "admin-pwa-fixed-bottom-pad")}
         >
-          <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-100">
+          <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-100 surface-dark:bg-subtle">
             {asset.kind === "tour" && asset.kuula_url ? (
               <iframe src={asset.kuula_url} className="h-full w-full" title={asset.title} />
             ) : asset.media_source === "youtube" && asset.embed_url ? (
@@ -790,7 +790,7 @@ function AssetDrawer({
               {asset.tags.length > 0 && (
                 <div className="col-span-2 flex flex-wrap gap-1">
                   {asset.tags.map((t) => (
-                    <Badge key={t} className="text-xs bg-slate-100"><Tag className="h-3 w-3" />{t}</Badge>
+                    <Badge key={t} className="text-xs bg-slate-100 surface-dark:bg-subtle"><Tag className="h-3 w-3" />{t}</Badge>
                   ))}
                 </div>
               )}
@@ -799,7 +799,7 @@ function AssetDrawer({
 
           {detail && detail.downloads.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-primary mb-2">Download History</h3>
+              <h3 className="text-sm font-semibold text-heading mb-2">Download History</h3>
               <ul className="space-y-1 text-xs text-muted">
                 {detail.downloads.map((d) => (
                   <li key={d.id}>{d.downloaded_by_email ?? "Unknown"} · {formatDate(d.created_at)}</li>
@@ -810,11 +810,11 @@ function AssetDrawer({
 
           {detail && detail.events.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-primary mb-2">Timeline</h3>
+              <h3 className="text-sm font-semibold text-heading mb-2">Timeline</h3>
               <ul className="space-y-2 text-sm">
                 {detail.events.map((e) => (
                   <li key={e.id} className="border-l-2 border-border pl-3">
-                    <p className="text-primary">{e.description || e.event_type}</p>
+                    <p className="text-foreground">{e.description || e.event_type}</p>
                     <p className="text-xs text-muted">{formatDate(e.created_at)}</p>
                   </li>
                 ))}
@@ -906,7 +906,7 @@ function Meta({ label, value, className }: { label: string; value: string; class
   return (
     <div className={className}>
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className="font-medium text-primary truncate">{value}</dd>
+      <dd className="font-medium text-heading truncate">{value}</dd>
     </div>
   );
 }

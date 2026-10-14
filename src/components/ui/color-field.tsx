@@ -50,7 +50,7 @@ export function ColorField({
           id={`${id}-picker`}
           value={normalized}
           onChange={(e) => onChange(e.target.value.toUpperCase())}
-          className="h-10 w-12 shrink-0 cursor-pointer rounded-lg border border-border bg-white p-1"
+          className="h-10 w-12 shrink-0 cursor-pointer rounded-lg border border-border bg-white surface-dark:bg-card p-1"
           aria-label={`${label} picker`}
         />
         <div

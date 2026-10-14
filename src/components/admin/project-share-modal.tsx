@@ -402,7 +402,7 @@ export function ProjectShareModal({
       <div className="space-y-6 pb-2">
         {/* Add people */}
         <section className="space-y-3">
-          <Label htmlFor="share-emails" className="text-sm font-semibold text-primary">
+          <Label htmlFor="share-emails" className="text-sm font-semibold text-heading">
             Add people
           </Label>
           <Textarea
@@ -524,7 +524,7 @@ export function ProjectShareModal({
         {/* People with access */}
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-primary">People with access</h3>
+            <h3 className="text-sm font-semibold text-heading">People with access</h3>
             {refreshing && <Loader2 className="h-4 w-4 animate-spin text-muted" />}
           </div>
           <ul className="divide-y divide-border rounded-lg border border-border overflow-hidden">
@@ -647,7 +647,7 @@ export function ProjectShareModal({
             Team members with admin access can manage this project. They are not listed here individually.
           </p>
           <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted space-y-1">
-            <p className="font-medium text-primary">What shared viewers can do</p>
+            <p className="font-medium text-heading">What shared viewers can do</p>
             <p>Can: view and download media, leave video comments (after sign-in).</p>
             <p>Cannot: see quotes, estimates, proposals, payments, checkout, or messages.</p>
           </div>
@@ -657,7 +657,7 @@ export function ProjectShareModal({
 
         {/* General access */}
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-heading flex items-center gap-2">
             <Globe className="h-4 w-4" /> General access
           </h3>
           <div className="space-y-2">

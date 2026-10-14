@@ -121,7 +121,7 @@ export function MediaUploadModal({
 
         <div className="space-y-2">
           <Label>Photos &amp; videos</Label>
-          <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-slate-50 px-4 py-6 text-sm text-muted hover:bg-slate-100">
+          <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-slate-50 surface-dark:bg-subtle px-4 py-6 text-sm text-muted hover:bg-slate-100 surface-dark:hover:bg-subtle">
             <Upload className="h-4 w-4" />
             Choose files
             <input
@@ -134,10 +134,10 @@ export function MediaUploadModal({
             />
           </label>
           {pendingFiles.length > 0 && (
-            <ul className="max-h-32 space-y-1 overflow-y-auto rounded-lg border border-border bg-slate-50 p-2 text-xs">
+            <ul className="max-h-32 space-y-1 overflow-y-auto rounded-lg border border-border bg-slate-50 surface-dark:bg-subtle p-2 text-xs">
               {pendingFiles.map((f) => (
                 <li key={`${f.name}-${f.size}`} className="flex justify-between gap-2">
-                  <span className="truncate font-medium text-primary">{f.name}</span>
+                  <span className="truncate font-medium text-heading">{f.name}</span>
                   <span className="shrink-0 text-muted">
                     {formatFileSize(f.size)} · {f.type || "unknown"}
                   </span>

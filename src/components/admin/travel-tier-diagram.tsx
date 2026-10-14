@@ -243,7 +243,7 @@ function Rings({ tiers }: { tiers: TravelTier[] }) {
         <div
           ref={tipRef}
           aria-hidden="true"
-          className="pointer-events-none absolute z-20 w-max max-w-[220px] rounded-md border border-border bg-white px-2.5 py-1.5 text-left shadow-md"
+          className="pointer-events-none absolute z-20 w-max max-w-[220px] rounded-md border border-border bg-white surface-dark:bg-card px-2.5 py-1.5 text-left shadow-md"
           style={{ top: tipPos.top, left: tipPos.left }}
         >
           <p className="text-xs font-semibold text-foreground">{`Tier ${shown + 1}`}</p>

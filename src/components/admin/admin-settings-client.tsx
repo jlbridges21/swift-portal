@@ -108,7 +108,7 @@ function DomainRecordsList({ refreshKey }: { refreshKey: string }) {
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full text-xs">
         <thead>
-          <tr className="bg-slate-50 text-left text-muted">
+          <tr className="bg-slate-50 surface-dark:bg-subtle text-left text-muted">
             <th className="px-2 py-1.5">Type</th>
             <th className="px-2 py-1.5">Name</th>
             <th className="px-2 py-1.5">Value</th>
@@ -150,12 +150,12 @@ function CompactToggle({
       onClick={() => onChange(!checked)}
       className={cn(
         "relative mx-auto flex h-5 w-9 shrink-0 rounded-full transition-colors",
-        checked ? "bg-accent" : "bg-slate-200"
+        checked ? "bg-accent" : "bg-slate-200 surface-dark:bg-border"
       )}
     >
       <span
         className={cn(
-          "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
+          "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white surface-dark:bg-card shadow transition-transform",
           checked && "translate-x-4"
         )}
       />
@@ -175,7 +175,7 @@ function RowToggle({
   label: string;
 }) {
   return (
-    <label htmlFor={id} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-4 py-3 hover:bg-slate-50">
+    <label htmlFor={id} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-4 py-3 hover:bg-slate-50 surface-dark:hover:bg-subtle">
       <span className="text-sm text-foreground">{label}</span>
       <CompactToggle id={id} checked={checked} onChange={onChange} label={label} />
     </label>
@@ -522,7 +522,7 @@ export function AdminSettingsClient({
         {restoreOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl">
-              <h3 className="text-lg font-semibold text-primary">Restore platform defaults?</h3>
+              <h3 className="text-lg font-semibold text-heading">Restore platform defaults?</h3>
               <p className="mt-2 text-sm text-muted">
                 This resets business name, portal name, contact info, logo URL, and brand colors to generic
                 platform defaults and saves immediately.
@@ -562,7 +562,7 @@ export function AdminSettingsClient({
         {restoreOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl">
-              <h3 className="text-lg font-semibold text-primary">Restore platform defaults?</h3>
+              <h3 className="text-lg font-semibold text-heading">Restore platform defaults?</h3>
               <p className="mt-2 text-sm text-muted">
                 This resets business name, portal name, contact info, logo URL, and brand colors to generic
                 platform defaults and saves immediately.
@@ -598,7 +598,7 @@ export function AdminSettingsClient({
           <div id="settings-business" tabIndex={-1} className="scroll-mt-24">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-primary">Business Identity</h2>
+                <h2 className="text-lg font-semibold text-heading">Business Identity</h2>
                 <p className="mt-1 text-sm text-muted">Name, portal title, legal copy, and public links.</p>
               </div>
               <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setRestoreOpen(true)}>
@@ -641,7 +641,7 @@ export function AdminSettingsClient({
         </SettingsPanel>
 
         <SettingsPanel id="branding" active={section}>
-          <h2 className="text-lg font-semibold text-primary">Branding &amp; Colors</h2>
+          <h2 className="text-lg font-semibold text-heading">Branding &amp; Colors</h2>
           <p className="mt-1 mb-4 text-sm text-muted">Logo, favicon, and brand colors used across the portal.</p>
           <Card className="shadow-sm">
             <CardContent className="space-y-6 pt-6">
@@ -697,7 +697,7 @@ export function AdminSettingsClient({
                 <div id="settings-portal-background" tabIndex={-1} className="scroll-mt-24 space-y-2">
                   <Label id="portal-background-label">Portal background</Label>
                   <p className="text-xs text-muted">
-                    This changes what clients see in their portal and on shared project links. Your own admin pages stay light.
+                    This applies to your portal and your clients&apos; portal, including shared project links.
                   </p>
                   <div
                     role="radiogroup"
@@ -821,7 +821,7 @@ export function AdminSettingsClient({
         </SettingsPanel>
 
         <SettingsPanel id="contact" active={section}>
-          <h2 className="text-lg font-semibold text-primary">Contact Information</h2>
+          <h2 className="text-lg font-semibold text-heading">Contact Information</h2>
           <p className="mt-1 mb-4 text-sm text-muted">Email, phone, website, and mailing address.</p>
           <Card className="shadow-sm">
             <CardContent className="grid gap-4 sm:grid-cols-2 pt-6">
@@ -871,14 +871,14 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="email" active={section}>
           <div id="settings-email" tabIndex={-1} className="scroll-mt-24">
-            <h2 className="text-lg font-semibold text-primary">Email</h2>
+            <h2 className="text-lg font-semibold text-heading">Email</h2>
             <p className="mt-1 mb-4 text-sm text-muted">
               How client emails are sent from your portal — sender name, domain, and a quick delivery check.
             </p>
             <Card className="shadow-sm">
               <CardContent className="grid gap-4 sm:grid-cols-2 pt-6">
                 <div className="space-y-2 sm:col-span-2">
-                  <p className="text-sm font-medium text-primary">How mail is sent</p>
+                  <p className="text-sm font-medium text-heading">How mail is sent</p>
                   <div className="flex flex-col gap-2">
                     <label className="flex items-start gap-2 text-sm">
                       <input
@@ -1017,7 +1017,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="custom_domain" active={section}>
           <div id="settings-custom-domain" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-primary">Use your own web address</h2>
+            <h2 className="text-lg font-semibold text-heading">Use your own web address</h2>
             <p className="mt-1 text-sm text-muted">
               Give clients a branded link like{" "}
               <span className="font-medium text-heading">portal.yourstudio.com</span> instead of a
@@ -1029,7 +1029,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="automated_emails" active={section}>
           <div id="settings-automated-emails" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-primary">Automated Emails</h2>
+            <h2 className="text-lg font-semibold text-heading">Automated Emails</h2>
             <p className="mt-1 text-sm text-muted">
               Edit the subject and body for emails your clients receive. Timing and channel toggles stay under
               Workflow Automation and Notifications.
@@ -1045,7 +1045,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="payments" active={section}>
           <div id="settings-payments" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-primary">Payments</h2>
+            <h2 className="text-lg font-semibold text-heading">Payments</h2>
             <p className="mt-1 mb-4 text-sm text-muted">Connect your Stripe account so clients pay you directly.</p>
             {payments}
             <Card className="shadow-sm" id="settings-download-gate">
@@ -1085,7 +1085,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="new_project_setup" active={section}>
           <div id="settings-new-project-setup" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-primary">New project setup</h2>
+            <h2 className="text-lg font-semibold text-heading">New project setup</h2>
             <p className="mt-1 mb-4 text-sm text-muted">
               Defaults applied when a new project is created. Existing projects keep their own settings.
             </p>
@@ -1136,7 +1136,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="services" active={section}>
           <div id="settings-services" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-primary">Services</h2>
+            <h2 className="text-lg font-semibold text-heading">Services</h2>
             <p className="mt-1 mb-4 text-sm text-muted">Catalog and preliminary estimate prices for this business.</p>
             <SettingsCollapsible
               id="settings-instant-preliminary"
@@ -1200,7 +1200,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="workflow" active={section}>
           <div id="settings-workflow" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-primary">Workflow Automation</h2>
+            <h2 className="text-lg font-semibold text-heading">Workflow Automation</h2>
             <p className="mt-1 text-sm text-muted">Stage actions, reminders, and proposal defaults.</p>
             <WorkflowSettingsCard workflow={settings.workflow} onChange={patchWorkflow} />
             <Card className="shadow-sm">
@@ -1268,7 +1268,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="notifications" active={section}>
           <div id="settings-notifications" tabIndex={-1} className="scroll-mt-24">
-            <h2 className="text-lg font-semibold text-primary">Notifications</h2>
+            <h2 className="text-lg font-semibold text-heading">Notifications</h2>
             <p className="mt-1 mb-2 text-sm text-muted">
               Toggle delivery channels per event. Activity still logs when notifications are off.
             </p>
@@ -1298,7 +1298,7 @@ export function AdminSettingsClient({
                           )}
                         >
                           <td className="px-4 py-2.5">
-                            <p className="font-medium text-primary leading-snug">{event.label}</p>
+                            <p className="font-medium text-heading leading-snug">{event.label}</p>
                             <p className="text-[11px] text-muted leading-snug mt-0.5">{event.description}</p>
                           </td>
                           <td className="px-2 py-2.5 text-center">
@@ -1337,7 +1337,7 @@ export function AdminSettingsClient({
                 <div className="divide-y divide-border md:hidden">
                   {notificationEvents.map((event) => (
                     <div key={`mobile-${event.key}`} className="px-4 py-3">
-                      <p className="text-sm font-medium text-primary">{event.label}</p>
+                      <p className="text-sm font-medium text-heading">{event.label}</p>
                       <p className="text-xs text-muted mt-0.5 mb-2">{event.description}</p>
                       <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-medium text-muted">
                         <div>
@@ -1382,7 +1382,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="integrations" active={section}>
           <div id="settings-integrations" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-primary">Integrations</h2>
+            <h2 className="text-lg font-semibold text-heading">Integrations</h2>
             <p className="mt-1 text-sm text-muted">Google Calendar and GoHighLevel.</p>
             <GoogleCalendarSettingsCard />
             <Card className="shadow-sm">
@@ -1421,7 +1421,7 @@ export function AdminSettingsClient({
         {restoreOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl">
-              <h3 className="text-lg font-semibold text-primary">Restore platform defaults?</h3>
+              <h3 className="text-lg font-semibold text-heading">Restore platform defaults?</h3>
               <p className="mt-2 text-sm text-muted">
                 This resets business name, portal name, contact info, logo URL, and brand colors to generic
                 platform defaults and saves immediately.

@@ -115,7 +115,7 @@ export function ProjectPipeline({
     <div className="space-y-4">
       {stage && stageLabel ? (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3">
-          <Badge className="border border-accent/40 bg-white text-primary">
+          <Badge className="border border-accent/40 bg-white surface-dark:bg-card text-heading">
             Showing: {stageLabel}
             {typeof filteredCount === "number" ? ` (${filteredCount})` : ` (${projects.length})`}
           </Badge>
@@ -139,7 +139,7 @@ export function ProjectPipeline({
               <div
                 key={col.value}
                 data-stage={col.value}
-                className={`flex shrink-0 flex-col rounded-xl border bg-slate-50/80 transition-all ${
+                className={`flex shrink-0 flex-col rounded-xl border bg-slate-50/80 surface-dark:bg-subtle/80 transition-all ${
                   isCollapsed ? "w-[4.5rem]" : "w-64"
                 } ${isOver ? "border-accent bg-accent/5" : "border-border"}`}
                 onDragOver={(e) => handleDragOver(e, col.value)}
@@ -151,13 +151,13 @@ export function ProjectPipeline({
                     <button
                       type="button"
                       onClick={() => toggleCollapsed(col.value)}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-white hover:text-primary"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-white surface-dark:hover:bg-card hover:text-heading"
                       aria-label={`Expand ${col.label}`}
                     >
                       <ChevronRight className="h-4 w-4" />
                     </button>
                     <span
-                      className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-muted shadow-sm"
+                      className="rounded-full bg-white surface-dark:bg-card px-2 py-0.5 text-xs font-medium text-muted shadow-sm"
                       title={`${col.label}: ${items.length}`}
                     >
                       {items.length}
@@ -169,15 +169,15 @@ export function ProjectPipeline({
                       <button
                         type="button"
                         onClick={() => toggleCollapsed(col.value)}
-                        className="flex min-h-8 min-w-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-white hover:text-primary"
+                        className="flex min-h-8 min-w-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-white surface-dark:hover:bg-card hover:text-heading"
                         aria-label={`Collapse ${col.label}`}
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </button>
-                      <h3 className="min-w-0 flex-1 text-xs font-semibold text-primary leading-tight truncate">
+                      <h3 className="min-w-0 flex-1 text-xs font-semibold text-heading leading-tight truncate">
                         {col.label}
                       </h3>
-                      <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-muted shadow-sm shrink-0">
+                      <span className="rounded-full bg-white surface-dark:bg-card px-2 py-0.5 text-xs font-medium text-muted shadow-sm shrink-0">
                         {items.length}
                       </span>
                     </div>
@@ -199,7 +199,7 @@ export function ProjectPipeline({
                               <div className="min-w-0 flex-1">
                                 <Link
                                   href={`/admin/projects/${project.id}`}
-                                  className="font-medium text-xs text-primary hover:text-accent line-clamp-2"
+                                  className="font-medium text-xs text-heading hover:text-accent line-clamp-2"
                                 >
                                   {project.project_name}
                                 </Link>

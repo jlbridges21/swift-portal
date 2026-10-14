@@ -77,7 +77,7 @@ export function EmailTemplatesSettingsCard({
     return (
       <div className="space-y-4">
         <div>
-          <h3 className="text-base font-semibold text-primary">{title}</h3>
+          <h3 className="text-base font-semibold text-heading">{title}</h3>
           <p className="mt-1 text-sm text-muted">{description}</p>
         </div>
         {templates.map((tpl) => {
@@ -128,12 +128,12 @@ export function EmailTemplatesSettingsCard({
                     onChange={(e) => patchMessage(tpl.key, { body: e.target.value })}
                   />
                 </div>
-                <div className="rounded-lg border border-border bg-slate-50 px-3 py-2">
-                  <p className="text-xs font-medium text-primary">Merge variables</p>
+                <div className="rounded-lg border border-border bg-slate-50 surface-dark:bg-subtle px-3 py-2">
+                  <p className="text-xs font-medium text-heading">Merge variables</p>
                   <p className="mt-1 text-[11px] leading-relaxed text-muted">{tpl.placeholders}</p>
                 </div>
                 <div className="rounded-lg border border-dashed border-border px-3 py-3">
-                  <p className="text-xs font-medium text-primary">Preview</p>
+                  <p className="text-xs font-medium text-heading">Preview</p>
                   <p className="mt-2 text-sm font-medium text-foreground">{previewSubject}</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-muted">{previewBody}</p>
                 </div>

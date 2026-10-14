@@ -51,7 +51,7 @@ export function RevisionDrawer({ revision, onClose, onUpdate }: RevisionDrawerPr
     <Modal open={!!revision} onClose={onClose} title="Revision Request">
       {revision && (
         <div className="space-y-4">
-          <div className="rounded-lg bg-slate-50 border border-border p-4 text-sm">
+          <div className="rounded-lg bg-slate-50 surface-dark:bg-subtle border border-border p-4 text-sm">
             <p className="text-xs font-medium text-muted uppercase mb-2">Client Request</p>
             <p className="text-foreground whitespace-pre-wrap">{revision.description}</p>
             <p className="text-xs text-muted mt-3">

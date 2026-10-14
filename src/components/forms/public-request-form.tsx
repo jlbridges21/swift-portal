@@ -88,7 +88,7 @@ export function PublicRequestForm({
       <main className="flex-1 px-4 py-12 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl">
           <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-primary">
+            <h1 className="text-3xl font-bold tracking-tight text-heading">
               {inquiryMode ? "Send an Inquiry" : "Request a Shoot"}
             </h1>
             <p className="mt-2 text-muted">
@@ -175,7 +175,7 @@ export function PublicRequestForm({
                 <section className="space-y-4 rounded-lg border border-border bg-slate-50 p-4">
                   <div className="flex items-center gap-2">
                     <Lock className="h-4 w-4 text-accent" />
-                    <h3 className="text-sm font-semibold text-primary">Portal Account</h3>
+                    <h3 className="text-sm font-semibold text-heading">Portal Account</h3>
                   </div>
                   <p className="text-xs text-muted">
                     {inquiryMode

@@ -109,23 +109,23 @@ export function StaffTeamCard() {
   const active = staff.filter((s) => !s.disabled_at);
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+    <section className="rounded-lg border border-slate-200 surface-dark:border-border bg-white surface-dark:bg-card p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Team</h2>
-          <p className="mt-1 text-sm text-slate-600">
+          <h2 className="text-lg font-semibold text-slate-900 surface-dark:text-heading">Team</h2>
+          <p className="mt-1 text-sm text-slate-600 surface-dark:text-foreground">
             Invite teammates. Staff are unlimited; admin seats are limited by plan.
           </p>
         </div>
         {seats && seats.limit != null ? (
-          <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          <div className="rounded-md bg-slate-50 surface-dark:bg-subtle px-3 py-2 text-sm text-slate-700 surface-dark:text-foreground">
             <span className="font-medium">
               {seats.used} of {seats.limit} admin seats
             </span>
             {seats.planName ? (
-              <span className="text-slate-500"> · {seats.planName}</span>
+              <span className="text-slate-500 surface-dark:text-muted"> · {seats.planName}</span>
             ) : null}
-            <span className="block text-xs text-slate-500">Staff: unlimited</span>
+            <span className="block text-xs text-slate-500 surface-dark:text-muted">Staff: unlimited</span>
           </div>
         ) : null}
       </div>
@@ -161,15 +161,15 @@ export function StaffTeamCard() {
         {error ? <p className="text-sm text-red-700">{error}</p> : null}
       </div>
 
-      <ul className="mt-6 divide-y divide-slate-100 border-t border-slate-100">
+      <ul className="mt-6 divide-y divide-slate-100 surface-dark:divide-border border-t border-slate-100 surface-dark:border-border">
         {active.length === 0 ? (
-          <li className="py-4 text-sm text-slate-500">No staff members yet.</li>
+          <li className="py-4 text-sm text-slate-500 surface-dark:text-muted">No staff members yet.</li>
         ) : null}
         {active.map((s) => (
           <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
             <div>
-              <p className="text-sm font-medium text-slate-900">{s.full_name || s.email}</p>
-              <p className="text-xs text-slate-500">{s.email}</p>
+              <p className="text-sm font-medium text-slate-900 surface-dark:text-heading">{s.full_name || s.email}</p>
+              <p className="text-xs text-slate-500 surface-dark:text-muted">{s.email}</p>
             </div>
             <Button
               type="button"

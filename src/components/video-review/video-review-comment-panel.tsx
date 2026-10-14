@@ -111,7 +111,7 @@ export function VideoReviewCommentPanel({
     <div className="flex h-full min-h-[320px] min-w-0 flex-col rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-black/5 lg:min-h-0">
       <div className="shrink-0 space-y-2 border-b border-border/60 p-3">
         <div className="flex min-w-0 items-center justify-between gap-2">
-          <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-primary">
+          <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-heading">
             <MessageSquarePlus className="h-3.5 w-3.5 shrink-0 text-accent" />
             <span className="truncate">Comments · V{versionNumber}</span>
           </h2>
@@ -422,7 +422,7 @@ function CommentThread({
                 <span className="text-[10px] text-muted">{replies.length} replies</span>
               )}
             </span>
-            <p className="text-sm text-primary whitespace-pre-wrap">{comment.body}</p>
+            <p className="text-sm text-foreground whitespace-pre-wrap">{comment.body}</p>
             <p className="mt-1 text-[11px] text-muted">{comment.author_name}</p>
             <StatusAttribution comment={comment} />
           </span>
@@ -465,7 +465,7 @@ function CommentThread({
         >
           {replies.map((reply) => (
             <li key={reply.id} className="rounded-lg bg-white px-3 py-2 ring-1 ring-black/5">
-              <p className="text-sm text-primary whitespace-pre-wrap">{reply.body}</p>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{reply.body}</p>
               <p className="mt-1 text-[11px] text-muted">
                 {reply.author_name} · {formatDate(reply.created_at)}
               </p>

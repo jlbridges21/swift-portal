@@ -40,7 +40,7 @@ export function SetupChecklistCard({
           <div key={item.id} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
             <a
               href={settingsHref(item.hash, linkToSettings)}
-              className="flex items-center gap-2 text-sm text-primary hover:underline"
+              className="flex items-center gap-2 text-sm text-heading hover:underline"
             >
               {item.done ? (
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-600" />
@@ -49,7 +49,7 @@ export function SetupChecklistCard({
               )}
               <span>{item.label}</span>
               {item.optional ? (
-                <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800">
+                <span className="rounded bg-white/80 surface-dark:bg-card/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800">
                   Optional
                 </span>
               ) : null}

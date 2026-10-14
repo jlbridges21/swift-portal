@@ -17,7 +17,7 @@ export function EmptyState({ icon: Icon, title, description, children, className
           <Icon className="h-6 w-6 text-muted" />
         </div>
       )}
-      <h3 className="font-semibold text-primary">{title}</h3>
+      <h3 className="font-semibold text-heading">{title}</h3>
       {description && <p className="mt-2 max-w-sm text-sm text-muted">{description}</p>}
       {children && <div className="mt-4">{children}</div>}
     </div>

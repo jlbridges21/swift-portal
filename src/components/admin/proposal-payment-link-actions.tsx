@@ -149,10 +149,10 @@ export function ProposalPaymentLinkActions({
 
       <Modal open={showModal} onClose={() => !creating && setShowModal(false)} title="Create Payment Link">
         <div className="space-y-4">
-          <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm">
+          <div className="rounded-xl bg-slate-50 surface-dark:bg-subtle px-4 py-3 text-sm">
             <p className="text-xs font-medium uppercase tracking-wide text-muted">Payment title</p>
-            <p className="mt-1 font-medium text-primary break-words">{linkTitle}</p>
-            <p className="mt-3 text-2xl font-bold text-primary">{formatCurrency(chargeCents)}</p>
+            <p className="mt-1 font-medium text-heading break-words">{linkTitle}</p>
+            <p className="mt-3 text-2xl font-bold text-heading">{formatCurrency(chargeCents)}</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="payment-link-description">Description</Label>

@@ -127,7 +127,7 @@ export function getStatusOrder(status: string): number {
 export function getStatusColor(status: string): string {
   const normalized = normalizeStatus(status);
   const colors: Record<string, string> = {
-    new_request: "bg-slate-100 text-slate-700",
+    new_request: "bg-slate-100 surface-dark:bg-subtle text-slate-700 surface-dark:text-foreground",
     quote_sent: "bg-violet-50 text-violet-700",
     proposal_approved: "bg-sky-50 text-sky-700",
     scheduled: "bg-blue-50 text-blue-700",
@@ -136,5 +136,5 @@ export function getStatusColor(status: string): string {
     awaiting_payment: "bg-orange-50 text-orange-700",
     delivered: "bg-teal-50 text-teal-700",
   };
-  return colors[normalized] ?? "bg-slate-100 text-slate-700";
+  return colors[normalized] ?? "bg-slate-100 surface-dark:bg-subtle text-slate-700 surface-dark:text-foreground";
 }

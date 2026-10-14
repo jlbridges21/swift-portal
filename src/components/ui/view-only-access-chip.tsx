@@ -20,7 +20,7 @@ export function ViewOnlyAccessChip({
         "inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium tracking-wide shadow-none",
         tone === "onDark"
           ? "border border-white/25 bg-white/10 text-white/85 backdrop-blur-sm"
-          : "border border-slate-200/90 bg-white/90 text-slate-600",
+          : "border border-slate-200/90 surface-dark:border-border bg-white/90 surface-dark:bg-card/90 text-slate-600 surface-dark:text-foreground",
         className
       )}
     >

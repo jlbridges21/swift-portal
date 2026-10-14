@@ -112,8 +112,8 @@ export function CreateClientModal({ open, onClose, onCreated }: CreateClientModa
             />
           </div>
         </div>
-        <div className="space-y-3 rounded-xl border border-border bg-slate-50/80 p-3">
-          <label className="flex items-center gap-2 text-sm font-medium text-primary">
+        <div className="space-y-3 rounded-xl border border-border bg-slate-50/80 surface-dark:bg-subtle/80 p-3">
+          <label className="flex items-center gap-2 text-sm font-medium text-heading">
             <input
               type="checkbox"
               checked={form.enablePortal}

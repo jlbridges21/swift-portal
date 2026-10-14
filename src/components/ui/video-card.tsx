@@ -54,7 +54,7 @@ export function VideoCard({
       </div>
       <p
         className={cn(
-          "mt-2 line-clamp-2 text-sm font-medium leading-snug text-primary group-hover:text-accent",
+          "mt-2 line-clamp-2 text-sm font-medium leading-snug text-heading group-hover:text-accent",
           titleClassName
         )}
       >

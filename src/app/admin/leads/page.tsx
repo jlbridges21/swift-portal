@@ -24,7 +24,7 @@ export default async function AdminLeadsPage() {
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-primary">Leads</h1>
+            <h1 className="text-2xl font-bold text-heading">Leads</h1>
             <p className="text-muted">{leads?.length ?? 0} total leads</p>
           </div>
         </div>
@@ -36,7 +36,7 @@ export default async function AdminLeadsPage() {
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <h3 className="font-semibold text-primary">{lead.name}</h3>
+                      <h3 className="font-semibold text-heading">{lead.name}</h3>
                       {!lead.is_read && <Badge variant="warning">New</Badge>}
                       <Badge>{lead.service_requested}</Badge>
                     </div>

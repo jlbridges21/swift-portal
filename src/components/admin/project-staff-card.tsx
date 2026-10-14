@@ -100,9 +100,9 @@ export function ProjectStaffCard({ projectId }: { projectId: string }) {
           the business.
         </p>
 
-        <ul className="divide-y divide-slate-100 rounded-lg border border-slate-100">
+        <ul className="divide-y divide-slate-100 surface-dark:divide-border rounded-lg border border-slate-100 surface-dark:border-border">
           {assigned.length === 0 ? (
-            <li className="px-3 py-3 text-sm text-slate-500">No staff assigned.</li>
+            <li className="px-3 py-3 text-sm text-slate-500 surface-dark:text-muted">No staff assigned.</li>
           ) : (
             assigned.map((row) => {
               const label =
@@ -114,9 +114,9 @@ export function ProjectStaffCard({ projectId }: { projectId: string }) {
                   className="flex items-center justify-between gap-2 px-3 py-2"
                 >
                   <div>
-                    <p className="text-sm font-medium text-slate-900">{label}</p>
+                    <p className="text-sm font-medium text-slate-900 surface-dark:text-heading">{label}</p>
                     {email && email !== label ? (
-                      <p className="text-xs text-slate-500">{email}</p>
+                      <p className="text-xs text-slate-500 surface-dark:text-muted">{email}</p>
                     ) : null}
                   </div>
                   <Button
@@ -155,7 +155,7 @@ export function ProjectStaffCard({ projectId }: { projectId: string }) {
             </Button>
           </div>
         ) : (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-500 surface-dark:text-muted">
             {assignable.length === 0
               ? "Invite staff in Settings → Staff & Permissions first."
               : "All active staff are already on this project."}

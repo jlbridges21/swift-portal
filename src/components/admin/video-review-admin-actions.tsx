@@ -131,7 +131,7 @@ export function VideoReviewAdminActions({
           <Link
             href={`/admin/projects/${projectId}/reviews/${review.id}`}
             className={cn(
-              "font-medium text-primary underline-offset-2 hover:underline",
+              "font-medium text-heading underline-offset-2 hover:underline",
               embedded ? "text-[11px]" : "text-xs"
             )}
           >

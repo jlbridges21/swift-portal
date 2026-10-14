@@ -77,7 +77,7 @@ export function W9PdfPreview({
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-slate-100">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-primary">Preview</p>
+          <p className="text-sm font-semibold text-heading">Preview</p>
           <p className="text-xs text-muted">
             The SSN and EIN boxes stay empty. The number is added when you generate the form.
           </p>

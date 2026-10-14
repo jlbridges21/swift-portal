@@ -226,7 +226,7 @@ export function NotificationBell() {
           style={useFixedPanel ? panelStyle : undefined}
         >
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-            <p className="font-semibold text-sm text-primary">Notifications</p>
+            <p className="font-semibold text-sm text-heading">Notifications</p>
             {unreadCount > 0 && (
               <button
                 type="button"

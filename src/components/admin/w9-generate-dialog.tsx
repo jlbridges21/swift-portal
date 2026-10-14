@@ -113,7 +113,7 @@ export function W9GenerateDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="max-h-[90dvh] w-full min-w-0 max-w-lg overflow-y-auto rounded-2xl bg-card p-6 shadow-xl">
-        <h3 className="text-lg font-semibold text-primary">
+        <h3 className="text-lg font-semibold text-heading">
           {lockedClient ? `Send W-9 to ${lockedClient.name}` : "Generate W-9"}
         </h3>
         <p className="mt-2 text-sm text-muted">

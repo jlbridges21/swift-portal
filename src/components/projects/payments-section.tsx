@@ -184,7 +184,7 @@ export function PaymentsSection({
 
   return (
     <section id="payments">
-      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-primary">
+      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-heading">
         <CreditCard className="h-5 w-5" /> Payments
       </h2>
 
@@ -204,7 +204,7 @@ export function PaymentsSection({
                 <Card key={p.id} className="border-orange-200 bg-gradient-to-r from-orange-50/80 to-white shadow-sm surface-dark:from-background surface-dark:to-background">
                   <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-xl font-bold text-primary">{formatCurrency(p.amount)}</p>
+                      <p className="text-xl font-bold text-heading">{formatCurrency(p.amount)}</p>
                       <p className="text-sm text-muted mt-0.5">{p.description}</p>
                       {p.due_date && (
                         <p className="text-xs text-muted mt-1">Due {formatDate(p.due_date)}</p>
@@ -240,7 +240,7 @@ export function PaymentsSection({
                         <Receipt className="h-4 w-4 text-emerald-600" />
                       </div>
                       <div>
-                        <p className="font-medium text-primary">{formatCurrency(p.amount)}</p>
+                        <p className="font-medium text-heading">{formatCurrency(p.amount)}</p>
                         <p className="text-sm text-muted">{p.description}</p>
                         <p className="text-xs text-muted mt-0.5">
                           Paid {p.paid_at ? formatDate(p.paid_at) : "—"}
