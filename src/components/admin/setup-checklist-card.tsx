@@ -28,7 +28,7 @@ export function SetupChecklistCard({
   if (!incomplete || items.length === 0) return null;
 
   return (
-    <Card className="mb-4 border-sky-200 bg-sky-50/70 shadow-sm">
+    <Card className="mb-4 border-sky-200 bg-sky-50/70 shadow-sm surface-dark:border-[#2E4260] surface-dark:bg-[#18222F]">
       <CardHeader className="pb-2">
         <CardTitle className="text-base">Finish setting up your portal</CardTitle>
         <p className="text-sm font-normal text-muted">
@@ -43,20 +43,23 @@ export function SetupChecklistCard({
               className="flex items-center gap-2 text-sm text-heading hover:underline"
             >
               {item.done ? (
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-600" />
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-600 surface-dark:text-teal-400" />
               ) : (
                 <Circle className="h-4 w-4 shrink-0 text-muted" />
               )}
               <span>{item.label}</span>
               {item.optional ? (
-                <span className="rounded bg-white/80 surface-dark:bg-card/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800">
+                <span className="rounded bg-white/80 surface-dark:bg-card/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800 surface-dark:text-sky-200">
                   Optional
                 </span>
               ) : null}
               <span className="text-xs text-muted">{item.done ? "Done" : "Needs attention"}</span>
             </a>
             {!item.done && item.acceptDefaultKey ? (
-              <AcceptSetupDefaultButton acceptKey={item.acceptDefaultKey} className="self-start sm:self-auto" />
+              <AcceptSetupDefaultButton
+                acceptKey={item.acceptDefaultKey}
+                className="self-start sm:self-auto surface-dark:border-sky-600"
+              />
             ) : null}
           </div>
         ))}
