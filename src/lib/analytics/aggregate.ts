@@ -39,7 +39,6 @@ export type BusinessRec = {
   slug: string;
   created_at: string;
   created_via: string;
-  trial_days: number | null;
   trial_ends_at: string | null;
   subscription_status: string | null;
   is_protected: boolean | null;
@@ -137,7 +136,8 @@ export function buildLifecycles(input: Pick<ReportInput, "businesses" | "attribu
       name: b.name,
       slug: b.slug,
       createdAt: b.created_at,
-      trialStartedAt: (b.trial_days ?? 0) > 0 && b.trial_ends_at ? b.created_at : null,
+      // Self-serve trials start at registration; trial_ends_at is only set when the plan granted one.
+      trialStartedAt: b.trial_ends_at ? b.created_at : null,
       trialEndsAt: b.trial_ends_at,
       activatedAt: input.firstProjectAt.get(b.id) ?? null,
       firstPaidAt: firstPaid.get(b.id) ?? null,

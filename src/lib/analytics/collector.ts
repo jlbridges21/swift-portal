@@ -13,7 +13,7 @@ export type CollectOutcome =
 export function isAllowedAnalyticsHost(host: string | null, platformRootDomain: string, allowDev: boolean): boolean {
   if (!host) return false;
   const h = host.split(":")[0]!.toLowerCase();
-  const root = platformRootDomain.toLowerCase();
+  const root = platformRootDomain.toLowerCase().replace(/^www\./, "");
   if (h === root || h === `www.${root}`) return true;
   return allowDev && (h === "localhost" || h === "127.0.0.1");
 }
@@ -63,7 +63,7 @@ export async function handleCollect(
       opts.store
     );
   } catch (err) {
-    console.warn("[analytics] collect failed", err instanceof Error ? err.message : err);
+    console.error("[analytics] collect store_error", err instanceof Error ? err.message : err);
     return { status: 204, reason: "store_error" };
   }
   return { status: 204, reason: "stored" };

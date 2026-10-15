@@ -162,7 +162,6 @@ async function main() {
     slug: id,
     created_at: createdAt,
     created_via: "signup",
-    trial_days: trial ? 14 : 0,
     trial_ends_at: trial ? new Date(Date.parse(createdAt) + 14 * 86_400_000).toISOString() : null,
     subscription_status: "trialing",
     is_protected: false,
@@ -248,6 +247,11 @@ async function main() {
   assert(o.trials === 3, "three trials in cohort");
   assert(o.signupToActivation.numerator === 1 && o.signupToActivation.denominator === 3, "only one of three activated");
 
+  section("Trials come from trial_ends_at (businesses has no trial_days column)");
+  assert(lifecycles.find((l) => l.id === "biz-paid")?.trialStartedAt === "2026-10-02T16:00:00Z", "trial starts at registration when trial_ends_at is set");
+  const noTrial = buildLifecycles({ ...input, businesses: [mkBiz("biz-no-trial", "2026-10-03T16:00:00Z", false)] });
+  assert(noTrial[0]?.trialStartedAt === null, "no trial when trial_ends_at is null");
+
   section("8. First project counted once");
   assert(input.firstProjectAt.get("biz-paid") === "2026-10-03T10:00:00Z", "earliest project kept");
   assert(o.activated === 1, "activation counted once despite three projects");
@@ -318,7 +322,10 @@ async function main() {
   assert(!isAllowedAnalyticsHost("acme.shootportal.app", ROOT, false), "tenant subdomain rejected by collector");
   assert(!isAllowedAnalyticsHost("portal.acmemedia.com", ROOT, false), "tenant custom domain rejected");
   assert(!isAllowedAnalyticsHost("localhost:3000", ROOT, false), "localhost rejected unless dev flag");
-  assert(isAllowedAnalyticsHost("www.shootportal.app", ROOT, false), "platform host accepted");
+  assert(isAllowedAnalyticsHost("www.shootportal.app", ROOT, false), "www host accepted");
+  assert(isAllowedAnalyticsHost("shootportal.app", ROOT, false), "apex host accepted");
+  assert(isAllowedAnalyticsHost("shootportal.app", "www.shootportal.app", false), "apex accepted even if root env includes www");
+  assert(isAllowedAnalyticsHost("WWW.ShootPortal.app:443", ROOT, false), "host check ignores case and port");
   const tenantRes = await collect(new MemoryStore(), { type: "pageview", path: "/", mode: "cookieless" }, { at: at(0), headers: headers({ host: "acme.shootportal.app" }) });
   assert(tenantRes.status === 204 && tenantRes.reason === "ignored_host", "tenant-host event ignored");
 

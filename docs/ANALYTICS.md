@@ -62,7 +62,7 @@ Lifecycle stages come from existing tables (no duplication):
 | Stage | Source of truth |
 | --- | --- |
 | Account created | `businesses.created_at` where `created_via = 'signup'` |
-| Trial started | Same row when `trial_days > 0` and `trial_ends_at` is set (trials start at creation in `createBusinessForPlatform`) |
+| Trial started | Same row when `trial_ends_at` is set (trials start at creation in `createBusinessForPlatform`; length comes from `plans.trial_days`) |
 | Activated | Earliest `projects.created_at` for the business (counted once) |
 | Paid subscriber | Earliest `platform_subscription_payments.paid_at` with `amount_paid_cents > 0` |
 | Revenue | Sum of `platform_subscription_payments.amount_paid_cents` (ShootPortal subscription invoices only; never tenant client payments) |

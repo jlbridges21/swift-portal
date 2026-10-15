@@ -13,6 +13,7 @@ import {
   AnalyticsPreferencesLink,
   MarketingAnalytics,
 } from "@/components/analytics/marketing-analytics";
+import { MarketingScrollReset } from "@/components/marketing/marketing-scroll-reset";
 
 const NAV = [
   { href: "/#product-demo", label: "Product" },
@@ -202,6 +203,7 @@ export function MarketingShell({
         </p>
       ) : null}
       <MarketingFooter />
+      <MarketingScrollReset />
       <MarketingAnalytics />
       <AnalyticsConsentBanner />
     </div>

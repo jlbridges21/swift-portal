@@ -12,12 +12,18 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   const length = Number(request.headers.get("content-length") ?? "0");
-  if (length > MAX_COLLECT_BODY_BYTES) return new NextResponse(null, { status: 413 });
+  if (length > MAX_COLLECT_BODY_BYTES) {
+    return new NextResponse(null, { status: 413, headers: { "X-SP-Analytics": "too_large" } });
+  }
   const body = await request.text();
   const outcome = await handleCollect(body, request.headers, {
     platformRootDomain: getPlatformRootDomain(),
     allowDev: process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ANALYTICS_DEV === "1",
     store: createSupabaseAnalyticsStore(),
   });
-  return new NextResponse(null, { status: outcome.status, headers: { "Cache-Control": "no-store" } });
+  // Outcome label (never data or error details) so ignored vs. stored is visible in DevTools.
+  return new NextResponse(null, {
+    status: outcome.status,
+    headers: { "Cache-Control": "no-store", "X-SP-Analytics": outcome.reason },
+  });
 }

@@ -12,6 +12,7 @@ const TABS = [
   { href: "/platform/analytics/accounts", label: "Accounts" },
   { href: "/platform/analytics/seo", label: "SEO" },
   { href: "/platform/analytics/definitions", label: "Definitions" },
+  { href: "/platform/analytics/diagnostics", label: "Diagnostics" },
 ];
 
 const PRESETS = [

@@ -82,8 +82,8 @@ export const METRICS: MetricDefinition[] = [
   {
     key: "trials",
     name: "New trials",
-    definition: "Registered businesses that started a free trial (trial_days > 0 and trial_ends_at set).",
-    source: "businesses.trial_days, trial_ends_at",
+    definition: "Registered self-serve businesses that started a free trial (trial_ends_at set at signup).",
+    source: "businesses.trial_ends_at (trial length comes from plans.trial_days at signup)",
     dedupe: "One per business.",
     dateBehavior: "Trials start at registration in createBusinessForPlatform, so the registration date is used.",
     limitations: "If the plan had 0 trial days the business registers without a trial; it counts as a registration only.",

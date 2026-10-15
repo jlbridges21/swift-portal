@@ -48,6 +48,11 @@ export function excludedBusinessIds(): Set<string> {
   );
 }
 
+/** Presence only (never the value) for the diagnostics page. */
+export function serviceRoleConfigured(): boolean {
+  return !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+}
+
 export function includeTestModePayments(): boolean {
   return process.env.ANALYTICS_INCLUDE_TEST_MODE === "1";
 }
@@ -82,59 +87,82 @@ async function loadTraffic(db: Db, range: { from: Date; to: Date }) {
   return { sessions: sessions.rows, events: events.rows, truncated: sessions.truncated || events.truncated };
 }
 
-async function loadAccounts(db: Db, tablesReady: boolean) {
-  const none = { rows: [], truncated: false };
+type Paged<T> = { rows: T[]; truncated: boolean };
+
+/** Run one loader; on failure record a labelled warning and return an empty set. */
+async function safeLoad<T>(label: string, warnings: string[], run: () => Promise<Paged<T>>): Promise<Paged<T>> {
+  try {
+    return await run();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[analytics] ${label} failed`, message);
+    warnings.push(`${label}: ${message}`);
+    return { rows: [], truncated: false };
+  }
+}
+
+async function loadAccounts(db: Db, tablesReady: boolean, warnings: string[]) {
   const [businesses, attribution, projects, payments, lifecycle] = await Promise.all([
-    paged<BusinessRec>(
-      (a, b) =>
-        db
-          .from("businesses")
-          .select("id, name, slug, created_at, created_via, trial_days, trial_ends_at, subscription_status, is_protected, deleted_at")
-          .eq("created_via", "signup")
-          .order("created_at", { ascending: true })
-          .range(a, b),
-      50_000
+    // Trials start at signup (createBusinessForPlatform); the plan's trial length lives on
+    // plans.trial_days, so a self-serve business is "on a trial" when trial_ends_at is set.
+    safeLoad<BusinessRec>("Businesses", warnings, () =>
+      paged<BusinessRec>(
+        (a, b) =>
+          db
+            .from("businesses")
+            .select("id, name, slug, created_at, created_via, trial_ends_at, subscription_status, is_protected, deleted_at")
+            .eq("created_via", "signup")
+            .order("created_at", { ascending: true })
+            .range(a, b),
+        50_000
+      )
     ),
-    !tablesReady
-      ? Promise.resolve(none as { rows: AttributionRec[]; truncated: boolean })
-      : paged<AttributionRec>(
-      (a, b) =>
-        db
-          .from("business_attribution")
-          .select("business_id, status, unknown_reason, visitor_key, ft_channel, ft_referrer_host, ft_utm_source, ft_utm_campaign, ft_landing_path, ft_at, lt_channel, lt_referrer_host, lt_utm_source, lt_utm_campaign, lt_landing_path, lt_at, first_article_slug, last_article_slug, articles_viewed, signup_cta_id, signup_cta_location, signup_cta_path, sessions_before_signup, signup_at")
-          .order("signup_at", { ascending: true })
-          .range(a, b),
-      50_000
+    tablesReady
+      ? safeLoad<AttributionRec>("Attribution", warnings, () =>
+          paged<AttributionRec>(
+            (a, b) =>
+              db
+                .from("business_attribution")
+                .select("business_id, status, unknown_reason, visitor_key, ft_channel, ft_referrer_host, ft_utm_source, ft_utm_campaign, ft_landing_path, ft_at, lt_channel, lt_referrer_host, lt_utm_source, lt_utm_campaign, lt_landing_path, lt_at, first_article_slug, last_article_slug, articles_viewed, signup_cta_id, signup_cta_location, signup_cta_path, sessions_before_signup, signup_at")
+                .order("signup_at", { ascending: true })
+                .range(a, b),
+            50_000
+          )
+        )
+      : Promise.resolve({ rows: [] as AttributionRec[], truncated: false }),
+    safeLoad<{ business_id: string; created_at: string }>("Projects", warnings, () =>
+      paged<{ business_id: string; created_at: string }>(
+        (a, b) => db.from("projects").select("business_id, created_at").order("created_at", { ascending: true }).range(a, b),
+        500_000
+      )
     ),
-    // Earliest project per business: ascending scan keeps only the first row per business.
-    paged<{ business_id: string; created_at: string }>(
-      (a, b) => db.from("projects").select("business_id, created_at").order("created_at", { ascending: true }).range(a, b),
-      500_000
+    safeLoad<PaymentRec & { stripe_mode: string }>("Subscription payments", warnings, () =>
+      paged<PaymentRec & { stripe_mode: string }>(
+        (a, b) => {
+          let q = db.from("platform_subscription_payments").select("business_id, amount_paid_cents, paid_at, stripe_mode");
+          if (!includeTestModePayments()) q = q.eq("stripe_mode", "live");
+          return q.order("paid_at", { ascending: true }).range(a, b);
+        },
+        200_000
+      )
     ),
-    paged<PaymentRec & { stripe_mode: string }>(
-      (a, b) => {
-        let q = db.from("platform_subscription_payments").select("business_id, amount_paid_cents, paid_at, stripe_mode");
-        if (!includeTestModePayments()) q = q.eq("stripe_mode", "live");
-        return q.order("paid_at", { ascending: true }).range(a, b);
-      },
-      200_000
-    ),
-    !tablesReady
-      ? Promise.resolve(none as { rows: (LifecycleRec & { stripe_mode: string | null })[]; truncated: boolean })
-      : paged<LifecycleRec & { stripe_mode: string | null }>(
-      (a, b) => {
-        let q = db.from("business_lifecycle_events").select("business_id, event_type, occurred_at, stripe_mode");
-        if (!includeTestModePayments()) q = q.eq("stripe_mode", "live");
-        return q.order("occurred_at", { ascending: true }).range(a, b);
-      },
-      200_000
-    ),
+    tablesReady
+      ? safeLoad<LifecycleRec & { stripe_mode: string | null }>("Billing history", warnings, () =>
+          paged<LifecycleRec & { stripe_mode: string | null }>(
+            (a, b) => {
+              let q = db.from("business_lifecycle_events").select("business_id, event_type, occurred_at, stripe_mode");
+              if (!includeTestModePayments()) q = q.eq("stripe_mode", "live");
+              return q.order("occurred_at", { ascending: true }).range(a, b);
+            },
+            200_000
+          )
+        )
+      : Promise.resolve({ rows: [] as (LifecycleRec & { stripe_mode: string | null })[], truncated: false }),
   ]);
-  const firstProjectAt = earliestByBusiness(projects.rows);
   return {
     businesses: businesses.rows,
     attribution: attribution.rows,
-    firstProjectAt,
+    firstProjectAt: earliestByBusiness(projects.rows),
     payments: payments.rows,
     lifecycle: lifecycle.rows,
   };
@@ -157,40 +185,32 @@ export async function loadReport(range: ReportRange, prev: ReportRange | null, n
   const db = await createServiceClient();
   const probe = await db.from("analytics_sessions").select("id", { head: true, count: "exact" }).limit(1);
   const tablesReady = !probe.error;
-  const excluded = excludedBusinessIds();
-  const articles = articleList();
-
-  const empty = { sessions: [] as SessionRec[], events: [] as EventRec[], truncated: false };
-  try {
-    const [traffic, prevTraffic, accounts] = await Promise.all([
-      tablesReady ? loadTraffic(db, range) : Promise.resolve(empty),
-      tablesReady && prev ? loadTraffic(db, prev) : Promise.resolve(empty),
-      loadAccounts(db, tablesReady),
-    ]);
-    const base = { now, articles, excludedBusinessIds: excluded, ...accounts };
-    return {
-      current: { ...base, range, sessions: traffic.sessions, events: traffic.events },
-      previous: prev ? { ...base, range: prev, sessions: prevTraffic.sessions, events: prevTraffic.events } : null,
-      truncated: traffic.truncated || prevTraffic.truncated,
-      tablesReady,
-      loadError: null,
-    };
-  } catch (err) {
-    const base: ReportInput = {
-      now,
-      range,
-      articles,
-      excludedBusinessIds: excluded,
-      sessions: [],
-      events: [],
-      businesses: [],
-      attribution: [],
-      firstProjectAt: new Map(),
-      payments: [],
-      lifecycle: [],
-    };
-    return { current: base, previous: null, truncated: false, tablesReady, loadError: err instanceof Error ? err.message : String(err) };
-  }
+  const warnings: string[] = [];
+  const emptyTraffic = { sessions: [] as SessionRec[], events: [] as EventRec[], truncated: false };
+  const traffic = async (label: string, r: { from: Date; to: Date }) => {
+    if (!tablesReady) return emptyTraffic;
+    try {
+      return await loadTraffic(db, r);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[analytics] ${label} failed`, message);
+      warnings.push(`${label}: ${message}`);
+      return emptyTraffic;
+    }
+  };
+  const [current, previous, accounts] = await Promise.all([
+    traffic("Website traffic", range),
+    prev ? traffic("Previous-period traffic", prev) : Promise.resolve(emptyTraffic),
+    loadAccounts(db, tablesReady, warnings),
+  ]);
+  const base = { now, articles: articleList(), excludedBusinessIds: excludedBusinessIds(), ...accounts };
+  return {
+    current: { ...base, range, sessions: current.sessions, events: current.events },
+    previous: prev ? { ...base, range: prev, sessions: previous.sessions, events: previous.events } : null,
+    truncated: current.truncated || previous.truncated,
+    tablesReady,
+    loadError: warnings.length ? warnings.join(" · ") : null,
+  };
 }
 
 /** Single business attribution + lifecycle for /platform/businesses/[id]. */
@@ -214,4 +234,67 @@ export async function loadBusinessAttribution(businessId: string) {
     firstProjectAt: (firstProject.data?.created_at as string | undefined) ?? null,
     firstPaidAt: (firstPaid.data?.paid_at as string | undefined) ?? null,
   };
+}
+
+export type AnalyticsDiagnostics = {
+  tables: { name: string; ok: boolean; rows: number | null; error: string | null }[];
+  latestEventAt: string | null;
+  latestSessionAt: string | null;
+  last24h: { pageviews: number; ctaClicks: number; signupStarts: number; sessions: number; persistentSessions: number; cookielessSessions: number } | null;
+  saltToday: boolean | null;
+  latestAttributionAt: string | null;
+  error: string | null;
+};
+
+/** Aggregate-only health checks for /platform/analytics/diagnostics (no visitor rows returned). */
+export async function loadAnalyticsDiagnostics(now = new Date()): Promise<AnalyticsDiagnostics> {
+  const db = await createServiceClient();
+  const names = ["analytics_sessions", "analytics_events", "analytics_daily_salts", "business_attribution", "business_lifecycle_events"];
+  const tables = await Promise.all(
+    names.map(async (name) => {
+      const r = await db.from(name).select("*", { head: true, count: "exact" });
+      return { name, ok: !r.error, rows: r.error ? null : r.count ?? 0, error: r.error?.message ?? null };
+    })
+  );
+  if (!tables[0]!.ok || !tables[1]!.ok) {
+    return { tables, latestEventAt: null, latestSessionAt: null, last24h: null, saltToday: null, latestAttributionAt: null, error: null };
+  }
+  try {
+    const since = new Date(now.getTime() - 86_400_000).toISOString();
+    const count = async (q: PromiseLike<{ count: number | null; error: { message: string } | null }>) => {
+      const r = await q;
+      if (r.error) throw new Error(r.error.message);
+      return r.count ?? 0;
+    };
+    const ev = (type: string) => db.from("analytics_events").select("id", { head: true, count: "exact" }).eq("event_type", type).gte("occurred_at", since);
+    const ss = (mode?: string) => {
+      let q = db.from("analytics_sessions").select("id", { head: true, count: "exact" }).gte("started_at", since);
+      if (mode) q = q.eq("consent_mode", mode);
+      return q;
+    };
+    const [latestEvent, latestSession, latestAttr, salt, pageviews, ctaClicks, signupStarts, sessions, persistentSessions, cookielessSessions] =
+      await Promise.all([
+        db.from("analytics_events").select("occurred_at").order("occurred_at", { ascending: false }).limit(1).maybeSingle(),
+        db.from("analytics_sessions").select("started_at").order("started_at", { ascending: false }).limit(1).maybeSingle(),
+        db.from("business_attribution").select("recorded_at").order("recorded_at", { ascending: false }).limit(1).maybeSingle(),
+        db.from("analytics_daily_salts").select("day").eq("day", now.toISOString().slice(0, 10)).maybeSingle(),
+        count(ev("pageview")),
+        count(ev("cta_click")),
+        count(ev("signup_start")),
+        count(ss()),
+        count(ss("persistent")),
+        count(ss("cookieless")),
+      ]);
+    return {
+      tables,
+      latestEventAt: (latestEvent.data?.occurred_at as string | undefined) ?? null,
+      latestSessionAt: (latestSession.data?.started_at as string | undefined) ?? null,
+      latestAttributionAt: (latestAttr.data?.recorded_at as string | undefined) ?? null,
+      saltToday: !!salt.data,
+      last24h: { pageviews, ctaClicks, signupStarts, sessions, persistentSessions, cookielessSessions },
+      error: null,
+    };
+  } catch (err) {
+    return { tables, latestEventAt: null, latestSessionAt: null, last24h: null, saltToday: null, latestAttributionAt: null, error: err instanceof Error ? err.message : String(err) };
+  }
 }
