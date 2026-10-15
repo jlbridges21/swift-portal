@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Clock } from "lucide-react";
 import { BlogCoverArt } from "@/components/blog/cover-art";
-import type { BlogCoverVariant } from "@/lib/blog/types";
+import type { BlogCoverTint, BlogCoverVariant } from "@/lib/blog/types";
 import { cn } from "@/lib/utils";
 
 /** Serializable card data (safe to pass to the client-side index browser). */
@@ -14,7 +14,7 @@ export type BlogCardData = {
   readingMinutes: number;
   publishedAt: string;
   publishedLabel: string;
-  cover: { variant: BlogCoverVariant; label: string };
+  cover: { variant: BlogCoverVariant; label: string; tint?: BlogCoverTint };
 };
 
 export function BlogCard({ post, className, headingLevel = "h3" }: { post: BlogCardData; className?: string; headingLevel?: "h2" | "h3" }) {
@@ -29,6 +29,7 @@ export function BlogCard({ post, className, headingLevel = "h3" }: { post: BlogC
       <div className="relative aspect-[16/9] overflow-hidden">
         <BlogCoverArt
           variant={post.cover.variant}
+          tint={post.cover.tint}
           idPrefix={`card-${post.slug}`}
           className="transition duration-500 group-hover:scale-[1.03]"
         />
@@ -64,6 +65,7 @@ export function FeaturedArticleCard({ post }: { post: BlogCardData }) {
       <div className="relative aspect-[16/9] overflow-hidden lg:aspect-auto lg:min-h-[22rem]">
         <BlogCoverArt
           variant={post.cover.variant}
+          tint={post.cover.tint}
           idPrefix={`featured-${post.slug}`}
           label={post.cover.label}
           anchor="left"

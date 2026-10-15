@@ -82,7 +82,7 @@ export function ArticleLayout({
         </div>
         <div className="relative mx-auto max-w-5xl px-4 pb-12 sm:px-6 lg:px-8">
           <div className="overflow-hidden rounded-[1.75rem] border border-[#E2E8F0] shadow-[0_40px_80px_-50px_rgba(15,23,42,0.6)]">
-            <BlogCoverArt variant={article.cover.variant} idPrefix={`hero-${article.slug}`} label={article.cover.label} title={article.cover.alt} />
+            <BlogCoverArt variant={article.cover.variant} tint={article.cover.tint} idPrefix={`hero-${article.slug}`} label={article.cover.label} title={article.cover.alt} />
           </div>
         </div>
       </header>

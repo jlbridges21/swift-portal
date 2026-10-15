@@ -134,6 +134,10 @@ export const article: BlogArticle = {
             want their own branding on property sites. Know which combinations your market expects before you pick a
             platform.
           </p>
+          <p>
+            Want the step-by-step process rather than a software comparison? Read{" "}
+            <BlogLink slug="how-to-deliver-real-estate-photos">how to deliver real estate photos to realtors</BlogLink>.
+          </p>
         </>
       ),
     },
@@ -522,6 +526,10 @@ export const article: BlogArticle = {
               those jobs manually.
             </p>
           </Callout>
+          <p>
+            For policy wording, deposits, and agents who expect to pay at closing, see{" "}
+            <BlogLink slug="get-paid-before-delivering-real-estate-photos">how to get paid before delivering real estate photos</BlogLink>.
+          </p>
         </>
       ),
     },

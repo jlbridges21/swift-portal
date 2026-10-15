@@ -237,6 +237,11 @@ export const article: BlogArticle = {
             a full white-label product, so if removing every trace of the vendor is a requirement, look at SuiteDash
             or Moxie.
           </p>
+          <p>
+            Ready to set one up? Our{" "}
+            <BlogLink slug="how-to-create-photography-client-portal">step-by-step guide to creating a photography client portal</BlogLink>{" "}
+            covers branding, sections, and launch.
+          </p>
         </>
       ),
     },

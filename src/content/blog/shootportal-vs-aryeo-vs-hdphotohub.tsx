@@ -236,6 +236,10 @@ export const article: BlogArticle = {
               </>
             }
           />
+          <p>
+            Pricing your own services rather than the software? See the{" "}
+            <BlogLink slug="real-estate-photography-pricing-guide">real estate photography pricing guide</BlogLink>.
+          </p>
         </>
       ),
     },

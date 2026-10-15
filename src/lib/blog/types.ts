@@ -34,6 +34,11 @@ export const BLOG_CATEGORIES = [
     description: "Galleries, video handoff, downloads, and revisions done professionally.",
   },
   {
+    slug: "pricing-payments",
+    label: "Pricing & Payments",
+    description: "What to charge, how to quote, and how to get paid on time.",
+  },
+  {
     slug: "business-automation",
     label: "Business Automation",
     description: "Booking, scheduling, reminders, and the admin work you can stop doing by hand.",
@@ -64,7 +69,19 @@ export type BlogCoverVariant =
   | "media"
   | "calendar"
   | "versus"
-  | "layers";
+  | "layers"
+  | "automation"
+  | "bigfile"
+  | "folders"
+  | "invoice"
+  | "timeline"
+  | "review"
+  | "pricetag"
+  | "checklist"
+  | "roadmap"
+  | "funnel";
+
+export type BlogCoverTint = "indigo" | "teal" | "amber" | "emerald" | "rose";
 
 export type BlogCtaConfig = {
   /** Headline of the end-of-article CTA band. */
@@ -116,7 +133,7 @@ export type BlogArticle = {
   primaryKeyword: string;
   secondaryKeywords: readonly string[];
   readingMinutes: number;
-  cover: { variant: BlogCoverVariant; alt: string; label: string };
+  cover: { variant: BlogCoverVariant; alt: string; label: string; tint?: BlogCoverTint };
   /** Shown on the index as the hero article. Only one article should set this. */
   featured?: boolean;
   /** Disclosure shown at the top of comparison articles. */

@@ -134,6 +134,10 @@ export const article: BlogArticle = {
               in an email thread, and a client who can&apos;t find last month&apos;s link when they need the files again.
             </p>
           </Callout>
+          <p>
+            For a deeper head-to-head on cloud storage, see{" "}
+            <BlogLink slug="google-drive-vs-dropbox-photo-delivery">Google Drive vs. Dropbox vs. dedicated delivery software</BlogLink>.
+          </p>
         </>
       ),
     },
@@ -286,6 +290,10 @@ export const article: BlogArticle = {
             Dropbox Replay belongs in this group too: it supports uploads up to 150 GB, media up to 12 hours, real-time
             comments and markup, and approvals, as an add-on to a Dropbox plan.
           </p>
+          <p>
+            For a fuller comparison of review tools, see our{" "}
+            <BlogLink slug="best-video-review-approval-software">video review and approval software guide</BlogLink>.
+          </p>
         </>
       ),
     },
@@ -335,6 +343,10 @@ export const article: BlogArticle = {
             strongest here. File transfer tools reserve branding for upper tiers (Dropbox Standard and up, WeTransfer
             Ultimate). Video review tools tend to gate it behind paid or per-member plans. Decide whether a custom domain
             matters to you, because it&apos;s the line that most often pushes you into a pricier tier.
+          </p>
+          <p>
+            We cover bitrate math, email limits, and transfer options in{" "}
+            <BlogLink slug="how-to-send-large-video-files-to-clients">how to send large video files to clients</BlogLink>.
           </p>
         </>
       ),

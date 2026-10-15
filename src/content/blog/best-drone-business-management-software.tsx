@@ -568,6 +568,10 @@ export const article: BlogArticle = {
             pay-per-delivery tool like HDPhotoHub fits if you mostly shoot listings, while an inexpensive CRM such as
             Studio Ninja Starter fits light photo work. The trade-off: as soon as you sell video with revisions or
             custom quotes, you&apos;ll feel the gaps.
+            If you&apos;re just getting set up, our{" "}
+            <BlogLink slug="how-to-start-drone-photography-business">guide to starting a drone photography business</BlogLink>{" "}
+            covers certification and insurance, and the{" "}
+            <BlogLink slug="drone-photography-pricing-guide">drone photography pricing guide</BlogLink> helps you set rates.
           </p>
           <h3>Full-time solo operator</h3>
           <p>

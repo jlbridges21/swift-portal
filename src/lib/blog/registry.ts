@@ -12,6 +12,21 @@ import { article as bestPhotographyClientPortals } from "@/content/blog/best-pho
 import { article as bestPhotoVideoDeliveryPlatforms } from "@/content/blog/best-photo-video-delivery-platforms";
 import { article as bestRealEstatePhotographyBookingSoftware } from "@/content/blog/best-real-estate-photography-booking-software";
 import { article as shootportalVsAryeoVsHdphotohub } from "@/content/blog/shootportal-vs-aryeo-vs-hdphotohub";
+import { article as howToDeliverRealEstatePhotos } from "@/content/blog/how-to-deliver-real-estate-photos";
+import { article as realEstatePhotographyAutomation } from "@/content/blog/real-estate-photography-automation";
+import { article as howToSendLargeVideoFilesToClients } from "@/content/blog/how-to-send-large-video-files-to-clients";
+import { article as howToCreatePhotographyClientPortal } from "@/content/blog/how-to-create-photography-client-portal";
+import { article as googleDriveVsDropboxPhotoDelivery } from "@/content/blog/google-drive-vs-dropbox-photo-delivery";
+import { article as getPaidBeforeDeliveringRealEstatePhotos } from "@/content/blog/get-paid-before-delivering-real-estate-photos";
+import { article as bestPhotographyInvoicingSoftware } from "@/content/blog/best-photography-invoicing-software";
+import { article as realEstatePhotographyClientManagement } from "@/content/blog/real-estate-photography-client-management";
+import { article as bestVideoReviewApprovalSoftware } from "@/content/blog/best-video-review-approval-software";
+import { article as photographyWorkflowAutomation } from "@/content/blog/photography-workflow-automation";
+import { article as dronePhotographyPricingGuide } from "@/content/blog/drone-photography-pricing-guide";
+import { article as realEstatePhotographyPricingGuide } from "@/content/blog/real-estate-photography-pricing-guide";
+import { article as howToStartDronePhotographyBusiness } from "@/content/blog/how-to-start-drone-photography-business";
+import { article as howToGetRealEstatePhotographyClients } from "@/content/blog/how-to-get-real-estate-photography-clients";
+import { article as howToStartRealEstatePhotographyBusiness } from "@/content/blog/how-to-start-real-estate-photography-business";
 
 /**
  * To publish an article: add its module under src/content/blog/, add the slug
@@ -28,6 +43,21 @@ const ARTICLES: readonly BlogArticle[] = [
   bestPhotoVideoDeliveryPlatforms,
   bestRealEstatePhotographyBookingSoftware,
   shootportalVsAryeoVsHdphotohub,
+  howToDeliverRealEstatePhotos,
+  realEstatePhotographyAutomation,
+  howToSendLargeVideoFilesToClients,
+  howToCreatePhotographyClientPortal,
+  googleDriveVsDropboxPhotoDelivery,
+  getPaidBeforeDeliveringRealEstatePhotos,
+  bestPhotographyInvoicingSoftware,
+  realEstatePhotographyClientManagement,
+  bestVideoReviewApprovalSoftware,
+  photographyWorkflowAutomation,
+  dronePhotographyPricingGuide,
+  realEstatePhotographyPricingGuide,
+  howToStartDronePhotographyBusiness,
+  howToGetRealEstatePhotographyClients,
+  howToStartRealEstatePhotographyBusiness,
 ];
 
 function validate(list: readonly BlogArticle[]) {
@@ -89,7 +119,7 @@ export function toCardData(a: BlogArticle): BlogCardData {
     readingMinutes: a.readingMinutes,
     publishedAt: a.publishedAt,
     publishedLabel: formatBlogDate(a.publishedAt),
-    cover: { variant: a.cover.variant, label: a.cover.label },
+    cover: { variant: a.cover.variant, label: a.cover.label, tint: a.cover.tint },
   };
 }
 

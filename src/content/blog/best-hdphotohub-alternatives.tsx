@@ -305,6 +305,11 @@ export const article: BlogArticle = {
             HDPhotoHub&apos;s login-free pages, MLS resizing, and pay-to-download are the bar to clear. Most
             alternatives match pay-to-download; fewer match its range of payment options (Square, tips, promo codes).
           </p>
+          <p>
+            Rethinking your own package prices at the same time? Our{" "}
+            <BlogLink slug="real-estate-photography-pricing-guide">real estate photography pricing guide</BlogLink> walks
+            through cost-plus pricing and add-ons.
+          </p>
         </>
       ),
     },

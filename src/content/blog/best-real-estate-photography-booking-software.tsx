@@ -502,6 +502,11 @@ export const article: BlogArticle = {
             Every real estate ordering platform above links booking to delivery to some degree. Generic schedulers
             don&apos;t, which is usually why photographers move off them.
           </p>
+          <p>
+            Booking is usually the first thing people automate. Our guide to{" "}
+            <BlogLink slug="real-estate-photography-automation">automating a real estate photography business</BlogLink>{" "}
+            covers payments and delivery too.
+          </p>
         </>
       ),
     },

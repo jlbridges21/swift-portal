@@ -177,6 +177,10 @@ export const article: BlogArticle = {
             If the CRM doesn&apos;t deliver, you&apos;ll pay for a gallery tool on top. That&apos;s fine if you love your
             gallery platform, but price the pair, not just the CRM.
           </p>
+          <p>
+            If payments are the part that hurts most, compare dedicated options in our{" "}
+            <BlogLink slug="best-photography-invoicing-software">photography invoicing and payment software guide</BlogLink>.
+          </p>
         </>
       ),
     },
@@ -262,6 +266,10 @@ export const article: BlogArticle = {
               work rather than forcing one tool to do both.
             </p>
           </Callout>
+          <p>
+            For a real estate-specific playbook, see{" "}
+            <BlogLink slug="real-estate-photography-client-management">how to manage multiple real estate photography clients</BlogLink>.
+          </p>
         </>
       ),
     },

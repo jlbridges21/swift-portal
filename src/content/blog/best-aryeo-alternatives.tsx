@@ -238,6 +238,11 @@ export const article: BlogArticle = {
             Pick a quiet month for the move if your market has one. Switching during peak listing season means learning
             new software while agents are waiting on deliveries.
           </p>
+          <p>
+            Switching is also a good moment to tighten your process. Our guide to{" "}
+            <BlogLink slug="real-estate-photography-client-management">managing multiple real estate photography clients</BlogLink>{" "}
+            covers agent preferences, property history, and pipeline stages.
+          </p>
         </>
       ),
     },

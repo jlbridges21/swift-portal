@@ -154,6 +154,8 @@ export const article: BlogArticle = {
             &quot;Lock media until paid&quot; is the single feature that most reduces collections work. Also check
             which payment processor is supported, whether you can take deposits, and whether brokerages can be billed
             separately from agents.
+            For policy wording and deposits, see{" "}
+            <BlogLink slug="get-paid-before-delivering-real-estate-photos">how to get paid before delivering photos</BlogLink>.
           </p>
           <h3>4. Delivery quality</h3>
           <p>
@@ -550,6 +552,8 @@ export const article: BlogArticle = {
             because slow months cost almost nothing. Flat subscriptions get cheaper per job as you grow, as long as the
             plan doesn&apos;t cap listings. And regardless of platform, your payment processor (Stripe, Square, etc.)
             charges its own fees on every card payment.
+            If you&apos;re still working out what to charge per listing, start with our{" "}
+            <BlogLink slug="real-estate-photography-pricing-guide">real estate photography pricing guide</BlogLink>.
           </p>
           <Callout tone="note" title="Don't forget the stack around the platform">
             <p>
