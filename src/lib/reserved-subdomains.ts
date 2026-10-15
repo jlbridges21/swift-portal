@@ -36,6 +36,7 @@ export const RESERVED_APP_ROUTE_SLUGS = [
   "api",
   "auth",
   "billing",
+  "blog",
   "contact",
   "dashboard",
   "how-it-works",

@@ -287,6 +287,8 @@ const BRAND_LITERAL_ALLOWLIST = new Set([
   "src/lib/site-metadata.ts",
   "src/app/globals.css",
   "src/lib/brand-color.ts",
+  // Platform blog author byline (founder bio); only rendered on /blog marketing pages.
+  "src/lib/blog/authors.ts",
 ]);
 
 const LOCALHOST_FALLBACK_ALLOWLIST = new Set([

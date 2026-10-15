@@ -4,6 +4,7 @@ import { AuthFragmentHandler } from "@/components/auth/auth-fragment-handler";
 import { PlatformLanding } from "@/components/landing/platform-landing";
 import { LandingPage } from "@/components/landing/landing-page";
 import { TenantUnavailable } from "@/components/public/tenant-unavailable";
+import { MarketingRoot } from "@/components/marketing/marketing-root";
 import { getAppSettings } from "@/lib/app-settings";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
@@ -85,7 +86,9 @@ export default async function HomePage() {
   return (
     <BrandProvider brand={platformPortalBrand()}>
       <AuthFragmentHandler />
-      <PlatformLanding trialDays={trialDays} plans={plans} />
+      <MarketingRoot>
+        <PlatformLanding trialDays={trialDays} plans={plans} />
+      </MarketingRoot>
     </BrandProvider>
   );
 }

@@ -1,0 +1,248 @@
+/*
+ * ShootPortal platform marketing styles — SCOPED ONLY.
+ *
+ * HARD RULES (do not violate):
+ * 1. EVERY rule must be nested under .marketing-root. No bare element
+ *    selectors (body, h1, a, *), no :root, no html, no @theme, no @layer base.
+ * 2. Custom properties must be namespaced as --mk-*. NEVER redefine --color-*.
+ *    Those tokens are painted at runtime by brandThemeCss and drive admin,
+ *    client portal, and tenant surface theming.
+ * 3. No global resets, no font-family on body, no overflow/scroll-behavior on
+ *    html or body.
+ *
+ * Imported by (marketing)/layout.tsx and by MarketingRoot (so PlatformLanding
+ * on / loads the sheet without visiting a child route). Never import from the
+ * root layout or globals.css. Tenant LandingPage / TenantUnavailable do not
+ * mount MarketingRoot, so rules under .marketing-root cannot reach them.
+ *
+ * Current rules: blog reading styles (.mk-blog, .mk-prose, .mk-table, mk-* motion).
+ */
+
+/* ------------------------------------------------------------------ */
+/* Blog (/blog, /blog/[slug]) — long-form reading styles.              */
+/* Everything stays under .marketing-root; tokens are --mk-*.          */
+/* ------------------------------------------------------------------ */
+
+.marketing-root .mk-blog {
+  --mk-indigo: #4f46e5;
+  --mk-indigo-hover: #4338ca;
+  --mk-violet: #7c3aed;
+  --mk-midnight: #0f172a;
+  --mk-ink: #1e293b;
+  --mk-slate: #475569;
+  --mk-line: #e2e8f0;
+  --mk-cloud: #f8fafc;
+  --mk-indigo-wash: #eef2ff;
+}
+
+/* Article body typography */
+.marketing-root .mk-prose {
+  color: var(--mk-ink);
+  font-size: 1.0625rem;
+  line-height: 1.8;
+}
+.marketing-root .mk-prose > * + *,
+.marketing-root .mk-prose > section > * + * {
+  margin-top: 1.25rem;
+}
+.marketing-root .mk-prose h2 {
+  margin-top: 3.5rem;
+  scroll-margin-top: 6rem;
+  color: var(--mk-midnight);
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.marketing-root .mk-prose h3 {
+  margin-top: 2.25rem;
+  scroll-margin-top: 6rem;
+  color: var(--mk-midnight);
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+.marketing-root .mk-prose h4 {
+  margin-top: 1.5rem;
+  color: var(--mk-midnight);
+  font-size: 1.0625rem;
+  font-weight: 650;
+}
+.marketing-root .mk-prose a:not(.mk-btn) {
+  color: var(--mk-indigo);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: rgb(79 70 229 / 0.35);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s ease, color 0.15s ease;
+}
+.marketing-root .mk-prose a:not(.mk-btn):hover {
+  color: var(--mk-indigo-hover);
+  text-decoration-color: currentColor;
+}
+.marketing-root .mk-prose strong {
+  color: var(--mk-midnight);
+  font-weight: 650;
+}
+.marketing-root .mk-prose ul,
+.marketing-root .mk-prose ol {
+  padding-left: 1.4rem;
+}
+.marketing-root .mk-prose ul {
+  list-style: disc;
+}
+.marketing-root .mk-prose ol {
+  list-style: decimal;
+}
+.marketing-root .mk-prose li + li {
+  margin-top: 0.5rem;
+}
+.marketing-root .mk-prose li::marker {
+  color: var(--mk-indigo);
+}
+.marketing-root .mk-prose .mk-plain-list {
+  list-style: none;
+  padding-left: 0;
+}
+.marketing-root .mk-prose > section > h2:first-child {
+  margin-top: 2.25rem;
+}
+@media (min-width: 640px) {
+  .marketing-root .mk-prose h2 {
+    font-size: 2rem;
+  }
+}
+
+/* Responsive comparison tables: scroll inside their own frame on phones. */
+.marketing-root .mk-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--mk-line);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 12px 32px -24px rgb(15 23 42 / 0.35);
+  -webkit-overflow-scrolling: touch;
+}
+.marketing-root .mk-table-wrap:focus-visible {
+  outline: 2px solid var(--mk-indigo);
+  outline-offset: 2px;
+}
+.marketing-root .mk-table {
+  width: 100%;
+  min-width: 40rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.marketing-root .mk-table th,
+.marketing-root .mk-table td {
+  padding: 0.8rem 1rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--mk-line);
+}
+.marketing-root .mk-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--mk-cloud);
+  color: var(--mk-midnight);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.marketing-root .mk-table tbody th {
+  color: var(--mk-midnight);
+  font-weight: 650;
+  white-space: nowrap;
+}
+.marketing-root .mk-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.marketing-root .mk-table tbody tr:hover > * {
+  background: rgb(238 242 255 / 0.45);
+}
+.marketing-root .mk-table .mk-col-highlight {
+  background: rgb(238 242 255 / 0.6);
+}
+
+/* Motion: gentle, opt-out aware. */
+@keyframes mk-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes mk-dash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+@keyframes mk-pulse-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes mk-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.marketing-root .mk-enter {
+  animation: mk-fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.marketing-root .mk-flow-line {
+  stroke-dasharray: 6 6;
+  animation: mk-dash 1.4s linear infinite;
+}
+.marketing-root .mk-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mk-pulse-dot 2.4s ease-in-out infinite;
+}
+.marketing-root .mk-float {
+  animation: mk-float 6s ease-in-out infinite;
+}
+@supports (animation-timeline: view()) {
+  .marketing-root .mk-reveal {
+    animation: mk-fade-up linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 22%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marketing-root .mk-enter,
+  .marketing-root .mk-reveal,
+  .marketing-root .mk-flow-line,
+  .marketing-root .mk-pulse,
+  .marketing-root .mk-float {
+    animation: none !important;
+  }
+}
+
+/* FAQ disclosure marker */
+.marketing-root .mk-faq summary {
+  list-style: none;
+}
+.marketing-root .mk-faq summary::-webkit-details-marker {
+  display: none;
+}
+.marketing-root .mk-faq details[open] .mk-faq-icon {
+  transform: rotate(45deg);
+}

@@ -14,6 +14,7 @@ const NAV = [
   { href: "/how-it-works", label: "How it works" },
   { href: "/pricing", label: "Pricing" },
   { href: "/partners", label: "Partners" },
+  { href: "/blog", label: "Blog" },
   { href: "/contact", label: "Contact" },
 ] as const;
 
@@ -126,6 +127,11 @@ export function MarketingFooter() {
         <div>
           <p className="text-sm font-semibold text-white">Company</p>
           <ul className="mt-3 space-y-2 text-sm">
+            <li>
+              <Link href="/blog" className="hover:text-white">
+                Blog
+              </Link>
+            </li>
             <li>
               <Link href="/contact" className="hover:text-white">
                 Contact
