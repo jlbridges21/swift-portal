@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -14,6 +13,8 @@ import {
   Yes,
 } from "@/components/blog/article-parts";
 import { BookingFlowDiagram } from "@/components/blog/diagrams";
+import { BestFitPanel, TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
+import { ProductPreview } from "@/components/blog/product-preview";
 
 export const article: BlogArticle = {
   slug: "best-real-estate-photography-booking-software",
@@ -58,7 +59,8 @@ export const article: BlogArticle = {
       </>,
       <>
         <strong>Custom quotes, aerials, and weather-dependent shoots?</strong> ShootPortal (our product) uses a request,
-        estimate, and proposed-time flow instead of self-booking, with ZIP-based travel fees and deposits.
+        estimate, and proposed-time flow instead of self-booking, with ZIP-based travel fees and deposits, and the
+        booking becomes the same project you later deliver and get paid on.
       </>,
       <>Whatever you pick, deposits and a calendar that shows conflicts prevent most scheduling pain.</>,
     ],
@@ -205,21 +207,33 @@ export const article: BlogArticle = {
           </p>
           <ComparisonTable
             caption="Real estate photography booking and scheduling software comparison, October 2026"
-            columns={["Tool", "Type", "Client picks a slot", "Packages / add-ons", "Travel fees", "Deposits", "Starting price"]}
+            columns={[
+              "Tool",
+              "Type",
+              "Client picks a slot",
+              "Packages / add-ons",
+              "Travel fees",
+              "Price before the shoot",
+              "Deposits",
+              "Booking carries into delivery",
+              "Starting price",
+            ]}
             rows={[
-              ["ShootPortal", "Request + estimate", <No key="a">You propose; client accepts or counters</No>, <Yes key="b">Service catalog</Yes>, <Yes key="c">ZIP-to-ZIP distance</Yes>, <Yes key="d">% or flat</Yes>, <SiteLink key="e" href="/pricing">See pricing</SiteLink>],
-              ["Aryeo", "RE ordering", <Yes key="f" />, <Yes key="g" />, <Yes key="h">%, flat, or metered</Yes>, <Yes key="i" />, "Free Lite; Pro $49/mo"],
-              ["HDPhotoHub", "RE ordering", <Yes key="j">Smart Scheduling</Yes>, <Yes key="k">Cart + add-ons</Yes>, "Not stated", <Yes key="l" />, "$5–$10 per delivery"],
-              ["Spiro", "RE ordering", <Yes key="m">Automated scheduling</Yes>, <Yes key="n" />, <Yes key="o">Optional trip fees</Yes>, "Not stated", "$5 per job"],
-              ["Tonomo", "RE ordering", <Yes key="p" />, <Yes key="q">Plus sq-ft pricing rules</Yes>, <Yes key="r">Calculated</Yes>, <Yes key="s">Partial upfront</Yes>, "$140/mo"],
-              ["Acuity Scheduling", "Generic scheduler", <Yes key="t" />, <Yes key="u">Packages on Standard+</Yes>, "Not stated", "Not stated", "$16/mo (annual)"],
-              ["Calendly", "Generic scheduler", <Yes key="v" />, <No key="w">Meeting types</No>, <No key="x" />, "Not stated", "Free; $10/seat/mo"],
-              ["Square Appointments", "Generic scheduler", <Yes key="y" />, "Not stated", "Not stated", <Yes key="z">Partial deposits</Yes>, "Free tier; paid not verified"],
-              ["Setmore", "Generic scheduler", <Yes key="aa" />, "Not stated", "Not stated", <Yes key="ab">Pro</Yes>, "Free; Pro from $5/user/mo"],
+              ["ShootPortal", "Request + estimate", <No key="a">You propose; client accepts or counters</No>, <Yes key="b">Service catalog</Yes>, <Yes key="c">ZIP-to-ZIP distance</Yes>, <Yes key="c1">Preliminary + versioned estimate</Yes>, <Yes key="d">% or flat</Yes>, <Yes key="d1">Same project: review, pay, download</Yes>, <SiteLink key="e" href="/pricing">See pricing</SiteLink>],
+              ["Aryeo", "RE ordering", <Yes key="f" />, <Yes key="g" />, <Yes key="h">%, flat, or metered</Yes>, "Price at checkout", <Yes key="i" />, <Yes key="i1">Delivery platform</Yes>, "Free Lite; Pro $49/mo"],
+              ["HDPhotoHub", "RE ordering", <Yes key="j">Smart Scheduling</Yes>, <Yes key="k">Cart + add-ons</Yes>, "Not stated", "Price at checkout", <Yes key="l" />, <Yes key="l1">Pay to Download</Yes>, "$5–$10 per delivery"],
+              ["Spiro", "RE ordering", <Yes key="m">Automated scheduling</Yes>, <Yes key="n" />, <Yes key="o">Optional trip fees</Yes>, "Price at checkout", "Not stated", <Yes key="o1">Delivery included</Yes>, "$5 per job"],
+              ["Tonomo", "RE ordering", <Yes key="p" />, <Yes key="q">Plus sq-ft pricing rules</Yes>, <Yes key="r">Calculated</Yes>, "Price at checkout", <Yes key="s">Partial upfront</Yes>, <Yes key="s1">Pay-to-unlock delivery</Yes>, "$140/mo"],
+              ["Acuity Scheduling", "Generic scheduler", <Yes key="t" />, <Yes key="u">Packages on Standard+</Yes>, "Not stated", "Not stated", "Not stated", <No key="u1" />, "$16/mo (annual)"],
+              ["Calendly", "Generic scheduler", <Yes key="v" />, <No key="w">Meeting types</No>, <No key="x" />, "Not stated", "Not stated", <No key="x1" />, "Free; $10/seat/mo"],
+              ["Square Appointments", "Generic scheduler", <Yes key="y" />, "Not stated", "Not stated", "Not stated", <Yes key="z">Partial deposits</Yes>, <No key="z1" />, "Free tier; paid not verified"],
+              ["Setmore", "Generic scheduler", <Yes key="aa" />, "Not stated", "Not stated", "Not stated", <Yes key="ab">Pro</Yes>, <No key="ab1" />, "Free; Pro from $5/user/mo"],
             ]}
             note={
               <>
-                From official pricing and product pages, October 15, 2026. Square Appointments&apos; paid prices could
+                From official pricing and product pages, October 15, 2026. &quot;Price at checkout&quot; means the
+                agent sees a package price while ordering rather than receiving a custom estimate; that&apos;s an
+                advantage for standard listings and a limitation for custom jobs. Square Appointments&apos; paid prices could
                 not be verified; see{" "}
                 <Ext href="https://squareup.com/us/en/appointments/pricing">Square&apos;s pricing page</Ext>.
               </>
@@ -377,7 +391,7 @@ export const article: BlogArticle = {
             name="ShootPortal"
             url="/"
             isShootPortal
-            tagline="Requests, estimates, proposed shoot times, and deposits in one client portal"
+            tagline="Request, estimate, proposed time, and deposit on one project that carries through to delivery"
             pricing={
               ctx.studioMonthly ? (
                 <>
@@ -391,12 +405,14 @@ export const article: BlogArticle = {
                 </>
               )
             }
-            bestFor="Solo operators and small teams whose jobs vary in scope, including aerial and commercial work."
+            bestFor="Solo operators and small teams whose jobs vary in scope or depend on the weather, including aerial, twilight, and commercial work. Our pick for that profile, not for high-volume self-booking."
             pros={[
-              "Request form with your service catalog, property address, preferred date, and notes",
-              "Automatic preliminary estimates with travel fees from ZIP-to-ZIP distance",
-              "Client accepts, declines, or counter-proposes the time you suggest",
+              "Request form with your service catalog, property address, preferred date, and notes; the client gets a request-received email",
+              "Automatic preliminary estimates with travel fees from ZIP-to-ZIP distance, or switch the form to a plain inquiry and hide pricing",
+              "Versioned official estimates with expiry dates and a PDF the client can forward",
+              "Client accepts, declines, or counter-proposes the time you suggest; your Google events show on the calendar so you can spot conflicts",
               "Deposits on approval, as a percentage or flat amount, into your own Stripe account",
+              "After the shoot, the same project handles review, the balance, and MLS or Print downloads",
             ]}
             cons={[
               "Clients can't instantly book an open slot themselves",
@@ -404,11 +420,6 @@ export const article: BlogArticle = {
               "Google Calendar shows your events read-only; it isn't full two-way sync",
               "No SMS reminders",
             ]}
-          />
-          <InlineCta
-            title="Stop confirming shoots by text"
-            body="Put your service catalog on a branded request form, send estimates with travel fees built in, and propose shoot times clients can accept in one tap."
-            trialDays={ctx.trialDays}
           />
         </>
       ),
@@ -453,6 +464,22 @@ export const article: BlogArticle = {
               the Google calendar you choose.
             </li>
           </ol>
+          <h3>What a weather reschedule looks like</h3>
+          <p>
+            Say an agent requests photos plus aerials for Thursday. You approve the estimate, the deposit is paid, and
+            you propose Thursday at 10 a.m. On Wednesday night the forecast shows sustained wind. Instead of a text
+            thread, you propose Friday morning from the same project; the agent accepts or counters with a time that
+            suits the seller, and the confirmed time pushes to your Google Calendar. The estimate, deposit, access
+            notes, and every message stay on the one record, so nothing has to be re-entered.
+          </p>
+          <Figure caption="Product illustration of the ShootPortal calendar: a month view with a confirmed shoot (demo data).">
+            <ProductPreview view="calendar" />
+          </Figure>
+          <p>
+            What&apos;s automated versus manual: the preliminary estimate, the travel fee, the request-received email,
+            and reminder emails for pending proposals and scheduling happen without you. Choosing the time, and when to
+            move it, stays your decision.
+          </p>
           <h3>When proposed times are a strength, and when they aren&apos;t</h3>
           <p>
             Proposing times works well for custom jobs, aerials, twilights, and anything weather-dependent, because you
@@ -464,6 +491,52 @@ export const article: BlogArticle = {
             at midnight without waiting for you. If that describes most of your client base, a self-booking platform
             like HDPhotoHub, Aryeo, or Tonomo will feel faster to them.
           </p>
+        </>
+      ),
+    },
+    {
+      id: "request-and-propose-fit",
+      title: "Who the request-and-propose model is right for",
+      tocLabel: "Is ShootPortal a fit?",
+      body: (ctx) => (
+        <>
+          <p>
+            We&apos;ll be direct: if your agents order the same three packages every week and want to grab a slot at
+            midnight, a self-booking storefront will serve them better than ShootPortal. Where ShootPortal earns its
+            place is the work that doesn&apos;t fit a fixed slot, and the businesses that want the booking to keep going
+            after the calendar entry: into the shoot, the review, the payment, and the delivery.
+          </p>
+          <BestFitPanel
+            heading="When ShootPortal is the right booking fit"
+            fits={[
+              {
+                who: "Listing shooters who also fly drones",
+                why: "Aerials depend on wind and rain. Proposing the time, and re-proposing it when the forecast turns, means you never commit to a slot the weather will cancel.",
+              },
+              {
+                who: "Commercial, land, and custom jobs",
+                why: "Scope and distance change the price. A preliminary estimate with a ZIP-based travel fee, then a versioned official estimate, comes before anyone picks a date.",
+              },
+              {
+                who: "Solo operators who want one record",
+                why: "The request becomes the project: address, notes, estimate, deposit, shoot time, files, and final payment all live on it.",
+              },
+              {
+                who: "Businesses losing money to cancellations",
+                why: "Request a deposit when the estimate is approved, as a percentage or flat amount, paid into your own Stripe account.",
+              },
+            ]}
+            notFor={[
+              "Most of your revenue is high-volume agents who expect instant self-booking (HDPhotoHub, Aryeo, or Tonomo fit better).",
+              "You dispatch several photographers and need auto-assignment or drive-time routing (Tonomo or Spiro).",
+              "You need full two-way calendar sync, SMS reminders, or promo codes at checkout.",
+            ]}
+          />
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Run your next request through it"
+            body="Add your services and travel-fee rule, connect Stripe for deposits, then send one real estimate and propose the shoot time. See whether one record beats the text thread."
+          />
         </>
       ),
     },
@@ -500,8 +573,12 @@ export const article: BlogArticle = {
           </ul>
           <p>
             Every real estate ordering platform above links booking to delivery to some degree. Generic schedulers
-            don&apos;t, which is usually why photographers move off them.
+            don&apos;t, which is usually why photographers move off them. In ShootPortal, the booking is the first few
+            stages of a project that runs all the way to the download:
           </p>
+          <Figure caption="ShootPortal's verified features at each stage of a job.">
+            <WorkflowCoverageMap highlight={["request", "estimate", "schedule", "pay"]} />
+          </Figure>
           <p>
             Booking is usually the first thing people automate. Our guide to{" "}
             <BlogLink slug="real-estate-photography-automation">automating a real estate photography business</BlogLink>{" "}
@@ -647,8 +724,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-real-estate-photography-software", "best-real-estate-photography-delivery-software", "best-photography-crm-software"],
   cta: {
-    title: "From request to confirmed shoot, without the text thread.",
-    body: "A branded request form with your services, automatic estimates with travel fees, proposed shoot times clients can accept, and deposits through your own Stripe account.",
+    title: "Book the shoot you can actually deliver.",
+    body: "A branded request form with your services, automatic estimates with travel fees, proposed shoot times clients accept or counter, deposits through your own Stripe account, and the same project carrying through to delivery.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

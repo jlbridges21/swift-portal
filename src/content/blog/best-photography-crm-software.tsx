@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -15,6 +14,8 @@ import {
   Yes,
 } from "@/components/blog/article-parts";
 import { CrmRecordDiagram, ToolCategoryMap } from "@/components/blog/diagrams";
+import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
+import { ProductPreview } from "@/components/blog/product-preview";
 
 export const article: BlogArticle = {
   slug: "best-photography-crm-software",
@@ -285,25 +286,34 @@ export const article: BlogArticle = {
           </p>
           <ComparisonTable
             caption="Photography CRM software comparison, October 2026"
-            columns={["CRM", "Entry price (Oct 2026)", "Free trial / plan", "Contracts & e-sign", "Native galleries / delivery"]}
+            columns={[
+              "CRM",
+              "Entry price (Oct 2026)",
+              "Free trial / plan",
+              "Contracts & e-sign",
+              "Client portal",
+              "History by property address",
+              "Native galleries / delivery",
+            ]}
             highlightColumn={undefined}
             rows={[
-              ["ShootPortal", "Flat monthly subscription", "Free trial, no card", <No key="a" />, <Yes key="b">Photos, video, tours, 3D</Yes>],
-              ["HoneyBook", "$29/mo billed yearly", "30-day trial", <Yes key="c" />, <No key="d">Pic-Time integration</No>],
-              ["Dubsado", "$335/yr", "21-day trial", <Yes key="e" />, <No key="f" />],
-              ["Studio Ninja", "$16/mo", "7-day trial", <Yes key="g" />, <No key="h">Via Pic-Time / ShootProof</No>],
-              ["Sprout Studio", "Lite from $19–$24/mo", "30-day trial", <Yes key="i" />, <Yes key="j">Galleries + store</Yes>],
-              ["Pixieset Studio Manager", "Free; Plus $12–$15/mo", "Free plan", <Yes key="k">3 on Free</Yes>, <Yes key="l">Separate Client Gallery plan</Yes>],
-              ["VSCO Workspace", "VSCO One $499.99/yr", "30-day refund window", <Yes key="m" />, "Not stated"],
-              ["17hats", "$60/mo; free CRM plan", "7-day trial", <Yes key="n" />, <No key="o" />],
-              ["Iris Works", "$14.95/mo", "14-day trial", <Yes key="p" />, <No key="q">Via Pic-Time / ShootProof</No>],
-              ["Bloom", "Starter $7–$14/mo", "7-day trial", <Yes key="r" />, <Yes key="s" />],
+              ["ShootPortal", "Flat monthly subscription", "Free trial, no card", <No key="a" />, <Yes key="a2">Approve, pay, download</Yes>, <Yes key="a3">Projects + revenue per address</Yes>, <Yes key="b">Photos, video, tours, 3D</Yes>],
+              ["HoneyBook", "$29/mo billed yearly", "30-day trial", <Yes key="c" />, <Yes key="c2" />, "Not stated", <No key="d">Pic-Time integration</No>],
+              ["Dubsado", "$335/yr", "21-day trial", <Yes key="e" />, <Yes key="e2" />, "Not stated", <No key="f" />],
+              ["Studio Ninja", "$16/mo", "7-day trial", <Yes key="g" />, "Not stated", "Not stated", <No key="h">Via Pic-Time / ShootProof</No>],
+              ["Sprout Studio", "Lite from $19–$24/mo", "30-day trial", <Yes key="i" />, "Not stated", "Not stated", <Yes key="j">Galleries + store</Yes>],
+              ["Pixieset Studio Manager", "Free; Plus $12–$15/mo", "Free plan", <Yes key="k">3 on Free</Yes>, "Not stated", "Not stated", <Yes key="l">Separate Client Gallery plan</Yes>],
+              ["VSCO Workspace", "VSCO One $499.99/yr", "30-day refund window", <Yes key="m" />, <Yes key="m2" />, "Not stated", "Not stated"],
+              ["17hats", "$60/mo; free CRM plan", "7-day trial", <Yes key="n" />, <Yes key="n2" />, "Not stated", <No key="o" />],
+              ["Iris Works", "$14.95/mo", "14-day trial", <Yes key="p" />, "Not stated", "Not stated", <No key="q">Via Pic-Time / ShootProof</No>],
+              ["Bloom", "Starter $7–$14/mo", "7-day trial", <Yes key="r" />, "Not stated", "Not stated", <Yes key="s" />],
             ]}
             note={
               <>
                 Prices from official vendor pages, checked October 15, 2026; links in each review below. Sprout
                 Studio and Bloom show two prices per plan without clearly labeling monthly vs. annual billing, so we
-                show the range. We left Light Blue (no client portal mentioned) and ShootProof (a gallery platform
+                show the range. &quot;History by property address&quot; means a client record that groups past jobs and
+                revenue by the address shot; we only mark it where the vendor documents it. We left Light Blue (no client portal mentioned) and ShootProof (a gallery platform
                 with light studio tools) off the main list.
               </>
             }
@@ -344,10 +354,12 @@ export const article: BlogArticle = {
             }
             bestFor="Real estate, commercial, drone, and video businesses with repeat clients, where delivery and getting paid are the core of the relationship."
             pros={[
-              "Client records with property history, lifetime revenue, outstanding balance, last payment, timestamped notes, and an activity timeline",
-              "Separate leads view and an 8-stage project pipeline with some automatic stage changes",
+              "Client records with property history, lifetime revenue, outstanding balance, last payment, last portal login, timestamped notes, and an activity timeline",
+              "Separate leads view; requests from your branded form create the client account and the project",
+              "8-stage project pipeline (New Request to Delivered) with some automatic stage changes",
               "Versioned estimates, proposed shoot times, two-way project messaging, and 10 editable email templates",
-              "Client review with time-stamped video comments, Stripe payments with deposits, and download unlock after payment",
+              "Client review with time-stamped video comments, Stripe payments to your own account with deposits, and download unlock after payment",
+              "Staff accounts with granular permissions, assigned to specific projects",
             ]}
             cons={[
               "No contracts or e-signature, and no questionnaires",
@@ -363,12 +375,25 @@ export const article: BlogArticle = {
               so the context for a repeat booking is in one place.
             </p>
             <p>
+              Here&apos;s what that looks like on an ordinary Tuesday. An agent you&apos;ve shot for a dozen times sends
+              a request for a house you photographed two years ago. Open their record and the earlier project at that
+              address is right there, with what you charged. You send a versioned estimate, the agent approves it in
+              the portal (a deposit can be collected on approval), you propose a shoot time, and the project moves
+              along the pipeline. When the finals are uploaded, the payment status, the messages, and the files all
+              sit on the same project and roll up to the same client record, so lifetime revenue and outstanding
+              balance reflect the job without a spreadsheet on the side.
+            </p>
+            <p>
               Where it differs from most CRMs on this list is that the delivery happens in the same system: clients
               approve estimates, respond to proposed times, review photos and video, pay, and download from the
               portal. Where it falls short is the paperwork side of session work. If you need signed contracts and
               questionnaires for every booking, HoneyBook or Dubsado are stronger.
             </p>
           </ToolCard>
+
+          <Figure caption="Product illustration of ShootPortal's client list, showing project counts, lifetime revenue, and outstanding balance per client (demo data).">
+            <ProductPreview view="clients" />
+          </Figure>
 
           <ToolCard
             rank={2}
@@ -540,11 +565,64 @@ export const article: BlogArticle = {
             pros={["Galleries, contracts, invoices, scheduling, and websites in one tool", "Unlimited automations on Standard and Plus", "No Bloom processing fee on Standard and Plus"]}
             cons={["Starter limited to 3 active projects and 1 automation", "Team access requires Plus", "The page's discount claims don't match the plan cards"]}
           />
-
-          <InlineCta
-            title="See every client's history in one record"
-            body="Properties shot, revenue, balances, notes, and every project from estimate to delivery, in a portal with your logo and colors."
+        </>
+      ),
+    },
+    {
+      id: "who-should-choose-shootportal",
+      title: "When ShootPortal is the right CRM (and when it isn't)",
+      tocLabel: "Is ShootPortal a fit?",
+      body: (ctx) => (
+        <>
+          <p>
+            A CRM for repeat, delivery-based clients has a different job than one for weddings. The question isn&apos;t
+            &quot;did they sign and return the questionnaire?&quot; but &quot;what did we shoot for this agent last
+            time, what did they pay, is anything still owed, and where are this week&apos;s files?&quot; When the
+            client record, the projects, the messages, the files, and the payments live in one system, that answer is
+            one page instead of four tabs.
+          </p>
+          <p>
+            That&apos;s why ShootPortal is our pick for solo operators and small teams whose clients send work again
+            and again: listing agents, builders, property managers, marketing teams, and companies that hire for aerial
+            or video. It&apos;s not our pick for session work built around contracts.
+          </p>
+          <BestFitPanel
+            heading="Who ShootPortal fits as a CRM"
+            fits={[
+              {
+                who: "Real estate photographers with repeat agents",
+                why: "Property history shows every job and the revenue at each address, so a re-list starts with context, not a search through old emails.",
+              },
+              {
+                who: "Drone and aerial operators",
+                why: "Quote with ZIP-distance travel fees, propose the flight time, and deliver photos, video, and 3D or mapping embeds on the same client record.",
+              },
+              {
+                who: "Commercial and video studios",
+                why: "Time-stamped video comments, numbered versions, and the payment request sit on the same project as the client conversation.",
+              },
+              {
+                who: "Small teams sharing the load",
+                why: "Staff accounts with granular permissions can be assigned to specific projects, while balances and client history stay in one place.",
+              },
+            ]}
+            notFor={[
+              "You need contracts with e-signature or questionnaires for every booking (HoneyBook or Dubsado are stronger).",
+              "Clients must self-book into open time slots; ShootPortal has you propose a time that clients accept or counter.",
+              "You sell prints or gallery products, or rely on SMS reminders.",
+              "You want to design your own pipeline stages; ShootPortal's eight stages are fixed.",
+            ]}
+          />
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Bring one repeat client over and watch the record fill in"
+            body={
+              <>
+                Add a client you shoot for often, run their next job through an estimate, a proposed time, delivery, and
+                payment, and see the history build on its own. The guided setup covers your logo and colors, a starter
+                service, and connecting your own Stripe account.
+              </>
+            }
           />
         </>
       ),
@@ -580,7 +658,7 @@ export const article: BlogArticle = {
               {
                 who: "Real estate, commercial, or drone",
                 pick: "ShootPortal",
-                why: "Property history, estimates, video review, payment, and delivery in the same client record.",
+                why: "Property history, lifetime revenue, and balances on the client record, with estimates, video review, payment, and delivery on the same projects.",
               },
               {
                 who: "Established VSCO studio",
@@ -731,8 +809,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-photography-client-portals", "best-drone-business-management-software", "best-photo-video-delivery-platforms"],
   cta: {
-    title: "Keep every client, job, and payment in one record.",
-    body: "Client history by property, estimates, scheduling, messages, video review, payments, and delivery, connected in a portal with your branding.",
+    title: "Know a client's history before you answer the phone.",
+    body: "Properties shot, revenue, balances, and notes on one client record, with each job's estimate, shoot time, messages, files, and payment status on the project behind it.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

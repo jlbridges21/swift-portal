@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -16,6 +15,7 @@ import {
 import { ToolCategoryMap } from "@/components/blog/diagrams";
 import { PaymentFlowDiagram } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "best-photography-invoicing-software",
@@ -755,21 +755,27 @@ export const article: BlogArticle = {
           </p>
           <ComparisonTable
             caption="Photography invoicing software feature comparison, October 2026"
-            columns={["Tool", "Estimates", "Deposits / schedules", "Client portal", "Accounting", "Tied to delivery"]}
+            columns={["Tool", "Estimates", "Deposits / schedules", "Client portal", "Payments processed by", "Accounting", "Tied to delivery"]}
             highlightColumn={undefined}
             rows={[
-              ["ShootPortal", <Yes key="a1">With versions</Yes>, <Yes key="a2">% or fixed</Yes>, <Yes key="a3" />, <No key="a4">Pair with accounting</No>, <Yes key="a5">Downloads unlock after payment</Yes>],
-              ["QuickBooks Online", "Confirm per plan", "Confirm per plan", "Not confirmed", <Yes key="b1">Full</Yes>, <No key="b2" />],
-              ["FreshBooks", <Yes key="c1" />, <Yes key="c2" />, <Yes key="c3" />, <Yes key="c4" />, <No key="c5" />],
-              ["Wave", <Yes key="d1" />, "Not confirmed", "Not confirmed", <Yes key="d2">Basic</Yes>, <No key="d3" />],
-              ["Square Invoices", <Yes key="e1" />, <Yes key="e2" />, "Not confirmed", <No key="e3" />, <No key="e4" />],
-              ["Stripe Invoicing", <Yes key="f1">Quotes on Plus</Yes>, "Not confirmed", "Not confirmed", <No key="f2" />, <No key="f3" />],
-              ["PayPal Invoicing", "Not confirmed", "Not confirmed", "Not confirmed", <No key="g1" />, <No key="g2" />],
-              ["HoneyBook", <Yes key="h1">Proposals</Yes>, <Yes key="h2" />, <Yes key="h3" />, <Yes key="h4">QBO sync (Essentials+)</Yes>, <No key="h5" />],
-              ["Dubsado", <Yes key="i1">Proposals</Yes>, <Yes key="i2" />, <Yes key="i3" />, <Yes key="i4">Integration (Premier)</Yes>, <No key="i5" />],
-              ["Studio Ninja", <Yes key="j1">Quotes</Yes>, <Yes key="j2" />, <Yes key="j3" />, <Yes key="j4">Xero / QuickBooks</Yes>, <No key="j5" />],
+              ["ShootPortal", <Yes key="a1">With versions</Yes>, <Yes key="a2">% or fixed, on approval</Yes>, <Yes key="a3" />, "Your own Stripe account (Stripe Connect)", <No key="a4">Pair with accounting</No>, <Yes key="a5">Downloads unlock after payment</Yes>],
+              ["QuickBooks Online", "Confirm per plan", "Confirm per plan", "Not confirmed", "QuickBooks Payments", <Yes key="b1">Full</Yes>, <No key="b2" />],
+              ["FreshBooks", <Yes key="c1" />, <Yes key="c2" />, <Yes key="c3" />, "FreshBooks Payments or Stripe", <Yes key="c4" />, <No key="c5" />],
+              ["Wave", <Yes key="d1" />, "Not confirmed", "Not confirmed", "Wave (approval required)", <Yes key="d2">Basic</Yes>, <No key="d3" />],
+              ["Square Invoices", <Yes key="e1" />, <Yes key="e2" />, "Not confirmed", "Square", <No key="e3" />, <No key="e4" />],
+              ["Stripe Invoicing", <Yes key="f1">Quotes on Plus</Yes>, "Not confirmed", "Not confirmed", "Stripe", <No key="f2" />, <No key="f3" />],
+              ["PayPal Invoicing", "Not confirmed", "Not confirmed", "Not confirmed", "PayPal", <No key="g1" />, <No key="g2" />],
+              ["HoneyBook", <Yes key="h1">Proposals</Yes>, <Yes key="h2" />, <Yes key="h3" />, "HoneyBook (built in)", <Yes key="h4">QBO sync (Essentials+)</Yes>, <No key="h5" />],
+              ["Dubsado", <Yes key="i1">Proposals</Yes>, <Yes key="i2" />, <Yes key="i3" />, "Dubsado Payments, Stripe, PayPal, or Square", <Yes key="i4">Integration (Premier)</Yes>, <No key="i5" />],
+              ["Studio Ninja", <Yes key="j1">Quotes</Yes>, <Yes key="j2" />, <Yes key="j3" />, "Stripe or PayPal", <Yes key="j4">Xero / QuickBooks</Yes>, <No key="j5" />],
             ]}
-            note={<>Features from official vendor pages, checked October 15, 2026.</>}
+            note={
+              <>
+                Features from official vendor pages, checked October 15, 2026. &quot;Tied to delivery&quot; means the
+                payment can control access to the finished files in the same tool, rather than living on a separate
+                invoice.
+              </>
+            }
           />
         </>
       ),
@@ -786,6 +792,10 @@ export const article: BlogArticle = {
             is. Here&apos;s how a job flows from the client&apos;s side:
           </p>
           <ol>
+            <li>
+              A request comes in through your branded request form, and the client receives an estimate built from your
+              service catalog (travel fees can be calculated from ZIP-to-ZIP distance).
+            </li>
             <li>The client approves the estimate in their portal. If you&apos;ve set a deposit, they pay it then.</li>
             <li>You shoot, upload, and the client reviews photos and video in the same project.</li>
             <li>You request the balance from the project; the client pays through Stripe Checkout.</li>
@@ -799,13 +809,65 @@ export const article: BlogArticle = {
           </Figure>
           <p>
             Money goes straight to your own Stripe account through Stripe Connect. If a client pays by check or bank
-            transfer outside Stripe, you mark the payment as received and the project status catches up. Clients get
-            email receipts, and the client record keeps their outstanding balance and lifetime revenue.
+            transfer outside Stripe, you mark the payment as received on the project. Clients get email receipts, and
+            the client record keeps their outstanding balance, last payment, and lifetime revenue.
           </p>
-          <InlineCta
-            title="Manage projects, invoices, and payments in one place."
-            body="Take deposits on approval, request the balance from the project, and unlock downloads when the final payment lands."
+          <h3>What&apos;s automatic, what&apos;s connected, and what&apos;s still on you</h3>
+          <ul>
+            <li>
+              <strong>Automatic (once you switch it on):</strong> the deposit request at estimate approval, unlocking
+              downloads after the final payment, moving the project to Delivered after payment, email receipts, and
+              reminder emails for outstanding payments.
+            </li>
+            <li>
+              <strong>Connected in one place:</strong> the approved estimate, the shoot time, the messages, the media,
+              and the payment status sit on the same project, so &quot;has this job been paid?&quot; is answered by
+              opening it, not by cross-checking Stripe against your inbox.
+            </li>
+            <li>
+              <strong>Still yours to do:</strong> deciding your deposit policy, requesting the balance from the
+              project, marking offline payments as paid, and keeping your books in QuickBooks, Wave, or whatever your
+              accountant uses. There&apos;s no accounting sync, so the bookkeeping export is a separate step.
+            </li>
+          </ul>
+          <BestFitPanel
+            heading="Who should take payments through ShootPortal"
+            fits={[
+              {
+                who: "Real estate photographers billing per listing",
+                why: "Agents preview the photos, pay, and download Print or MLS sizes from the same page, so the balance arrives before the files go out.",
+              },
+              {
+                who: "Drone and video operators with deposits",
+                why: "A percentage or fixed deposit on estimate approval protects the flight day; the balance gates the final downloads.",
+              },
+              {
+                who: "Solo shooters tired of reconciling",
+                why: "Each project shows its payment status, and each client record shows outstanding balance and lifetime revenue, without a side spreadsheet.",
+              },
+              {
+                who: "Studios that already like Stripe",
+                why: "Payments run through Stripe Checkout and land in your own Stripe account, at Stripe's standard processing fees.",
+              },
+            ]}
+            notFor={[
+              "You want one tool to do invoicing and bookkeeping; QuickBooks Online or FreshBooks does both.",
+              "You need formal invoice documents with custom numbering and templates, or an accounting sync.",
+              "Clients sign a contract before paying; HoneyBook or Dubsado handle contract-plus-invoice in one step.",
+            ]}
+          />
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Put your next deposit and delivery on one project"
+            body={
+              <>
+                Connect your own Stripe account during setup, add a service, and run one real job: deposit on approval,
+                balance after the shoot, downloads unlocked when it&apos;s paid. Keep your accounting app exactly where
+                it is.
+              </>
+            }
+            secondaryHref="/pricing"
+            secondaryLabel="See pricing"
           />
           <p>
             If you run real estate work alongside other niches, our roundup of{" "}
@@ -955,7 +1017,7 @@ export const article: BlogArticle = {
   ],
   related: ["get-paid-before-delivering-real-estate-photos", "best-photography-crm-software", "real-estate-photography-pricing-guide"],
   cta: {
-    title: "Manage projects, invoices, and payments in one place.",
+    title: "Get paid before the files go out, without chasing it.",
     body: "Collect deposits on approval, request the balance from the project, and release downloads when the final payment lands, with every payment going straight to your own Stripe account.",
     secondaryHref: "/pricing",
     secondaryLabel: "See pricing",

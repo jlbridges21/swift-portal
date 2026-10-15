@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   SiteLink,
   Steps,
@@ -13,6 +12,7 @@ import {
 import { WorkflowDiagram } from "@/components/blog/diagrams";
 import { BeforeAfter } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "real-estate-photography-automation",
@@ -308,6 +308,14 @@ export const article: BlogArticle = {
             For a recurring agent, steps 1 to 3 become nearly frictionless: their details are already on file, they know
             your packages, and the estimate matches what they paid last time. The difference over a full week adds up.
           </p>
+          <ProductCallout title="Recurring agents stay on file, with every address they've sent you">
+            <p>
+              Each agent&apos;s client record keeps their contact details, timestamped notes (lockbox habits, preferred
+              package, who gets the delivery), the message timeline, and a property history listing every address with
+              its projects and revenue. When they request the next listing, you&apos;re not starting from a blank
+              email.
+            </p>
+          </ProductCallout>
           <Figure caption="Illustrative comparison of a busy listing week handled manually versus with an automated workflow. Not measured data; your mileage will vary.">
             <BeforeAfter
               beforeTitle="Manual week"
@@ -337,45 +345,73 @@ export const article: BlogArticle = {
     },
     {
       id: "shootportal-automation",
-      title: "How ShootPortal automates a real estate workflow",
-      tocLabel: "ShootPortal's automation",
+      title: "What ShootPortal automates, what it centralizes, and what stays yours",
+      tocLabel: "ShootPortal: automated vs. manual",
       body: (ctx) => (
         <>
           <p>
             ShootPortal is our product, so read this section with that in mind. It was built by the owner of a drone
-            photography business who shoots listings himself, and its automation is deliberately narrow: it handles the
-            predictable hand-offs and leaves judgment calls to you. Here&apos;s what it automates today:
+            photography business who shoots listings himself, around a simple observation: great listing media is only
+            half the business. The other half is the agent&apos;s request, the estimate, the shoot time, the revision
+            notes, the balance, and the download link, and that half is where most of the typing happens.
           </p>
-          <ul>
-            <li>
-              <strong>Preliminary estimates.</strong> When an agent submits a request and picks a service from your
-              catalog, ShootPortal can produce an automatic preliminary estimate, including a travel fee calculated from
-              ZIP-to-ZIP distance using your free radius, per-mile rate, or mileage tiers. You then send the official
-              estimate, with versions, an expiry date, and a PDF.
-            </li>
-            <li>
-              <strong>Automatic stage changes.</strong> Projects move through an eight-stage pipeline (New Request,
-              Quote Sent, Proposal Approved, Scheduled, Shoot Complete, Review, Awaiting Payment, Delivered), and some of
-              those moves happen on their own as the agent approves, pays, or responds.
-            </li>
-            <li>
-              <strong>Payment and delivery toggles.</strong> Request a deposit (percentage or fixed) when an estimate is
-              approved, automatically move a project to Delivered after payment, and optionally keep downloads locked
-              until the final payment while the agent can still view everything.
-            </li>
-            <li>
-              <strong>Editable email templates and reminder emails</strong> for proposals, scheduling, review, and
-              payment, so the routine nudges go out in your words.
-            </li>
-            <li>
-              <strong>Push notifications to you</strong> through the installable web app when a client approves, pays,
-              or messages.
-            </li>
-            <li>
-              <strong>Google Calendar push.</strong> Confirmed shoots go to the Google calendar you choose, and your
-              Google events show (read-only) inside the ShootPortal calendar so you can spot conflicts.
-            </li>
-          </ul>
+          <p>
+            It helps to be precise about what software actually does here, because &quot;automation&quot; gets used
+            loosely. Some things in ShootPortal genuinely run on their own or on a toggle you set once. Many more are{" "}
+            <em>centralized</em>: not automatic, but kept on one project record so you stop hunting for them. And some
+            work stays manual by design.
+          </p>
+          <div className="mk-reveal !mt-8 grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-[#C7D2FE] bg-[#EEF2FF]/60 p-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#4F46E5]">Automated</p>
+              <p className="mt-1 text-sm font-semibold text-[#0F172A]">Runs on its own, or on a toggle you set</p>
+              <ul className="mk-plain-list mt-3 space-y-2 text-sm leading-snug text-[#334155]">
+                <li>Preliminary estimate from the agent&apos;s chosen service, plus a ZIP-to-ZIP travel fee</li>
+                <li>&quot;We received your request&quot; acknowledgment email</li>
+                <li>Some stage changes as the agent approves, pays, or responds</li>
+                <li>Deposit request when an estimate is approved (if configured)</li>
+                <li>Move to Delivered after payment (if enabled)</li>
+                <li>Unlock downloads after final payment (if enabled)</li>
+                <li>Email receipts for payments</li>
+                <li>Reminder emails for proposals, scheduling, review, and payment</li>
+                <li>Confirmed shoots pushed to your Google Calendar</li>
+                <li>Batched notifications for video comments</li>
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#475569]">Centralized</p>
+              <p className="mt-1 text-sm font-semibold text-[#0F172A]">Not automatic, but in one place</p>
+              <ul className="mk-plain-list mt-3 space-y-2 text-sm leading-snug text-[#334155]">
+                <li>The agent&apos;s client record, notes, and property history</li>
+                <li>The listing project and its stage in the pipeline</li>
+                <li>Messages with the agent, on the project</li>
+                <li>Uploaded photos, video, tours, and documents</li>
+                <li>The estimate, its versions, and its PDF</li>
+                <li>Payment status and outstanding balance</li>
+                <li>Your calendar, with Google events shown read-only</li>
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#64748B]">Still manual</p>
+              <p className="mt-1 text-sm font-semibold text-[#0F172A]">Your judgment, your time</p>
+              <ul className="mk-plain-list mt-3 space-y-2 text-sm leading-snug text-[#334155]">
+                <li>Proposing the shoot time (the agent accepts, declines, or counters)</li>
+                <li>Reviewing and sending the official estimate</li>
+                <li>Shooting and editing</li>
+                <li>Uploading the finals</li>
+                <li>Your final check before the agent sees anything</li>
+                <li>Follow-ups and review requests after delivery</li>
+                <li>Re-booking the agent&apos;s next listing</li>
+              </ul>
+            </div>
+          </div>
+          <p>
+            The centralized column matters more than it looks. When an agent texts &quot;are the photos for Oak Street
+            ready, and did I pay the deposit?&quot;, the estimate, the confirmed shoot time, the messages, the uploaded
+            files, and the payment status all sit on the same project. You answer by opening one page instead of
+            checking your inbox, your calendar, a cloud folder, and Stripe. And because the agent sees the same project
+            in their branded portal, they can check the status themselves before they text.
+          </p>
           <Figure caption="Product illustration: the ShootPortal studio view with a project pipeline and client activity (demo data).">
             <ProductPreview view="studio" />
           </Figure>
@@ -398,10 +434,16 @@ export const article: BlogArticle = {
               </>
             )}
           </p>
-          <InlineCta
-            title="Put your next listing on autopilot"
-            body="Set up your packages and travel-fee rule once, then let requests, estimates, payment requests, and download access run themselves."
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Test the automation on one real listing"
+            body={
+              <>
+                Add your packages and travel-fee rule during setup, connect your own Stripe account, and send your next
+                agent the request link. Watch the preliminary estimate, deposit request, receipt, and download unlock
+                happen on their own, while you keep control of the shoot time and the final check.
+              </>
+            }
           />
         </>
       ),
@@ -650,9 +692,9 @@ export const article: BlogArticle = {
   ],
   related: ["best-real-estate-photography-software", "photography-workflow-automation", "get-paid-before-delivering-real-estate-photos"],
   cta: {
-    title: "Spend less time managing the business and more time creating.",
-    body: "Requests, preliminary estimates, scheduling, payment requests, and delivery in one workspace, with the routine steps running on their own.",
+    title: "Let the routine listing admin run on rules you set",
+    body: "Preliminary estimates with travel fees, deposit requests on approval, receipts, reminders, and pay-to-download happen on their own. The estimate, shoot time, messages, files, and balance for every listing sit on one project, and the shoot and the agent relationship stay yours.",
     secondaryHref: "/how-it-works",
-    secondaryLabel: "See how it works",
+    secondaryLabel: "See the request-to-delivery flow",
   },
 };

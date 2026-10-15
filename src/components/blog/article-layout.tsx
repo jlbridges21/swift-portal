@@ -290,7 +290,7 @@ function ArticleFinalCta({ article, ctx }: { article: BlogArticle; ctx: BlogRend
             href="/signup"
             className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-[#4F46E5] px-7 text-base font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:bg-[#4338CA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0F172A]"
           >
-            Start your free trial <ArrowRight className="h-4 w-4" aria-hidden />
+            {ctx.trialDays > 0 ? `Start your ${ctx.trialDays}-day free trial` : "Start free"} <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
           <Link
             href={article.cta.secondaryHref ?? "/how-it-works"}
@@ -300,7 +300,9 @@ function ArticleFinalCta({ article, ctx }: { article: BlogArticle; ctx: BlogRend
           </Link>
         </div>
         {ctx.trialDays > 0 ? (
-          <p className="mt-4 text-sm text-slate-300">{ctx.trialDays} days free. No credit card required.</p>
+          <p className="mt-4 text-sm text-slate-300">
+            {ctx.trialDays} days free. No credit card required. Sign up with Google or a five-field form.
+          </p>
         ) : null}
         {pricing ? <p className="mt-1 text-sm text-slate-400">{pricing}</p> : null}
       </div>

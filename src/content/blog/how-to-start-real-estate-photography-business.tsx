@@ -5,12 +5,11 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   SiteLink,
 } from "@/components/blog/article-parts";
 import { ProjectBoardDiagram, RoadmapDiagram, ServiceMenu } from "@/components/blog/business-diagrams";
-import { ProductPreview } from "@/components/blog/product-preview";
+import { TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "how-to-start-real-estate-photography-business",
@@ -90,13 +89,14 @@ export const article: BlogArticle = {
       body: () => (
         <>
           <p>
-            Listing photos are usually the first thing a buyer sees, and much of that viewing happens on a phone.
-            NAR&apos;s buyer research, including the{" "}
+            Listing photos are usually the first thing a buyer sees, and much of that viewing happens on a phone. In
+            NAR&apos;s{" "}
             <Ext href="https://www.nar.realtor/sites/default/files/2024-11/2024-profile-of-home-buyers-and-sellers-highlights-11-04-2024_2.pdf">
               2024 Profile of Home Buyers and Sellers highlights
             </Ext>
-            , reports photos among the website features buyers find most useful when searching online.
-            Agents know this, and many treat professional photography as a standard part of marketing a listing.
+            , photos topped the list of website features buyers found useful: 41 percent rated them very useful, ahead of
+            detailed property information at 39 percent. Agents know this, and many treat professional photography as a
+            standard part of marketing a listing.
           </p>
           <p>
             For a photographer, that creates a business with a few distinct traits:
@@ -426,18 +426,54 @@ export const article: BlogArticle = {
             <BlogLink slug="best-real-estate-photography-software">real estate photography software</BlogLink> covers
             the main platforms and how they charge, including per-listing and subscription models.
           </p>
+          <h3>Professional from the first listing</h3>
           <p>
-            ShootPortal (our product) is one option, built around the workflow in this guide. Agents request shoots
-            from your public form, approve estimates, and accept or counter-propose the shoot time you suggest. Each
-            listing is a project that moves from request to delivered. Photos download as MLS-sized or full-resolution
-            files, singly or as a ZIP, and you can require payment through Stripe before downloads unlock. Staff
-            accounts have granular permissions and can be assigned to specific projects, which suits a second shooter or
-            editor. It doesn&apos;t offer client self-booking into open time slots, property websites, or Zillow Showcase
-            delivery, so weigh those if your agents expect them.{" "}
+            Agents judge a new photographer on the whole experience, not only the photos. When the booking
+            confirmation, the price, the shoot time, the payment link, and the download page all come from different
+            places, you look like someone getting started, even if your images are excellent. When they come from one
+            place with your name on it, you look like an established business on day one. It&apos;s also much easier to
+            set up a single workflow at two listings a week than to migrate one at fifteen.
+          </p>
+          <p>
+            ShootPortal (our product) is one way to do that, built around the workflow in this guide. Every listing is
+            one project, and the request, estimate, shoot time, messages, files, and payment status all live on it, so
+            you answer an agent&apos;s &quot;where are we?&quot; by opening one page:
+          </p>
+          <ul>
+            <li>
+              <strong>Requests and estimates.</strong> Agents request shoots from your branded form and pick a package
+              from your service catalog. ShootPortal can generate a preliminary estimate with a ZIP-distance travel
+              fee, and you send official estimates (with versions, expiry dates, and a PDF) for custom work.
+            </li>
+            <li>
+              <strong>Scheduling.</strong> You propose a shoot time, and the agent accepts or counter-proposes in their
+              portal. Shoots can push to your Google Calendar. (Agents don&apos;t self-book into open slots.)
+            </li>
+            <li>
+              <strong>Payments.</strong> Deposits on approval or pay in full, by card through Stripe straight to your
+              own account, with email receipts. You can require payment before downloads unlock.
+            </li>
+            <li>
+              <strong>Delivery.</strong> MLS-sized or full-resolution files, single or ZIP, plus video, 360 tours, and
+              3D embeds, in a portal with your logo, colors, and your own domain if you add one.
+            </li>
+            <li>
+              <strong>Growing a team.</strong> Staff accounts have granular permissions and can be assigned to specific
+              projects, which suits a second shooter or editor.
+            </li>
+          </ul>
+          <Figure caption="ShootPortal's verified features at each stage of a job.">
+            <WorkflowCoverageMap />
+          </Figure>
+          <p>
+            What it doesn&apos;t replace: your bookkeeping or accounting software, your contracts (there&apos;s no
+            e-signature), and your editing tools. It also doesn&apos;t offer client self-booking into open time slots,
+            property websites, or Zillow Showcase delivery, so weigh those if your agents expect them.{" "}
             {ctx.studioMonthly ? (
               <>
                 The Studio plan is {ctx.studioMonthly}/month
-                {ctx.studioAnnual ? <> or {ctx.studioAnnual}/month billed annually</> : null}.
+                {ctx.studioAnnual ? <> or {ctx.studioAnnual}/month billed annually</> : null}, with Stripe&apos;s
+                standard processing fees on client payments.
               </>
             ) : (
               <>
@@ -445,13 +481,17 @@ export const article: BlogArticle = {
               </>
             )}
           </p>
-          <Figure caption="Product illustration: the ShootPortal studio view for managing projects, clients, and delivery (demo data).">
-            <ProductPreview view="studio" />
-          </Figure>
-          <InlineCta
-            title="Run every listing through one workflow"
-            body="Requests, estimates, scheduling, payments, and MLS-ready delivery in a portal branded to you."
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Launch with the systems most photographers add in year two"
+            body={
+              <>
+                The guided setup walks you through your logo and colors, a starter service menu, and connecting Stripe.
+                Then run your next portfolio shoot through it as a real listing, from request to download.
+              </>
+            }
+            secondaryHref="/pricing"
+            secondaryLabel="See pricing"
           />
           <p>
             See the full request-to-delivery flow on our <SiteLink href="/how-it-works">How it works page</SiteLink>.
@@ -533,8 +573,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-real-estate-photography-software", "how-to-get-real-estate-photography-clients", "real-estate-photography-pricing-guide"],
   cta: {
-    title: "Build your business on an organized foundation from day one.",
-    body: "Requests, estimates, scheduling, payments, and delivery for every listing, in a client portal branded to you.",
+    title: "Start your listing business with one system, not five.",
+    body: "Agent requests, estimates, shoot scheduling, payments, and MLS-ready delivery on one project per listing, in a client portal with your logo, colors, and domain.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

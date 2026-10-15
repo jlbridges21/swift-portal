@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -14,6 +13,8 @@ import {
   Yes,
 } from "@/components/blog/article-parts";
 import { ToolCategoryMap, VideoReviewDiagram } from "@/components/blog/diagrams";
+import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
+import { ProductPreview } from "@/components/blog/product-preview";
 
 /** Parses "$59" → 59 so break-even math tracks live pricing. Null when unavailable. */
 function monthlyPrice(ctx: BlogRenderContext): number | null {
@@ -41,7 +42,7 @@ export const article: BlogArticle = {
     "HDPhotoHub competitors",
     "pay per delivery vs subscription",
   ],
-  readingMinutes: 14,
+  readingMinutes: 16,
   cover: { variant: "layers", label: "Alternatives Guide", alt: "Illustration of layered software panels on a dark indigo background" },
   disclosure: true,
   quickAnswer: {
@@ -62,8 +63,9 @@ export const article: BlogArticle = {
         <strong>Want per-listing pricing with brokerage billing?</strong> Spiro, at $5 per listing.
       </>,
       <>
-        <strong>Quoting custom jobs and running video review rounds?</strong> ShootPortal (our product) is built for
-        that, though it has no marketing kit or property websites.
+        <strong>Quoting custom jobs, running video review rounds, or delivering above the break-even?</strong>{" "}
+        ShootPortal (our product) is our pick: one flat price, estimates, frame-pinned video review, and
+        pay-before-download in one branded portal. It has no marketing kit or property websites.
       </>,
     ],
   },
@@ -269,16 +271,24 @@ export const article: BlogArticle = {
           </p>
           <ComparisonTable
             caption="HDPhotoHub alternatives feature comparison, October 2026"
-            columns={["Platform", "Pricing model", "How jobs come in", "Pay-to-download", "Property sites / kit", "Team members"]}
+            columns={["Platform", "Pricing model", "How jobs come in", "Client records", "Pay-to-download", "Property sites / kit", "Team members"]}
             rows={[
-              ["HDPhotoHub", "$5–$10 per delivery", "Shopping cart", <Yes key="a" />, <Yes key="b">Full Delivery</Yes>, "Unlimited, no extra cost"],
-              ["ShootPortal", "Flat monthly", "Request + estimate", <Yes key="c">Optional</Yes>, <No key="d" />, "Staff accounts with permissions"],
-              ["Aryeo", "Free Lite; Pro $49–$179/mo", "Order forms", "Not stated", "Not stated", "1, 3, or 5 seats by tier"],
-              ["Spiro", "$5 per listing", "Custom order pages", "Not stated", <Yes key="e" />, "Not stated"],
-              ["Tonomo", "$140 or $250/mo", "Booking flows", <Yes key="f" />, <Yes key="g">Marketing kit editor</Yes>, "1 or unlimited by plan"],
-              ["Rela", "$49 or $99/mo + per-site fees", "Storefront add-on", <Yes key="h">With add-on</Yes>, <Yes key="i" />, "Staff accounts on Pro"],
-              ["RTV", "$6–$12 per project", "Real-time booking", <Yes key="j" />, <Yes key="k" />, "Not stated"],
-              ["PhotoFounder", "$1,495/yr or $4,495 lifetime", "Agent self-booking", "Not stated", <Yes key="l" />, "Unlimited"],
+              ["HDPhotoHub", "$5–$10 per delivery", "Shopping cart", "Profiles with order history, client pricing", <Yes key="a" />, <Yes key="b">Full Delivery</Yes>, "Unlimited, no extra cost"],
+              [
+                "ShootPortal",
+                "Flat monthly",
+                "Request + estimate",
+                "Notes, message timeline, property history, lifetime revenue, balance",
+                <Yes key="c">Optional</Yes>,
+                <No key="d" />,
+                "Staff accounts with permissions",
+              ],
+              ["Aryeo", "Free Lite; Pro $49–$179/mo", "Order forms", "Agent login portal with past listings and invoices", "Not stated", "Not stated", "1, 3, or 5 seats by tier"],
+              ["Spiro", "$5 per listing", "Custom order pages", "Client CRM", "Not stated", <Yes key="e" />, "Not stated"],
+              ["Tonomo", "$140 or $250/mo", "Booking flows", "Not stated", <Yes key="f" />, <Yes key="g">Marketing kit editor</Yes>, "1 or unlimited by plan"],
+              ["Rela", "$49 or $99/mo + per-site fees", "Storefront add-on", "Not stated", <Yes key="h">With add-on</Yes>, <Yes key="i" />, "Staff accounts on Pro"],
+              ["RTV", "$6–$12 per project", "Real-time booking", "Not stated", <Yes key="j" />, <Yes key="k" />, "Not stated"],
+              ["PhotoFounder", "$1,495/yr or $4,495 lifetime", "Agent self-booking", "Not stated", "Not stated", <Yes key="l" />, "Unlimited"],
             ]}
             note={
               <>
@@ -329,12 +339,13 @@ export const article: BlogArticle = {
             name="ShootPortal"
             url="/"
             isShootPortal
-            tagline="Flat-priced workspace from request and estimate to review, payment, and delivery"
+            tagline="Flat-priced client portal from request and estimate to review, payment, and delivery"
             pricing={
               ctx.studioMonthly ? (
                 <>
                   Studio plan: {ctx.studioMonthly}/month{ctx.studioAnnual ? <> or {ctx.studioAnnual}/month billed annually</> : null}.
-                  No per-delivery fees. {ctx.trialDays > 0 ? <>{ctx.trialDays}-day free trial, no card.</> : null}
+                  No per-delivery fees; Stripe&apos;s standard processing fees apply.{" "}
+                  {ctx.trialDays > 0 ? <>{ctx.trialDays}-day free trial, no card.</> : null}
                 </>
               ) : (
                 <>
@@ -342,12 +353,14 @@ export const article: BlogArticle = {
                 </>
               )
             }
-            bestFor="Higher-volume photographers, and anyone mixing listings with quoted aerial, video, or commercial jobs."
+            bestFor="Our pick for photographers delivering above the break-even point, and anyone mixing listings with quoted aerial, video, or commercial jobs."
             pros={[
               "Flat price, so busy months don't raise your platform bill",
-              "Adjustable estimates with versions, PDFs, and ZIP-based travel fees",
-              "Frame-pinned, time-stamped video comments with numbered versions",
-              "Client CRM with notes, property history, and lifetime revenue",
+              "Adjustable estimates with versions, PDFs, expiry dates, and ZIP-based travel fees",
+              "Deposits on approval, then downloads that unlock after the final Stripe payment",
+              "Frame-pinned, time-stamped video comments with threaded replies and numbered versions",
+              "Client CRM with notes, property history, lifetime revenue, and outstanding balance",
+              "Email-invite share links with expiry for assistants or stagers who don't have an account",
             ]}
             cons={[
               "No Marketing Kit equivalent: no property sites, flyers, or social graphics",
@@ -358,7 +371,9 @@ export const article: BlogArticle = {
             <p>
               ShootPortal overlaps with HDPhotoHub on delivery: unlock downloads after payment, Print or MLS (2048px)
               downloads, ZIPs, and Matterport, Kuula, and other 3D embeds. It differs in how jobs start and how feedback
-              works, which is covered in more detail in the next section.
+              works. Instead of a cart, a job starts as a request that becomes an estimate the client approves; instead
+              of a download page, the client signs in to a portal where the estimate, shoot time, messages, review
+              comments, payment, and files all sit on one project. The next section walks through it.
             </p>
           </ToolCard>
 
@@ -464,11 +479,6 @@ export const article: BlogArticle = {
             cons={["Large upfront commitment", "No free trial (14-day money-back instead)"]}
           />
 
-          <InlineCta
-            title="Paying per delivery in your busiest months?"
-            body="See what one flat price looks like for your volume. Run a real job through ShootPortal from request to paid and delivered."
-            trialDays={ctx.trialDays}
-          />
         </>
       ),
     },
@@ -476,7 +486,9 @@ export const article: BlogArticle = {
       id: "shootportal-for-hdphotohub-users",
       title: "What ShootPortal adds, and what it doesn't, for HDPhotoHub users",
       tocLabel: "ShootPortal for HDPhotoHub users",
-      body: () => (
+      body: (ctx) => {
+        const price = monthlyPrice(ctx);
+        return (
         <>
           <p>
             If you&apos;re considering ShootPortal specifically, here&apos;s where it lines up with what you&apos;re used
@@ -511,6 +523,60 @@ export const article: BlogArticle = {
           <Figure caption="Conceptual diagram: time-stamped video comments across numbered versions.">
             <VideoReviewDiagram />
           </Figure>
+          <h3>Why the record behind the download page matters</h3>
+          <p>
+            HDPhotoHub&apos;s login-free download page is excellent for getting files to an agent quickly. What a
+            download page can&apos;t show you is the business around it. In real estate that matters because the same
+            agents come back week after week, the same addresses come back when listings relist, and the money and the
+            files are released at the same moment.
+          </p>
+          <p>
+            In ShootPortal, those all hang off one project and one client record. The agent&apos;s record shows every
+            property you&apos;ve shot for them with revenue per address, their lifetime spend, and any outstanding
+            balance. The project shows the approved estimate, the confirmed shoot time, the message thread, the review
+            status of each file, and whether the deposit and balance are paid. Clients see the same project from their
+            side, in your branding:
+          </p>
+          <Figure caption="Product illustration: a client's view of one ShootPortal project, from approved estimate to shoot, media, payment, and files (demo data).">
+            <ProductPreview view="client-portal" />
+          </Figure>
+          <BestFitPanel
+            heading="When ShootPortal is the right HDPhotoHub alternative"
+            fits={[
+              {
+                who: "You're past the break-even every month",
+                why: (
+                  <>
+                    {price ? (
+                      <>
+                        At {ctx.studioMonthly}/month, the Studio plan equals about {Math.ceil(price / 5)} Basic
+                        Deliveries. Beyond that, extra jobs add nothing to your platform bill.
+                      </>
+                    ) : (
+                      <>One flat subscription, so extra deliveries in a busy month add nothing to your platform bill.</>
+                    )}
+                  </>
+                ),
+              },
+              {
+                who: "Your work doesn't all fit a cart",
+                why: "Construction series, commercial aerials, and brand videos get a versioned estimate with travel fees, approved online before you schedule.",
+              },
+              {
+                who: "Video clients ask for revisions",
+                why: "Frame-pinned, time-stamped comments on numbered versions replace email threads and a separate review tool.",
+              },
+              {
+                who: "You want to see the business, not just the deliveries",
+                why: "An eight-stage pipeline plus client records with property history and outstanding balances, in one place.",
+              },
+            ]}
+            notFor={[
+              <>Your volume is low or very seasonal; per-delivery pricing will usually cost less.</>,
+              <>Agents expect property sites, flyers, and social graphics with every listing.</>,
+              <>You rely on Square, tips, promo codes, or drive-time Smart Scheduling.</>,
+            ]}
+          />
           <h3>What you&apos;d lose</h3>
           <p>
             Be clear-eyed about this. ShootPortal has no Marketing Kit (property sites, flyers, social graphics, reels,
@@ -519,8 +585,22 @@ export const article: BlogArticle = {
             agents, HDPhotoHub or another listing platform remains the better fit. You can{" "}
             <SiteLink href="/how-it-works">walk through ShootPortal&apos;s workflow</SiteLink> to judge for yourself.
           </p>
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Check the break-even against a real month"
+            body={
+              <>
+                Count last month&apos;s deliveries, then run your next few jobs through ShootPortal from request to paid
+                and delivered. You&apos;ll know whether a flat price and a project-based portal beat paying per
+                delivery for the way you actually work.
+              </>
+            }
+            secondaryHref="/pricing"
+            secondaryLabel="See pricing"
+          />
         </>
-      ),
+        );
+      },
     },
     {
       id: "how-to-choose",
@@ -557,8 +637,8 @@ export const article: BlogArticle = {
               },
               {
                 who: "Quoted jobs and video revisions",
-                pick: "ShootPortal",
-                why: "Estimates, approvals, and frame-pinned video review in the same project as delivery.",
+                pick: "ShootPortal (our pick)",
+                why: "Estimates, approvals, frame-pinned video review, and pay-before-download in the same project as delivery.",
               },
             ]}
           />
@@ -661,7 +741,7 @@ export const article: BlogArticle = {
   related: ["shootportal-vs-aryeo-vs-hdphotohub", "best-aryeo-alternatives", "best-real-estate-photography-software"],
   cta: {
     title: "One flat price, however busy the month gets.",
-    body: "ShootPortal brings requests, estimates, scheduling, video review, payments, and delivery into one branded client portal.",
+    body: "Requests, estimates, shoot times, video revisions, payments, and downloads on one project, in a client portal with your logo, colors, and domain. No per-delivery fees.",
     secondaryHref: "/pricing",
     secondaryLabel: "See pricing",
   },

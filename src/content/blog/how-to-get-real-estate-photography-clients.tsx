@@ -5,12 +5,12 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   SiteLink,
 } from "@/components/blog/article-parts";
 import { DocumentCard, FunnelDiagram } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { TrialCard } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "how-to-get-real-estate-photography-clients",
@@ -307,6 +307,13 @@ export const article: BlogArticle = {
       tocLabel: "Retention and growth",
       body: (ctx) => (
         <>
+          <p>
+            Strategies 1–11 earn the first booking. Whether there&apos;s a second one depends on everything that
+            happens between the agent&apos;s request and the moment the photos go live on the MLS: how fast you
+            confirm, how clearly you price, whether the shoot time is settled without five texts, and how easy the
+            files are to get. Agents rarely tell you they found that part clumsy. They just book someone else next
+            time.
+          </p>
           <h3>12. Make the client experience the reason agents stay</h3>
           <p>
             For a busy agent, a great photographer is one who is easy to book, shows up on time, delivers fast, and
@@ -341,22 +348,52 @@ export const article: BlogArticle = {
             undoes the reputation that brought the clients in. Keep each agent&apos;s history in one record, track
             every listing by stage, and use consistent emails for confirmations and delivery.
           </p>
+          <h3>What a repeat-agent workflow looks like in ShootPortal</h3>
           <p>
-            ShootPortal (our product) is built around that kind of growth. Each agent has a client record with notes,
-            message history, property history by address, lifetime revenue, and outstanding balance. Listings move
-            through stages from request to delivery, and agents use your branded portal to approve estimates, respond
-            to proposed shoot times, review and download media, and pay. Share links let an agent&apos;s assistant or
-            co-listing agent download files without an account. It doesn&apos;t send SMS or build property websites, so
-            if agents expect those, factor that in.{" "}
-            {ctx.trialDays > 0 ? <>You can try it free for {ctx.trialDays} days, no card required.</> : null}
+            ShootPortal (our product) is built around keeping agents once you&apos;ve won them. Here is how the
+            second, tenth, and fiftieth listing for the same agent works:
           </p>
-          <Figure caption="Product illustration: agent client records with history and balances in ShootPortal (demo data).">
-            <ProductPreview view="clients" />
+          <ul>
+            <li>
+              <strong>Booking is the same every time.</strong> The agent requests the next listing from your branded
+              request form, picks a package from your service list, and gets an estimate to approve in their portal.
+              You propose a shoot time, and they accept it or suggest another.
+            </li>
+            <li>
+              <strong>You remember what they like.</strong> Their client record keeps timestamped notes (usual
+              package, lockbox habits, twilight on luxury listings), the full message history, and property history
+              by address, so when a home they listed last year comes back, you can see what you shot and what it
+              cost.
+            </li>
+            <li>
+              <strong>Delivery is fast and phone-friendly.</strong> Photos download as MLS size or full-resolution
+              print files, one at a time or as a ZIP. Share links let a transaction coordinator or co-listing agent
+              download without an account.
+            </li>
+            <li>
+              <strong>Payment doesn&apos;t become a conversation.</strong> The agent pays by card through Stripe in
+              the same portal, and you can set downloads to unlock once the balance is paid.
+            </li>
+          </ul>
+          <p>
+            To be clear about what each part does: reminder emails, receipts, and some stage changes happen
+            automatically. The client record, messages, files, and payment status are centralized on the agent and
+            the listing. The relationship itself (the check-in call, the referral ask, the office presentation) is
+            still yours. ShootPortal doesn&apos;t send SMS or build property websites, so if your agents expect those,
+            factor that in.
+          </p>
+          <Figure caption="Product illustration: an agent's view of a listing in the ShootPortal client portal, moving from estimate to shoot, media, payment, and files (demo data).">
+            <ProductPreview view="client-portal" />
           </Figure>
-          <InlineCta
-            title="Give every agent the same great experience"
-            body="Client records, listing projects, messages, payments, and delivery in one branded portal."
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Make the second booking easier than the first"
+            body={
+              <>
+                Put your packages on a branded request form, keep each agent&apos;s notes and property history on their
+                record, and deliver MLS-ready files they can grab from a phone. Try it on your next listing.
+              </>
+            }
           />
           <p>
             For a broader look at tools that track clients and leads, see our{" "}
@@ -459,8 +496,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-photography-crm-software", "real-estate-photography-client-management", "how-to-start-real-estate-photography-business"],
   cta: {
-    title: "Win the agent, then keep them.",
-    body: "Client records, listing projects, messages, payments, and delivery in one portal branded to your business.",
+    title: "You won the agent. Now give them a reason to rebook.",
+    body: "A branded request form, estimates agents approve online, agent records with notes and property history, and fast MLS-ready delivery with payment in the same portal.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

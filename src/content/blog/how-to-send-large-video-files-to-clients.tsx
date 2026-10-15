@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   No,
   SiteLink,
@@ -14,6 +13,7 @@ import {
 import { DeliveryPathDiagram, VideoReviewDiagram } from "@/components/blog/diagrams";
 import { FileSizeChart } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "how-to-send-large-video-files-to-clients",
@@ -381,16 +381,15 @@ export const article: BlogArticle = {
               as a new request (a new shot list, a re-fly) versus a revision.
             </li>
           </ul>
-          <h3>How ShootPortal handles video review</h3>
-          <p>
-            In ShootPortal, video review happens inside the client&apos;s project rather than in a separate tool. Clients
-            leave time-stamped comments that can be pinned to a spot on the frame, you reply in threads, and comments can
-            be resolved or reopened. Each upload of a cut becomes a numbered version, so feedback stays attached to the
-            version it was left on. Clients can approve or reject each deliverable with written feedback, which gives you
-            the approval record before you export the final. It&apos;s built for client review on a project, not as a
-            replacement for a full post-production review suite with NLE integrations; if your editors need those,
-            Frame.io or Dropbox Replay is the better fit for the internal side.
-          </p>
+          <ProductCallout title="&quot;The part near the end&quot; becomes a pin at 1:42 on v2">
+            <p>
+              In ShootPortal, the client reviews the cut inside their project. They pause, click, and leave a
+              time-stamped comment that can be pinned to a spot on the frame. You reply in a thread and mark it
+              resolved when it&apos;s fixed. Upload the next cut and it becomes v3, with v2&apos;s comments still attached
+              to v2. It&apos;s built for client review, not as a replacement for a post-production suite with NLE
+              integrations; if your editors need those, Frame.io or Dropbox Replay is the better fit internally.
+            </p>
+          </ProductCallout>
         </>
       ),
     },
@@ -398,7 +397,7 @@ export const article: BlogArticle = {
       id: "delivering-finals",
       title: "Sharing the final files professionally",
       tocLabel: "Delivering finals",
-      body: (ctx) => (
+      body: () => (
         <>
           <p>
             Once a cut is approved, the final delivery is about access: who can watch it, who can download it, for how
@@ -432,23 +431,91 @@ export const article: BlogArticle = {
           <Figure caption="Conceptual diagram: upload, client review, optional payment step, then download. Illustrative only.">
             <DeliveryPathDiagram showPaywall />
           </Figure>
+        </>
+      ),
+    },
+    {
+      id: "review-to-delivery-loop",
+      title: "Review, version, pay, deliver: running the whole loop in one project",
+      tocLabel: "The full loop",
+      body: (ctx) => (
+        <>
           <p>
-            ShootPortal puts these steps in one project. Large video files go up with resumable uploads (built on the
-            open tus protocol), so a dropped connection partway through a multi-gigabyte upload doesn&apos;t mean starting
-            over. Clients watch the video files in their portal, alongside any YouTube embeds, photos, and documents for
-            the same job, and download single files or a ZIP. An optional setting keeps downloads locked until the final
-            payment is made through your own Stripe account, while still letting the client preview. For people without
-            an account, you can create &quot;anyone with the link&quot; view pages or email-invite shares that are
-            one-time or reusable and can expire. One thing to plan for: upload the delivery export you want clients to
-            play, and keep masters for those who&apos;ve asked for them.
+            Each tool above does its own job well. The cost shows up between them. A typical small-business video job
+            with separate tools looks like this: upload to a review platform, paste the link into an email, collect
+            notes, upload v2 and send a new link, chase an approval, send an invoice from your accounting app, watch for
+            the payment, then upload the final to Drive or a transfer service and send a third link. The client has
+            three links to keep track of, and you&apos;re the only one who knows whether the job is approved, paid,
+            and delivered.
           </p>
+          <p>
+            The alternative is to keep the cut, the comments, the approval, the payment, and the final file on the same
+            project, so one page answers &quot;where are we?&quot; for both of you. Here&apos;s how that loop runs in
+            ShootPortal for a two-minute listing film at Oak St:
+          </p>
+          <ol>
+            <li>
+              <strong>Upload the cut to the project.</strong> Uploads are resumable (ShootPortal uses the open tus
+              protocol), so a dropped connection partway through a multi-gigabyte file picks up where it left off
+              instead of starting over.
+            </li>
+            <li>
+              <strong>The client reviews in their portal.</strong> They watch v1, leave time-stamped comments pinned to
+              the frame, and you reply in threads. Comment notifications are batched rather than sent one by one.
+            </li>
+            <li>
+              <strong>Post the next version.</strong> v2 sits next to v1 with each version&apos;s comments kept
+              separately, and you resolve or reopen comments as you work through them.
+            </li>
+            <li>
+              <strong>Get the approval on record.</strong> The client approves the deliverable, or rejects it with
+              written feedback and a revision request, in the same place.
+            </li>
+            <li>
+              <strong>Request payment from the project.</strong> The client pays through Stripe Checkout, and the money
+              goes to your own connected Stripe account. A receipt goes out by email.
+            </li>
+            <li>
+              <strong>Deliver the final.</strong> The approved file is already in the project. With &quot;unlock
+              downloads after payment&quot; turned on, the client can watch it right away and download it (single file or
+              ZIP) once the final payment is made. Share links or email invites, one-time or reusable with expiry, cover
+              the seller or the agency editor.
+            </li>
+          </ol>
           <Figure caption="Product illustration: a ShootPortal project's media view, where a job's deliverables live together (demo data).">
             <ProductPreview view="media" />
           </Figure>
-          <InlineCta
-            title="One link for the cut, the comments, and the final"
-            body="Upload large video files, collect time-stamped feedback on numbered versions, and unlock downloads when the invoice is paid."
+          <h3>Automatic, centralized, and still manual</h3>
+          <ul>
+            <li>
+              <strong>Automatic:</strong> resuming interrupted uploads, version numbering, batched comment
+              notifications, emailed receipts, the download unlock after final payment (if you enable it), and some
+              project stage changes, including an optional move to Delivered once paid.
+            </li>
+            <li>
+              <strong>Centralized:</strong> every version, comment thread, approval, message, payment status, and final
+              file for the job, on the client&apos;s record.
+            </li>
+            <li>
+              <strong>Still manual:</strong> editing and exporting (do it in your NLE), choosing which export to upload,
+              sending the payment request, and handing masters to anyone who needs them. ShootPortal plays and delivers
+              the file you upload, so upload the delivery export clients should watch, and keep masters for those
+              who&apos;ve asked for them. It&apos;s not a bulk transfer service for raw footage to an editor; use a
+              transfer tool for that.
+            </li>
+          </ul>
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Send your next cut through one project"
+            body={
+              <>
+                Upload a real cut, open the review link as your client, leave a pinned comment, post v2, and see what the
+                approve-pay-download step looks like from their side, before you change anything in your current
+                workflow.
+              </>
+            }
+            secondaryHref="/how-it-works"
+            secondaryLabel="See how review and delivery work"
           />
         </>
       ),
@@ -602,9 +669,9 @@ export const article: BlogArticle = {
     "google-drive-vs-dropbox-photo-delivery",
   ],
   cta: {
-    title: "Stop juggling transfer links and review tools",
-    body: "Upload large video files, collect time-stamped feedback on numbered versions, and unlock downloads after payment, all from one client project.",
+    title: "Keep the cut, the comments, and the final in one place",
+    body: "Resumable uploads, time-stamped comments pinned to the frame, numbered versions, approvals, and payment through your own Stripe account, with downloads that can unlock after the final payment.",
     secondaryHref: "/how-it-works",
-    secondaryLabel: "See how delivery works",
+    secondaryLabel: "See how review works",
   },
 };

@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -14,6 +13,7 @@ import {
   Yes,
 } from "@/components/blog/article-parts";
 import { DeliveryPathDiagram, ToolCategoryMap, WorkflowDiagram } from "@/components/blog/diagrams";
+import { BestFitPanel, TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "best-drone-business-management-software",
@@ -62,8 +62,9 @@ export const article: BlogArticle = {
         but neither delivers photos, video, or maps.
       </>,
       <>
-        <strong>Want custom quotes with travel fees, client review, payments, and delivery of video, photos, and 3D or
-        map embeds in one portal?</strong> That&apos;s what ShootPortal (our product) was built for.
+        <strong>Need the client side handled: custom quotes with travel fees, weather reschedules, video revisions,
+        deposits, and delivery of video, photos, and DroneDeploy or Pix4D embeds in one portal?</strong> That&apos;s
+        our pick, ShootPortal (our product), paired with the flight app you already use.
       </>,
     ],
   },
@@ -304,23 +305,45 @@ export const article: BlogArticle = {
           </p>
           <ComparisonTable
             caption="Drone business management software comparison, October 2026"
-            columns={["Tool", "Type", "Entry price (Oct 2026)", "Client portal", "Media delivery", "Flight logging"]}
-            highlightColumn={undefined}
+            columns={[
+              "Tool",
+              "Type",
+              "Entry price (Oct 2026)",
+              "Client portal",
+              "Media delivery",
+              "Distance-based travel fees",
+              "Time-stamped video review",
+              "Downloads locked until paid",
+              "Flight logging",
+            ]}
             rows={[
-              ["ShootPortal", "Project workflow + delivery", "Flat monthly subscription", <Yes key="a" />, <Yes key="b">Photos, video, 3D/map embeds</Yes>, <No key="c" />],
-              ["Dronedesk", "Drone ops + business", "See official pricing", "Not stated", "Not stated", <Yes key="d" />],
-              ["HoneyBook", "Creative CRM", "$29/mo billed yearly", <Yes key="e" />, <No key="f">Via Pic-Time integration</No>, <No key="g" />],
-              ["Dubsado", "Creative CRM", "$335/yr", <Yes key="h" />, <No key="i" />, <No key="j" />],
-              ["Studio Ninja", "Photography CRM", "$16/mo", <Yes key="k" />, <No key="l">Via integrations</No>, <No key="m" />],
-              ["Jobber", "Field service", "$29/mo billed annually", <Yes key="n">Client Hub</Yes>, <No key="o" />, <No key="p" />],
-              ["Housecall Pro", "Field service", "$59/mo billed annually", "Not stated", <No key="q" />, <No key="r" />],
-              ["Aryeo", "Real estate media", "Free Lite; Pro from $49/mo", <Yes key="s">Agent portal</Yes>, <Yes key="t" />, <No key="u" />],
-              ["HDPhotoHub", "Real estate media", "$5–$10 per delivery", "Not stated", <Yes key="v" />, <No key="w" />],
+              [
+                "ShootPortal",
+                "Project workflow + delivery",
+                "Flat monthly subscription",
+                <Yes key="a" />,
+                <Yes key="b">Photos, video, 3D/map embeds</Yes>,
+                <Yes key="b1">ZIP-to-ZIP rules</Yes>,
+                <Yes key="b2">Pinned to the frame</Yes>,
+                <Yes key="b3">Optional</Yes>,
+                <No key="c" />,
+              ],
+              ["Dronedesk", "Drone ops + business", "See official pricing", "Not stated", "Not stated", "Not stated", "Not stated", "Not stated", <Yes key="d" />],
+              ["HoneyBook", "Creative CRM", "$29/mo billed yearly", <Yes key="e" />, <No key="f">Via Pic-Time integration</No>, "Not stated", <No key="f1" />, <No key="f2">No native delivery</No>, <No key="g" />],
+              ["Dubsado", "Creative CRM", "$335/yr", <Yes key="h" />, <No key="i" />, "Not stated", <No key="i1" />, <No key="i2">No native delivery</No>, <No key="j" />],
+              ["Studio Ninja", "Photography CRM", "$16/mo", <Yes key="k" />, <No key="l">Via integrations</No>, "Not stated", <No key="l1" />, <No key="l2">No native delivery</No>, <No key="m" />],
+              ["Jobber", "Field service", "$29/mo billed annually", <Yes key="n">Client Hub</Yes>, <No key="o" />, "Not stated", <No key="o1" />, <No key="o2">No media delivery</No>, <No key="p" />],
+              ["Housecall Pro", "Field service", "$59/mo billed annually", "Not stated", <No key="q" />, "Not stated", <No key="q1" />, <No key="q2">No media delivery</No>, <No key="r" />],
+              ["Aryeo", "Real estate media", "Free Lite; Pro from $49/mo", <Yes key="s">Agent portal</Yes>, <Yes key="t" />, <Yes key="t1">Distance or time</Yes>, "Not stated", "Not stated", <No key="u" />],
+              ["HDPhotoHub", "Real estate media", "$5–$10 per delivery", "Not stated", <Yes key="v" />, "Not stated", "Not stated", <Yes key="v1">Pay to Download</Yes>, <No key="w" />],
             ]}
             note={
               <>
                 Prices from each vendor&apos;s official pricing page, checked October 15, 2026, and linked in the
-                reviews below. Card processing fees are charged separately by each payment provider.
+                reviews below. Card processing fees are charged separately by each payment provider. The three middle
+                columns are the drone-specific client workflow: pricing a job by distance, collecting video feedback,
+                and holding finals until the balance is paid. No tool in this table covers both those and flight
+                logging, which is why most operators run two apps.
               </>
             }
           />
@@ -343,7 +366,7 @@ export const article: BlogArticle = {
             name="ShootPortal"
             url="/"
             isShootPortal
-            tagline="Request-to-delivery project workspace built by a working drone operator"
+            tagline="The client side of a drone job, from request to paid delivery, built by a working Part 107 operator"
             pricing={
               ctx.studioMonthly ? (
                 <>
@@ -357,32 +380,42 @@ export const article: BlogArticle = {
                 </>
               )
             }
-            bestFor="Solo pilots and small teams doing custom aerial photo, video, and mapping work who want quoting, client review, payment, and delivery in one place."
+            bestFor="Solo pilots and small teams doing custom aerial photo, video, and mapping work who want quoting, rescheduling, client review, payment, and delivery on one project record. Our pick for that profile."
             pros={[
-              "Versioned estimates with PDFs, plus travel fees calculated from ZIP-to-ZIP distance (mileage tiers or free radius plus per-mile rate)",
-              "Deliver photos, video, Kuula tours, and 3D or map embeds from DroneDeploy, Pix4D, Matterport, Polycam, ArcGIS, Cesium, and others",
-              "Time-stamped video comments pinned to the frame, with numbered versions",
-              "Deposits on approval and optional download unlock after final payment, paid into your own Stripe account",
-              "Resumable uploads for large files; staff accounts with granular permissions",
+              "Versioned estimates with expiry dates and PDFs, plus travel fees calculated from ZIP-to-ZIP distance (mileage tiers, or a free radius plus a per-mile rate with a cap)",
+              "Weather moves handled in the portal: you propose a new shoot time and the client accepts, declines, or counter-proposes; confirmed shoots push to your Google Calendar",
+              "Deliver photos, video, Kuula tours, and 3D or map embeds from DroneDeploy, Pix4D, Agisoft, Matterport, Polycam, ArcGIS, Cesium, and others",
+              "Time-stamped video comments pinned to a spot on the frame, threaded replies, and numbered versions",
+              "Deposits on approval (percentage or fixed) and optional download unlock after final payment, paid into your own Stripe account",
+              "Resumable uploads for large files; staff accounts with granular permissions and per-project assignment",
             ]}
             cons={[
-              "No flight logging, airspace, or compliance features; keep using your flight-ops app",
+              "No flight logging, airspace, weather, or compliance features; keep Aloft, AirData, or similar for that",
               "You propose shoot times and the client responds; clients can't self-book open slots",
               "No contracts/e-signature, SMS notifications, or QuickBooks sync",
             ]}
           >
             <p>
-              ShootPortal started as the system behind a working drone photography business, so it&apos;s organized
-              around the job rather than around a storefront or a flight. A client submits a request from your branded
-              portal with the site address and the service they need, and ShootPortal can produce a preliminary
-              estimate with a travel fee before you send the official one.
+              ShootPortal&apos;s founder holds a Part 107 certificate and runs a drone photography business, and the
+              product is organized the way those jobs actually run: around the project, not around a storefront or a
+              flight. A client submits a request from your branded portal with the site address, the service from
+              your catalog, and a preferred date. ShootPortal creates the client record and can produce a preliminary
+              estimate with the travel fee already calculated from the job&apos;s ZIP code, before you send the
+              official, versioned estimate.
             </p>
             <p>
-              After approval, you propose a shoot time and the client accepts, declines, or suggests another. That
-              matters when weather forces a move: the new time goes through the same flow, and confirmed shoots push to
-              your Google Calendar. When the work is done, the client reviews each deliverable in the portal, comments
-              on video at the exact second, pays, and downloads. A mapping deliverable can sit next to the flyover
-              video and stills as an embed, so the client isn&apos;t juggling three links.
+              Here&apos;s how a typical commercial job moves. The client approves the estimate (or requests changes)
+              in the portal, and a deposit request can go out on approval. You propose a shoot time; when the wind
+              forecast kills it, you propose a new one and the client accepts or counters, with the exchange kept on
+              the project instead of in a text thread. After the flight, you upload the edit, the stills, and the
+              DroneDeploy or Pix4D link. The client approves each deliverable or sends written feedback, pins video
+              comments to the exact second and spot on the frame, pays the balance through Stripe Checkout, and then
+              downloads the originals, a ZIP, or MLS-size copies.
+            </p>
+            <p>
+              The point is that the estimate, shoot time, messages, files, feedback, and payment status sit on the same
+              project. When a client asks &quot;where are we?&quot;, you open one page instead of searching email, a
+              calendar, a drive folder, and Stripe.
             </p>
           </ToolCard>
 
@@ -543,11 +576,66 @@ export const article: BlogArticle = {
             pros={["Pay to Download with Stripe or Square", "Matterport, iGUIDE, Zillow 3D, and any embed URL", "Unlimited team members"]}
             cons={["Per-delivery pricing grows with volume", "Listing-centric; less suited to custom commercial quotes"]}
           />
-
-          <InlineCta
-            title="Quote, schedule, and deliver your next aerial job in one place"
-            body="Send a versioned estimate with travel fees, propose the shoot time, and deliver video, stills, and map embeds through a portal with your logo."
+        </>
+      ),
+    },
+    {
+      id: "right-fit",
+      title: "When ShootPortal is the right fit for a drone business",
+      tocLabel: "Is ShootPortal a fit?",
+      body: (ctx) => (
+        <>
+          <p>
+            Great aerials are only half of a drone business. The other half is everything that happens between
+            &quot;can you fly our site?&quot; and the paid download: the quote, the travel fee, the weather delays, the
+            revision rounds, the deposit, and getting a multi-gigabyte edit and a processed map to a client who isn&apos;t
+            technical. That half is where ShootPortal is built to help, and it&apos;s where it fits best.
+          </p>
+          <BestFitPanel
+            heading="Who should choose ShootPortal for drone work"
+            fits={[
+              {
+                who: "Solo pilots selling custom jobs",
+                why: "Acreage, deliverables, and distance change every quote. Estimates are versioned with PDFs, and travel fees come from rules you set instead of mental math.",
+              },
+              {
+                who: "Pilots who deliver video",
+                why: "Clients leave time-stamped comments pinned to the frame, you upload numbered versions, and each round stays attached to the job.",
+              },
+              {
+                who: "Mapping and inspection operators",
+                why: "Embed the DroneDeploy, Pix4D, ArcGIS, or Cesium output next to the flyover video and stills, so the client gets one portal link instead of three.",
+              },
+              {
+                who: "Small teams of two or three",
+                why: "Staff accounts with granular permissions and per-project assignment, so a second pilot or editor sees their jobs without your whole client list.",
+              },
+            ]}
+            notFor={[
+              "You need flight logs, LAANC, risk assessments, or battery records in the same app. ShootPortal has none of that; Dronedesk combines flight ops with quoting, and Aloft or AirData cover compliance.",
+              "Clients must book open time slots themselves. In ShootPortal you propose a time and the client accepts or counters.",
+              "You rely on contracts with e-signature, SMS reminders, or QuickBooks sync.",
+              "You run a dispatch-heavy crew that needs auto-assignment or drive-time routing; Jobber or Housecall Pro fit better.",
+            ]}
+          />
+          <p>
+            In practice, the stack we&apos;d recommend for most commercial pilots is simple: a flight-ops app for
+            airspace and logs, your processing software for maps and models, and ShootPortal for the client from
+            request to paid delivery. Here is what that covers at each stage.
+          </p>
+          <Figure caption="ShootPortal's verified features at each stage of a job.">
+            <WorkflowCoverageMap highlight={["estimate", "schedule", "review", "pay", "deliver"]} />
+          </Figure>
+          <p>
+            What&apos;s automated versus what you still do: preliminary estimates and travel fees are calculated for
+            you, some stage changes happen automatically, and reminder emails go out for proposals, scheduling, review,
+            and payment. You still decide when to fly, upload the files, and choose whether downloads unlock only after
+            payment.
+          </p>
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Put your next aerial job through it"
+            body="Add your services and travel-fee rule, connect your own Stripe account, then send one real estimate, propose the shoot time, and deliver the edit and map embed through your branded portal."
           />
         </>
       ),
@@ -750,7 +838,7 @@ export const article: BlogArticle = {
   related: ["best-photography-crm-software", "best-photo-video-delivery-platforms", "best-real-estate-photography-software"],
   cta: {
     title: "Run the business behind the footage.",
-    body: "Estimates with travel fees, shoot scheduling, video review, payments, and delivery of photos, video, and 3D or map embeds, all in a portal with your branding.",
+    body: "Keep your flight app for the airspace. Use ShootPortal for the client: estimates with travel fees, weather reschedules by propose-and-counter, video review, deposits, and delivery of photos, video, and DroneDeploy or Pix4D embeds in a portal with your logo.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

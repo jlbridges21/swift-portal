@@ -5,12 +5,12 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   SiteLink,
   Steps,
 } from "@/components/blog/article-parts";
 import { CostBreakdown, SampleEstimate } from "@/components/blog/business-diagrams";
+import { TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
 import { JobPriceCalculator } from "@/components/blog/job-price-calculator";
 
 const THUMBTACK_AERIAL = "https://www.thumbtack.com/p/aerial-photography-prices";
@@ -437,7 +437,7 @@ export const article: BlogArticle = {
       id: "build-your-rate",
       title: "Build your rate with cost-plus pricing",
       tocLabel: "Cost-plus worksheet",
-      body: (ctx) => (
+      body: () => (
         <>
           <p>
             Market ranges tell you whether a price is plausible. Cost-plus tells you whether it&apos;s sustainable. Use
@@ -486,11 +486,11 @@ export const article: BlogArticle = {
             which services pay for themselves and which are quietly subsidized by the rest. You may find that the
             add-on you sell most often has the thinnest margin once editing time is counted honestly.
           </p>
-          <InlineCta
-            title="Quote drone jobs with your real numbers"
-            body="Set up your services with starting-at prices and line items, add ZIP-based travel fees, and send estimates clients can approve online."
-            trialDays={ctx.trialDays}
-          />
+          <p>
+            Pay attention to the admin line in particular. In the example breakdown above, quoting, scheduling, and
+            delivery take a bigger share of the price than travel. That share is real time, and it repeats on every
+            job. It&apos;s also the one cost you can shrink without lowering your rate or your quality.
+          </p>
         </>
       ),
     },
@@ -568,43 +568,80 @@ export const article: BlogArticle = {
     },
     {
       id: "quoting-in-shootportal",
-      title: "Turning your price list into quotes with ShootPortal",
+      title: "From rate card to repeatable quotes: running your pricing in ShootPortal",
       tocLabel: "Quoting in ShootPortal",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
-            ShootPortal (our product) was built by the owner of a Part 107 drone photography business. Its quoting
-            tools follow the workflow above:
+            A rate only makes money if four things happen every time: it&apos;s quoted the same way, the client
+            approves it before you fly, you collect it, and the job is delivered without an evening of follow-up. Miss
+            one and the margin you worked out in the worksheet leaks away. Travel gets forgotten on a rural job, a
+            verbal &quot;yes&quot; turns into a scope argument, or the balance sits unpaid for three weeks. A price
+            list in a spreadsheet can&apos;t enforce any of that. A quoting workflow can.
+          </p>
+          <p>
+            ShootPortal (our product) was built by the owner of a Part 107 drone photography business, and its quoting
+            tools follow the same steps as this guide:
           </p>
           <ul>
             <li>
-              <strong>Service catalog.</strong> Set up each service or package with a description, a &quot;starting
-              at&quot; label, an includes list, and line items. You can hide pricing on services you&apos;d rather
+              <strong>Your rate card becomes a service catalog.</strong> Each service or package gets a description, a
+              &quot;starting at&quot; label, an includes list, and line items, so &quot;25 edited aerial stills, one
+              revision round&quot; is written down once instead of retyped on every quote. Mark your best-value package
+              as recommended, start from the built-in starter templates, and hide pricing on services you&apos;d rather
               quote case by case, such as mapping or recurring construction work.
             </li>
             <li>
-              <strong>Automatic preliminary estimates with travel fees.</strong> When a client requests a service from
-              your request form, ShootPortal can generate a preliminary estimate that includes a travel fee based on
-              ZIP-to-ZIP distance. You choose mileage tiers or a free radius plus a per-mile rate with a cap.
+              <strong>Travel is calculated, not remembered.</strong> When a client picks a service on your request
+              form and enters the site address, ShootPortal can produce a preliminary estimate that already includes a
+              travel fee from ZIP-to-ZIP distance. You set the rule once: mileage tiers, or a free radius plus a
+              per-mile rate with a cap. The same job 40 miles out gets the same fee every time.
             </li>
             <li>
-              <strong>Official estimates with versions.</strong> Send a formal estimate with an expiry date. If the
-              scope changes, issue a new version. Clients approve or request changes in their portal and can download
-              a PDF.
+              <strong>Scope is written down and versioned.</strong> For commercial or custom work, send an official
+              estimate with an expiry date. If the client adds a flight or a second deliverable, issue a new version
+              instead of editing an email thread. Clients approve or request changes in their portal and can download
+              the estimate as a PDF.
             </li>
             <li>
-              <strong>Deposits on approval.</strong> Request a percentage or fixed deposit when the estimate is
-              approved, with payments going through Stripe directly to your own account.
+              <strong>The deposit is part of the approval.</strong> Request a percentage or fixed deposit when the
+              estimate is approved, then the balance later, with payments going through Stripe directly to your own
+              account. If you want, downloads stay locked until the final payment, while the client can still view the
+              media.
             </li>
           </ul>
+          <Figure caption="ShootPortal's verified features at each stage of a job.">
+            <WorkflowCoverageMap highlight={["request", "estimate", "pay"]} />
+          </Figure>
+          <h3>What&apos;s automated, what&apos;s centralized, and what stays with you</h3>
+          <p>
+            <strong>Automated:</strong> the preliminary estimate and its travel fee, reminder emails for open
+            proposals and payments, and some stage changes, such as moving a project to Delivered after payment if you
+            turn that on. <strong>Centralized:</strong> the estimate versions, the deposit and balance status, the
+            client&apos;s messages, and the delivered files all sit on one project, so &quot;did they approve the
+            revised quote?&quot; takes one click to answer. <strong>Still yours:</strong> deciding the price, scoping
+            custom jobs, and anything to do with the flight itself.
+          </p>
           <p>
             What it won&apos;t do: ShootPortal doesn&apos;t generate contracts or collect e-signatures, and it
-            doesn&apos;t log flights or handle airspace authorization. You&apos;d keep a separate flight-logging tool.
-            For a broader look at the options, see the comparison of{" "}
+            doesn&apos;t log flights or handle airspace authorization, so keep your flight-ops app and your own written
+            terms. For a broader look at the options, see the comparison of{" "}
             <BlogLink slug="best-drone-business-management-software">drone business management software</BlogLink>.
-            You can also see the full request-to-delivery flow on the{" "}
-            <SiteLink href="/how-it-works">how it works</SiteLink> page.
+            The full request-to-delivery flow is on the <SiteLink href="/how-it-works">how it works</SiteLink> page.
           </p>
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Load your drone rate card and quote a real job"
+            body={
+              <>
+                Add your services from a starter template, set your travel rule, and send yourself an estimate with a
+                deposit to see exactly what a client sees. If it doesn&apos;t save you time on the next quote, you
+                haven&apos;t paid anything.
+              </>
+            }
+            secondaryHref="/pricing"
+            secondaryLabel="See pricing"
+          />
         </>
       ),
     },
@@ -735,8 +772,8 @@ export const article: BlogArticle = {
     "real-estate-photography-pricing-guide",
   ],
   cta: {
-    title: "Price every flight with confidence.",
-    body: "Build a service catalog with starting-at prices, add ZIP-based travel fees automatically, and send versioned estimates with deposits clients can approve online.",
+    title: "Quote every flight the same way, and get paid for it.",
+    body: "Turn your rate card into a service catalog, let ZIP-distance travel fees calculate themselves, and send versioned estimates with a deposit due on approval. Delivery and the balance live on the same project.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

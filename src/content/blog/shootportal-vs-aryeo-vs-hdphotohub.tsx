@@ -5,13 +5,14 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   No,
   PickGrid,
   SiteLink,
   Yes,
 } from "@/components/blog/article-parts";
 import { BookingFlowDiagram } from "@/components/blog/diagrams";
+import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
+import { ProductPreview } from "@/components/blog/product-preview";
 
 /** Parses "$59" → 59 so the annual-cost row tracks live pricing. Null when unavailable. */
 function monthlyPrice(ctx: BlogRenderContext): number | null {
@@ -41,7 +42,7 @@ export const article: BlogArticle = {
     "real estate photography software comparison",
     "HDPhotoHub vs Aryeo",
   ],
-  readingMinutes: 13,
+  readingMinutes: 15,
   cover: { variant: "versus", label: "Head to Head", alt: "Illustration of three software panels facing off on a dark indigo background" },
   disclosure: true,
   quickAnswer: {
@@ -57,7 +58,8 @@ export const article: BlogArticle = {
       </>,
       <>
         <strong>ShootPortal</strong> (our product) wins on custom estimates, frame-accurate video review, client CRM, and
-        one flat price with no listing caps.
+        one flat price with no listing caps. It&apos;s our pick for solo shooters and small teams who mix listings with
+        aerial, video, or commercial work.
       </>,
       <>
         <strong>Low or seasonal volume?</strong> HDPhotoHub is usually cheapest. <strong>High, steady volume?</strong> A
@@ -214,7 +216,12 @@ export const article: BlogArticle = {
               ["Travel fees", "ZIP-to-ZIP distance tiers or per-mile", "Percentage, flat, or by distance/time", "Not stated"],
               ["Project pipeline", "8 stages, request to delivered", "Content dashboard; reporting on Pro", "Not stated"],
               ["Client records", "Notes, timeline, property history, lifetime revenue", "Agent login portal", "Profiles with order history, client pricing"],
+              ["Estimate approval online", <Yes key="r6a">Versioned, with PDF and expiry</Yes>, "Not stated", "Not stated"],
+              ["Property history per address", <Yes key="r6b">Projects and revenue per address</Yes>, "Not stated", "Not stated"],
+              ["Client messaging on the job", <Yes key="r6c">Two-way, on the project</Yes>, "Not stated", "Not stated"],
               ["Media delivery", "Print + MLS (2048px), ZIP, video, 3D, Kuula", "Delivery center, branded delivery pages", "Login-free pages, MLS resizing, 3D embeds"],
+              ["Approve / request changes per file", <Yes key="r8b">With written feedback</Yes>, "Not stated", "Not stated"],
+              ["Sharing with people who have no account", <Yes key="r8c">View links; email invites with expiry</Yes>, "Not stated", <Yes key="r8d">Login-free download pages</Yes>],
               ["Pay-to-download", <Yes key="r9a">Optional</Yes>, "Not stated", <Yes key="r9c" />],
               ["Payment processors", "Stripe (your own account)", "Payment integrations (not itemized)", "Stripe or Square"],
               ["Deposits", <Yes key="r11a" />, <Yes key="r11b" />, <Yes key="r11c" />],
@@ -312,6 +319,35 @@ export const article: BlogArticle = {
             If you juggle agents, builders, and commercial clients with different histories, the CRM depth matters more.
             The <BlogLink slug="best-photography-crm-software">photography CRM comparison</BlogLink> goes further on this.
           </p>
+          <h3>Why this matters more in real estate than in most photography</h3>
+          <p>
+            Real estate media runs on repeat business. The same agent books you again next week, the same house comes
+            back when it relists, and every delivery is waiting on a payment. That changes what &quot;management&quot;
+            means:
+          </p>
+          <ul>
+            <li>
+              <strong>Repeat orders.</strong> When an agent&apos;s usual package, past jobs, notes, and message history
+              are on one record, the tenth booking takes less work than the first.
+            </li>
+            <li>
+              <strong>Property history.</strong> Looking up an address and seeing what you shot there, and what you
+              charged, keeps relist and next-phase quotes consistent.
+            </li>
+            <li>
+              <strong>Payment-linked delivery.</strong> If the payment status and the files are on the same project, you
+              don&apos;t have to cross-check an invoicing app before releasing downloads. In ShootPortal, an
+              &quot;unlock downloads after payment&quot; option does that check for you, and the project can move to
+              Delivered once the balance is paid.
+            </li>
+          </ul>
+          <p>
+            In practice, that&apos;s the difference between asking &quot;where are we on this job?&quot; across four
+            apps and opening one pipeline:
+          </p>
+          <Figure caption="Product illustration: ShootPortal's project pipeline with jobs moving from request to delivered (demo data).">
+            <ProductPreview view="projects" />
+          </Figure>
         </>
       ),
     },
@@ -350,10 +386,17 @@ export const article: BlogArticle = {
               <BlogLink slug="best-photo-video-delivery-platforms">photo and video delivery comparison</BlogLink>.
             </p>
           </Callout>
-          <InlineCta
-            title="Test the review-to-delivery flow yourself"
-            body="Upload a real video, leave a frame-pinned comment, request payment, and unlock the download, all in one ShootPortal project."
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Test the review-to-delivery flow yourself"
+            body={
+              <>
+                Upload a real listing video, leave a frame-pinned comment as your client would, post version 2, request
+                the balance, and watch the download unlock, all in one ShootPortal project.
+              </>
+            }
+            secondaryHref="/#product-demo"
+            secondaryLabel="Watch the demo"
           />
         </>
       ),
@@ -474,6 +517,32 @@ export const article: BlogArticle = {
             makes the least sense when your value to agents is listing marketing or Showcase. In that case, Aryeo or
             HDPhotoHub is the better tool, and we&apos;d rather you pick it than switch and regret it.
           </p>
+          <BestFitPanel
+            heading="Choose ShootPortal over Aryeo and HDPhotoHub if you are…"
+            fits={[
+              {
+                who: "A solo shooter with a mixed book",
+                why: "Listings, aerial, video, and commercial jobs all start as a request, become an approved estimate, and end as a paid, delivered project.",
+              },
+              {
+                who: "A small team that quotes custom work",
+                why: "Versioned estimates with ZIP-based travel fees, staff permissions, and projects assigned to the right shooter or editor.",
+              },
+              {
+                who: "Delivering steady volume year-round",
+                why: "One flat subscription without listing caps or per-delivery fees, so the cost per job falls as you grow.",
+              },
+              {
+                who: "Running real video revision rounds",
+                why: "Time-stamped comments pinned to the frame, threaded replies, and numbered versions, on the same project as payment.",
+              },
+            ]}
+            notFor={[
+              <>Showcase delivery or Zillow integrations matter to your agents (Aryeo).</>,
+              <>You sell property sites and flyers with most listings (HDPhotoHub Full Delivery).</>,
+              <>You want agents to self-book open slots, or need Square, tips, or QuickBooks.</>,
+            ]}
+          />
           <p>
             For the broader field beyond these three, read the{" "}
             <BlogLink slug="best-real-estate-photography-software">10 best real estate photography software platforms</BlogLink>.
@@ -546,7 +615,7 @@ export const article: BlogArticle = {
   related: ["best-aryeo-alternatives", "best-hdphotohub-alternatives", "best-real-estate-photography-software"],
   cta: {
     title: "See if ShootPortal fits your workflow.",
-    body: "Requests, estimates, scheduling, video review, payments, and delivery in one branded client portal, for one flat monthly price.",
+    body: "Put one real job through it: estimate approved online, shoot time confirmed, video reviewed, balance paid, files downloaded, all on one project in your branded portal.",
     secondaryHref: "/#product-demo",
     secondaryLabel: "Watch the demo",
   },

@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -17,6 +16,7 @@ import {
 import { VideoReviewDiagram } from "@/components/blog/diagrams";
 import { BeforeAfter } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "best-video-review-approval-software",
@@ -203,23 +203,34 @@ export const article: BlogArticle = {
           </p>
           <ComparisonTable
             caption="Video review and approval software comparison, October 2026"
-            columns={["Tool", "Time-stamped comments", "On-frame markup", "Versions", "Approvals", "Reviewer account", "NLE integrations", "Entry price"]}
+            columns={[
+              "Tool",
+              "Time-stamped comments",
+              "On-frame markup",
+              "Versions",
+              "Approvals",
+              "Reviewer account",
+              "NLE integrations",
+              "Client payment & delivery",
+              "Entry price",
+            ]}
             rows={[
-              ["ShootPortal", <Yes key="a1" />, <Yes key="a2">Pin to a spot</Yes>, <Yes key="a3">Numbered</Yes>, <Yes key="a4">Approve / reject with feedback</Yes>, "Client portal sign-in", <No key="a5">None</No>, "Flat monthly plan"],
-              ["Frame.io", <Yes key="b1">Frame-accurate, ranges</Yes>, <Yes key="b2">Annotations</Yes>, <Yes key="b3">Stacks + compare</Yes>, "Not stated on pricing page", <No key="b4">Not required</No>, "Premiere, Final Cut Pro", "Free; Pro $15/member/mo"],
-              ["Vimeo", <Yes key="c1">Time-coded</Yes>, "Not stated", <Yes key="c2">Keeps comment history</Yes>, <Yes key="c3">Statuses</Yes>, <No key="c4">Not required</No>, "Premiere Pro", "Starter $12/mo (annual)"],
-              ["Dropbox Replay", <Yes key="d1">Frame-accurate, ranges</Yes>, <Yes key="d2">Markup</Yes>, <Yes key="d3">Compare</Yes>, <Yes key="d4" />, <No key="d5">Not required</No>, "Premiere, After Effects, FCP, Resolve, Pro Tools", "$10/user/mo add-on (annual)"],
-              ["Wipster", "Not stated", "Not stated", <Yes key="e1">Compare</Yes>, "Not stated", <No key="e2">No login</No>, "Premiere Pro, After Effects", "Light $9.95/mo (annual)"],
-              ["Krock.io", "Not stated", <Yes key="f1">Drawing</Yes>, <Yes key="f2">Compare</Yes>, "Not stated", "Not stated", "Resolve Studio, Adobe CC, FCP", "Free; Pro $10/user"],
-              ["Filestage", <Yes key="g1" />, <Yes key="g2">Drawing</Yes>, <Yes key="g3">Compare (Starter+)</Yes>, <Yes key="g4">Statuses</Yes>, <No key="g5">Email only</No>, "Premiere Pro, After Effects", "Free; Starter $199/mo"],
-              ["Ziflow", <Yes key="h1">Frame and range</Yes>, <Yes key="h2">Markup tools</Yes>, <Yes key="h3">Side-by-side, overlay</Yes>, <Yes key="h4">Staged</Yes>, <No key="h5">Guest via URL</No>, "Adobe CC plugins", "Free; Standard $199/mo (annual)"],
-              ["MediaSilo", "Not stated", "Not stated", "Not stated", <Yes key="i1" />, <Yes key="i2">Free reviewer account</Yes>, "Adobe CC, Resolve Studio", "Team from $15/user/mo"],
+              ["ShootPortal", <Yes key="a1" />, <Yes key="a2">Pin to a spot</Yes>, <Yes key="a3">Numbered</Yes>, <Yes key="a4">Approve / reject with feedback</Yes>, "Client portal sign-in", <No key="a5">None</No>, <Yes key="a6">Stripe payment; downloads can unlock after payment</Yes>, "Flat monthly plan"],
+              ["Frame.io", <Yes key="b1">Frame-accurate, ranges</Yes>, <Yes key="b2">Annotations</Yes>, <Yes key="b3">Stacks + compare</Yes>, "Not stated on pricing page", <No key="b4">Not required</No>, "Premiere, Final Cut Pro", <No key="b5">No invoicing</No>, "Free; Pro $15/member/mo"],
+              ["Vimeo", <Yes key="c1">Time-coded</Yes>, "Not stated", <Yes key="c2">Keeps comment history</Yes>, <Yes key="c3">Statuses</Yes>, <No key="c4">Not required</No>, "Premiere Pro", "Not stated", "Starter $12/mo (annual)"],
+              ["Dropbox Replay", <Yes key="d1">Frame-accurate, ranges</Yes>, <Yes key="d2">Markup</Yes>, <Yes key="d3">Compare</Yes>, <Yes key="d4" />, <No key="d5">Not required</No>, "Premiere, After Effects, FCP, Resolve, Pro Tools", <No key="d6">No client-business tools</No>, "$10/user/mo add-on (annual)"],
+              ["Wipster", "Not stated", "Not stated", <Yes key="e1">Compare</Yes>, "Not stated", <No key="e2">No login</No>, "Premiere Pro, After Effects", "Not stated", "Light $9.95/mo (annual)"],
+              ["Krock.io", "Not stated", <Yes key="f1">Drawing</Yes>, <Yes key="f2">Compare</Yes>, "Not stated", "Not stated", "Resolve Studio, Adobe CC, FCP", "Not stated", "Free; Pro $10/user"],
+              ["Filestage", <Yes key="g1" />, <Yes key="g2">Drawing</Yes>, <Yes key="g3">Compare (Starter+)</Yes>, <Yes key="g4">Statuses</Yes>, <No key="g5">Email only</No>, "Premiere Pro, After Effects", "Not stated", "Free; Starter $199/mo"],
+              ["Ziflow", <Yes key="h1">Frame and range</Yes>, <Yes key="h2">Markup tools</Yes>, <Yes key="h3">Side-by-side, overlay</Yes>, <Yes key="h4">Staged</Yes>, <No key="h5">Guest via URL</No>, "Adobe CC plugins", "Not stated", "Free; Standard $199/mo (annual)"],
+              ["MediaSilo", "Not stated", "Not stated", "Not stated", <Yes key="i1" />, <Yes key="i2">Free reviewer account</Yes>, "Adobe CC, Resolve Studio", "Not stated", "Team from $15/user/mo"],
             ]}
             note={
               <>
                 From official vendor pages, checked October 15, 2026. Vimeo&apos;s own pages disagree on whether review
                 is on all plans or paid plans only; MediaSilo reviewers can view without registering but need a free
-                account to comment or approve. Follow the links in each section to confirm current pricing.
+                account to comment or approve. &quot;Client payment &amp; delivery&quot; means collecting the client&apos;s payment
+                and releasing final files in the same tool as the review. Follow the links in each section to confirm current pricing.
               </>
             }
           />
@@ -264,6 +275,7 @@ export const article: BlogArticle = {
               "Numbered video versions on the same project",
               "Clients approve or reject each deliverable with written feedback",
               "Comment notifications are batched instead of one email per note",
+              "Same project holds the estimate, messages, Stripe payment request, and final downloads, which can stay locked until the balance is paid",
             ]}
             cons={[
               "No Premiere Pro, DaVinci Resolve, or Final Cut Pro integrations",
@@ -284,6 +296,13 @@ export const article: BlogArticle = {
               estimate the client approved, the messages, the payment request, and the final files. You can let the
               client watch and comment while downloads stay locked until the final payment, which is a cleaner
               arrangement than sending a review link from one tool and an invoice from another.
+            </p>
+            <p>
+              A typical round on a listing or brand video: you upload v1, the client leaves three notes pinned to the
+              frame at 0:12, 0:47, and 1:30, and you reply in each thread. You upload v2 as the next numbered version,
+              resolve the notes you fixed (reopening one if the client disagrees), and the client approves. The balance
+              request goes out from the same project, and once it&apos;s paid the master file is ready to download
+              without a separate transfer link.
             </p>
           </ToolCard>
 
@@ -574,13 +593,69 @@ export const article: BlogArticle = {
             and the estimate, so scope questions are easy to settle. Approval leads straight to the payment request. And
             delivery can wait on payment without you policing it by hand.
           </p>
-          <Figure caption="Product illustration: a client's project moving from media review to paid invoice and final files (demo data).">
+          <ComparisonTable
+            caption="One video job, two setups"
+            columns={["Step", "Review suite + separate invoice + file link", "Review inside the ShootPortal project"]}
+            rows={[
+              ["Scope", "Estimate lives in email or another app", "Approved estimate (versioned, with PDF) on the project"],
+              ["Feedback", "Comments in the review tool", "Time-stamped comments pinned to the frame, threaded, resolve or reopen"],
+              ["Versions", "Version stack in the review tool", "Numbered versions on the same deliverable"],
+              ["Approval", "Status in the review tool; you remember to invoice", "Client approves or rejects the deliverable with written feedback"],
+              ["Payment", "Invoice from a separate tool", "Payment request from the project via Stripe, to your own account"],
+              ["Delivery", "New transfer link once you see the payment", "Downloads can unlock automatically after the final payment"],
+              ["History", "Split across three tools", "On the project and the client record"],
+            ]}
+            note={
+              <>
+                Dedicated review suites still win on editor integrations, drawing tools, and side-by-side comparison;
+                this table is about what happens around the review.
+              </>
+            }
+          />
+          <Figure caption="Product illustration: a client's project moving from media review to payment and final files (demo data).">
             <ProductPreview view="client-portal" />
           </Figure>
-          <InlineCta
-            title="Feedback, approval, payment, and delivery on one project."
-            body="Clients comment on the frame, approve the final cut, pay, and download in a portal with your logo and colors."
+          <h3>Who should run client review in ShootPortal</h3>
+          <p>
+            For a videographer who shoots, edits, and delivers to the client directly, ShootPortal is our pick for the
+            client-facing round of review. For a post team trading notes inside Premiere or Resolve, it isn&apos;t, and
+            some studios sensibly run both.
+          </p>
+          <BestFitPanel
+            heading="Where review inside the project fits best"
+            fits={[
+              {
+                who: "Real estate and property videographers",
+                why: "Agents comment on the walkthrough, approve, pay, and download, with photos and 360 tours on the same project.",
+              },
+              {
+                who: "Drone operators delivering edits",
+                why: "Aerial cuts, stills, and mapping or 3D embeds go to one client page instead of three links.",
+              },
+              {
+                who: "Freelancers billing per project",
+                why: "Approval and the balance request happen in the same place, so the final file isn't released before it's paid.",
+              },
+              {
+                who: "Small brand-content studios",
+                why: "Staff can be assigned to projects, and every past project stays on the client's record for the next job.",
+              },
+            ]}
+            notFor={[
+              "Your editors need notes as markers inside Premiere Pro, Resolve, or Final Cut (Frame.io, Dropbox Replay, Krock.io).",
+              "Reviewers must comment without any sign-in, or you need drawing tools and side-by-side compare.",
+              "You run multi-stage agency approval chains (Filestage or Ziflow).",
+            ]}
+          />
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Run your next revision round through a client project"
+            body={
+              <>
+                Upload a cut, comment on it from the client side, resolve the notes, post v2, approve it, and request the
+                balance, all on one project in a portal with your logo and colors.
+              </>
+            }
           />
           <p>
             That&apos;s also why drone operators who deliver video tend to look for an all-in-one setup; our comparison
@@ -725,7 +800,7 @@ export const article: BlogArticle = {
   ],
   related: ["best-photo-video-delivery-platforms", "how-to-send-large-video-files-to-clients", "photography-workflow-automation"],
   cta: {
-    title: "Stop chasing video feedback through email.",
+    title: "Close the loop from first cut to paid delivery.",
     body: "Clients comment on the frame, approve each version, pay, and download, all on the same project in a portal branded to your business.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",

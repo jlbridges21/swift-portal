@@ -5,13 +5,14 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   PickGrid,
   SiteLink,
   Steps,
   ToolCard,
 } from "@/components/blog/article-parts";
 import { WorkflowDiagram } from "@/components/blog/diagrams";
+import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
+import { ProductPreview } from "@/components/blog/product-preview";
 
 export const article: BlogArticle = {
   slug: "best-aryeo-alternatives",
@@ -33,7 +34,7 @@ export const article: BlogArticle = {
     "Aryeo pricing",
     "leave Aryeo",
   ],
-  readingMinutes: 16,
+  readingMinutes: 18,
   cover: { variant: "swap", label: "Switching Guide", alt: "Illustration of two software panels swapping places on a dark indigo background" },
   disclosure: true,
   quickAnswer: {
@@ -55,8 +56,9 @@ export const article: BlogArticle = {
         <strong>Selling tours and property sites?</strong> Rela, Tourbuzz, and RTV are built around them.
       </>,
       <>
-        <strong>Want a flat price and a workflow that also fits aerial, video, and commercial jobs?</strong> That&apos;s
-        where ShootPortal (our product) fits, with the caveat that it has no Showcase delivery or property websites.
+        <strong>Want a flat price and a workflow that also fits aerial, video, and commercial jobs?</strong> ShootPortal
+        (our product) is our pick: no listing caps, quoted estimates, video revision rounds, and payment-linked
+        delivery in one branded portal. It has no Showcase delivery or property websites.
       </>,
     ],
   },
@@ -258,16 +260,22 @@ export const article: BlogArticle = {
           </p>
           <ComparisonTable
             caption="Aryeo alternatives compared, October 2026"
-            columns={["Platform", "How it charges (Oct 2026)", "What you gain vs. Aryeo", "What you give up"]}
+            columns={["Platform", "How it charges (Oct 2026)", "How jobs come in", "What you gain vs. Aryeo", "What you give up"]}
             rows={[
-              ["Aryeo (baseline)", "Free Lite; Pro $49–$179/mo with annual listing caps", "—", "—"],
-              ["ShootPortal", "Flat monthly subscription, no listing caps", "Custom estimates, video review, client CRM", "Showcase, property websites"],
-              ["HDPhotoHub", "$5–$10 per delivery, no subscription", "No monthly fee, unlimited team members", "Showcase"],
-              ["Spiro", "$5 per listing, no subscription", "Brokerage billing, pay-at-close", "Showcase"],
-              ["Tonomo", "$140 or $250/mo with listing caps", "Auto-assignment and drive-time dispatch", "Showcase; still a capped subscription"],
-              ["Rela", "$49 or $99/mo plus per-site fees", "Property websites, floor plans, flyers", "Ordering and payments need a +$25/mo add-on"],
-              ["Tourbuzz", "Pay per item, no monthly fee", "Unbranded MLS links, native 3D tours", "Predictable monthly cost"],
-              ["RTV", "$6–$12 per project", "360° tours, pay-to-download, white-label", "Fewer team features confirmed"],
+              ["Aryeo (baseline)", "Free Lite; Pro $49–$179/mo with annual listing caps", "Embeddable order forms with add-ons", "—", "—"],
+              [
+                "ShootPortal",
+                "Flat monthly subscription, no listing caps",
+                "Request, then a versioned estimate the client approves",
+                "Quoted estimates with ZIP-based travel fees; frame-pinned video review; client CRM with property history and balances",
+                "Showcase, property websites, agent self-booking",
+              ],
+              ["HDPhotoHub", "$5–$10 per delivery, no subscription", "Shopping cart with add-ons", "No monthly fee, unlimited team members", "Showcase"],
+              ["Spiro", "$5 per listing, no subscription", "Custom order pages", "Brokerage billing, pay-at-close", "Showcase"],
+              ["Tonomo", "$140 or $250/mo with listing caps", "Branded booking flows", "Auto-assignment and drive-time dispatch", "Showcase; still a capped subscription"],
+              ["Rela", "$49 or $99/mo plus per-site fees", "Order form (Storefront add-on)", "Property websites, floor plans, flyers", "Ordering and payments need a +$25/mo add-on"],
+              ["Tourbuzz", "Pay per item, no monthly fee", "Online ordering ($0.15/order)", "Unbranded MLS links, native 3D tours", "Predictable monthly cost"],
+              ["RTV", "$6–$12 per project", "Booking with real-time availability", "360° tours, pay-to-download, white-label", "Fewer team features confirmed"],
             ]}
             note={
               <>
@@ -297,12 +305,13 @@ export const article: BlogArticle = {
             name="ShootPortal"
             url="/"
             isShootPortal
-            tagline="Flat-priced request, estimate, review, payment, and delivery workspace"
+            tagline="One flat price for requests, estimates, scheduling, video review, payments, and delivery"
             pricing={
               ctx.studioMonthly ? (
                 <>
                   Studio plan: {ctx.studioMonthly}/month{ctx.studioAnnual ? <> or {ctx.studioAnnual}/month billed annually</> : null}.
-                  No listing caps. {ctx.trialDays > 0 ? <>{ctx.trialDays}-day free trial, no card.</> : null}
+                  No listing caps or per-listing fees; Stripe&apos;s standard processing fees apply.{" "}
+                  {ctx.trialDays > 0 ? <>{ctx.trialDays}-day free trial, no card.</> : null}
                 </>
               ) : (
                 <>
@@ -310,26 +319,36 @@ export const article: BlogArticle = {
                 </>
               )
             }
-            bestFor="Photographers leaving Aryeo who also shoot aerial, video, or commercial jobs and want one price regardless of volume."
+            bestFor="Our pick for photographers leaving Aryeo over listing caps who also shoot aerial, video, or commercial jobs and want one price regardless of volume."
             pros={[
-              "One flat price with no annual listing cap",
-              "Estimates with versions and ZIP-based travel fees for jobs that aren't a standard package",
-              "Time-stamped video comments pinned to the frame, with numbered versions",
-              "Payments go to your own Stripe account, with optional deposits and download unlock after payment",
+              "One flat price with no annual listing cap, so a busy spring doesn't push you up a tier",
+              "Preliminary estimates from your request form, then versioned official estimates with ZIP-based travel fees",
+              "Clients accept, decline, or counter-propose your shoot time; confirmed shoots push to Google Calendar",
+              "Time-stamped video comments pinned to the frame, threaded replies, and numbered versions",
+              "Deposits on approval, payments into your own Stripe account, and optional download unlock after the final payment",
+              "Client records with property history, lifetime revenue, outstanding balance, and last portal login",
             ]}
             cons={[
               "No Zillow Showcase delivery",
               "No property websites, flyers, or marketing kits",
               "You propose shoot times and clients respond; agents can't self-book an open slot",
+              "No auto-assignment, SMS notifications, or QuickBooks sync",
             ]}
           >
             <p>
               Where Aryeo is built around an agent storefront, ShootPortal is built around the project. Clients submit a
               request from your branded portal, you send an estimate they approve online, then you propose a shoot time
               they can accept or counter. After the shoot, they review photos and video, pay, and download Print
-              (full-resolution) or MLS (2048px) files in the same place. If you&apos;re leaving Aryeo mainly because
-              your work has drifted beyond listings, that structure fits better. If your agents rely on Showcase or
-              property sites, it doesn&apos;t.
+              (full-resolution) or MLS (2048px) files in the same place.
+            </p>
+            <p>
+              A concrete example: a builder asks for twilight photos of a model home plus a drone progress video of the
+              rest of the subdivision. That doesn&apos;t fit a listing package, and on a storefront built around
+              listing products, jobs like it often end up quoted by email and invoiced separately. In ShootPortal it&apos;s one project: the estimate (with travel fee)
+              is approved online, a deposit is collected on approval, the builder comments on the video at the exact
+              second they want changed, and the final files unlock when the balance is paid. If you&apos;re leaving
+              Aryeo mainly because your work has drifted beyond listings, that structure fits better. If your agents
+              rely on Showcase or property sites, it doesn&apos;t.
             </p>
           </ToolCard>
 
@@ -479,11 +498,6 @@ export const article: BlogArticle = {
             cons={["Its FAQ lists credit pricing that differs from the plan prices, so confirm before buying", "Team and dispatch features not confirmed"]}
           />
 
-          <InlineCta
-            title="Leaving Aryeo because of listing caps?"
-            body="ShootPortal is one flat price however many jobs you deliver. Run a real job through it, from request to paid and delivered, before you decide."
-            trialDays={ctx.trialDays}
-          />
         </>
       ),
     },
@@ -491,7 +505,7 @@ export const article: BlogArticle = {
       id: "shootportal-vs-aryeo",
       title: "How ShootPortal compares to Aryeo, honestly",
       tocLabel: "ShootPortal vs. Aryeo",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             Because we make ShootPortal, here&apos;s a plain account of where it&apos;s a better fit than Aryeo and where
@@ -534,6 +548,69 @@ export const article: BlogArticle = {
               <strong>Zero cost.</strong> Aryeo Lite is free. ShootPortal is a paid subscription after the trial.
             </li>
           </ul>
+          <h3>Why the business side matters as much as the delivery page</h3>
+          <p>
+            Aryeo&apos;s agent login portal is genuinely useful: agents can find past listings, media, and invoices in
+            one place. The difference with ShootPortal is mostly on <em>your</em> side of the business. Real estate
+            work is repeat work, so the questions you ask every week are about the relationship, not the gallery:
+          </p>
+          <ul>
+            <li>
+              <strong>&quot;What did we shoot at this address last time?&quot;</strong> Each client record keeps a
+              property history with the projects and revenue per address, which helps when a listing relists or a
+              builder sends the next phase.
+            </li>
+            <li>
+              <strong>&quot;Does this agent owe us anything?&quot;</strong> Lifetime revenue, outstanding balance, last
+              payment, and last portal login sit on the client record, next to timestamped notes and the message
+              timeline.
+            </li>
+            <li>
+              <strong>&quot;Can I release the files yet?&quot;</strong> Payment status lives on the same project as the
+              files, and with download unlock turned on, the agent can preview the media but downloads open after the
+              final payment, with no manual check needed.
+            </li>
+          </ul>
+          <Figure caption="Product illustration: a ShootPortal client list with project counts, lifetime revenue, and outstanding balance per client (demo data).">
+            <ProductPreview view="clients" />
+          </Figure>
+          <BestFitPanel
+            heading="Leaving Aryeo? ShootPortal is our pick if…"
+            fits={[
+              {
+                who: "Listing caps are the reason you're leaving",
+                why: "One flat subscription with no annual listing cap or per-listing fee, so volume growth doesn't change your platform bill.",
+              },
+              {
+                who: "You shoot listings plus aerial or video",
+                why: "Quoted jobs, travel fees, and video revision rounds run through the same project flow as a standard listing.",
+              },
+              {
+                who: "You're a small team, not a dispatch operation",
+                why: "Staff accounts with granular permissions and per-project assignment, without a dispatch system you don't need.",
+              },
+              {
+                who: "You want clients in your brand, not a portal's",
+                why: "Your logo, colors, light or dark theme, custom domain, and email sent from your own domain.",
+              },
+            ]}
+            notFor={[
+              <>Your agents use Zillow Showcase. Stay on Aryeo, or keep Lite for those listings.</>,
+              <>Agents expect to self-book an open time slot on an order form.</>,
+              <>Property websites and flyers are part of every package you sell.</>,
+            ]}
+          />
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Try it alongside Aryeo, not instead of it"
+            body={
+              <>
+                Keep Aryeo Lite running so old delivery links keep working, and send your next new job through
+                ShootPortal. You&apos;ll see the estimate, scheduling, review, payment, and delivery steps on real work
+                before you move a single agent over.
+              </>
+            }
+          />
           <p>
             For a full feature-by-feature breakdown that also includes HDPhotoHub, see{" "}
             <BlogLink slug="shootportal-vs-aryeo-vs-hdphotohub">ShootPortal vs. Aryeo vs. HDPhotoHub</BlogLink>. You can
@@ -581,8 +658,8 @@ export const article: BlogArticle = {
               },
               {
                 who: "Your work goes beyond listings",
-                pick: "ShootPortal",
-                why: "Quotes, video review rounds, and delivery work the same for a listing or a commercial aerial job.",
+                pick: "ShootPortal (our pick)",
+                why: "Quotes, video review rounds, payments, and delivery work the same for a listing or a commercial aerial job, at one flat price.",
               },
             ]}
           />
@@ -679,7 +756,7 @@ export const article: BlogArticle = {
   related: ["shootportal-vs-aryeo-vs-hdphotohub", "best-hdphotohub-alternatives", "best-real-estate-photography-software"],
   cta: {
     title: "Outgrown a listing storefront?",
-    body: "ShootPortal handles requests, estimates, scheduling, video review, payments, and delivery in one branded portal, for one flat monthly price.",
+    body: "Move requests, estimates, shoot times, video revisions, payments, and downloads onto one project record in a portal branded to you, with no listing caps.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

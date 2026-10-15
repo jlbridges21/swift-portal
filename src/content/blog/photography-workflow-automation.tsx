@@ -5,12 +5,12 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   SiteLink,
 } from "@/components/blog/article-parts";
 import { ToolSprawlDiagram, WorkflowDiagram } from "@/components/blog/diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { TrialCard } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "photography-workflow-automation",
@@ -399,21 +399,60 @@ export const article: BlogArticle = {
             <BlogLink slug="best-photography-crm-software">photography CRM comparison</BlogLink> is the better starting
             point.
           </p>
-          <h3>Where ShootPortal fits</h3>
+          <h3>Running the template in ShootPortal, stage by stage</h3>
           <p>
-            ShootPortal (our product) covers rows 1 through 11 of the template in one project: a public request form,
-            automatic preliminary estimates with ZIP-based travel fees, official estimates with versions and expiry,
-            deposits on approval, proposed shoot times the client accepts or counters, Google Calendar push, per-item
-            approvals and time-stamped video comments, Stripe payment requests with automatic receipts, optional download
-            unlock after payment, and editable email templates with reminder emails. It does not cover row 12: there are
-            no automated review requests or re-booking campaigns, and it has no contracts or e-signature, so pair it with
-            your own follow-up habit and contract process.{" "}
-            {ctx.trialDays > 0 ? <>You can try it free for {ctx.trialDays} days without a card.</> : null}
+            ShootPortal is our product, so weigh this accordingly. It exists because the camera work is only half of a
+            media business; the other half is the inquiry, the estimate, the schedule, the revision notes, the payment,
+            and the hand-off, and that half usually lives in five apps. ShootPortal keeps it on one project record and
+            one branded client portal, whether the job is a listing, a roof inspection, a construction progress flight,
+            or a brand video.
           </p>
-          <InlineCta
-            title="Run your next job through one workflow"
-            body="From request to estimate, schedule, review, payment, and delivery, on a single project your client can follow."
+          <p>
+            &quot;Covers a stage&quot; can mean very different things, so here is the template again with each row
+            split three ways: what the software does <em>by itself</em>, what it simply keeps <em>in one place</em>,
+            and what is still <em>your job</em>.
+          </p>
+          <ComparisonTable
+            caption="The workflow template in ShootPortal: automated, centralized, or still manual at each stage"
+            columns={["Stage", "Automated", "Centralized on the project", "Still manual"]}
+            rows={[
+              ["1. Lead intake", "Client record created from the request form; request acknowledgment email", "Contact details, address, chosen service, preferred date, notes", "Moving DMs and phone inquiries to the form link"],
+              ["2. Inquiry reply", "—", "Two-way messages on the project", "Answering questions; confirming scope"],
+              ["3. Estimate", "Preliminary estimate from your service catalog, with a ZIP-to-ZIP travel fee", "Official estimate with versions, expiry, and PDF", "Reviewing and sending the official estimate"],
+              ["3a. Estimate reminder", "Reminder emails for proposals", "—", "Deciding when to call instead"],
+              ["4. Deposit", "Deposit request on approval (percentage or fixed), if configured", "Payment status on the project", "Choosing your deposit policy"],
+              ["5. Scheduling", "Confirmed shoots pushed to Google Calendar; scheduling reminder emails", "Calendar with your Google events shown read-only", "Proposing the shoot time (client accepts, declines, or counters)"],
+              ["6. Preparation", "—", "Address and request notes on the project", "Shot list, gear, weather, airspace, LAANC"],
+              ["7. Session", "—", "—", "Shooting; updating the project when you're done"],
+              ["8. Review", "Review reminder emails; batched notifications for video comments", "Per-item approve or reject with feedback; time-stamped video comments; numbered versions", "Uploading media; your own final check"],
+              ["9. Revisions", "—", "Revision requests and comment threads, resolved or reopened", "Editing and uploading the new version"],
+              ["10. Payment", "Email receipts; payment reminder emails", "Stripe Checkout payments to your own Stripe account; balances on the client record", "Requesting the balance from the project; marking offline payments paid"],
+              ["11. Delivery", "Unlock downloads after payment and move to Delivered, if enabled", "Print and MLS-size downloads, ZIPs, video, 360 tours, 3D embeds, share links", "Choosing which media sections the client sees"],
+              ["12. Follow-up", "—", "Client history and lifetime revenue on the record", "Check-ins, review requests, and re-booking"],
+            ]}
+            note="Based on ShootPortal's current features as of October 15, 2026. “If enabled” and “if configured” items are settings you choose. Some pipeline stage changes also happen automatically as clients approve, pay, or respond."
+          />
+          <p>
+            Read the table column by column and the pattern is clear. The automated column handles the predictable
+            hand-offs: acknowledging, pricing the skeleton, nudging, receipting, and unlocking. The centralized column is
+            the bigger day-to-day win: the estimate, the shoot time, the messages, the files, and the payment status
+            all sit on the same project, so &quot;where are we on this job?&quot; is answered by opening one page, by you
+            or by the client in their portal. The manual column is the creative and judgment work no tool should take
+            from you, plus follow-up, which ShootPortal doesn&apos;t automate. It also has no contracts or e-signature, so
+            keep your own contract process alongside it.
+          </p>
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Run one job through your new template"
+            body={
+              <>
+                Load your services during the guided setup, connect your own Stripe account, and send the request link to
+                your next client. You&apos;ll see rows 1 through 11 happen on a single project, and find out quickly which
+                of your old steps you no longer need.
+              </>
+            }
+            secondaryHref="/#product-demo"
+            secondaryLabel="Take the product tour"
           />
           <p>
             Whatever you choose, build it in the order of the template, test each stage on a real job, and see the full
@@ -495,8 +534,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-drone-business-management-software", "real-estate-photography-automation", "best-video-review-approval-software"],
   cta: {
-    title: "Spend less time managing the business and more time creating.",
-    body: "Requests, estimates, scheduling, reviews, payments, and delivery on one project, with the routine hand-offs automated.",
+    title: "Turn your workflow template into a system that runs",
+    body: "Request, estimate, schedule, review, payment, and delivery on one project for any kind of shoot, with acknowledgments, reminders, receipts, and download unlocks handled for you. The creative work and the judgment calls stay yours.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

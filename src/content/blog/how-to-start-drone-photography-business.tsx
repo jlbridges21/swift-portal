@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   SiteLink,
   Steps,
@@ -13,6 +12,7 @@ import {
 import { WorkflowDiagram } from "@/components/blog/diagrams";
 import { ChecklistCard, RoadmapDiagram } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { TrialCard, TrialPlan } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "how-to-start-drone-photography-business",
@@ -502,29 +502,85 @@ export const article: BlogArticle = {
             <BlogLink slug="how-to-send-large-video-files-to-clients">how to send large video files to clients</BlogLink>{" "}
             compares the options.
           </p>
-          <h3>Using software as your foundation</h3>
+          <h3>One system or five tools?</h3>
           <p>
-            You can run a new drone business on email, a calendar, a cloud folder, and a payment app. The problem is
-            that each job ends up spread across all four. A single platform that ties those steps to one project is
-            easier to keep consistent from the start than to migrate to later. Our comparison of{" "}
+            Most new pilots assemble the business side from whatever is free: an email inbox for requests, a document
+            template for quotes, a calendar, a cloud folder for delivery, and a payment app. Each tool works. The
+            problem is that a single job ends up in all five, and the only thing connecting them is your memory. That
+            holds up at three jobs a month. It starts to slip when a construction client wants weekly flights and two
+            real estate agents want aerials the same week.
+          </p>
+          <ComparisonTable
+            caption="Running a new drone business on separate tools versus one project record per job"
+            columns={["Job step", "Typical starter stack", "What goes wrong as volume grows", "On one project record"]}
+            rows={[
+              ["Request", "Email, texts, social DMs", "Site address and deliverables scattered across threads", "Client fills in one form; the job is created with the details attached"],
+              ["Estimate", "Document or spreadsheet template", "Travel and revisions priced differently each time", "Estimate built from your service list, approved in writing"],
+              ["Scheduling", "Personal calendar", "Weather reschedules agreed by text and never recorded", "Shoot time proposed, accepted, or countered on the job"],
+              ["Delivery", "Cloud folder link", "Large video files, expired links, and no record of approval", "Files, review comments, and approvals stay with the job"],
+              ["Payment", "Payment app or invoice", "Hard to tell which delivered jobs are unpaid", "Deposit and balance status visible on the same job"],
+            ]}
+            note='Either approach can work. The question is how many places you have to check to answer "where is this job?"'
+          />
+          <p>
+            Our comparison of{" "}
             <BlogLink slug="best-drone-business-management-software">drone business management software</BlogLink>{" "}
-            separates flight-operations tools (logs, airspace, compliance) from client-facing business tools.
+            separates flight-operations tools (logs, airspace, compliance) from client-facing business tools. You will
+            likely want one of each, and it helps to know which is which before you buy.
+          </p>
+          <h3>Where ShootPortal fits for a new drone business</h3>
+          <p>
+            ShootPortal (our product) is on the client-facing side, and it was built by the owner of a Part 107 drone
+            photography business. Each job is a project that moves through stages from new request to delivered. A
+            client requests a flight through your branded form, gets an estimate (including a travel fee calculated
+            from ZIP-to-ZIP distance, which matters when sites are spread across a county), and approves it in their
+            portal. You propose a shoot time, and they accept it or counter-propose, which is useful when weather moves
+            the date. They review stills and video with time-stamped comments, pay through Stripe straight to your
+            account, and download from a portal with your logo and colors. For mapping and modeling clients, you can
+            embed 3D models from tools like DroneDeploy and Pix4D alongside photos and video.
           </p>
           <p>
-            ShootPortal (our product) is on the client-facing side. Each job is a project that moves through stages
-            from new request to delivered. Clients request work through your form, approve estimates, accept a proposed
-            shoot time or counter it, review photos and video with time-stamped comments, pay through Stripe, and
-            download from a branded portal. For mapping and modeling clients, you can embed 3D models from tools like
-            DroneDeploy and Pix4D alongside photos and video. It doesn&apos;t do flight logging, airspace checks, or
-            contracts, so pair it with your flight-ops app and your own terms.
+            Be clear about what it doesn&apos;t replace. It doesn&apos;t do flight logging, airspace checks or LAANC
+            requests, contracts or e-signatures, or bookkeeping, so pair it with your flight-ops app, your own written
+            terms, and your accounting tool. What it removes is the job of stitching the client side together yourself.
           </p>
           <Figure caption="Product illustration: drone and photo jobs organized by stage in ShootPortal (demo data).">
             <ProductPreview view="projects" />
           </Figure>
-          <InlineCta
-            title="Start with a workflow you won't outgrow"
-            body="Requests, estimates, scheduling, client review, payments, and delivery on one project per job."
+          <h3>A first-week test before your first paying client</h3>
+          <p>
+            The best time to set up a workflow is before anyone is waiting on you. If you want to try ShootPortal, run
+            your spec shoot through it as if it were a paid job:
+          </p>
+          <TrialPlan
+            steps={[
+              {
+                title: "Create your business",
+                body: "Sign up with Google or a five-field form and choose your portal address.",
+              },
+              {
+                title: "Add your first services",
+                body: "Start from a service template, add your aerial packages and travel rule, and connect your Stripe account. You can skip any step and come back to it.",
+              },
+              {
+                title: "Run your spec shoot as a job",
+                body: "Create the project, send the estimate, propose a flight time, and upload the edited stills and clip.",
+              },
+              {
+                title: "Open it as your client",
+                body: "Approve the estimate, leave a time-stamped comment on the video, pay, and download, so you know what your first real client will see.",
+              },
+            ]}
+          />
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Set up your drone business's client side before you need it"
+            body={
+              <>
+                Requests, estimates with travel fees, scheduling, video review, payments, and delivery on one project
+                per job. Your flight-ops app stays where it is.
+              </>
+            }
           />
         </>
       ),
@@ -654,8 +710,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-drone-business-management-software", "drone-photography-pricing-guide", "how-to-send-large-video-files-to-clients"],
   cta: {
-    title: "Build your business on an organized foundation from day one.",
-    body: "Requests, estimates, scheduling, client review, payments, and delivery on one project per job, in a portal branded to you.",
+    title: "Fly the job. Let one system run everything around it.",
+    body: "Requests, estimates with ZIP-based travel fees, shoot-time proposals, video review, payments, and delivery on one project per job, in a client portal with your logo and colors.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

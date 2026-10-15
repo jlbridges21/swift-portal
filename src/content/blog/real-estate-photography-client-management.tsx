@@ -4,7 +4,6 @@ import {
   Callout,
   ComparisonTable,
   Figure,
-  InlineCta,
   KeyTakeaways,
   SiteLink,
   Steps,
@@ -12,6 +11,7 @@ import {
 import { CrmRecordDiagram } from "@/components/blog/diagrams";
 import { DocumentCard, ProjectBoardDiagram } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "real-estate-photography-client-management",
@@ -293,7 +293,7 @@ export const article: BlogArticle = {
       id: "deliverables-revisions",
       title: "Track deliverables and revisions per listing",
       tocLabel: "Deliverables and revisions",
-      body: (ctx) => (
+      body: () => (
         <>
           <p>
             A listing often has more deliverables than people realize: MLS photos, print files, aerials, a video and its
@@ -321,11 +321,6 @@ export const article: BlogArticle = {
             requests, and videos get time-stamped comments across numbered versions. For the delivery side of this, see{" "}
             <BlogLink slug="how-to-deliver-real-estate-photos">how to deliver real estate photos to clients</BlogLink>.
           </p>
-          <InlineCta
-            title="Bring your clients, projects, and messages together."
-            body="Agent records, property history, an eight-stage pipeline, and project messaging in one place, with a branded portal for your clients."
-            trialDays={ctx.trialDays}
-          />
         </>
       ),
     },
@@ -404,10 +399,18 @@ export const article: BlogArticle = {
               &quot;someone&apos;s&quot; job.
             </li>
           </ul>
+          <ProductCallout title="Give a second shooter their jobs, not your books">
+            <p>
+              Staff accounts in ShootPortal come with granular permissions (around thirty of them), and you assign staff
+              to specific projects. By default a staff member works within the projects assigned to them, and
+              permissions to view estimates and payments start switched off, so a shooter can open the listing&apos;s
+              address, request notes, and message thread without seeing your revenue. Upload, scheduling, messaging,
+              and sharing rights are each granted separately.
+            </p>
+          </ProductCallout>
           <p>
-            ShootPortal supports staff accounts with granular permissions and assigning staff to specific projects. It
-            doesn&apos;t auto-assign photographers or route by drive time, so if you&apos;re dispatching a large team
-            across territories, compare dispatch-focused tools in our{" "}
+            Assignment is manual: ShootPortal doesn&apos;t auto-dispatch photographers or route by drive time. If
+            you&apos;re dispatching a large team across territories, compare dispatch-focused tools in our{" "}
             <BlogLink slug="best-real-estate-photography-software">real estate photography software guide</BlogLink>.
           </p>
           <Callout tone="tip" title="Hire into a working system">
@@ -416,6 +419,63 @@ export const article: BlogArticle = {
               team member will follow whatever system exists, including its gaps.
             </p>
           </Callout>
+        </>
+      ),
+    },
+    {
+      id: "connected-record",
+      title: "How ShootPortal ties each agent to their listings, messages, and money",
+      tocLabel: "One record per agent in ShootPortal",
+      body: (ctx) => (
+        <>
+          <p>
+            ShootPortal is our product, so here&apos;s exactly how it maps onto the system above, including the gaps.
+            The idea behind it is that the photos are only half of what an agent buys from you. The other half is a
+            smooth request, a clear price, a confirmed time, quick revisions, an easy payment, and files that are easy to
+            find, and that half falls apart when it&apos;s spread across texts, a spreadsheet, a calendar, a cloud folder,
+            and a payment app.
+          </p>
+          <p>
+            In ShootPortal everything hangs off two records: the <strong>client</strong> (the agent) and the{" "}
+            <strong>project</strong> (one listing job). Open an agent and you see every project they&apos;ve ordered;
+            open a project and you see that listing&apos;s estimate, shoot time, messages, files, approvals, and payment
+            status together.
+          </p>
+          <ComparisonTable
+            caption="Where each part of the client management system lives in ShootPortal"
+            columns={["What you need to track", "Where it lives in ShootPortal", "What it doesn't do"]}
+            rows={[
+              ["Agent details and preferences", "Client record: name, email, phone, company, referral source, plus timestamped notes for preferences", "No dedicated preference form; use notes"],
+              ["Every listing they've sent", "Projects linked to the client, each moving through the eight-stage pipeline", "Stages are fixed, not custom"],
+              ["Property history", "Each address with its projects and revenue, on the client record", "No property websites"],
+              ["Conversations", "Two-way messages on each project, plus the client's activity and message timeline", "No SMS notifications"],
+              ["Deliverables and revisions", "Files in the agent's portal; approve or reject each item with feedback; time-stamped video comments", "No pinned comments on photos"],
+              ["Money", "Estimates, deposits, payments via your own Stripe account, lifetime revenue, outstanding balance, last payment", "No brokerage billing or pay-at-close"],
+              ["Engagement", "Last portal login on the client record", "—"],
+              ["Team", "Staff accounts with granular permissions; staff assigned to specific projects", "No auto-dispatch or drive-time routing"],
+            ]}
+            note="ShootPortal features as of October 15, 2026."
+          />
+          <p>
+            In practice, this changes the daily review. &quot;Approved but unscheduled&quot; and &quot;awaiting
+            payment&quot; are columns on the pipeline board instead of things you reconstruct from memory, and when an
+            agent asks what they owe, the outstanding balance is on their record. Some stage changes happen
+            automatically as agents approve and pay, but the system is mainly about organization: it keeps the facts in
+            one place so you and your staff stop asking each other where things are.
+          </p>
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Move your three busiest agents in first"
+            body={
+              <>
+                Create records for the agents who send you the most work, add their preferences as notes, and run their
+                next listings through the pipeline. Within a week you&apos;ll know whether one record per agent beats
+                the texts-and-spreadsheet system you have now.
+              </>
+            }
+            secondaryHref="/pricing"
+            secondaryLabel="See pricing"
+          />
         </>
       ),
     },
@@ -439,10 +499,10 @@ export const article: BlogArticle = {
             <li>Staff accounts with permissions</li>
           </ul>
           <p>
-            ShootPortal was built by the owner of a drone photography business around this shape of work,
-            and you can see how the pieces fit on <SiteLink href="/how-it-works">how ShootPortal works</SiteLink>. It
-            isn&apos;t the only option: tools differ on self-booking, brokerage billing, property websites, and team
-            dispatch, so weigh what your agents actually ask for.
+            ShootPortal was built by the owner of a drone photography business around this shape of work, and you can
+            see how the pieces fit on <SiteLink href="/how-it-works">how ShootPortal works</SiteLink>. It isn&apos;t the
+            only option: tools differ on self-booking, brokerage billing, property websites, and team dispatch, so weigh
+            what your agents actually ask for against the checklist above.
           </p>
           <KeyTakeaways
             items={[
@@ -523,8 +583,8 @@ export const article: BlogArticle = {
     "how-to-create-photography-client-portal",
   ],
   cta: {
-    title: "Bring your clients, projects, and messages together.",
-    body: "Agent records with property history, a pipeline for every listing, project messaging, and payments, all in one place.",
+    title: "Know where every agent and listing stands, on one screen",
+    body: "Each agent's record links to their listings, property history, messages, deliverables, and outstanding balance, with staff permissions for when you hire. Stop rebuilding the week from texts and spreadsheets.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

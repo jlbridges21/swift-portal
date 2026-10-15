@@ -5,15 +5,14 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   No,
-  SiteLink,
   Yes,
 } from "@/components/blog/article-parts";
 import { DeliveryPathDiagram } from "@/components/blog/diagrams";
 import { DocumentCard } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "how-to-deliver-real-estate-photos",
@@ -291,11 +290,14 @@ export const article: BlogArticle = {
               don&apos;t have to unlock at the same time.
             </li>
           </ul>
-          <p>
-            In ShootPortal, clients sign in to their portal, and you can also create share links: &quot;anyone with
-            the link&quot; view pages, or email invites that are one-time or reusable and can expire. That covers the
-            assistant who needs the photos without needing an account.
-          </p>
+          <ProductCallout title="The agent logs in; the assistant just gets a link">
+            <p>
+              Your client signs in to their portal and sees every property you&apos;ve shot for them. When the agent
+              says &quot;send it to my assistant too,&quot; you create a share link from the same project: an
+              &quot;anyone with the link&quot; view page, or an email invite that&apos;s one-time or reusable and can
+              expire. No account, no second upload, no separate Drive folder to keep in sync.
+            </p>
+          </ProductCallout>
           <h3>Plan for how long media stays available</h3>
           <p>
             Tell agents how long you host delivered media, and keep your own archive regardless. Listings get relisted,
@@ -346,7 +348,7 @@ export const article: BlogArticle = {
       id: "payment-and-delivery",
       title: "Connecting delivery to payment",
       tocLabel: "Payment",
-      body: (ctx) => (
+      body: () => (
         <>
           <p>
             Most real estate photographers have, at some point, delivered a full listing and then spent two weeks
@@ -382,11 +384,6 @@ export const article: BlogArticle = {
             </BlogLink>
             .
           </p>
-          <InlineCta
-            title="Still sending Google Drive links?"
-            body="Put photos, video, tours, and payment on one branded page per property, and let downloads unlock when the invoice is paid."
-            trialDays={ctx.trialDays}
-          />
         </>
       ),
     },
@@ -476,15 +473,127 @@ export const article: BlogArticle = {
               <BlogLink slug="how-to-create-photography-client-portal">how to create a photography client portal</BlogLink>.
             </li>
           </ul>
+        </>
+      ),
+    },
+    {
+      id: "delivery-is-part-of-the-job",
+      title: "Why delivery problems are usually workflow problems",
+      tocLabel: "Connected workflow",
+      body: () => (
+        <>
           <p>
-            ShootPortal is one way to put this together. Each project holds the photos (in folders), video files,
-            YouTube embeds, Kuula 360 tours, 3D model embeds such as Matterport, and documents, and you choose which
-            media sections the client sees. The portal uses your logo, brand color, and your own subdomain or custom
-            domain. It doesn&apos;t build single-property websites or deliver to Zillow Showcase, so if agents in your
-            market expect those, look at the platforms in our{" "}
-            <BlogLink slug="best-real-estate-photography-delivery-software">delivery software comparison</BlogLink>.
-            You can see the full flow on <SiteLink href="/how-it-works">how ShootPortal works</SiteLink>.
+            Look closely at the delivery headaches above and most of them aren&apos;t about file transfer at all. The
+            &quot;did you get paid for Oak Ave?&quot; question lives in your invoicing tool. The revision request lives
+            in a text thread. The shoot date lives in your calendar, the agent&apos;s phone number in your contacts, and
+            the photos in a Drive folder. Delivery is simply the moment all of those disconnected pieces have to line up,
+            which is why it feels harder than it should.
           </p>
+          <p>The manual stack can work, and plenty of photographers run it well. The trade-offs are predictable:</p>
+          <ul>
+            <li>
+              <strong>Status lives in your head.</strong> To answer &quot;where are we on 123 Main St?&quot; you check
+              three apps and your memory.
+            </li>
+            <li>
+              <strong>Payment and files don&apos;t know about each other.</strong> Holding downloads until payment means
+              watching for the Stripe email and then manually sharing the folder.
+            </li>
+            <li>
+              <strong>Feedback gets detached from the files.</strong> A revision note in a text message doesn&apos;t
+              tell you which version the agent was looking at.
+            </li>
+            <li>
+              <strong>History is scattered.</strong> When the listing is relisted in six months, you hunt for the folder
+              link instead of opening the property.
+            </li>
+          </ul>
+          <p>
+            The connected alternative is to treat each property as one job record that carries everything: the order,
+            the shoot time, the messages, the media, the revision notes, and the payment status. The delivery link is
+            then just the client&apos;s view of that record. Whatever software you choose, that&apos;s the model worth
+            aiming for.
+          </p>
+        </>
+      ),
+    },
+    {
+      id: "one-link-per-property-in-shootportal",
+      title: "One link per property: how the handoff works in ShootPortal",
+      tocLabel: "One link per property",
+      body: (ctx) => (
+        <>
+          <p>
+            Here&apos;s how a single listing, say a twilight-and-aerial package at 123 Main St, runs through ShootPortal
+            from the agent&apos;s side and from yours.
+          </p>
+          <ol>
+            <li>
+              <strong>The property is a project.</strong> 123 Main St gets one project on the agent&apos;s client
+              record, alongside every other address you&apos;ve shot for them. The estimate, the confirmed shoot time,
+              your messages, and the media all sit on that project.
+            </li>
+            <li>
+              <strong>Everything for the listing goes in it.</strong> Photos (in folders such as Interior, Exterior, and
+              Aerial), the listing video file, a YouTube embed, a Kuula 360 tour, a 3D model embed such as Matterport,
+              and the floor plan PDF. Uploads are resumable, so a large video upload doesn&apos;t restart from zero if
+              your connection drops. You choose which media sections the agent sees.
+            </li>
+            <li>
+              <strong>The agent picks the size, not you.</strong> Each photo downloads as &quot;Print&quot; (the
+              original full-resolution file) or &quot;MLS&quot; (2048 pixels on the long edge), one at a time or as a
+              ZIP. You upload one full-resolution set instead of exporting two.
+            </li>
+            <li>
+              <strong>Feedback is attached to the item.</strong> The agent approves each deliverable or requests changes
+              with a written note, and video gets time-stamped comments on numbered versions. You fix the file in the
+              same project, so the request and the fix stay together.
+            </li>
+            <li>
+              <strong>Others get access without accounts.</strong> A share link or email invite covers the assistant,
+              stager, or seller.
+            </li>
+            <li>
+              <strong>Payment can gate downloads.</strong> If you turn on &quot;unlock downloads after payment,&quot;
+              the agent can view everything right away, and downloads unlock once the final payment is made through your
+              own Stripe account.
+            </li>
+          </ol>
+          <h3>What&apos;s automatic, what&apos;s centralized, and what&apos;s still on you</h3>
+          <ul>
+            <li>
+              <strong>Automatic:</strong> the MLS-size version of each photo, ZIP downloads, the download unlock after
+              final payment (when enabled), email notifications from your editable templates, and some project stage
+              changes. You can also choose to move a project to Delivered once it&apos;s paid.
+            </li>
+            <li>
+              <strong>Centralized:</strong> the order, shoot time, messages, media, revision notes, payment status, and
+              the property&apos;s history on the agent&apos;s client record.
+            </li>
+            <li>
+              <strong>Still manual:</strong> culling, editing, and exporting (ShootPortal doesn&apos;t edit photos),
+              checking your MLS&apos;s specific photo rules, uploading the finals, and deciding when a revision counts as
+              new work.
+            </li>
+          </ul>
+          <p>
+            The portal carries your logo, brand color, and either a yourstudio.shootportal.app address or your
+            own custom domain. It doesn&apos;t build single-property websites, provide branded and unbranded MLS tour
+            links, or deliver to Zillow Showcase, so if agents in your market expect those, look at the platforms in
+            our <BlogLink slug="best-real-estate-photography-delivery-software">delivery software comparison</BlogLink>.
+          </p>
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Deliver your next listing from one branded link"
+            body={
+              <>
+                Set up your portal, create a project for a property you&apos;ve already shot, upload the set, and open it
+                on your phone the way an agent would. If it beats your current folder link, send it on the next job.
+              </>
+            }
+            secondaryHref="/how-it-works"
+            secondaryLabel="See the delivery flow"
+          />
         </>
       ),
     },
@@ -586,8 +695,8 @@ export const article: BlogArticle = {
     "get-paid-before-delivering-real-estate-photos",
   ],
   cta: {
-    title: "Still sending Google Drive links?",
-    body: "Deliver photos, video, and tours on one branded page per property, collect payment through your own Stripe account, and keep every listing on the client's record.",
+    title: "Give every listing one link the agent can't lose",
+    body: "One project per property: photos with Print and MLS downloads, video, tours, and floor plans, plus approvals, share links for assistants, and optional unlock-after-payment through your own Stripe account.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how delivery works",
   },

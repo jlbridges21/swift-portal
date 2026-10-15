@@ -5,14 +5,16 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
+  No,
   PickGrid,
   SiteLink,
   ToolCard,
   Yes,
 } from "@/components/blog/article-parts";
 import { DeliveryPathDiagram, WorkflowDiagram } from "@/components/blog/diagrams";
+import { BestFitPanel, ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
+import { ProductPreview } from "@/components/blog/product-preview";
 
 export const article: BlogArticle = {
   slug: "best-real-estate-photography-delivery-software",
@@ -60,8 +62,8 @@ export const article: BlogArticle = {
       </>,
       <>
         <strong>Want delivery tied to the estimate, review, and payment for every job, listings and aerials alike?</strong>{" "}
-        ShootPortal (our product) gives agents Print and MLS downloads, ZIPs, per-item approval, and optional
-        unlock-after-payment in one branded portal.
+        ShootPortal (our product) puts each job on one project page in your branded portal: Print and MLS downloads,
+        ZIPs, per-item approval, and optional unlock-after-payment, with the property&apos;s past shoots on file.
       </>,
     ],
   },
@@ -206,24 +208,34 @@ export const article: BlogArticle = {
           </p>
           <ComparisonTable
             caption="Real estate photography delivery software comparison, October 2026"
-            columns={["Platform", "Delivery pricing", "MLS-sized downloads", "Pay-to-download", "Tours / 3D embeds", "Login-free pages"]}
+            columns={[
+              "Platform",
+              "Delivery pricing",
+              "MLS-sized downloads",
+              "Pay-to-download",
+              "Tours / 3D embeds",
+              "Login-free pages",
+              "Per-item client approval",
+              "Client or property history",
+            ]}
             rows={[
-              ["ShootPortal", "Flat monthly subscription", <Yes key="a">2048px MLS + full-res</Yes>, <Yes key="b">Optional</Yes>, <Yes key="c">Kuula, Matterport, Polycam &amp; more</Yes>, <Yes key="d">Share links; clients sign in to the portal</Yes>],
-              ["Aryeo", "Lite free; Pro from $49/mo", "Not stated", "Not stated", <Yes key="e">Zillow 3D Home</Yes>, "Agent login portal"],
-              ["HDPhotoHub", "$5 / $10 per delivery", <Yes key="f">Automatic</Yes>, <Yes key="g" />, <Yes key="h">Matterport, iGUIDE, Zillow 3D</Yes>, <Yes key="i" />],
-              ["Spiro", "$5 per listing", "Not stated", "Not stated", "Not stated", "Not stated"],
-              ["Tonomo", "$140 or $250/mo", <Yes key="j">Auto-resize</Yes>, <Yes key="k">Pay-to-unlock</Yes>, "Not stated", "Customer project portal"],
-              ["Rela", "$49 or $99/mo + per-site fees", <Yes key="l">Auto-resizing</Yes>, <Yes key="m">With Storefront add-on</Yes>, <Yes key="n">Floor plans (Pro)</Yes>, "White-label customer portal"],
-              ["Tourbuzz", "$2.50 per delivery order", "Not stated", "Not stated", <Yes key="o">Native 3D + floor plans</Yes>, <Yes key="p">Branded &amp; unbranded links</Yes>],
-              ["RTV", "$6 or $12 per project", "Not stated", <Yes key="q" />, <Yes key="r">360° tour builder</Yes>, "Not stated"],
-              ["Fotello", "Free tier; paid per listing", "Not stated", "Not stated", "Not stated", "Co-branded agent portal"],
-              ["Pixieset", "Free to $50/mo", <Yes key="s">Configurable sizes</Yes>, "Sells downloads via its store", "Not stated", "Not stated"],
+              ["ShootPortal", "Flat monthly subscription", <Yes key="a">2048px MLS + full-res</Yes>, <Yes key="b">Optional</Yes>, <Yes key="c">Kuula, Matterport, Polycam &amp; more</Yes>, <Yes key="d">Share links; clients sign in to the portal</Yes>, <Yes key="d1">Approve or request changes</Yes>, <Yes key="d2">Per client and per address</Yes>],
+              ["Aryeo", "Lite free; Pro from $49/mo", "Not stated", "Not stated", <Yes key="e">Zillow 3D Home</Yes>, "Agent login portal", "Not stated", <Yes key="e1">Agent portal keeps past listings</Yes>],
+              ["HDPhotoHub", "$5 / $10 per delivery", <Yes key="f">Automatic</Yes>, <Yes key="g" />, <Yes key="h">Matterport, iGUIDE, Zillow 3D</Yes>, <Yes key="i" />, "Not stated", <Yes key="i1">Client order history</Yes>],
+              ["Spiro", "$5 per listing", "Not stated", "Not stated", "Not stated", "Not stated", "Not stated", <Yes key="i2">Client CRM</Yes>],
+              ["Tonomo", "$140 or $250/mo", <Yes key="j">Auto-resize</Yes>, <Yes key="k">Pay-to-unlock</Yes>, "Not stated", "Customer project portal", "Not stated", "Not stated"],
+              ["Rela", "$49 or $99/mo + per-site fees", <Yes key="l">Auto-resizing</Yes>, <Yes key="m">With Storefront add-on</Yes>, <Yes key="n">Floor plans (Pro)</Yes>, "White-label customer portal", "Not stated", "Not stated"],
+              ["Tourbuzz", "$2.50 per delivery order", "Not stated", "Not stated", <Yes key="o">Native 3D + floor plans</Yes>, <Yes key="p">Branded &amp; unbranded links</Yes>, "Not stated", "Not stated"],
+              ["RTV", "$6 or $12 per project", "Not stated", <Yes key="q" />, <Yes key="r">360° tour builder</Yes>, "Not stated", "Not stated", "Not stated"],
+              ["Fotello", "Free tier; paid per listing", "Not stated", "Not stated", "Not stated", "Co-branded agent portal", "Not stated", "Not stated"],
+              ["Pixieset", "Free to $50/mo", <Yes key="s">Configurable sizes</Yes>, "Sells downloads via its store", "Not stated", "Not stated", <No key="s1">Favorites and proofing instead</No>, "Not stated"],
             ]}
             note={
               <>
                 Pricing and features from each vendor&apos;s official site, checked October 15, 2026. Payment
-                processor fees are extra on every platform. Follow the links in each review below to confirm current
-                details.
+                processor fees are extra on every platform. The last two columns cover what happens around the
+                download: whether the agent can sign off on each item, and whether the next order starts with the
+                previous one on file. Follow the links in each review below to confirm current details.
               </>
             }
           />
@@ -247,7 +259,7 @@ export const article: BlogArticle = {
             name="ShootPortal"
             url="/"
             isShootPortal
-            tagline="Delivery inside a request-to-payment project portal, branded to your business"
+            tagline="One project page per job: estimate, approvals, payment, and listing downloads behind your brand"
             pricing={
               ctx.studioMonthly ? (
                 <>
@@ -262,13 +274,14 @@ export const article: BlogArticle = {
                 </>
               )
             }
-            bestFor="Listing photographers who also shoot aerial, video, or commercial jobs and want delivery tied to the estimate, review, and payment."
+            bestFor="Solo listing photographers and small teams, especially those who also shoot aerial, video, or commercial jobs, who want delivery tied to the estimate, approvals, and payment instead of living on a separate page."
             pros={[
               "Every photo downloads as Print (original full resolution) or MLS (2048px long edge), singly or as a ZIP",
-              "Clients approve or reject each deliverable with written feedback before final delivery",
-              "Optional unlock-after-payment: agents preview everything, downloads open when the final payment clears",
+              "Clients approve or reject each deliverable with written feedback, and revision requests stay on the project",
+              "Optional unlock-after-payment: agents preview everything, downloads open when the final payment clears through Stripe Checkout",
               "Video files, YouTube embeds, Kuula 360 tours, and 3D embeds from Matterport, Polycam, and others on the same page",
-              "Share links and email-invite shares for assistants or co-listing agents without an account",
+              "Share links and email-invite shares (one-time or reusable, with expiry) for assistants or co-listing agents without an account",
+              "Property history per address: past projects and revenue for the house when it relists",
             ]}
             cons={[
               "No separate branded and unbranded MLS tour links",
@@ -288,7 +301,15 @@ export const article: BlogArticle = {
               The client side lives at your own subdomain or a custom domain like portal.yourstudio.com, with your logo
               and colors. Agents can approve each item or request a change with a note, then download what they need.
               If you turn on unlock-after-payment, they can review the full set immediately while downloads stay locked
-              until the final payment goes through your own Stripe account.
+              until the final payment goes through your own Stripe account. You can also have the project move to
+              Delivered automatically once it&apos;s paid.
+            </p>
+            <p>
+              A typical listing looks like this: you upload the edited set into folders (exterior, interior, aerial),
+              add the walkthrough video and the Matterport embed, and the agent gets an email that the media is ready.
+              They open one page, see every photo, the video, the tour, and the balance due, flag the one photo that
+              needs a different sky, pay, and pull the MLS-size ZIP from their phone. Their assistant gets a share link
+              instead of a password.
             </p>
           </ToolCard>
 
@@ -482,11 +503,6 @@ export const article: BlogArticle = {
             </p>
           </ToolCard>
 
-          <InlineCta
-            title="See what agents see"
-            body="Upload a real listing to ShootPortal, turn on MLS downloads and unlock-after-payment, and send the portal to an agent you trust."
-            trialDays={ctx.trialDays}
-          />
         </>
       ),
     },
@@ -519,6 +535,14 @@ export const article: BlogArticle = {
               hit the gate. Check that you can release files or mark a job paid by hand.
             </li>
           </ul>
+          <ProductCallout title="Previews open, downloads locked, and a manual override">
+            <p>
+              With unlock-after-payment on, agents see the full set immediately and the payment button sits on the same
+              project page. Downloads open when the project reaches Delivered, which can happen automatically once the
+              final payment is made. For an agent on account, move the project to Delivered yourself. If you prefer to
+              collect part up front, request a deposit when the estimate is approved and the balance at delivery.
+            </p>
+          </ProductCallout>
           <Callout tone="warning" title="Brokerage billing and pay-at-close change the math">
             <p>
               If a brokerage pays for the media, or the agent pays at closing, a hard paywall won&apos;t fit. Spiro and
@@ -567,11 +591,70 @@ export const article: BlogArticle = {
             <WorkflowDiagram highlight={["review", "pay", "deliver"]} />
           </Figure>
           <p>
+            Here&apos;s what that looks like from the agent&apos;s side in ShootPortal. Instead of one email with the
+            estimate, another with a Dropbox link, a third with the tour, and a fourth with an invoice, the agent has one
+            project to open. The estimate, shoot date, messages, files, and payment status are all on it, so &quot;did
+            you get my note about the kitchen?&quot; and &quot;is this paid?&quot; are answered on the same page.
+          </p>
+          <Figure caption="Product illustration of the ShootPortal client portal: a project moving through estimate, shoot, media, payment, and files (demo data).">
+            <ProductPreview view="client-portal" />
+          </Figure>
+          <p>
             The trade-off is that all-in-one systems rarely match a dedicated listing-marketing platform on property
             websites or branded/unbranded link handling. If your client records matter as much as the delivery, our{" "}
             <BlogLink slug="best-photography-client-portals">client portal comparison</BlogLink> looks at that side in
             more detail.
           </p>
+        </>
+      ),
+    },
+    {
+      id: "who-should-choose-shootportal",
+      title: "Who should choose ShootPortal for listing delivery",
+      tocLabel: "Is ShootPortal a fit?",
+      body: (ctx) => (
+        <>
+          <p>
+            Delivery is the moment agents judge the shoot, but it&apos;s only one step of the job. Before it come the
+            request, the quote, the shoot time, and any revisions; after it comes getting paid. ShootPortal is our pick
+            when you want all of that to land on the same project record, rather than a delivery page that knows
+            nothing about the order. It is not the pick for every listing business, and the panel below is honest about
+            where it isn&apos;t.
+          </p>
+          <BestFitPanel
+            heading="Where ShootPortal fits best for real estate delivery"
+            fits={[
+              {
+                who: "Photographers tired of chasing invoices",
+                why: "Agents preview the full set, pay through Stripe Checkout on the same page, and downloads unlock after payment. Receipts go out by email.",
+              },
+              {
+                who: "Agents who send revision notes",
+                why: "Each photo or video can be approved or sent back with written feedback, so the twilight-sky request sits next to the file it's about.",
+              },
+              {
+                who: "Listing plus aerial or video shooters",
+                why: "Print and MLS photo sizes, video files, Kuula tours, and 3D embeds from Matterport or DroneDeploy on one project page.",
+              },
+              {
+                who: "Repeat agents and relists",
+                why: "Client records show lifetime revenue, outstanding balance, and property history, so a relisted house starts with the last shoot on file.",
+              },
+            ]}
+            notFor={[
+              "Your agents need Zillow Showcase delivery (Aryeo) or separate branded and unbranded MLS links (Tourbuzz).",
+              "Property websites, flyers, or marketing kits are part of what you sell.",
+              "Agents insist on fully login-free download pages for every delivery; ShootPortal clients sign in, with share links for others.",
+              "You need brokerage billing or pay-at-close.",
+            ]}
+          />
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Deliver your next listing from one link"
+            body="Upload a real set, turn on MLS downloads and unlock-after-payment, add the tour embed, and open the portal on your phone the way an agent would before you send it."
+            secondaryHref="/pricing"
+            secondaryLabel="See pricing"
+          />
         </>
       ),
     },
@@ -710,8 +793,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-photo-video-delivery-platforms", "best-real-estate-photography-software", "shootportal-vs-aryeo-vs-hdphotohub"],
   cta: {
-    title: "Deliver listings the way agents want them.",
-    body: "MLS and full-resolution downloads, video, 3D tours, per-item approval, and optional unlock-after-payment, all in a portal with your logo and domain.",
+    title: "Get paid before the MLS upload, not after.",
+    body: "Give every listing one project page in your branded portal: MLS and Print downloads, video, 3D tours, per-item approval, and downloads that unlock when the balance is paid.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

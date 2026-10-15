@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -14,6 +13,7 @@ import {
   Yes,
 } from "@/components/blog/article-parts";
 import { ToolCategoryMap, ToolSprawlDiagram, WorkflowDiagram } from "@/components/blog/diagrams";
+import { BestFitPanel, TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "best-real-estate-photography-software",
@@ -34,7 +34,7 @@ export const article: BlogArticle = {
     "real estate photography management software",
     "real estate photography software comparison",
   ],
-  readingMinutes: 17,
+  readingMinutes: 19,
   cover: { variant: "ranking", label: "2026 Buyer's Guide", alt: "Illustration of ranked software cards on a dark indigo background" },
   featured: true,
   disclosure: true,
@@ -58,8 +58,9 @@ export const article: BlogArticle = {
         built around them.
       </>,
       <>
-        <strong>Want one flat-priced workspace for estimates, scheduling, client messages, video review, payments,
-        and delivery?</strong> That&apos;s the gap ShootPortal (our product) is built for.
+        <strong>Shoot listings plus aerial, video, or commercial work?</strong> ShootPortal (our product) is our pick
+        for solo operators and small teams: estimates, scheduling, client messages, video review, payments, and
+        delivery on one project, for one flat monthly price with no per-listing fees.
       </>,
     ],
   },
@@ -217,24 +218,34 @@ export const article: BlogArticle = {
           </p>
           <ComparisonTable
             caption="Real estate photography software comparison, October 2026"
-            columns={["Platform", "Pricing model (Oct 2026)", "Free trial / plan", "Pay-to-download", "Property websites"]}
+            columns={[
+              "Platform",
+              "Pricing model (Oct 2026)",
+              "Free trial / plan",
+              "How jobs come in",
+              "Pay-to-download",
+              "Video review rounds",
+              "Property websites",
+            ]}
             highlightColumn={undefined}
             rows={[
-              ["ShootPortal", "Flat monthly subscription", "Free trial, no card", <Yes key="a">Optional</Yes>, <No key="b" />],
-              ["Aryeo", "Free Lite; Pro from $49/mo with annual listing caps", "Free Lite plan", "Not stated", "Not stated"],
-              ["HDPhotoHub", "$5–$10 per delivery, no subscription", "Free account", <Yes key="c" />, <Yes key="d">Marketing Kit</Yes>],
-              ["Spiro", "$5 per listing, no subscription", "“Start Free” (terms not stated)", "Not stated", <Yes key="e" />],
-              ["Tonomo", "$140 or $250/mo with listing caps", "Demo only", <Yes key="f" />, "Not stated"],
-              ["Rela", "$49 or $99/mo + per-site fees", "14 days, no card", <Yes key="g">With add-on</Yes>, <Yes key="h" />],
-              ["Fotello", "Free tier; paid priced per listing (editing)", "Free tier", "Not stated", <Yes key="i" />],
-              ["Tourbuzz", "Pay per item, no monthly fee", "Full access, no card", "Not stated", <Yes key="j" />],
-              ["RTV", "$6–$12 per project", "Free trial, no card", <Yes key="k" />, <Yes key="l" />],
-              ["PhotoFounder", "$1,495/yr or $4,495 lifetime", "14-day money-back", "Not stated", <Yes key="m" />],
+              ["ShootPortal", "Flat monthly subscription, no per-listing fees", "Free trial, no card", "Request, then estimate the client approves online", <Yes key="a">Optional</Yes>, <Yes key="a2">Frame-pinned comments, numbered versions</Yes>, <No key="b" />],
+              ["Aryeo", "Free Lite; Pro from $49/mo with annual listing caps", "Free Lite plan", "Embeddable order forms with add-ons", "Not stated", "Not stated", "Not stated"],
+              ["HDPhotoHub", "$5–$10 per delivery, no subscription", "Free account", "Shopping cart with add-ons", <Yes key="c" />, "Not stated (Vimeo integration)", <Yes key="d">Marketing Kit</Yes>],
+              ["Spiro", "$5 per listing, no subscription", "“Start Free” (terms not stated)", "Custom order pages", "Not stated", "Not stated", <Yes key="e" />],
+              ["Tonomo", "$140 or $250/mo with listing caps", "Demo only", "Branded booking flows", <Yes key="f" />, "Not stated", "Not stated"],
+              ["Rela", "$49 or $99/mo + per-site fees", "14 days, no card", "Order form (Storefront add-on)", <Yes key="g">With add-on</Yes>, "Not stated", <Yes key="h" />],
+              ["Fotello", "Free tier; paid priced per listing (editing)", "Free tier", "Bookings on the free tier", "Not stated", "Not stated", <Yes key="i" />],
+              ["Tourbuzz", "Pay per item, no monthly fee", "Full access, no card", "Online ordering ($0.15/order)", "Not stated", "Not stated", <Yes key="j" />],
+              ["RTV", "$6–$12 per project", "Free trial, no card", "Booking with real-time availability", <Yes key="k" />, "Not stated", <Yes key="l" />],
+              ["PhotoFounder", "$1,495/yr or $4,495 lifetime", "14-day money-back", "Agent self-booking", "Not stated", "Not stated", <Yes key="m" />],
             ]}
             note={
               <>
                 Prices from each vendor&apos;s official pricing page, checked October 15, 2026. Vendors change pricing
-                often; follow the links in each section below to confirm.
+                often; follow the links in each section below to confirm. &quot;Video review rounds&quot; means clients
+                can leave time-stamped feedback on successive cuts inside the platform; delivering a video file alone
+                doesn&apos;t count.
               </>
             }
           />
@@ -259,12 +270,13 @@ export const article: BlogArticle = {
             name="ShootPortal"
             url="/"
             isShootPortal
-            tagline="Request-to-delivery workspace for photographers, videographers, and drone operators"
+            tagline="One branded portal for estimate → schedule → review → pay → deliver, at one flat price"
             pricing={
               ctx.studioMonthly ? (
                 <>
                   {ctx.studioMonthly}/month{ctx.studioAnnual ? <>, or {ctx.studioAnnual}/month billed annually</> : null}.
-                  No per-listing fees. {ctx.trialDays > 0 ? <>{ctx.trialDays}-day free trial, no card.</> : null}
+                  No per-listing fees or listing caps; Stripe&apos;s standard processing fees apply.{" "}
+                  {ctx.trialDays > 0 ? <>{ctx.trialDays}-day free trial, no card.</> : null}
                 </>
               ) : (
                 <>
@@ -272,34 +284,52 @@ export const article: BlogArticle = {
                 </>
               )
             }
-            bestFor="Solo operators and small teams who shoot listings plus aerial, video, or commercial work and want one system for all of it."
+            bestFor="Our pick for solo operators and small teams who shoot listings plus aerial, video, or commercial work, quote custom jobs, and want flat pricing without per-listing fees."
             pros={[
-              "Estimates with versions, PDFs, and distance-based travel fees calculated from ZIP codes",
-              "Clients approve estimates, respond to proposed shoot times, review media, pay, and download in one branded portal",
-              "Time-stamped video comments pinned to the frame, with numbered versions",
-              "Payments go straight to your own Stripe account; optional deposits and download unlock after payment",
-              "Print (full-res) and MLS (2048px) downloads, single files or ZIP",
+              "Request form with automatic preliminary estimates, then versioned official estimates (with PDF and expiry) the client approves online",
+              "Travel fees calculated from ZIP-to-ZIP distance, using mileage tiers or a free radius plus a per-mile rate",
+              "Clients accept, decline, or counter-propose the shoot time you send; confirmed shoots push to your Google Calendar",
+              "Time-stamped video comments pinned to the frame, threaded replies, and numbered versions",
+              "Deposits on approval, payment through your own Stripe account, and optional download unlock after the final payment",
+              "Print (full-res) and MLS (2048px) downloads, single files or ZIP, plus Kuula 360 tours and 3D embeds (Matterport, Polycam, and others)",
+              "Client records with notes, message timeline, property history, lifetime revenue, and outstanding balance",
             ]}
             cons={[
               "No property websites, flyers, or marketing kits",
               "No Zillow Showcase delivery",
-              "Clients respond to times you propose rather than self-booking an open slot",
-              "No contracts/e-signature or QuickBooks sync yet",
+              "Clients respond to times you propose rather than self-booking an open slot; no drive-time routing or auto-assignment",
+              "No contracts/e-signature, QuickBooks sync, or SMS notifications",
+              "Stripe is the only payment processor; no tips or promo codes",
             ]}
           >
             <p>
               ShootPortal was built by the owner of a drone photography business to run his own jobs, so it&apos;s
-              organized around the project rather than the listing storefront. A job starts as a request from your
-              branded portal, where the client picks a service from your catalog and enters the property address.
-              ShootPortal can generate a preliminary estimate, including a travel fee based on distance, then you send
-              the official estimate for approval.
+              organized around the project rather than the listing storefront. Every job, whether it&apos;s a
+              25-photo listing or a commercial aerial shoot, gets one project record that holds the estimate, the shoot
+              time, the messages, the files, and the payment status. When an agent asks &quot;where are we on Maple
+              Street?&quot;, you open one page instead of searching texts, your calendar, and Dropbox.
             </p>
             <p>
-              From there you propose a shoot time, the client accepts or suggests another, and the shoot is pushed to
-              your Google Calendar. After the shoot you upload photos, video, Kuula tours, or 3D model embeds
-              (Matterport, Polycam, and others) to the project. Clients can approve each item or request changes, leave
-              time-stamped comments on videos, pay through Stripe, and download. Staff accounts with granular
-              permissions let you bring on editors or second shooters.
+              Here&apos;s how a typical listing with an aerial add-on runs. The agent submits a request from your
+              branded portal (your logo, colors, and optionally your own domain), picks a service from your catalog, and
+              enters the property address. ShootPortal drafts a preliminary estimate, including a travel fee from the
+              distance between ZIP codes, and you send the official estimate. The agent approves it online, which can
+              trigger a deposit request. You propose Thursday at 4 p.m.; the agent counter-proposes Friday morning; you
+              accept, and the shoot lands on your Google Calendar.
+            </p>
+            <p>
+              After the shoot you upload photos, the listing video, a Kuula tour, or a Matterport embed to the same
+              project. The agent approves each item or requests changes with written notes, and leaves a comment at
+              0:42 of the video pinned to the spot on the frame they mean. You upload version 2, request the balance,
+              and downloads unlock once it&apos;s paid if you&apos;ve turned that on. The agent grabs MLS-size files
+              for the listing and Print files for the brochure, and can email their assistant a share link that
+              expires, no account needed. Next time that agent books, their client record already shows every past
+              property, what they&apos;ve spent, and whether anything is outstanding.
+            </p>
+            <p>
+              Staff accounts with granular permissions let you assign editors or second shooters to specific projects,
+              and the eight-stage pipeline (New Request through Delivered) shows what&apos;s shot, in review, or
+              awaiting payment across every job at once.
             </p>
             <p>
               Where it&apos;s weaker: it doesn&apos;t try to be a listing-marketing platform. If agents expect a
@@ -513,11 +543,6 @@ export const article: BlogArticle = {
             cons={["Large upfront commitment and no free trial (14-day money-back instead)", "Newer vendor with fewer independent reviews"]}
           />
 
-          <InlineCta
-            title="Evaluating platforms this week?"
-            body="Run one real listing through ShootPortal, from request to paid and delivered, and compare it with your current setup."
-            trialDays={ctx.trialDays}
-          />
         </>
       ),
     },
@@ -525,7 +550,7 @@ export const article: BlogArticle = {
       id: "pricing-math",
       title: "Per-listing vs. subscription: which pricing model costs less?",
       tocLabel: "Pricing models compared",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             The cheapest platform depends on your volume. A quick way to compare: multiply your expected listings for
@@ -561,6 +586,115 @@ export const article: BlogArticle = {
               subscription that covers all four. Price out the whole workflow, not just the delivery line item.
             </p>
           </Callout>
+          <p>
+            For reference, ShootPortal is a flat subscription with no per-listing fees and no annual listing cap:{" "}
+            {ctx.studioMonthly ? (
+              <>
+                the Studio plan is {ctx.studioMonthly}/month{ctx.studioAnnual ? <> or {ctx.studioAnnual}/month billed annually</> : null}
+              </>
+            ) : (
+              <>
+                see <SiteLink href="/pricing">current pricing</SiteLink>
+              </>
+            )}
+            . Card payments run through your own Stripe account, so Stripe&apos;s standard processing fees apply on top,
+            as they would on any platform.
+          </p>
+        </>
+      ),
+    },
+    {
+      id: "why-one-system",
+      title: "Why real estate media businesses need management and delivery in one system",
+      tocLabel: "Why one system matters",
+      body: () => (
+        <>
+          <p>
+            Great listing media is only half of a real estate photography business. The other half is everything around
+            it: the request, the quote, the shoot time, the reschedule, the revision, the invoice, and the download.
+            Real estate makes that half unusually heavy, for three reasons.
+          </p>
+          <h3>Agents are repeat clients, not one-off bookings</h3>
+          <p>
+            A wedding client books you once. A productive listing agent might book you every few weeks for years. That
+            makes the client record more valuable than any single gallery: their usual package, their brokerage, who
+            on their team needs the files, and whether last month&apos;s invoice is still open. When that lives in a
+            CRM that isn&apos;t connected to delivery, someone has to copy it across on every job.
+          </p>
+          <h3>Properties come back</h3>
+          <p>
+            Listings expire and relist, homes sell again, and builders send you the same subdivision phase after phase.
+            Being able to pull up an address and see what you shot there before, and what you charged, makes the next
+            quote faster and more consistent. That only works if jobs are stored against the property and the client,
+            not just as a folder of JPEGs.
+          </p>
+          <h3>Payment and delivery should be the same step</h3>
+          <p>
+            In real estate the files are time-sensitive and the agent wants them before the listing goes live. If
+            delivery and invoicing are separate tools, you either release files and chase payment, or hold files and
+            field &quot;are they ready?&quot; messages. Tying the download to the payment (deposit on booking, balance
+            before the download unlocks) removes that standoff without slowing a paying client down.
+          </p>
+          <p>
+            Most platforms in this guide connect some of these pieces. When you compare them, check whether the client
+            record, the property history, the payment, and the delivery are actually the same record, or four screens
+            that happen to share a login. Here&apos;s what that looks like in ShootPortal, stage by stage:
+          </p>
+          <Figure caption="ShootPortal's verified features at each stage of a job.">
+            <WorkflowCoverageMap />
+          </Figure>
+        </>
+      ),
+    },
+    {
+      id: "who-should-choose-shootportal",
+      title: "Who should choose ShootPortal?",
+      tocLabel: "Who ShootPortal fits",
+      body: (ctx) => (
+        <>
+          <p>
+            We built ShootPortal, so weigh this accordingly. Based on what it does and doesn&apos;t do, it&apos;s our
+            recommendation for three kinds of real estate media business, and the wrong choice for a few others.
+          </p>
+          <BestFitPanel
+            heading="Where ShootPortal is our pick"
+            fits={[
+              {
+                who: "Solo shooters who do more than listings",
+                why: "Listings, aerials, construction progress, and commercial video all run through the same request, estimate, review, and payment steps, so you don't need a second system for non-listing work.",
+              },
+              {
+                who: "Small teams quoting custom work",
+                why: "Versioned estimates with ZIP-based travel fees, staff accounts with granular permissions, and projects assigned to specific team members.",
+              },
+              {
+                who: "Video-heavy media businesses",
+                why: "Clients leave time-stamped comments pinned to the frame on numbered versions, so revision rounds stay on the project instead of in email.",
+              },
+              {
+                who: "Businesses that want one branded front door",
+                why: "Clients request, approve estimates, answer proposed shoot times, review, pay, and download in one portal with your logo, colors, and domain, at one flat price with no per-listing fees.",
+              },
+            ]}
+            notFor={[
+              <>Your agents need Zillow Showcase delivery (Aryeo says it&apos;s the only platform that offers it).</>,
+              <>Property websites, flyers, or marketing kits are a core product (look at Rela or HDPhotoHub Full Delivery).</>,
+              <>You dispatch several photographers by drive time and service area every day (Tonomo is built for that).</>,
+              <>You&apos;d rather pay per delivery with no subscription at all (HDPhotoHub or Spiro).</>,
+            ]}
+          />
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Put your next listing through ShootPortal"
+            body={
+              <>
+                Add your logo and services, connect Stripe, and run one real job from request to paid and delivered.
+                Then open the portal as your agent would and compare it with what you use today.
+              </>
+            }
+            secondaryHref="/pricing"
+            secondaryLabel="See pricing"
+          />
         </>
       ),
     },
@@ -594,8 +728,8 @@ export const article: BlogArticle = {
               },
               {
                 who: "Listings plus aerial, video, or commercial work",
-                pick: "ShootPortal",
-                why: "Custom estimates, travel fees, video review, and delivery work the same for any job type.",
+                pick: "ShootPortal (our pick)",
+                why: "Custom estimates, travel fees, video review, payments, and delivery work the same for any job type, at one flat price.",
               },
               {
                 who: "You want to own a license",
@@ -732,8 +866,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-aryeo-alternatives", "shootportal-vs-aryeo-vs-hdphotohub", "best-real-estate-photography-delivery-software"],
   cta: {
-    title: "Run your photography business in one place.",
-    body: "Requests, estimates, scheduling, client messages, media review, payments, and delivery, all attached to the same project in a portal branded to you.",
+    title: "Run your real estate media business in one place.",
+    body: "Agent requests, estimates, shoot times, revisions, payments, and downloads on one project record, in a client portal with your logo, colors, and domain. No per-listing fees.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

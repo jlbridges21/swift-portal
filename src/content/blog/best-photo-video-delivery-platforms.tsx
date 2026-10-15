@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -14,6 +13,8 @@ import {
   Yes,
 } from "@/components/blog/article-parts";
 import { DeliveryPathDiagram, VideoReviewDiagram } from "@/components/blog/diagrams";
+import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
+import { ProductPreview } from "@/components/blog/product-preview";
 
 export const article: BlogArticle = {
   slug: "best-photo-video-delivery-platforms",
@@ -57,8 +58,9 @@ export const article: BlogArticle = {
         work, but give clients no branding, approvals, or payment step.
       </>,
       <>
-        <strong>Photos, video, drone maps, and payment for the same client?</strong> ShootPortal (our product) puts
-        them in one branded portal with time-stamped video comments, per-item approval, and optional unlock-after-payment.
+        <strong>Videographer or drone operator delivering photos, video, maps, and an invoice on the same job?</strong>{" "}
+        Our pick is ShootPortal (our product): review, payment, and download live on one project in your branded
+        portal, with time-stamped video comments, per-item approval, and optional unlock-after-payment.
       </>,
       <>
         Check per-file video limits before you commit. They range from 3 GB to multiple terabytes depending on the
@@ -253,7 +255,12 @@ export const article: BlogArticle = {
               </>
             }
             bestFor="Videographers working with editors or agencies who need frame-accurate review."
-            pros={["Frame-accurate and range-based comments with annotations", "Files up to 5 TB per asset", "Branded, passphrase-protected, expiring shares on Pro"]}
+            pros={[
+              "Frame-accurate and range-based comments with annotations",
+              "Files up to 5 TB per asset",
+              "Branded, passphrase-protected, expiring shares on Pro",
+              "Premiere Pro and Final Cut Pro integrations, so editors can work on comments from the timeline",
+            ]}
             cons={["No payments or print store", "Priced per member, which adds up for small teams"]}
           />
           <ToolCard
@@ -320,7 +327,7 @@ export const article: BlogArticle = {
               ["ShootProof", "Up to 20 GB / 60 min", "Per an older help article"],
               ["SmugMug", "3 GB / 20 min", "Display copies up to 1080p"],
               ["Pixieset", "No per-file limit stated", "Metered by plan video minutes"],
-              ["ShootPortal", "Resumable uploads for large files", "Ask us about very large projects"],
+              ["ShootPortal", "Per-file limit not published", "Resumable uploads recover from a dropped connection"],
             ]}
             note={
               <>
@@ -405,24 +412,34 @@ export const article: BlogArticle = {
           </p>
           <ComparisonTable
             caption="Photo and video delivery platform comparison, October 2026"
-            columns={["Platform", "Category", "Time-coded video comments", "Payments / store", "Starting paid price"]}
+            columns={[
+              "Platform",
+              "Category",
+              "Time-coded video comments",
+              "Client approval step",
+              "Takes client payment",
+              "Print store / favorites",
+              "Starting paid price",
+            ]}
             rows={[
-              ["ShootPortal", "Client portal", <Yes key="a">Pinned to frame, versions</Yes>, <Yes key="b">Stripe, optional download lock</Yes>, <SiteLink key="c" href="/pricing">See pricing</SiteLink>],
-              ["Pixieset", "Gallery", <No key="d">Not found</No>, <Yes key="e">Store</Yes>, "$10/mo"],
-              ["Pic-Time", "Gallery", <No key="f">Not found</No>, <Yes key="g">Store</Yes>, "$8/mo"],
-              ["ShootProof", "Gallery", <No key="h">Not found</No>, <Yes key="i">Store, invoices</Yes>, "$9.99/mo"],
-              ["SmugMug", "Gallery", <No key="j">Not found</No>, <Yes key="k">Portfolio plan+</Yes>, "$20/mo (annual)"],
-              ["Zenfolio", "Gallery", <No key="l">Not found</No>, <Yes key="m">Professional+</Yes>, "$9/mo"],
-              ["Frame.io", "Video review", <Yes key="n">Frame-accurate</Yes>, <No key="o" />, "$15/member/mo"],
-              ["Vimeo review", "Video review", <Yes key="p" />, <No key="q">Not stated</No>, "Not verified"],
-              ["Wipster", "Video review", "Not stated on pricing page", <No key="r" />, "$9.95/mo (annual)"],
-              ["Dropbox + Replay", "Storage / review", <Yes key="s">With Replay</Yes>, <No key="t" />, "$9.99/mo (Plus)"],
-              ["WeTransfer", "File transfer", <No key="u" />, <No key="v" />, "Not verified"],
-              ["Google Drive", "Storage", <No key="w" />, <No key="x" />, "$1.99/mo (100 GB)"],
+              ["ShootPortal", "Client portal", <Yes key="a">Pinned to frame, versions</Yes>, <Yes key="a1">Approve or request changes per item</Yes>, <Yes key="b">Project payments via your Stripe; optional download lock</Yes>, <No key="b1" />, <SiteLink key="c" href="/pricing">See pricing</SiteLink>],
+              ["Pixieset", "Gallery", <No key="d">Not found</No>, <Yes key="d1">Favorites / proofing</Yes>, <Yes key="e">Store</Yes>, <Yes key="e1" />, "$10/mo"],
+              ["Pic-Time", "Gallery", <No key="f">Not found</No>, "Not stated", <Yes key="g">Store</Yes>, <Yes key="g1">Print store</Yes>, "$8/mo"],
+              ["ShootProof", "Gallery", <No key="h">Not found</No>, "Not stated", <Yes key="i">Store, invoices</Yes>, <Yes key="i1">Store</Yes>, "$9.99/mo"],
+              ["SmugMug", "Gallery", <No key="j">Not found</No>, <Yes key="j1">Favoriting (Pro)</Yes>, <Yes key="k">Portfolio plan+</Yes>, <Yes key="k1" />, "$20/mo (annual)"],
+              ["Zenfolio", "Gallery", <No key="l">Not found</No>, "Not stated", <Yes key="m">Professional+</Yes>, <Yes key="m1">Selling on Pro+</Yes>, "$9/mo"],
+              ["Frame.io", "Video review", <Yes key="n">Frame-accurate</Yes>, "Not confirmed on pricing page", <No key="o" />, <No key="o1" />, "$15/member/mo"],
+              ["Vimeo review", "Video review", <Yes key="p" />, <Yes key="p1">&quot;Approved&quot; status</Yes>, <No key="q">Not stated</No>, <No key="q1" />, "Not verified"],
+              ["Wipster", "Video review", "Not stated on pricing page", "Not stated", <No key="r" />, <No key="r1" />, "$9.95/mo (annual)"],
+              ["Dropbox + Replay", "Storage / review", <Yes key="s">With Replay</Yes>, <Yes key="s1">With Replay</Yes>, <No key="t" />, <No key="t1" />, "$9.99/mo (Plus)"],
+              ["WeTransfer", "File transfer", <No key="u" />, <No key="u1" />, <No key="v" />, <No key="v1" />, "Not verified"],
+              ["Google Drive", "Storage", <No key="w" />, <No key="w1" />, <No key="x" />, <No key="x1" />, "$1.99/mo (100 GB)"],
             ]}
             note={
               <>
-                Prices are monthly list prices from official pages on October 15, 2026 (Pixieset, Pic-Time, ShootProof,
+                Read across a row: few platforms cover video comments, an approval step, and payment together, and the
+                ones that sell prints don&apos;t do frame-level video review. Prices are monthly list prices from
+                official pages on October 15, 2026 (Pixieset, Pic-Time, ShootProof,
                 SmugMug, Zenfolio, Frame.io, Wipster, Dropbox, Google One). Vimeo and WeTransfer prices could not be
                 verified; see{" "}
                 <Ext href="https://vimeo.com/upgrade-plan">Vimeo</Ext> and{" "}
@@ -437,13 +454,14 @@ export const article: BlogArticle = {
       id: "shootportal-delivery",
       title: "How ShootPortal handles photo and video delivery",
       tocLabel: "ShootPortal delivery",
-      body: (ctx) => (
+      body: () => (
         <>
           <p>
-            ShootPortal is our product, built by the owner of a drone photography business who was tired of sending
-            footage through one tool, feedback through another, and invoices through a third. It isn&apos;t a gallery
+            ShootPortal is our product, built by the owner of a drone photography business. It isn&apos;t a gallery
             store, and it isn&apos;t a post-production suite. It&apos;s a branded client portal where delivery is one
-            stage of the project.
+            stage of a project that already holds the estimate, the shoot date, the message thread, and the payment
+            status. That&apos;s the difference from every category above: the files don&apos;t live on a page by
+            themselves, so the review and the invoice don&apos;t either.
           </p>
           <ul>
             <li>
@@ -474,15 +492,76 @@ export const article: BlogArticle = {
           <Figure caption="Conceptual diagram: upload, client review, optional payment, then download.">
             <DeliveryPathDiagram />
           </Figure>
+          <h3>A delivery, start to finish</h3>
           <p>
-            What it doesn&apos;t do: there&apos;s no print store, no favorites or proofing hearts, and no adaptive
-            streaming. Wedding and portrait photographers who earn from print sales are better served by a gallery
-            platform. Clients also sign in to the portal rather than opening a login-free page.
+            Take a commercial drone job for a builder: a two-minute progress film, forty stills, and a Pix4D model.
+            You upload v1 of the film, the stills in folders, and the model embed to the project. The site manager
+            pauses at 0:42, pins a comment on the crane they want cropped out, and approves the stills. You resolve the
+            note and post v2 as the next numbered version. They approve v2, pay the balance through Stripe
+            Checkout on the same project, and the download buttons unlock: the film file, a ZIP of the stills at full
+            resolution, and the model still embedded for their team to open.
           </p>
-          <InlineCta
-            title="Deliver your next video in a portal clients actually use"
-            body="Upload a cut, collect time-stamped feedback, post v2, and unlock the download when the invoice is paid."
+          <p>
+            What&apos;s automated versus manual: video-comment notifications are batched, client emails come from
+            editable templates, reminder emails can nudge an outstanding review or payment, and the project can move to
+            Delivered once it&apos;s paid. You still export from your editor and upload each version yourself.
+          </p>
+          <Figure caption="Product illustration of the ShootPortal studio view: project board, client message, upload, and payment status (demo data).">
+            <ProductPreview view="studio" />
+          </Figure>
+          <p>
+            What it doesn&apos;t do: there&apos;s no print store, no favorites or proofing hearts, no adaptive
+            streaming, and no plug-in for Premiere or Final Cut. Wedding and portrait photographers who earn from print
+            sales are better served by a gallery platform. Clients also sign in to the portal rather than opening a
+            login-free page, though you can create share links for people without an account.
+          </p>
+        </>
+      ),
+    },
+    {
+      id: "who-should-choose-shootportal",
+      title: "When ShootPortal is the right delivery platform",
+      tocLabel: "Is ShootPortal a fit?",
+      body: (ctx) => (
+        <>
+          <p>
+            The categories in this guide each own one piece: galleries own browsing and print sales, review tools own
+            frame-level feedback, transfer services own raw size. If your client needs all three pieces on the same
+            job, plus an invoice, you either stitch tools together or use one portal that holds the whole project.
+            That&apos;s the case ShootPortal is built for, and we recommend it for the profiles below.
+          </p>
+          <BestFitPanel
+            heading="Who should choose ShootPortal for delivery"
+            fits={[
+              {
+                who: "Videographers selling to businesses",
+                why: "Time-stamped comments pinned to the frame, numbered versions, and resolve or reopen, with the balance collected on the same project before the final file downloads.",
+              },
+              {
+                who: "Drone operators with mixed deliverables",
+                why: "Video, stills, Kuula tours, and DroneDeploy, Pix4D, or Matterport embeds on one project, so the client opens one link instead of three.",
+              },
+              {
+                who: "Hybrid photo and video shooters",
+                why: "Photos download as Print or MLS sizes, singly or as a ZIP, next to the video files, with per-item approval for everything that isn't video.",
+              },
+              {
+                who: "Anyone tired of chasing final payments",
+                why: "Clients can view everything, but downloads can stay locked until the final payment clears through your own Stripe account.",
+              },
+            ]}
+            notFor={[
+              "You earn from print sales or favorites-based proofing; Pixieset, Pic-Time, ShootProof, SmugMug, or Zenfolio fit better.",
+              "Your editors review inside Premiere or Final Cut and need NLE integration; Frame.io is built for that.",
+              "You only need to move one huge file now and then; a transfer service is cheaper.",
+            ]}
+          />
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Run one delivery through it"
+            body="Upload a real cut and the stills from the same job, collect time-stamped feedback, post v2, and let the download unlock when the balance is paid."
+            secondaryHref="/#product-demo"
+            secondaryLabel="Watch the demo"
           />
         </>
       ),
@@ -626,8 +705,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-real-estate-photography-delivery-software", "best-photography-client-portals", "best-drone-business-management-software"],
   cta: {
-    title: "Photos, video, and feedback in one branded portal.",
-    body: "Upload any media type, collect time-stamped video comments across versions, take payment through your own Stripe account, and deliver downloads clients can find again.",
+    title: "Review, payment, and delivery on the same project.",
+    body: "Upload photos, video, and 3D or map embeds, collect time-stamped video comments across versions, take payment through your own Stripe account, and unlock downloads clients can find again.",
     secondaryHref: "/#product-demo",
     secondaryLabel: "Watch the demo",
   },

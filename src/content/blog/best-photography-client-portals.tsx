@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -14,6 +13,8 @@ import {
   Yes,
 } from "@/components/blog/article-parts";
 import { PortalAnatomyDiagram, VideoReviewDiagram } from "@/components/blog/diagrams";
+import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
+import { ProductPreview } from "@/components/blog/product-preview";
 
 export const article: BlogArticle = {
   slug: "best-photography-client-portals",
@@ -298,25 +299,34 @@ export const article: BlogArticle = {
           </p>
           <ComparisonTable
             caption="Client portals for photographers and videographers, October 2026"
-            columns={["Tool", "Entry price with portal", "Client login", "Pay in portal", "Media delivery in portal", "White-label"]}
+            columns={[
+              "Tool",
+              "Entry price with portal",
+              "Client login",
+              "Pay in portal",
+              "Media delivery in portal",
+              "Approve media / video comments",
+              "White-label",
+            ]}
             highlightColumn={undefined}
             rows={[
-              ["ShootPortal", "Flat monthly subscription", "Account; share links for others", <Yes key="a" />, <Yes key="b">Photos, video, tours, 3D</Yes>, <No key="c">Branded + custom domain</No>],
-              ["HoneyBook", "$29/mo billed yearly", "Not required by default", <Yes key="d" />, <No key="e">Files only</No>, <No key="f">Badge removed on Essentials+</No>],
-              ["Dubsado", "$335/yr", "Login (off by default)", <Yes key="g" />, <No key="h" />, "Not verified"],
-              ["Studio Ninja", "$16/mo", "Not verified", <Yes key="i" />, <No key="j" />, "Not verified"],
-              ["Sprout Studio", "See official pricing", "Not verified", "Not verified", <Yes key="k">Galleries</Yes>, "Not verified"],
-              ["Pixieset Studio Manager", "Free", "No persistent portal found", <Yes key="l" />, <No key="m">Separate gallery product</No>, <Yes key="n">Pro removes branding</Yes>],
-              ["Moxie", "Pro $20/mo annual", "No Moxie account needed", <Yes key="o" />, <No key="p">File attachments</No>, <Yes key="q">Pro</Yes>],
-              ["SuiteDash", "$19/mo", "Login", <Yes key="r" />, <No key="s">File sharing</No>, <Yes key="t">All plans</Yes>],
-              ["Assembly", "Free; Starter $29/mo annual", "Sign-in", "Not verified", "Not verified", <Yes key="u">Professional+</Yes>],
-              ["Aryeo", "Lite free", "Agent login", <Yes key="v" />, <Yes key="w">Listing media</Yes>, "Not verified"],
+              ["ShootPortal", "Flat monthly subscription", "Account; share links for others", <Yes key="a" />, <Yes key="b">Photos, video, tours, 3D</Yes>, <Yes key="b2">Per item + time-stamped video</Yes>, <No key="c">Branded + custom domain</No>],
+              ["HoneyBook", "$29/mo billed yearly", "Not required by default", <Yes key="d" />, <No key="e">Files only</No>, <No key="e2" />, <No key="f">Badge removed on Essentials+</No>],
+              ["Dubsado", "$335/yr", "Login (off by default)", <Yes key="g" />, <No key="h" />, <No key="h2" />, "Not verified"],
+              ["Studio Ninja", "$16/mo", "Not verified", <Yes key="i" />, <No key="j" />, <No key="j2">In a separate gallery tool</No>, "Not verified"],
+              ["Sprout Studio", "See official pricing", "Not verified", "Not verified", <Yes key="k">Galleries</Yes>, "Not verified", "Not verified"],
+              ["Pixieset Studio Manager", "Free", "No persistent portal found", <Yes key="l" />, <No key="m">Separate gallery product</No>, "Not verified", <Yes key="n">Pro removes branding</Yes>],
+              ["Moxie", "Pro $20/mo annual", "No Moxie account needed", <Yes key="o" />, <No key="p">File attachments</No>, <No key="p2" />, <Yes key="q">Pro</Yes>],
+              ["SuiteDash", "$19/mo", "Login", <Yes key="r" />, <No key="s">File sharing</No>, <No key="s2" />, <Yes key="t">All plans</Yes>],
+              ["Assembly", "Free; Starter $29/mo annual", "Sign-in", "Not verified", "Not verified", "Not verified", <Yes key="u">Professional+</Yes>],
+              ["Aryeo", "Lite free", "Agent login", <Yes key="v" />, <Yes key="w">Listing media</Yes>, "Not verified", "Not verified"],
             ]}
             note={
               <>
                 Prices and portal capabilities from official pricing and help pages, checked October 15, 2026. Links are
                 in each profile below. &quot;File sharing&quot; means general file attachments rather than galleries or
-                video review.
+                video review. &quot;Approve media / video comments&quot; means the client can approve or request changes on
+                individual deliverables, or comment at a moment in a video, inside the same portal.
               </>
             }
           />
@@ -356,10 +366,11 @@ export const article: BlogArticle = {
             }
             bestFor="Photographers, videographers, and drone operators whose clients care most about seeing, approving, and downloading the work."
             pros={[
-              "Clients approve estimates, respond to proposed shoot times, and see friendly project stages",
+              "Clients approve estimates (or request changes), download the estimate PDF, and accept, decline, or counter a proposed shoot time",
               "Photos in folders, video files, Kuula 360 tours, 3D model embeds, and documents in one place",
               "Approve or reject each deliverable with feedback; time-stamped, frame-pinned video comments",
-              "Pay through Stripe Checkout; download single files or ZIPs in full-res or MLS size",
+              "Pay through Stripe Checkout, with money going to your own Stripe account; download single files or ZIPs in full-res or MLS size",
+              "Message you on the project, so the conversation sits next to the files it's about",
               "Your logo, brand color, light or dark theme, and custom domain; share links for people without an account",
             ]}
             cons={[
@@ -375,6 +386,13 @@ export const article: BlogArticle = {
               accepts or counter-proposes the shoot time, and then reviews the deliverables. You decide which media
               sections each client sees, and you can keep downloads locked until the final payment while still letting
               the client preview everything.
+            </p>
+            <p>
+              Because the portal sits on top of the same project you work from, nothing has to be copied between tools.
+              When a client approves the estimate, the project moves forward and a deposit can be requested on
+              approval. When they comment at 0:42 of the second cut, that note lives on version two of the video, not
+              in an email. When they pay, the payment status shows on the project, and downloads can unlock without you
+              sending another link.
             </p>
             <p>
               The trade-off is that it isn&apos;t a contracts-and-questionnaires portal. If those documents are central
@@ -532,11 +550,81 @@ export const article: BlogArticle = {
               <BlogLink slug="best-aryeo-alternatives">Aryeo alternatives guide</BlogLink>.
             </p>
           </ToolCard>
-
-          <InlineCta
-            title="Show clients a portal with your name on it"
-            body="Estimates, shoot times, photos, video review, payment, and downloads in one place, with your logo, colors, and domain."
-            trialDays={ctx.trialDays}
+        </>
+      ),
+    },
+    {
+      id: "one-job-in-shootportal",
+      title: "One job, one link: what a client does in a ShootPortal portal",
+      tocLabel: "A job in ShootPortal",
+      body: () => (
+        <>
+          <p>
+            Feature lists blur together, so here&apos;s the client&apos;s side of a single commercial or listing job,
+            start to finish, without leaving the portal. Everything below happens at your own address (a{" "}
+            <em>yourstudio</em>.shootportal.app subdomain or a custom domain like portal.yourstudio.com), under your logo
+            and brand color.
+          </p>
+          <ol>
+            <li>
+              <strong>Approve the estimate.</strong> The client opens the versioned estimate, approves it or requests
+              changes, and can download it as a PDF for their records.
+            </li>
+            <li>
+              <strong>Confirm the shoot time.</strong> You propose a time; they accept, decline, or counter-propose.
+            </li>
+            <li>
+              <strong>Review the work.</strong> Photos appear in folders, alongside video, Kuula 360 tours, 3D model
+              embeds, and documents. They approve or reject each deliverable with written feedback, and leave
+              time-stamped comments on video, pinned to a spot on the frame.
+            </li>
+            <li>
+              <strong>Pay.</strong> A Stripe Checkout payment goes straight to your Stripe account, and a receipt is
+              emailed.
+            </li>
+            <li>
+              <strong>Download.</strong> Single files or a ZIP, in original &quot;Print&quot; size or 2048-pixel
+              &quot;MLS&quot; size, unlocked after payment if you&apos;ve turned that on.
+            </li>
+            <li>
+              <strong>Ask a question at any step.</strong> Messages stay on the project, and email notifications tell
+              the client when something needs their attention.
+            </li>
+          </ol>
+          <Figure caption="Product illustration of the ShootPortal client portal, showing a project moving from estimate to shoot, media, payment, and files (demo data).">
+            <ProductPreview view="client-portal" />
+          </Figure>
+          <p>
+            What the portal deliberately doesn&apos;t do matters just as much. Clients sign in to use it, which suits
+            repeat clients who come back for their history; for a one-time viewer, a share link is the workaround. It
+            is branded rather than fully white-labeled. And there are no contracts, questionnaires, or self-booking into
+            open slots.
+          </p>
+          <BestFitPanel
+            heading="Who this kind of portal suits"
+            fits={[
+              {
+                who: "Real estate photographers",
+                why: "Agents approve, pay, and grab Print or MLS sizes from the same page, and assistants can get a share link without an account.",
+              },
+              {
+                who: "Videographers and editors",
+                why: "Frame-pinned, time-stamped comments, threaded replies, and numbered versions keep revision rounds on the record.",
+              },
+              {
+                who: "Drone and 3D capture operators",
+                why: "Deliver stills and video next to embeds from Matterport, Polycam, Sketchfab, DroneDeploy, Pix4D, and others.",
+              },
+              {
+                who: "Studios that want to look established",
+                why: "Your logo, colors, light or dark theme, custom domain, and email from your own domain on every touchpoint.",
+              },
+            ]}
+            notFor={[
+              "Your clients must never create an account, even repeat ones.",
+              "You need the vendor's name removed entirely (look at SuiteDash or Moxie Pro).",
+              "Contracts, e-signature, and questionnaires are the heart of your booking flow.",
+            ]}
           />
         </>
       ),
@@ -545,7 +633,7 @@ export const article: BlogArticle = {
       id: "choosing-a-portal",
       title: "Choosing a portal: test it as your client would",
       tocLabel: "How to choose",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             Every portal looks good in a demo from the photographer&apos;s side. Before you commit, create a test
@@ -559,6 +647,19 @@ export const article: BlogArticle = {
             <li>Pay, then download. Note where the money lands and how long downloads take.</li>
             <li>Come back a week later and see whether you can find everything again.</li>
           </ol>
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Run this six-step test on ShootPortal today"
+            body={
+              <>
+                Create your studio, add your logo and colors in the guided setup, connect your own Stripe account, and
+                send yourself a test project. Then open it on your phone the way a client would: approve, comment,
+                pay, and download.
+              </>
+            }
+            secondaryHref="/#product-demo"
+            secondaryLabel="Watch the demo first"
+          />
           <PickGrid
             items={[
               {
@@ -614,7 +715,7 @@ export const article: BlogArticle = {
           <p>
             Pick the portal that matches the moment your clients care about most. If that moment is the delivery,{" "}
             <SiteLink href="/#product-demo">watch the ShootPortal product demo</SiteLink> or{" "}
-            <SiteLink href="/signup">start a free trial</SiteLink> and send yourself a test project. Drone operators can
+            <SiteLink href="/how-it-works">see how the workflow fits together</SiteLink>. Drone operators can
             also read our <BlogLink slug="best-drone-business-management-software">drone business software guide</BlogLink>.
           </p>
         </>
@@ -685,8 +786,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-photography-crm-software", "best-photo-video-delivery-platforms", "best-drone-business-management-software"],
   cta: {
-    title: "Give every client one place for the whole project.",
-    body: "Estimates, shoot times, media review, payments, and downloads in a portal with your logo, colors, and domain.",
+    title: "Give your clients one link for the whole job.",
+    body: "They approve the estimate, confirm the shoot time, review and comment, pay, and download, all in a portal with your logo, colors, and domain.",
     secondaryHref: "/#product-demo",
     secondaryLabel: "Watch the demo",
   },

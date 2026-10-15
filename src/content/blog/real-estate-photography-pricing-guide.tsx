@@ -5,12 +5,12 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   KeyTakeaways,
   SiteLink,
 } from "@/components/blog/article-parts";
 import { SampleEstimate, ServiceMenu } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
 
 const THUMBTACK_RE = "https://www.thumbtack.com/p/real-estate-photography-prices";
 const THUMBTACK_PHOTO = "https://www.thumbtack.com/p/photographer-prices";
@@ -378,7 +378,7 @@ export const article: BlogArticle = {
       id: "package-profitability",
       title: "Checking package profitability: cost-plus and time",
       tocLabel: "Package profitability",
-      body: (ctx) => (
+      body: () => (
         <>
           <p>
             A package can look popular and still lose money. The test is simple: for each package, add up the time it
@@ -408,11 +408,12 @@ export const article: BlogArticle = {
             listing packages too. Your entry package is the one most likely to fail this test. That&apos;s fine if
             it&apos;s a deliberate on-ramp, but not if it&apos;s what most agents buy.
           </p>
-          <InlineCta
-            title="Turn your price list into a service catalog"
-            body="Packages with starting-at prices, includes lists, and line items, plus automatic estimates with travel fees when agents request a shoot."
-            trialDays={ctx.trialDays}
-          />
+          <p>
+            One more line belongs in that math: the admin around each listing. Answering the &quot;how much for a
+            3,200 sq ft with drone?&quot; text, working out the travel fee, sending a payment link, and re-sending the
+            download link to the agent&apos;s assistant can add up to a meaningful slice of an entry-level package. If
+            your margin looks thin, cutting that time is often easier than winning a price increase.
+          </p>
         </>
       ),
     },
@@ -420,7 +421,7 @@ export const article: BlogArticle = {
       id: "service-menu-and-estimates",
       title: "Building your service menu and sending professional estimates",
       tocLabel: "Service menu and estimates",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             A clear service menu does half your selling. Agents should be able to see what each package includes, what
@@ -440,16 +441,35 @@ export const article: BlogArticle = {
               ]}
             />
           </Figure>
-          <h3>How ShootPortal handles service menus and estimates</h3>
+          <h3>Why a price list isn&apos;t the same as a quoting system</h3>
           <p>
-            In ShootPortal (our product), each service in your catalog can have a description, a &quot;starting
-            at&quot; label, an includes list, and line items. You can hide pricing for services you prefer to quote
-            individually, mark one as recommended, and start from built-in starter templates. When an agent requests a
-            shoot from your public request form, ShootPortal can generate a preliminary estimate automatically,
-            including a travel fee calculated from ZIP-to-ZIP distance using your mileage tiers or a free radius plus a
-            per-mile rate with a cap. For custom jobs, you send an official estimate with an expiry date and issue new
-            versions as the scope changes. Agents approve or request changes in their portal and can download a PDF.
+            A package is only as profitable as the way it gets quoted. Agents compare every invoice with the last one,
+            so consistency is part of the price: the same tier for the same square footage, the same travel fee for
+            the same town, and add-ons that never &quot;slip&quot; off the bill. The usual leaks are small and
+            constant. A travel fee is waived because you didn&apos;t want to look it up, a twilight image is promised
+            in a text and never invoiced, or a busy agent gets the gallery before the balance is paid and the reminder
+            emails start.
           </p>
+          <p>
+            The fix is to quote from the same menu every time, get approval in writing, and tie payment to delivery.
+            Whatever tools you use, those three habits protect the margin you worked out above.
+          </p>
+          <ProductCallout title="Your package menu becomes the request form agents order from">
+            <p>
+              In ShootPortal (our product), each package in your service catalog has a description, a &quot;starting
+              at&quot; label, an includes list, and line items. Mark Listing Plus as recommended, hide pricing on
+              commercial or luxury work you quote individually, and start from the built-in starter templates if you
+              don&apos;t have a menu yet. When an agent picks a package on your request form and enters the address,
+              ShootPortal can generate a preliminary estimate with a travel fee from ZIP-to-ZIP distance, using your
+              mileage tiers or a free radius plus a capped per-mile rate.
+            </p>
+            <p>
+              For custom jobs, send an official estimate with an expiry date and issue new versions as the scope
+              changes. The agent approves in their portal (or downloads the PDF for their records), a deposit can be
+              requested on approval, and downloads can stay locked until the balance is paid. The quote, the payment,
+              and the photos all sit on the same listing project.
+            </p>
+          </ProductCallout>
           <p>
             It&apos;s not an all-in-one listing marketing platform. ShootPortal doesn&apos;t build property websites,
             flyers, or Zillow Showcase deliveries, and it doesn&apos;t support pay-at-closing. If those matter in your
@@ -459,6 +479,18 @@ export const article: BlogArticle = {
             <BlogLink slug="best-photography-invoicing-software">photography invoicing software comparison</BlogLink>.
             The <SiteLink href="/how-it-works">how it works</SiteLink> page shows the full request-to-delivery flow.
           </p>
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Build your package menu once, then let agents request from it"
+            body={
+              <>
+                The guided setup starts you on a service template. Swap in your own tiers and add-ons, set your travel
+                rule, and request a test shoot from your own form to see the estimate an agent would get.
+              </>
+            }
+            secondaryHref="/pricing"
+            secondaryLabel="See pricing"
+          />
         </>
       ),
     },
@@ -587,8 +619,8 @@ export const article: BlogArticle = {
     "how-to-start-real-estate-photography-business",
   ],
   cta: {
-    title: "Turn your price list into estimates agents can approve.",
-    body: "A service catalog with starting-at prices and add-ons, automatic estimates with ZIP-based travel fees, and versioned official estimates with PDF.",
+    title: "Make every listing quote consistent, approved, and paid.",
+    body: "Publish your packages as a service catalog, let agents get a preliminary estimate with the travel fee already included, and collect deposits and balances on the same project you deliver from.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

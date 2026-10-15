@@ -4,7 +4,6 @@ import {
   Callout,
   ComparisonTable,
   Figure,
-  InlineCta,
   KeyTakeaways,
   SiteLink,
   Steps,
@@ -12,6 +11,7 @@ import {
 import { PortalAnatomyDiagram } from "@/components/blog/diagrams";
 import { BeforeAfter } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { TrialCard, TrialPlan } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "how-to-create-photography-client-portal",
@@ -309,36 +309,60 @@ export const article: BlogArticle = {
       body: (ctx) => (
         <>
           <p>
-            To make the steps concrete, here&apos;s how the setup works in ShootPortal, the platform we build. The order
-            is similar in most dedicated tools, so use it as a template even if you choose something else.
+            The difference between a DIY portal and a dedicated one comes down to where the portal gets its
+            information. A DIY page shows whatever you last typed into it. A dedicated portal is the client&apos;s view
+            of the project record you already work from: when you send the estimate, propose a shoot time, upload the
+            finals, or record a payment, the client&apos;s page reflects it because it&apos;s the same record.
+          </p>
+          <p>
+            To make the setup concrete, here&apos;s the path in ShootPortal, the platform we build. The order is
+            similar in most dedicated tools, so use it as a template even if you choose something else.
           </p>
           <Steps
             items={[
               {
-                title: "Add your branding",
+                title: "Create your account and pick your portal address",
                 body: (
                   <>
-                    Upload your logo, set your brand color, and choose a light or dark portal theme. Every business
-                    gets a <em>yourname.shootportal.app</em> address to start.
+                    Sign up with Google, or fill in five fields: business name, your name, portal address, email, and
+                    password. The portal address becomes <em>yourstudio.shootportal.app</em>. No credit card is
+                    requested to start the trial.
                   </>
                 ),
               },
               {
-                title: "Connect your own domain",
+                title: "Follow the guided setup",
                 body: (
                   <>
-                    Add a custom domain such as <em>portal.yourstudio.com</em>. ShootPortal walks you through the DNS
-                    record and verifies it. You can also send client emails from your own domain.
+                    Onboarding walks you through your business identity, branding, services, payments, and your landing
+                    page, then finishes. Any step can be skipped and completed later from settings, so you don&apos;t
+                    need every answer on day one.
                   </>
                 ),
               },
               {
-                title: "Build your service catalog",
+                title: "Brand it",
                 body: (
                   <>
-                    Create services and packages with descriptions, what&apos;s included, and a &quot;starting
-                    at&quot; label, or hide pricing for custom work. Starter templates help if you&apos;re starting
-                    from scratch.
+                    Upload your logo, set your brand color, and choose a light or dark portal theme.
+                  </>
+                ),
+              },
+              {
+                title: "Add services from templates",
+                body: (
+                  <>
+                    Start from starter service templates and edit them into your packages: descriptions, what&apos;s
+                    included, line items, a &quot;starting at&quot; label, or hidden pricing for custom work.
+                  </>
+                ),
+              },
+              {
+                title: "Connect your Stripe account",
+                body: (
+                  <>
+                    Client payments go straight to your own Stripe account through Stripe Connect. Decide whether to take
+                    a deposit on approval (percentage or fixed) and whether downloads unlock only after final payment.
                   </>
                 ),
               },
@@ -346,26 +370,18 @@ export const article: BlogArticle = {
                 title: "Publish your landing page and request form",
                 body: (
                   <>
-                    Each business gets an editable public page on its portal domain. Clients submit a request with their
-                    details, address, chosen service, and preferred date, which creates their portal account.
+                    Each business gets an editable public page on its portal domain with your services and a request
+                    form. A client&apos;s request (details, property address, service, preferred date) creates their
+                    portal account and a new project.
                   </>
                 ),
               },
               {
-                title: "Connect Stripe",
+                title: "Move to your own domain when you're ready",
                 body: (
                   <>
-                    Payments go straight to your own Stripe account. Choose whether to take a deposit on approval
-                    (percentage or fixed), and whether downloads unlock only after final payment.
-                  </>
-                ),
-              },
-              {
-                title: "Choose what clients see",
-                body: (
-                  <>
-                    Decide which media sections appear (photos, video, 360 tours, 3D embeds, documents) and edit the
-                    email templates that notify clients at each step.
+                    Add a custom domain such as <em>portal.yourstudio.com</em>. ShootPortal shows the DNS record to add
+                    and verifies it. You can also send client emails from your own domain.
                   </>
                 ),
               },
@@ -383,22 +399,48 @@ export const article: BlogArticle = {
           <Figure caption="Product illustration: the client side of a ShootPortal portal, with status, estimate, media, and payment (demo data).">
             <ProductPreview view="client-portal" />
           </Figure>
+          <h3>What the portal does for you, and what it doesn&apos;t</h3>
+          <ul>
+            <li>
+              <strong>Automatic once set up:</strong> a client account and project from each request, preliminary
+              estimates from your catalog (if you turn them on), email notifications from editable templates, some
+              stage changes as work moves forward, payment receipts, and an optional download unlock after final
+              payment.
+            </li>
+            <li>
+              <strong>Centralized:</strong> the estimate, shoot time, messages, media, approvals, and payment status for
+              each project, and every project on one client record with lifetime revenue and outstanding balance.
+            </li>
+            <li>
+              <strong>Still yours to do:</strong> sending the official estimate, proposing shoot times (clients accept,
+              decline, or counter; they don&apos;t book open slots themselves), uploading finals, and following up on
+              anything unusual.
+            </li>
+          </ul>
           <p>
             Some honest limits worth knowing: ShootPortal is a branded portal (your logo, colors, and domain), not a
-            fully white-labeled one. Clients respond to shoot times you propose rather than booking open slots
-            themselves, and there&apos;s no built-in e-signature for contracts. If those are essential, weigh them
-            against the tools in our{" "}
+            fully white-labeled one, and there&apos;s no built-in e-signature for contracts. If those are essential,
+            weigh them against the tools in our{" "}
             <BlogLink slug="best-photography-crm-software">photography CRM comparison</BlogLink>.
           </p>
-          <InlineCta
-            title="Build your portal on a real project"
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Set up your portal and run one real client through it"
             body={
               <>
-                Set up your branding and services, then run one client through it end to end.
-                {ctx.studioMonthly ? <> Studio plan from {ctx.studioMonthly}/month.</> : null}
+                Pick your portal address, add your logo and a service or two, connect Stripe, and send your next client
+                their own branded project page. Skip anything you&apos;re not ready for and come back to it.
+                {ctx.studioMonthly ? (
+                  <>
+                    {" "}
+                    After the trial, the Studio plan is {ctx.studioMonthly}/month
+                    {ctx.studioAnnual ? <> or {ctx.studioAnnual}/month billed annually</> : null}.
+                  </>
+                ) : null}
               </>
             }
-            trialDays={ctx.trialDays}
+            secondaryHref="/pricing"
+            secondaryLabel="See pricing"
           />
         </>
       ),
@@ -490,7 +532,15 @@ export const article: BlogArticle = {
           </p>
           <p>
             Then watch for friction. If a client emails instead of using the portal, reply with a link to the right
-            spot rather than handling it in email. Most clients adapt within one or two projects. To see the full flow
+            spot rather than handling it in email. Most clients adapt within one or two projects.
+          </p>
+          <h3>A one-week pilot before you switch everything</h3>
+          <p>
+            If you&apos;re trying a dedicated tool, evaluate it on a real job rather than a feature list. A simple plan:
+          </p>
+          <TrialPlan />
+          <p>
+            To see the full flow
             before you build anything, take a look at{" "}
             <SiteLink href="/how-it-works">how ShootPortal&apos;s client portal works</SiteLink>, or browse the wider
             options in our{" "}
@@ -571,8 +621,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-photography-client-portals", "how-to-deliver-real-estate-photos", "best-photography-crm-software"],
   cta: {
-    title: "Give every client one branded home for their project.",
-    body: "Estimates, scheduling, messages, media, and payments in a portal with your logo, colors, and domain.",
+    title: "Build a branded client portal your clients will actually use",
+    body: "Pick your portal address, add your logo and services, connect your own Stripe account, and give every client one page for their estimate, shoot time, files, and payments.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See the client portal",
   },

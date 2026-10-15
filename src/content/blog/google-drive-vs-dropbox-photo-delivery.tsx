@@ -5,7 +5,6 @@ import {
   ComparisonTable,
   Ext,
   Figure,
-  InlineCta,
   No,
   PickGrid,
   SiteLink,
@@ -13,6 +12,7 @@ import {
 } from "@/components/blog/article-parts";
 import { BeforeAfter } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { BestFitPanel, TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
 
 export const article: BlogArticle = {
   slug: "google-drive-vs-dropbox-photo-delivery",
@@ -397,21 +397,22 @@ export const article: BlogArticle = {
           </p>
           <ComparisonTable
             caption="Google Drive, Dropbox, and dedicated photo delivery software compared for client delivery"
-            columns={["", "Google Drive", "Dropbox", "Dedicated delivery software"]}
+            columns={["", "Google Drive", "Dropbox", "Dedicated delivery software", "ShootPortal (ours)"]}
             highlightColumn={3}
             rows={[
-              ["Cost of storage per TB", <Yes key="a">Low</Yes>, <Yes key="b">Low</Yes>, "Usually higher; you pay for the client experience"],
-              ["Archive and backup", <Yes key="c">Excellent</Yes>, <Yes key="d">Excellent</Yes>, <No key="e">Not the purpose; keep a separate archive</No>],
-              ["Your branding", <No key="f" />, "Higher plans; limited", <Yes key="g">Logo, colors, often custom domain</Yes>],
-              ["Web and print download sizes", <No key="h">Export each yourself</No>, <No key="i">Export each yourself</No>, <Yes key="j">Common</Yes>],
-              ["Client proofing or approvals", <No key="k" />, <No key="l" />, <Yes key="m">Favorites (galleries) or approve/reject (portals)</Yes>],
-              ["Payment tied to downloads", <No key="n" />, <No key="o" />, "Many platforms; check each"],
-              ["Print store", <No key="p" />, <No key="q" />, "Gallery platforms, yes; portals and RE tools vary"],
-              ["Video alongside photos", "Files only", "Files; Replay add-on for review", "Varies; check video limits per plan"],
-              ["Client history in one place", <No key="r">Folders and inbox links</No>, <No key="s">Folders and inbox links</No>, <Yes key="t">Client login or gallery list</Yes>],
-              ["Learning curve for clients", "Familiar", "Familiar", "New, but built for them"],
+              ["Cost of storage per TB", <Yes key="a">Low</Yes>, <Yes key="b">Low</Yes>, "Usually higher; you pay for the client experience", "Flat subscription; not priced as a storage plan"],
+              ["Archive and backup", <Yes key="c">Excellent</Yes>, <Yes key="d">Excellent</Yes>, <No key="e">Not the purpose; keep a separate archive</No>, <No key="e2">Keep Drive or Dropbox as the archive</No>],
+              ["Your branding", <No key="f" />, "Higher plans; limited", <Yes key="g">Logo, colors, often custom domain</Yes>, <Yes key="g2">Logo, color, theme, custom domain (not white-label)</Yes>],
+              ["Web and print download sizes", <No key="h">Export each yourself</No>, <No key="i">Export each yourself</No>, <Yes key="j">Common</Yes>, <Yes key="j2">Print (original) or MLS (2048 px), single or ZIP</Yes>],
+              ["Client proofing or approvals", <No key="k" />, <No key="l" />, <Yes key="m">Favorites (galleries) or approve/reject (portals)</Yes>, <Yes key="m2">Approve or reject each item with feedback</Yes>],
+              ["Payment tied to downloads", <No key="n" />, <No key="o" />, "Many platforms; check each", <Yes key="o2">Optional unlock after final payment</Yes>],
+              ["Print store", <No key="p" />, <No key="q" />, "Gallery platforms, yes; portals and RE tools vary", <No key="q2" />],
+              ["Video alongside photos", "Files only", "Files; Replay add-on for review", "Varies; check video limits per plan", <Yes key="q3">Video files plus time-stamped review</Yes>],
+              ["Estimate, schedule, and messages with the delivery", <No key="q4" />, <No key="q5" />, "Integrated portals only", <Yes key="q6">Same project</Yes>],
+              ["Client history in one place", <No key="r">Folders and inbox links</No>, <No key="s">Folders and inbox links</No>, <Yes key="t">Client login or gallery list</Yes>, <Yes key="t2">Client login with every project</Yes>],
+              ["Learning curve for clients", "Familiar", "Familiar", "New, but built for them", "Client sign-in; share links for others"],
             ]}
-            note="Category-level comparison based on Google and Dropbox documentation and vendor pages checked 2026-10-15. Features vary by product and plan."
+            note="Category-level comparison based on Google and Dropbox documentation and vendor pages checked 2026-10-15. Features vary by product and plan. The ShootPortal column describes our own product."
           />
           <p>
             Drive and Dropbox win the first two rows outright, and that&apos;s not a small thing. Everything below them is
@@ -456,6 +457,75 @@ export const article: BlogArticle = {
       ),
     },
     {
+      id: "storage-to-workflow",
+      title: "From a shared folder to a client workflow",
+      tocLabel: "Storage to workflow",
+      body: () => (
+        <>
+          <p>
+            Here&apos;s the part a storage-versus-storage comparison misses. A Drive or Dropbox link only covers the last
+            step of a job. Before it, there was an inquiry, a quote, a back-and-forth about the shoot date, maybe a
+            deposit, then a round of feedback. After it, there&apos;s a payment to chase. Each of those lives somewhere
+            else: your inbox, your texts, a payment app, a spreadsheet. The folder is fine; it&apos;s the six places
+            around it that cost you time.
+          </p>
+          <p>
+            Moving from storage to a client workflow means those steps share one record. In ShootPortal, the request,
+            the estimate, the proposed shoot time, the messages, the files, and the payment status all sit on the same
+            project. When a client asks &quot;where are we?&quot;, you open one page, and so can they.
+          </p>
+          <Figure caption="ShootPortal's verified features at each stage of a job.">
+            <WorkflowCoverageMap highlight={["review", "pay", "deliver"]} />
+          </Figure>
+          <p>
+            The highlighted stages are the ones that replace what a shared folder does today. To be specific about what
+            changes:
+          </p>
+          <ul>
+            <li>
+              <strong>Automated:</strong> downloads can unlock when the final payment lands, the project can move to
+              Delivered after payment, and clients get email notifications and receipts without you writing them.
+            </li>
+            <li>
+              <strong>Centralized:</strong> approvals, revision requests, video comments, messages, and payment status
+              sit with the files, and every past job is in the client&apos;s login instead of an old email.
+            </li>
+            <li>
+              <strong>Still manual:</strong> editing, uploading the finals, choosing which media sections the client
+              sees, and keeping your archive in Drive or Dropbox. If someone without an account needs the files, such
+              as an agent&apos;s assistant, you create a share link (view-only, or an email invite with an expiry).
+            </li>
+          </ul>
+          <BestFitPanel
+            heading="When it's time to move delivery out of Drive or Dropbox"
+            fits={[
+              {
+                who: "You deliver every week",
+                why: "Repeat clients find every past job in one login instead of searching their inbox for last month's folder.",
+              },
+              {
+                who: "You've delivered before getting paid",
+                why: "Clients can view the work while downloads stay locked until the final Stripe payment, with no folder permissions to flip back.",
+              },
+              {
+                who: "Your clients need two sizes",
+                why: "Print and MLS sizes come from the same upload, so you stop exporting and labeling two folders.",
+              },
+              {
+                who: "You deliver photos, video, and tours together",
+                why: "Video with time-stamped comments, Kuula 360 tours, and Matterport or other 3D embeds sit beside the photos on one project.",
+              },
+            ]}
+            notFor={[
+              "You deliver a few jobs a month and clients pay reliably; a well-organized Drive folder is fine.",
+              "You sell prints or need favorites and a gallery store; a gallery platform fits better.",
+              "You want the cheapest possible storage per terabyte; that's still Drive or Dropbox.",
+            ]}
+          />
+        </>
+      ),
+    },
+    {
       id: "payments-and-pricing",
       title: "Payment workflows and the real cost comparison",
       tocLabel: "Payments & pricing",
@@ -492,10 +562,16 @@ export const article: BlogArticle = {
             per credit, and gallery platforms may take a commission on store sales on lower tiers. Check each pricing page
             for the model, not just the headline price.
           </p>
-          <InlineCta
-            title="Still sending Google Drive links?"
-            body="Keep Drive or Dropbox as your archive and give clients a branded portal with photos, video, approvals, and payment in one place."
+          <TrialCard
             trialDays={ctx.trialDays}
+            title="Keep your Drive. Upgrade the handoff."
+            body={
+              <>
+                Leave your archive where it is and send your next delivery through a ShootPortal project instead: your
+                logo and colors, Print and MLS downloads, approvals, and payment in one place. The guided setup walks
+                you through branding and connecting your own Stripe account.
+              </>
+            }
           />
         </>
       ),
@@ -621,7 +697,7 @@ export const article: BlogArticle = {
   ],
   cta: {
     title: "Still sending Google Drive links?",
-    body: "Keep your cloud storage for backups. Give clients a branded portal for photos, video, approvals, and payment.",
+    body: "Keep your cloud storage for backups. Give clients one branded project with the estimate, messages, approvals, payment, and downloads together.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how delivery works",
   },
