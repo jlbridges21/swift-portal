@@ -8,6 +8,11 @@ import {
   MarketingMobileNav,
   MarketingPartnersDesktop,
 } from "@/components/marketing/marketing-partners-nav";
+import {
+  AnalyticsConsentBanner,
+  AnalyticsPreferencesLink,
+  MarketingAnalytics,
+} from "@/components/analytics/marketing-analytics";
 
 const NAV = [
   { href: "/#product-demo", label: "Product" },
@@ -171,9 +176,10 @@ export function MarketingFooter() {
         </div>
       </div>
       <div className="border-t border-white/10">
-        <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-slate-400 sm:px-6 lg:px-8">
-          © {year} ShootPortal. All rights reserved.
-        </p>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-5 text-xs text-slate-400 sm:px-6 lg:px-8">
+          <p>© {year} ShootPortal. All rights reserved.</p>
+          <AnalyticsPreferencesLink className="hover:text-white" />
+        </div>
       </div>
     </footer>
   );
@@ -196,6 +202,8 @@ export function MarketingShell({
         </p>
       ) : null}
       <MarketingFooter />
+      <MarketingAnalytics />
+      <AnalyticsConsentBanner />
     </div>
   );
 }

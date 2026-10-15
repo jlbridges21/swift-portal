@@ -90,6 +90,7 @@ export function TrialCard({
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
               href="/signup"
+              data-sp-cta="blog:trial-card"
               className="mk-btn inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#4F46E5] px-5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:bg-[#4338CA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-2"
             >
               {trialDays > 0 ? `Start your ${trialDays}-day free trial` : "Start free"} <ArrowRight className="h-4 w-4" aria-hidden />

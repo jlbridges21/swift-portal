@@ -113,6 +113,7 @@ export default async function BlogIndexPage() {
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
                 <Link
                   href="/signup"
+                  data-sp-cta="blog:index-cta"
                   className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-[#4F46E5] px-7 text-base font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:bg-[#4338CA]"
                 >
                   Start your free trial <ArrowRight className="h-4 w-4" aria-hidden />

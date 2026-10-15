@@ -298,6 +298,7 @@ export function InlineCta({
         <div className="shrink-0">
           <Link
             href={href}
+            data-sp-cta="blog:inline-cta"
             className="mk-btn inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#4F46E5] px-5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:bg-[#4338CA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0F172A]"
           >
             {label ?? (trialDays > 0 ? `Try ShootPortal free for ${trialDays} days` : "Try ShootPortal")}

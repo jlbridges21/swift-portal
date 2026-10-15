@@ -86,6 +86,13 @@ const BUSINESS_OWNED_TABLES = new Set([
 
 /** createServiceClient() / SERVICE_ROLE_KEY — each file is justified in SERVICE-ROLE-MIGRATION.md */
 const SERVICE_ROLE_ALLOWLIST = new Set([
+  // Marketing analytics (docs/ANALYTICS.md): platform-only analytics_* tables,
+  // super-admin reports, signup attribution, billing history. See SERVICE-ROLE-MIGRATION.md.
+  "src/lib/analytics/supabase-store.ts",
+  "src/lib/analytics/attribution.ts",
+  "src/lib/analytics/lifecycle.ts",
+  "src/lib/analytics/report-data.ts",
+  "src/app/api/cron/analytics-retention/route.ts",
   "src/lib/supabase/server.ts",
   "src/lib/supabase/tenant-service.ts",
   "src/lib/tenant.ts",
@@ -204,6 +211,8 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
  * tenant-wrapper files that use db.from (auto-filtered).
  */
 const FROM_UNSCOPED_ALLOWLIST = new Set([
+  // Super-admin analytics: cross-tenant first-project dates (business_id, created_at only).
+  "src/lib/analytics/report-data.ts",
   "src/lib/supabase/tenant-service.ts",
   "src/lib/stripe-payments.ts",
   "src/lib/stripe-payment-reconcile.ts",

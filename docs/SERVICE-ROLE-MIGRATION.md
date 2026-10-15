@@ -194,3 +194,13 @@ Platform-generic `DEFAULT_APP_SETTINGS` / `PLATFORM_BUSINESS_DEFAULTS`. Swift id
 Platform-generic constants (`SITE`, `BRAND`, `PLATFORM_BUSINESS_DEFAULTS`) now use ShootPortal (`shootportal.app`, Portal Indigo `#4F46E5`). Tenant `business_settings` rows were not modified. `PLATFORM_ROOT_DOMAIN` is documented only — hostname routing is a later prompt.
 
 Do **not** start tenant hostname routing in this batch.
+
+## Marketing analytics (v103)
+
+Service-role users added for first-party marketing analytics (design: `docs/ANALYTICS.md`). New tables `analytics_sessions`, `analytics_events`, `analytics_daily_salts`, `business_attribution`, `business_lifecycle_events` have RLS enabled with no policies and privileges revoked from `anon`/`authenticated`.
+
+- `src/lib/analytics/supabase-store.ts` — write-only collector store for `POST /api/analytics/collect`; touches only `analytics_*` tables.
+- `src/lib/analytics/attribution.ts` — reads the consenting visitor's own `analytics_*` rows and writes one `business_attribution` row inside `createBusinessForPlatform` (self-serve signups).
+- `src/lib/analytics/lifecycle.ts` — writes `business_lifecycle_events` from the platform billing webhook (cancellations, failed payments).
+- `src/lib/analytics/report-data.ts` — super-admin dashboard reads (called only after `requireSuperAdminPage`). Cross-tenant columns are limited to `businesses` lifecycle fields, `projects.business_id/created_at`, and `platform_subscription_payments` amounts; also on `FROM_UNSCOPED_ALLOWLIST`.
+- `src/app/api/cron/analytics-retention/route.ts` — `CRON_SECRET`-gated retention deletes on `analytics_*` tables.

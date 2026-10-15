@@ -6,6 +6,7 @@ import { BusinessDetailActions } from "@/components/platform/business-detail-act
 import { listAllPlans, type PlanRow } from "@/lib/entitlements";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BusinessAcquisitionCard } from "@/components/platform/analytics/business-acquisition-card";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,14 @@ export default async function PlatformBusinessDetailPage({
         Created {formatDate(detail.business.created_at)}
         {detail.business.is_protected ? " · protected (undeletable)" : ""}
       </p>
+
+      <BusinessAcquisitionCard
+        businessId={detail.business.id}
+        createdVia={detail.business.created_via}
+        createdAt={detail.business.created_at}
+        trialEndsAt={detail.business.trial_ends_at ?? null}
+        subscriptionStatus={detail.business.subscription_status ?? null}
+      />
 
       {detail.referral ? (
         <p className="mb-6 text-sm text-muted">

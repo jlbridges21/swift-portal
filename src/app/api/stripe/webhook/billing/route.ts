@@ -263,6 +263,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 });
   }
 
+  if (
+    recordEvent &&
+    recordBusinessId &&
+    (event.type === "customer.subscription.deleted" || event.type === "invoice.payment_failed")
+  ) {
+    // Analytics history only (docs/ANALYTICS.md); swallows its own errors.
+    const { recordBusinessLifecycleEvent } = await import("@/lib/analytics/lifecycle");
+    await recordBusinessLifecycleEvent({
+      businessId: recordBusinessId,
+      eventType: event.type === "customer.subscription.deleted" ? "subscription_canceled" : "payment_failed",
+      occurredAt: new Date(event.created * 1000),
+      stripeEventId: event.id,
+      amountCents:
+        event.type === "invoice.payment_failed" ? (event.data.object as Stripe.Invoice).amount_due ?? null : null,
+      livemode: event.livemode,
+    });
+  }
+
   if (recordEvent) {
     await markStripeEventProcessed(event.id, event.type, recordBusinessId);
   }

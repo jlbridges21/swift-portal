@@ -60,7 +60,7 @@ export default async function PrivacyPage() {
             Legal
           </p>
           <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#0F172A]">Privacy Policy</h1>
-          <p className="mt-3 text-sm text-[#475569]">Last updated: September 24, 2026</p>
+          <p className="mt-3 text-sm text-[#475569]">Last updated: October 15, 2026</p>
           <p className="mt-6 text-sm leading-relaxed text-[#475569]">
             This policy explains how ShootPortal (“we,” “us,” and “our”) handles information when
             you use shootportal.app, a Tenant workspace, a Client project portal, or the Partner
@@ -301,6 +301,10 @@ export default async function PrivacyPage() {
                 <strong>Referral attribution.</strong> Connecting a prospective Tenant signup to a
                 Partner, as described next.
               </li>
+              <li>
+                <strong>Website analytics.</strong> Understanding which marketing pages help people
+                find ShootPortal, as described below under &ldquo;Website analytics.&rdquo;
+              </li>
             </ul>
             <h3 className="pt-2 text-base font-semibold text-[#0F172A]">
               Referral cookie (sp_partner_ref)
@@ -321,12 +325,32 @@ export default async function PrivacyPage() {
               attributes an eligible subscription to the Partner. An existing Tenant account is not
               reassigned because a cookie is present later.
             </p>
+            <h3 className="pt-2 text-base font-semibold text-[#0F172A]">Website analytics</h3>
+            <p>
+              On the ShootPortal marketing site (not on Tenant portals or inside the app) we measure
+              page visits, the website or campaign that referred you, and clicks on signup links. By
+              default this is cookieless: nothing is stored on your device, and visits are counted
+              with a one-way code derived from your IP address and browser type using a random value
+              that changes daily and is deleted within two days. We do not store your full IP
+              address.
+            </p>
+            <p>
+              If you choose &ldquo;Allow analytics,&rdquo; we set a first-party cookie named{" "}
+              <code className="text-xs">sp_vid</code> (a random identifier, kept up to 13 months) and
+              store your choice in your browser. This lets us connect visits across days and, if you
+              create a ShootPortal account, record which pages and sources led to the signup. You can
+              change your choice at any time with the &ldquo;Analytics preferences&rdquo; link in the
+              site footer; declining removes the cookie. If your browser sends a Global Privacy
+              Control signal, we treat it as declining analytics cookies. Analytics data is used only
+              by ShootPortal to improve the site and is not sold or used for advertising. Raw visit
+              records are deleted after about 13 months.
+            </p>
             <p>
               You can block or delete cookies in your browser. Blocking the referral cookie means
               a signup may not be attributed to a Partner. Blocking authentication cookies will
               prevent sign-in. We do not use cookies to sell personal information or to build
-              cross-site advertising profiles, and the site does not respond to Global Privacy
-              Control or “Do Not Track” signals. Depending on where you live and subject to
+              cross-site advertising profiles. Apart from website analytics described above, the site
+              does not respond to Global Privacy Control or “Do Not Track” signals. Depending on where you live and subject to
               applicable law, you may still send an opt-out request to{" "}
               <a
                 className="font-medium text-[#4F46E5] hover:underline"

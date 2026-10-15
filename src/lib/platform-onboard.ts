@@ -29,6 +29,7 @@ import {
 } from "@/lib/partner-referral";
 import { cookies } from "next/headers";
 import { getPartnerById } from "@/lib/partners";
+import { recordSignupAttribution } from "@/lib/analytics/attribution";
 
 /**
  * Prefetch-safe admin invite: generateLink creates/refreshes the auth user WITHOUT
@@ -423,6 +424,9 @@ export async function createBusinessForPlatform(
     signupUserId: input.existingUserId ?? null,
     referredByPartnerId: source === "platform" ? input.referredByPartnerId : null,
   });
+
+  // First-party marketing attribution (docs/ANALYTICS.md). Self-serve only; never throws.
+  if (source === "signup") await recordSignupAttribution(businessId);
 
   try {
     const settings = structuredClone(DEFAULT_APP_SETTINGS);

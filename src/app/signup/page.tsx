@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { getPublicHostContext } from "@/lib/host-resolution";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
+import { MarketingAnalytics } from "@/components/analytics/marketing-analytics";
 import { BrandProvider } from "@/components/brand/brand-provider";
 import { platformPortalBrand } from "@/lib/public-host-chrome";
 import { SignupForm } from "@/components/auth/signup-form";
@@ -37,6 +38,7 @@ export default async function SignupPage() {
         trialDays={trialDays}
         oauthAllowed={oauthAllowed}
       />
+      <MarketingAnalytics eventType="signup_start" />
     </BrandProvider>
   );
 }
