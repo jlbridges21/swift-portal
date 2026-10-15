@@ -626,6 +626,10 @@ export const article: BlogArticle = {
               "Contracts, e-signature, and questionnaires are the heart of your booking flow.",
             ]}
           />
+          <p>
+            See both sides, your studio and your client&apos;s view, on our{" "}
+            <SiteLink href="/photography-client-portal">photography client portal</SiteLink> page.
+          </p>
         </>
       ),
     },

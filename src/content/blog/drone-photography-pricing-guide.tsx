@@ -642,6 +642,10 @@ export const article: BlogArticle = {
             secondaryHref="/pricing"
             secondaryLabel="See pricing"
           />
+          <p>
+            More on quoting, scheduling, and delivering aerial jobs:{" "}
+            <SiteLink href="/drone-business-management-software">ShootPortal for drone businesses</SiteLink>.
+          </p>
         </>
       ),
     },

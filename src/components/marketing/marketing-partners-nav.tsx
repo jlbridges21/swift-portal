@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SolutionLinks } from "@/components/marketing/marketing-solutions-nav";
 
 export const PARTNER_NAV_LINKS = [
   {
@@ -106,7 +107,7 @@ export function MarketingPartnersDesktop() {
   );
 }
 
-/** Mobile strip. Tapping Partners expands the two destinations below the row. */
+/** Mobile strip. Tapping Solutions or Partners expands its destinations below the row. */
 export function MarketingMobileNav({
   items,
 }: {
@@ -114,31 +115,40 @@ export function MarketingMobileNav({
 }) {
   const pathname = usePathname();
   const panelId = useId();
-  const [open, setOpen] = useState(false);
+  const solutionsPanelId = useId();
+  const [menu, setMenu] = useState<"partners" | "solutions" | null>(null);
   const active = pathname === "/partners" || pathname === "/strategic-partners";
 
   useEffect(() => {
-    setOpen(false);
+    setMenu(null);
   }, [pathname]);
 
+  const toggle = (which: "partners" | "solutions") => setMenu((value) => (value === which ? null : which));
+
   return (
-    <nav className="border-t border-[#E2E8F0] px-4 py-2 md:hidden" aria-label="Mobile">
+    <nav className="border-t border-[#E2E8F0] px-4 py-2 lg:hidden" aria-label="Mobile">
       <div className="flex gap-4 overflow-x-auto">
         {items.map((item) =>
-          item.href === "/partners" ? (
+          item.href === "/partners" || item.href === "#solutions" ? (
             <button
               key={item.href}
               type="button"
               className={cn(
                 "inline-flex shrink-0 items-center gap-1 py-1 text-sm font-medium text-[#475569]",
-                (open || active) && "text-[#0F172A]"
+                (item.href === "/partners" ? menu === "partners" || active : menu === "solutions") && "text-[#0F172A]"
               )}
-              aria-expanded={open}
-              aria-controls={panelId}
-              onClick={() => setOpen((value) => !value)}
+              aria-expanded={item.href === "/partners" ? menu === "partners" : menu === "solutions"}
+              aria-controls={item.href === "/partners" ? panelId : solutionsPanelId}
+              onClick={() => toggle(item.href === "/partners" ? "partners" : "solutions")}
             >
-              Partners
-              <ChevronDown className={cn("h-3.5 w-3.5 transition duration-150", open && "rotate-180")} aria-hidden />
+              {item.label}
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 transition duration-150",
+                  (item.href === "/partners" ? menu === "partners" : menu === "solutions") && "rotate-180"
+                )}
+                aria-hidden
+              />
             </button>
           ) : (
             <Link
@@ -154,8 +164,11 @@ export function MarketingMobileNav({
           Log in
         </Link>
       </div>
-      <div id={panelId} hidden={!open} className="mt-2 rounded-xl border border-[#E2E8F0] bg-white p-1.5 shadow-sm">
-        <PartnerLinks onNavigate={() => setOpen(false)} />
+      <div id={solutionsPanelId} hidden={menu !== "solutions"} className="mt-2 rounded-xl border border-[#E2E8F0] bg-white p-1.5 shadow-sm">
+        <SolutionLinks onNavigate={() => setMenu(null)} />
+      </div>
+      <div id={panelId} hidden={menu !== "partners"} className="mt-2 rounded-xl border border-[#E2E8F0] bg-white p-1.5 shadow-sm">
+        <PartnerLinks onNavigate={() => setMenu(null)} />
       </div>
     </nav>
   );

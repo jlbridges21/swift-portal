@@ -19,7 +19,19 @@ export function SiteLink({
   href,
   children,
 }: {
-  href: "/" | "/how-it-works" | "/pricing" | "/signup" | "/contact" | "/#product-demo" | "/partners";
+  href:
+    | "/"
+    | "/how-it-works"
+    | "/pricing"
+    | "/signup"
+    | "/contact"
+    | "/#product-demo"
+    | "/partners"
+    | "/real-estate-photography-software"
+    | "/drone-business-management-software"
+    | "/photography-client-portal"
+    | "/real-estate-photography-crm"
+    | "/photo-video-delivery-software";
   children: ReactNode;
 }) {
   return <Link href={href}>{children}</Link>;

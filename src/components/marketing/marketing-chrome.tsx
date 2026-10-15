@@ -8,6 +8,8 @@ import {
   MarketingMobileNav,
   MarketingPartnersDesktop,
 } from "@/components/marketing/marketing-partners-nav";
+import { MarketingSolutionsDesktop } from "@/components/marketing/marketing-solutions-nav";
+import { SOLUTION_PAGES } from "@/lib/solutions";
 import {
   AnalyticsConsentBanner,
   AnalyticsPreferencesLink,
@@ -17,6 +19,7 @@ import { MarketingScrollReset } from "@/components/marketing/marketing-scroll-re
 
 const NAV = [
   { href: "/#product-demo", label: "Product" },
+  { href: "#solutions", label: "Solutions" },
   { href: "/how-it-works", label: "How it works" },
   { href: "/pricing", label: "Pricing" },
   { href: "/partners", label: "Partners" },
@@ -45,10 +48,12 @@ export function MarketingHeader({ className }: { className?: string }) {
           <span className="sr-only">{SITE.name}</span>
         </Link>
 
-        <nav className="hidden items-center gap-6 md:flex" aria-label="Primary">
+        <nav className="hidden items-center gap-6 whitespace-nowrap lg:flex" aria-label="Primary">
           {NAV.map((item) =>
             item.href === "/partners" ? (
               <MarketingPartnersDesktop key={item.href} />
+            ) : item.href === "#solutions" ? (
+              <MarketingSolutionsDesktop key={item.href} />
             ) : (
               <Link
                 key={item.href}
@@ -87,7 +92,7 @@ export function MarketingFooter() {
   const year = new Date().getFullYear();
   return (
     <footer className="border-t border-[#E2E8F0] bg-[#0F172A] text-slate-300">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 lg:grid-cols-4 lg:px-8">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-2 sm:px-6 lg:grid-cols-5 lg:px-8">
         <div className="lg:col-span-1">
           <Image
             src={SITE_ICONS.logoWhite}
@@ -99,6 +104,18 @@ export function MarketingFooter() {
           <p className="mt-4 text-sm leading-relaxed text-slate-400">
             {MARKETING_BRAND.tagline}
           </p>
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-white">Solutions</p>
+          <ul className="mt-3 space-y-2 text-sm">
+            {SOLUTION_PAGES.map((page) => (
+              <li key={page.path}>
+                <Link href={page.path} className="hover:text-white">
+                  {page.primaryKeyword.charAt(0).toUpperCase() + page.primaryKeyword.slice(1)}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
         <div>
           <p className="text-sm font-semibold text-white">Product</p>

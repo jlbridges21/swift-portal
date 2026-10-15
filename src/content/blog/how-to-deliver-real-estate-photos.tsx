@@ -8,6 +8,7 @@ import {
   KeyTakeaways,
   No,
   Yes,
+  SiteLink,
 } from "@/components/blog/article-parts";
 import { DeliveryPathDiagram } from "@/components/blog/diagrams";
 import { DocumentCard } from "@/components/blog/business-diagrams";
@@ -594,6 +595,10 @@ export const article: BlogArticle = {
             secondaryHref="/how-it-works"
             secondaryLabel="See the delivery flow"
           />
+          <p>
+            Tour the delivery side in more detail on the{" "}
+            <SiteLink href="/photo-video-delivery-software">photo delivery software</SiteLink> page.
+          </p>
         </>
       ),
     },

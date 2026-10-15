@@ -563,3 +563,60 @@ export function delta(current: number, previous: number): number | null {
   if (previous === 0) return current === 0 ? 0 : null;
   return (current - previous) / previous;
 }
+
+// ---------------------------------------------------------------- landing pages & CTAs
+
+export type LandingPageRow = {
+  path: string;
+  /** Sessions that started on this path. */
+  entrances: number;
+  pageviews: number;
+  visitors: number;
+  ctaClicks: number;
+  /** Registrations in range whose first-touch / last-touch landing page was this path. */
+  firstTouchRegistrations: number;
+  lastTouchRegistrations: number;
+};
+
+/** Per-path traffic and credited registrations (display only; same data as other reports). */
+export function buildLandingPages(input: ReportInput, lifecycles: BusinessLifecycle[]): LandingPageRow[] {
+  const rows = new Map<string, LandingPageRow & { _visitors: Set<string> }>();
+  const row = (path: string) => {
+    let r = rows.get(path);
+    if (!r) {
+      r = { path, entrances: 0, pageviews: 0, visitors: 0, ctaClicks: 0, firstTouchRegistrations: 0, lastTouchRegistrations: 0, _visitors: new Set() };
+      rows.set(path, r);
+    }
+    return r;
+  };
+  for (const s of input.sessions) row(s.landing_path).entrances++;
+  for (const e of input.events) {
+    if (e.event_type === "pageview") {
+      const r = row(e.path);
+      r.pageviews++;
+      r._visitors.add(e.visitor_key);
+    } else if (e.event_type === "cta_click") row(e.path).ctaClicks++;
+  }
+  for (const l of lifecycles) {
+    if (!inRange(l.createdAt, input.range) || l.attribution?.status !== "attributed") continue;
+    if (l.attribution.ft_landing_path) row(l.attribution.ft_landing_path).firstTouchRegistrations++;
+    if (l.attribution.lt_landing_path) row(l.attribution.lt_landing_path).lastTouchRegistrations++;
+  }
+  return [...rows.values()].map(({ _visitors, ...r }) => ({ ...r, visitors: _visitors.size }));
+}
+
+export type CtaRow = { ctaId: string; location: string; clicks: number; pages: number };
+
+/** Signup CTA clicks grouped by CTA id (e.g. seo:crm:hero, blog:trial-card). */
+export function buildCtaBreakdown(input: ReportInput): CtaRow[] {
+  const map = new Map<string, { ctaId: string; location: string; clicks: number; pages: Set<string> }>();
+  for (const e of input.events) {
+    if (e.event_type !== "cta_click") continue;
+    const id = e.cta_id ?? "unknown";
+    const c = map.get(id) ?? { ctaId: id, location: e.cta_location ?? "unknown", clicks: 0, pages: new Set<string>() };
+    c.clicks++;
+    c.pages.add(e.path);
+    map.set(id, c);
+  }
+  return [...map.values()].map((c) => ({ ctaId: c.ctaId, location: c.location, clicks: c.clicks, pages: c.pages.size })).sort((a, b) => b.clicks - a.clicks);
+}

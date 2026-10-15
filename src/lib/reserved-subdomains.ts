@@ -52,6 +52,12 @@ export const RESERVED_APP_ROUTE_SLUGS = [
   "staff",
   "finish-setup",
   "terms",
+  // Marketing "Solutions" landing pages (src/lib/solutions.ts)
+  "real-estate-photography-software",
+  "drone-business-management-software",
+  "photography-client-portal",
+  "real-estate-photography-crm",
+  "photo-video-delivery-software",
   // Next.js / metadata / asset path segments that must not be shadowed
   "robots",
   "sitemap",

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { getCanonicalSiteUrl } from "@/lib/site-metadata";
 import { getAllArticles } from "@/lib/blog/registry";
+import { SOLUTION_PAGES } from "@/lib/solutions";
 
 /**
  * /sitemap.xml for Google Search Console: public, indexable marketing pages and
@@ -39,6 +40,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/`, changeFrequency: "weekly", priority: 1 },
     { url: `${base}/how-it-works`, changeFrequency: "monthly", priority: 0.9 },
     { url: `${base}/pricing`, changeFrequency: "monthly", priority: 0.9 },
+    // Commercial "Solutions" landing pages (src/lib/solutions.ts).
+    ...SOLUTION_PAGES.map((p): Entry => ({ url: `${base}${p.path}`, changeFrequency: "monthly", priority: 0.9 })),
     {
       url: `${base}/blog`,
       ...(newestArticle ? { lastModified: day(newestArticle) } : {}),

@@ -605,6 +605,10 @@ export const article: BlogArticle = {
             <BlogLink slug="best-photography-client-portals">client portal comparison</BlogLink> looks at that side in
             more detail.
           </p>
+          <p>
+            See how a full listing delivery works on our{" "}
+            <SiteLink href="/photo-video-delivery-software">photo and video delivery software</SiteLink> page.
+          </p>
         </>
       ),
     },

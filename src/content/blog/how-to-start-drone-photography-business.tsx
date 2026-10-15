@@ -582,6 +582,10 @@ export const article: BlogArticle = {
               </>
             }
           />
+          <p>
+            When you&apos;re ready to set up the client side, see{" "}
+            <SiteLink href="/drone-business-management-software">drone business management software</SiteLink> built for working pilots.
+          </p>
         </>
       ),
     },

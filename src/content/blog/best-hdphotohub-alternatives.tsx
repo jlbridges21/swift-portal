@@ -657,6 +657,10 @@ export const article: BlogArticle = {
               </>,
             ]}
           />
+          <p>
+            The{" "}
+            <SiteLink href="/real-estate-photography-software">real estate photography software</SiteLink> page shows the whole request-to-delivery workflow in one place.
+          </p>
         </>
       ),
     },

@@ -624,6 +624,10 @@ export const article: BlogArticle = {
               </>
             }
           />
+          <p>
+            For real estate work specifically, see our{" "}
+            <SiteLink href="/real-estate-photography-crm">real estate photography CRM</SiteLink> page, built around agents and properties.
+          </p>
         </>
       ),
     },

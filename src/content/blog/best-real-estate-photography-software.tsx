@@ -695,6 +695,10 @@ export const article: BlogArticle = {
             secondaryHref="/pricing"
             secondaryLabel="See pricing"
           />
+          <p>
+            For the full tour of how ShootPortal handles listing work, see our{" "}
+            <SiteLink href="/real-estate-photography-software">real estate photography software</SiteLink> page.
+          </p>
         </>
       ),
     },

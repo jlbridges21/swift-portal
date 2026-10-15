@@ -442,6 +442,10 @@ export const article: BlogArticle = {
             secondaryHref="/pricing"
             secondaryLabel="See pricing"
           />
+          <p>
+            Want to see the finished result first? Tour the{" "}
+            <SiteLink href="/photography-client-portal">ShootPortal client portal</SiteLink>.
+          </p>
         </>
       ),
     },

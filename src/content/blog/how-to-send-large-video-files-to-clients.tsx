@@ -517,6 +517,10 @@ export const article: BlogArticle = {
             secondaryHref="/how-it-works"
             secondaryLabel="See how review and delivery work"
           />
+          <p>
+            See the whole review-and-delivery loop on our{" "}
+            <SiteLink href="/photo-video-delivery-software">video delivery platform</SiteLink> page.
+          </p>
         </>
       ),
     },

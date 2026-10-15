@@ -515,6 +515,10 @@ export const article: BlogArticle = {
             sales are better served by a gallery platform. Clients also sign in to the portal rather than opening a
             login-free page, though you can create share links for people without an account.
           </p>
+          <p>
+            For galleries, review rounds, and download options in detail, see{" "}
+            <SiteLink href="/photo-video-delivery-software">ShootPortal photo and video delivery software</SiteLink>.
+          </p>
         </>
       ),
     },

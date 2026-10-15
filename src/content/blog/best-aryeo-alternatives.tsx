@@ -616,6 +616,10 @@ export const article: BlogArticle = {
             <BlogLink slug="shootportal-vs-aryeo-vs-hdphotohub">ShootPortal vs. Aryeo vs. HDPhotoHub</BlogLink>. You can
             also <SiteLink href="/how-it-works">see how ShootPortal&apos;s workflow runs</SiteLink> step by step.
           </p>
+          <p>
+            See every stage of a listing job in ShootPortal on the{" "}
+            <SiteLink href="/real-estate-photography-software">real estate photography software</SiteLink> page.
+          </p>
         </>
       ),
     },

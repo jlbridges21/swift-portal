@@ -522,6 +522,10 @@ export const article: BlogArticle = {
               "You want the cheapest possible storage per terabyte; that's still Drive or Dropbox.",
             ]}
           />
+          <p>
+            Here&apos;s what that looks like in practice:{" "}
+            <SiteLink href="/photo-video-delivery-software">photo and video delivery software</SiteLink> built for client work.
+          </p>
         </>
       ),
     },

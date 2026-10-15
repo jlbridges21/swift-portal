@@ -18,6 +18,8 @@ import { buildAttributionSnapshot, snapshotToRow, type AttributionEvent, type At
 import {
   buildArticles,
   buildChannels,
+  buildCtaBreakdown,
+  buildLandingPages,
   buildLifecycles,
   buildOverview,
   buildTimeseries,
@@ -272,6 +274,15 @@ async function main() {
   section("Visitor → registration (consented cohort)");
   assert(o.visitorToSignup.denominator === 1 && o.visitorToSignup.numerator === 1, "only consented visitors in the denominator");
   assert(o.visitors === 2 && o.consentedVisitors === 1, "visitors include cookieless; consented tracked separately");
+
+  section("Landing pages and CTA breakdown");
+  const lp = buildLandingPages(input, lifecycles);
+  const aryeoLp = lp.find((r) => r.path === "/blog/best-aryeo-alternatives")!;
+  assert(aryeoLp.entrances === 1 && aryeoLp.pageviews === 1 && aryeoLp.ctaClicks === 1, "landing page entrances, views, CTA clicks");
+  assert(lp.find((r) => r.path === "/")?.ctaClicks === 1, "homepage CTA counted on its own path");
+  const ctas = buildCtaBreakdown(input);
+  assert(ctas.length === 2 && ctas.every((c) => c.clicks === 1), "CTA clicks grouped by cta_id");
+  assert(ctas.some((c) => c.ctaId === "blog:trial-card"), "CTA ids preserved");
 
   section("Channels and articles");
   const ch = buildChannels(input, lifecycles, "first");

@@ -549,6 +549,10 @@ export const article: BlogArticle = {
             If ShootPortal sounds like a fit, <SiteLink href="/how-it-works">see how it works</SiteLink> or run your next
             real job through the free trial.
           </p>
+          <p>
+            If ShootPortal sounds like the right fit, our{" "}
+            <SiteLink href="/real-estate-photography-software">real estate photography software</SiteLink> page walks through each step of a listing job.
+          </p>
         </>
       ),
     },

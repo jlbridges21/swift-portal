@@ -476,6 +476,10 @@ export const article: BlogArticle = {
             secondaryHref="/pricing"
             secondaryLabel="See pricing"
           />
+          <p>
+            See how agents, properties, and balances connect on our{" "}
+            <SiteLink href="/real-estate-photography-crm">real estate photography CRM</SiteLink> page.
+          </p>
         </>
       ),
     },

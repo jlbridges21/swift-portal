@@ -1,5 +1,6 @@
 import { requireSuperAdminPage } from "@/lib/admin-access";
-import { buildChannels } from "@/lib/analytics/aggregate";
+import { buildChannels, buildCtaBreakdown, buildLandingPages } from "@/lib/analytics/aggregate";
+import { SOLUTION_PAGES } from "@/lib/solutions";
 import { loadDashboard, type DashboardSearchParams } from "@/lib/analytics/dashboard";
 import { AnalyticsPageHeader } from "@/components/platform/analytics/page-header";
 import { ModelToggle } from "@/components/platform/analytics/controls";
@@ -16,6 +17,12 @@ export default async function AcquisitionPage({ searchParams }: { searchParams: 
     (a, b) => b.registrations - a.registrations || b.sessions - a.sessions
   );
   const totalSessions = rows.reduce((n, r) => n + r.sessions, 0);
+  const solutionPaths = new Set<string>(SOLUTION_PAGES.map((p) => p.path));
+  const landing = buildLandingPages(loaded.current, lifecycles)
+    .filter((r) => r.entrances > 0 || r.pageviews > 0 || r.firstTouchRegistrations > 0 || r.lastTouchRegistrations > 0)
+    .sort((a, b) => Number(solutionPaths.has(b.path)) - Number(solutionPaths.has(a.path)) || b.entrances - a.entrances || b.pageviews - a.pageviews)
+    .slice(0, 30);
+  const ctaRows = buildCtaBreakdown(loaded.current);
 
   const campaigns = new Map<string, { source: string; medium: string; campaign: string; sessions: number }>();
   for (const s of loaded.current.sessions) {
@@ -139,6 +146,62 @@ export default async function AcquisitionPage({ searchParams }: { searchParams: 
             <code className="rounded bg-subtle px-1 text-xs">?utm_source=instagram&amp;utm_medium=social&amp;utm_campaign=fall-launch</code>.
           </p>
         )}
+      </Panel>
+      <Panel
+        title="Landing pages"
+        description="Where sessions started and which pages led to registrations. Solutions pages are listed first."
+      >
+        {landing.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[52rem] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+                  <th className="py-2 pr-3 font-medium">Page</th>
+                  <th className="py-2 pr-3 text-right font-medium" title="Sessions that started on this page">Entrances</th>
+                  <th className="py-2 pr-3 text-right font-medium">Pageviews</th>
+                  <th className="py-2 pr-3 text-right font-medium">Visitors</th>
+                  <th className="py-2 pr-3 text-right font-medium">CTA clicks</th>
+                  <th className="py-2 pr-3 text-right font-medium" title="Registrations whose first tracked visit landed here">Reg. (first touch)</th>
+                  <th className="py-2 text-right font-medium" title="Registrations whose last non-direct visit landed here">Reg. (last touch)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {landing.map((r) => (
+                  <tr key={r.path} className="border-b border-border/70 last:border-0">
+                    <td className="py-2.5 pr-3">
+                      <span className="font-medium text-heading">{r.path}</span>
+                      {solutionPaths.has(r.path) ? (
+                        <span className="ml-2 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">Solution</span>
+                      ) : null}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.entrances)}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.pageviews)}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.visitors)}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.ctaClicks)}</td>
+                    <td className="py-2.5 pr-3 text-right font-semibold tabular-nums text-heading">{fmtInt(r.firstTouchRegistrations)}</td>
+                    <td className="py-2.5 text-right tabular-nums">{fmtInt(r.lastTouchRegistrations)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">No tracked page visits in this range yet.</p>
+        )}
+      </Panel>
+
+      <Panel title="Signup CTAs" description="Clicks on links to /signup, grouped by CTA id (seo:<page>:<placement>, blog:…, signup:<location>)">
+        <BarList
+          metric="Clicks"
+          rows={ctaRows.slice(0, 15).map((c) => ({
+            key: c.ctaId,
+            label: c.ctaId,
+            value: c.clicks,
+            sub: c.location,
+            details: [{ label: "Pages", value: c.pages }],
+          }))}
+          empty="No signup CTA clicks in this range."
+        />
       </Panel>
     </div>
   );

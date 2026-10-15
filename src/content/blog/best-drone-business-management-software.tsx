@@ -637,6 +637,10 @@ export const article: BlogArticle = {
             title="Put your next aerial job through it"
             body="Add your services and travel-fee rule, connect your own Stripe account, then send one real estimate, propose the shoot time, and deliver the edit and map embed through your branded portal."
           />
+          <p>
+            See how the client side of drone work runs in ShootPortal on our{" "}
+            <SiteLink href="/drone-business-management-software">drone business management software</SiteLink> page.
+          </p>
         </>
       ),
     },

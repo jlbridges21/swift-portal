@@ -445,6 +445,10 @@ export const article: BlogArticle = {
               </>
             }
           />
+          <p>
+            For a feature-by-feature look, visit our{" "}
+            <SiteLink href="/real-estate-photography-software">software for real estate photographers</SiteLink>.
+          </p>
         </>
       ),
     },
