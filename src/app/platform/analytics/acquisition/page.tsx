@@ -85,12 +85,24 @@ export default async function AcquisitionPage({ searchParams }: { searchParams: 
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel title="Registrations by channel" description={`${model === "first" ? "First" : "Last"}-touch credit`}>
           <BarList
-            rows={rows.filter((r) => r.registrations > 0).map((r) => ({ key: r.channel, label: channelLabel(r.channel), value: r.registrations, color: CHANNEL_COLORS[r.channel] }))}
+            metric={`Registrations (${model === "first" ? "first" : "last"} touch)`}
+            rows={rows.filter((r) => r.registrations > 0).map((r) => ({
+              key: r.channel,
+              label: channelLabel(r.channel),
+              value: r.registrations,
+              color: CHANNEL_COLORS[r.channel],
+              details: [
+                { label: "Trials", value: r.trials },
+                { label: "Paid", value: r.paid },
+                { label: "Revenue", value: r.revenueCents, type: "money" as const },
+              ],
+            }))}
             empty="No registrations in this range."
           />
         </Panel>
         <Panel title="Top referring sites" description="Session-starting referrer hosts (own domain excluded)">
           <BarList
+            metric="Sessions"
             rows={[...referrers.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([host, n]) => ({ key: host, label: host, value: n, color: "#10B981" }))}
             empty="No external referrers in this range."
           />

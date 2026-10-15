@@ -104,7 +104,18 @@ export default async function AnalyticsOverviewPage({ searchParams }: { searchPa
           }
         >
           <BarList
-            rows={channels.filter((c) => c.sessions > 0).map((c) => ({ key: c.channel, label: channelLabel(c.channel), value: c.sessions, color: CHANNEL_COLORS[c.channel], sub: c.registrations ? `${c.registrations} reg.` : undefined }))}
+            metric="Sessions"
+            rows={channels.filter((c) => c.sessions > 0).map((c) => ({
+              key: c.channel,
+              label: channelLabel(c.channel),
+              value: c.sessions,
+              color: CHANNEL_COLORS[c.channel],
+              sub: c.registrations ? `${c.registrations} reg.` : undefined,
+              details: [
+                { label: "Visitors", value: c.visitors },
+                { label: "Registrations (first touch)", value: c.registrations },
+              ],
+            }))}
           />
         </Panel>
         <Panel
@@ -117,7 +128,18 @@ export default async function AnalyticsOverviewPage({ searchParams }: { searchPa
           }
         >
           <BarList
-            rows={articles.map((a) => ({ key: a.slug, label: a.title, value: a.pageviews, sub: a.first.registrations ? `${a.first.registrations} reg. (first touch)` : undefined }))}
+            metric="Pageviews"
+            rows={articles.map((a) => ({
+              key: a.slug,
+              label: a.title,
+              value: a.pageviews,
+              sub: a.first.registrations ? `${a.first.registrations} reg. (first touch)` : undefined,
+              details: [
+                { label: "Visitors", value: a.visitors },
+                { label: "Signup CTA clicks", value: a.ctaClicks },
+                { label: "Registrations (first touch)", value: a.first.registrations },
+              ],
+            }))}
             empty="No blog views in this range yet."
           />
         </Panel>

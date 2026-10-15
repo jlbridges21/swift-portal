@@ -101,10 +101,34 @@ export default async function SeoPage({ searchParams }: { searchParams: Promise<
       </Panel>
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel title="Top queries" description="Site-wide, by clicks">
-          <BarList rows={report.queries.slice(0, 15).map((q) => ({ key: q.query, label: q.query, value: q.clicks, sub: `${fmtInt(q.impressions)} impr.` }))} empty="No queries reported for this range." />
+          <BarList
+            metric="Clicks"
+            rows={report.queries.slice(0, 15).map((q) => ({
+              key: q.query,
+              label: q.query,
+              value: q.clicks,
+              sub: `${fmtInt(q.impressions)} impr.`,
+              details: [
+                { label: "Impressions", value: q.impressions },
+                { label: "CTR", value: q.ctr, type: "pct" as const },
+                { label: "Avg. position", value: q.position, type: "decimal" as const },
+              ],
+            }))} empty="No queries reported for this range." />
         </Panel>
         <Panel title="Top landing pages" description="By clicks">
-          <BarList rows={report.pages.slice(0, 15).map((p) => ({ key: p.page, label: p.path, value: p.clicks, sub: `pos. ${pos(p.position)}` }))} empty="No pages reported for this range." />
+          <BarList
+            metric="Clicks"
+            rows={report.pages.slice(0, 15).map((p) => ({
+              key: p.page,
+              label: p.path,
+              value: p.clicks,
+              sub: `pos. ${pos(p.position)}`,
+              details: [
+                { label: "Impressions", value: p.impressions },
+                { label: "CTR", value: p.ctr, type: "pct" as const },
+                { label: "Avg. position", value: p.position, type: "decimal" as const },
+              ],
+            }))} empty="No pages reported for this range." />
         </Panel>
       </div>
       <Panel title="Blog articles in Google Search" description="Per-article performance and the queries Google associates with each URL">

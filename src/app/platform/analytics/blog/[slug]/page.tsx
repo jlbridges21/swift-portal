@@ -66,7 +66,7 @@ export default async function ArticleAnalyticsPage({
           />
         </Panel>
         <Panel title="Traffic sources" description="Channels of sessions that viewed this article">
-          <BarList rows={detail.sources.map((s) => ({ key: s.channel, label: channelLabel(s.channel), value: s.sessions, color: CHANNEL_COLORS[s.channel] }))} />
+          <BarList metric="Sessions" rows={detail.sources.map((s) => ({ key: s.channel, label: channelLabel(s.channel), value: s.sessions, color: CHANNEL_COLORS[s.channel] }))} />
         </Panel>
       </div>
 
@@ -96,7 +96,7 @@ export default async function ArticleAnalyticsPage({
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Panel title="CTA interactions" description="Signup links clicked on this article">
-          <BarList rows={detail.ctas.map((c) => ({ key: `${c.ctaId}|${c.location}`, label: `${c.ctaId} · ${c.location}`, value: c.clicks }))} empty="No CTA clicks in this range." />
+          <BarList metric="Clicks" rows={detail.ctas.map((c) => ({ key: `${c.ctaId}|${c.location}`, label: `${c.ctaId} · ${c.location}`, value: c.clicks }))} empty="No CTA clicks in this range." />
         </Panel>
         <Panel title="Attributed accounts" description="Businesses registered in this range whose journey included this article" className="lg:col-span-2">
           {detail.accounts.length ? (
