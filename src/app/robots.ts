@@ -33,9 +33,16 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
         "/api",
         "/billing",
         "/onboarding",
-        "/partner",
+        // Partner app only. A bare "/partner" prefix would also block the /partners
+        // marketing page, so match the exact path and its subpaths.
+        "/partner$",
+        "/partner/",
         "/b/",
         "/w9",
+        "/staff",
+        "/view/",
+        "/finish-setup",
+        "/auth/",
       ],
     },
     sitemap: `${canonical}/sitemap.xml`,
