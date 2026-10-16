@@ -8,8 +8,8 @@ import { BLOG_AUTHORS } from "@/lib/blog/authors";
 import type { BlogSlug } from "@/lib/blog/slugs";
 import type { BlogRenderContext } from "@/lib/blog/types";
 import { getSolutionPage, type SolutionKey } from "@/lib/solutions";
-import type { SolutionVideoAsset } from "@/lib/solution-media";
-import { DemoVideo, LoopVideo } from "@/components/solutions/solution-media";
+import type { SolutionImageAsset, SolutionVideoAsset } from "@/lib/solution-media";
+import { DemoVideo, LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
 import { cn } from "@/lib/utils";
 
 /**
@@ -491,11 +491,13 @@ export function FinalCta({
   body,
   ctaId,
   ctx,
+  secondary = { href: "/pricing", label: "View pricing" },
 }: {
   title: string;
   body: ReactNode;
   ctaId: string;
   ctx: BlogRenderContext;
+  secondary?: { href: string; label: string };
 }) {
   return (
     <section className="relative overflow-hidden bg-[#0B1124]">
@@ -512,8 +514,8 @@ export function FinalCta({
         <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-slate-300 sm:text-lg">{body}</p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <TrialButton ctaId={ctaId} trialDays={ctx.trialDays} tone="dark" label="Start your free trial" />
-          <SecondaryButton href="/pricing" tone="dark">
-            View pricing
+          <SecondaryButton href={secondary.href} tone="dark">
+            {secondary.label}
           </SecondaryButton>
         </div>
         <TrialFacts trialDays={ctx.trialDays} tone="dark" className="mt-5 justify-center" />
@@ -674,5 +676,34 @@ export function FilmBand({ video, eyebrow, title, body }: { video: SolutionVideo
         <LoopVideo video={video} frame="dark" className="mx-auto max-w-5xl" />
       </div>
     </section>
+  );
+}
+
+/** Solution page cards with a real screenshot thumbnail (homepage "who it's for"). */
+export function SolutionPreviewCards({ items }: { items: { key: SolutionKey; image: SolutionImageAsset; blurb: string }[] }) {
+  return (
+    <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {items.map(({ key, image, blurb }) => {
+        const p = getSolutionPage(key);
+        return (
+          <li key={key} className="mk-reveal">
+            <Link
+              href={p.path}
+              className="group flex h-full flex-col overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white transition hover:-translate-y-0.5 hover:border-[#C7D2FE] hover:shadow-[0_30px_60px_-40px_rgba(79,70,229,0.7)]"
+            >
+              <ShowcaseImage image={image} frame="none" sizes="(min-width: 1024px) 360px, (min-width: 640px) 50vw, 100vw" className="bg-[#0B1124]" />
+              <span className="flex flex-1 flex-col p-5">
+                <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#4F46E5]">{p.navTitle}</span>
+                <span className="mt-1.5 font-semibold capitalize text-[#0F172A]">{p.primaryKeyword}</span>
+                <span className="mt-1.5 text-sm leading-relaxed text-[#475569]">{blurb}</span>
+                <span className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-semibold text-[#4F46E5]">
+                  See how it works <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" aria-hidden />
+                </span>
+              </span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

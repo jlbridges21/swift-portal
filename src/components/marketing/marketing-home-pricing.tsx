@@ -18,9 +18,12 @@ const STUDIO_DESCRIPTION =
 export function MarketingHomePricing({
   plan,
   trialDays,
+  ctaId,
 }: {
   plan: PlanRow | null;
   trialDays: number;
+  /** Analytics CTA id for the signup button (e.g. home:pricing, pricing:card). */
+  ctaId?: string;
 }) {
   const [interval, setInterval] = useState<BillingInterval>("monthly");
 
@@ -124,7 +127,7 @@ export function MarketingHomePricing({
 
         <p className="mt-2 text-sm text-[#475569]">Cancel anytime.</p>
 
-        <Link href="/signup" className="mt-6 block">
+        <Link href="/signup" className="mt-6 block" data-sp-cta={ctaId}>
           <Button className="min-h-12 w-full bg-[#4F46E5] text-base font-semibold text-white hover:bg-[#4338CA]">
             Start your free trial
           </Button>

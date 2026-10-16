@@ -1,5 +1,4 @@
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import {
   formatAnnualSavingsLabel,
   formatAnnualSavingsLongLabel,
@@ -14,11 +13,13 @@ import {
 } from "@/components/marketing/marketing-chrome";
 import { MarketingHomePricing } from "@/components/marketing/marketing-home-pricing";
 import { MarketingFaq } from "@/components/marketing/marketing-faq";
-import { HeroProductVizLazy } from "@/components/marketing/hero-viz-lazy";
 import { HomepageWorkflowMarquee } from "@/components/marketing/home/workflow-marquee";
 import { ConsolidationPills } from "@/components/marketing/home/consolidation-pills";
 import { HomePainConverge } from "@/components/marketing/home/pain-converge";
-import { HomeSocialProgression } from "@/components/marketing/home/social-progression";
+import { FeatureTabs } from "@/components/solutions/feature-tabs";
+import { LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
+import { DemoShowcase, FounderNote, SolutionPreviewCards, TrialFacts } from "@/components/solutions/solution-sections";
+import { MEDIA } from "@/lib/solution-media";
 import {
   CalendarClock,
   CheckCircle2,
@@ -33,20 +34,6 @@ import {
   FileText,
   UserPlus,
 } from "lucide-react";
-
-const ProductDemo = dynamic(
-  () =>
-    import("@/components/marketing/product-demo/product-demo").then((m) => m.ProductDemo),
-  {
-    ssr: true,
-    loading: () => (
-      <div
-        className="mx-auto h-[560px] max-w-6xl animate-pulse rounded-2xl bg-[#F1F5F9]"
-        aria-hidden
-      />
-    ),
-  }
-);
 
 const FEATURES = [
   {
@@ -180,9 +167,9 @@ export function PlatformLanding({
               and payments in one simple portal built for real estate media professionals.
             </p>
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-              <Link href="/signup" className="inline-flex">
+              <Link href="/signup" className="inline-flex" data-sp-cta="home:hero">
                 <Button className="min-h-12 bg-[#4F46E5] px-7 text-base font-semibold text-white shadow-md shadow-indigo-500/25 hover:bg-[#4338CA] focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-2">
-                  Start your free trial
+                  {trialDays > 0 ? `Start your ${trialDays}-day free trial` : "Start free"}
                 </Button>
               </Link>
               <a href="#product-demo" className="inline-flex">
@@ -190,23 +177,23 @@ export function PlatformLanding({
                   variant="outline"
                   className="min-h-12 border-[#E2E8F0] bg-white/80 px-6 text-base font-medium text-[#0F172A] hover:bg-white focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-2"
                 >
-                  See how it works
+                  Watch the 1-minute tour
                 </Button>
               </a>
             </div>
-            {trialDays > 0 ? (
-              <p className="mt-4 text-sm text-[#475569]">
-                {trialDays} days free. No credit card required.
-              </p>
-            ) : null}
-            <p className="mt-3 text-sm font-medium text-[#0F172A]">
-              Spend less time managing the business and more time shooting.
-            </p>
+            <TrialFacts trialDays={trialDays} className="mt-5 justify-center" />
           </div>
 
-          <div className="relative mx-auto mt-14 max-w-5xl lg:mt-16">
-            <HeroProductVizLazy />
-          </div>
+          <figure className="relative mx-auto mt-14 max-w-5xl lg:mt-16">
+            <div
+              className="pointer-events-none absolute -inset-x-10 -bottom-10 top-10 rounded-[3rem] bg-gradient-to-b from-[#4F46E5]/25 via-[#7C3AED]/15 to-transparent blur-3xl"
+              aria-hidden
+            />
+            <ShowcaseImage image={MEDIA.business.hero} frame="dark" priority sizes="(min-width: 1024px) 1024px, 100vw" className="relative ring-1 ring-black/5" />
+            <figcaption className="mt-3 text-center text-xs text-[#64748B]">
+              The ShootPortal Command Center with video review and payments. Real screens from a live account.
+            </figcaption>
+          </figure>
         </div>
         <div
           className="pointer-events-none h-10 bg-gradient-to-b from-transparent to-white"
@@ -228,10 +215,44 @@ export function PlatformLanding({
         </div>
       </section>
 
-      {/* Product tour */}
+      {/* Product tour: real demo video, then real screens by area */}
+      <DemoShowcase
+        id="product-demo"
+        eyebrow="Product tour"
+        title="See a real job go from request to paid"
+        intro="A 52-second tour of real ShootPortal screens: the client's request, proposal approval, your calendar, the pipeline, time-stamped video review, payments, share links, and your own brand and domain."
+        video={MEDIA.shared.tour}
+        points={["Clients request and approve on your branded portal", "Video review, payments, and files on the same project", "Everything under your own brand and domain"]}
+        ctaId="home:demo"
+        trialDays={trialDays}
+        ctaLabel="Try it on your next job"
+      />
+
       <section className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-          <ProductDemo />
+          <div className="max-w-2xl">
+            <SectionEyebrow>EXPLORE THE PRODUCT</SectionEyebrow>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl">
+              Every part of the job, on real screens.
+            </h2>
+            <p className="mt-3 text-base leading-relaxed text-[#475569]">
+              Pick an area. Each view is ShootPortal as it runs today, with client details blurred.
+            </p>
+          </div>
+          <div className="mt-10">
+            <FeatureTabs
+              label="ShootPortal product areas"
+              tabs={[
+                { key: "requests", title: "Requests", summary: "Clients request a shoot from your branded form.", visual: <ShowcaseImage image={MEDIA.booking.twoViews} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>The request form captures the address, the service from your catalog, a preferred date, and notes, then creates the project and the client&apos;s account.</p> },
+                { key: "estimates", title: "Estimates & approvals", summary: "Send the proposal; the client approves online.", visual: <ShowcaseImage image={MEDIA.realEstate.twoSided} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Preliminary estimates can go out automatically. You send the official proposal and the client approves it or requests changes in their portal.</p> },
+                { key: "calendar", title: "Scheduling", summary: "Shoots on your calendar, next to Google.", visual: <ShowcaseImage image={MEDIA.booking.calendar} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Propose a shoot time and the client accepts or counters. Shoots push to your Google Calendar, and your Google events show alongside them.</p> },
+                { key: "pipeline", title: "Projects", summary: "Every job on one board, from request to delivered.", visual: <ShowcaseImage image={MEDIA.workflow.stages} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Projects move through clear stages, and your client follows the same progress in their portal.</p> },
+                { key: "review", title: "Video review", summary: "Feedback pinned to the exact second.", visual: <ShowcaseImage image={MEDIA.videoReview.features} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Clients comment at a timestamp; you reply, resolve, and upload numbered versions.</p> },
+                { key: "payments", title: "Payments", summary: "Deposits and card payments on the project.", visual: <ShowcaseImage image={MEDIA.invoicing.clientView} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Request payment from the project. Clients pay by card through Stripe, straight to your own account, and see what&apos;s still owed.</p> },
+                { key: "delivery", title: "Delivery", summary: "Photos and video in a branded portal.", visual: <ShowcaseImage image={MEDIA.delivery.gallery} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Deliver photos, video, tours, and documents with full-size or 2048px downloads and ZIP files. Downloads can wait for payment.</p> },
+              ]}
+            />
+          </div>
         </div>
       </section>
 
@@ -256,6 +277,33 @@ export function PlatformLanding({
             >
               See the full workflow
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Who it's for */}
+      <section className="border-b border-[#E2E8F0] bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+          <div className="max-w-2xl">
+            <SectionEyebrow>BUILT FOR YOUR KIND OF WORK</SectionEyebrow>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl">
+              Real estate, drone, and video businesses run on ShootPortal.
+            </h2>
+            <p className="mt-3 text-base leading-relaxed text-[#475569]">
+              One platform, shaped around how commissioned media work actually happens. See it through your lens.
+            </p>
+          </div>
+          <div className="mt-10">
+            <SolutionPreviewCards
+              items={[
+                { key: "real-estate-software", image: MEDIA.realEstate.twoSided, blurb: "Agents request from your menu, approve online, and download MLS-ready files." },
+                { key: "drone-software", image: MEDIA.drone.dashboard, blurb: "Quotes with travel fees, weather reschedules, video review, and paid delivery." },
+                { key: "video-review", image: MEDIA.videoReview.hero, blurb: "Client feedback pinned to the second, numbered versions, and approval per deliverable." },
+                { key: "client-portal", image: MEDIA.portal.twoSided, blurb: "One branded link for every client: estimate, schedule, messages, payment, and files." },
+                { key: "invoicing", image: MEDIA.invoicing.dashboard, blurb: "Deposits, payment links, and receipts tied to each job, paid to your own Stripe." },
+                { key: "crm", image: MEDIA.crm.dashboard, blurb: "Every agent, property, project, and balance in one connected record." },
+              ]}
+            />
           </div>
         </div>
       </section>
@@ -329,28 +377,22 @@ export function PlatformLanding({
         </div>
       </section>
 
-      {/* Social proof */}
-      <section className="border-b border-[#E2E8F0] bg-[#0F172A]">
-        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
-          <p className="text-center text-sm font-semibold uppercase tracking-[0.18em] text-[#818CF8]">
-            BUILT FOR WORKING MEDIA PROFESSIONALS
-          </p>
-          <h2 className="mx-auto mt-4 max-w-2xl text-center text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-            A better experience for you and your clients.
-          </h2>
-          <div className="mx-auto mt-8 grid max-w-4xl gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
-            <div>
-              <blockquote className="text-center text-lg leading-relaxed text-slate-200 lg:text-left">
-                &ldquo;I want clients to feel like they are working with a real company, even when I
-                am running the entire business myself. ShootPortal gives me one place to keep the job
-                organized from the first request through delivery and payment.&rdquo;
-              </blockquote>
-              <p className="mt-6 text-center text-sm font-medium text-slate-400 lg:text-left">
-                Real estate media professional
-              </p>
+      {/* Founder + brand film (replaces an unattributed quote) */}
+      <section className="relative overflow-hidden border-b border-[#E2E8F0] bg-[#0B1124]">
+        <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse 60% 60% at 80% 0%, rgba(99,102,241,0.35), transparent 60%)" }} aria-hidden />
+        <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8 lg:py-20">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#A5B4FC]">BUILT BY A WORKING PHOTOGRAPHER</p>
+            <h2 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Built around real client jobs.</h2>
+            <p className="mt-4 text-base leading-relaxed text-slate-300">
+              ShootPortal started inside a working aerial and real estate media business, to run real jobs: requests, quotes, weather
+              reschedules, revision rounds, payments, and deliveries. Every feature exists because a client job needed it.
+            </p>
+            <div className="mt-6 [&>div]:border-white/10 [&>div]:bg-white/5 [&_p]:text-slate-300 [&_p:first-child]:text-white">
+              <FounderNote />
             </div>
-            <HomeSocialProgression />
           </div>
+          <LoopVideo video={MEDIA.drone.film} frame="dark" />
         </div>
       </section>
 
@@ -371,6 +413,7 @@ export function PlatformLanding({
               aria-label="Studio plan highlights"
             >
               <li>One plan with the full feature set</li>
+              <li>Client card payments go straight to your Stripe account. ShootPortal takes no cut.</li>
               <li>{monthlyPriceLabel} per month billed monthly</li>
               {studioPlan?.price_annual_cents != null ? (
                 <li>{annualPriceLabel} per month billed annually</li>
@@ -386,7 +429,7 @@ export function PlatformLanding({
             </ul>
           </div>
           <div className="mt-10">
-            <MarketingHomePricing plan={studioPlan ?? null} trialDays={trialDays} />
+            <MarketingHomePricing plan={studioPlan ?? null} trialDays={trialDays} ctaId="home:pricing" />
           </div>
         </div>
       </section>
