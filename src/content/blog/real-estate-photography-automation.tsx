@@ -434,6 +434,10 @@ export const article: BlogArticle = {
               </>
             )}
           </p>
+          <p>
+            For a step-by-step list of which hand-offs ShootPortal performs automatically and which stay with you, see our{" "}
+            <SiteLink href="/real-estate-photography-workflow-software">real estate photography workflow software</SiteLink> page.
+          </p>
           <TrialCard
             trialDays={ctx.trialDays}
             title="Test the automation on one real listing"

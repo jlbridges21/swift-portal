@@ -30,7 +30,7 @@ import { MarketingShell } from "@/components/marketing/marketing-chrome";
 import { platformPortalBrand } from "@/lib/public-host-chrome";
 import { requirePlatformMarketingHost } from "@/lib/marketing-host";
 import { loadBlogRenderContext } from "@/lib/blog/render-context";
-import { getSolutionPage, solutionCtaId } from "@/lib/solutions";
+import { getSolutionPage, solutionCtaId, type CtaPlacement } from "@/lib/solutions";
 import { solutionJsonLd, solutionMetadata } from "@/lib/solutions-seo";
 import { jsonLdString } from "@/lib/blog/structured-data";
 import {
@@ -47,14 +47,17 @@ import {
   SolutionHero,
   ToolsVsPlatform,
   TrialButton,
+  DemoShowcase,
+  FilmBand,
 } from "@/components/solutions/solution-sections";
-import { FloatingChip, AerialArt } from "@/components/solutions/solution-visuals";
-import { VideoReviewDiagram } from "@/components/blog/diagrams";
+import { FloatingChip } from "@/components/solutions/solution-visuals";
+import { DemoVideo, LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
+import { MEDIA } from "@/lib/solution-media";
 import { ProjectBoardDiagram, SampleEstimate, ServiceMenu } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
 
 const PAGE = getSolutionPage("drone-software");
-const cta = (p: "hero" | "mid" | "final" | "pricing") => solutionCtaId(PAGE.key, p);
+const cta = (p: CtaPlacement) => solutionCtaId(PAGE.key, p);
 
 export const revalidate = 300;
 export const metadata: Metadata = solutionMetadata(PAGE);
@@ -171,22 +174,20 @@ export default async function DroneBusinessManagementSoftwarePage() {
           ctx={ctx}
           visual={
             <div className="relative px-2 pb-12 pt-8 sm:px-6">
-              <div className="overflow-hidden rounded-3xl ring-1 ring-white/15 shadow-[0_60px_120px_-50px_rgba(99,102,241,0.75)]">
-                <AerialArt idPrefix="drone-hero" />
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 bg-[#0F172A]/95 px-5 py-3.5">
-                  <div>
-                    <p className="text-sm font-semibold text-white">Ridgeline Estates · Phase 2</p>
-                    <p className="text-xs text-slate-400">Progress aerials + site flyover video</p>
-                  </div>
-                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-[#C7D2FE]">Review</span>
-                </div>
-              </div>
+              <ShowcaseImage image={MEDIA.drone.dashboard} frame="dark" priority className="ring-1 ring-white/15" />
               <FloatingChip icon={MapPin} title="Estimate sent" detail="Includes travel fee · 38 mi" tone="indigo" className="-left-1 top-0 sm:-left-6" />
               <FloatingChip icon={CloudRain} title="New time proposed" detail="Wind delay → Thu 7:30 AM" tone="sky" className="-right-1 top-[30%] sm:-right-8" delayMs={500} />
               <FloatingChip icon={MessageSquareText} title="Comment at 0:42" detail="“Slow the orbit here”" tone="amber" className="bottom-14 -left-1 sm:-left-8" delayMs={1000} />
               <FloatingChip icon={CreditCard} title="Paid" detail="Downloads unlocked" tone="emerald" className="-right-1 bottom-0 sm:right-4" delayMs={1500} />
             </div>
           }
+        />
+
+        <FilmBand
+          video={MEDIA.drone.film}
+          eyebrow="The business behind the footage"
+          title="Requests, projects, review, and delivery for drone pilots"
+          body="Real ShootPortal screens over aerial footage from a working drone business."
         />
 
         <Section
@@ -250,6 +251,16 @@ export default async function DroneBusinessManagementSoftwarePage() {
             })}
           </ul>
         </Section>
+
+        <DemoShowcase
+          title="Every flight, from inquiry to delivery"
+          intro="A 35-second tour of a real drone project in ShootPortal: the request, the official estimate, the pipeline, video notes, Stripe payment, and the share link."
+          video={MEDIA.drone.lifecycle}
+          points={["Clients request a flight from your portal", "Notes land on the exact second of the footage", "The client pays through Stripe, then you share the final media"]}
+          ctaId={cta("demo")}
+          trialDays={ctx.trialDays}
+          ctaLabel="Run your next flight through it"
+        />
 
         <Section
           eyebrow="Estimates & services"
@@ -353,7 +364,7 @@ export default async function DroneBusinessManagementSoftwarePage() {
                 calendar, so a dentist appointment doesn&apos;t collide with a sunrise flight.
               </p>
               <ul className="space-y-2 pt-2 text-[0.98rem] text-[#1E293B]">
-                {["Reminder emails for proposals and scheduling", "Shoot details, address, and notes on the project", "Assign a second pilot or editor to the job"].map((t) => (
+                {["Clients accept, decline, or counter your proposed time", "Shoot details, address, and notes on the project", "Assign a second pilot or editor to the job"].map((t) => (
                   <li key={t} className="flex gap-2.5">
                     <Check className="mt-1 h-4 w-4 shrink-0 text-[#4F46E5]" aria-hidden />
                     {t}
@@ -548,10 +559,7 @@ export default async function DroneBusinessManagementSoftwarePage() {
           intro="Drone films live or die on pacing. Let clients point to the exact moment."
         >
           <div className="grid items-center gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
-            <figure className="mk-reveal">
-              <VideoReviewDiagram />
-              <figcaption className="mt-3 text-center text-xs text-[#64748B]">Illustration of time-stamped comments across numbered versions.</figcaption>
-            </figure>
+            <DemoVideo video={MEDIA.drone.review} frame="dark" className="mk-reveal" ctaHint="Real ShootPortal video review. No sound." />
             <div className="mk-reveal">
               <ul className="space-y-5">
                 {[
@@ -618,6 +626,7 @@ export default async function DroneBusinessManagementSoftwarePage() {
           title="What one aerial job looks like, before and after"
           intro="Most drone operators run the business on a spreadsheet, an inbox, a transfer service, and a payment app. Each one is fine. The gaps between them are where time goes."
         >
+          <ShowcaseImage image={MEDIA.drone.lessAdmin} className="mk-reveal mx-auto mb-10 max-w-4xl" sizes="(min-width: 1024px) 896px, 100vw" />
           <ToolsVsPlatform
             leftTitle="Patchwork of apps"
             rows={[
@@ -644,6 +653,7 @@ export default async function DroneBusinessManagementSoftwarePage() {
           title="How three kinds of aerial jobs run in ShootPortal"
           intro="Same system, different jobs. These are example workflows with fictional clients."
         >
+          <LoopVideo video={MEDIA.drone.workflowLoop} frame="dark" className="mk-reveal mx-auto mb-12 max-w-4xl" />
           <div className="grid gap-5 lg:grid-cols-3">
             {PLAYBOOKS.map((pb) => {
               const Icon = pb.icon;

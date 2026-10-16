@@ -647,6 +647,10 @@ export const article: BlogArticle = {
               "You run multi-stage agency approval chains (Filestage or Ziflow).",
             ]}
           />
+          <p>
+            To see time-stamped comments, versions, and per-deliverable approval side by side, visit our{" "}
+            <SiteLink href="/video-review-approval-software">video review and approval software</SiteLink> page.
+          </p>
           <TrialCard
             trialDays={ctx.trialDays}
             title="Run your next revision round through a client project"

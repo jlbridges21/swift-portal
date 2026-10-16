@@ -4,29 +4,41 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { SOLUTION_PAGES } from "@/lib/solutions";
+import { SOLUTION_GROUPS, SOLUTION_PAGES, solutionsInGroup } from "@/lib/solutions";
 import { cn } from "@/lib/utils";
 
-/** Solutions menu links (always in the DOM so crawlers see plain anchors). */
+/** Solutions menu links, grouped (always in the DOM so crawlers see plain anchors). */
 export function SolutionLinks({ onNavigate, compact = false }: { onNavigate?: () => void; compact?: boolean }) {
   return (
-    <>
-      {SOLUTION_PAGES.map((item) => (
-        <Link
-          key={item.path}
-          href={item.path}
-          onClick={onNavigate}
-          className={cn("block rounded-lg transition hover:bg-[#F8FAFC]", compact ? "px-3 py-2.5" : "px-3 py-3")}
-        >
-          <span className="block text-sm font-semibold text-[#0F172A]">{item.navTitle}</span>
-          <span className="mt-0.5 block text-xs leading-relaxed text-[#475569]">{item.navDescription}</span>
-        </Link>
+    <div className={cn("grid", compact ? "gap-x-2 gap-y-3 sm:grid-cols-2 lg:grid-cols-3" : "gap-3 sm:grid-cols-2")}>
+      {SOLUTION_GROUPS.map((group) => (
+        <div key={group.key}>
+          <p className="px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-[#94A3B8]">{group.label}</p>
+          <ul>
+            {solutionsInGroup(group.key).map((item) => (
+              <li key={item.path}>
+                <Link
+                  href={item.path}
+                  onClick={onNavigate}
+                  className={cn("block rounded-lg transition hover:bg-[#F8FAFC]", compact ? "px-3 py-2" : "px-3 py-2.5")}
+                >
+                  <span className="block whitespace-normal text-sm font-semibold text-[#0F172A]">{item.navTitle}</span>
+                  <span className="mt-0.5 block whitespace-normal text-xs leading-relaxed text-[#475569]">{item.navDescription}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       ))}
-    </>
+    </div>
   );
 }
 
-/** Desktop: hover or focus opens the menu; the label is a button (there is no index page). */
+/**
+ * Desktop: hover or focus opens the menu; the label is a button (there is no index page).
+ * The panel is positioned against the Primary nav (relative), not the button, so the wide
+ * three-column menu stays on screen at the lg breakpoint.
+ */
 export function MarketingSolutionsDesktop() {
   const pathname = usePathname();
   const menuId = useId();
@@ -56,7 +68,6 @@ export function MarketingSolutionsDesktop() {
 
   return (
     <div
-      className="relative"
       onMouseEnter={show}
       onMouseLeave={hideSoon}
       onFocus={show}
@@ -87,7 +98,7 @@ export function MarketingSolutionsDesktop() {
         id={menuId}
         inert={!open}
         className={cn(
-          "absolute left-1/2 top-full z-50 w-[22rem] -translate-x-1/2 pt-3 transition duration-150",
+          "absolute left-1/2 top-full z-50 w-[min(50rem,calc(100vw-2rem))] -translate-x-1/2 pt-3 transition duration-150",
           open ? "visible translate-y-0 opacity-100" : "pointer-events-none invisible -translate-y-1 opacity-0"
         )}
       >

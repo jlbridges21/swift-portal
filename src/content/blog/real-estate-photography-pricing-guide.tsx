@@ -479,6 +479,11 @@ export const article: BlogArticle = {
             <BlogLink slug="best-photography-invoicing-software">photography invoicing software comparison</BlogLink>.
             The <SiteLink href="/how-it-works">how it works</SiteLink> page shows the full request-to-delivery flow.
           </p>
+          <p>
+            Once your prices are set, collecting them is the next step; our{" "}
+            <SiteLink href="/photography-invoicing-software">photography invoicing software</SiteLink> page shows how an approved
+            estimate becomes a card payment.
+          </p>
           <TrialCard
             trialDays={ctx.trialDays}
             title="Build your package menu once, then let agents request from it"

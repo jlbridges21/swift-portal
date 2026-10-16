@@ -19,17 +19,19 @@ import { MarketingShell } from "@/components/marketing/marketing-chrome";
 import { platformPortalBrand } from "@/lib/public-host-chrome";
 import { requirePlatformMarketingHost } from "@/lib/marketing-host";
 import { loadBlogRenderContext } from "@/lib/blog/render-context";
-import { getSolutionPage, solutionCtaId } from "@/lib/solutions";
+import { getSolutionPage, solutionCtaId, type CtaPlacement } from "@/lib/solutions";
 import { solutionJsonLd, solutionMetadata } from "@/lib/solutions-seo";
 import { jsonLdString } from "@/lib/blog/structured-data";
 import {
   AudienceSplit,
+  DemoShowcase,
   FeatureCards,
   FeatureSpotlight,
   FinalCta,
   FounderNote,
   GradientText,
   PricingStrip,
+  REAL_CAPTURE_NOTE,
   ProblemGrid,
   RelatedReading,
   Section,
@@ -38,14 +40,16 @@ import {
   ToolsVsPlatform,
   TrialButton,
 } from "@/components/solutions/solution-sections";
-import { FloatingChip, GalleryCard, PropertyArt, StageRibbon } from "@/components/solutions/solution-visuals";
+import { FloatingChip } from "@/components/solutions/solution-visuals";
+import { LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
+import { MEDIA } from "@/lib/solution-media";
 import { WorkflowCoverageMap } from "@/components/blog/conversion-parts";
 import { BookingFlowDiagram, CrmRecordDiagram, PortalAnatomyDiagram } from "@/components/blog/diagrams";
-import { PaymentFlowDiagram, SampleEstimate } from "@/components/blog/business-diagrams";
+import { PaymentFlowDiagram } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
 
 const PAGE = getSolutionPage("real-estate-software");
-const cta = (p: "hero" | "mid" | "final" | "pricing") => solutionCtaId(PAGE.key, p);
+const cta = (p: CtaPlacement) => solutionCtaId(PAGE.key, p);
 
 export const revalidate = 300;
 export const metadata: Metadata = solutionMetadata(PAGE);
@@ -76,21 +80,9 @@ export default async function RealEstatePhotographySoftwarePage() {
           ctaId={cta("hero")}
           ctx={ctx}
           visual={
-            <div className="relative px-2 pb-10 pt-6 sm:px-6">
-              <div className="overflow-hidden rounded-3xl border border-white shadow-[0_50px_100px_-50px_rgba(49,46,129,0.8)] ring-1 ring-[#E2E8F0]">
-                <PropertyArt idPrefix="re-hero" />
-                <div className="bg-white px-5 py-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-[#0F172A]">214 Oak Street</p>
-                      <p className="text-xs text-[#64748B]">Listing photos + aerials + walkthrough video</p>
-                    </div>
-                    <span className="rounded-full bg-[#EEF2FF] px-2.5 py-1 text-[11px] font-semibold text-[#4F46E5]">Review</span>
-                  </div>
-                  <StageRibbon active={4} className="mt-3" />
-                </div>
-              </div>
-              <FloatingChip icon={Check} title="Estimate approved" detail="Listing package + aerials" tone="emerald" className="-left-2 top-0 sm:-left-6" />
+            <div className="relative pb-10 pt-6">
+              <ShowcaseImage image={MEDIA.realEstate.heroDashboard} frame="none" priority sizes="(min-width: 1024px) 50vw, 100vw" className="-mx-2 sm:mx-0" />
+              <FloatingChip icon={Check} title="Estimate approved" detail="Listing package + aerials" tone="emerald" className="-left-1 top-0 hidden sm:-left-4 sm:flex" />
               <FloatingChip icon={CalendarClock} title="Shoot confirmed" detail="Agent accepted Sat 10:00 AM" tone="indigo" className="-right-1 top-1/3 sm:-right-6" delayMs={600} />
               <FloatingChip icon={CreditCard} title="Paid · downloads unlocked" detail="Straight to your Stripe" tone="amber" className="bottom-0 left-6" delayMs={1200} />
             </div>
@@ -115,11 +107,26 @@ export default async function RealEstatePhotographySoftwarePage() {
           />
         </Section>
 
+        <DemoShowcase
+          title="Watch a listing go from request to paid"
+          intro="A 37-second walkthrough of real ShootPortal screens: the agent's request, the automatic estimate, the shoot on your calendar, video feedback, and payment."
+          video={MEDIA.realEstate.demo}
+          points={[
+            "The agent requests a shoot on your branded portal",
+            "An automatic preliminary estimate based on the service",
+            "Clients comment on the exact second of the video, then pay through Stripe",
+          ]}
+          ctaId={cta("demo")}
+          trialDays={ctx.trialDays}
+          ctaLabel="Try it on your next listing"
+        />
+
         <Section
           eyebrow="One system instead of five"
           title="What changes when every listing lives on one project"
           intro="Each job gets one record that you and the agent both work from. Here is how the everyday tasks compare."
         >
+          <ShowcaseImage image={MEDIA.realEstate.beforeAfter} className="mk-reveal mx-auto mb-10 max-w-4xl" sizes="(min-width: 1024px) 896px, 100vw" />
           <ToolsVsPlatform
             rows={[
               { task: "New request", before: "Text or email; you retype the address and services", after: "Agent submits your branded request form: service, address, preferred date, notes" },
@@ -139,6 +146,7 @@ export default async function RealEstatePhotographySoftwarePage() {
           intro="These are the stages every listing moves through in ShootPortal, and the real features at each step."
           tone="cloud"
         >
+          <LoopVideo video={MEDIA.realEstate.workflowLoop} frame="dark" className="mk-reveal mx-auto mb-10 max-w-4xl" />
           <figure>
             <WorkflowCoverageMap />
             <figcaption className="mt-3 text-center text-xs text-[#64748B]">ShootPortal&apos;s verified features at each stage of a job.</figcaption>
@@ -177,20 +185,8 @@ export default async function RealEstatePhotographySoftwarePage() {
                   tracked, with a PDF if the brokerage needs one.
                 </p>
               }
-              visual={
-                <SampleEstimate
-                  title="214 Oak Street · Listing package"
-                  client="Avery Chen, Northside Realty"
-                  depositPercent={30}
-                  lines={[
-                    { label: "Listing photos (up to 35)", amount: 225 },
-                    { label: "Drone aerials (5 stills)", amount: 95 },
-                    { label: "Walkthrough video", amount: 150 },
-                    { label: "Travel fee", detail: "26–50 miles from base ZIP", amount: 40 },
-                  ]}
-                />
-              }
-              caption="Example estimate with illustrative prices. Your catalog sets the real ones."
+              visual={<ShowcaseImage image={MEDIA.realEstate.twoSided} />}
+              caption="Your estimate (left) and the agent's approval view (right). Real ShootPortal screens."
             />
             <FeatureSpotlight
               eyebrow="Booking & scheduling"
@@ -273,8 +269,8 @@ export default async function RealEstatePhotographySoftwarePage() {
                   </Link>
                 </>,
               ]}
-              visual={<GalleryCard locked />}
-              caption="Illustration of a delivery with downloads locked until payment."
+              visual={<ShowcaseImage image={MEDIA.realEstate.mediaDelivery} />}
+              caption={REAL_CAPTURE_NOTE}
             />
           </div>
         </Section>

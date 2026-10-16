@@ -12,6 +12,11 @@ const HEADLINES: Record<SolutionKey, string> = {
   "client-portal": "A branded client portal for photographers",
   crm: "The CRM built around agents and properties",
   "media-delivery": "Photo and video delivery, review, and paid downloads",
+  booking: "From client request to confirmed shoot",
+  invoicing: "Estimates, deposits, and payments on every project",
+  "video-review": "Client video feedback on the exact frame",
+  workflow: "Automate the busywork. Organize the rest.",
+  "business-management": "Run your photography business from one place",
 };
 
 const AUDIENCE: Record<SolutionKey, string> = {
@@ -20,6 +25,11 @@ const AUDIENCE: Record<SolutionKey, string> = {
   "client-portal": "For photographers & videographers",
   crm: "For real estate photographers",
   "media-delivery": "For photographers & videographers",
+  booking: "Photography booking software",
+  invoicing: "Photography invoicing software",
+  "video-review": "Video review software",
+  workflow: "For real estate media businesses",
+  "business-management": "Photography business software",
 };
 
 /** Social preview for a Solutions page: brand mark, audience label, headline. */

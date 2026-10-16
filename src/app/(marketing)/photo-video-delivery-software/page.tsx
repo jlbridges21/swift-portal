@@ -29,7 +29,7 @@ import { MarketingShell } from "@/components/marketing/marketing-chrome";
 import { platformPortalBrand } from "@/lib/public-host-chrome";
 import { requirePlatformMarketingHost } from "@/lib/marketing-host";
 import { loadBlogRenderContext } from "@/lib/blog/render-context";
-import { getSolutionPage, solutionCtaId } from "@/lib/solutions";
+import { getSolutionPage, solutionCtaId, type CtaPlacement } from "@/lib/solutions";
 import { solutionJsonLd, solutionMetadata } from "@/lib/solutions-seo";
 import { jsonLdString } from "@/lib/blog/structured-data";
 import {
@@ -44,15 +44,19 @@ import {
   SolutionHero,
   ToolsVsPlatform,
   TrialButton,
+  DemoShowcase,
+  FilmBand,
 } from "@/components/solutions/solution-sections";
-import { BrowserFrame, FloatingChip, GalleryCard, VideoReviewCard } from "@/components/solutions/solution-visuals";
+import { DemoVideo, LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
+import { MEDIA } from "@/lib/solution-media";
+import { FloatingChip, GalleryCard } from "@/components/solutions/solution-visuals";
 import { BeforeAfter, PaymentFlowDiagram } from "@/components/blog/business-diagrams";
 import { BestFitPanel } from "@/components/blog/conversion-parts";
 import { Steps } from "@/components/blog/article-parts";
 import { ProductPreview } from "@/components/blog/product-preview";
 
 const PAGE = getSolutionPage("media-delivery");
-const cta = (p: "hero" | "mid" | "final" | "pricing") => solutionCtaId(PAGE.key, p);
+const cta = (p: CtaPlacement) => solutionCtaId(PAGE.key, p);
 
 export const revalidate = 300;
 export const metadata: Metadata = solutionMetadata(PAGE);
@@ -88,14 +92,7 @@ export default async function PhotoVideoDeliverySoftwarePage() {
           secondary={{ href: "/pricing", label: "See pricing" }}
           visual={
             <div className="relative px-1 pb-12 pt-4 text-left sm:px-6">
-              <div className="grid items-center gap-5 md:grid-cols-[1.2fr_1fr]">
-                <BrowserFrame url="portal.yourstudio.com/projects/harbor-view">
-                  <div className="bg-[#F8FAFC] p-3 sm:p-4">
-                    <GalleryCard />
-                  </div>
-                </BrowserFrame>
-                <VideoReviewCard className="relative z-[1] md:-ml-14 md:mt-24" />
-              </div>
+              <ShowcaseImage image={MEDIA.delivery.gallery} frame="dark" priority sizes="(min-width: 1024px) 1024px, 100vw" />
               <FloatingChip icon={CheckCircle2} title="24 of 24 approved" detail="Client signed off on the photos" tone="emerald" className="-top-2 left-2 sm:-left-4" />
               <FloatingChip icon={Link2} title="Share link sent" detail="Invite expires Friday" tone="sky" className="right-0 top-6 sm:-right-4" delayMs={600} />
               <FloatingChip icon={Package} title="ZIP ready" detail="Print + MLS (2048px)" tone="indigo" className="bottom-0 left-1/3" delayMs={1200} />
@@ -143,6 +140,13 @@ export default async function PhotoVideoDeliverySoftwarePage() {
           </div>
         </Section>
 
+        <FilmBand
+          video={MEDIA.delivery.film}
+          eyebrow="Create. Organize. Review. Deliver."
+          title="Professional photo and video delivery for your clients"
+          body="Real ShootPortal screens: the media library, time-stamped feedback, and a branded delivery."
+        />
+
         <Section
           eyebrow="Galleries organized by project"
           title="Every job gets its own gallery, not another folder"
@@ -167,6 +171,16 @@ export default async function PhotoVideoDeliverySoftwarePage() {
             caption="Product illustration: a project's photo grid (demo data)."
           />
         </Section>
+
+        <DemoShowcase
+          title="Organize, share, and deliver from one library"
+          intro="A 30-second tour of real ShootPortal screens: every file across projects, filters by client and service, the unlock-after-payment setting, share links, and the client's download view."
+          video={MEDIA.delivery.demo}
+          points={["Find any file by client, service, or property", "Share with one link and control who has access", "Optional: downloads unlock after payment"]}
+          ctaId={cta("demo")}
+          trialDays={ctx.trialDays}
+          ctaLabel="Make your next delivery in ShootPortal"
+        />
 
         <Section
           eyebrow="Photo & video projects"
@@ -389,43 +403,7 @@ export default async function PhotoVideoDeliverySoftwarePage() {
                 .
               </li>
             </ul>
-            <figure className="mk-reveal">
-              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 sm:p-6" aria-hidden>
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span className="font-semibold text-slate-200">Harbor_View_Film</span>
-                  <span className="flex gap-1">
-                    <span className="rounded-full bg-white/10 px-2 py-0.5">v1</span>
-                    <span className="rounded-full bg-white/10 px-2 py-0.5">v2</span>
-                    <span className="rounded-full bg-[#4F46E5] px-2 py-0.5 text-white">v3</span>
-                  </span>
-                </div>
-                <div className="mt-4 space-y-3">
-                  <div className="rounded-2xl bg-white/5 p-4">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="rounded bg-amber-300/15 px-1.5 py-0.5 font-mono text-amber-200">0:23</span>
-                      <span className="font-semibold text-slate-200">Client</span>
-                      <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
-                        <Check className="h-3 w-3" /> Resolved
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm text-slate-200">The dock shot cuts away too fast. Hold it two seconds?</p>
-                    <div className="mt-3 border-l-2 border-white/10 pl-3">
-                      <p className="text-xs font-semibold text-[#C7D2FE]">You</p>
-                      <p className="mt-0.5 text-sm text-slate-300">Done in v3, now 4 seconds with a slow push in.</p>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-white/5 p-4">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="rounded bg-amber-300/15 px-1.5 py-0.5 font-mono text-amber-200">0:51</span>
-                      <span className="font-semibold text-slate-200">Client</span>
-                      <span className="ml-auto rounded-full bg-amber-300/15 px-2 py-0.5 text-[11px] font-semibold text-amber-200">Open</span>
-                    </div>
-                    <p className="mt-2 text-sm text-slate-200">Pinned: can we lose the boat on the left side of the frame?</p>
-                  </div>
-                </div>
-              </div>
-              <figcaption className="mt-3 text-center text-xs text-slate-400">Illustration of a threaded, resolvable video comment across versions.</figcaption>
-            </figure>
+            <DemoVideo video={MEDIA.delivery.reviewDemo} className="mk-reveal" ctaHint={<span className="text-slate-400">Real ShootPortal video review: comment, reply, resolve. No sound.</span>} />
           </div>
         </Section>
 
@@ -460,6 +438,7 @@ export default async function PhotoVideoDeliverySoftwarePage() {
           intro="A standalone gallery only sees the files. ShootPortal's delivery sits inside the business system that booked the shoot."
           tone="cloud"
         >
+          <LoopVideo video={MEDIA.delivery.workflowLoop} frame="dark" className="mk-reveal mx-auto mb-12 max-w-4xl" />
           <FeatureCards
             columns={4}
             items={[
@@ -509,6 +488,7 @@ export default async function PhotoVideoDeliverySoftwarePage() {
           intro="Both get files to a client. Only one is designed around the client getting, reviewing, and paying for them."
           tone="cloud"
         >
+          <ShowcaseImage image={MEDIA.delivery.comparison} className="mk-reveal mx-auto mb-10 max-w-4xl" sizes="(min-width: 1024px) 896px, 100vw" />
           <ToolsVsPlatform
             leftTitle="Cloud storage links"
             rows={[

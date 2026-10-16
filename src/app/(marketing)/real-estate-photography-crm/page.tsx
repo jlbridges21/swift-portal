@@ -28,7 +28,7 @@ import { MarketingShell } from "@/components/marketing/marketing-chrome";
 import { platformPortalBrand } from "@/lib/public-host-chrome";
 import { requirePlatformMarketingHost } from "@/lib/marketing-host";
 import { loadBlogRenderContext } from "@/lib/blog/render-context";
-import { getSolutionPage, solutionCtaId } from "@/lib/solutions";
+import { getSolutionPage, solutionCtaId, type CtaPlacement } from "@/lib/solutions";
 import { solutionJsonLd, solutionMetadata } from "@/lib/solutions-seo";
 import { jsonLdString } from "@/lib/blog/structured-data";
 import {
@@ -47,14 +47,17 @@ import {
   SolutionHero,
   ToolsVsPlatform,
   TrialButton,
+  DemoShowcase,
+  REAL_CAPTURE_NOTE,
 } from "@/components/solutions/solution-sections";
 import { FloatingChip } from "@/components/solutions/solution-visuals";
+import { LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
+import { MEDIA } from "@/lib/solution-media";
 import { CrmRecordDiagram } from "@/components/blog/diagrams";
 import { ProjectBoardDiagram, SampleEstimate } from "@/components/blog/business-diagrams";
-import { ProductPreview } from "@/components/blog/product-preview";
 
 const PAGE = getSolutionPage("crm");
-const cta = (p: "hero" | "mid" | "final" | "pricing") => solutionCtaId(PAGE.key, p);
+const cta = (p: CtaPlacement) => solutionCtaId(PAGE.key, p);
 
 export const revalidate = 300;
 export const metadata: Metadata = solutionMetadata(PAGE);
@@ -146,8 +149,8 @@ export default async function RealEstatePhotographyCrmPage() {
           secondary={{ href: "#client-record", label: "Look inside a client record" }}
           visual={
             <div className="relative pb-14 pt-8 [contain:inline-size] sm:pl-4">
-              <div className="opacity-95 sm:mr-14">
-                <ProductPreview view="clients" />
+              <div className="sm:mr-14">
+                <ShowcaseImage image={MEDIA.crm.dashboard} frame="dark" priority className="ring-1 ring-white/15" />
               </div>
               <div className="relative -mt-20 ml-auto w-[94%] sm:-mt-28 sm:w-[80%]">
                 <HeroRecordCard />
@@ -202,6 +205,16 @@ export default async function RealEstatePhotographyCrmPage() {
           />
         </Section>
 
+        <DemoShowcase
+          title="Every client, connected to their projects"
+          intro="A 35-second tour of client management in ShootPortal: the client list, the pipeline, estimates, deposits and payments, the activity timeline, and moving projects between stages."
+          video={MEDIA.crm.demo}
+          points={["Revenue, balances, and activity for every client", "Estimates, deposits, and payments tracked per project", "A shared activity timeline on every job"]}
+          ctaId={cta("demo")}
+          trialDays={ctx.trialDays}
+          ctaLabel="Organize your agents in ShootPortal"
+        />
+
         <Section
           eyebrow="What to expect"
           title="What a photography CRM should give you"
@@ -228,6 +241,7 @@ export default async function RealEstatePhotographyCrmPage() {
           title="Remember every agent the way your best clients expect"
           intro="Repeat agents are the business. The record keeps what you know about them where your whole team can find it."
         >
+          <LoopVideo video={MEDIA.crm.agentLoop} frame="dark" className="mk-reveal mx-auto mb-12 max-w-4xl" />
           <div className="grid items-center gap-12 lg:grid-cols-[1fr_1.1fr]">
             <div className="space-y-5 text-base leading-relaxed text-slate-300">
               <p>
@@ -356,6 +370,10 @@ export default async function RealEstatePhotographyCrmPage() {
           intro="Every job sits on a board from New Request to Delivered. The stages are fixed, which keeps the board and the client portal speaking the same language."
           tone="cloud"
         >
+          <figure className="mk-reveal mx-auto mb-10 max-w-4xl">
+            <ShowcaseImage image={MEDIA.crm.pipeline} frame="dark" sizes="(min-width: 1024px) 896px, 100vw" />
+            <figcaption className="mt-3 text-center text-xs text-[#64748B]">{REAL_CAPTURE_NOTE}</figcaption>
+          </figure>
           <figure>
             <ProjectBoardDiagram />
             <figcaption className="mt-3 text-center text-xs text-[#64748B]">
@@ -373,6 +391,7 @@ export default async function RealEstatePhotographyCrmPage() {
           title="Estimates, schedules, messages, and media, all on the client"
           intro="A general CRM stops at the contact. Here the jobs themselves hang off the record, so nothing needs copying between tools."
         >
+          <LoopVideo video={MEDIA.crm.clientLoop} frame="dark" className="mk-reveal mx-auto mb-14 max-w-4xl" />
           <FeatureSpotlight
             eyebrow="Estimates & payment requests"
             title="Every quote and payment tied to the agent who ordered it"
@@ -505,6 +524,7 @@ export default async function RealEstatePhotographyCrmPage() {
           title="General-purpose CRM vs. a CRM built into your media workflow"
           intro="Tools like HubSpot or Pipedrive are built around contacts and deals. They're strong at sales, but the photos, the shoot, and the payment still live somewhere else."
         >
+          <ShowcaseImage image={MEDIA.crm.comparison} className="mk-reveal mx-auto mb-10 max-w-4xl" sizes="(min-width: 1024px) 896px, 100vw" />
           <ToolsVsPlatform
             leftTitle="General-purpose CRM"
             rows={[

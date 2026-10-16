@@ -481,6 +481,11 @@ export const article: BlogArticle = {
               </>
             )}
           </p>
+          <p>
+            When you&apos;re ready to put the business side in one place, our{" "}
+            <SiteLink href="/photography-business-management-software">photography business management software</SiteLink> page
+            shows how requests, payments, and delivery fit together.
+          </p>
           <TrialCard
             trialDays={ctx.trialDays}
             title="Launch with the systems most photographers add in year two"

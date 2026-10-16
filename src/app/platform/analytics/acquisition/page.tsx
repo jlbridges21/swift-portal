@@ -1,5 +1,5 @@
 import { requireSuperAdminPage } from "@/lib/admin-access";
-import { buildChannels, buildCtaBreakdown, buildLandingPages } from "@/lib/analytics/aggregate";
+import { buildChannels, buildCtaBreakdown, buildLandingFunnel, buildLandingPages } from "@/lib/analytics/aggregate";
 import { SOLUTION_PAGES } from "@/lib/solutions";
 import { loadDashboard, type DashboardSearchParams } from "@/lib/analytics/dashboard";
 import { AnalyticsPageHeader } from "@/components/platform/analytics/page-header";
@@ -23,6 +23,8 @@ export default async function AcquisitionPage({ searchParams }: { searchParams: 
     .sort((a, b) => Number(solutionPaths.has(b.path)) - Number(solutionPaths.has(a.path)) || b.entrances - a.entrances || b.pageviews - a.pageviews)
     .slice(0, 30);
   const ctaRows = buildCtaBreakdown(loaded.current);
+  const seoFunnel = buildLandingFunnel(loaded.current, lifecycles, model, SOLUTION_PAGES.map((p) => p.path));
+  const seoTitle = new Map<string, string>(SOLUTION_PAGES.map((p) => [p.path, p.primaryKeyword]));
 
   const campaigns = new Map<string, { source: string; medium: string; campaign: string; sessions: number }>();
   for (const s of loaded.current.sessions) {
@@ -147,6 +149,47 @@ export default async function AcquisitionPage({ searchParams }: { searchParams: 
           </p>
         )}
       </Panel>
+      <Panel
+        title="SEO landing pages"
+        description={`All Solutions pages, including ones with no traffic yet. Conversions use ${model === "first" ? "first" : "last"}-touch landing page credit`}
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[60rem] text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+                <th className="py-2 pr-3 font-medium">Page</th>
+                <th className="py-2 pr-3 text-right font-medium" title="Sessions that started on this page">Entrances</th>
+                <th className="py-2 pr-3 text-right font-medium">Visitors</th>
+                <th className="py-2 pr-3 text-right font-medium" title="Clicks on signup links on this page">Signup clicks</th>
+                <th className="py-2 pr-3 text-right font-medium">Registrations</th>
+                <th className="py-2 pr-3 text-right font-medium">Trials</th>
+                <th className="py-2 pr-3 text-right font-medium" title="Created a first project">Activated</th>
+                <th className="py-2 pr-3 text-right font-medium" title="Made a first subscription payment">Paid</th>
+                <th className="py-2 text-right font-medium">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {seoFunnel.map((r) => (
+                <tr key={r.path} className="border-b border-border/70 last:border-0">
+                  <td className="py-2.5 pr-3">
+                    <span className="block font-medium text-heading">{seoTitle.get(r.path)}</span>
+                    <span className="block text-xs text-muted">{r.path}</span>
+                  </td>
+                  <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.entrances)}</td>
+                  <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.visitors)}</td>
+                  <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.ctaClicks)}</td>
+                  <td className="py-2.5 pr-3 text-right font-semibold tabular-nums text-heading">{fmtInt(r.registrations)}</td>
+                  <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.trials)}</td>
+                  <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.activated)}</td>
+                  <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.paid)}</td>
+                  <td className="py-2.5 text-right tabular-nums">{fmtMoney(r.revenueCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
       <Panel
         title="Landing pages"
         description="Where sessions started and which pages led to registrations. Solutions pages are listed first."

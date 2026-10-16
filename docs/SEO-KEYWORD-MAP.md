@@ -51,6 +51,32 @@ compared" → article). Never point two landing pages at the same primary keywor
 | `/real-estate-photography-crm` | real estate photography CRM | CRM for real estate photographers; real estate photography client management; real estate media client management; photographer CRM software | Commercial; relationship + project tracking (agents, properties) | RE photographers managing many agents | Trial (`seo:crm:*`) | best-photography-crm-software, real-estate-photography-client-management, real-estate-photography-automation, how-to-get-real-estate-photography-clients |
 | `/photo-video-delivery-software` | photo and video delivery software | photo delivery software; video delivery platform; photography client delivery software; professional photo delivery; media delivery platform | Commercial; delivery product | Photographers, videographers, drone operators, RE media | Trial (`seo:media-delivery:*`) | best-photo-video-delivery-platforms, best-real-estate-photography-delivery-software, google-drive-vs-dropbox-photo-delivery, how-to-send-large-video-files-to-clients, best-video-review-approval-software |
 
+| `/photography-booking-software` | photography booking software | photography scheduling software; photographer scheduling software; photography appointment booking; client booking software for photographers | Commercial; request-to-confirmed-shoot booking (**not** self-scheduling into open slots) | Photographers taking client-commissioned shoots | Trial (`seo:booking:*`) | best-real-estate-photography-booking-software, photography-workflow-automation, how-to-get-real-estate-photography-clients |
+| `/photography-invoicing-software` | photography invoicing software | photography payment software; invoicing software for photographers; photographer invoice management; real estate photography invoicing; drone photography invoicing software | Commercial; estimates → deposit → payment request → receipt on the project | Photographers and drone pilots | Trial (`seo:invoicing:*`) | best-photography-invoicing-software, get-paid-before-delivering-real-estate-photos, real-estate-photography-pricing-guide |
+| `/video-review-approval-software` | video review software | video approval software; client video review platform; video feedback software; time-stamped video comments; video review software for videographers | Commercial; client feedback + versions + delivery (not an editor, not a frame.io replacement for post teams) | Videographers, drone video, RE media | Trial (`seo:video-review:*`) | best-video-review-approval-software, how-to-send-large-video-files-to-clients, best-photo-video-delivery-platforms |
+| `/real-estate-photography-workflow-software` | real estate photography workflow software | real estate photography workflow automation; automated real estate photography workflow; real estate media workflow software; photography business automation | Commercial; what is automated vs. centralized | RE photographers / growing media teams | Trial (`seo:workflow:*`) | real-estate-photography-automation, photography-workflow-automation, best-real-estate-photography-software |
+| `/photography-business-management-software` | photography business management software | all-in-one photography business software; photography studio management software; photographer business software; photography project management software; business management for photographers | Commercial; whole business for client-commissioned photo/video work (any niche) | Photographers, videographers, drone pilots, small media teams | Trial (`seo:business-management:*`) | best-photography-crm-software, how-to-start-real-estate-photography-business, how-to-start-drone-photography-business |
+
+### Pages 6–10: intent decisions (2026-10-15)
+
+- **Automation page URL changed** from the suggested `/real-estate-photography-automation` to
+  `/real-estate-photography-workflow-software`. The article `/blog/real-estate-photography-automation`
+  already owns "real estate photography automation" as an informational how-to; a landing page on the
+  same head term would compete with it. The landing page owns the vendor phrasing ("workflow software")
+  and the article links to it.
+- **Same primary keyword as a "best X" article** (invoicing, video review): same precedent as pages 1
+  and 2. The landing page is the vendor page; the article's title/H1 lead with "Best … (2026)" for
+  comparison intent. They link to each other with distinct anchors.
+- **Booking:** "real estate photography booking software" stays with the booking comparison article,
+  not the landing page. SERP is dominated by self-scheduling engines (Appointy, Cal.com, Wix); the
+  page says up front that clients request and respond to proposed times rather than picking open slots.
+- **Business management vs. real estate software (1) vs. CRM (4):** page 10 speaks to any
+  client-commissioned photo/video business; page 1 is listing-specific (agents, MLS); page 4 is the
+  relationship record. "photography client management software" was dropped from page 10 to avoid
+  overlap with page 4. SERP is wedding/portrait studio CRMs with contracts; the page states that
+  ShootPortal has no contracts/e-sign, questionnaires, or print sales.
+- **Workflow software:** SERP is editing tools again; the page clarifies it covers the business workflow.
+
 ### Separation between overlapping pages
 
 - **Software (1) vs. CRM (4):** page 1 sells the whole request → deliver business system; page 4 is
@@ -63,6 +89,8 @@ compared" → article). Never point two landing pages at the same primary keywor
 
 ## Analytics
 
-CTA ids follow `seo:<page-key>:<placement>` (`hero`, `mid`, `pricing`, `final`), set with `data-sp-cta`.
+CTA ids follow `seo:<page-key>:<placement>` (`hero`, `demo`, `mid`, `pricing`, `final`), set with `data-sp-cta`.
+All Solutions pages: `/platform/analytics/acquisition` → "SEO landing pages" (entrances, visitors, signup clicks,
+registrations, trials, activated, paid, revenue; follows the first/last-touch toggle).
 Landing-page performance appears in `/platform/analytics/acquisition` → "Landing pages" (entrances,
 CTA clicks, first/last-touch signups) and "Signup CTAs" (clicks per CTA id).

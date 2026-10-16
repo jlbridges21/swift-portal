@@ -496,6 +496,10 @@ export const article: BlogArticle = {
               </>
             )}
           </p>
+          <p>
+            The payment side of this workflow (proposals, deposits, payment requests, and receipts) is covered on our{" "}
+            <SiteLink href="/photography-invoicing-software">invoicing and payment software for photographers</SiteLink> page.
+          </p>
           <TrialCard
             trialDays={ctx.trialDays}
             title="Run your next listing through preview, pay, download"

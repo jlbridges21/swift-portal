@@ -58,6 +58,11 @@ export const RESERVED_APP_ROUTE_SLUGS = [
   "photography-client-portal",
   "real-estate-photography-crm",
   "photo-video-delivery-software",
+  "photography-booking-software",
+  "photography-invoicing-software",
+  "video-review-approval-software",
+  "real-estate-photography-workflow-software",
+  "photography-business-management-software",
   // Next.js / metadata / asset path segments that must not be shadowed
   "robots",
   "sitemap",

@@ -441,6 +441,11 @@ export const article: BlogArticle = {
             from you, plus follow-up, which ShootPortal doesn&apos;t automate. It also has no contracts or e-signature, so
             keep your own contract process alongside it.
           </p>
+          <p>
+            If you shoot real estate, our{" "}
+            <SiteLink href="/real-estate-photography-workflow-software">real estate photography workflow software</SiteLink> page
+            maps these columns onto a listing, trigger by trigger.
+          </p>
           <TrialCard
             trialDays={ctx.trialDays}
             title="Run one job through your new template"

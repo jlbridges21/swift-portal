@@ -164,7 +164,12 @@ export function MarketingMobileNav({
           Log in
         </Link>
       </div>
-      <div id={solutionsPanelId} hidden={menu !== "solutions"} className="mt-2 rounded-xl border border-[#E2E8F0] bg-white p-1.5 shadow-sm">
+      {/* The header is sticky, so a tall panel must scroll inside the viewport or its last links are unreachable. */}
+      <div
+        id={solutionsPanelId}
+        hidden={menu !== "solutions"}
+        className="mt-2 max-h-[calc(100dvh-9rem)] overflow-y-auto overscroll-contain rounded-xl border border-[#E2E8F0] bg-white p-1.5 shadow-sm"
+      >
         <SolutionLinks onNavigate={() => setMenu(null)} />
       </div>
       <div id={panelId} hidden={menu !== "partners"} className="mt-2 rounded-xl border border-[#E2E8F0] bg-white p-1.5 shadow-sm">

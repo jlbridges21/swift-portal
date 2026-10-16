@@ -33,3 +33,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Source media for the Solutions pages (originals + raw frames). The site uses the copies in public/solutions.
+/Landing Page Assets/

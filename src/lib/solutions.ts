@@ -9,10 +9,30 @@ import type { BlogSlug } from "@/lib/blog/slugs";
  * and add the slug to RESERVED_APP_ROUTE_SLUGS.
  */
 
-export type SolutionKey = "real-estate-software" | "drone-software" | "client-portal" | "crm" | "media-delivery";
+export type SolutionKey =
+  | "real-estate-software"
+  | "drone-software"
+  | "client-portal"
+  | "crm"
+  | "media-delivery"
+  | "booking"
+  | "invoicing"
+  | "video-review"
+  | "workflow"
+  | "business-management";
+
+/** Menu groups (nav dropdown, mobile panel, footer). */
+export type SolutionGroup = "business" | "operations" | "experience";
+
+export const SOLUTION_GROUPS: readonly { key: SolutionGroup; label: string }[] = [
+  { key: "business", label: "By business" },
+  { key: "operations", label: "Run the business" },
+  { key: "experience", label: "Client experience" },
+];
 
 export type SolutionPage = {
   key: SolutionKey;
+  group: SolutionGroup;
   slug: string;
   path: `/${string}`;
   /** Menu label and one-liner. */
@@ -30,6 +50,7 @@ export type SolutionPage = {
 export const SOLUTION_PAGES: readonly SolutionPage[] = [
   {
     key: "real-estate-software",
+    group: "business",
     slug: "real-estate-photography-software",
     path: "/real-estate-photography-software",
     navTitle: "Real estate photographers",
@@ -53,6 +74,7 @@ export const SOLUTION_PAGES: readonly SolutionPage[] = [
   },
   {
     key: "drone-software",
+    group: "business",
     slug: "drone-business-management-software",
     path: "/drone-business-management-software",
     navTitle: "Drone pilots",
@@ -76,6 +98,7 @@ export const SOLUTION_PAGES: readonly SolutionPage[] = [
   },
   {
     key: "client-portal",
+    group: "experience",
     slug: "photography-client-portal",
     path: "/photography-client-portal",
     navTitle: "Client portal",
@@ -98,6 +121,7 @@ export const SOLUTION_PAGES: readonly SolutionPage[] = [
   },
   {
     key: "crm",
+    group: "operations",
     slug: "real-estate-photography-crm",
     path: "/real-estate-photography-crm",
     navTitle: "Client management",
@@ -120,6 +144,7 @@ export const SOLUTION_PAGES: readonly SolutionPage[] = [
   },
   {
     key: "media-delivery",
+    group: "experience",
     slug: "photo-video-delivery-software",
     path: "/photo-video-delivery-software",
     navTitle: "Photo & video delivery",
@@ -141,7 +166,129 @@ export const SOLUTION_PAGES: readonly SolutionPage[] = [
       "google-drive-vs-dropbox-photo-delivery",
     ],
   },
+  {
+    key: "booking",
+    group: "operations",
+    slug: "photography-booking-software",
+    path: "/photography-booking-software",
+    navTitle: "Booking & scheduling",
+    navDescription: "From client request to confirmed shoot.",
+    seoTitle: "Photography Booking Software for Client Requests",
+    description:
+      "Photography booking software that turns client requests into confirmed shoots: your service menu, estimates, proposed shoot times, and replies in one portal.",
+    primaryKeyword: "photography booking software",
+    secondaryKeywords: [
+      "photography scheduling software",
+      "photographer scheduling software",
+      "photography appointment booking",
+      "client booking software for photographers",
+    ],
+    relatedArticles: [
+      "best-real-estate-photography-booking-software",
+      "photography-workflow-automation",
+      "how-to-get-real-estate-photography-clients",
+    ],
+  },
+  {
+    key: "invoicing",
+    group: "operations",
+    slug: "photography-invoicing-software",
+    path: "/photography-invoicing-software",
+    navTitle: "Invoicing & payments",
+    navDescription: "Estimates, deposits, and card payments per job.",
+    seoTitle: "Photography Invoicing & Payment Software",
+    description:
+      "Photography invoicing software that ties estimates, deposits, payment requests, and receipts to each project, paid by card to your own Stripe account. Try it free.",
+    primaryKeyword: "photography invoicing software",
+    secondaryKeywords: [
+      "photography payment software",
+      "invoicing software for photographers",
+      "photographer invoice management",
+      "real estate photography invoicing",
+      "drone photography invoicing software",
+    ],
+    relatedArticles: [
+      "best-photography-invoicing-software",
+      "get-paid-before-delivering-real-estate-photos",
+      "real-estate-photography-pricing-guide",
+    ],
+  },
+  {
+    key: "video-review",
+    group: "experience",
+    slug: "video-review-approval-software",
+    path: "/video-review-approval-software",
+    navTitle: "Video review & approval",
+    navDescription: "Time-stamped client feedback and versions.",
+    seoTitle: "Video Review & Approval Software for Client Work",
+    description:
+      "Video review software where clients leave time-stamped comments pinned to the frame, you post new versions, and approved videos are delivered. Free trial.",
+    primaryKeyword: "video review software",
+    secondaryKeywords: [
+      "video approval software",
+      "client video review platform",
+      "video feedback software",
+      "time-stamped video comments",
+      "video review software for videographers",
+    ],
+    relatedArticles: [
+      "best-video-review-approval-software",
+      "how-to-send-large-video-files-to-clients",
+      "best-photo-video-delivery-platforms",
+    ],
+  },
+  {
+    key: "workflow",
+    group: "operations",
+    slug: "real-estate-photography-workflow-software",
+    path: "/real-estate-photography-workflow-software",
+    navTitle: "Workflow automation",
+    navDescription: "What runs on its own, and what stays in one place.",
+    seoTitle: "Real Estate Photography Workflow Software",
+    description:
+      "Real estate photography workflow software with automatic estimates, status updates, reminders, and payment-unlocked downloads, and every other step in one place.",
+    primaryKeyword: "real estate photography workflow software",
+    secondaryKeywords: [
+      "real estate photography workflow automation",
+      "automated real estate photography workflow",
+      "real estate media workflow software",
+      "photography business automation",
+    ],
+    relatedArticles: [
+      "real-estate-photography-automation",
+      "photography-workflow-automation",
+      "best-real-estate-photography-software",
+    ],
+  },
+  {
+    key: "business-management",
+    group: "business",
+    slug: "photography-business-management-software",
+    path: "/photography-business-management-software",
+    navTitle: "Photography businesses",
+    navDescription: "Clients, projects, payments, and delivery in one place.",
+    seoTitle: "Photography Business Management Software",
+    description:
+      "Photography business management software for client-commissioned work: requests, estimates, scheduling, payments, video review, and delivery in one branded portal.",
+    primaryKeyword: "photography business management software",
+    secondaryKeywords: [
+      "all-in-one photography business software",
+      "photography studio management software",
+      "photographer business software",
+      "photography project management software",
+      "business management for photographers",
+    ],
+    relatedArticles: [
+      "best-photography-crm-software",
+      "how-to-start-real-estate-photography-business",
+      "how-to-start-drone-photography-business",
+    ],
+  },
 ];
+
+export function solutionsInGroup(group: SolutionGroup): SolutionPage[] {
+  return SOLUTION_PAGES.filter((p) => p.group === group);
+}
 
 export function getSolutionPage(key: SolutionKey): SolutionPage {
   const page = SOLUTION_PAGES.find((p) => p.key === key);
@@ -149,7 +296,9 @@ export function getSolutionPage(key: SolutionKey): SolutionPage {
   return page;
 }
 
+export type CtaPlacement = "hero" | "demo" | "mid" | "pricing" | "final";
+
 /** Analytics CTA id convention: seo:<page-key>:<placement>. */
-export function solutionCtaId(key: SolutionKey, placement: "hero" | "mid" | "final" | "pricing"): string {
+export function solutionCtaId(key: SolutionKey, placement: CtaPlacement): string {
   return `seo:${key}:${placement}`;
 }

@@ -48,7 +48,7 @@ export function MarketingHeader({ className }: { className?: string }) {
           <span className="sr-only">{SITE.name}</span>
         </Link>
 
-        <nav className="hidden items-center gap-6 whitespace-nowrap lg:flex" aria-label="Primary">
+        <nav className="relative hidden items-center gap-6 whitespace-nowrap lg:flex" aria-label="Primary">
           {NAV.map((item) =>
             item.href === "/partners" ? (
               <MarketingPartnersDesktop key={item.href} />
@@ -92,7 +92,7 @@ export function MarketingFooter() {
   const year = new Date().getFullYear();
   return (
     <footer className="border-t border-[#E2E8F0] bg-[#0F172A] text-slate-300">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-2 sm:px-6 lg:grid-cols-5 lg:px-8">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-2 sm:px-6 lg:grid-cols-6 lg:px-8">
         <div className="lg:col-span-1">
           <Image
             src={SITE_ICONS.logoWhite}
@@ -105,9 +105,9 @@ export function MarketingFooter() {
             {MARKETING_BRAND.tagline}
           </p>
         </div>
-        <div>
+        <div className="lg:col-span-2">
           <p className="text-sm font-semibold text-white">Solutions</p>
-          <ul className="mt-3 space-y-2 text-sm">
+          <ul className="mt-3 grid gap-x-6 gap-y-2 text-sm lg:grid-cols-2">
             {SOLUTION_PAGES.map((page) => (
               <li key={page.path}>
                 <Link href={page.path} className="hover:text-white">

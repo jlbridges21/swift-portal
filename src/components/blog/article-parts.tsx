@@ -31,7 +31,12 @@ export function SiteLink({
     | "/drone-business-management-software"
     | "/photography-client-portal"
     | "/real-estate-photography-crm"
-    | "/photo-video-delivery-software";
+    | "/photo-video-delivery-software"
+    | "/photography-booking-software"
+    | "/photography-invoicing-software"
+    | "/video-review-approval-software"
+    | "/real-estate-photography-workflow-software"
+    | "/photography-business-management-software";
   children: ReactNode;
 }) {
   return <Link href={href}>{children}</Link>;

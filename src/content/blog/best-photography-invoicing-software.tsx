@@ -856,6 +856,10 @@ export const article: BlogArticle = {
               "Clients sign a contract before paying; HoneyBook or Dubsado handle contract-plus-invoice in one step.",
             ]}
           />
+          <p>
+            For a closer look at how estimates, deposits, and card payments work on each project, see the{" "}
+            <SiteLink href="/photography-invoicing-software">photography invoicing software</SiteLink> page.
+          </p>
           <TrialCard
             trialDays={ctx.trialDays}
             title="Put your next deposit and delivery on one project"

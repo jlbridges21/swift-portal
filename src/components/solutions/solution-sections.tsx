@@ -7,6 +7,9 @@ import { getArticle, toCardData } from "@/lib/blog/registry";
 import { BLOG_AUTHORS } from "@/lib/blog/authors";
 import type { BlogSlug } from "@/lib/blog/slugs";
 import type { BlogRenderContext } from "@/lib/blog/types";
+import { getSolutionPage, type SolutionKey } from "@/lib/solutions";
+import type { SolutionVideoAsset } from "@/lib/solution-media";
+import { DemoVideo, LoopVideo } from "@/components/solutions/solution-media";
 import { cn } from "@/lib/utils";
 
 /**
@@ -514,6 +517,161 @@ export function FinalCta({
           </SecondaryButton>
         </div>
         <TrialFacts trialDays={ctx.trialDays} tone="dark" className="mt-5 justify-center" />
+      </div>
+    </section>
+  );
+}
+
+/** Cross-links to sibling Solutions pages (crawlable anchors with keyword-led labels). */
+export function RelatedSolutions({ keys, title = "Related solutions" }: { keys: SolutionKey[]; title?: string }) {
+  const pages = keys.map(getSolutionPage);
+  return (
+    <nav aria-label={title} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {pages.map((p) => (
+        <Link
+          key={p.path}
+          href={p.path}
+          className="mk-reveal group rounded-2xl border border-[#E2E8F0] bg-white p-6 transition hover:-translate-y-0.5 hover:border-[#C7D2FE] hover:shadow-[0_24px_50px_-36px_rgba(79,70,229,0.6)]"
+        >
+          <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#4F46E5]">{p.navTitle}</span>
+          <span className="mt-2 block font-semibold capitalize text-[#0F172A]">{p.primaryKeyword}</span>
+          <span className="mt-1.5 block text-sm leading-relaxed text-[#475569]">{p.navDescription}</span>
+          <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#4F46E5]">
+            Learn more <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" aria-hidden />
+          </span>
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+/** Numbered horizontal (desktop) / vertical (mobile) step timeline. */
+export function StepTimeline({ steps, tone = "light" }: { steps: { title: string; body: ReactNode; tag?: string }[]; tone?: "light" | "dark" }) {
+  const dark = tone === "dark";
+  return (
+    <ol className={cn("relative grid gap-5", steps.length >= 4 ? "md:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3")}>
+      {steps.map((st, i) => (
+        <li
+          key={st.title}
+          className={cn("mk-reveal relative rounded-2xl border p-6", dark ? "border-white/10 bg-white/[0.04]" : "border-[#E2E8F0] bg-white")}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#4F46E5] to-[#7C3AED] text-sm font-bold text-white">{i + 1}</span>
+            {st.tag ? (
+              <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", dark ? "bg-white/10 text-indigo-200" : "bg-[#EEF2FF] text-[#4F46E5]")}>{st.tag}</span>
+            ) : null}
+          </div>
+          <h3 className={cn("mt-4 font-semibold", dark ? "text-white" : "text-[#0F172A]")}>{st.title}</h3>
+          <div className={cn("mt-1.5 text-sm leading-relaxed", dark ? "text-slate-300" : "text-[#475569]")}>{st.body}</div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Honest side-by-side of two approaches, with who each one fits. */
+export function ApproachCompare({
+  left,
+  right,
+}: {
+  left: { label: string; title: string; points: ReactNode[]; fit: ReactNode };
+  right: { label: string; title: string; points: ReactNode[]; fit: ReactNode };
+}) {
+  return (
+    <div className="grid gap-5 md:grid-cols-2">
+      {[left, right].map((side, i) => (
+        <div
+          key={side.label}
+          className={cn(
+            "mk-reveal flex flex-col rounded-3xl border p-7",
+            i === 0 ? "border-[#E2E8F0] bg-white" : "border-[#C7D2FE] bg-gradient-to-br from-[#EEF2FF] to-white"
+          )}
+        >
+          <p className={cn("text-xs font-bold uppercase tracking-[0.14em]", i === 0 ? "text-[#64748B]" : "text-[#4F46E5]")}>{side.label}</p>
+          <h3 className="mt-2 text-xl font-semibold text-[#0F172A]">{side.title}</h3>
+          <ul className="mt-4 space-y-2">
+            {side.points.map((pt, j) => (
+              <li key={j} className="flex gap-2.5 text-sm text-[#1E293B]">
+                {i === 0 ? (
+                  <Minus className="mt-0.5 h-4 w-4 shrink-0 text-[#94A3B8]" aria-hidden />
+                ) : (
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#4F46E5]" aria-hidden />
+                )}
+                <span>{pt}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-auto pt-6 text-sm leading-relaxed text-[#475569]">
+            <span className="font-semibold text-[#0F172A]">Best fit: </span>
+            {side.fit}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Caption used under real ShootPortal captures. */
+export const REAL_CAPTURE_NOTE = "Real ShootPortal screens from a live account. Client details are blurred.";
+
+/** "See it in action": a click-to-play product demo with what to watch for and a CTA. */
+export function DemoShowcase({
+  id,
+  eyebrow = "See it in action",
+  title,
+  intro,
+  video,
+  points,
+  ctaId,
+  trialDays,
+  ctaLabel,
+}: {
+  id?: string;
+  eyebrow?: string;
+  title: string;
+  intro?: ReactNode;
+  video: SolutionVideoAsset;
+  points: ReactNode[];
+  ctaId: string;
+  trialDays: number;
+  ctaLabel?: string;
+}) {
+  return (
+    <Section id={id} eyebrow={eyebrow} title={title} intro={intro} tone="dark">
+      <div className="mx-auto max-w-5xl">
+        <DemoVideo video={video} />
+        <ul className="mt-8 grid gap-3 sm:grid-cols-3">
+          {points.map((pt, i) => (
+            <li key={i} className="flex gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-relaxed text-slate-200">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#A5B4FC]" aria-hidden />
+              <span>{pt}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 text-center text-xs text-slate-400">{REAL_CAPTURE_NOTE} No sound.</p>
+        <div className="mt-8 flex flex-col items-center gap-4">
+          <TrialButton ctaId={ctaId} trialDays={trialDays} tone="dark" label={ctaLabel} />
+          <TrialFacts trialDays={trialDays} tone="dark" className="justify-center" />
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/** Full-width cinematic band with a muted motion loop (brand film or workflow animation). */
+export function FilmBand({ video, eyebrow, title, body }: { video: SolutionVideoAsset; eyebrow?: string; title?: string; body?: ReactNode }) {
+  return (
+    <section className="relative overflow-hidden border-b border-white/10 bg-[#0B1124]">
+      <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse 60% 60% at 50% 0%, rgba(99,102,241,0.3), transparent 65%)" }} aria-hidden />
+      <div className={cn(SECTION_X, "relative py-14 lg:py-20")}>
+        {title ? (
+          <div className="mx-auto mb-8 max-w-2xl text-center">
+            {eyebrow ? <Eyebrow tone="dark">{eyebrow}</Eyebrow> : null}
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{title}</h2>
+            {body ? <p className="mt-3 text-base leading-relaxed text-slate-300">{body}</p> : null}
+          </div>
+        ) : null}
+        <LoopVideo video={video} frame="dark" className="mx-auto max-w-5xl" />
       </div>
     </section>
   );

@@ -605,6 +605,50 @@ export function buildLandingPages(input: ReportInput, lifecycles: BusinessLifecy
   return [...rows.values()].map(({ _visitors, ...r }) => ({ ...r, visitors: _visitors.size }));
 }
 
+export type LandingFunnelRow = ConversionCounts & {
+  path: string;
+  entrances: number;
+  visitors: number;
+  ctaClicks: number;
+};
+
+/**
+ * Full funnel for a fixed list of landing pages (e.g. the SEO Solutions pages): traffic in
+ * range, then businesses registered in range credited by the model's landing page
+ * (ft_landing_path / lt_landing_path), with trials, activation, paid, and revenue.
+ * Every requested path gets a row, including zero-traffic pages.
+ */
+export function buildLandingFunnel(
+  input: ReportInput,
+  lifecycles: BusinessLifecycle[],
+  model: AttributionModel,
+  paths: readonly string[]
+): LandingFunnelRow[] {
+  const wanted = new Set(paths);
+  const traffic = new Map(paths.map((p) => [p, { entrances: 0, visitors: new Set<string>(), ctaClicks: 0 }]));
+  for (const s of input.sessions) {
+    const t = traffic.get(s.landing_path);
+    if (t) t.entrances++;
+  }
+  for (const e of input.events) {
+    const t = traffic.get(e.path);
+    if (!t) continue;
+    if (e.event_type === "pageview") t.visitors.add(e.visitor_key);
+    else if (e.event_type === "cta_click") t.ctaClicks++;
+  }
+  const conv = creditConversions(input, lifecycles, (l) => {
+    const a = l.attribution;
+    if (!a || a.status !== "attributed") return [];
+    const path = model === "first" ? a.ft_landing_path : a.lt_landing_path;
+    return path && wanted.has(path) ? [path] : [];
+  });
+  return paths.map((path) => {
+    const t = traffic.get(path)!;
+    const c = conv.get(path) ?? { registrations: 0, trials: 0, activated: 0, paid: 0, revenueCents: 0 };
+    return { path, entrances: t.entrances, visitors: t.visitors.size, ctaClicks: t.ctaClicks, ...c };
+  });
+}
+
 export type CtaRow = { ctaId: string; location: string; clicks: number; pages: number };
 
 /** Signup CTA clicks grouped by CTA id (e.g. seo:crm:hero, blog:trial-card). */

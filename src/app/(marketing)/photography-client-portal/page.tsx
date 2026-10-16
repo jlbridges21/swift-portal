@@ -19,7 +19,6 @@ import {
   Palette,
   Receipt,
   Share2,
-  Sun,
   UserRound,
 } from "lucide-react";
 import { BrandProvider } from "@/components/brand/brand-provider";
@@ -27,7 +26,7 @@ import { MarketingShell } from "@/components/marketing/marketing-chrome";
 import { platformPortalBrand } from "@/lib/public-host-chrome";
 import { requirePlatformMarketingHost } from "@/lib/marketing-host";
 import { loadBlogRenderContext } from "@/lib/blog/render-context";
-import { getSolutionPage, solutionCtaId } from "@/lib/solutions";
+import { getSolutionPage, solutionCtaId, type CtaPlacement } from "@/lib/solutions";
 import { solutionJsonLd, solutionMetadata } from "@/lib/solutions-seo";
 import { jsonLdString } from "@/lib/blog/structured-data";
 import {
@@ -45,14 +44,18 @@ import {
   SolutionFaq,
   SolutionHero,
   TrialButton,
+  DemoShowcase,
+  FilmBand,
+  REAL_CAPTURE_NOTE,
 } from "@/components/solutions/solution-sections";
 import { FloatingChip, GalleryCard, VideoReviewCard } from "@/components/solutions/solution-visuals";
-import { PortalAnatomyDiagram } from "@/components/blog/diagrams";
+import { LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
+import { MEDIA } from "@/lib/solution-media";
 import { BeforeAfter, PaymentFlowDiagram } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
 
 const PAGE = getSolutionPage("client-portal");
-const cta = (p: "hero" | "mid" | "final" | "pricing") => solutionCtaId(PAGE.key, p);
+const cta = (p: CtaPlacement) => solutionCtaId(PAGE.key, p);
 
 export const revalidate = 300;
 export const metadata: Metadata = solutionMetadata(PAGE);
@@ -111,44 +114,6 @@ function ConnectorVertical() {
   );
 }
 
-function ThemedPortal({ theme, url }: { theme: "light" | "dark"; url: string }) {
-  const dark = theme === "dark";
-  return (
-    <div
-      className={
-        dark
-          ? "overflow-hidden rounded-2xl border border-white/10 bg-[#111827] shadow-[0_30px_70px_-40px_rgba(0,0,0,0.9)]"
-          : "overflow-hidden rounded-2xl border border-white/20 bg-white shadow-[0_30px_70px_-40px_rgba(0,0,0,0.9)]"
-      }
-      aria-hidden
-    >
-      <div className={dark ? "flex items-center gap-2 border-b border-white/10 bg-black/30 px-3 py-2" : "flex items-center gap-2 border-b border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2"}>
-        {dark ? <Moon className="h-3.5 w-3.5 text-slate-400" /> : <Sun className="h-3.5 w-3.5 text-amber-500" />}
-        <span className={dark ? "truncate rounded bg-white/10 px-2 py-0.5 text-[11px] text-slate-300" : "truncate rounded bg-white px-2 py-0.5 text-[11px] text-[#64748B] ring-1 ring-[#E2E8F0]"}>{url}</span>
-      </div>
-      <div className="p-4">
-        <div className="flex items-center gap-2.5">
-          <span className={dark ? "flex h-8 w-8 items-center justify-center rounded-lg bg-teal-400 text-xs font-bold text-[#111827]" : "flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600 text-xs font-bold text-white"}>
-            LS
-          </span>
-          <div>
-            <p className={dark ? "text-sm font-semibold text-white" : "text-sm font-semibold text-[#0F172A]"}>Lumen Studio</p>
-            <p className={dark ? "text-[11px] text-slate-400" : "text-[11px] text-[#64748B]"}>Spring brand shoot</p>
-          </div>
-        </div>
-        <div className={dark ? "mt-4 rounded-xl bg-white/5 p-3" : "mt-4 rounded-xl bg-[#F8FAFC] p-3"}>
-          <p className={dark ? "text-[11px] font-semibold uppercase tracking-[0.12em] text-teal-300" : "text-[11px] font-semibold uppercase tracking-[0.12em] text-teal-700"}>Shoot Scheduled</p>
-          <div className={dark ? "mt-2 h-1.5 rounded-full bg-white/10" : "mt-2 h-1.5 rounded-full bg-[#E2E8F0]"}>
-            <div className={dark ? "h-full w-1/2 rounded-full bg-teal-400" : "h-full w-1/2 rounded-full bg-teal-600"} />
-          </div>
-        </div>
-        <span className={dark ? "mt-4 inline-flex rounded-lg bg-teal-400 px-3 py-1.5 text-xs font-semibold text-[#111827]" : "mt-4 inline-flex rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white"}>
-          View estimate
-        </span>
-      </div>
-    </div>
-  );
-}
 
 export default async function PhotographyClientPortalPage() {
   await requirePlatformMarketingHost();
@@ -204,6 +169,13 @@ export default async function PhotographyClientPortalPage() {
               <FloatingChip icon={Download} title="Files ready" detail="Single files or one ZIP" tone="sky" className="-bottom-1 right-2" delayMs={1500} />
             </div>
           }
+        />
+
+        <FilmBand
+          video={MEDIA.portal.film}
+          eyebrow="The client side"
+          title="Your clients get a portal with your name on it"
+          body="Projects, progress, proposals, payments, and media in one branded place. Real ShootPortal screens."
         />
 
         <Section
@@ -269,6 +241,7 @@ export default async function PhotographyClientPortalPage() {
           title="One link the client can always come back to"
           intro="When everything about a job lives on one project, the experience feels calmer for the client and lighter for you."
         >
+          <LoopVideo video={MEDIA.portal.journeyLoop} frame="dark" className="mk-reveal mx-auto mb-10 max-w-4xl" />
           <FeatureCards
             columns={4}
             items={[
@@ -312,15 +285,8 @@ export default async function PhotographyClientPortalPage() {
               </li>
             </ul>
             <figure>
-              <div className="relative grid gap-4 sm:grid-cols-2">
-                <ThemedPortal theme="light" url="lumenstudio.shootportal.app" />
-                <div className="sm:translate-y-10">
-                  <ThemedPortal theme="dark" url="portal.lumenstudio.com" />
-                </div>
-              </div>
-              <figcaption className="mt-14 text-center text-xs text-slate-400">
-                Illustration of one fictional studio&apos;s portal in light and dark themes.
-              </figcaption>
+              <ShowcaseImage image={MEDIA.portal.twoSided} frame="dark" />
+              <figcaption className="mt-3 text-center text-xs text-slate-400">Branding settings on your side, the branded portal on your client&apos;s phone. Real ShootPortal screens.</figcaption>
             </figure>
           </div>
         </Section>
@@ -431,6 +397,17 @@ export default async function PhotographyClientPortalPage() {
           </div>
         </Section>
 
+        <DemoShowcase
+          eyebrow="What your client sees"
+          title="Walk through the portal as your client"
+          intro="A 22-second look at the client side: the branded landing page, their projects, progress at every step, media, and downloads."
+          video={MEDIA.portal.demo}
+          points={["Your client opens your branded portal", "Their projects and next steps are waiting", "Photos and video ready to review and download"]}
+          ctaId={cta("demo")}
+          trialDays={ctx.trialDays}
+          ctaLabel="Give your clients this portal"
+        />
+
         <Section
           eyebrow="Before and after"
           title="One client, one job, two very different weeks"
@@ -463,6 +440,10 @@ export default async function PhotographyClientPortalPage() {
         </Section>
 
         <Section eyebrow="Who benefits" title="Better for you, better for them" tone="cloud">
+          <figure className="mk-reveal mx-auto mb-12 max-w-4xl">
+            <ShowcaseImage image={MEDIA.portal.phones} frame="dark" sizes="(min-width: 1024px) 896px, 100vw" />
+            <figcaption className="mt-3 text-center text-xs text-[#64748B]">{REAL_CAPTURE_NOTE}</figcaption>
+          </figure>
           <AudienceSplit
             items={[
               {
@@ -498,8 +479,8 @@ export default async function PhotographyClientPortalPage() {
         >
           <div className="grid items-center gap-10 lg:grid-cols-[1.15fr_1fr]">
             <figure>
-              <PortalAnatomyDiagram />
-              <figcaption className="mt-3 text-center text-xs text-[#64748B]">What a signed-in client can do inside the portal.</figcaption>
+              <ShowcaseImage image={MEDIA.portal.responsive} frame="none" />
+              <figcaption className="mt-3 text-center text-xs text-[#64748B]">One portal on laptop, tablet, and phone: landing page, request form, and sign-in. Real ShootPortal screens.</figcaption>
             </figure>
             <div className="space-y-4">
               {[

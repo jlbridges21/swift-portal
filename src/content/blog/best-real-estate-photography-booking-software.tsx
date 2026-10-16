@@ -532,6 +532,10 @@ export const article: BlogArticle = {
               "You need full two-way calendar sync, SMS reminders, or promo codes at checkout.",
             ]}
           />
+          <p>
+            Want to see request-based booking in action, from the request form to an accepted shoot time? Our{" "}
+            <SiteLink href="/photography-booking-software">photography booking software</SiteLink> page walks through each step.
+          </p>
           <TrialCard
             trialDays={ctx.trialDays}
             title="Run your next request through it"

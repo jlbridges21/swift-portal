@@ -613,6 +613,11 @@ export const article: BlogArticle = {
               "You want to design your own pipeline stages; ShootPortal's eight stages are fixed.",
             ]}
           />
+          <p>
+            If you need more than a CRM, our{" "}
+            <SiteLink href="/photography-business-management-software">photography business management software</SiteLink> page
+            covers how client records connect to scheduling, payments, and delivery.
+          </p>
           <TrialCard
             trialDays={ctx.trialDays}
             title="Bring one repeat client over and watch the record fill in"

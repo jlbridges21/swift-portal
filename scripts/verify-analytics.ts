@@ -20,6 +20,7 @@ import {
   buildChannels,
   buildCtaBreakdown,
   buildLandingPages,
+  buildLandingFunnel,
   buildLifecycles,
   buildOverview,
   buildTimeseries,
@@ -283,6 +284,28 @@ async function main() {
   const ctas = buildCtaBreakdown(input);
   assert(ctas.length === 2 && ctas.every((c) => c.clicks === 1), "CTA clicks grouped by cta_id");
   assert(ctas.some((c) => c.ctaId === "blog:trial-card"), "CTA ids preserved");
+
+  section("SEO landing page funnel");
+  const seoPaths = ["/photography-booking-software", "/photography-invoicing-software", "/real-estate-photography-software"];
+  const seoInput: ReportInput = {
+    ...input,
+    sessions: [...input.sessions, { ...input.sessions[0]!, id: "sS", visitor_key: "v:seo", landing_path: "/photography-booking-software", landing_article_slug: null }],
+    events: [
+      ...input.events,
+      { session_id: "sS", visitor_key: "v:seo", event_type: "pageview", path: "/photography-booking-software", article_slug: null, cta_id: null, cta_location: null, occurred_at: "2026-10-02T15:00:00Z" },
+      { session_id: "sS", visitor_key: "v:seo", event_type: "cta_click", path: "/photography-booking-software", article_slug: null, cta_id: "seo:booking:hero", cta_location: "inline", occurred_at: "2026-10-02T15:01:00Z" },
+    ],
+    attribution: [{ ...attributed("biz-paid", "google_organic", "v:seo", null, []), ft_landing_path: "/photography-booking-software", lt_landing_path: "/photography-invoicing-software" }],
+  };
+  const seoLc = buildLifecycles(seoInput);
+  const ftFunnel = buildLandingFunnel(seoInput, seoLc, "first", seoPaths);
+  const ltFunnel = buildLandingFunnel(seoInput, seoLc, "last", seoPaths);
+  assert(ftFunnel.length === 3 && ftFunnel[2]!.entrances === 0 && ftFunnel[2]!.registrations === 0, "every requested page listed, zero rows included");
+  const booking = ftFunnel[0]!;
+  assert(booking.entrances === 1 && booking.visitors === 1 && booking.ctaClicks === 1, "landing traffic and CTA clicks");
+  assert(booking.registrations === 1 && booking.trials === 1 && booking.activated === 1 && booking.paid === 1 && booking.revenueCents === 5900, "first-touch funnel: registration → trial → activated → paid → revenue");
+  assert(ltFunnel[0]!.registrations === 0 && ltFunnel[1]!.registrations === 1 && ltFunnel[1]!.paid === 1, "last-touch credits the last landing page instead");
+  assert(buildLandingFunnel(input, lifecycles, "first", seoPaths).every((r) => r.registrations === 0), "non-SEO landing paths are not credited to SEO pages");
 
   section("Channels and articles");
   const ch = buildChannels(input, lifecycles, "first");

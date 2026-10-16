@@ -385,6 +385,11 @@ export const article: BlogArticle = {
           <Figure caption="Product illustration: an agent's view of a listing in the ShootPortal client portal, moving from estimate to shoot, media, payment, and files (demo data).">
             <ProductPreview view="client-portal" />
           </Figure>
+          <p>
+            Once agents start sending work, make ordering easy: our{" "}
+            <SiteLink href="/photography-booking-software">photography booking software</SiteLink> page shows how a request
+            turns into a confirmed shoot.
+          </p>
           <TrialCard
             trialDays={ctx.trialDays}
             title="Make the second booking easier than the first"
