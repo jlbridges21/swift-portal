@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { Folder, FolderPlus, Images, MoreHorizontal } from "lucide-react";
+import { Folder, FolderPlus, Images, Link2, MoreHorizontal } from "lucide-react";
 import type { ActionMenuAnchor } from "@/components/ui/action-menu";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,8 @@ interface PhotoFolderTileProps {
   count: number;
   coverUrl: string | null;
   general?: boolean;
+  /** Folder has an active share — uploads here are visible to its recipients. */
+  shared?: boolean;
   onOpen: () => void;
   onMenu: (anchor: ActionMenuAnchor) => void;
 }
@@ -28,6 +30,7 @@ export function PhotoFolderTile({
   count,
   coverUrl,
   general = false,
+  shared = false,
   onOpen,
   onMenu,
 }: PhotoFolderTileProps) {
@@ -54,7 +57,7 @@ export function PhotoFolderTile({
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`Open ${name}, ${photoCountLabel(count)}`}
+        aria-label={`Open ${name}, ${photoCountLabel(count)}${shared ? ", shared" : ""}`}
         className="block w-full rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <div className="relative aspect-[4/3] overflow-hidden rounded-t-xl bg-subtle">
@@ -66,9 +69,14 @@ export function PhotoFolderTile({
               <Icon className="h-8 w-8 opacity-60" />
             </div>
           )}
+          {shared ? (
+            <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white">
+              <Link2 className="h-3 w-3" aria-hidden /> Shared
+            </span>
+          ) : null}
           {isOver ? (
             <div className="absolute inset-0 flex items-center justify-center bg-accent/25 text-sm font-semibold text-heading">
-              Move here
+              {shared ? "Move here — shared folder" : "Move here"}
             </div>
           ) : null}
         </div>

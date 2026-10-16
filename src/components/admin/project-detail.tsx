@@ -126,6 +126,7 @@ interface AdminProjectDetailProps {
   /** Individual photo sharing: what this user may manage, and live counts per photo. */
   photoSharing?: { email: boolean; link: boolean };
   photoShareSummary?: Record<string, PhotoShareSummary>;
+  folderShareSummary?: Record<string, PhotoShareSummary>;
   /** Hide estimates / payments / payment links when false (staff without money.view). */
   canViewMoney?: boolean;
   depositMode?: DepositMode;
@@ -163,6 +164,7 @@ export function AdminProjectDetail({
   linkAccessViewCount = 0,
   photoSharing = { email: false, link: false },
   photoShareSummary = {},
+  folderShareSummary = {},
   canViewMoney = true,
   depositMode = "none",
   depositPercent = 50,
@@ -333,7 +335,14 @@ export function AdminProjectDetail({
       .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
   );
   const canSharePhotos = photoSharing.email || photoSharing.link;
-  const shareSummary = useProjectPhotoShareSummary(initialProject.id, photoShareSummary, photos, canSharePhotos);
+  const shareSummary = useProjectPhotoShareSummary(
+    initialProject.id,
+    photoShareSummary,
+    photos,
+    canSharePhotos,
+    folderShareSummary,
+    folders.map((f) => f.id)
+  );
   const photoShare = usePhotoShareDialog(shareSummary.update);
   const videos = media.filter((m) => m.media_type === "video").sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
   const videoEntries = useMemo(() => videosToGridEntries(videos), [videos]);
@@ -1196,6 +1205,20 @@ export function AdminProjectDetail({
                       name: mediaDisplayName(photo),
                       thumbUrl: getCachedThumbUrl(photo.id),
                     })
+                : undefined
+            }
+            folderShareSummary={canSharePhotos ? shareSummary.folderSummary : undefined}
+            onShareFolder={
+              canSharePhotos
+                ? (folder) => {
+                    const coverId = photos.find((p) => p.folder_id === folder.id)?.id;
+                    photoShare.openShare({
+                      kind: "folder",
+                      id: folder.id,
+                      name: folder.name,
+                      thumbUrl: coverId ? getCachedThumbUrl(coverId) : null,
+                    });
+                  }
                 : undefined
             }
             onFoldersChange={setFolders}

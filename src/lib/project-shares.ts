@@ -22,13 +22,37 @@ export type ProjectShareRow = {
   notified_at: string | null;
   last_accessed_at: string | null;
   revoked_at: string | null;
-  access_token_hash: string | null;
   access_mode: "one_time" | "reusable";
   access_starts_at: string | null;
   access_expires_at: string | null;
   one_time_used_at: string | null;
   expiry_preset: ShareExpiryPreset;
 };
+
+/** Server-only: includes the access token hash, which must never leave the server. */
+type ProjectShareRecord = ProjectShareRow & { access_token_hash: string | null };
+
+const PROJECT_SHARE_COLUMNS =
+  "id, business_id, project_id, email, invited_by, invited_at, notified_at, last_accessed_at, revoked_at, access_mode, access_starts_at, access_expires_at, one_time_used_at, expiry_preset";
+
+function toProjectShareRow(record: ProjectShareRecord): ProjectShareRow {
+  return {
+    id: record.id,
+    business_id: record.business_id,
+    project_id: record.project_id,
+    email: record.email,
+    invited_by: record.invited_by,
+    invited_at: record.invited_at,
+    notified_at: record.notified_at,
+    last_accessed_at: record.last_accessed_at,
+    revoked_at: record.revoked_at,
+    access_mode: record.access_mode,
+    access_starts_at: record.access_starts_at,
+    access_expires_at: record.access_expires_at,
+    one_time_used_at: record.one_time_used_at,
+    expiry_preset: record.expiry_preset,
+  };
+}
 
 export function normalizeShareEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -56,7 +80,7 @@ export async function listProjectShares(
   const raw = await createServiceClient();
   const { data, error } = await raw
     .from("project_shares")
-    .select("*")
+    .select(PROJECT_SHARE_COLUMNS)
     .eq("business_id", businessId)
     .eq("project_id", projectId)
     .is("revoked_at", null)
@@ -269,7 +293,7 @@ export async function sendProjectShareInviteEmail(options: {
   inviterName: string;
   shareId: string;
   accessFields: ShareAccessFields;
-}): Promise<{ sent: boolean; signInUrl: string; error?: string }> {
+}): Promise<{ sent: boolean; error?: string }> {
   const signInUrl = await buildShareAccessLink({
     shareId: options.shareId,
     businessId: options.businessId,
@@ -297,7 +321,6 @@ export async function sendProjectShareInviteEmail(options: {
 
   return {
     sent: result.sent,
-    signInUrl,
     error: result.error,
   };
 }
@@ -320,7 +343,6 @@ export type AddProjectShareResult = {
   created: boolean;
   notified: boolean;
   notifyError?: string | null;
-  signInUrl?: string | null;
   linkedExistingUser: boolean;
 };
 
@@ -346,12 +368,12 @@ export async function addProjectShare(input: AddProjectShareInput): Promise<AddP
     .eq("email", email)
     .maybeSingle();
 
-  let share: ProjectShareRow;
+  let share: ProjectShareRecord;
   let created = false;
 
   if (existing) {
     if (!existing.revoked_at) {
-      share = existing as ProjectShareRow;
+      share = existing as ProjectShareRecord;
     } else {
       const { data: revived, error: reviveError } = await raw
         .from("project_shares")
@@ -367,7 +389,7 @@ export async function addProjectShare(input: AddProjectShareInput): Promise<AddP
         .select("*")
         .single();
       if (reviveError || !revived) throw new Error(reviveError?.message || "Could not restore share.");
-      share = revived as ProjectShareRow;
+      share = revived as ProjectShareRecord;
       created = false;
     }
   } else {
@@ -383,20 +405,19 @@ export async function addProjectShare(input: AddProjectShareInput): Promise<AddP
       .select("*")
       .single();
     if (insertError || !inserted) throw new Error(insertError?.message || "Could not add share.");
-    share = inserted as ProjectShareRow;
+    share = inserted as ProjectShareRecord;
     created = true;
   }
 
   if (!share.access_token_hash && !input.notify) {
     await mintShareAccessCredentials(share.id, accessFields);
     const { data: refreshed } = await raw.from("project_shares").select("*").eq("id", share.id).single();
-    if (refreshed) share = refreshed as ProjectShareRow;
+    if (refreshed) share = refreshed as ProjectShareRecord;
   }
 
   const linkedExistingUser = Boolean(await findProfileIdByEmail(email));
   let notified = false;
   let notifyError: string | null = null;
-  let signInUrl: string | null = null;
 
   if (input.notify) {
     const emailResult = await sendProjectShareInviteEmail({
@@ -410,7 +431,6 @@ export async function addProjectShare(input: AddProjectShareInput): Promise<AddP
     });
     notified = emailResult.sent;
     notifyError = emailResult.error ?? null;
-    signInUrl = emailResult.signInUrl;
     if (notified) {
       await raw
         .from("project_shares")
@@ -420,11 +440,10 @@ export async function addProjectShare(input: AddProjectShareInput): Promise<AddP
   }
 
   return {
-    share,
+    share: toProjectShareRow(share),
     created,
     notified,
     notifyError,
-    signInUrl,
     linkedExistingUser,
   };
 }
@@ -446,7 +465,7 @@ export async function updateProjectShareExpiry(
     .eq("business_id", businessId)
     .eq("project_id", projectId)
     .is("revoked_at", null)
-    .select("*")
+    .select(PROJECT_SHARE_COLUMNS)
     .single();
   if (error || !data) throw new Error(error?.message || "Could not update share expiry.");
   return data as ProjectShareRow;

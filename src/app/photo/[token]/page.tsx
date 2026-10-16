@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { getAppSettings } from "@/lib/app-settings";
 import { parseSurfaceMode } from "@/lib/brand-color";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
-import { recordPhotoShareView, resolvePhotoShareToken } from "@/lib/media-shares";
+import { recordMediaShareView, resolveMediaShareToken } from "@/lib/media-shares";
 import {
   allowPhotoShareRequest,
   isPhotoShareLookupBlocked,
@@ -53,13 +53,13 @@ export default async function PhotoSharePage({ params }: PageProps) {
     );
   }
 
-  const share = await resolvePhotoShareToken(token, host.businessId);
-  if (!share) {
+  const share = await resolveMediaShareToken(token, host.businessId);
+  if (!share || share.subject.kind !== "photo") {
     recordPhotoShareMiss(ip);
     notFound();
   }
 
-  await recordPhotoShareView(share.businessId, share.shareId);
+  await recordMediaShareView(share.businessId, share.shareId);
 
   return (
     <PhotoShareBrand businessId={share.businessId}>

@@ -11,7 +11,7 @@ import { getProjectLinkAccessState } from "@/lib/project-link-access";
 import { canAccessProject, staffCan, isOwnerAdmin, visibleClientIdsFor } from "@/lib/staff-access";
 import { getAppSettings } from "@/lib/app-settings";
 import { photoSharePermissions } from "@/lib/media-share-api";
-import { getProjectPhotoShareSummary } from "@/lib/media-shares";
+import { getProjectFolderShareSummary, getProjectPhotoShareSummary } from "@/lib/media-shares";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -146,10 +146,13 @@ export default async function AdminProjectPage({ params }: PageProps) {
   const projectShares = await listProjectShares(tenant.businessId, id);
   const linkAccess = await getProjectLinkAccessState(tenant.businessId, id);
   const photoSharing = photoSharePermissions(profile);
-  const photoShareSummary =
-    photoSharing.email || photoSharing.link
-      ? await getProjectPhotoShareSummary(tenant.businessId, id)
-      : {};
+  const canSharePhotos = photoSharing.email || photoSharing.link;
+  const [photoShareSummary, folderShareSummary] = canSharePhotos
+    ? await Promise.all([
+        getProjectPhotoShareSummary(tenant.businessId, id),
+        getProjectFolderShareSummary(tenant.businessId, id),
+      ])
+    : [{}, {}];
 
   const appSettings = await getAppSettings(tenant.businessId);
   const appUrl = getBusinessPortalOrigin(tenant.business);
@@ -184,6 +187,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
           linkAccessViewCount={linkAccess.viewCount}
           photoSharing={photoSharing}
           photoShareSummary={photoShareSummary}
+          folderShareSummary={folderShareSummary}
           canViewMoney={canViewMoney}
           depositMode={appSettings.workflow.payments.depositMode}
           depositPercent={appSettings.workflow.payments.depositPercent}

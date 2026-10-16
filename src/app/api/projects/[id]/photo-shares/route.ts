@@ -3,11 +3,11 @@ import { getProfile } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { canAccessProject } from "@/lib/staff-access";
 import { photoSharePermissions } from "@/lib/media-share-api";
-import { getProjectPhotoShareSummary } from "@/lib/media-shares";
+import { getProjectFolderShareSummary, getProjectPhotoShareSummary } from "@/lib/media-shares";
 
 export const dynamic = "force-dynamic";
 
-/** Live individual-photo share counts for a project's photos (grid badges). */
+/** Live share counts for a project's photos and folders (grid badges). */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,6 +19,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!(await canAccessProject(tenant.businessId, profile, projectId))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const summary = await getProjectPhotoShareSummary(tenant.businessId, projectId);
-  return NextResponse.json({ summary }, { headers: { "Cache-Control": "private, no-store" } });
+  const [summary, folders] = await Promise.all([
+    getProjectPhotoShareSummary(tenant.businessId, projectId),
+    getProjectFolderShareSummary(tenant.businessId, projectId),
+  ]);
+  return NextResponse.json({ summary, folders }, { headers: { "Cache-Control": "private, no-store" } });
 }

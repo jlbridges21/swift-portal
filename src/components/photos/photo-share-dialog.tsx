@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, Copy, Link2, Loader2, Mail, RotateCw, UserMinus, Users } from "lucide-react";
+import { AlertTriangle, Check, Copy, Folder, Link2, Loader2, Mail, RotateCw, UserMinus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,13 @@ import {
   type MediaInviteResult,
   type MediaShareExpiryPreset,
   type MediaShareState,
+  type MediaShareSubjectKind,
   type PhotoShareSummary,
 } from "@/lib/media-share-types";
+
+/** Shown on the folder share dialog and the shared-folder banner: membership is live. */
+export const FOLDER_SHARE_WARNING =
+  "Everyone you share this folder with can see every photo in it — including photos you upload or move here later. Photos moved out of the folder, deleted, or hidden from the client stop being shared. The rest of the project is never shared.";
 
 type Permissions = { email: boolean; link: boolean };
 
@@ -44,19 +49,26 @@ export function summarizeShareState(state: MediaShareState): PhotoShareSummary {
   return { link: Boolean(state.link), people: state.people.length };
 }
 
-export type PhotoShareTarget = { id: string; name: string; thumbUrl?: string | null };
+export type PhotoShareTarget = {
+  id: string;
+  name: string;
+  thumbUrl?: string | null;
+  /** Defaults to a single photo. */
+  kind?: MediaShareSubjectKind;
+};
 
-/** Owns which photo the share dialog is open for. */
-export function usePhotoShareDialog(
-  onSummaryChange?: (mediaId: string, summary: PhotoShareSummary) => void
-) {
+type SummaryChange = (id: string, summary: PhotoShareSummary, kind: MediaShareSubjectKind) => void;
+
+/** Owns which photo or folder the share dialog is open for. */
+export function usePhotoShareDialog(onSummaryChange?: SummaryChange) {
   const [target, setTarget] = useState<PhotoShareTarget | null>(null);
   const dialog = target ? (
     <PhotoShareDialog
       open
       onClose={() => setTarget(null)}
-      mediaId={target.id}
-      photoName={target.name}
+      kind={target.kind ?? "photo"}
+      targetId={target.id}
+      targetName={target.name}
       thumbUrl={target.thumbUrl}
       onSummaryChange={onSummaryChange}
     />
@@ -64,18 +76,29 @@ export function usePhotoShareDialog(
   return { openShare: setTarget, dialog };
 }
 
+function withSummary(prev: Record<string, PhotoShareSummary>, id: string, next: PhotoShareSummary) {
+  const copy = { ...prev };
+  if (next.link || next.people > 0) copy[id] = next;
+  else delete copy[id];
+  return copy;
+}
+
 /**
- * Live share badges for a project's photos. Refetches when photos change
- * folder or disappear, because the server revokes shares on move/delete.
+ * Live share badges for a project's photos and folders. Refetches when photos
+ * change folder or disappear, or folders are deleted, because the server
+ * revokes shares on move/delete.
  */
 export function useProjectPhotoShareSummary(
   projectId: string,
   initial: Record<string, PhotoShareSummary>,
   photos: { id: string; folder_id?: string | null }[],
-  enabled: boolean
+  enabled: boolean,
+  initialFolders: Record<string, PhotoShareSummary> = {},
+  folderIds: string[] = []
 ) {
   const [summary, setSummary] = useState(initial);
-  const placementKey = photos.map((p) => `${p.id}:${p.folder_id ?? ""}`).join(",");
+  const [folderSummary, setFolderSummary] = useState(initialFolders);
+  const placementKey = `${photos.map((p) => `${p.id}:${p.folder_id ?? ""}`).join(",")}|${folderIds.join(",")}`;
   const lastKey = useRef(placementKey);
 
   useEffect(() => {
@@ -85,7 +108,9 @@ export function useProjectPhotoShareSummary(
     void fetch(`/api/projects/${projectId}/photo-shares`, { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
-        if (!cancelled && json?.summary) setSummary(json.summary);
+        if (cancelled) return;
+        if (json?.summary) setSummary(json.summary);
+        if (json?.folders) setFolderSummary(json.folders);
       })
       .catch(() => {});
     return () => {
@@ -93,33 +118,33 @@ export function useProjectPhotoShareSummary(
     };
   }, [enabled, placementKey, projectId]);
 
-  const update = useCallback((mediaId: string, next: PhotoShareSummary) => {
-    setSummary((prev) => {
-      const copy = { ...prev };
-      if (next.link || next.people > 0) copy[mediaId] = next;
-      else delete copy[mediaId];
-      return copy;
-    });
+  const update = useCallback<SummaryChange>((id, next, kind) => {
+    if (kind === "folder") setFolderSummary((prev) => withSummary(prev, id, next));
+    else setSummary((prev) => withSummary(prev, id, next));
   }, []);
 
-  return { summary, update };
+  return { summary, folderSummary, update };
 }
 
 export function PhotoShareDialog({
   open,
   onClose,
-  mediaId,
-  photoName,
+  kind = "photo",
+  targetId,
+  targetName,
   thumbUrl,
   onSummaryChange,
 }: {
   open: boolean;
   onClose: () => void;
-  mediaId: string;
-  photoName: string;
+  kind?: MediaShareSubjectKind;
+  targetId: string;
+  targetName: string;
   thumbUrl?: string | null;
-  onSummaryChange?: (mediaId: string, summary: PhotoShareSummary) => void;
+  onSummaryChange?: SummaryChange;
 }) {
+  const isFolder = kind === "folder";
+  const endpoint = isFolder ? `/api/media-folders/${targetId}/shares` : `/api/media/${targetId}/shares`;
   const [state, setState] = useState<MediaShareState | null>(null);
   const [perms, setPerms] = useState<Permissions>({ email: false, link: false });
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -133,7 +158,7 @@ export function PhotoShareDialog({
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const res = await fetch(`/api/media/${mediaId}/shares`, { cache: "no-store" });
+      const res = await fetch(endpoint, { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Couldn't load sharing.");
       setState(json.state);
@@ -141,7 +166,7 @@ export function PhotoShareDialog({
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Couldn't load sharing.");
     }
-  }, [mediaId]);
+  }, [endpoint]);
 
   useEffect(() => {
     if (!open) return;
@@ -158,7 +183,7 @@ export function PhotoShareDialog({
   ): Promise<MediaInviteResult[] | undefined> {
     setBusy(key);
     try {
-      const res = await fetch(`/api/media/${mediaId}/shares`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -166,7 +191,7 @@ export function PhotoShareDialog({
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Something went wrong.");
       setState(json.state);
-      onSummaryChange?.(mediaId, summarizeShareState(json.state));
+      onSummaryChange?.(targetId, summarizeShareState(json.state), kind);
       if (success) toast.success(success);
       return json.results as MediaInviteResult[] | undefined;
     } catch (err) {
@@ -219,22 +244,34 @@ export function PhotoShareDialog({
     : null;
 
   return (
-    <Modal open={open} onClose={onClose} title="Share photo" className="sm:max-w-xl">
+    <Modal open={open} onClose={onClose} title={isFolder ? "Share folder" : "Share photo"} className="sm:max-w-xl">
       <div className="space-y-5 pb-1">
         <div className="flex items-center gap-3">
-          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border bg-subtle">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-subtle">
             {thumbUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
+            ) : isFolder ? (
+              <Folder className="h-6 w-6 text-muted" aria-hidden />
             ) : null}
           </div>
           <div className="min-w-0">
-            <p className="truncate font-medium text-heading">{photoName}</p>
+            <p className="truncate font-medium text-heading">{targetName}</p>
             <p className="text-sm text-muted" aria-live="polite">
               {statusLine ? `Shared with: ${statusLine}` : "Loading sharing…"}
             </p>
           </div>
         </div>
+
+        {isFolder ? (
+          <div
+            role="note"
+            className="flex gap-2.5 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 surface-dark:border-amber-500/40 surface-dark:bg-amber-500/10 surface-dark:text-amber-100"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <p>{FOLDER_SHARE_WARNING}</p>
+          </div>
+        ) : null}
 
         {loadError ? (
           <div className="rounded-lg border border-border bg-subtle p-4 text-sm">
@@ -480,7 +517,7 @@ export function PhotoShareDialog({
                 ) : (
                   <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border p-3 sm:flex-row sm:items-center">
                     <p className="flex-1 text-sm text-muted">
-                      Off. Only people you invite can open this photo.
+                      Off. Only people you invite can open this {isFolder ? "folder" : "photo"}.
                     </p>
                     <Button
                       variant="outline"
@@ -499,8 +536,9 @@ export function PhotoShareDialog({
             <p className="flex gap-2 text-xs text-muted">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               <span>
-                Shares open this one photo only — never the project, folder, or other photos. Moving the photo to another
-                folder or project, or deleting it, ends every share.
+                {isFolder
+                  ? "Deleting the folder ends every share of it. Photos shared on their own keep those shares."
+                  : "Shares open this one photo only — never the project, folder, or other photos. Moving the photo to another folder or project, or deleting it, ends every share."}
               </span>
             </p>
           </>

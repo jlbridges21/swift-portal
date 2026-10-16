@@ -111,6 +111,9 @@ interface AdminPhotoGridProps {
   /** Active individual shares by asset id — drives the Shared badge and move/delete warnings. */
   shareSummary?: Record<string, PhotoShareSummary>;
   onShare?: (photo: MediaAsset) => void;
+  /** Active folder shares by folder id — drives the folder Shared badge and upload warning. */
+  folderShareSummary?: Record<string, PhotoShareSummary>;
+  onShareFolder?: (folder: MediaFolder) => void;
   /** Rendered beside the breadcrumb (e.g. client visibility toggle). */
   headerSlot?: React.ReactNode;
   maxFileSizeLabel?: string;
@@ -118,6 +121,11 @@ interface AdminPhotoGridProps {
 
 function isClientVisible(asset: MediaAsset) {
   return isClientVisibleMedia(asset);
+}
+
+function shareAudienceText(summary: PhotoShareSummary): string {
+  const people = summary.people ? `${summary.people} ${summary.people === 1 ? "person" : "people"}` : null;
+  return [people, summary.link ? "anyone with the link" : null].filter(Boolean).join(" and ");
 }
 
 /** Project-wide photo order. Folder views show a subset in that same order. */
@@ -297,6 +305,7 @@ function SortablePhotoCard({
   coarsePointer,
   selectMode,
   placementMode,
+  dragActive,
   thumbUrl,
   thumbFailed,
   onThumbVisible,
@@ -308,6 +317,7 @@ function SortablePhotoCard({
   onMenu,
   onLongPressSelect,
   onToggleSelect,
+  onKeyboardToggle,
   onPaintSelectEnter,
   onPaintSelectMove,
   onPaintSelectEnd,
@@ -321,6 +331,7 @@ function SortablePhotoCard({
   coarsePointer: boolean;
   selectMode: boolean;
   placementMode: boolean;
+  dragActive: boolean;
   thumbUrl: string | null;
   thumbFailed: boolean;
   onThumbVisible: (id: string) => void;
@@ -328,10 +339,11 @@ function SortablePhotoCard({
   onThumbRetry: (id: string) => void;
   scrollRoot: Element | null;
   onActivate: (e: ReactMouseEvent, id: string, index: number) => void;
-  onOpen: () => void;
+  onOpen: (e: ReactMouseEvent, photo: MediaAsset) => void;
   onMenu: (photo: MediaAsset, anchor: ActionMenuAnchor) => void;
   onLongPressSelect: (id: string, index: number) => void;
   onToggleSelect: (id: string, index: number) => void;
+  onKeyboardToggle: (id: string, index: number) => void;
   onPaintSelectEnter: (id: string, index: number) => void;
   onPaintSelectMove: (clientX: number, clientY: number) => void;
   onPaintSelectEnd: () => void;
@@ -448,9 +460,19 @@ function SortablePhotoCard({
       data-photo-id={photo.id}
       data-photo-index={index}
       {...attributes}
+      aria-pressed={selected}
       aria-label={`${name}${selected ? ", selected" : ""}`}
       {...(placementMode || (coarsePointer && selectMode) ? {} : mouseListeners)}
-      {...keyListeners}
+      onKeyDown={(e) => {
+        // Space/Enter select; Alt/Option+Space hands off to dnd-kit's keyboard reorder.
+        const selectKey = e.key === " " || e.key === "Enter";
+        if (selectKey && !e.altKey && !dragActive && e.target === e.currentTarget) {
+          e.preventDefault();
+          if (!placementMode) onKeyboardToggle(photo.id, index);
+          return;
+        }
+        keyListeners.onKeyDown?.(e);
+      }}
       onClick={(e) => {
         if (placementMode) return;
         if (skipNextClick.current) {
@@ -459,8 +481,8 @@ function SortablePhotoCard({
         }
         onActivate(e, photo.id, index);
       }}
-      onDoubleClick={() => {
-        if (!coarsePointer && !placementMode) onOpen();
+      onDoubleClick={(e) => {
+        if (!coarsePointer && !placementMode) onOpen(e, photo);
       }}
       onContextMenu={(e) => {
         if (placementMode || coarsePointer) return;
@@ -571,6 +593,17 @@ function SortablePhotoCard({
 
 type MenuState = { anchor: ActionMenuAnchor; title: string; items: ActionMenuItem[] };
 
+/** Selection as it was just before a click toggled it — lets a double-click undo its two clicks. */
+type RecentClick = { id: string; at: number; before: Set<string>; anchorBefore: number | null };
+
+/** Longest gap between the two clicks of a double-click (OS settings top out around here). */
+const DOUBLE_CLICK_WINDOW_MS = 800;
+
+const PHOTO_GRID_SCREEN_READER_INSTRUCTIONS = {
+  draggable:
+    "Press Space or Enter to select or deselect this photo. To reorder, press Option+Space (Alt+Space) to pick it up, use the arrow keys to move it, then press Space to drop or Escape to cancel.",
+};
+
 type DeleteTarget = { kind: "photos"; ids: string[] } | { kind: "folder"; folder: MediaFolder };
 
 export function AdminPhotoGrid({
@@ -588,6 +621,8 @@ export function AdminPhotoGrid({
   onRefresh,
   shareSummary,
   onShare,
+  folderShareSummary,
+  onShareFolder,
   headerSlot,
   maxFileSizeLabel,
 }: AdminPhotoGridProps) {
@@ -663,6 +698,7 @@ export function AdminPhotoGrid({
   const selectionBeforeMarquee = useRef<Set<string>>(new Set());
   const photosRef = useRef(photos);
   const justDraggedRef = useRef(false);
+  const recentClicksRef = useRef<RecentClick[]>([]);
   const paintSelectActive = useRef(false);
   const undoSnapshotRef = useRef<MediaAsset[] | null>(null);
   const fileDragDepth = useRef(0);
@@ -834,6 +870,7 @@ export function AdminPhotoGrid({
   }
 
   const viewUploadFolder = view === "all" || view === UNFILED_FOLDER_SCOPE ? null : view;
+  const currentFolderShare = currentFolder ? folderShareSummary?.[currentFolder.id] ?? null : null;
   const viewLabel =
     view === "all" ? "All photos" : view === UNFILED_FOLDER_SCOPE ? UNFILED_FOLDER_LABEL : currentFolder?.name ?? "Folder";
 
@@ -927,26 +964,51 @@ export function AdminPhotoGrid({
       return;
     }
 
-    if (e.metaKey || e.ctrlKey) {
-      e.preventDefault();
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      });
-      setAnchorIndex(index);
-      return;
-    }
     if (e.shiftKey && anchorIndex != null) {
       e.preventDefault();
+      recentClicksRef.current = [];
       const from = Math.min(anchorIndex, index);
       const to = Math.max(anchorIndex, index);
       setSelectedIds(new Set(visiblePhotos.slice(from, to + 1).map((p) => p.id)));
       return;
     }
-    setSelectedIds(new Set([id]));
+
+    // Plain and Cmd/Ctrl clicks both toggle, instantly. A double-click restores
+    // `before` from its first click, so opening a photo never changes selection.
+    if (e.metaKey || e.ctrlKey) e.preventDefault();
+    recentClicksRef.current = [
+      ...recentClicksRef.current.slice(-1),
+      { id, at: e.timeStamp, before: selectedIds, anchorBefore: anchorIndex },
+    ];
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
     setAnchorIndex(index);
+  }
+
+  function handleOpen(e: ReactMouseEvent, photo: MediaAsset) {
+    const [first, second] = recentClicksRef.current;
+    recentClicksRef.current = [];
+    if (
+      first &&
+      second &&
+      first.id === photo.id &&
+      second.id === photo.id &&
+      second.at - first.at <= DOUBLE_CLICK_WINDOW_MS &&
+      e.timeStamp - second.at <= DOUBLE_CLICK_WINDOW_MS
+    ) {
+      setSelectedIds(first.before);
+      setAnchorIndex(first.anchorBefore);
+    }
+    setLightboxPhoto(photo);
+  }
+
+  function onKeyboardToggle(id: string, index: number) {
+    if (coarsePointer && !selectMode) setSelectMode(true);
+    onToggleSelect(id, index);
   }
 
   function onLongPressSelect(id: string, index: number) {
@@ -1437,6 +1499,16 @@ export function AdminPhotoGrid({
         disabled: count === 0,
         onSelect: () => downloadFolder(folder.id),
       },
+      ...(onShareFolder
+        ? [
+            {
+              id: "share",
+              label: folderShareSummary?.[folder.id] ? "Manage sharing…" : "Share…",
+              icon: Share2,
+              onSelect: () => onShareFolder(folder),
+            },
+          ]
+        : []),
       { id: "rename", label: "Rename…", icon: Pencil, onSelect: () => setFolderDialog({ mode: "rename", folder }) },
       { type: "separator", id: "s" },
       {
@@ -1676,12 +1748,37 @@ export function AdminPhotoGrid({
       </div>
       {headerSlot ? <div className="sm:hidden">{headerSlot}</div> : null}
 
+      {currentFolderShare ? (
+        <div
+          role="note"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 surface-dark:border-amber-500/40 surface-dark:bg-amber-500/10 surface-dark:text-amber-100"
+        >
+          <Link2 className="h-4 w-4 shrink-0" aria-hidden />
+          <p className="min-w-0 flex-1">
+            <span className="font-semibold">This folder is shared with {shareAudienceText(currentFolderShare)}.</span>{" "}
+            Photos you upload or move here become visible to them right away.
+          </p>
+          {onShareFolder && currentFolder ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 shrink-0 bg-card"
+              onClick={() => onShareFolder(currentFolder)}
+            >
+              Manage sharing
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       {zip.panel}
 
       <DndContext
         id={`admin-photo-grid-${projectId}`}
         sensors={sensors}
         collisionDetection={photoCollision}
+        accessibility={{ screenReaderInstructions: PHOTO_GRID_SCREEN_READER_INSTRUCTIONS }}
         onDragStart={handleDragStart}
         onDragEnd={(e) => void handleDragEnd(e)}
         onDragCancel={() => {
@@ -1719,6 +1816,7 @@ export function AdminPhotoGrid({
                     name={folder.name}
                     count={stats?.count ?? 0}
                     coverUrl={stats?.coverId ? thumbUrls[stats.coverId] ?? null : null}
+                    shared={Boolean(folderShareSummary?.[folder.id])}
                     onOpen={() => navigate(folder.id)}
                     onMenu={(anchor) => setMenu({ anchor, title: folder.name, items: folderMenuItems(folder) })}
                   />
@@ -1774,7 +1872,7 @@ export function AdminPhotoGrid({
             <p className="text-xs text-muted">
               {coarsePointer
                 ? "Tap a photo to open it. Tap Select (or long-press) to choose several. Hold the grip to drag."
-                : "Click to select, double-click to open, right-click for actions. Drag to reorder; Cmd/Ctrl-click or drag a box to select several."}
+                : "Click photos to select or deselect them, double-click to open, right-click for actions. Shift-click selects a range; drag to reorder or drag a box to select several."}
             </p>
 
             {placementMode && (
@@ -1818,6 +1916,7 @@ export function AdminPhotoGrid({
                         coarsePointer={coarsePointer}
                         selectMode={Boolean(coarsePointer && selectMode)}
                         placementMode={placementMode}
+                        dragActive={activeDragIds.length > 0}
                         thumbUrl={thumbUrls[p.id] ?? null}
                         thumbFailed={!thumbUrls[p.id] && (thumbFailures[p.id] ?? 0) >= THUMB_FAIL_LIMIT}
                         onThumbVisible={onThumbVisible}
@@ -1825,10 +1924,11 @@ export function AdminPhotoGrid({
                         onThumbRetry={onThumbRetry}
                         scrollRoot={scrollRoot}
                         onActivate={handleActivate}
-                        onOpen={() => setLightboxPhoto(p)}
+                        onOpen={handleOpen}
                         onMenu={openPhotoMenu}
                         onLongPressSelect={onLongPressSelect}
                         onToggleSelect={onToggleSelect}
+                        onKeyboardToggle={onKeyboardToggle}
                         onPaintSelectEnter={onPaintSelectEnter}
                         onPaintSelectMove={onPaintSelectMove}
                         onPaintSelectEnd={onPaintSelectEnd}
@@ -1876,6 +1976,7 @@ export function AdminPhotoGrid({
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-accent bg-accent/10 backdrop-blur-[1px]">
           <p className="rounded-lg bg-card px-4 py-2 text-sm font-semibold text-heading shadow">
             Drop to upload to {viewLabel === "All photos" ? UNFILED_FOLDER_LABEL : viewLabel}
+            {currentFolderShare ? ` — shared with ${shareAudienceText(currentFolderShare)}` : ""}
           </p>
         </div>
       )}
@@ -1975,6 +2076,12 @@ export function AdminPhotoGrid({
                 <p className="text-muted">
                   To delete the photos themselves, open the folder, select them, and choose Delete.
                 </p>
+                {folderShareSummary?.[deleteTarget.folder.id] ? (
+                  <p className="text-muted">
+                    This folder is shared with {shareAudienceText(folderShareSummary[deleteTarget.folder.id])}. Deleting
+                    it ends that sharing — its photos won&apos;t be visible through the folder&apos;s link or invites.
+                  </p>
+                ) : null}
               </>
             );
           })()

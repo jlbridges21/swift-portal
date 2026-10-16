@@ -1,5 +1,8 @@
-/** Client-safe types for single-photo sharing (no server imports). */
+/** Client-safe types for photo and folder sharing (no server imports). */
 import type { ShareExpiryPreset } from "@/lib/project-share-expiry";
+
+/** What a share opens: one photo, or one folder and the photos in it at access time. */
+export type MediaShareSubjectKind = "photo" | "folder";
 
 export type MediaShareExpiryPreset = Exclude<ShareExpiryPreset, "one_time" | "custom">;
 
@@ -40,7 +43,7 @@ export type MediaShareState = {
   people: MediaPersonShareView[];
 };
 
-/** Per-photo counts for grid badges. */
+/** Per-photo (or per-folder) counts for grid badges. */
 export type PhotoShareSummary = { link: boolean; people: number };
 
 export type MediaInviteResult = {

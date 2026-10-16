@@ -43,10 +43,13 @@ export function allowPublicLinkApi(ip: string, token: string): { allowed: boolea
 }
 
 const photoRequestBuckets = new Map<string, Bucket>();
+const photoAssetBuckets = new Map<string, Bucket>();
 const photoMissBuckets = new Map<string, Bucket>();
 
 const PHOTO_REQUEST_WINDOW_MS = 60 * 1000;
 const PHOTO_REQUEST_MAX = 120;
+/** A shared folder's gallery loads one thumbnail per photo, so image bytes get a larger budget. */
+const PHOTO_ASSET_MAX = 600;
 const PHOTO_MISS_WINDOW_MS = 10 * 60 * 1000;
 const PHOTO_MISS_MAX = 20;
 const MAX_TRACKED_KEYS = 10_000;
@@ -66,6 +69,12 @@ function sweep(map: Map<string, Bucket>) {
 export function allowPhotoShareRequest(ip: string): { allowed: boolean; retryAfterSec: number } {
   sweep(photoRequestBuckets);
   return take(photoRequestBuckets, ip || "unknown", PHOTO_REQUEST_MAX, PHOTO_REQUEST_WINDOW_MS);
+}
+
+/** Per-IP budget for share image/download requests (thumbnails, previews, originals). */
+export function allowPhotoShareAssetRequest(ip: string): { allowed: boolean; retryAfterSec: number } {
+  sweep(photoAssetBuckets);
+  return take(photoAssetBuckets, ip || "unknown", PHOTO_ASSET_MAX, PHOTO_REQUEST_WINDOW_MS);
 }
 
 /** True once an IP has failed too many photo-share token lookups recently. */
@@ -88,6 +97,7 @@ export function resetPublicLinkRateLimitsForTests() {
   pageBuckets.clear();
   apiBuckets.clear();
   photoRequestBuckets.clear();
+  photoAssetBuckets.clear();
   photoMissBuckets.clear();
 }
 
@@ -95,5 +105,6 @@ export const PUBLIC_LINK_RATE_LIMITS = {
   pagePerMinute: PAGE_MAX,
   apiPerMinute: API_MAX,
   photoRequestsPerMinute: PHOTO_REQUEST_MAX,
+  photoAssetRequestsPerMinute: PHOTO_ASSET_MAX,
   photoMissesPer10Min: PHOTO_MISS_MAX,
 } as const;
