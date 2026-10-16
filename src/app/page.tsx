@@ -87,12 +87,15 @@ export default async function HomePage() {
     console.warn("[landing] could not load public plans", plansResult.reason);
   }
 
+  // MarketingRoot is outermost, matching the (marketing) layout. Next scrolls a new page to its
+  // first visible element; with BrandProvider's zero-size wrapper directly in <body>, that was
+  // the toaster after it at the bottom of the page, so returning to / landed at the bottom.
   return (
-    <BrandProvider brand={platformPortalBrand()}>
-      <AuthFragmentHandler />
-      <MarketingRoot>
+    <MarketingRoot>
+      <BrandProvider brand={platformPortalBrand()}>
+        <AuthFragmentHandler />
         <PlatformLanding trialDays={trialDays} plans={plans} />
-      </MarketingRoot>
-    </BrandProvider>
+      </BrandProvider>
+    </MarketingRoot>
   );
 }
