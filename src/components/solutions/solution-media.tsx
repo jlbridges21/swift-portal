@@ -2,13 +2,15 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Pause, Play } from "lucide-react";
+import { Maximize2, Pause, Play, X } from "lucide-react";
 import type { SolutionImageAsset, SolutionVideoAsset } from "@/lib/solution-media";
 import { cn } from "@/lib/utils";
 
 /**
  * Media building blocks for the Solutions pages.
- * - ShowcaseImage: next/image (responsive srcset, modern formats, lazy unless priority).
+ * - ShowcaseImage: next/image at quality 90 with a large size hint so UI text in product
+ *   screenshots stays legible on high-density screens, plus click-to-enlarge (native <dialog>)
+ *   that shows the full-resolution original.
  * - LoopVideo: muted motion graphic. Sources attach only when near the viewport, playback
  *   pauses off-screen, reduced-motion users get the poster and a play button, and a visible
  *   pause control satisfies WCAG 2.2.2 for moving content.
@@ -33,31 +35,99 @@ const FRAMES = {
   dark: "overflow-hidden rounded-2xl border border-white/10 bg-[#0B1124] shadow-[0_50px_100px_-50px_rgba(0,0,0,0.9)]",
 } as const;
 
+/**
+ * Screenshots are composite scenes (a whole app screen inside a device mockup), so they need
+ * more pixels than their on-page width suggests. The hint makes 2x screens fetch ~2048px.
+ */
+const SCREENSHOT_SIZES = "(min-width: 640px) 1100px, 100vw";
+
 export function ShowcaseImage({
   image,
-  sizes = "(min-width: 1024px) 50vw, 100vw",
   priority = false,
   frame = "card",
   className,
+  zoomable = true,
 }: {
   image: SolutionImageAsset;
+  /** Kept for call-site compatibility; screenshots always use SCREENSHOT_SIZES for legibility. */
   sizes?: string;
   priority?: boolean;
   frame?: keyof typeof FRAMES;
   className?: string;
+  /** Set false inside links or other interactive containers. */
+  zoomable?: boolean;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const d = dialogRef.current;
+    if (!d) return;
+    if (open && !d.open) d.showModal();
+    if (!open && d.open) d.close();
+  }, [open]);
+
+  const img = (
+    <Image
+      src={image.src}
+      alt={image.alt}
+      width={image.width}
+      height={image.height}
+      sizes={SCREENSHOT_SIZES}
+      quality={90}
+      priority={priority}
+      className="block h-auto w-full"
+    />
+  );
+
+  if (!zoomable) return <div className={cn(FRAMES[frame], className)}>{img}</div>;
+
   return (
-    <div className={cn(FRAMES[frame], className)}>
-      <Image
-        src={image.src}
-        alt={image.alt}
-        width={image.width}
-        height={image.height}
-        sizes={sizes}
-        priority={priority}
-        className="block h-auto w-full"
-      />
-    </div>
+    <>
+      <div className={cn("group relative", FRAMES[frame], className)}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-2"
+          aria-label={`Enlarge image: ${image.alt}`}
+        >
+          {img}
+          <span
+            className="pointer-events-none absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white opacity-90 backdrop-blur transition group-hover:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+            aria-hidden
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+            Enlarge
+          </span>
+        </button>
+      </div>
+      <dialog
+        ref={dialogRef}
+        onClose={() => setOpen(false)}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setOpen(false);
+        }}
+        aria-label={image.alt}
+        className="m-auto max-h-[94vh] max-w-[96vw] overflow-visible bg-transparent p-0 backdrop:bg-[#020617]/85 backdrop:backdrop-blur-sm"
+      >
+        {open ? (
+          <div className="relative">
+            {/* Full-resolution original: no resizing or recompression. */}
+            {/* eslint-disable-next-line @next/next/no-img-element -- intentional: show the untouched original at full size */}
+            <img src={image.src} alt={image.alt} width={image.width} height={image.height} className="block h-auto max-h-[90vh] w-auto max-w-[96vw] rounded-xl object-contain shadow-2xl" />
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="absolute -top-3 right-0 flex h-10 w-10 -translate-y-full items-center justify-center rounded-full bg-white text-[#0F172A] shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5] sm:right-0"
+              aria-label="Close enlarged image"
+              autoFocus
+            >
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+          </div>
+        ) : null}
+      </dialog>
+    </>
   );
 }
 

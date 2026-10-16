@@ -691,7 +691,7 @@ export function SolutionPreviewCards({ items }: { items: { key: SolutionKey; ima
               href={p.path}
               className="group flex h-full flex-col overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white transition hover:-translate-y-0.5 hover:border-[#C7D2FE] hover:shadow-[0_30px_60px_-40px_rgba(79,70,229,0.7)]"
             >
-              <ShowcaseImage image={image} frame="none" sizes="(min-width: 1024px) 360px, (min-width: 640px) 50vw, 100vw" className="bg-[#0B1124]" />
+              <ShowcaseImage image={image} frame="none" zoomable={false} className="bg-[#0B1124]" />
               <span className="flex flex-1 flex-col p-5">
                 <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#4F46E5]">{p.navTitle}</span>
                 <span className="mt-1.5 font-semibold capitalize text-[#0F172A]">{p.primaryKeyword}</span>

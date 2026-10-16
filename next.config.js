@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
+    // 75 is the default; 90 keeps UI text sharp in marketing product screenshots (ShowcaseImage).
+    qualities: [75, 90],
     remotePatterns: [
       { protocol: "https", hostname: "*.supabase.co" },
       // Custom Supabase Auth/Storage domain (prod NEXT_PUBLIC_SUPABASE_URL).
