@@ -1,3 +1,4 @@
+import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
@@ -236,6 +237,7 @@ export const article: BlogArticle = {
               placeholders, not recommendations. An attorney can tell you what&apos;s enforceable where you work.
             </p>
           </Callout>
+          <FreeResourceCallout resource="photography-invoice" />
         </>
       ),
     },

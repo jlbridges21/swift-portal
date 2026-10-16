@@ -1,7 +1,6 @@
 "use client";
 
 import { useLayoutEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { AuthLinkHelpCard } from "@/components/auth/auth-link-help-card";
 import {
   clearAuthFragmentFromUrl,
@@ -58,6 +57,8 @@ export function AuthFragmentHandler() {
 
     void (async () => {
       try {
+        // Loaded on demand: only needed when a login link lands here with tokens in the URL.
+        const { createClient } = await import("@/lib/supabase/client");
         const supabase = createClient();
         const { error } = await supabase.auth.setSession({
           access_token: parsed.accessToken,

@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
 
 type HomeTarget = { href: string; label: string };
 
@@ -24,6 +23,9 @@ export function SafeHomeLink({
     let cancelled = false;
     (async () => {
       try {
+        // Loaded on demand: this link sits in the root error/not-found boundaries, which are part
+        // of every route's bundle, so a static import would ship the auth client to every page.
+        const { createClient } = await import("@/lib/supabase/client");
         const supabase = createClient();
         const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError || !authData.user) {

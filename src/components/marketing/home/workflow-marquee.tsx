@@ -192,7 +192,7 @@ export function HomepageWorkflowMarquee() {
         }
       `}</style>
 
-      <p className="mt-3 text-center text-xs text-[#94A3B8]">
+      <p className="mt-3 text-center text-xs text-[#64748B]">
         {reduced
           ? "Swipe or drag to browse every stage."
           : "Swipe or drag to browse every stage."}

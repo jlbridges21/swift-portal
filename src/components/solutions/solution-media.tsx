@@ -268,14 +268,14 @@ export function DemoVideo({
             type="button"
             onClick={() => setStarted(true)}
             className="group absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/45 via-black/10 to-transparent focus-visible:outline-none"
-            aria-label={`Play video: ${video.title ?? video.label}`}
           >
+            <span className="sr-only">Play video: {video.title ? "" : video.label}</span>
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/95 shadow-[0_20px_50px_-15px_rgba(79,70,229,0.9)] ring-8 ring-white/20 transition group-hover:scale-105 group-focus-visible:ring-white/60 sm:h-20 sm:w-20">
               <Play className="ml-1 h-7 w-7 fill-[#4F46E5] text-[#4F46E5] sm:h-8 sm:w-8" aria-hidden />
             </span>
             {video.title ? (
               <span className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 text-left sm:bottom-4 sm:left-5 sm:right-5">
-                <span className="hidden text-base font-semibold text-white drop-shadow sm:inline">{video.title}</span>
+                <span className="sr-only text-base font-semibold text-white drop-shadow sm:not-sr-only sm:inline">{video.title}</span>
                 {video.duration ? (
                   <span className="ml-auto rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">{video.duration}</span>
                 ) : null}

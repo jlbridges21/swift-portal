@@ -1,3 +1,4 @@
+import { isEngagementCtaId } from "@/lib/analytics/engagement";
 import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { Channel } from "@/lib/analytics/channels";
@@ -116,7 +117,8 @@ export function buildAttributionSnapshot(
   const articleViews = events.filter((e) => e.event_type === "pageview" && e.article_slug);
   const articles: string[] = [];
   for (const e of articleViews) if (!articles.includes(e.article_slug!)) articles.push(e.article_slug!);
-  const cta = [...events].reverse().find((e) => e.event_type === "cta_click") ?? null;
+  // The signup CTA is the last real signup link click, never a tool or template interaction.
+  const cta = [...events].reverse().find((e) => e.event_type === "cta_click" && !isEngagementCtaId(e.cta_id)) ?? null;
 
   return {
     status: "attributed",

@@ -9,6 +9,7 @@ import {
   MarketingPartnersDesktop,
 } from "@/components/marketing/marketing-partners-nav";
 import { MarketingSolutionsDesktop } from "@/components/marketing/marketing-solutions-nav";
+import { MarketingResourcesDesktop } from "@/components/marketing/marketing-resources-nav";
 import { SOLUTION_PAGES } from "@/lib/solutions";
 import {
   AnalyticsConsentBanner,
@@ -23,7 +24,7 @@ const NAV = [
   { href: "/how-it-works", label: "How it works" },
   { href: "/pricing", label: "Pricing" },
   { href: "/partners", label: "Partners" },
-  { href: "/blog", label: "Blog" },
+  { href: "#resources", label: "Resources" },
   { href: "/contact", label: "Contact" },
 ] as const;
 
@@ -39,7 +40,7 @@ export function MarketingHeader({ className }: { className?: string }) {
         <Link href="/" className="flex min-w-0 items-center gap-2.5">
           <Image
             src={SITE_ICONS.logoMark}
-            alt={SITE.name}
+            alt=""
             width={140}
             height={36}
             className="h-8 w-auto object-contain"
@@ -54,6 +55,8 @@ export function MarketingHeader({ className }: { className?: string }) {
               <MarketingPartnersDesktop key={item.href} />
             ) : item.href === "#solutions" ? (
               <MarketingSolutionsDesktop key={item.href} />
+            ) : item.href === "#resources" ? (
+              <MarketingResourcesDesktop key={item.href} />
             ) : (
               <Link
                 key={item.href}
@@ -128,6 +131,16 @@ export function MarketingFooter() {
             <li>
               <Link href="/pricing" className="hover:text-white">
                 Pricing
+              </Link>
+            </li>
+            <li>
+              <Link href="/tools" className="hover:text-white">
+                Free tools
+              </Link>
+            </li>
+            <li>
+              <Link href="/resources" className="hover:text-white">
+                Free templates
               </Link>
             </li>
             <li>

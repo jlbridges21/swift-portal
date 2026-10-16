@@ -33,9 +33,11 @@ export async function generateMetadata(): Promise<Metadata> {
     const { metadata } = await publicHostBrand();
     return metadata;
   }
+  // Platform homepage only (tenants return above). SITE.description stays the tenant fallback.
   return marketingPageMetadata({
-    title: SITE.title,
-    description: SITE.description,
+    title: `${SITE.name}: Run Your Media Business in One Place`,
+    description:
+      "Requests, estimates, scheduling, client portal, video review, payments, and delivery in one platform for photographers, videographers, and drone pilots.",
     path: "/",
   });
 }
@@ -68,19 +70,21 @@ export default async function HomePage() {
     );
   }
 
+  // Independent queries: run in parallel to cut server response time on the marketing homepage.
+  const [studioResult, plansResult] = await Promise.allSettled([assertActivePlanKey("studio"), listPublicPlans()]);
+
   let trialDays = FALLBACK_TRIAL_DAYS;
-  try {
-    const studio = await assertActivePlanKey("studio");
-    trialDays = resolvePlanTrialDays(studio, "platform_landing");
-  } catch (err) {
-    console.warn("[landing] could not load studio trial_days — using fallback", err);
+  if (studioResult.status === "fulfilled") {
+    trialDays = resolvePlanTrialDays(studioResult.value, "platform_landing");
+  } else {
+    console.warn("[landing] could not load studio trial_days — using fallback", studioResult.reason);
   }
 
   let plans: Awaited<ReturnType<typeof listPublicPlans>> = [];
-  try {
-    plans = await listPublicPlans();
-  } catch (err) {
-    console.warn("[landing] could not load public plans", err);
+  if (plansResult.status === "fulfilled") {
+    plans = plansResult.value;
+  } else {
+    console.warn("[landing] could not load public plans", plansResult.reason);
   }
 
   return (

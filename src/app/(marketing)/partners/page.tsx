@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { BrandProvider } from "@/components/brand/brand-provider";
+import { jsonLdString } from "@/lib/blog/structured-data";
+import { graph, webPageNode } from "@/lib/marketing-jsonld";
 import { MarketingShell } from "@/components/marketing/marketing-chrome";
 import { PartnerApplyForm } from "@/components/marketing/partner-apply-form";
 import { PartnerProgramFaq } from "@/components/marketing/partner-program-faq";
@@ -23,7 +25,7 @@ export const revalidate = 60;
 export const metadata: Metadata = marketingPageMetadata({
   title: "Partner Program",
   description:
-    "Turn your audience into recurring income. Refer photographers, drone pilots, and media businesses to ShootPortal and earn a recurring commission for as long as they remain paying customers.",
+    "Refer photographers, drone pilots, and media businesses to ShootPortal and earn a recurring commission for as long as they remain paying customers.",
   path: "/partners",
 });
 
@@ -52,6 +54,10 @@ export default async function PartnersMarketingPage() {
   return (
     <BrandProvider brand={platformPortalBrand()}>
       <MarketingShell>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdString(graph(webPageNode("/partners", "ShootPortal Partner Program", "Refer photographers, drone pilots, and media businesses to ShootPortal and earn a recurring commission.", [{ name: "Partners", path: "/partners" }]))) }}
+        />
         {/* Hero */}
         <section className="relative overflow-hidden border-b border-[#E2E8F0]">
           <div

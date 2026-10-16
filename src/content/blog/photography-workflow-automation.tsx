@@ -1,3 +1,4 @@
+import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
@@ -199,6 +200,7 @@ export const article: BlogArticle = {
             surprising amount of lost work is simply quotes nobody followed up on. For drone-specific quoting and
             pricing, see our <BlogLink slug="drone-photography-pricing-guide">drone photography pricing guide</BlogLink>.
           </p>
+          <FreeResourceCallout tool="quote-builder" note="Build a clean quote with optional add-ons and a deposit, and download it as a PDF." />
         </>
       ),
     },
@@ -375,6 +377,7 @@ export const article: BlogArticle = {
             turning a request into a price, turning approval or finished media into payment, and turning payment into
             delivered files.
           </p>
+          <FreeResourceCallout resource="photography-project-workflow-checklist" />
         </>
       ),
     },

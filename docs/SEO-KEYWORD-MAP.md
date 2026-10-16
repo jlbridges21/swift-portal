@@ -94,3 +94,49 @@ All Solutions pages: `/platform/analytics/acquisition` → "SEO landing pages" (
 registrations, trials, activated, paid, revenue; follows the first/last-touch toggle).
 Landing-page performance appears in `/platform/analytics/acquisition` → "Landing pages" (entrances,
 CTA clicks, first/last-touch signups) and "Signup CTAs" (clicks per CTA id).
+
+## Free tools and templates (2026-10-15)
+
+Tools own **calculator / generator** intent; templates own **template / checklist / sample** intent.
+Neither competes with the "best X" articles (comparison intent) or solution pages (vendor intent).
+
+| URL | Primary keyword | Intent | Next step |
+| --- | --- | --- | --- |
+| `/tools` | free tools for photographers | Hub | Each tool |
+| `/tools/drone-photography-pricing-calculator` | drone photography pricing calculator | Do: price a job | `/drone-business-management-software` → trial |
+| `/tools/real-estate-photography-pricing-calculator` | real estate photography pricing calculator | Do: price a listing, build a price list | `/real-estate-photography-software` → trial |
+| `/tools/photography-quote-builder` | photography quote generator | Do: create a client quote PDF | `/photography-business-management-software` → trial |
+| `/resources` | photography business templates | Hub | Each template |
+| `/resources/real-estate-photography-pricing-template` | real estate photography pricing template | Download | RE software / RE calculator |
+| `/resources/drone-photography-quote-template` | drone photography quote template | Download | Drone software / quote builder |
+| `/resources/photography-invoice-template` | photography invoice template | Download | `/photography-invoicing-software` |
+| `/resources/real-estate-photography-shot-list` | real estate photography shot list | Download | RE software |
+| `/resources/drone-photography-business-plan-template` | drone photography business plan template | Download | Drone software |
+| `/resources/photography-client-questionnaire` | photography client questionnaire | Download | `/photography-client-portal` |
+| `/resources/photography-workflow-checklist` | photography workflow checklist | Download | `/real-estate-photography-workflow-software` |
+
+Overlap guard: the pricing guides (`/blog/*-pricing-guide`) own "how much to charge" research intent
+and link to the calculators; the calculators own the interactive "calculator" intent and link back.
+
+## Topic clusters
+
+| Cluster | Commercial page (destination) | Supporting pages |
+| --- | --- | --- |
+| Real estate photography business | `/real-estate-photography-software` | RE pricing guide, start-a-business, RE calculator, pricing sheet, shot list, Aryeo/HDPhotoHub comparisons |
+| Drone business | `/drone-business-management-software` | Drone pricing guide, start-a-drone-business, drone calculator, drone quote template, business plan |
+| Client management | `/real-estate-photography-crm` | Client management guide, CRM comparison, client questionnaire |
+| Client portal | `/photography-client-portal` | Client portal guides, client questionnaire |
+| Media delivery | `/photo-video-delivery-software` | Delivery guides, Drive vs Dropbox, large video files |
+| Booking and scheduling | `/photography-booking-software` | Booking software comparison, getting clients |
+| Invoicing and payments | `/photography-invoicing-software` | Invoicing comparison, get paid before delivering, invoice template, quote builder |
+| Video review | `/video-review-approval-software` | Video review comparison |
+| Pricing | Tools (calculators) | Both pricing guides, pricing sheet, quote template |
+| Workflow automation | `/real-estate-photography-workflow-software` | Automation guides, workflow checklist |
+| Business management | `/photography-business-management-software` | CRM comparison, start-a-business guides, quote builder |
+
+Links are registry-driven where possible (`src/lib/solutions.ts`, `src/lib/tools/registry.ts`,
+`src/lib/resources/registry.ts`); article → tool/template links use `<FreeResourceCallout>`.
+
+Analytics: tool/template interactions are `cta_click` events with ids `tool:<tool>:<action>` and
+`resource:<resource>:<format>`, reported in Acquisition → "Free tools & templates" and excluded from
+signup CTA metrics. Signup buttons on these pages use `toolpage:*` / `resourcepage:*` ids.

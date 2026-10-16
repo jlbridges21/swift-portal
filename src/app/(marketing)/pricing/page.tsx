@@ -21,6 +21,8 @@ import {
 import { ShowcaseImage } from "@/components/solutions/solution-media";
 import { WorkflowCoverageMap } from "@/components/blog/conversion-parts";
 import { MEDIA } from "@/lib/solution-media";
+import { jsonLdString } from "@/lib/blog/structured-data";
+import { graph, webPageNode, softwareNode } from "@/lib/marketing-jsonld";
 
 /** Revalidate so /platform plan edits show up without a redeploy. */
 export const revalidate = 60;
@@ -75,6 +77,17 @@ export default async function PricingPage() {
   return (
     <BrandProvider brand={platformPortalBrand()}>
       <MarketingShell trialNote={trialDays > 0 ? `${trialDays} days free. No credit card required.` : null}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: jsonLdString(
+              graph(
+                webPageNode("/pricing", "ShootPortal pricing", "One ShootPortal plan with every feature, monthly or annual.", [{ name: "Pricing", path: "/pricing" }]),
+                softwareNode(monthly, trialDays)
+              )
+            ),
+          }}
+        />
         {/* Hero: copy + live plan card above the fold */}
         <section className="relative overflow-hidden border-b border-[#E2E8F0]">
           <div
@@ -112,7 +125,7 @@ export default async function PricingPage() {
               </ul>
             </div>
             <div>
-              <MarketingHomePricing plan={studioPlan} trialDays={trialDays} ctaId="pricing:card" />
+              <MarketingHomePricing plan={studioPlan} trialDays={trialDays} ctaId="pricing:card" headingLevel="h2" />
               <p className="mx-auto mt-4 max-w-lg text-center text-xs leading-relaxed text-[#64748B]">
                 Prices load from the live plan catalog, the same source checkout uses. Client card payments go to your own Stripe
                 account at Stripe&apos;s standard rates.

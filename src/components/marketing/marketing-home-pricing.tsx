@@ -19,11 +19,14 @@ export function MarketingHomePricing({
   plan,
   trialDays,
   ctaId,
+  headingLevel = "h3",
 }: {
   plan: PlanRow | null;
   trialDays: number;
   /** Analytics CTA id for the signup button (e.g. home:pricing, pricing:card). */
   ctaId?: string;
+  /** Heading level for the plan name: h3 under a section h2, h2 directly under the page h1. */
+  headingLevel?: "h2" | "h3";
 }) {
   const [interval, setInterval] = useState<BillingInterval>("monthly");
 
@@ -86,7 +89,11 @@ export function MarketingHomePricing({
       ) : null}
 
       <article className="rounded-2xl border border-[#4F46E5] bg-white p-8 shadow-sm ring-2 ring-[#4F46E5]/10">
-        <h3 className="text-lg font-semibold text-[#0F172A]">{planName}</h3>
+        {headingLevel === "h2" ? (
+          <h2 className="text-lg font-semibold text-[#0F172A]">{planName}</h2>
+        ) : (
+          <h3 className="text-lg font-semibold text-[#0F172A]">{planName}</h3>
+        )}
         <p className="mt-2 text-sm leading-relaxed text-[#475569]">{description}</p>
 
         <div className="mt-6 space-y-1">

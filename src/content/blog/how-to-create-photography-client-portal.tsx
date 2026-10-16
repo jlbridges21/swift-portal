@@ -1,3 +1,4 @@
+import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
@@ -155,6 +156,7 @@ export const article: BlogArticle = {
           <p>
             Write your list down. It becomes the checklist you hold every tool against, including a DIY setup.
           </p>
+          <FreeResourceCallout resource="photography-client-questionnaire" />
         </>
       ),
     },

@@ -23,7 +23,7 @@ export const article: BlogArticle = {
   title: "Best Video Review and Approval Software for Videographers in 2026",
   seoTitle: "Best Video Review Software for Videographers (2026)",
   description:
-    "Compare video review software for client feedback: time-stamped comments, on-frame markup, versions, approvals, NLE integrations, and pricing for Frame.io and alternatives.",
+    "Compare video review software for client feedback: time-stamped comments, on-frame markup, versions, approvals, and pricing for Frame.io and its alternatives.",
   excerpt:
     "Frame.io, Vimeo, Dropbox Replay, Wipster, Krock.io, Filestage, Ziflow, MediaSilo, and ShootPortal compared on how clients leave feedback, how versions and approvals work, and what each one costs.",
   category: "software-comparisons",

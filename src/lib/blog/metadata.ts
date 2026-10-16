@@ -6,7 +6,9 @@ export function blogArticleMetadata(article: BlogArticle, author: BlogAuthor, ca
   const url = `${getCanonicalSiteUrl()}/blog/${article.slug}`;
   const ogTitle = `${article.seoTitle} | ${SITE.name}`;
   return {
-    title: article.seoTitle,
+    // Drop the " | ShootPortal" suffix when it would push the title past ~60 characters,
+    // so the keyword-led title isn't truncated in search results. Social titles keep the brand.
+    title: article.seoTitle.length + SITE.name.length + 3 > 60 ? { absolute: article.seoTitle } : article.seoTitle,
     description: article.description,
     keywords: [article.primaryKeyword, ...article.secondaryKeywords],
     authors: [{ name: author.name }],

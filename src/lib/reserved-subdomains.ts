@@ -63,6 +63,9 @@ export const RESERVED_APP_ROUTE_SLUGS = [
   "video-review-approval-software",
   "real-estate-photography-workflow-software",
   "photography-business-management-software",
+  // Free tools and template library
+  "tools",
+  "resources",
   // Next.js / metadata / asset path segments that must not be shadowed
   "robots",
   "sitemap",

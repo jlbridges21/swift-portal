@@ -1,3 +1,4 @@
+import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
@@ -225,6 +226,7 @@ export const article: BlogArticle = {
             ]}
             note="Many photographers edit in-house while they develop a consistent style, then outsource once volume grows and they can write clear editing instructions."
           />
+          <FreeResourceCallout resource="real-estate-photography-shot-list" />
         </>
       ),
     },
@@ -285,6 +287,7 @@ export const article: BlogArticle = {
             <BlogLink slug="real-estate-photography-pricing-guide">real estate photography pricing guide</BlogLink>{" "}
             compares published sources and walks through building prices from your own costs.
           </p>
+          <FreeResourceCallout tool="real-estate-pricing" />
         </>
       ),
     },

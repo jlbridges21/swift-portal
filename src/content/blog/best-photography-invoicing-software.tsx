@@ -1,3 +1,4 @@
+import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
@@ -22,7 +23,7 @@ export const article: BlogArticle = {
   title: "Best Photography Invoicing and Payment Software in 2026",
   seoTitle: "Best Photography Invoicing Software & Payment Tools (2026)",
   description:
-    "Compare photography invoicing software on deposits, card and ACH fees, estimates, and client portals: QuickBooks, FreshBooks, Wave, Square, Stripe, HoneyBook, and more.",
+    "Compare photography invoicing software on deposits, card and ACH fees, estimates, and client portals: QuickBooks, FreshBooks, Wave, Stripe, HoneyBook, and more.",
   excerpt:
     "Ten invoicing and payment tools photographers actually use, compared on published card and ACH fees, deposits, estimates, and how well each one connects payment to the job and the delivery.",
   category: "pricing-payments",
@@ -126,6 +127,7 @@ export const article: BlogArticle = {
           <Figure caption="Conceptual diagram: where money changes hands in a typical photography job, from approved estimate to unlocked downloads.">
             <PaymentFlowDiagram withDeposit />
           </Figure>
+          <FreeResourceCallout resource="photography-invoice" note="Not ready for software yet? Start with a free invoice template that calculates totals, deposit, tax, and balance due." />
         </>
       ),
     },

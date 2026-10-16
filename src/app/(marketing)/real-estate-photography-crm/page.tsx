@@ -1,3 +1,4 @@
+import { RelatedNext } from "@/components/tools/tool-page-parts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
@@ -676,6 +677,8 @@ export default async function RealEstatePhotographyCrmPage() {
         <Section eyebrow="Keep reading" title="More on managing real estate clients" tone="cloud">
           <RelatedReading slugs={PAGE.relatedArticles} />
         </Section>
+
+        <RelatedNext heading="Free tools and templates" tools={["real-estate-pricing"]} resources={["photography-client-questionnaire"]} />
 
         <FinalCta
           ctaId={cta("final")}

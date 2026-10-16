@@ -1,3 +1,4 @@
+import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
@@ -19,7 +20,7 @@ export const article: BlogArticle = {
   title: "How to Automate Your Real Estate Photography Business: Booking, Payments, and Delivery",
   seoTitle: "Real Estate Photography Automation: A Practical Guide",
   description:
-    "Automate the repetitive parts of a real estate photography business: agent inquiries, estimates, booking, reminders, payments, and delivery, without losing the personal touch.",
+    "Automate the repetitive parts of a real estate photography business: agent inquiries, estimates, booking, payments, and delivery, without losing the personal touch.",
   excerpt:
     "Agents order the same packages week after week. Here's how to turn that repetition into a workflow that quotes, schedules, collects, and delivers with far less typing.",
   category: "business-automation",
@@ -262,6 +263,7 @@ export const article: BlogArticle = {
             Once those five pieces exist on paper, the software choice becomes much easier, because you know exactly
             what you need it to do.
           </p>
+          <FreeResourceCallout resource="photography-project-workflow-checklist" />
         </>
       ),
     },

@@ -1,3 +1,4 @@
+import { isEngagementCtaId } from "@/lib/analytics/engagement";
 import { CHANNELS, type Channel } from "@/lib/analytics/channels";
 import { inRange, localDay, type ReportRange } from "@/lib/analytics/range";
 
@@ -76,6 +77,14 @@ export type PaymentRec = { business_id: string; amount_paid_cents: number; paid_
 export type LifecycleRec = { business_id: string; event_type: string; occurred_at: string };
 
 export type AttributionModel = "first" | "last";
+
+/**
+ * Signup CTA clicks only. Free-tool and template interactions are stored as cta_click with
+ * "tool:" / "resource:" ids (the schema has no other event type) and are reported separately.
+ */
+export function isSignupCtaClick(e: { event_type: string; cta_id?: string | null }): boolean {
+  return e.event_type === "cta_click" && !isEngagementCtaId(e.cta_id);
+}
 
 export type ReportInput = {
   range: ReportRange;
@@ -187,7 +196,7 @@ export function trafficTotals(sessions: SessionRec[], events: EventRec[]): Traff
     if (e.event_type === "pageview") {
       pageviews++;
       if (e.article_slug) blogViews++;
-    } else if (e.event_type === "cta_click") ctaClicks++;
+    } else if (isSignupCtaClick(e)) ctaClicks++;
     else if (e.event_type === "signup_start") signupSessions.add(e.session_id);
   }
   return {
@@ -414,7 +423,7 @@ export function buildChannels(input: ReportInput, lifecycles: BusinessLifecycle[
     traffic.set(s.channel, t);
   }
   for (const e of input.events) {
-    if (e.event_type !== "cta_click") continue;
+    if (!isSignupCtaClick(e)) continue;
     const ch = sessionChannel.get(e.session_id);
     if (ch) traffic.get(ch)!.ctaClicks++;
   }
@@ -468,7 +477,7 @@ export function buildArticles(input: ReportInput, lifecycles: BusinessLifecycle[
       s.pageviews++;
       s.visitors.add(e.visitor_key);
       s.sessions.add(e.session_id);
-    } else if (e.event_type === "cta_click") {
+    } else if (isSignupCtaClick(e)) {
       const m = /^\/blog\/([a-z0-9-]+)$/.exec(e.path);
       if (m) get(m[1]!).cta++;
     }
@@ -533,7 +542,7 @@ export function buildArticleDetail(input: ReportInput, lifecycles: BusinessLifec
   for (const s of input.sessions) if (sessionIds.has(s.id)) sources.set(s.channel, (sources.get(s.channel) ?? 0) + 1);
   const ctas = new Map<string, { ctaId: string; location: string; clicks: number }>();
   for (const e of input.events) {
-    if (e.event_type !== "cta_click" || e.path !== `/blog/${slug}`) continue;
+    if (!isSignupCtaClick(e) || e.path !== `/blog/${slug}`) continue;
     const key = `${e.cta_id}|${e.cta_location}`;
     const c = ctas.get(key) ?? { ctaId: e.cta_id ?? "unknown", location: e.cta_location ?? "unknown", clicks: 0 };
     c.clicks++;
@@ -595,7 +604,7 @@ export function buildLandingPages(input: ReportInput, lifecycles: BusinessLifecy
       const r = row(e.path);
       r.pageviews++;
       r._visitors.add(e.visitor_key);
-    } else if (e.event_type === "cta_click") row(e.path).ctaClicks++;
+    } else if (isSignupCtaClick(e)) row(e.path).ctaClicks++;
   }
   for (const l of lifecycles) {
     if (!inRange(l.createdAt, input.range) || l.attribution?.status !== "attributed") continue;
@@ -634,7 +643,7 @@ export function buildLandingFunnel(
     const t = traffic.get(e.path);
     if (!t) continue;
     if (e.event_type === "pageview") t.visitors.add(e.visitor_key);
-    else if (e.event_type === "cta_click") t.ctaClicks++;
+    else if (isSignupCtaClick(e)) t.ctaClicks++;
   }
   const conv = creditConversions(input, lifecycles, (l) => {
     const a = l.attribution;
@@ -655,7 +664,7 @@ export type CtaRow = { ctaId: string; location: string; clicks: number; pages: n
 export function buildCtaBreakdown(input: ReportInput): CtaRow[] {
   const map = new Map<string, { ctaId: string; location: string; clicks: number; pages: Set<string> }>();
   for (const e of input.events) {
-    if (e.event_type !== "cta_click") continue;
+    if (!isSignupCtaClick(e)) continue;
     const id = e.cta_id ?? "unknown";
     const c = map.get(id) ?? { ctaId: id, location: e.cta_location ?? "unknown", clicks: 0, pages: new Set<string>() };
     c.clicks++;
@@ -663,4 +672,25 @@ export function buildCtaBreakdown(input: ReportInput): CtaRow[] {
     map.set(id, c);
   }
   return [...map.values()].map((c) => ({ ctaId: c.ctaId, location: c.location, clicks: c.clicks, pages: c.pages.size })).sort((a, b) => b.clicks - a.clicks);
+}
+
+export type EngagementRow = { id: string; kind: "tool" | "resource"; subject: string; action: string; count: number; visitors: number };
+
+/** Free tool and template interactions (tool:<tool>:<action>, resource:<resource>:<format>). */
+export function buildEngagement(input: ReportInput): EngagementRow[] {
+  const map = new Map<string, { count: number; visitors: Set<string> }>();
+  for (const e of input.events) {
+    if (e.event_type !== "cta_click" || !isEngagementCtaId(e.cta_id)) continue;
+    const id = e.cta_id as string;
+    const m = map.get(id) ?? { count: 0, visitors: new Set<string>() };
+    m.count++;
+    m.visitors.add(e.visitor_key);
+    map.set(id, m);
+  }
+  return [...map.entries()]
+    .map(([id, m]) => {
+      const [kind, subject = "", action = ""] = id.split(":");
+      return { id, kind: kind as "tool" | "resource", subject, action, count: m.count, visitors: m.visitors.size };
+    })
+    .sort((a, b) => b.count - a.count);
 }

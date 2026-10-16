@@ -1,3 +1,4 @@
+import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
@@ -394,6 +395,7 @@ export const article: BlogArticle = {
               ]}
             />
           </Figure>
+          <FreeResourceCallout resource="drone-photography-business-plan" />
         </>
       ),
     },
@@ -429,6 +431,7 @@ export const article: BlogArticle = {
             into hourly versus package pricing, inspection and construction rates from published sources, and a
             cost-plus worksheet you can use for your own numbers.
           </p>
+          <FreeResourceCallout tool="drone-pricing" />
         </>
       ),
     },

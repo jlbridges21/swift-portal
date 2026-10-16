@@ -1,3 +1,4 @@
+import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
@@ -16,7 +17,7 @@ import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
 export const article: BlogArticle = {
   slug: "real-estate-photography-client-management",
   title: "How to Manage Multiple Real Estate Photography Clients Without Losing Track of Projects",
-  seoTitle: "Real Estate Photography Client Management: A Practical System",
+  seoTitle: "Real Estate Photography Client Management System",
   description:
     "Real estate photography client management for growing businesses: agent preferences, property history, pipeline stages, revisions, and a daily review.",
   excerpt:
@@ -175,6 +176,7 @@ export const article: BlogArticle = {
           <Figure caption="Conceptual diagram: the layers of a client record for a real estate media business.">
             <CrmRecordDiagram />
           </Figure>
+          <FreeResourceCallout resource="photography-client-questionnaire" />
         </>
       ),
     },

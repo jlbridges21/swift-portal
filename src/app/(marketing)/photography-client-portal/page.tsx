@@ -1,3 +1,4 @@
+import { RelatedNext } from "@/components/tools/tool-page-parts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
@@ -636,6 +637,8 @@ export default async function PhotographyClientPortalPage() {
         <Section eyebrow="Keep reading" title="Guides to a better client experience">
           <RelatedReading slugs={PAGE.relatedArticles} />
         </Section>
+
+        <RelatedNext heading="Free tools and templates" tools={["quote-builder"]} resources={["photography-client-questionnaire"]} />
 
         <FinalCta
           ctaId={cta("final")}

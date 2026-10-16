@@ -7,6 +7,8 @@ import { BeforeAfterConverge } from "@/components/marketing/how-it-works/before-
 import { DemoVideo, LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
 import { REAL_CAPTURE_NOTE, TrialFacts } from "@/components/solutions/solution-sections";
 import { MEDIA } from "@/lib/solution-media";
+import { jsonLdString } from "@/lib/blog/structured-data";
+import { graph, webPageNode, videoNode, DEMO_VIDEO_UPLOAD_DATE } from "@/lib/marketing-jsonld";
 import { Check } from "lucide-react";
 import { OutcomeCards } from "@/components/marketing/how-it-works/outcome-cards";
 import { platformPortalBrand } from "@/lib/public-host-chrome";
@@ -82,6 +84,22 @@ export default async function HowItWorksPage() {
   return (
     <BrandProvider brand={platformPortalBrand()}>
       <MarketingShell trialNote={trialNote}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: jsonLdString(
+              graph(
+                webPageNode("/how-it-works", "How ShootPortal works", "How ShootPortal keeps every job connected from new request to paid and delivered.", [{ name: "How it works", path: "/how-it-works" }]),
+                videoNode(MEDIA.realEstate.demo, {
+                  name: "A job from request to paid in ShootPortal",
+                  description: "Step by step on real ShootPortal screens: request, automatic preliminary estimate, scheduling, time-stamped video feedback, and Stripe payment.",
+                  uploadDate: DEMO_VIDEO_UPLOAD_DATE,
+                  duration: "PT37S",
+                })
+              )
+            ),
+          }}
+        />
         {/* Hero */}
         <section className="relative overflow-hidden border-b border-[#E2E8F0]">
           <div

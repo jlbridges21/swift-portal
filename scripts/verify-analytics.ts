@@ -21,6 +21,7 @@ import {
   buildCtaBreakdown,
   buildLandingPages,
   buildLandingFunnel,
+  buildEngagement,
   buildLifecycles,
   buildOverview,
   buildTimeseries,
@@ -306,6 +307,34 @@ async function main() {
   assert(booking.registrations === 1 && booking.trials === 1 && booking.activated === 1 && booking.paid === 1 && booking.revenueCents === 5900, "first-touch funnel: registration → trial → activated → paid → revenue");
   assert(ltFunnel[0]!.registrations === 0 && ltFunnel[1]!.registrations === 1 && ltFunnel[1]!.paid === 1, "last-touch credits the last landing page instead");
   assert(buildLandingFunnel(input, lifecycles, "first", seoPaths).every((r) => r.registrations === 0), "non-SEO landing paths are not credited to SEO pages");
+
+  section("Free tool and template engagement stays out of signup metrics");
+  const engInput: ReportInput = {
+    ...input,
+    events: [
+      ...input.events,
+      { session_id: "sA", visitor_key: "v:aaa", event_type: "cta_click", path: "/blog/best-aryeo-alternatives", article_slug: null, cta_id: "tool:drone-calculator:calculated", cta_location: "engagement", occurred_at: "2026-10-02T15:03:00Z" },
+      { session_id: "sA", visitor_key: "v:aaa", event_type: "cta_click", path: "/blog/best-aryeo-alternatives", article_slug: null, cta_id: "resource:photography-invoice:xlsx", cta_location: "engagement", occurred_at: "2026-10-02T15:04:00Z" },
+      { session_id: "sB", visitor_key: "c:bbb", event_type: "cta_click", path: "/", article_slug: null, cta_id: "resource:photography-invoice:xlsx", cta_location: "engagement", occurred_at: "2026-10-03T15:02:00Z" },
+    ],
+  };
+  const engLc = buildLifecycles(engInput);
+  assert(buildOverview(engInput, engLc).ctaClicks === o.ctaClicks, "engagement events don't count as signup CTA clicks");
+  assert(buildCtaBreakdown(engInput).every((c) => !c.ctaId.startsWith("tool:") && !c.ctaId.startsWith("resource:")), "CTA breakdown lists signup CTAs only");
+  assert(buildLandingPages(engInput, engLc).find((r) => r.path === "/blog/best-aryeo-alternatives")?.ctaClicks === 1, "landing-page signup clicks unchanged");
+  const eng = buildEngagement(engInput);
+  const inv = eng.find((e) => e.id === "resource:photography-invoice:xlsx");
+  assert(eng.length === 2 && inv?.count === 2 && inv.visitors === 2 && inv.kind === "resource" && inv.subject === "photography-invoice" && inv.action === "xlsx", "engagement grouped by id with visitors");
+  const attrSnap = buildAttributionSnapshot(
+    [{ id: "s1", started_at: "2026-10-02T15:00:00Z", channel: "google_organic", referrer_host: "google.com", landing_path: "/tools", utm_source: null, utm_medium: null, utm_campaign: null, utm_content: null, utm_term: null }],
+    [
+      { session_id: "s1", event_type: "pageview", path: "/tools", article_slug: null, cta_id: null, cta_location: null, occurred_at: "2026-10-02T15:00:00Z" },
+      { session_id: "s1", event_type: "cta_click", path: "/tools", article_slug: null, cta_id: "toolpage:hub:final", cta_location: "inline", occurred_at: "2026-10-02T15:01:00Z" },
+      { session_id: "s1", event_type: "cta_click", path: "/tools", article_slug: null, cta_id: "tool:quote-builder:pdf", cta_location: "engagement", occurred_at: "2026-10-02T15:02:00Z" },
+    ],
+    new Date("2026-10-02T15:05:00Z")
+  );
+  assert(snapshotToRow("biz", attrSnap, new Date("2026-10-02T15:05:00Z"), null).signup_cta_id === "toolpage:hub:final", "signup attribution ignores a later tool interaction");
 
   section("Channels and articles");
   const ch = buildChannels(input, lifecycles, "first");

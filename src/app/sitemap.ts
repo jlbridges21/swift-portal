@@ -2,6 +2,8 @@ import type { MetadataRoute } from "next";
 import { getCanonicalSiteUrl } from "@/lib/site-metadata";
 import { getAllArticles } from "@/lib/blog/registry";
 import { SOLUTION_PAGES } from "@/lib/solutions";
+import { TOOLS } from "@/lib/tools/registry";
+import { RESOURCES } from "@/lib/resources/registry";
 
 /**
  * /sitemap.xml for Google Search Console: public, indexable marketing pages and
@@ -42,6 +44,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/pricing`, changeFrequency: "monthly", priority: 0.9 },
     // Commercial "Solutions" landing pages (src/lib/solutions.ts).
     ...SOLUTION_PAGES.map((p): Entry => ({ url: `${base}${p.path}`, changeFrequency: "monthly", priority: 0.9 })),
+    // Free tools and template library (src/lib/tools/registry.ts, src/lib/resources/registry.ts).
+    { url: `${base}/tools`, changeFrequency: "monthly", priority: 0.8 },
+    ...TOOLS.map((t): Entry => ({ url: `${base}${t.path}`, changeFrequency: "monthly", priority: 0.8 })),
+    { url: `${base}/resources`, changeFrequency: "monthly", priority: 0.8 },
+    ...RESOURCES.map((r): Entry => ({ url: `${base}${r.path}`, changeFrequency: "monthly", priority: 0.7 })),
     {
       url: `${base}/blog`,
       ...(newestArticle ? { lastModified: day(newestArticle) } : {}),

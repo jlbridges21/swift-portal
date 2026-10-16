@@ -3,6 +3,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { BrandProvider } from "@/components/brand/brand-provider";
+import { jsonLdString } from "@/lib/blog/structured-data";
+import { graph, webPageNode } from "@/lib/marketing-jsonld";
 import { MarketingShell } from "@/components/marketing/marketing-chrome";
 import { Button } from "@/components/ui/button";
 import { platformPortalBrand } from "@/lib/public-host-chrome";
@@ -15,7 +17,7 @@ const SKYYTASK_LOGO = "/icons/SKKYTASK-applogo.png";
 export const metadata: Metadata = marketingPageMetadata({
   title: "Strategic Partners",
   description:
-    "ShootPortal partners with complementary companies serving drone pilots, photographers, videographers, and media professionals. SkyyTask is the featured strategic partner.",
+    "ShootPortal partners with companies serving drone pilots, photographers, and media professionals. SkyyTask is our featured strategic partner.",
   path: "/strategic-partners",
 });
 
@@ -40,6 +42,10 @@ export default async function StrategicPartnersPage() {
   return (
     <BrandProvider brand={platformPortalBrand()}>
       <MarketingShell>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdString(graph(webPageNode("/strategic-partners", "ShootPortal strategic partners", "Companies ShootPortal partners with to serve drone pilots, photographers, and media professionals.", [{ name: "Strategic partners", path: "/strategic-partners" }]))) }}
+        />
         <section className="relative overflow-hidden border-b border-[#E2E8F0]">
           <div
             className="pointer-events-none absolute inset-0"

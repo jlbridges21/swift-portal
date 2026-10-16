@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { ENGAGEMENT_EVENT } from "@/lib/analytics/engagement";
 
 /**
  * First-party marketing analytics for the platform marketing site.
@@ -224,7 +225,18 @@ function useCtaClicks() {
       send("cta_click", { path: location.pathname, cta: { id: id.slice(0, 80), location: location_ } });
     };
     document.addEventListener("click", onClick, { capture: true });
-    return () => document.removeEventListener("click", onClick, { capture: true });
+    // Free tool / template interactions (src/lib/analytics/engagement.ts): same consent-aware
+    // send path, recorded as cta_click with a "tool:" or "resource:" id. No user input is sent.
+    const onEngagement = (e: Event) => {
+      const id = (e as CustomEvent<{ id?: unknown }>).detail?.id;
+      if (typeof id !== "string" || !/^(tool|resource):[a-z0-9:_-]{1,72}$/i.test(id)) return;
+      send("cta_click", { path: location.pathname, cta: { id, location: "engagement" } });
+    };
+    window.addEventListener(ENGAGEMENT_EVENT, onEngagement);
+    return () => {
+      document.removeEventListener("click", onClick, { capture: true });
+      window.removeEventListener(ENGAGEMENT_EVENT, onEngagement);
+    };
   }, []);
 }
 

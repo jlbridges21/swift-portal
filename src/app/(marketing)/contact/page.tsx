@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { BrandProvider } from "@/components/brand/brand-provider";
+import { jsonLdString } from "@/lib/blog/structured-data";
+import { graph, webPageNode } from "@/lib/marketing-jsonld";
 import { MarketingShell } from "@/components/marketing/marketing-chrome";
 import { platformPortalBrand } from "@/lib/public-host-chrome";
 import { requirePlatformMarketingHost } from "@/lib/marketing-host";
@@ -23,6 +25,10 @@ export default async function ContactPage() {
   return (
     <BrandProvider brand={platformPortalBrand()}>
       <MarketingShell>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdString(graph(webPageNode("/contact", "Contact ShootPortal", "Contact ShootPortal support and sales.", [{ name: "Contact", path: "/contact" }]))) }}
+        />
         <section className="mx-auto max-w-3xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F46E5]">
             Contact

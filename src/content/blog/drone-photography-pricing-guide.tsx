@@ -1,3 +1,4 @@
+import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
@@ -27,7 +28,7 @@ export const article: BlogArticle = {
   title: "How Much Should You Charge for Drone Photography in 2026? Complete Pricing Guide",
   seoTitle: "Drone Photography Pricing 2026: What to Charge",
   description:
-    "Drone photography pricing for 2026: sourced rate ranges for real estate, commercial, video, roof inspections, and mapping, plus a cost-plus method to set your own rates.",
+    "Drone photography pricing for 2026: sourced rate ranges for real estate, commercial, video, inspections, and mapping, plus a cost-plus method to set your rates.",
   excerpt:
     "Published drone rates range widely, and most of the numbers online are guesses. This guide separates what clients report paying from what pilots suggest, then shows you how to build a price from your own costs.",
   category: "pricing-payments",
@@ -491,6 +492,7 @@ export const article: BlogArticle = {
             delivery take a bigger share of the price than travel. That share is real time, and it repeats on every
             job. It&apos;s also the one cost you can shrink without lowering your rate or your quality.
           </p>
+          <FreeResourceCallout tool="drone-pricing" note="Run these steps with your own hours, travel, overhead, and margin, and see the price update as you go." />
         </>
       ),
     },
@@ -563,6 +565,7 @@ export const article: BlogArticle = {
             <BlogLink slug="get-paid-before-delivering-real-estate-photos">getting paid before you deliver</BlogLink>{" "}
             walks through structuring deposits and payment-before-download in detail.
           </p>
+          <FreeResourceCallout resource="drone-photography-quote" />
         </>
       ),
     },

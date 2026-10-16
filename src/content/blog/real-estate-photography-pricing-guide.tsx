@@ -1,3 +1,4 @@
+import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
@@ -26,7 +27,7 @@ export const article: BlogArticle = {
   title: "Real Estate Photography Pricing Guide 2026: What to Charge for Photos, Video, and Drone Services",
   seoTitle: "Real Estate Photography Pricing Guide 2026",
   description:
-    "Real estate photography pricing for 2026: sourced price ranges, square-footage tiers, good-better-best packages, add-on pricing, travel fees, and when to raise rates.",
+    "Real estate photography pricing for 2026: sourced price ranges, square-footage tiers, good-better-best packages, add-ons, travel fees, and when to raise rates.",
   excerpt:
     "Most listing photographers price by copying the competition. This guide covers what agents actually pay and order, then shows how to build packages and add-ons that are profitable on every listing.",
   category: "pricing-payments",
@@ -414,6 +415,7 @@ export const article: BlogArticle = {
             download link to the agent&apos;s assistant can add up to a meaningful slice of an entry-level package. If
             your margin looks thin, cutting that time is often easier than winning a price increase.
           </p>
+          <FreeResourceCallout tool="real-estate-pricing" note="Check the profit on your packages and add-ons with your own numbers, then download a price list by square footage." />
         </>
       ),
     },
@@ -496,6 +498,7 @@ export const article: BlogArticle = {
             secondaryHref="/pricing"
             secondaryLabel="See pricing"
           />
+          <FreeResourceCallout resource="real-estate-photography-pricing-sheet" />
         </>
       ),
     },

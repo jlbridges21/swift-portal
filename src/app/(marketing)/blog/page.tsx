@@ -1,3 +1,5 @@
+import { TOOLS } from "@/lib/tools/registry";
+import { RESOURCES } from "@/lib/resources/registry";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -94,6 +96,32 @@ export default async function BlogIndexPage() {
               <div className="mt-10">
                 <WorkflowDiagram />
               </div>
+            </div>
+          </section>
+
+          {/* Free tools and templates */}
+          <section aria-labelledby="free-tools-heading" className="border-t border-[#E2E8F0] bg-[#F8FAFC]">
+            <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
+              <h2 id="free-tools-heading" className="text-2xl font-semibold tracking-tight text-[#0F172A] sm:text-3xl">
+                Free tools and templates
+              </h2>
+              <p className="mt-2 max-w-2xl text-[#475569]">Put the guides to work: price a job, send a quote, or download a ready-made template.</p>
+              <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {[...TOOLS.map((t) => ({ href: t.path, title: t.name, summary: t.summary, kind: "Free tool" })), ...RESOURCES.slice(0, 3).map((r) => ({ href: r.path, title: r.name, summary: r.summary, kind: "Free template" }))].map((x) => (
+                  <li key={x.href}>
+                    <Link href={x.href} className="flex h-full flex-col rounded-2xl border border-[#E2E8F0] bg-white p-4 transition hover:border-[#C7D2FE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5]">
+                      <span className="text-xs font-semibold text-[#4F46E5]">{x.kind}</span>
+                      <span className="mt-1 font-semibold text-[#0F172A]">{x.title.charAt(0).toUpperCase() + x.title.slice(1)}</span>
+                      <span className="mt-1 text-sm leading-relaxed text-[#475569]">{x.summary}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-5 text-sm">
+                <Link href="/resources" className="font-semibold text-[#4F46E5] hover:underline">
+                  Browse all templates
+                </Link>
+              </p>
             </div>
           </section>
 

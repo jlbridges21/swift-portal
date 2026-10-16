@@ -1,5 +1,7 @@
 import { requireSuperAdminPage } from "@/lib/admin-access";
-import { buildChannels, buildCtaBreakdown, buildLandingFunnel, buildLandingPages } from "@/lib/analytics/aggregate";
+import { buildChannels, buildCtaBreakdown, buildEngagement, buildLandingFunnel, buildLandingPages } from "@/lib/analytics/aggregate";
+import { TOOLS } from "@/lib/tools/registry";
+import { RESOURCES } from "@/lib/resources/registry";
 import { SOLUTION_PAGES } from "@/lib/solutions";
 import { loadDashboard, type DashboardSearchParams } from "@/lib/analytics/dashboard";
 import { AnalyticsPageHeader } from "@/components/platform/analytics/page-header";
@@ -25,6 +27,15 @@ export default async function AcquisitionPage({ searchParams }: { searchParams: 
   const ctaRows = buildCtaBreakdown(loaded.current);
   const seoFunnel = buildLandingFunnel(loaded.current, lifecycles, model, SOLUTION_PAGES.map((p) => p.path));
   const seoTitle = new Map<string, string>(SOLUTION_PAGES.map((p) => [p.path, p.primaryKeyword]));
+  const toolPages = [
+    { path: "/tools", name: "Free tools hub" },
+    ...TOOLS.map((t) => ({ path: t.path, name: t.name })),
+    { path: "/resources", name: "Template library" },
+    ...RESOURCES.map((r) => ({ path: r.path, name: r.name })),
+  ];
+  const toolFunnel = buildLandingFunnel(loaded.current, lifecycles, model, toolPages.map((p) => p.path));
+  const toolName = new Map(toolPages.map((p) => [p.path, p.name]));
+  const engagement = buildEngagement(loaded.current);
 
   const campaigns = new Map<string, { source: string; medium: string; campaign: string; sessions: number }>();
   for (const s of loaded.current.sessions) {
@@ -187,6 +198,64 @@ export default async function AcquisitionPage({ searchParams }: { searchParams: 
               ))}
             </tbody>
           </table>
+        </div>
+      </Panel>
+
+      <Panel
+        title="Free tools & templates"
+        description={`Traffic and conversions for /tools and /resources pages (${model === "first" ? "first" : "last"}-touch landing page credit), plus what visitors did with them`}
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[60rem] text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+                <th className="py-2 pr-3 font-medium">Page</th>
+                <th className="py-2 pr-3 text-right font-medium">Entrances</th>
+                <th className="py-2 pr-3 text-right font-medium">Visitors</th>
+                <th className="py-2 pr-3 text-right font-medium">Signup clicks</th>
+                <th className="py-2 pr-3 text-right font-medium">Registrations</th>
+                <th className="py-2 pr-3 text-right font-medium">Trials</th>
+                <th className="py-2 pr-3 text-right font-medium">Activated</th>
+                <th className="py-2 pr-3 text-right font-medium">Paid</th>
+                <th className="py-2 text-right font-medium">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {toolFunnel.map((r) => (
+                <tr key={r.path} className="border-b border-border/70 last:border-0">
+                  <td className="py-2.5 pr-3">
+                    <span className="block font-medium text-heading">{toolName.get(r.path)}</span>
+                    <span className="block text-xs text-muted">{r.path}</span>
+                  </td>
+                  <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.entrances)}</td>
+                  <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.visitors)}</td>
+                  <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.ctaClicks)}</td>
+                  <td className="py-2.5 pr-3 text-right font-semibold tabular-nums text-heading">{fmtInt(r.registrations)}</td>
+                  <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.trials)}</td>
+                  <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.activated)}</td>
+                  <td className="py-2.5 pr-3 text-right tabular-nums">{fmtInt(r.paid)}</td>
+                  <td className="py-2.5 text-right tabular-nums">{fmtMoney(r.revenueCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-6">
+          <p className="text-sm font-medium text-heading">Interactions</p>
+          <p className="text-xs text-muted">Calculator use, copies, prints, PDF exports, and template downloads. Only the action is recorded, never what visitors typed.</p>
+          <div className="mt-3">
+            <BarList
+              metric="Events"
+              rows={engagement.slice(0, 20).map((e) => ({
+                key: e.id,
+                label: `${e.subject} · ${e.action}`,
+                value: e.count,
+                sub: e.kind === "tool" ? "Free tool" : "Template",
+                details: [{ label: "Visitors", value: e.visitors }],
+              }))}
+              empty="No tool or template interactions in this range yet."
+            />
+          </div>
         </div>
       </Panel>
 

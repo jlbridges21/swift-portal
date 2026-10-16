@@ -20,6 +20,8 @@ import { FeatureTabs } from "@/components/solutions/feature-tabs";
 import { LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
 import { DemoShowcase, FounderNote, SolutionPreviewCards, TrialFacts } from "@/components/solutions/solution-sections";
 import { MEDIA } from "@/lib/solution-media";
+import { jsonLdString } from "@/lib/blog/structured-data";
+import { graph, webPageNode, websiteNode, softwareNode, videoNode, DEMO_VIDEO_UPLOAD_DATE } from "@/lib/marketing-jsonld";
 import {
   CalendarClock,
   CheckCircle2,
@@ -147,6 +149,24 @@ export function PlatformLanding({
 
   return (
     <MarketingShell trialNote={trialNote}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: jsonLdString(
+            graph(
+              websiteNode(),
+              softwareNode(studioPlan ? monthlyPriceLabel : null, trialDays),
+              webPageNode("/", "ShootPortal: Run Your Media Business in One Place", "Requests, estimates, scheduling, client portal, video review, payments, and delivery in one platform for photographers, videographers, and drone pilots."),
+              videoNode(MEDIA.shared.tour, {
+                name: "ShootPortal product tour",
+                description: "A 52-second tour of real ShootPortal screens: client requests, proposal approval, calendar, pipeline, time-stamped video review, payments, share links, and branding.",
+                uploadDate: DEMO_VIDEO_UPLOAD_DATE,
+                duration: "PT52S",
+              })
+            )
+          ),
+        }}
+      />
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-[#E2E8F0]">
         <div

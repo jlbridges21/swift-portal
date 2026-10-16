@@ -17,7 +17,7 @@ export const article: BlogArticle = {
   title: "How to Get More Real Estate Photography Clients: 15 Strategies That Work",
   seoTitle: "How to Get Real Estate Photography Clients: 15 Strategies",
   description:
-    "How to get real estate photography clients: 15 practical strategies covering your portfolio, agent networking, outreach, Google Business Profile, reviews, and retention.",
+    "How to get real estate photography clients: 15 practical strategies for your portfolio, agent networking, outreach, Google Business Profile, and retention.",
   excerpt:
     "Fifteen practical ways to win listing agents and keep them booking, from office presentations and personal outreach to Google Business Profile, reviews, and a delivery experience agents remember.",
   category: "real-estate-photography",

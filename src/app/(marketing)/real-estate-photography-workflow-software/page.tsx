@@ -1,3 +1,4 @@
+import { RelatedNext } from "@/components/tools/tool-page-parts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AppWindow, BellRing, Copy, Hourglass, Layers3, ListChecks, MessagesSquare, SlidersHorizontal, Timer, Workflow } from "lucide-react";
@@ -355,6 +356,8 @@ export default async function RealEstatePhotographyWorkflowSoftwarePage() {
         <Section eyebrow="More of ShootPortal" title="Explore the workflow by stage" tone="cloud">
           <RelatedSolutions keys={["booking", "invoicing", "real-estate-software"]} />
         </Section>
+
+        <RelatedNext heading="Free tools and templates" tools={["real-estate-pricing"]} resources={["photography-project-workflow-checklist"]} />
 
         <FinalCta
           ctaId={cta("final")}

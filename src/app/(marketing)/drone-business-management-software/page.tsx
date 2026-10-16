@@ -1,3 +1,4 @@
+import { RelatedNext } from "@/components/tools/tool-page-parts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
@@ -802,6 +803,8 @@ export default async function DroneBusinessManagementSoftwarePage() {
         <Section eyebrow="Keep reading" title="Guides for drone business owners">
           <RelatedReading slugs={PAGE.relatedArticles} />
         </Section>
+
+        <RelatedNext heading="Free tools and templates" tools={["drone-pricing", "quote-builder"]} resources={["drone-photography-quote", "drone-photography-business-plan"]} />
 
         <FinalCta
           ctaId={cta("final")}

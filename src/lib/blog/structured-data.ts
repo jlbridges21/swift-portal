@@ -3,7 +3,7 @@ import { getCanonicalSiteUrl, SITE, SITE_ICONS } from "@/lib/site-metadata";
 
 /** JSON-LD builders. Only factual properties; no ratings or review markup. */
 
-function organization(base: string) {
+export function organization(base: string) {
   return {
     "@type": "Organization",
     "@id": `${base}/#organization`,

@@ -246,3 +246,39 @@
 .marketing-root .mk-faq details[open] .mk-faq-icon {
   transform: rotate(45deg);
 }
+
+/* ---------------------------------------------------------------- free tools: print
+ * "Print or Save PDF" on /tools pages prints only the result sheet / quote document.
+ * Scoped with :has() so no other marketing page is affected. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  .marketing-root:has(.tool-print-area) header,
+  .marketing-root:has(.tool-print-area) footer,
+  .marketing-root:has(.tool-print-area) nav,
+  .marketing-root:has(.tool-print-area) .tool-page-chrome,
+  .marketing-root:has(.tool-print-area) .tool-no-print,
+  .marketing-root:has(.tool-print-area) [role="dialog"] {
+    display: none !important;
+  }
+  .marketing-root:has(.tool-print-area) .print-show {
+    display: block !important;
+  }
+  .marketing-root:has(.tool-print-area) .tool-layout {
+    display: block !important;
+  }
+  .marketing-root .tool-print-area {
+    box-shadow: none !important;
+    break-inside: avoid;
+    margin: 0 auto 8mm;
+    max-width: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .marketing-root .quote-doc {
+    border: 0 !important;
+    padding: 0 !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+  }
+}
