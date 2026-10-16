@@ -136,7 +136,7 @@ export function ProjectStaffCard({ projectId }: { projectId: string }) {
         </ul>
 
         {available.length > 0 ? (
-          <div className="flex flex-wrap items-end gap-2">
+          <div className="flex max-w-xl flex-wrap items-end gap-2">
             <div className="min-w-[12rem] flex-1">
               <Select
                 value={addUserId}

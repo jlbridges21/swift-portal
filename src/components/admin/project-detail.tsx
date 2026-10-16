@@ -1023,7 +1023,7 @@ export function AdminProjectDetail({
       {/* Project details */}
       <Card>
         <CardHeader><CardTitle>Project Details</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="max-w-4xl space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Project Name</Label>
@@ -1204,7 +1204,7 @@ export function AdminProjectDetail({
         <CardContent>
           <p className="mb-4 text-xs text-muted">Upload up to {formatFileSize(FILE_SIZE_LIMITS.video)} or paste a YouTube link</p>
           {showYoutubeForm && (
-            <form onSubmit={handleYoutube} className="mb-4 space-y-3 rounded-lg border border-border p-4">
+            <form onSubmit={handleYoutube} className="mb-4 max-w-2xl space-y-3 rounded-lg border border-border p-4">
               <Input name="title" placeholder="Video title" />
               <Input name="youtube_url" required placeholder="https://youtube.com/watch?v=..." />
               <Button type="submit" variant="accent" size="sm">Add YouTube Video</Button>
@@ -1298,7 +1298,7 @@ export function AdminProjectDetail({
         </CardHeader>
         <CardContent>
           {showTourForm && (
-            <form onSubmit={handleCreateTour} className="mb-4 space-y-3 rounded-lg border border-border p-4">
+            <form onSubmit={handleCreateTour} className="mb-4 max-w-2xl space-y-3 rounded-lg border border-border p-4">
               <Input name="tour_name" required placeholder="Tour name" />
               <Input name="kuula_url" required placeholder="Kuula URL" />
               <Input name="thumbnail_url" placeholder="Thumbnail URL (optional)" />
@@ -1369,7 +1369,7 @@ export function AdminProjectDetail({
         </CardHeader>
         <CardContent>
           {showModelForm && (
-            <form onSubmit={handleCreateModel} className="mb-4 space-y-3 rounded-lg border border-border p-4">
+            <form onSubmit={handleCreateModel} className="mb-4 max-w-2xl space-y-3 rounded-lg border border-border p-4">
               <Input name="title" required placeholder="Model title" />
               <Input
                 name="embed_url"
@@ -1529,7 +1529,7 @@ export function AdminProjectDetail({
             {showPaymentForm && (
               <form
                 onSubmit={handleCreatePayment}
-                className="mb-4 space-y-3 rounded-lg border border-border p-4"
+                className="mb-4 max-w-2xl space-y-3 rounded-lg border border-border p-4"
               >
                 <Input
                   name="amount"
@@ -1700,7 +1700,11 @@ export function AdminProjectDetail({
         onCreated={handleClientCreated}
       />
 
-      <StickySaveBar onSave={saveProject} saving={saving} />
+      <StickySaveBar
+        onSave={saveProject}
+        saving={saving}
+        contentClassName="max-w-7xl md:px-6 lg:px-8"
+      />
     </div>
   );
 }

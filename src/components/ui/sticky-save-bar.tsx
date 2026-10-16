@@ -9,10 +9,18 @@ interface StickySaveBarProps {
   saving?: boolean;
   label?: string;
   className?: string;
+  /** Width of the inner row; match the page container so the button lines up with content. */
+  contentClassName?: string;
 }
 
 /** Mobile: static bar at end of form. Desktop: fixed to bottom safe area. */
-export function StickySaveBar({ onSave, saving, label = "Save Project", className }: StickySaveBarProps) {
+export function StickySaveBar({
+  onSave,
+  saving,
+  label = "Save Project",
+  className,
+  contentClassName = "max-w-4xl",
+}: StickySaveBarProps) {
   return (
     <div
       className={cn(
@@ -21,7 +29,7 @@ export function StickySaveBar({ onSave, saving, label = "Save Project", classNam
         className
       )}
     >
-      <div className="mx-auto flex max-w-4xl items-center justify-end gap-4 md:justify-between">
+      <div className={cn("mx-auto flex items-center justify-end gap-4 md:justify-between", contentClassName)}>
         <p className="hidden text-sm text-muted md:block">Unsaved changes are saved when you click Save.</p>
         <Button variant="accent" onClick={onSave} disabled={saving} className="w-full min-h-11 md:ml-auto md:w-auto md:min-w-[140px]">
           {saving ? (
