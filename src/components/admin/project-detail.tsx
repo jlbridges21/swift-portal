@@ -48,6 +48,9 @@ import type { VideoReviewListItem } from "@/lib/video-reviews";
 import type { ProjectShareRow } from "@/lib/project-shares";
 import { ProjectShareModal } from "@/components/admin/project-share-modal";
 import type { ProjectLinkAccessMode } from "@/lib/project-link-access";
+import type { PhotoShareSummary } from "@/lib/media-share-types";
+import { usePhotoShareDialog, useProjectPhotoShareSummary } from "@/components/photos/photo-share-dialog";
+import { getCachedThumbUrl } from "@/lib/media-thumb-client";
 import { useAsyncAction } from "@/lib/use-async-action";
 import {
   MEDIA_SECTION_LABELS,
@@ -120,6 +123,9 @@ interface AdminProjectDetailProps {
   linkAccessMode?: ProjectLinkAccessMode;
   linkAccessPublicUrl?: string | null;
   linkAccessViewCount?: number;
+  /** Individual photo sharing: what this user may manage, and live counts per photo. */
+  photoSharing?: { email: boolean; link: boolean };
+  photoShareSummary?: Record<string, PhotoShareSummary>;
   /** Hide estimates / payments / payment links when false (staff without money.view). */
   canViewMoney?: boolean;
   depositMode?: DepositMode;
@@ -155,6 +161,8 @@ export function AdminProjectDetail({
   linkAccessMode = "restricted",
   linkAccessPublicUrl = null,
   linkAccessViewCount = 0,
+  photoSharing = { email: false, link: false },
+  photoShareSummary = {},
   canViewMoney = true,
   depositMode = "none",
   depositPercent = 50,
@@ -324,6 +332,9 @@ export function AdminProjectDetail({
       .filter((m) => m.media_type === "photo")
       .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
   );
+  const canSharePhotos = photoSharing.email || photoSharing.link;
+  const shareSummary = useProjectPhotoShareSummary(initialProject.id, photoShareSummary, photos, canSharePhotos);
+  const photoShare = usePhotoShareDialog(shareSummary.update);
   const videos = media.filter((m) => m.media_type === "video").sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
   const videoEntries = useMemo(() => videosToGridEntries(videos), [videos]);
   const documents = media.filter((m) => m.media_type === "document").sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
@@ -403,18 +414,46 @@ export function AdminProjectDetail({
 
     const fileList = Array.from(files);
     e.target.value = "";
+    uploadFiles(fileList, mediaType);
+  }
 
+  async function filePhotosIntoFolder(ids: string[], folderId: string) {
+    const res = await fetch("/api/media/move-to-folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ project_id: initialProject.id, folder_id: folderId, photo_ids: ids }),
+    });
+    if (!res.ok) {
+      toast.error("Uploaded, but couldn't add the photos to the folder. They're in General Photos.");
+      return;
+    }
+    setMedia((prev) => prev.map((m) => (ids.includes(m.id) ? { ...m, folder_id: folderId } : m)));
+  }
+
+  function uploadFiles(
+    fileList: File[],
+    mediaType: "photo" | "video" | "document",
+    opts?: { folderId?: string | null }
+  ) {
+    const folderId = mediaType === "photo" ? opts?.folderId ?? null : null;
     enqueueUploads({
       files: fileList,
       projectId: initialProject.id,
       mediaType,
       onAsset: (asset) => {
-        setMedia((prev) => dedupeMedia([...prev, asset]));
+        setMedia((prev) => dedupeMedia([...prev, folderId ? { ...asset, folder_id: folderId } : asset]));
         if (mediaType === "photo") {
           setPendingNewPhotoIds((prev) => [...prev, asset.id]);
         }
       },
-      onBatchComplete: ({ uploaded, errors }) => {
+      onBatchComplete: async ({ uploaded, errors }) => {
+        if (uploaded.length && folderId) {
+          await filePhotosIntoFolder(
+            uploaded.map((a) => a.id),
+            folderId
+          );
+        }
         if (uploaded.length) {
           toast.success(`${uploaded.length} file${uploaded.length === 1 ? "" : "s"} uploaded`);
           router.refresh();
@@ -486,7 +525,7 @@ export function AdminProjectDetail({
       body: JSON.stringify({ id: initialProject.id, cover_image_id: mediaId }),
     });
     setCoverImageId(mediaId);
-    toast.success("Hero media updated");
+    toast.success("Project cover updated");
     router.refresh();
   }
 
@@ -520,11 +559,17 @@ export function AdminProjectDetail({
 
   async function deleteMedia(id: string) {
     if (!confirm("Delete this file?")) return;
+    await deleteMediaConfirmed(id);
+  }
+
+  async function deleteMediaConfirmed(id: string): Promise<boolean> {
     const ok = await deleteMediaWithReviewCheck(id);
     if (ok) {
       setMedia((m) => m.filter((a) => a.id !== id));
+      if (coverImageId === id) setCoverImageId(null);
       void refreshVideoReviews();
     }
+    return Boolean(ok);
   }
 
   async function toggleMediaVisibility(id: string, visible: boolean) {
@@ -1121,59 +1166,60 @@ export function AdminProjectDetail({
       )}
 
       {/* Photos */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <CardTitle className="flex items-center gap-2"><ImageIcon className="h-5 w-5" /> Photos</CardTitle>
-            <ClientSectionVisibilityToggle
-              sectionKey="photos"
-              visible={mediaSections.photos}
-              saving={sectionSaving === "photos"}
-              onChange={(v) => void setClientSectionVisible("photos", v)}
-            />
-          </div>
-          <label className="cursor-pointer shrink-0">
-            <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white surface-dark:bg-card px-3 text-xs font-medium hover:bg-slate-50 surface-dark:hover:bg-subtle">
-              <Upload className="h-4 w-4" /> Upload Photos
-            </span>
-            <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleUpload(e, "photo")} />
-          </label>
+      <Card id="photos" className="scroll-mt-20">
+        <CardHeader className="flex flex-row flex-wrap items-center gap-3">
+          <CardTitle className="flex items-center gap-2"><ImageIcon className="h-5 w-5" /> Photos</CardTitle>
+          <ClientSectionVisibilityToggle
+            sectionKey="photos"
+            visible={mediaSections.photos}
+            saving={sectionSaving === "photos"}
+            onChange={(v) => void setClientSectionVisible("photos", v)}
+          />
         </CardHeader>
         <CardContent>
-          <p className="mb-4 text-xs text-muted">Max {formatFileSize(FILE_SIZE_LIMITS.photo)} per image</p>
-          {photos.length === 0 ? (
-            <p className="text-sm text-muted py-4 text-center">No photos yet</p>
-          ) : (
-            <AdminPhotoGrid
-              projectId={initialProject.id}
-              photos={photos}
-              folders={folders}
-              isHero={isHero}
-              onSetHero={setHeroMedia}
-              onDelete={deleteMedia}
-              onToggleVisibility={toggleMediaVisibility}
-              onFoldersChange={setFolders}
-              onPhotosChange={(nextPhotos) => {
-                setMedia((prev) => {
-                  const others = prev.filter((m) => m.media_type !== "photo");
-                  return [...others, ...nextPhotos];
-                });
-              }}
-              onPropertyLineSaved={(asset) => {
-                const saved = asset as unknown as MediaAsset;
-                setMedia((prev) => {
-                  const idx = prev.findIndex((m) => m.id === saved.id);
-                  if (idx >= 0) {
-                    const next = [...prev];
-                    next[idx] = { ...next[idx], ...saved };
-                    return next;
-                  }
-                  return [...prev, saved];
-                });
-              }}
-              onRefresh={() => router.refresh()}
-            />
-          )}
+          <AdminPhotoGrid
+            projectId={initialProject.id}
+            photos={photos}
+            folders={folders}
+            isHero={isHero}
+            onSetHero={setHeroMedia}
+            onDelete={deleteMediaConfirmed}
+            onToggleVisibility={toggleMediaVisibility}
+            onUploadFiles={(files, folderId) => uploadFiles(files, "photo", { folderId })}
+            maxFileSizeLabel={formatFileSize(FILE_SIZE_LIMITS.photo)}
+            shareSummary={canSharePhotos ? shareSummary.summary : undefined}
+            onShare={
+              canSharePhotos
+                ? (photo) =>
+                    photoShare.openShare({
+                      id: photo.id,
+                      name: mediaDisplayName(photo),
+                      thumbUrl: getCachedThumbUrl(photo.id),
+                    })
+                : undefined
+            }
+            onFoldersChange={setFolders}
+            onPhotosChange={(nextPhotos) => {
+              setMedia((prev) => {
+                const others = prev.filter((m) => m.media_type !== "photo");
+                return [...others, ...nextPhotos];
+              });
+            }}
+            onPropertyLineSaved={(asset) => {
+              const saved = asset as unknown as MediaAsset;
+              setMedia((prev) => {
+                const idx = prev.findIndex((m) => m.id === saved.id);
+                if (idx >= 0) {
+                  const next = [...prev];
+                  next[idx] = { ...next[idx], ...saved };
+                  return next;
+                }
+                return [...prev, saved];
+              });
+            }}
+            onRefresh={() => router.refresh()}
+          />
+          {photoShare.dialog}
         </CardContent>
       </Card>
 

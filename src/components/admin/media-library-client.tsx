@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RemoteImage } from "@/components/ui/remote-image";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,8 +17,11 @@ import {
 import type { LibraryAsset, LibraryAssetKind } from "@/lib/media-library";
 import {
   Search, Star, ImageIcon, Video, FileText, Globe, Download, ExternalLink,
-  X, Filter, ChevronDown, Trash2, Tag, Copy, Pencil, Loader2, CheckSquare, Square, Upload,
+  X, Filter, ChevronDown, Trash2, Tag, Copy, Pencil, Loader2, CheckSquare, Square, Upload, Share2,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { usePhotoShareDialog } from "@/components/photos/photo-share-dialog";
+import { UNFILED_FOLDER_LABEL, UNFILED_FOLDER_SCOPE } from "@/lib/project-zip-assets";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { MediaUploadModal } from "@/components/admin/media-upload-modal";
@@ -52,6 +55,8 @@ interface MediaLibraryClientProps {
   filterOptions: FilterOptions;
   openUploadOnMount?: boolean;
   initialQuery?: string;
+  /** Which kinds of photo sharing this user may manage. */
+  photoSharing?: { email: boolean; link: boolean };
 }
 
 const TYPE_OPTIONS = [
@@ -105,8 +110,11 @@ export function MediaLibraryClient({
   filterOptions,
   openUploadOnMount = false,
   initialQuery = "",
+  photoSharing = { email: false, link: false },
 }: MediaLibraryClientProps) {
   const router = useRouter();
+  const photoShare = usePhotoShareDialog();
+  const canSharePhotos = photoSharing.email || photoSharing.link;
   const [assets, setAssets] = useState(initialAssets);
   const [total, setTotal] = useState(initialTotal);
   const [uploadOpen, setUploadOpen] = useState(openUploadOnMount);
@@ -418,6 +426,16 @@ export function MediaLibraryClient({
             setDrawerAsset(updated);
           }}
           onFavorite={() => toggleFavorite(drawerAsset)}
+          onShare={
+            canSharePhotos
+              ? () =>
+                  photoShare.openShare({
+                    id: drawerAsset.id,
+                    name: mediaDisplayName(drawerAsset),
+                    thumbUrl: thumbUrls[drawerAsset.id] ?? null,
+                  })
+              : undefined
+          }
           onDeleted={() => {
             setAssets((prev) => prev.filter((a) => a.id !== drawerAsset.id));
             setDrawerAsset(null);
@@ -459,6 +477,7 @@ export function MediaLibraryClient({
           fetchPage(1, true);
         }}
       />
+      {photoShare.dialog}
     </div>
   );
 }
@@ -547,16 +566,26 @@ function isVideoAsset(asset: LibraryAsset): boolean {
 }
 
 function AssetDrawer({
-  asset, projects, onClose, onUpdate, onFavorite, onDeleted, onPropertyLineSaved,
+  asset, projects, onClose, onUpdate, onFavorite, onShare, onDeleted, onPropertyLineSaved,
 }: {
   asset: LibraryAsset;
   projects: { id: string; project_name: string; property_address: string }[];
   onClose: () => void;
   onUpdate: (a: LibraryAsset) => void;
   onFavorite: () => void;
+  /** Present when this user may share photos. */
+  onShare?: () => void;
   onDeleted: () => void;
   onPropertyLineSaved?: (asset: Record<string, unknown>) => void;
 }) {
+  const isSharablePhoto = asset.kind === "photo" && asset.media_source !== "youtube";
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const projectHref = asset.project_id
+    ? asset.kind === "photo"
+      ? `/admin/projects/${asset.project_id}?folder=${asset.folder_id ?? UNFILED_FOLDER_SCOPE}#photos`
+      : `/admin/projects/${asset.project_id}`
+    : null;
   const [detail, setDetail] = useState<{
     events: { id: string; event_type: string; description: string | null; created_at: string }[];
     downloads: { id: string; downloaded_by_email: string | null; created_at: string }[];
@@ -649,7 +678,7 @@ function AssetDrawer({
   }
 
   async function setAsCover() {
-    await fetch("/api/media/bulk", {
+    const res = await fetch("/api/media/bulk", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -660,15 +689,27 @@ function AssetDrawer({
         cover_asset_id: asset.id,
       }),
     });
-    toast.success("Set as project cover");
+    if (!res.ok) {
+      toast.error("Couldn't update the project cover");
+      return;
+    }
+    toast.success("Project cover updated");
     onUpdate({ ...asset, is_cover: true });
   }
 
   async function handleDelete() {
-    if (!confirm("Delete this asset permanently?")) return;
-    await fetch(`/api/media/${asset.id}`, { method: "DELETE", credentials: "include" });
-    onDeleted();
-    toast.success("Deleted");
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/media/${asset.id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error();
+      setConfirmDelete(false);
+      onDeleted();
+      toast.success("Deleted");
+    } catch {
+      toast.error("Couldn't delete. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -710,16 +751,26 @@ function AssetDrawer({
             <Button variant="outline" size="sm" onClick={handleDownload} disabled={asset.kind === "tour"}>
               <Download className="h-4 w-4" /> Download
             </Button>
-            {asset.project_id && (
-              <Link href={`/admin/projects/${asset.project_id}`}>
-                <Button variant="outline" size="sm"><ExternalLink className="h-4 w-4" /> Open Project</Button>
+            {isSharablePhoto && onShare ? (
+              <Button variant="outline" size="sm" onClick={onShare}>
+                <Share2 className="h-4 w-4" /> Share
+              </Button>
+            ) : null}
+            {projectHref && (
+              <Link href={projectHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                <ExternalLink className="h-4 w-4" /> Open in project
               </Link>
             )}
-            <Button variant="outline" size="sm" onClick={onFavorite}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onFavorite}
+              aria-label={asset.is_favorite ? "Remove from favorites" : "Add to favorites"}
+            >
               <Star className={cn("h-4 w-4", asset.is_favorite && "fill-amber-400 text-amber-400")} />
             </Button>
-            {asset.kind === "photo" && (
-              <Button variant="outline" size="sm" onClick={setAsCover}>Set Cover</Button>
+            {asset.kind === "photo" && asset.project_id && !asset.is_cover && (
+              <Button variant="outline" size="sm" onClick={setAsCover}>Set as project cover</Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setEditing((e) => !e)}>
               <Pencil className="h-4 w-4" /> Edit
@@ -740,6 +791,11 @@ function AssetDrawer({
                   })),
                 ]}
               />
+              {asset.kind === "photo" && form.project_id !== (asset.project_id ?? "") ? (
+                <p className="text-xs text-amber-700 surface-dark:text-amber-300">
+                  Moving this photo to another project takes it out of its folder and ends any share links or invites.
+                </p>
+              ) : null}
               <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Title" />
               <Input value={form.alt_text} onChange={(e) => setForm((f) => ({ ...f, alt_text: e.target.value }))} placeholder="Alt text" />
               <textarea
@@ -781,7 +837,15 @@ function AssetDrawer({
               <Meta label="Client" value={asset.client_name} />
               <Meta label="Company" value={asset.client_company ?? "—"} />
               <Meta label="Property" value={asset.property_address} className="col-span-2" />
-              <Meta label="Project" value={asset.project_name} />
+              <Meta
+                label={asset.kind === "photo" && asset.project_id ? "Location" : "Project"}
+                value={
+                  asset.kind === "photo" && asset.project_id
+                    ? `${asset.project_name} › ${asset.folder_name ?? UNFILED_FOLDER_LABEL}`
+                    : asset.project_name
+                }
+                className="col-span-2"
+              />
               <Meta label="Service" value={asset.service_type} />
               <Meta label="Uploaded" value={formatDate(asset.created_at)} />
               <Meta label="Downloads" value={String(asset.download_count)} />
@@ -822,16 +886,35 @@ function AssetDrawer({
             </section>
           )}
 
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-h-11 text-red-600"
-            onClick={handleDelete}
-          >
-            <Trash2 className="h-4 w-4" /> Delete Asset
-          </Button>
+          <div className="border-t border-border pt-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="min-h-11 text-red-600"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="h-4 w-4" /> Delete {libraryKindLabel(asset.kind).toLowerCase()}…
+            </Button>
+          </div>
         </div>
       </aside>
+      <ConfirmDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => void handleDelete()}
+        title={`Delete ${libraryKindLabel(asset.kind).toLowerCase()}?`}
+        confirmLabel="Delete permanently"
+        destructive
+        busy={deleting}
+      >
+        <p className="text-sm text-foreground">
+          <span className="font-medium">{asset.title}</span>{" "}
+          will be permanently removed, including the original file. This can&apos;t be undone.
+        </p>
+        {isSharablePhoto ? (
+          <p className="mt-2 text-sm text-muted">Any share links or invites for this photo stop working.</p>
+        ) : null}
+      </ConfirmDialog>
     </>
   );
 }

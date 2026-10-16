@@ -116,10 +116,11 @@ export function buildPublicProjectViewUrl(portalOrigin: string, token: string): 
   return `${portalOrigin.replace(/\/$/, "")}${buildPublicProjectViewPath(token)}`;
 }
 
-export async function buildPublicProjectViewUrlForBusiness(
+/** Absolute URL for a public tenant path (local dev uses the /b/{slug} rewrite). */
+export async function buildPublicTenantUrlForBusiness(
   businessId: string,
   biz: { slug: string; custom_domain: string | null },
-  token: string
+  path: string
 ): Promise<string> {
   const { getBusinessPortalOriginById, joinPortalPath, getDeploymentOrigin } = await import(
     "@/lib/portal-url"
@@ -132,10 +133,18 @@ export async function buildPublicProjectViewUrlForBusiness(
     /* keep default */
   }
   if ((depHost === "localhost" || depHost === "127.0.0.1") && biz.slug) {
-    return `${dep.replace(/\/$/, "")}/b/${biz.slug}${buildPublicProjectViewPath(token)}`;
+    return `${dep.replace(/\/$/, "")}/b/${biz.slug}${path}`;
   }
   const origin = await getBusinessPortalOriginById(businessId);
-  return joinPortalPath(origin, buildPublicProjectViewPath(token));
+  return joinPortalPath(origin, path);
+}
+
+export async function buildPublicProjectViewUrlForBusiness(
+  businessId: string,
+  biz: { slug: string; custom_domain: string | null },
+  token: string
+): Promise<string> {
+  return buildPublicTenantUrlForBusiness(businessId, biz, buildPublicProjectViewPath(token));
 }
 
 export async function getProjectLinkAccessState(

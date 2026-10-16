@@ -208,6 +208,9 @@ export async function updateSession(request: NextRequest) {
   const path = resolution.rewritePathname ?? request.nextUrl.pathname;
   const isApi = path.startsWith("/api/");
   const method = request.method.toUpperCase();
+  // Single-photo share links are authorized by their token alone. A signed-in
+  // session (any business, any state) must not redirect or sign out the viewer.
+  const isPhotoSharePath = path.startsWith("/photo/") || path.startsWith("/api/public/photo/");
 
   const protectedPaths = [
     "/dashboard",
@@ -295,6 +298,7 @@ export async function updateSession(request: NextRequest) {
     if (
       profile?.role === "staff" &&
       profile.disabled_at &&
+      !isPhotoSharePath &&
       !path.startsWith("/login") &&
       !path.startsWith("/api/auth/") &&
       !isApi
@@ -317,6 +321,7 @@ export async function updateSession(request: NextRequest) {
       path.startsWith("/auth/handoff") ||
       path.startsWith("/auth/oauth") ||
       path.startsWith("/auth/share") ||
+      isPhotoSharePath ||
       path.startsWith("/api/auth/") ||
       path.startsWith("/_next") ||
       path === "/favicon.ico";
@@ -346,7 +351,7 @@ export async function updateSession(request: NextRequest) {
       profile?.role !== "super_admin" &&
       (!ownBusiness || ownBusiness.status !== "active" || Boolean(ownBusiness.deleted_at));
 
-    if (businessUnavailable && !path.startsWith("/login") && !isApi) {
+    if (businessUnavailable && !path.startsWith("/login") && !isApi && !isPhotoSharePath) {
       await supabase.auth.signOut();
       const url = request.nextUrl.clone();
       url.pathname = `${resolution.pathPrefix}/login`;
@@ -412,6 +417,7 @@ export async function updateSession(request: NextRequest) {
 
     if (
       !isApi &&
+      !isPhotoSharePath &&
       resolution.kind === "tenant" &&
       resolution.business &&
       profile?.role !== "super_admin" &&
@@ -815,7 +821,7 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  if (path.startsWith("/view/") || path.startsWith("/w9/")) {
+  if (path.startsWith("/view/") || path.startsWith("/w9/") || isPhotoSharePath) {
     supabaseResponse.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
     supabaseResponse.headers.set("Cache-Control", "private, no-store");
   }

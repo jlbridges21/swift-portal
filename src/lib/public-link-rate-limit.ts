@@ -42,13 +42,58 @@ export function allowPublicLinkApi(ip: string, token: string): { allowed: boolea
   return take(apiBuckets, key, API_MAX, API_WINDOW_MS);
 }
 
+const photoRequestBuckets = new Map<string, Bucket>();
+const photoMissBuckets = new Map<string, Bucket>();
+
+const PHOTO_REQUEST_WINDOW_MS = 60 * 1000;
+const PHOTO_REQUEST_MAX = 120;
+const PHOTO_MISS_WINDOW_MS = 10 * 60 * 1000;
+const PHOTO_MISS_MAX = 20;
+const MAX_TRACKED_KEYS = 10_000;
+
+function sweep(map: Map<string, Bucket>) {
+  if (map.size < MAX_TRACKED_KEYS) return;
+  const now = Date.now();
+  for (const [key, bucket] of map) {
+    if (now >= bucket.resetAt) map.delete(key);
+  }
+}
+
+/**
+ * Photo share requests are limited per IP across all tokens, so rotating the
+ * token on each guess doesn't reset the budget.
+ */
+export function allowPhotoShareRequest(ip: string): { allowed: boolean; retryAfterSec: number } {
+  sweep(photoRequestBuckets);
+  return take(photoRequestBuckets, ip || "unknown", PHOTO_REQUEST_MAX, PHOTO_REQUEST_WINDOW_MS);
+}
+
+/** True once an IP has failed too many photo-share token lookups recently. */
+export function isPhotoShareLookupBlocked(ip: string): { blocked: boolean; retryAfterSec: number } {
+  const cur = photoMissBuckets.get(ip || "unknown");
+  const now = Date.now();
+  if (!cur || now >= cur.resetAt || cur.count < PHOTO_MISS_MAX) {
+    return { blocked: false, retryAfterSec: 0 };
+  }
+  return { blocked: true, retryAfterSec: Math.ceil((cur.resetAt - now) / 1000) };
+}
+
+export function recordPhotoShareMiss(ip: string): void {
+  sweep(photoMissBuckets);
+  take(photoMissBuckets, ip || "unknown", Number.MAX_SAFE_INTEGER, PHOTO_MISS_WINDOW_MS);
+}
+
 /** Test helper */
 export function resetPublicLinkRateLimitsForTests() {
   pageBuckets.clear();
   apiBuckets.clear();
+  photoRequestBuckets.clear();
+  photoMissBuckets.clear();
 }
 
 export const PUBLIC_LINK_RATE_LIMITS = {
   pagePerMinute: PAGE_MAX,
   apiPerMinute: API_MAX,
+  photoRequestsPerMinute: PHOTO_REQUEST_MAX,
+  photoMissesPer10Min: PHOTO_MISS_MAX,
 } as const;

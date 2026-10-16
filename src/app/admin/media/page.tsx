@@ -2,6 +2,7 @@ import { Header, PageHeader } from "@/components/layout/header";
 import { requireAdminPage } from "@/lib/admin-access";
 import { MediaLibraryClient } from "@/components/admin/media-library-client";
 import { getLibraryFilterOptions, queryMediaLibrary } from "@/lib/media-library";
+import { photoSharePermissions } from "@/lib/media-share-api";
 import {
   isOwnerAdmin,
   visibleClientIdsFor,
@@ -47,6 +48,7 @@ export default async function AdminMediaPage({ searchParams }: PageProps) {
           filterOptions={filterOptions}
           openUploadOnMount={sp.upload === "1"}
           initialQuery={initialQuery}
+          photoSharing={photoSharePermissions(profile)}
         />
       </main>
     </div>

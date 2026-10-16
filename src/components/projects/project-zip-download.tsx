@@ -32,17 +32,28 @@ interface ProjectZipDownloadProps {
   compact?: boolean;
 }
 
-export function ProjectZipDownload({
+interface UseProjectZipDownloadOptions {
+  projectId: string;
+  zipApiBase?: string;
+  expectedFileCount?: number;
+  folderId?: string;
+  folderLabel?: string;
+  /** Hero styling for the progress panel (dark overlay backgrounds). */
+  hero?: boolean;
+}
+
+/**
+ * ZIP download state machine without a trigger button, so menus and toolbars
+ * can start a download. Render `panel` where progress should appear.
+ */
+export function useProjectZipDownload({
   projectId,
   zipApiBase,
   expectedFileCount,
   folderId,
   folderLabel,
-  className,
-  buttonClassName,
-  variant = "hero",
-  compact = false,
-}: ProjectZipDownloadProps) {
+  hero = false,
+}: UseProjectZipDownloadOptions) {
   const [mounted, setMounted] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [active, setActive] = useState(false);
@@ -228,39 +239,13 @@ export function ProjectZipDownload({
     }
   }
 
-  const isHero = variant === "hero";
-  const buttonLabel = folderLabel
-    ? compact
-      ? "Download"
-      : `Download ${folderLabel}`
-    : active
-      ? "Preparing download…"
-      : "Download All";
+  const isHero = hero;
+  const start = useCallback(() => {
+    if (mounted && !active) setPickerOpen(true);
+  }, [mounted, active]);
 
-  return (
-    <div className={cn("space-y-3", className)}>
-      <button
-        type="button"
-        onClick={() => setPickerOpen(true)}
-        disabled={!mounted || active}
-        aria-busy={active}
-        className={cn(
-          isHero
-            ? "group inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20 hover:border-white/30 disabled:opacity-60"
-            : compact
-              ? "inline-flex items-center gap-1.5 rounded-md border border-border bg-white surface-dark:bg-card px-2.5 py-1.5 text-xs font-medium text-heading hover:bg-slate-50 surface-dark:hover:bg-subtle disabled:opacity-60"
-              : "inline-flex items-center gap-2 rounded-lg border border-border bg-white surface-dark:bg-card px-4 py-2 text-sm font-medium text-heading hover:bg-slate-50 surface-dark:hover:bg-subtle disabled:opacity-60",
-          buttonClassName
-        )}
-      >
-        {active ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Download className={cn("h-4 w-4", isHero && "opacity-80 group-hover:opacity-100")} />
-        )}
-        {active ? "Preparing download…" : buttonLabel}
-      </button>
-
+  const panel = (
+    <>
       <DownloadQualityDialog
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
@@ -320,6 +305,64 @@ export function ProjectZipDownload({
           )}
         </div>
       )}
+    </>
+  );
+
+  return { start, active, ready: mounted, panel };
+}
+
+export function ProjectZipDownload({
+  projectId,
+  zipApiBase,
+  expectedFileCount,
+  folderId,
+  folderLabel,
+  className,
+  buttonClassName,
+  variant = "hero",
+  compact = false,
+}: ProjectZipDownloadProps) {
+  const isHero = variant === "hero";
+  const { start, active, ready, panel } = useProjectZipDownload({
+    projectId,
+    zipApiBase,
+    expectedFileCount,
+    folderId,
+    folderLabel,
+    hero: isHero,
+  });
+  const buttonLabel = folderLabel
+    ? compact
+      ? "Download"
+      : `Download ${folderLabel}`
+    : active
+      ? "Preparing download…"
+      : "Download All";
+
+  return (
+    <div className={cn("space-y-3", className)}>
+      <button
+        type="button"
+        onClick={start}
+        disabled={!ready || active}
+        aria-busy={active}
+        className={cn(
+          isHero
+            ? "group inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20 hover:border-white/30 disabled:opacity-60"
+            : compact
+              ? "inline-flex items-center gap-1.5 rounded-md border border-border bg-white surface-dark:bg-card px-2.5 py-1.5 text-xs font-medium text-heading hover:bg-slate-50 surface-dark:hover:bg-subtle disabled:opacity-60"
+              : "inline-flex items-center gap-2 rounded-lg border border-border bg-white surface-dark:bg-card px-4 py-2 text-sm font-medium text-heading hover:bg-slate-50 surface-dark:hover:bg-subtle disabled:opacity-60",
+          buttonClassName
+        )}
+      >
+        {active ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Download className={cn("h-4 w-4", isHero && "opacity-80 group-hover:opacity-100")} />
+        )}
+        {active ? "Preparing download…" : buttonLabel}
+      </button>
+      {panel}
     </div>
   );
 }

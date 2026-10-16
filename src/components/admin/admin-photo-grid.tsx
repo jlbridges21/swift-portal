@@ -6,7 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
+  type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
   type TouchEvent as ReactTouchEvent,
 } from "react";
@@ -17,8 +17,10 @@ import {
   MouseSensor,
   TouchSensor,
   closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -30,43 +32,67 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Modal } from "@/components/ui/modal";
-import { Select } from "@/components/ui/select";
-import { mediaDisplayName } from "@/lib/media-display-name";
-import { cn } from "@/lib/utils";
-import type { MediaAsset, MediaFolder } from "@/lib/types";
-import { AdminPhotoLightbox } from "@/components/admin/admin-photo-lightbox";
 import {
   ArrowDownToLine,
   ArrowUpToLine,
   Check,
+  ChevronRight,
+  Download,
   Eye,
   EyeOff,
   FolderInput,
+  FolderOpen,
   FolderPlus,
   GripVertical,
+  ImageOff,
+  ImagePlus,
+  Images,
+  Link2,
+  MoreHorizontal,
   Move,
   Pencil,
+  RotateCw,
+  Share2,
+  Star,
   Trash2,
+  Upload,
   X,
   ZoomIn,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ActionMenu, type ActionMenuAnchor, type ActionMenuItem } from "@/components/ui/action-menu";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { AdminPhotoLightbox } from "@/components/admin/admin-photo-lightbox";
+import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
+import { useProjectZipDownload } from "@/components/projects/project-zip-download";
 import {
-  createThumbRequestQueue,
-  getCachedThumbUrl,
-} from "@/lib/media-thumb-client";
+  FOLDER_DROP_PREFIX,
+  NewFolderTile,
+  PhotoFolderTile,
+  photoCountLabel,
+} from "@/components/admin/photo-folder-tile";
+import { MoveToFolderDialog, NameDialog } from "@/components/admin/photo-grid-dialogs";
+import { mediaDisplayName } from "@/lib/media-display-name";
+import { downloadMediaAsset } from "@/lib/download";
+import { cn } from "@/lib/utils";
+import type { MediaAsset, MediaFolder } from "@/lib/types";
+import type { PhotoShareSummary } from "@/lib/media-share-types";
+import { createThumbRequestQueue, getCachedThumbUrl, invalidateThumbUrl } from "@/lib/media-thumb-client";
 import { isClientVisibleMedia } from "@/lib/client-media";
-import { ProjectZipDownload } from "@/components/projects/project-zip-download";
 import {
   countFolderDownloadableAssets,
   UNFILED_FOLDER_LABEL,
   UNFILED_FOLDER_SCOPE,
 } from "@/lib/project-zip-assets";
 
-type FolderFilter = "all" | "unfiled" | string;
+/** `all` = every photo; `unfiled` = General Photos; otherwise a folder id. */
+type PhotoView = "all" | typeof UNFILED_FOLDER_SCOPE | string;
+
+const PHOTO_ACCEPT = ["image/jpeg", "image/png", "image/webp"];
+const VIEW_QUERY_PARAM = "folder";
+const THUMB_FAIL_LIMIT = 2;
 
 interface AdminPhotoGridProps {
   projectId: string;
@@ -74,19 +100,27 @@ interface AdminPhotoGridProps {
   folders: MediaFolder[];
   isHero: (id: string) => boolean;
   onSetHero: (id: string) => void;
-  onDelete: (id: string) => void;
+  /** Called after the grid has confirmed the deletion with the user. */
+  onDelete: (id: string) => Promise<boolean> | void;
   onPhotosChange: (photos: MediaAsset[]) => void;
   onFoldersChange: (folders: MediaFolder[]) => void;
   onToggleVisibility: (id: string, visible: boolean) => void;
+  onUploadFiles: (files: File[], folderId: string | null) => void;
   onPropertyLineSaved?: (asset: Record<string, unknown>) => void;
   onRefresh?: () => void;
+  /** Active individual shares by asset id — drives the Shared badge and move/delete warnings. */
+  shareSummary?: Record<string, PhotoShareSummary>;
+  onShare?: (photo: MediaAsset) => void;
+  /** Rendered beside the breadcrumb (e.g. client visibility toggle). */
+  headerSlot?: React.ReactNode;
+  maxFileSizeLabel?: string;
 }
 
 function isClientVisible(asset: MediaAsset) {
   return isClientVisibleMedia(asset);
 }
 
-/** Project-wide photo order — folders are a filter, not a sort key. */
+/** Project-wide photo order. Folder views show a subset in that same order. */
 function sortByDisplayOrder(list: MediaAsset[]) {
   return [...list].sort((a, b) => {
     const order = (a.display_order ?? 0) - (b.display_order ?? 0);
@@ -104,9 +138,7 @@ function applySlotReorder(
   previousVisible: MediaAsset[],
   nextVisibleOrdered: MediaAsset[]
 ): MediaAsset[] {
-  const slots = previousVisible
-    .map((p) => p.display_order ?? 0)
-    .sort((a, b) => a - b);
+  const slots = previousVisible.map((p) => p.display_order ?? 0).sort((a, b) => a - b);
 
   const newOrderById = new Map<string, number>();
   nextVisibleOrdered.forEach((p, i) => {
@@ -132,17 +164,40 @@ function useCoarsePointer() {
   return coarse;
 }
 
+/** Folder tiles take priority while the pointer is over one; otherwise sort among photos. */
+const photoCollision: CollisionDetection = (args) => {
+  const folderTargets = args.droppableContainers.filter((c) =>
+    String(c.id).startsWith(FOLDER_DROP_PREFIX)
+  );
+  if (folderTargets.length) {
+    const hits = pointerWithin({ ...args, droppableContainers: folderTargets });
+    if (hits.length) return hits;
+  }
+  return closestCenter({
+    ...args,
+    droppableContainers: args.droppableContainers.filter(
+      (c) => !String(c.id).startsWith(FOLDER_DROP_PREFIX)
+    ),
+  });
+};
+
 function PhotoThumb({
   assetId,
   selected,
   url,
+  failed,
   onVisible,
+  onImageError,
+  onRetry,
   scrollRoot,
 }: {
   assetId: string;
   selected: boolean;
   url: string | null;
+  failed: boolean;
   onVisible: (id: string) => void;
+  onImageError: (id: string) => void;
+  onRetry: (id: string) => void;
   /** Nested overflow scroller — required so IO fires inside max-h overflow-auto. */
   scrollRoot: Element | null;
 }) {
@@ -150,7 +205,7 @@ function PhotoThumb({
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || url) return;
+    if (!el || url || failed) return;
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) onVisible(assetId);
@@ -161,14 +216,14 @@ function PhotoThumb({
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [assetId, onVisible, url, scrollRoot]);
+  }, [assetId, onVisible, url, failed, scrollRoot]);
 
   return (
     <div
       ref={ref}
-      className="relative aspect-square w-full bg-slate-100 surface-dark:bg-subtle"
+      className="relative aspect-square w-full bg-subtle"
       onMouseEnter={() => {
-        if (!url) onVisible(assetId);
+        if (!url && !failed) onVisible(assetId);
       }}
     >
       {url ? (
@@ -178,9 +233,26 @@ function PhotoThumb({
           alt=""
           className="pointer-events-none h-full w-full object-cover"
           draggable={false}
+          onError={() => onImageError(assetId)}
         />
+      ) : failed ? (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-muted">
+          <ImageOff className="h-6 w-6 opacity-70" />
+          <span className="text-[11px]">Preview unavailable</span>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent-subtle"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRetry(assetId);
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <RotateCw className="h-3 w-3" /> Retry
+          </button>
+        </div>
       ) : (
-        <div className="h-full w-full animate-pulse bg-slate-200 surface-dark:bg-border" />
+        <div className="h-full w-full animate-pulse bg-border/60" />
       )}
       {selected && <div className="absolute inset-0 bg-slate-900/45" />}
     </div>
@@ -200,24 +272,40 @@ function InsertionGap({ onInsert, label }: { onInsert: () => void; label: string
   );
 }
 
+function PhotoBadge({ children, tone }: { children: React.ReactNode; tone: "accent" | "amber" | "neutral" }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold shadow-sm backdrop-blur",
+        tone === "accent" && "bg-accent text-accent-foreground",
+        tone === "amber" && "bg-amber-400/95 text-amber-950",
+        tone === "neutral" && "bg-black/60 text-white"
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
 function SortablePhotoCard({
   photo,
   index,
   selected,
   isHeroPhoto,
+  shared,
+  folderName,
   coarsePointer,
   selectMode,
   placementMode,
-  showHandle,
   thumbUrl,
+  thumbFailed,
   onThumbVisible,
+  onThumbError,
+  onThumbRetry,
   scrollRoot,
   onActivate,
   onOpen,
-  onSetHero,
-  onToggleVisibility,
-  onDelete,
-  onRename,
+  onMenu,
   onLongPressSelect,
   onToggleSelect,
   onPaintSelectEnter,
@@ -228,19 +316,20 @@ function SortablePhotoCard({
   index: number;
   selected: boolean;
   isHeroPhoto: boolean;
+  shared: boolean;
+  folderName: string | null;
   coarsePointer: boolean;
   selectMode: boolean;
   placementMode: boolean;
-  showHandle: boolean;
   thumbUrl: string | null;
+  thumbFailed: boolean;
   onThumbVisible: (id: string) => void;
+  onThumbError: (id: string) => void;
+  onThumbRetry: (id: string) => void;
   scrollRoot: Element | null;
   onActivate: (e: ReactMouseEvent, id: string, index: number) => void;
   onOpen: () => void;
-  onSetHero: () => void;
-  onToggleVisibility: () => void;
-  onDelete: () => void;
-  onRename: () => void;
+  onMenu: (photo: MediaAsset, anchor: ActionMenuAnchor) => void;
   onLongPressSelect: (id: string, index: number) => void;
   onToggleSelect: (id: string, index: number) => void;
   onPaintSelectEnter: (id: string, index: number) => void;
@@ -289,8 +378,8 @@ function SortablePhotoCard({
 
   function onTouchStartTile(e: ReactTouchEvent) {
     if (!coarsePointer || placementMode) return;
-    // Don't compete with the drag handle
-    if ((e.target as HTMLElement).closest("[data-drag-handle]")) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("[data-drag-handle]") || target.closest("[data-photo-menu]")) return;
 
     longPressMoved.current = false;
     paintStarted.current = false;
@@ -319,10 +408,7 @@ function SortablePhotoCard({
     const t = e.touches[0];
     if (!t || !touchStartPos.current) return;
 
-    const dist = Math.hypot(
-      t.clientX - touchStartPos.current.x,
-      t.clientY - touchStartPos.current.y
-    );
+    const dist = Math.hypot(t.clientX - touchStartPos.current.x, t.clientY - touchStartPos.current.y);
     if (dist <= 8) return;
 
     if (!longPressMoved.current) {
@@ -352,6 +438,9 @@ function SortablePhotoCard({
     }
   }
 
+  const name = mediaDisplayName(photo);
+  const hidden = !isClientVisible(photo);
+
   return (
     <div
       ref={setNodeRef}
@@ -359,6 +448,7 @@ function SortablePhotoCard({
       data-photo-id={photo.id}
       data-photo-index={index}
       {...attributes}
+      aria-label={`${name}${selected ? ", selected" : ""}`}
       {...(placementMode || (coarsePointer && selectMode) ? {} : mouseListeners)}
       {...keyListeners}
       onClick={(e) => {
@@ -369,36 +459,40 @@ function SortablePhotoCard({
         }
         onActivate(e, photo.id, index);
       }}
+      onDoubleClick={() => {
+        if (!coarsePointer && !placementMode) onOpen();
+      }}
+      onContextMenu={(e) => {
+        if (placementMode || coarsePointer) return;
+        e.preventDefault();
+        onMenu(photo, { kind: "point", x: e.clientX, y: e.clientY, element: e.currentTarget });
+      }}
       onTouchStart={onTouchStartTile}
       onTouchMove={onTouchMoveTile}
       onTouchEnd={onTouchEndTile}
       onTouchCancel={onTouchEndTile}
       className={cn(
-        "group relative overflow-hidden rounded-lg border bg-white surface-dark:bg-card transition-shadow select-none",
+        "group relative overflow-hidden rounded-lg border bg-card transition-shadow select-none",
         !coarsePointer && !placementMode && "cursor-grab active:cursor-grabbing",
-        selected
-          ? "border-accent ring-2 ring-accent shadow-md"
-          : "border-border hover:border-slate-300",
+        selected ? "border-accent ring-2 ring-accent shadow-md" : "border-border hover:border-accent/40",
         isDragging && "opacity-40",
         placementMode && selected && "scale-[0.97] opacity-30",
         placementMode && !selected && "opacity-80"
       )}
     >
-      {coarsePointer && selectMode && (
+      {(coarsePointer && selectMode) || (!coarsePointer && selected) ? (
         <div
           className={cn(
             "absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border-2 shadow",
-            selected
-              ? "border-accent bg-accent text-accent-foreground"
-              : "border-white bg-black/30 text-transparent"
+            selected ? "border-accent bg-accent text-accent-foreground" : "border-white bg-black/30 text-transparent"
           )}
           aria-hidden
         >
           <Check className="h-4 w-4" />
         </div>
-      )}
+      ) : null}
 
-      {showHandle && !placementMode && (
+      {coarsePointer && !placementMode && !selectMode && (
         <button
           type="button"
           data-drag-handle
@@ -413,83 +507,71 @@ function SortablePhotoCard({
         </button>
       )}
 
-      <PhotoThumb
-        assetId={photo.id}
-        selected={selected}
-        url={thumbUrl}
-        onVisible={onThumbVisible}
-        scrollRoot={scrollRoot}
-      />
-      <div className="space-y-2 p-2">
-        <p className="line-clamp-2 text-xs text-foreground">{mediaDisplayName(photo)}</p>
-        <div className="flex flex-wrap gap-1">
-          {isHeroPhoto && (
-            <span className="inline-block rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-              Hero
-            </span>
-          )}
-          {!isClientVisible(photo) && (
-            <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
-              Hidden
-            </span>
-          )}
+      <div className="relative">
+        <PhotoThumb
+          assetId={photo.id}
+          selected={selected}
+          url={thumbUrl}
+          failed={thumbFailed}
+          onVisible={onThumbVisible}
+          onImageError={onThumbError}
+          onRetry={onThumbRetry}
+          scrollRoot={scrollRoot}
+        />
+        {(isHeroPhoto || hidden || shared) && (
+          <div className="pointer-events-none absolute bottom-2 left-2 flex flex-wrap gap-1">
+            {isHeroPhoto && (
+              <PhotoBadge tone="accent">
+                <Star className="h-2.5 w-2.5" /> Cover
+              </PhotoBadge>
+            )}
+            {hidden && (
+              <PhotoBadge tone="amber">
+                <EyeOff className="h-2.5 w-2.5" /> Hidden
+              </PhotoBadge>
+            )}
+            {shared && (
+              <PhotoBadge tone="neutral">
+                <Link2 className="h-2.5 w-2.5" /> Shared
+              </PhotoBadge>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1 py-1.5 pl-2.5 pr-1">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-medium text-foreground" title={name}>
+            {name}
+          </p>
+          {folderName ? <p className="truncate text-[11px] text-muted">{folderName}</p> : null}
         </div>
-        {!selectMode && !placementMode && (
-          <div
-            className="flex flex-wrap gap-1"
+        {!placementMode && !(coarsePointer && selectMode) && (
+          <button
+            type="button"
+            data-photo-menu
+            aria-label={`Actions for ${name}`}
+            aria-haspopup="menu"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted hover:bg-accent-subtle hover:text-heading focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMenu(photo, { kind: "element", element: e.currentTarget });
+            }}
           >
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              title="Open fullscreen"
-              onClick={onOpen}
-            >
-              <ZoomIn className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              title={isClientVisible(photo) ? "Hide from client" : "Show to client"}
-              onClick={onToggleVisibility}
-            >
-              {isClientVisible(photo) ? (
-                <EyeOff className="h-3.5 w-3.5" />
-              ) : (
-                <Eye className="h-3.5 w-3.5" />
-              )}
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onSetHero}>
-              Hero
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={onRename}
-              title="Rename"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 text-red-500"
-              onClick={onDelete}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
         )}
       </div>
     </div>
   );
 }
+
+type MenuState = { anchor: ActionMenuAnchor; title: string; items: ActionMenuItem[] };
+
+type DeleteTarget = { kind: "photos"; ids: string[] } | { kind: "folder"; folder: MediaFolder };
 
 export function AdminPhotoGrid({
   projectId,
@@ -501,44 +583,89 @@ export function AdminPhotoGrid({
   onPhotosChange,
   onFoldersChange,
   onToggleVisibility,
+  onUploadFiles,
   onPropertyLineSaved,
   onRefresh,
+  shareSummary,
+  onShare,
+  headerSlot,
+  maxFileSizeLabel,
 }: AdminPhotoGridProps) {
   const coarsePointer = useCoarsePointer();
-  const [folderFilter, setFolderFilter] = useState<FolderFilter>("all");
+  const [view, setView] = useState<PhotoView>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
   const [lightboxPhoto, setLightboxPhoto] = useState<MediaAsset | null>(null);
   const [activeDragIds, setActiveDragIds] = useState<string[]>([]);
-  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(
-    null
-  );
-  const [newFolderOpen, setNewFolderOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
-  const [renameId, setRenameId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [moveFolderId, setMoveFolderId] = useState("");
-  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [placementMode, setPlacementMode] = useState(false);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
+  const [thumbFailures, setThumbFailures] = useState<Record<string, number>>({});
   const [scrollRoot, setScrollRoot] = useState<Element | null>(null);
+  const [menu, setMenu] = useState<MenuState | null>(null);
+  const [folderDialog, setFolderDialog] = useState<
+    { mode: "create"; moveIds?: string[] } | { mode: "rename"; folder: MediaFolder } | null
+  >(null);
+  const [renamePhoto, setRenamePhoto] = useState<MediaAsset | null>(null);
+  const [moveIds, setMoveIds] = useState<string[] | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [downloadPhoto, setDownloadPhoto] = useState<MediaAsset | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [fileDragActive, setFileDragActive] = useState(false);
+  const [zipTarget, setZipTarget] = useState<{ scope: string; label: string; count: number } | null>(null);
+  const zipStartPending = useRef(false);
+
   const thumbQueueRef = useRef(
-    createThumbRequestQueue((urls) => {
+    createThumbRequestQueue((urls, attempted) => {
       setThumbUrls((prev) => ({ ...prev, ...urls }));
+      const missed = (attempted ?? []).filter((id) => !urls[id]);
+      if (missed.length) {
+        setThumbFailures((prev) => {
+          const next = { ...prev };
+          for (const id of missed) next[id] = (next[id] ?? 0) + 1;
+          return next;
+        });
+      }
     })
   );
   const onThumbVisible = useCallback((id: string) => {
     thumbQueueRef.current.request(id);
   }, []);
+  const onThumbRetry = useCallback((id: string) => {
+    invalidateThumbUrl(id);
+    setThumbFailures((prev) => ({ ...prev, [id]: 0 }));
+    setThumbUrls((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    thumbQueueRef.current.request(id);
+  }, []);
+  const onThumbError = useCallback((id: string) => {
+    invalidateThumbUrl(id);
+    setThumbUrls((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setThumbFailures((prev) => {
+      const count = (prev[id] ?? 0) + 1;
+      if (count < THUMB_FAIL_LIMIT) window.setTimeout(() => thumbQueueRef.current.request(id), 400);
+      return { ...prev, [id]: count };
+    });
+  }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const uploadFolderRef = useRef<string | null>(null);
   const marqueeStart = useRef<{ x: number; y: number; additive: boolean } | null>(null);
   const selectionBeforeMarquee = useRef<Set<string>>(new Set());
   const photosRef = useRef(photos);
   const justDraggedRef = useRef(false);
   const paintSelectActive = useRef(false);
   const undoSnapshotRef = useRef<MediaAsset[] | null>(null);
+  const fileDragDepth = useRef(0);
 
   useEffect(() => {
     photosRef.current = photos;
@@ -549,14 +676,58 @@ export function AdminPhotoGrid({
     [photos]
   );
 
+  const folderById = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
+  const currentFolder = view !== "all" && view !== UNFILED_FOLDER_SCOPE ? folderById.get(view) ?? null : null;
+
+  // Restore the open folder from ?folder= (deep links from the Media library).
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get(VIEW_QUERY_PARAM);
+    if (!requested) return;
+    if (requested === UNFILED_FOLDER_SCOPE || folders.some((f) => f.id === requested)) {
+      setView(requested);
+    }
+    // Only on mount — later navigation is driven by the UI.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A deleted folder (here or in another tab) drops back to All photos.
+  useEffect(() => {
+    if (view !== "all" && view !== UNFILED_FOLDER_SCOPE && !folderById.has(view)) setView("all");
+  }, [view, folderById]);
+
+  const navigate = useCallback((next: PhotoView) => {
+    setView(next);
+    setSelectedIds(new Set());
+    setAnchorIndex(null);
+    setSelectMode(false);
+    setPlacementMode(false);
+    const url = new URL(window.location.href);
+    if (next === "all") url.searchParams.delete(VIEW_QUERY_PARAM);
+    else url.searchParams.set(VIEW_QUERY_PARAM, next);
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, []);
+
   const visiblePhotos = useMemo(() => {
-    let list = allProjectPhotos;
-    if (folderFilter === "unfiled") list = list.filter((p) => !p.folder_id);
-    else if (folderFilter !== "all") list = list.filter((p) => p.folder_id === folderFilter);
-    return list;
-  }, [allProjectPhotos, folderFilter]);
+    if (view === "all") return allProjectPhotos;
+    if (view === UNFILED_FOLDER_SCOPE) return allProjectPhotos.filter((p) => !p.folder_id);
+    return allProjectPhotos.filter((p) => p.folder_id === view);
+  }, [allProjectPhotos, view]);
 
   const visibleIds = useMemo(() => visiblePhotos.map((p) => p.id), [visiblePhotos]);
+
+  const folderStats = useMemo(() => {
+    const stats = new Map<string, { count: number; coverId: string | null }>();
+    for (const p of allProjectPhotos) {
+      const key = p.folder_id ?? UNFILED_FOLDER_SCOPE;
+      const entry = stats.get(key) ?? { count: 0, coverId: null };
+      entry.count += 1;
+      if (!entry.coverId) entry.coverId = p.id;
+      stats.set(key, entry);
+    }
+    return stats;
+  }, [allProjectPhotos]);
+
+  const showFolderTiles = view === "all" && folders.length > 0;
 
   // Bind IO root once the overflow scroller mounts.
   useEffect(() => {
@@ -567,6 +738,9 @@ export function AdminPhotoGrid({
   // inside max-h overflow-auto — a one-shot miss/failed batch left tiles blank forever.
   useEffect(() => {
     const ids = visiblePhotos.map((p) => p.id);
+    if (showFolderTiles) {
+      for (const s of folderStats.values()) if (s.coverId) ids.push(s.coverId);
+    }
     for (const id of ids) thumbQueueRef.current.request(id);
     const retry = window.setTimeout(() => {
       for (const id of ids) {
@@ -574,28 +748,7 @@ export function AdminPhotoGrid({
       }
     }, 1500);
     return () => window.clearTimeout(retry);
-  }, [visibleIds, visiblePhotos]);
-
-  const folderCounts = useMemo(() => {
-    const map = new Map<string | "null", number>();
-    for (const p of allProjectPhotos) {
-      const key = (p.folder_id ?? "null") as string | "null";
-      map.set(key, (map.get(key) ?? 0) + 1);
-    }
-    return map;
-  }, [allProjectPhotos]);
-
-  const scopedFolderDownload = useMemo(() => {
-    if (folderFilter === "all") return null;
-    const scope = folderFilter === "unfiled" ? UNFILED_FOLDER_SCOPE : folderFilter;
-    const label =
-      folderFilter === "unfiled"
-        ? UNFILED_FOLDER_LABEL
-        : folders.find((f) => f.id === folderFilter)?.name ?? "Folder";
-    const count = countFolderDownloadableAssets(allProjectPhotos, scope, true);
-    if (count <= 0) return null;
-    return { scope, label, count };
-  }, [allProjectPhotos, folderFilter, folders]);
+  }, [visibleIds, visiblePhotos, showFolderTiles, folderStats]);
 
   // Mount all sensors always — hybrid devices need both mouse and touch paths
   const sensors = useSensors(
@@ -611,8 +764,11 @@ export function AdminPhotoGrid({
     setPlacementMode(false);
   }, []);
 
+  const dialogOpen = Boolean(menu || folderDialog || renamePhoto || moveIds || deleteTarget || downloadPhoto || lightboxPhoto);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (dialogOpen) return;
       if (e.key === "Escape") {
         if (placementMode) {
           setPlacementMode(false);
@@ -624,6 +780,7 @@ export function AdminPhotoGrid({
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
         const target = e.target as HTMLElement | null;
         if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+        if (!target?.closest?.("[data-photo-grid]")) return;
         e.preventDefault();
         setSelectedIds(new Set(visibleIds));
         if (coarsePointer) setSelectMode(true);
@@ -631,12 +788,60 @@ export function AdminPhotoGrid({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [clearSelection, visibleIds, placementMode, coarsePointer]);
+  }, [clearSelection, visibleIds, placementMode, coarsePointer, dialogOpen]);
 
-  async function persistFullOrder(
-    orderedPhotos: MediaAsset[],
-    opts?: { undoable?: boolean }
-  ): Promise<boolean> {
+  const zip = useProjectZipDownload({
+    projectId,
+    folderId: zipTarget?.scope,
+    folderLabel: zipTarget?.label,
+    expectedFileCount: zipTarget?.count,
+  });
+
+  useEffect(() => {
+    if (zipStartPending.current && zipTarget) {
+      zipStartPending.current = false;
+      zip.start();
+    }
+  }, [zipTarget, zip]);
+
+  function downloadFolder(scope: string) {
+    if (zip.active) {
+      toast.info("A folder download is already in progress");
+      return;
+    }
+    const label = scope === UNFILED_FOLDER_SCOPE ? UNFILED_FOLDER_LABEL : folderById.get(scope)?.name ?? "Folder";
+    const count = countFolderDownloadableAssets(allProjectPhotos, scope, true);
+    if (count <= 0) {
+      toast.info(`${label} has no photos to download`);
+      return;
+    }
+    zipStartPending.current = true;
+    setZipTarget({ scope, label, count });
+  }
+
+  function startUpload(folderId: string | null) {
+    uploadFolderRef.current = folderId;
+    uploadInputRef.current?.click();
+  }
+
+  function submitFiles(files: File[], folderId: string | null) {
+    const accepted = files.filter((f) => PHOTO_ACCEPT.includes(f.type));
+    const rejected = files.length - accepted.length;
+    if (rejected > 0) {
+      toast.error(`${rejected} file${rejected === 1 ? "" : "s"} skipped — photos must be JPEG, PNG, or WebP`);
+    }
+    if (accepted.length) onUploadFiles(accepted, folderId);
+  }
+
+  const viewUploadFolder = view === "all" || view === UNFILED_FOLDER_SCOPE ? null : view;
+  const viewLabel =
+    view === "all" ? "All photos" : view === UNFILED_FOLDER_SCOPE ? UNFILED_FOLDER_LABEL : currentFolder?.name ?? "Folder";
+
+  function hasFiles(e: ReactDragEvent) {
+    return Array.from(e.dataTransfer?.types ?? []).includes("Files");
+  }
+
+  async function persistFullOrder(orderedPhotos: MediaAsset[], opts?: { undoable?: boolean }): Promise<boolean> {
     const previous = photosRef.current;
     if (opts?.undoable) undoSnapshotRef.current = previous;
 
@@ -668,10 +873,9 @@ export function AdminPhotoGrid({
           onClick: () => {
             const snap = undoSnapshotRef.current;
             if (!snap) return;
-            void persistFullOrder(
-              sortByDisplayOrder(snap.filter((p) => p.media_type === "photo")),
-              { undoable: false }
-            );
+            void persistFullOrder(sortByDisplayOrder(snap.filter((p) => p.media_type === "photo")), {
+              undoable: false,
+            });
           },
         },
       });
@@ -681,17 +885,13 @@ export function AdminPhotoGrid({
     return true;
   }
 
-  async function moveSelectionToInsertIndex(insertIndex: number) {
-    if (!selectedIds.size) return;
+  async function moveIdsToInsertIndex(ids: Set<string>, insertIndex: number) {
+    if (!ids.size) return;
     const previousVisible = [...visiblePhotos];
-    const selectedOrdered = previousVisible.filter((p) => selectedIds.has(p.id));
-    const remaining = previousVisible.filter((p) => !selectedIds.has(p.id));
+    const selectedOrdered = previousVisible.filter((p) => ids.has(p.id));
+    const remaining = previousVisible.filter((p) => !ids.has(p.id));
     const clamped = Math.max(0, Math.min(insertIndex, remaining.length));
-    const nextVisible = [
-      ...remaining.slice(0, clamped),
-      ...selectedOrdered,
-      ...remaining.slice(clamped),
-    ];
+    const nextVisible = [...remaining.slice(0, clamped), ...selectedOrdered, ...remaining.slice(clamped)];
     const merged = applySlotReorder(allProjectPhotos, previousVisible, nextVisible);
     const ok = await persistFullOrder(merged, { undoable: true });
     if (ok) {
@@ -727,7 +927,6 @@ export function AdminPhotoGrid({
       return;
     }
 
-    // Desktop — Cmd/Shift/click selection (unchanged)
     if (e.metaKey || e.ctrlKey) {
       e.preventDefault();
       setSelectedIds((prev) => {
@@ -884,18 +1083,25 @@ export function AdminPhotoGrid({
     }, 0);
 
     if (!over || dragging.length === 0) return;
-    if (String(active.id) === String(over.id) && dragging.length === 1) return;
+
+    const overId = String(over.id);
+    if (overId.startsWith(FOLDER_DROP_PREFIX)) {
+      const scope = overId.slice(FOLDER_DROP_PREFIX.length);
+      requestMove(dragging, scope === UNFILED_FOLDER_SCOPE ? null : scope);
+      return;
+    }
+
+    if (String(active.id) === overId && dragging.length === 1) return;
 
     const previousVisible = [...visiblePhotos];
     let nextVisible = [...previousVisible];
 
     if (dragging.length === 1) {
       const oldIndex = nextVisible.findIndex((p) => p.id === active.id);
-      const newIndex = nextVisible.findIndex((p) => p.id === over.id);
+      const newIndex = nextVisible.findIndex((p) => p.id === overId);
       if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return;
       nextVisible = arrayMove(nextVisible, oldIndex, newIndex);
     } else {
-      const overId = String(over.id);
       const fromIndexes = dragging
         .map((id) => nextVisible.findIndex((p) => p.id === id))
         .filter((i) => i >= 0)
@@ -913,153 +1119,381 @@ export function AdminPhotoGrid({
     await persistFullOrder(merged);
   }
 
-  async function createFolder() {
-    const name = newFolderName.trim();
-    if (!name) return;
-    setCreatingFolder(true);
+  async function createFolderRequest(name: string): Promise<MediaFolder | null> {
+    const res = await fetch("/api/media-folders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ project_id: projectId, name }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error((data as { error?: string }).error || "Failed to create folder");
+      return null;
+    }
+    return data as MediaFolder;
+  }
+
+  async function createFolder(name: string, moveAfter?: string[]) {
+    setBusy(true);
+    try {
+      const folder = await createFolderRequest(name);
+      if (!folder) return;
+      const nextFolders = [...folders, folder].sort((a, b) => a.display_order - b.display_order);
+      onFoldersChange(nextFolders);
+      setFolderDialog(null);
+      if (moveAfter?.length) {
+        await moveToFolder(moveAfter, folder.id, folder.name);
+      } else {
+        toast.success(`Folder “${folder.name}” created`);
+        navigate(folder.id);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function renameFolder(folder: MediaFolder, name: string) {
+    if (name === folder.name) {
+      setFolderDialog(null);
+      return;
+    }
+    setBusy(true);
     try {
       const res = await fetch("/api/media-folders", {
-        method: "POST",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ project_id: projectId, name }),
+        body: JSON.stringify({ id: folder.id, project_id: projectId, name }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data.error || "Failed to create folder");
+        toast.error((data as { error?: string }).error || "Failed to rename folder");
         return;
       }
-      onFoldersChange(
-        [...folders, data as MediaFolder].sort((a, b) => a.display_order - b.display_order)
-      );
-      setNewFolderOpen(false);
-      setNewFolderName("");
-      setFolderFilter(data.id);
-      toast.success("Folder created");
-      onRefresh?.();
+      onFoldersChange(folders.map((f) => (f.id === folder.id ? { ...f, name } : f)));
+      setFolderDialog(null);
+      toast.success("Folder renamed");
     } finally {
-      setCreatingFolder(false);
+      setBusy(false);
     }
   }
 
   async function deleteFolder(folder: MediaFolder) {
-    if (
-      !confirm(
-        `Delete folder "${folder.name}"? Photos inside will not be deleted — they will move to Unfiled.`
-      )
-    ) {
-      return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/media-folders?id=${folder.id}&project_id=${projectId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || "Failed to delete folder");
+        return;
+      }
+      onFoldersChange(folders.filter((f) => f.id !== folder.id));
+      onPhotosChange(
+        photosRef.current.map((p) => (p.folder_id === folder.id ? { ...p, folder_id: null } : p))
+      );
+      if (view === folder.id) navigate("all");
+      setDeleteTarget(null);
+      toast.success(`Folder deleted — its photos are now in ${UNFILED_FOLDER_LABEL}`);
+      onRefresh?.();
+    } finally {
+      setBusy(false);
     }
-    const res = await fetch(`/api/media-folders?id=${folder.id}&project_id=${projectId}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      toast.error((data as { error?: string }).error || "Failed to delete folder");
-      return;
-    }
-    onFoldersChange(folders.filter((f) => f.id !== folder.id));
-    onPhotosChange(
-      photos.map((p) => (p.folder_id === folder.id ? { ...p, folder_id: null } : p))
-    );
-    if (folderFilter === folder.id) setFolderFilter("all");
-    toast.success("Folder deleted — photos moved to Unfiled");
-    onRefresh?.();
   }
 
-  async function renameFolder(folder: MediaFolder) {
-    const name = window.prompt("Rename folder", folder.name)?.trim();
-    if (!name || name === folder.name) return;
-    const res = await fetch("/api/media-folders", {
+  function requestMove(ids: string[], targetFolderId?: string | null) {
+    if (!ids.length) return;
+    if (targetFolderId === undefined) {
+      setMoveIds(ids);
+      return;
+    }
+    const sharedCount = ids.filter((id) => shareSummary?.[id]).length;
+    if (sharedCount > 0) {
+      // Dropping onto a tile still needs the shared-photo warning.
+      setMoveIds(ids);
+      return;
+    }
+    void moveToFolder(ids, targetFolderId);
+  }
+
+  async function moveToFolder(ids: string[], targetFolderId: string | null, targetName?: string) {
+    const previous = photosRef.current;
+    const actuallyMoving = ids.filter((id) => previous.find((p) => p.id === id)?.folder_id !== targetFolderId);
+    if (!actuallyMoving.length) {
+      setMoveIds(null);
+      return;
+    }
+    onPhotosChange(
+      previous.map((p) => (actuallyMoving.includes(p.id) ? { ...p, folder_id: targetFolderId } : p))
+    );
+    setBusy(true);
+    try {
+      const res = await fetch("/api/media/move-to-folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ project_id: projectId, folder_id: targetFolderId, photo_ids: actuallyMoving }),
+      });
+      if (!res.ok) {
+        onPhotosChange(previous);
+        const data = await res.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || "Failed to move photos");
+        return;
+      }
+      setMoveIds(null);
+      clearSelection();
+      const name =
+        targetName ?? (targetFolderId ? folderById.get(targetFolderId)?.name ?? "folder" : UNFILED_FOLDER_LABEL);
+      toast.success(`Moved ${photoCountLabel(actuallyMoving.length)} to ${name}`);
+      onRefresh?.();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function savePhotoName(photo: MediaAsset, title: string) {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/media/${photo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id: photo.id, title }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error((data as { error?: string }).error || "Failed to rename");
+        return;
+      }
+      onPhotosChange(photosRef.current.map((p) => (p.id === photo.id ? { ...p, ...(data as MediaAsset) } : p)));
+      setRenamePhoto(null);
+      toast.success("Photo renamed");
+      onRefresh?.();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setVisibility(ids: string[], visible: boolean) {
+    if (ids.length === 1) {
+      onToggleVisibility(ids[0], visible);
+      return;
+    }
+    const previous = photosRef.current;
+    const visibility = visible ? "client" : "admin";
+    onPhotosChange(previous.map((p) => (ids.includes(p.id) ? { ...p, visibility } : p)));
+    const res = await fetch("/api/media/bulk", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ id: folder.id, project_id: projectId, name }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      toast.error((data as { error?: string }).error || "Failed to rename");
-      return;
-    }
-    onFoldersChange(folders.map((f) => (f.id === folder.id ? { ...f, name } : f)));
-    toast.success("Folder renamed");
-  }
-
-  async function moveSelectedToFolder(targetFolderId: string | null) {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return;
-    const previous = photos;
-    onPhotosChange(
-      photos.map((p) => (ids.includes(p.id) ? { ...p, folder_id: targetFolderId } : p))
-    );
-    const res = await fetch("/api/media/move-to-folder", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        project_id: projectId,
-        folder_id: targetFolderId,
-        photo_ids: ids,
-      }),
+      body: JSON.stringify({ action: "set_visibility", ids, visibility }),
     });
     if (!res.ok) {
       onPhotosChange(previous);
       const data = await res.json().catch(() => ({}));
-      toast.error((data as { error?: string }).error || "Failed to move photos");
+      toast.error((data as { error?: string }).error || "Failed to update visibility");
       return;
     }
-    clearSelection();
     toast.success(
-      targetFolderId
-        ? `Moved ${ids.length} photo${ids.length === 1 ? "" : "s"}`
-        : `Removed ${ids.length} photo${ids.length === 1 ? "" : "s"} from folder`
+      visible ? `${photoCountLabel(ids.length)} visible to client` : `${photoCountLabel(ids.length)} hidden from client`
     );
     onRefresh?.();
   }
 
-  async function saveRename() {
-    if (!renameId) return;
-    const title = renameValue.trim();
-    if (!title) {
-      toast.error("Title cannot be empty");
-      return;
+  async function deletePhotos(ids: string[]) {
+    setBusy(true);
+    try {
+      if (ids.length === 1) {
+        const ok = await onDelete(ids[0]);
+        if (ok === false) return;
+      } else {
+        const res = await fetch("/api/media/bulk", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ action: "delete", ids }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          toast.error((data as { error?: string }).error || "Failed to delete photos");
+          return;
+        }
+        onPhotosChange(photosRef.current.filter((p) => !ids.includes(p.id)));
+        toast.success(`${photoCountLabel(ids.length)} deleted`);
+        onRefresh?.();
+      }
+      setDeleteTarget(null);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.delete(id);
+        return next;
+      });
+    } finally {
+      setBusy(false);
     }
-    const res = await fetch(`/api/media/${renameId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ id: renameId, title }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      toast.error((data as { error?: string }).error || "Failed to rename");
-      return;
-    }
-    onPhotosChange(photos.map((p) => (p.id === renameId ? { ...p, ...(data as MediaAsset) } : p)));
-    setRenameId(null);
-    toast.success("Photo renamed");
-    onRefresh?.();
   }
 
   const selectionCount = selectedIds.size;
+  const selectedList = useMemo(() => Array.from(selectedIds), [selectedIds]);
   const showSelectionChrome = selectionCount > 0 || (coarsePointer && selectMode);
   const remainingCount = visiblePhotos.length - selectionCount;
+  const selectedAllVisible = selectedList.length > 0 && selectedList.every((id) => {
+    const p = allProjectPhotos.find((x) => x.id === id);
+    return p ? isClientVisible(p) : true;
+  });
+
+  function openPhotoMenu(photo: MediaAsset, anchor: ActionMenuAnchor) {
+    if (selectedIds.has(photo.id) && selectedIds.size > 1) {
+      setMenu({ anchor, title: `${photoCountLabel(selectedIds.size)} selected`, items: selectionMenuItems() });
+      return;
+    }
+    if (!coarsePointer && !selectedIds.has(photo.id)) {
+      setSelectedIds(new Set([photo.id]));
+    }
+    setMenu({ anchor, title: mediaDisplayName(photo), items: photoMenuItems(photo) });
+  }
+
+  function photoMenuItems(photo: MediaAsset): ActionMenuItem[] {
+    const visible = isClientVisible(photo);
+    const cover = isHero(photo.id);
+    const items: ActionMenuItem[] = [
+      { id: "open", label: "Open", icon: ZoomIn, onSelect: () => setLightboxPhoto(photo) },
+      { id: "download", label: "Download", icon: Download, onSelect: () => setDownloadPhoto(photo) },
+    ];
+    if (onShare) {
+      items.push({
+        id: "share",
+        label: shareSummary?.[photo.id] ? "Manage sharing…" : "Share…",
+        icon: Share2,
+        onSelect: () => onShare(photo),
+      });
+    }
+    items.push(
+      { type: "separator", id: "s1" },
+      { id: "rename", label: "Rename…", icon: Pencil, onSelect: () => setRenamePhoto(photo) },
+      { id: "move", label: "Move to folder…", icon: FolderInput, onSelect: () => requestMove([photo.id]) },
+      {
+        id: "cover",
+        label: cover ? "Project cover" : "Set as project cover",
+        icon: Star,
+        disabled: cover,
+        onSelect: () => onSetHero(photo.id),
+      },
+      {
+        id: "visibility",
+        label: visible ? "Hide from client" : "Show to client",
+        icon: visible ? EyeOff : Eye,
+        onSelect: () => void setVisibility([photo.id], !visible),
+      },
+      { type: "separator", id: "s2" },
+      {
+        id: "delete",
+        label: "Delete photo…",
+        icon: Trash2,
+        destructive: true,
+        onSelect: () => setDeleteTarget({ kind: "photos", ids: [photo.id] }),
+      }
+    );
+    return items;
+  }
+
+  function selectionMenuItems(): ActionMenuItem[] {
+    const ids = selectedList;
+    return [
+      { type: "label", id: "l", label: `${photoCountLabel(ids.length)} selected` },
+      { id: "move", label: "Move to folder…", icon: FolderInput, onSelect: () => requestMove(ids) },
+      { id: "top", label: "Move to top", icon: ArrowUpToLine, onSelect: () => void moveIdsToInsertIndex(new Set(ids), 0) },
+      {
+        id: "bottom",
+        label: "Move to bottom",
+        icon: ArrowDownToLine,
+        onSelect: () => void moveIdsToInsertIndex(new Set(ids), remainingCount),
+      },
+      { id: "show", label: "Show to client", icon: Eye, onSelect: () => void setVisibility(ids, true) },
+      { id: "hide", label: "Hide from client", icon: EyeOff, onSelect: () => void setVisibility(ids, false) },
+      { type: "separator", id: "s" },
+      {
+        id: "delete",
+        label: `Delete ${photoCountLabel(ids.length)}…`,
+        icon: Trash2,
+        destructive: true,
+        onSelect: () => setDeleteTarget({ kind: "photos", ids }),
+      },
+    ];
+  }
+
+  function folderMenuItems(folder: MediaFolder): ActionMenuItem[] {
+    const count = folderStats.get(folder.id)?.count ?? 0;
+    return [
+      { id: "open", label: "Open", icon: FolderOpen, onSelect: () => navigate(folder.id) },
+      { id: "upload", label: "Upload photos here…", icon: Upload, onSelect: () => startUpload(folder.id) },
+      {
+        id: "download",
+        label: "Download folder",
+        icon: Download,
+        disabled: count === 0,
+        onSelect: () => downloadFolder(folder.id),
+      },
+      { id: "rename", label: "Rename…", icon: Pencil, onSelect: () => setFolderDialog({ mode: "rename", folder }) },
+      { type: "separator", id: "s" },
+      {
+        id: "delete",
+        label: "Delete folder…",
+        icon: Trash2,
+        destructive: true,
+        onSelect: () => setDeleteTarget({ kind: "folder", folder }),
+      },
+    ];
+  }
+
+  function generalMenuItems(): ActionMenuItem[] {
+    const count = folderStats.get(UNFILED_FOLDER_SCOPE)?.count ?? 0;
+    return [
+      { id: "open", label: "Open", icon: FolderOpen, onSelect: () => navigate(UNFILED_FOLDER_SCOPE) },
+      { id: "upload", label: "Upload photos here…", icon: Upload, onSelect: () => startUpload(null) },
+      {
+        id: "download",
+        label: `Download ${UNFILED_FOLDER_LABEL}`,
+        icon: Download,
+        disabled: count === 0,
+        onSelect: () => downloadFolder(UNFILED_FOLDER_SCOPE),
+      },
+    ];
+  }
+
+  const moveCurrentFolder = useMemo<string | null | undefined>(() => {
+    if (!moveIds?.length) return undefined;
+    const folderIds = new Set(moveIds.map((id) => allProjectPhotos.find((p) => p.id === id)?.folder_id ?? null));
+    return folderIds.size === 1 ? Array.from(folderIds)[0] : undefined;
+  }, [moveIds, allProjectPhotos]);
+
+  const deleteIds = deleteTarget?.kind === "photos" ? deleteTarget.ids : [];
+  const deleteSharedCount =
+    deleteTarget?.kind === "folder"
+      ? allProjectPhotos.filter((p) => p.folder_id === deleteTarget.folder.id && shareSummary?.[p.id]).length
+      : deleteIds.filter((id) => shareSummary?.[id]).length;
+  const deleteIncludesCover = deleteIds.some((id) => isHero(id));
+  const singleDeletePhoto =
+    deleteIds.length === 1 ? allProjectPhotos.find((p) => p.id === deleteIds[0]) ?? null : null;
 
   const selectionActions = (
     <>
-      <span className="text-sm font-medium text-heading">
-        {selectionCount} selected
-      </span>
-      <div className="flex flex-wrap items-center gap-2">
+      <span className="text-sm font-medium text-heading">{selectionCount} selected</span>
+      <div className="flex flex-1 flex-wrap items-center gap-2">
         {selectionCount > 0 && (
           <>
+            <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => requestMove(selectedList)}>
+              <FolderInput className="h-3.5 w-3.5" /> Move to folder
+            </Button>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-8"
-              onClick={() => void moveSelectionToInsertIndex(0)}
+              className="h-9"
+              onClick={() => void moveIdsToInsertIndex(selectedIds, 0)}
             >
               <ArrowUpToLine className="h-3.5 w-3.5" /> Top
             </Button>
@@ -1067,43 +1501,23 @@ export function AdminPhotoGrid({
               type="button"
               variant="outline"
               size="sm"
-              className="h-8"
-              onClick={() => void moveSelectionToInsertIndex(remainingCount)}
+              className="h-9"
+              onClick={() => void moveIdsToInsertIndex(selectedIds, remainingCount)}
             >
               <ArrowDownToLine className="h-3.5 w-3.5" /> Bottom
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8"
-              onClick={() => setPlacementMode(true)}
-            >
-              <Move className="h-3.5 w-3.5" /> Move
+            <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setPlacementMode(true)}>
+              <Move className="h-3.5 w-3.5" /> Place…
             </Button>
-            <Select
-              className="min-w-[10rem]"
-              value={moveFolderId}
-              onChange={(e) => setMoveFolderId(e.target.value)}
-              placeholder="Move to folder…"
-              options={[
-                { value: "__unfiled__", label: "Remove from folder (Unfiled)" },
-                ...folders.map((f) => ({ value: f.id, label: f.name })),
-              ]}
-            />
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-8"
-              disabled={!moveFolderId}
-              onClick={() => {
-                const target = moveFolderId === "__unfiled__" ? null : moveFolderId;
-                void moveSelectedToFolder(target);
-                setMoveFolderId("");
-              }}
+              className="h-9"
+              onClick={() => void setVisibility(selectedList, !selectedAllVisible)}
             >
-              <FolderInput className="h-3.5 w-3.5" /> Folder
+              {selectedAllVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {selectedAllVisible ? "Hide" : "Show"}
             </Button>
           </>
         )}
@@ -1111,7 +1525,7 @@ export function AdminPhotoGrid({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-8"
+          className="h-9"
           onClick={() => {
             setSelectedIds(new Set(visibleIds));
             if (coarsePointer) setSelectMode(true);
@@ -1119,324 +1533,484 @@ export function AdminPhotoGrid({
         >
           Select all
         </Button>
-        <Button type="button" variant="ghost" size="sm" className="h-8" onClick={clearSelection}>
+        <Button type="button" variant="ghost" size="sm" className="h-9" onClick={clearSelection}>
           <X className="h-3.5 w-3.5" /> {coarsePointer ? "Done" : "Clear"}
         </Button>
+        {selectionCount > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto h-9 border-red-300 text-red-600 hover:bg-red-50 surface-dark:border-red-500/40 surface-dark:text-red-400 surface-dark:hover:bg-red-500/10"
+            onClick={() => setDeleteTarget({ kind: "photos", ids: selectedList })}
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Delete
+          </Button>
+        )}
       </div>
     </>
   );
 
+  const totalPhotos = allProjectPhotos.length;
+  const viewCount = visiblePhotos.length;
+
   return (
-    <div className={cn("space-y-3", coarsePointer && showSelectionChrome && "pb-28")}>
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setFolderFilter("all")}
-          className={cn(
-            "rounded-full px-3 py-1.5 text-xs font-medium transition",
-            folderFilter === "all"
-              ? "bg-accent text-accent-foreground"
-              : "bg-slate-100 surface-dark:bg-subtle text-slate-700 surface-dark:text-foreground hover:bg-slate-200 surface-dark:hover:bg-subtle"
-          )}
-        >
-          All photos ({allProjectPhotos.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setFolderFilter("unfiled")}
-          className={cn(
-            "rounded-full px-3 py-1.5 text-xs font-medium transition",
-            folderFilter === "unfiled"
-              ? "bg-accent text-accent-foreground"
-              : "bg-slate-100 surface-dark:bg-subtle text-slate-700 surface-dark:text-foreground hover:bg-slate-200 surface-dark:hover:bg-subtle"
-          )}
-        >
-          {UNFILED_FOLDER_LABEL} ({folderCounts.get("null") ?? 0})
-        </button>
-        {countFolderDownloadableAssets(allProjectPhotos, UNFILED_FOLDER_SCOPE, true) > 0 && (
-          <ProjectZipDownload
-            projectId={projectId}
-            folderId={UNFILED_FOLDER_SCOPE}
-            folderLabel={UNFILED_FOLDER_LABEL}
-            expectedFileCount={countFolderDownloadableAssets(allProjectPhotos, UNFILED_FOLDER_SCOPE, true)}
-            variant="default"
-            compact
-            className="!space-y-0"
-          />
-        )}
-        {folders.map((folder) => {
-          const folderDownloadCount = countFolderDownloadableAssets(allProjectPhotos, folder.id, true);
-          return (
-          <div key={folder.id} className="flex items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => setFolderFilter(folder.id)}
-              onDragOver={(e) => {
-                if (selectedIds.size) e.preventDefault();
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (selectedIds.size) void moveSelectedToFolder(folder.id);
-              }}
-              className={cn(
-                "rounded-full px-3 py-1.5 text-xs font-medium transition",
-                folderFilter === folder.id
-                  ? "bg-accent text-accent-foreground"
-                  : "bg-slate-100 surface-dark:bg-subtle text-slate-700 surface-dark:text-foreground hover:bg-slate-200 surface-dark:hover:bg-subtle"
-              )}
-            >
-              {folder.name} ({folderCounts.get(folder.id) ?? 0})
-            </button>
-            {folderDownloadCount > 0 && (
-              <ProjectZipDownload
-                projectId={projectId}
-                folderId={folder.id}
-                folderLabel={folder.name}
-                expectedFileCount={folderDownloadCount}
-                variant="default"
-                compact
-                className="!space-y-0"
-              />
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              title="Rename folder"
-              onClick={() => void renameFolder(folder)}
-            >
-              <Pencil className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 text-red-500"
-              title="Delete folder"
-              onClick={() => void deleteFolder(folder)}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        );
-        })}
-        <Button variant="outline" size="sm" className="h-8" onClick={() => setNewFolderOpen(true)}>
-          <FolderPlus className="h-3.5 w-3.5" /> New folder
-        </Button>
+    <div
+      data-photo-grid
+      className={cn("relative space-y-4", coarsePointer && showSelectionChrome && "pb-36")}
+      onDragEnter={(e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        fileDragDepth.current += 1;
+        setFileDragActive(true);
+      }}
+      onDragOver={(e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }}
+      onDragLeave={(e) => {
+        if (!hasFiles(e)) return;
+        fileDragDepth.current = Math.max(0, fileDragDepth.current - 1);
+        if (fileDragDepth.current === 0) setFileDragActive(false);
+      }}
+      onDrop={(e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        fileDragDepth.current = 0;
+        setFileDragActive(false);
+        submitFiles(Array.from(e.dataTransfer.files), viewUploadFolder);
+      }}
+    >
+      <input
+        ref={uploadInputRef}
+        type="file"
+        multiple
+        accept={PHOTO_ACCEPT.join(",")}
+        className="hidden"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          e.target.value = "";
+          if (files.length) submitFiles(files, uploadFolderRef.current);
+        }}
+      />
 
-        {coarsePointer && !placementMode && (
-          <Button
-            type="button"
-            variant={selectMode ? "accent" : "outline"}
-            size="sm"
-            className="h-8"
-            onClick={() => {
-              if (selectMode) clearSelection();
-              else setSelectMode(true);
-            }}
-          >
-            {selectMode ? "Selecting…" : "Select"}
-          </Button>
-        )}
-      </div>
-
-      {scopedFolderDownload && (
-        <ProjectZipDownload
-          projectId={projectId}
-          folderId={scopedFolderDownload.scope}
-          folderLabel={scopedFolderDownload.label}
-          expectedFileCount={scopedFolderDownload.count}
-          variant="default"
-        />
-      )}
-
-      <p className="text-xs text-muted">
-        {coarsePointer
-          ? "Tap Select (or long-press a photo) to multi-select. Use Move, Top, or Bottom to reorder. Press-and-hold the grip to drag one photo."
-          : "Drag photos to reorder. Cmd/Ctrl-click or marquee to multi-select, then drag the group. Use Move for placement."}
-      </p>
-
-      {placementMode && (
-        <div className="sticky top-2 z-30 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2">
-          <p className="text-sm font-medium text-heading">
-            Tap where to move {selectionCount} photo{selectionCount === 1 ? "" : "s"}
-          </p>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8"
-            onClick={() => setPlacementMode(false)}
-          >
-            Cancel
-          </Button>
-        </div>
-      )}
-
-      {/* Desktop selection bar (top) */}
-      {!coarsePointer && showSelectionChrome && !placementMode && (
-        <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2">
-          {selectionActions}
-        </div>
-      )}
-
-      {visiblePhotos.length === 0 ? (
-        <p className="py-4 text-center text-sm text-muted">No photos in this view</p>
-      ) : (
-        <div
-          ref={scrollRef}
-          className="relative max-h-[70vh] overflow-auto rounded-lg"
-          onMouseDown={onGridMouseDown}
-        >
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={(e) => void handleDragEnd(e)}
-            onDragCancel={() => {
-              setActiveDragIds([]);
-              window.setTimeout(() => {
-                justDraggedRef.current = false;
-              }, 0);
-            }}
-            autoScroll={{ threshold: { x: 0.15, y: 0.15 }, acceleration: 12 }}
-          >
-            <SortableContext items={visibleIds} strategy={rectSortingStrategy}>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {placementMode && (
-                  <InsertionGap
-                    onInsert={() => void moveSelectionToInsertIndex(0)}
-                    label="Move here (start)"
-                  />
-                )}
-                {visiblePhotos.map((p, i) => (
-                  <div key={p.id} className="contents">
-                    <SortablePhotoCard
-                      photo={p}
-                      index={i}
-                      selected={selectedIds.has(p.id)}
-                      isHeroPhoto={isHero(p.id)}
-                      coarsePointer={coarsePointer}
-                      selectMode={Boolean(coarsePointer && selectMode)}
-                      placementMode={placementMode}
-                      showHandle
-                      thumbUrl={thumbUrls[p.id] ?? null}
-                      onThumbVisible={onThumbVisible}
-                      scrollRoot={scrollRoot}
-                      onActivate={handleActivate}
-                      onOpen={() => {
-                        if (placementMode) return;
-                        if (coarsePointer && selectMode) return;
-                        setLightboxPhoto(p);
-                      }}
-                      onSetHero={() => onSetHero(p.id)}
-                      onToggleVisibility={() =>
-                        onToggleVisibility(p.id, !isClientVisible(p))
-                      }
-                      onDelete={() => onDelete(p.id)}
-                      onRename={() => {
-                        setRenameId(p.id);
-                        setRenameValue(mediaDisplayName(p));
-                      }}
-                      onLongPressSelect={onLongPressSelect}
-                      onToggleSelect={onToggleSelect}
-                      onPaintSelectEnter={onPaintSelectEnter}
-                      onPaintSelectMove={onPaintSelectMove}
-                      onPaintSelectEnd={onPaintSelectEnd}
-                    />
-                    {placementMode && (
-                      <InsertionGap
-                        onInsert={() =>
-                          void moveSelectionToInsertIndex(
-                            visiblePhotos
-                              .slice(0, i + 1)
-                              .filter((photo) => !selectedIds.has(photo.id)).length
-                          )
-                        }
-                        label="Move here"
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </SortableContext>
-            <DragOverlay dropAnimation={null}>
-              {activeDragIds.length > 0 ? (
-                <div className="relative h-28 w-28 select-none">
-                  <div className="absolute inset-0 rotate-[-4deg] rounded-lg bg-slate-200 surface-dark:bg-border shadow" />
-                  <div className="absolute inset-0 rotate-[3deg] rounded-lg bg-slate-100 surface-dark:bg-subtle shadow" />
-                  <div className="absolute inset-0 flex items-center justify-center rounded-lg border-2 border-accent bg-white surface-dark:bg-card text-sm font-semibold text-heading shadow-lg">
-                    {activeDragIds.length} photo{activeDragIds.length === 1 ? "" : "s"}
-                  </div>
-                </div>
+      {/* Toolbar: location on the left, actions for this location on the right */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <nav aria-label="Photo folders" className="flex min-w-[12rem] flex-1 items-center gap-1 text-sm">
+          {view === "all" ? (
+            <h3 className="flex items-center gap-2 font-semibold text-heading">
+              All photos <span className="font-normal text-muted">{totalPhotos}</span>
+            </h3>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => navigate("all")}
+                className="shrink-0 rounded-md px-1.5 py-1 font-medium text-muted hover:bg-accent-subtle hover:text-heading"
+              >
+                All photos
+              </button>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+              <h3 className="flex min-w-0 items-center gap-2 font-semibold text-heading" aria-current="page">
+                <span className="truncate">{viewLabel}</span>
+                <span className="shrink-0 font-normal text-muted">{viewCount}</span>
+              </h3>
+              {currentFolder ? (
+                <button
+                  type="button"
+                  aria-label={`${currentFolder.name} actions`}
+                  aria-haspopup="menu"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted hover:bg-accent-subtle hover:text-heading"
+                  onClick={(e) =>
+                    setMenu({
+                      anchor: { kind: "element", element: e.currentTarget },
+                      title: currentFolder.name,
+                      items: folderMenuItems(currentFolder),
+                    })
+                  }
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
               ) : null}
-            </DragOverlay>
-          </DndContext>
-
-          {marquee && (
-            <div
-              className="pointer-events-none absolute z-20 border border-accent/80 bg-accent/15"
-              style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }}
-            />
+            </>
           )}
+          {headerSlot ? <div className="ml-1 hidden shrink-0 sm:block">{headerSlot}</div> : null}
+        </nav>
+        <div className="flex flex-wrap items-center gap-2">
+          {view !== "all" && viewCount > 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              disabled={zip.active}
+              onClick={() => downloadFolder(view)}
+            >
+              <Download className="h-3.5 w-3.5" /> Download
+            </Button>
+          ) : null}
+          {view === "all" ? (
+            <Button variant="outline" size="sm" className="h-9" onClick={() => setFolderDialog({ mode: "create" })}>
+              <FolderPlus className="h-3.5 w-3.5" /> New folder
+            </Button>
+          ) : null}
+          {coarsePointer && viewCount > 0 && !placementMode ? (
+            <Button
+              type="button"
+              variant={selectMode ? "accent" : "outline"}
+              size="sm"
+              className="h-9"
+              onClick={() => {
+                if (selectMode) clearSelection();
+                else setSelectMode(true);
+              }}
+            >
+              {selectMode ? "Selecting…" : "Select"}
+            </Button>
+          ) : null}
+          <Button variant="accent" size="sm" className="h-9" onClick={() => startUpload(viewUploadFolder)}>
+            <Upload className="h-3.5 w-3.5" />
+            {currentFolder ? "Upload to folder" : "Upload"}
+          </Button>
+        </div>
+      </div>
+      {headerSlot ? <div className="sm:hidden">{headerSlot}</div> : null}
+
+      {zip.panel}
+
+      <DndContext
+        id={`admin-photo-grid-${projectId}`}
+        sensors={sensors}
+        collisionDetection={photoCollision}
+        onDragStart={handleDragStart}
+        onDragEnd={(e) => void handleDragEnd(e)}
+        onDragCancel={() => {
+          setActiveDragIds([]);
+          window.setTimeout(() => {
+            justDraggedRef.current = false;
+          }, 0);
+        }}
+        autoScroll={{ threshold: { x: 0.15, y: 0.15 }, acceleration: 12 }}
+      >
+        {showFolderTiles && (
+          <section aria-label="Folders" className="space-y-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Folders</h4>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              <PhotoFolderTile
+                dropId={UNFILED_FOLDER_SCOPE}
+                name={UNFILED_FOLDER_LABEL}
+                count={folderStats.get(UNFILED_FOLDER_SCOPE)?.count ?? 0}
+                coverUrl={(() => {
+                  const id = folderStats.get(UNFILED_FOLDER_SCOPE)?.coverId;
+                  return id ? thumbUrls[id] ?? null : null;
+                })()}
+                general
+                onOpen={() => navigate(UNFILED_FOLDER_SCOPE)}
+                onMenu={(anchor) =>
+                  setMenu({ anchor, title: UNFILED_FOLDER_LABEL, items: generalMenuItems() })
+                }
+              />
+              {folders.map((folder) => {
+                const stats = folderStats.get(folder.id);
+                return (
+                  <PhotoFolderTile
+                    key={folder.id}
+                    dropId={folder.id}
+                    name={folder.name}
+                    count={stats?.count ?? 0}
+                    coverUrl={stats?.coverId ? thumbUrls[stats.coverId] ?? null : null}
+                    onOpen={() => navigate(folder.id)}
+                    onMenu={(anchor) => setMenu({ anchor, title: folder.name, items: folderMenuItems(folder) })}
+                  />
+                );
+              })}
+              <NewFolderTile onClick={() => setFolderDialog({ mode: "create" })} />
+            </div>
+            {!coarsePointer && totalPhotos > 0 ? (
+              <p className="text-xs text-muted">Drag photos onto a folder to move them.</p>
+            ) : null}
+          </section>
+        )}
+
+        {totalPhotos === 0 && view === "all" ? (
+          <EmptyState
+            icon={ImagePlus}
+            title="No photos yet"
+            description={`Upload JPEG, PNG, or WebP photos${maxFileSizeLabel ? ` (up to ${maxFileSizeLabel} each)` : ""}, or drag them onto this area.`}
+          >
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="accent" onClick={() => startUpload(null)}>
+                <Upload className="h-4 w-4" /> Upload photos
+              </Button>
+              <Button variant="outline" onClick={() => setFolderDialog({ mode: "create" })}>
+                <FolderPlus className="h-4 w-4" /> New folder
+              </Button>
+            </div>
+          </EmptyState>
+        ) : viewCount === 0 ? (
+          <EmptyState
+            icon={view === UNFILED_FOLDER_SCOPE ? Images : FolderOpen}
+            title={view === UNFILED_FOLDER_SCOPE ? "Every photo is in a folder" : "This folder is empty"}
+            description={
+              view === UNFILED_FOLDER_SCOPE
+                ? "Photos that aren't in a folder appear here."
+                : "Upload photos here, or move photos in from All photos."
+            }
+          >
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="accent" onClick={() => startUpload(viewUploadFolder)}>
+                <Upload className="h-4 w-4" /> Upload photos
+              </Button>
+              <Button variant="outline" onClick={() => navigate("all")}>
+                Back to All photos
+              </Button>
+            </div>
+          </EmptyState>
+        ) : (
+          <section aria-label={viewLabel} className="space-y-2">
+            {showFolderTiles ? (
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">All photos</h4>
+            ) : null}
+            <p className="text-xs text-muted">
+              {coarsePointer
+                ? "Tap a photo to open it. Tap Select (or long-press) to choose several. Hold the grip to drag."
+                : "Click to select, double-click to open, right-click for actions. Drag to reorder; Cmd/Ctrl-click or drag a box to select several."}
+            </p>
+
+            {placementMode && (
+              <div className="sticky top-2 z-30 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/30 bg-card px-3 py-2 shadow-sm">
+                <p className="text-sm font-medium text-heading">
+                  Tap where to move {photoCountLabel(selectionCount)}
+                </p>
+                <Button type="button" variant="ghost" size="sm" className="h-9" onClick={() => setPlacementMode(false)}>
+                  Cancel
+                </Button>
+              </div>
+            )}
+
+            {!coarsePointer && showSelectionChrome && !placementMode && (
+              <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-card px-3 py-2 shadow-sm">
+                {selectionActions}
+              </div>
+            )}
+
+            <div
+              ref={scrollRef}
+              className="relative max-h-[70vh] overflow-auto rounded-lg"
+              onMouseDown={onGridMouseDown}
+            >
+              <SortableContext items={visibleIds} strategy={rectSortingStrategy}>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {placementMode && (
+                    <InsertionGap onInsert={() => void moveIdsToInsertIndex(selectedIds, 0)} label="Move here (start)" />
+                  )}
+                  {visiblePhotos.map((p, i) => (
+                    <div key={p.id} className="contents">
+                      <SortablePhotoCard
+                        photo={p}
+                        index={i}
+                        selected={selectedIds.has(p.id)}
+                        isHeroPhoto={isHero(p.id)}
+                        shared={Boolean(shareSummary?.[p.id])}
+                        folderName={
+                          view === "all" && p.folder_id ? folderById.get(p.folder_id)?.name ?? null : null
+                        }
+                        coarsePointer={coarsePointer}
+                        selectMode={Boolean(coarsePointer && selectMode)}
+                        placementMode={placementMode}
+                        thumbUrl={thumbUrls[p.id] ?? null}
+                        thumbFailed={!thumbUrls[p.id] && (thumbFailures[p.id] ?? 0) >= THUMB_FAIL_LIMIT}
+                        onThumbVisible={onThumbVisible}
+                        onThumbError={onThumbError}
+                        onThumbRetry={onThumbRetry}
+                        scrollRoot={scrollRoot}
+                        onActivate={handleActivate}
+                        onOpen={() => setLightboxPhoto(p)}
+                        onMenu={openPhotoMenu}
+                        onLongPressSelect={onLongPressSelect}
+                        onToggleSelect={onToggleSelect}
+                        onPaintSelectEnter={onPaintSelectEnter}
+                        onPaintSelectMove={onPaintSelectMove}
+                        onPaintSelectEnd={onPaintSelectEnd}
+                      />
+                      {placementMode && (
+                        <InsertionGap
+                          onInsert={() =>
+                            void moveIdsToInsertIndex(
+                              selectedIds,
+                              visiblePhotos.slice(0, i + 1).filter((photo) => !selectedIds.has(photo.id)).length
+                            )
+                          }
+                          label="Move here"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </SortableContext>
+
+              {marquee && (
+                <div
+                  className="pointer-events-none absolute z-20 border border-accent/80 bg-accent/15"
+                  style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }}
+                />
+              )}
+            </div>
+          </section>
+        )}
+
+        <DragOverlay dropAnimation={null}>
+          {activeDragIds.length > 0 ? (
+            <div className="relative h-28 w-28 select-none">
+              <div className="absolute inset-0 rotate-[-4deg] rounded-lg bg-border shadow" />
+              <div className="absolute inset-0 rotate-[3deg] rounded-lg bg-subtle shadow" />
+              <div className="absolute inset-0 flex items-center justify-center rounded-lg border-2 border-accent bg-card text-sm font-semibold text-heading shadow-lg">
+                {photoCountLabel(activeDragIds.length)}
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {fileDragActive && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-accent bg-accent/10 backdrop-blur-[1px]">
+          <p className="rounded-lg bg-card px-4 py-2 text-sm font-semibold text-heading shadow">
+            Drop to upload to {viewLabel === "All photos" ? UNFILED_FOLDER_LABEL : viewLabel}
+          </p>
         </div>
       )}
 
       {/* Mobile selection bar (bottom, thumb-reachable) */}
       {coarsePointer && showSelectionChrome && !placementMode && (
-        <div
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-accent/30 bg-accent/5 px-3 py-3 backdrop-blur"
-          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
-        >
+        <div className="fixed inset-x-0 bottom-[calc(var(--admin-pwa-nav-height)+env(safe-area-inset-bottom,0px))] z-50 border-t border-border bg-card/95 px-3 py-3 shadow-lg backdrop-blur md:bottom-0 md:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto flex max-w-3xl flex-col gap-2">{selectionActions}</div>
         </div>
       )}
 
-      <Modal
-        open={newFolderOpen}
-        onClose={() => setNewFolderOpen(false)}
-        title="New photo folder"
-        footer={
-          <Button
-            variant="accent"
-            className="w-full min-h-11"
-            disabled={creatingFolder}
-            onClick={() => void createFolder()}
-          >
-            {creatingFolder ? "Creating…" : "Create folder"}
-          </Button>
-        }
-      >
-        <Input
-          value={newFolderName}
-          onChange={(e) => setNewFolderName(e.target.value)}
-          placeholder="e.g. Interior"
-          className="min-h-11"
-          onKeyDown={(e: ReactKeyboardEvent) => {
-            if (e.key === "Enter") void createFolder();
-          }}
-        />
-      </Modal>
+      <ActionMenu
+        anchor={menu?.anchor ?? null}
+        onClose={() => setMenu(null)}
+        items={menu?.items ?? []}
+        title={menu?.title ?? ""}
+      />
 
-      <Modal
-        open={!!renameId}
-        onClose={() => setRenameId(null)}
+      <NameDialog
+        open={folderDialog !== null}
+        title={folderDialog?.mode === "rename" ? "Rename folder" : "New folder"}
+        initialValue={folderDialog?.mode === "rename" ? folderDialog.folder.name : ""}
+        placeholder="e.g. Exterior"
+        confirmLabel={folderDialog?.mode === "rename" ? "Save" : "Create folder"}
+        busy={busy}
+        onClose={() => setFolderDialog(null)}
+        onSubmit={(name) => {
+          if (folderDialog?.mode === "rename") void renameFolder(folderDialog.folder, name);
+          else void createFolder(name, folderDialog?.moveIds);
+        }}
+      />
+
+      <NameDialog
+        open={renamePhoto !== null}
         title="Rename photo"
-        footer={
-          <Button variant="accent" className="w-full min-h-11" onClick={() => void saveRename()}>
-            Save name
-          </Button>
+        initialValue={renamePhoto ? mediaDisplayName(renamePhoto) : ""}
+        confirmLabel="Save"
+        busy={busy}
+        onClose={() => setRenamePhoto(null)}
+        onSubmit={(title) => {
+          if (renamePhoto) void savePhotoName(renamePhoto, title);
+        }}
+      />
+
+      <MoveToFolderDialog
+        open={moveIds !== null}
+        count={moveIds?.length ?? 0}
+        folders={folders}
+        currentFolderId={moveCurrentFolder}
+        sharedCount={(moveIds ?? []).filter((id) => shareSummary?.[id]).length}
+        busy={busy}
+        onClose={() => setMoveIds(null)}
+        onMove={(folderId) => {
+          if (moveIds) void moveToFolder(moveIds, folderId);
+        }}
+        onCreateAndMove={(name) => {
+          if (moveIds) void createFolder(name, moveIds);
+        }}
+      />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        busy={busy}
+        destructive
+        title={
+          deleteTarget?.kind === "folder"
+            ? `Delete folder “${deleteTarget.folder.name}”?`
+            : deleteIds.length === 1
+              ? "Delete photo?"
+              : `Delete ${photoCountLabel(deleteIds.length)}?`
         }
+        confirmLabel={
+          deleteTarget?.kind === "folder"
+            ? "Delete folder"
+            : deleteIds.length === 1
+              ? "Delete photo"
+              : `Delete ${photoCountLabel(deleteIds.length)}`
+        }
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          if (deleteTarget.kind === "folder") void deleteFolder(deleteTarget.folder);
+          else void deletePhotos(deleteTarget.ids);
+        }}
       >
-        <Input
-          value={renameValue}
-          onChange={(e) => setRenameValue(e.target.value)}
-          maxLength={120}
-          className="min-h-11"
-          onKeyDown={(e: ReactKeyboardEvent) => {
-            if (e.key === "Enter") void saveRename();
-          }}
-        />
-      </Modal>
+        {deleteTarget?.kind === "folder" ? (
+          (() => {
+            const count = folderStats.get(deleteTarget.folder.id)?.count ?? 0;
+            return (
+              <>
+                <p>
+                  {count === 0
+                    ? "This folder is empty."
+                    : `The ${photoCountLabel(count)} in this folder will move to ${UNFILED_FOLDER_LABEL}.`}{" "}
+                  <strong className="font-semibold text-heading">No photos are deleted.</strong>
+                </p>
+                <p className="text-muted">
+                  To delete the photos themselves, open the folder, select them, and choose Delete.
+                </p>
+              </>
+            );
+          })()
+        ) : (
+          <>
+            <p>
+              {singleDeletePhoto ? (
+                <>
+                  <strong className="font-semibold text-heading">{mediaDisplayName(singleDeletePhoto)}</strong>{" "}
+                  will be permanently removed, including the original file.
+                </>
+              ) : (
+                <>These photos will be permanently removed, including their original files.</>
+              )}{" "}
+              This can&apos;t be undone.
+            </p>
+            {deleteIncludesCover ? <p className="text-muted">The project cover will be cleared.</p> : null}
+          </>
+        )}
+        {deleteSharedCount > 0 ? (
+          <p className="text-muted">
+            {deleteSharedCount === 1 ? "1 shared photo" : `${deleteSharedCount} shared photos`} will stop being
+            available to the people and links it was shared with.
+          </p>
+        ) : null}
+      </ConfirmDialog>
+
+      <DownloadQualityDialog
+        open={downloadPhoto !== null}
+        onClose={() => setDownloadPhoto(null)}
+        title="Download photo"
+        onConfirm={(quality) => {
+          if (downloadPhoto) void downloadMediaAsset(downloadPhoto, { quality });
+          setDownloadPhoto(null);
+        }}
+      />
 
       {lightboxPhoto && (
         <AdminPhotoLightbox

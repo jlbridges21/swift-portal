@@ -11,6 +11,9 @@ export interface LibraryAsset {
   thumbnail_url: string | null;
   project_id: string | null;
   project_name: string;
+  /** Photo folder inside the project; null = General Photos (or not a project photo). */
+  folder_id: string | null;
+  folder_name: string | null;
   project_status: string;
   service_type: string;
   property_address: string;
@@ -239,6 +242,25 @@ async function loadProjectMap(
   return map;
 }
 
+async function attachFolderNames(
+  db: TenantServiceClient,
+  assets: LibraryAsset[]
+): Promise<LibraryAsset[]> {
+  const ids = [...new Set(assets.map((a) => a.folder_id).filter((id): id is string => !!id))];
+  if (!ids.length) return assets;
+  const names = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data } = await db
+      .from("media_folders")
+      .select("id, name")
+      .in("id", ids.slice(i, i + 100));
+    (data ?? []).forEach((f) => names.set(f.id as string, f.name as string));
+  }
+  return assets.map((a) =>
+    a.folder_id ? { ...a, folder_name: names.get(a.folder_id) ?? null } : a
+  );
+}
+
 function mapUnassignedMediaRow(row: MediaAsset): LibraryAsset {
   return {
     id: row.id,
@@ -248,6 +270,8 @@ function mapUnassignedMediaRow(row: MediaAsset): LibraryAsset {
     thumbnail_url: row.thumbnail_url ?? null,
     project_id: null,
     project_name: "Unassigned",
+    folder_id: null,
+    folder_name: null,
     project_status: "—",
     service_type: "—",
     property_address: "—",
@@ -296,6 +320,8 @@ function mapMediaRowWithProject(
     thumbnail_url: row.thumbnail_url ?? null,
     project_id: row.project_id,
     project_name: project.project_name,
+    folder_id: row.folder_id ?? null,
+    folder_name: null,
     project_status: project.status,
     service_type: project.service_type,
     property_address: project.property_address,
@@ -341,6 +367,8 @@ function mapTourRowWithProject(row: Tour, project: ProjectRow): LibraryAsset {
     thumbnail_url: row.thumbnail_url,
     project_id: row.project_id,
     project_name: project.project_name,
+    folder_id: null,
+    folder_name: null,
     project_status: project.status,
     service_type: project.service_type,
     property_address: project.property_address,
@@ -428,13 +456,13 @@ async function fetchMediaAssets(businessId: string, filters: LibraryFilters): Pr
     filtered.map((r) => r.project_id).filter((id): id is string => !!id)
   );
 
-  return filtered
-    .map((row) => {
-      if (!row.project_id) return mapUnassignedMediaRow(row);
-      const project = projectMap.get(row.project_id);
-      if (!project) return mapUnassignedMediaRow(row);
-      return mapMediaRowWithProject(row, project);
-    });
+  const mapped = filtered.map((row) => {
+    if (!row.project_id) return mapUnassignedMediaRow(row);
+    const project = projectMap.get(row.project_id);
+    if (!project) return mapUnassignedMediaRow(row);
+    return mapMediaRowWithProject(row, project);
+  });
+  return attachFolderNames(db, mapped);
 }
 
 async function fetchTourAssets(businessId: string, filters: LibraryFilters): Promise<LibraryAsset[]> {
@@ -599,7 +627,7 @@ export async function getMediaAssetDetail(
     const [withTags] = await attachTagsToAssets(db, [asset]);
     return withTags;
   }
-  const asset = mapMediaRowWithProject(data as MediaAsset, project);
+  const [asset] = await attachFolderNames(db, [mapMediaRowWithProject(data as MediaAsset, project)]);
   const [withTags] = await attachTagsToAssets(db, [asset]);
   return withTags;
 }

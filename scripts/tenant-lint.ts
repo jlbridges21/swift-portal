@@ -61,6 +61,7 @@ const BUSINESS_OWNED_TABLES = new Set([
   "media_assets",
   "media_downloads",
   "media_folders",
+  "media_shares",
   "notifications",
   "payments",
   "project_clients",

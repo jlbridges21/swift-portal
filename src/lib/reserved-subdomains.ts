@@ -44,6 +44,7 @@ export const RESERVED_APP_ROUTE_SLUGS = [
   "onboarding",
   "partner",
   "partners",
+  "photo",
   "platform",
   "pricing",
   "privacy",

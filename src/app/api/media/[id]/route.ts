@@ -66,6 +66,15 @@ export async function PATCH(request: Request) {
         .single();
       updates.client_id = project?.client_id ?? null;
       updates.property_id = project?.property_id ?? null;
+      if (!("folder_id" in updates)) {
+        const { data: current } = await db
+          .from("media_assets")
+          .select("project_id")
+          .eq("id", id)
+          .maybeSingle();
+        // Folders belong to one project; a reassigned photo can't keep the old folder.
+        if (current && current.project_id !== projectId) updates.folder_id = null;
+      }
     } else {
       updates.client_id = null;
       updates.property_id = null;
