@@ -124,7 +124,13 @@ export default async function ResourcesHubPage() {
         <section className="border-b border-[#E2E8F0] bg-white">
           <div className={`${SECTION_X} py-12 lg:py-16`}>
             <h2 className="text-2xl font-semibold tracking-tight text-[#0F172A] sm:text-3xl">Need the numbers first?</h2>
-            <p className="mt-2 max-w-2xl text-[#475569]">Free calculators work out what to charge, and the quote builder turns it into a PDF you can send.</p>
+            <p className="mt-2 max-w-2xl text-[#475569]">
+              Free calculators work out what to charge, and the quote builder turns it into a PDF you can send. See them all on the{" "}
+              <Link href="/tools" className="font-semibold text-[#4F46E5] hover:underline">
+                free tools for photographers
+              </Link>{" "}
+              page.
+            </p>
             <ul className="mt-6 grid gap-3 sm:grid-cols-3">
               {TOOLS.map((t) => (
                 <li key={t.key}>

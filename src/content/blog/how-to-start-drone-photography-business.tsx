@@ -540,7 +540,10 @@ export const article: BlogArticle = {
             portal. You propose a shoot time, and they accept it or counter-propose, which is useful when weather moves
             the date. They review stills and video with time-stamped comments, pay through Stripe straight to your
             account, and download from a portal with your logo and colors. For mapping and modeling clients, you can
-            embed 3D models from tools like DroneDeploy and Pix4D alongside photos and video.
+            embed 3D models from tools like DroneDeploy and Pix4D alongside photos and video. If you also shoot
+            ground-level photo or video work, our{" "}
+            <SiteLink href="/photography-business-management-software">photography business management software</SiteLink>{" "}
+            page covers the same workflow for any client-commissioned shoot.
           </p>
           <p>
             Be clear about what it doesn&apos;t replace. It doesn&apos;t do flight logging, airspace checks or LAANC

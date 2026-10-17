@@ -37,7 +37,11 @@ export type PlatformAuditAction =
   | "partner.adjustment"
   | "partner.landing_upsert"
   | "partner.landing_content_update"
-  | "partner.landing_active";
+  | "partner.landing_active"
+  | "seo.opportunity.reviewed"
+  | "seo.opportunity.dismissed"
+  | "seo.opportunity.reopened"
+  | "seo.index_snapshot";
 
 export async function requestIpAddress(): Promise<string | null> {
   try {

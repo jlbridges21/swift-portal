@@ -395,7 +395,9 @@ export const article: BlogArticle = {
             Frame.io, Vimeo review, and Dropbox Replay all handle the first two well. ShootPortal adds the same
             idea to a client portal: comments are time-stamped and can be pinned to a spot on the frame, replies are
             threaded, notes can be resolved and reopened, and videos carry numbered versions. Photos and other
-            deliverables use simpler approve-or-reject feedback with a written note, without pinned comments.
+            deliverables use simpler approve-or-reject feedback with a written note, without pinned comments. The{" "}
+            <SiteLink href="/video-review-approval-software">video review and approval software</SiteLink> page walks
+            through a full review round.
           </p>
         </>
       ),

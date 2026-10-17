@@ -1,3 +1,4 @@
+import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
@@ -168,6 +169,7 @@ export const article: BlogArticle = {
             e-signature are essential for weddings and events and less central for listing or commercial work, where an
             approved estimate often serves as the agreement.
           </p>
+          <FreeResourceCallout tool="quote-builder" note="Not ready for a CRM yet? Build a client quote with your services, add-ons, deposit, and terms, and download it as a PDF." />
           <h3>Automations</h3>
           <p>
             Automations send the questionnaire after booking, the reminder before the session, and the thank-you after

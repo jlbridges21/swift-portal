@@ -94,6 +94,8 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/analytics/lifecycle.ts",
   "src/lib/analytics/report-data.ts",
   "src/app/api/cron/analytics-retention/route.ts",
+  // SEO Growth Engine: super-admin-only reads/writes of platform_audit_log (seo.* actions).
+  "src/lib/seo-growth/store.ts",
   "src/lib/supabase/server.ts",
   "src/lib/supabase/tenant-service.ts",
   "src/lib/tenant.ts",

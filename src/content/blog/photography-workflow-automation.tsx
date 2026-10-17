@@ -216,7 +216,9 @@ export const article: BlogArticle = {
             self-book into open slots, which suits simple, repeatable sessions. Others let you propose a time and the
             client accepts or counters, which suits work that depends on weather, light, site access, or travel. Many
             drone and exterior jobs fit the second model better, because the &quot;right&quot; time isn&apos;t only
-            about your availability.
+            about your availability. Our{" "}
+            <SiteLink href="/photography-booking-software">photography booking software</SiteLink> page shows how the
+            propose-and-confirm model works from request to confirmed shoot.
           </p>
           <p>
             Whichever model you use, the confirmed time should land on the calendar you actually look at, and your

@@ -178,8 +178,8 @@ export const article: BlogArticle = {
               <strong>No account needed.</strong>{" "}
               <Ext href="https://help.honeybook.com/en/articles/6428603-what-clients-can-see-and-do-in-the-client-portal">HoneyBook</Ext>{" "}
               says clients don&apos;t need to log in by default, and{" "}
-              <Ext href="https://help.withmoxie.com/en/articles/5855650-client-portal-features">Moxie</Ext> says clients
-              don&apos;t need a Moxie account. This is the lowest-friction option.
+              <Ext href="https://www.withmoxie.com/product-pages/client-portal">Moxie</Ext> invites clients into its
+              portal with no shared passwords. This is the lowest-friction option.
             </li>
             <li>
               <strong>Client account.</strong>{" "}

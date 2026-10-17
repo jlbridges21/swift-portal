@@ -13,7 +13,7 @@ import { unstable_cache } from "next/cache";
 const SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-type GscConfig = { siteUrl: string; clientEmail: string; privateKey: string };
+export type GscConfig = { siteUrl: string; clientEmail: string; privateKey: string };
 
 export function searchConsoleConfig(): GscConfig | null {
   const siteUrl = process.env.GSC_SITE_URL?.trim();
@@ -29,7 +29,7 @@ function b64url(input: string | Buffer): string {
 
 const tokenCache = new Map<string, { token: string; exp: number }>();
 
-async function accessToken(cfg: GscConfig): Promise<string> {
+export async function accessToken(cfg: GscConfig): Promise<string> {
   const cached = tokenCache.get(cfg.clientEmail);
   if (cached && cached.exp - 60_000 > Date.now()) return cached.token;
   const now = Math.floor(Date.now() / 1000);
@@ -50,9 +50,9 @@ async function accessToken(cfg: GscConfig): Promise<string> {
   return json.access_token;
 }
 
-type GscRow = { keys?: string[]; clicks: number; impressions: number; ctr: number; position: number };
+export type GscRow = { keys?: string[]; clicks: number; impressions: number; ctr: number; position: number };
 
-async function query(cfg: GscConfig, body: Record<string, unknown>): Promise<GscRow[]> {
+export async function query(cfg: GscConfig, body: Record<string, unknown>): Promise<GscRow[]> {
   const token = await accessToken(cfg);
   const res = await fetch(
     `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(cfg.siteUrl)}/searchAnalytics/query`,

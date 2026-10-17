@@ -1,3 +1,4 @@
+import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
@@ -117,6 +118,7 @@ export const article: BlogArticle = {
             quoting process doesn&apos;t add a travel fee consistently, you either forget it or apply it unevenly
             across clients.
           </p>
+          <FreeResourceCallout tool="drone-pricing" note="Price a drone photo or video job, travel included, in three steps and download a branded quote." />
           <h3>Weather moves the calendar</h3>
           <p>
             Wind, rain, and low ceilings reschedule drone shoots far more often than they reschedule a headshot

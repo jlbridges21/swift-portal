@@ -22,6 +22,8 @@
     "test:partner-lifecycle-e2e": "npx tsx scripts/verify-partner-lifecycle-e2e.ts",
     "test:plan-stripe-prices": "npx tsx scripts/verify-plan-stripe-price-consistency.ts",
     "test:analytics": "npx tsx scripts/verify-analytics.ts",
+    "test:seo-growth": "npx tsx scripts/verify-seo-growth.ts",
+    "seo:audit": "npx tsx scripts/seo-audit.ts",
     "setup:stripe-billing": "npx tsx scripts/setup-stripe-billing.ts",
     "tenant-lint": "npx tsx scripts/tenant-lint.ts && npx tsx scripts/verify-marketing-css.ts",
     "db:seed-zips": "npx tsx --env-file=.env.local scripts/seed-zip-centroids.ts",

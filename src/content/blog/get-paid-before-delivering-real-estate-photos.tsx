@@ -280,6 +280,7 @@ export const article: BlogArticle = {
             you may decide pay-before-download alone is enough. Pricing decisions like these are covered in more depth
             in our <BlogLink slug="real-estate-photography-pricing-guide">real estate photography pricing guide</BlogLink>.
           </p>
+          <FreeResourceCallout tool="real-estate-pricing" note="Set package prices for every home size first, then decide where a deposit makes sense." />
         </>
       ),
     },

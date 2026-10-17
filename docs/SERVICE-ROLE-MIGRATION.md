@@ -204,3 +204,7 @@ Service-role users added for first-party marketing analytics (design: `docs/ANAL
 - `src/lib/analytics/lifecycle.ts` — writes `business_lifecycle_events` from the platform billing webhook (cancellations, failed payments).
 - `src/lib/analytics/report-data.ts` — super-admin dashboard reads (called only after `requireSuperAdminPage`). Cross-tenant columns are limited to `businesses` lifecycle fields, `projects.business_id/created_at`, and `platform_subscription_payments` amounts; also on `FROM_UNSCOPED_ALLOWLIST`.
 - `src/app/api/cron/analytics-retention/route.ts` — `CRON_SECRET`-gated retention deletes on `analytics_*` tables.
+
+## SEO Growth Engine
+
+- `src/lib/seo-growth/store.ts` — super-admin only (callers pass `requireSuperAdminPage` / `requireSuperAdminApi`). Reads and appends `platform_audit_log` rows with `seo.*` actions (opportunity review state, Google index snapshots). Touches no tenant tables; no new tables or policies.

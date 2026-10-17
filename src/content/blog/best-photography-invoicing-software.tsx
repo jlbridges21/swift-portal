@@ -210,6 +210,7 @@ export const article: BlogArticle = {
             <BlogLink slug="real-estate-photography-pricing-guide">real estate photography pricing guide</BlogLink>{" "}
             covers how to structure packages and add-ons before you build them into any tool.
           </p>
+          <FreeResourceCallout tool="quote-builder" note="See what a clean, approvable quote looks like: build one free with your logo, add-ons, deposit, and terms." />
           <h3>Deposits and payment schedules</h3>
           <p>
             You want to take a deposit (as a percentage or a fixed amount) at booking and the balance later, without

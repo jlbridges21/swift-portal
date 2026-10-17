@@ -344,7 +344,10 @@ export const article: BlogArticle = {
             alongside Wipster, Filestage, and others in{" "}
             <BlogLink slug="best-video-review-approval-software">the best video review and approval software</BlogLink>.
             The trade-off for a small video or drone business is that review lives in one tool, delivery in another,
-            and invoicing in a third, and the client has to keep track of all three.
+            and invoicing in a third, and the client has to keep track of all three. If you&apos;d rather keep them
+            together, see how our{" "}
+            <SiteLink href="/video-review-approval-software">video review and approval software</SiteLink> ties client
+            feedback, versions, and approval to the project.
           </p>
         </>
       ),
