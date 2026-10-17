@@ -91,7 +91,7 @@ export function RefreshButton() {
           const res = await fetch("/api/platform/seo-growth/refresh", { method: "POST", credentials: "include" });
           const json = (await res.json().catch(() => ({}))) as { error?: string };
           if (!res.ok) throw new Error(json.error || "Refresh failed");
-          toast.message("Re-checking the site and Google. This takes up to a minute.");
+          toast.message("Re-checking the site and Google. This takes about 30 seconds; Google results may finish on the next reload.");
           start(() => router.refresh());
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "Refresh failed");

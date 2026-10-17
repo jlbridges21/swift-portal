@@ -5,7 +5,7 @@ import { accessToken, searchConsoleConfig, type GscConfig } from "@/lib/analytic
  * webmasters.readonly scope as the Search Analytics report). This is Google's own
  * view of a URL: whether it is indexed, when it was last crawled, and which canonical
  * Google chose. Quota: 2,000 inspections/day and 600/minute per property, so callers
- * cache results for 24 hours and inspect at most MAX_INSPECTIONS URLs per run.
+ * cache each URL's result for 24 hours and inspect at most MAX_INSPECTIONS URLs per run.
  *
  * It does NOT request indexing. Google offers no supported bulk "index this" API for
  * normal pages; use "Request indexing" in Search Console for individual URLs.
@@ -100,7 +100,29 @@ export function parseInspection(url: string, json: ApiResponse): UrlInspection {
   };
 }
 
-async function inspectOne(cfg: GscConfig, token: string, url: string): Promise<UrlInspection> {
+export function failedInspection(url: string, err: unknown): UrlInspection {
+  return {
+    url,
+    path: pathOf(url),
+    ok: false,
+    error: err instanceof Error ? err.message : String(err),
+    verdict: null,
+    coverageState: null,
+    indexingState: null,
+    robotsTxtState: null,
+    pageFetchState: null,
+    lastCrawlTime: null,
+    googleCanonical: null,
+    userCanonical: null,
+    sitemaps: [],
+    referringUrls: [],
+    richResults: null,
+    inspectionLink: null,
+  };
+}
+
+async function inspectOne(cfg: GscConfig | null, token: string, url: string): Promise<UrlInspection> {
+  if (!cfg) return failedInspection(url, new Error("Search Console is not configured"));
   try {
     const res = await fetch("https://searchconsole.googleapis.com/v1/urlInspection/index:inspect", {
       method: "POST",
@@ -112,48 +134,75 @@ async function inspectOne(cfg: GscConfig, token: string, url: string): Promise<U
     if (!res.ok) throw new Error(json.error?.message || `URL inspection failed (${res.status})`);
     return parseInspection(url, json);
   } catch (err) {
-    return {
-      url,
-      path: pathOf(url),
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-      verdict: null,
-      coverageState: null,
-      indexingState: null,
-      robotsTxtState: null,
-      pageFetchState: null,
-      lastCrawlTime: null,
-      googleCanonical: null,
-      userCanonical: null,
-      sitemaps: [],
-      referringUrls: [],
-      richResults: null,
-      inspectionLink: null,
-    };
+    return failedInspection(url, err);
   }
 }
 
 export type InspectionRun =
   | { status: "not_configured" }
-  | { status: "ok"; siteUrl: string; checkedAt: string; results: UrlInspection[]; skipped: number };
+  | {
+      status: "ok";
+      siteUrl: string;
+      /** Oldest check time among the results (results may come from different cache fills). */
+      checkedAt: string;
+      results: UrlInspection[];
+      /** URLs beyond MAX_INSPECTIONS, never inspected. */
+      skipped: number;
+      /** URLs still being inspected when the time budget ran out; they finish in the background. */
+      pending: number;
+    };
 
-/** Inspect up to MAX_INSPECTIONS absolute URLs, 4 at a time (well under 600/minute). */
-export async function inspectUrls(urls: readonly string[]): Promise<InspectionRun> {
+/** Inspect one absolute URL (token minted and cached per service account). Never throws. */
+export async function inspectUrl(url: string): Promise<UrlInspection & { checkedAt: string }> {
+  const cfg = searchConsoleConfig();
+  const checkedAt = new Date().toISOString();
+  if (!cfg) return { ...(await inspectOne(null, "", url)), checkedAt };
+  try {
+    return { ...(await inspectOne(cfg, await accessToken(cfg), url)), checkedAt };
+  } catch (err) {
+    return { ...failedInspection(url, err), checkedAt };
+  }
+}
+
+/**
+ * Inspect up to MAX_INSPECTIONS URLs, `concurrency` at a time. Google answers each request
+ * in roughly 5–7 seconds, so ~55 URLs take ~30s at 12 parallel (well under 600/minute).
+ * With `budgetMs`, returns whatever finished in time; unfinished calls keep running and are
+ * exposed through `inflight` so a caller can keep the function alive for them (next/server `after`).
+ */
+export async function inspectUrls(
+  urls: readonly string[],
+  opts: { concurrency?: number; budgetMs?: number; run?: (url: string) => Promise<UrlInspection & { checkedAt?: string }> } = {}
+): Promise<InspectionRun & { inflight?: Promise<unknown> }> {
   const cfg = searchConsoleConfig();
   if (!cfg) return { status: "not_configured" };
   const list = urls.slice(0, MAX_INSPECTIONS);
-  const token = await accessToken(cfg);
-  const results: UrlInspection[] = new Array(list.length);
+  const run = opts.run ?? inspectUrl;
+  const results: (UrlInspection & { checkedAt?: string })[] = [];
   let next = 0;
-  await Promise.all(
-    Array.from({ length: 4 }, async () => {
+  const workers = Promise.all(
+    Array.from({ length: Math.min(opts.concurrency ?? 12, list.length) }, async () => {
       while (next < list.length) {
-        const i = next++;
-        results[i] = await inspectOne(cfg, token, list[i]!);
+        const url = list[next++]!;
+        results.push(await run(url));
       }
     })
   );
-  return { status: "ok", siteUrl: cfg.siteUrl, checkedAt: new Date().toISOString(), results, skipped: urls.length - list.length };
+  if (opts.budgetMs) await Promise.race([workers, new Promise((r) => setTimeout(r, opts.budgetMs))]);
+  else await workers;
+  const done = [...results];
+  const order = new Map(list.map((u, i) => [u, i]));
+  done.sort((a, b) => (order.get(a.url) ?? 0) - (order.get(b.url) ?? 0));
+  const times = done.map((r) => r.checkedAt).filter((t): t is string => !!t).sort();
+  return {
+    status: "ok",
+    siteUrl: cfg.siteUrl,
+    checkedAt: times[0] ?? new Date().toISOString(),
+    results: done,
+    skipped: urls.length - list.length,
+    pending: list.length - done.length,
+    inflight: done.length < list.length ? workers : undefined,
+  };
 }
 
 export type SitemapStatus = {

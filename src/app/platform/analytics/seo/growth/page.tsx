@@ -50,6 +50,12 @@ export default async function SeoGrowthPage({ searchParams }: { searchParams: Pr
       </div>
       <GrowthTabs view={view} counts={{ opportunities: open.length, indexing: needPages, content: contentItems }} />
       <div className="mt-6 space-y-6">
+        {data.inspection?.status === "ok" && data.inspection.pending > 0 ? (
+          <Notice>
+            Google is still inspecting {data.inspection.pending} page{data.inspection.pending === 1 ? "" : "s"} (each takes a few seconds). Those show as
+            &ldquo;Not checked&rdquo; for now. Reload in a minute to see them.
+          </Notice>
+        ) : null}
         {data.warnings.length ? <Notice tone="warn">Some sources could not be loaded: {data.warnings.join(" · ")}</Notice> : null}
         {view === "overview" ? <Overview data={data} open={open} /> : null}
         {view === "opportunities" ? <Opportunities data={data} rows={rows} /> : null}

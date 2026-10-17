@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { after } from "next/server";
 import { getCanonicalSiteUrl, getPlatformRootDomain } from "@/lib/site-metadata";
 import { loadSearchConsole, query, searchConsoleConfig } from "@/lib/analytics/search-console";
 import { addDays, parseReportRange } from "@/lib/analytics/range";
@@ -6,7 +7,7 @@ import { loadReport } from "@/lib/analytics/report-data";
 import { buildLifecycles } from "@/lib/analytics/aggregate";
 import { buildInventory } from "@/lib/seo-growth/inventory";
 import { crawlSite, type CrawlResult } from "@/lib/seo-growth/crawl";
-import { inspectUrls, loadSitemapStatus, type InspectionRun } from "@/lib/seo-growth/url-inspection";
+import { failedInspection, inspectUrl, inspectUrls, loadSitemapStatus, type InspectionRun } from "@/lib/seo-growth/url-inspection";
 import { assessPages, googleState, siteChecks } from "@/lib/seo-growth/health";
 import { auditContent } from "@/lib/seo-growth/content-audit";
 import { buildOrganicConversions } from "@/lib/seo-growth/conversions";
@@ -19,7 +20,8 @@ import { loadIndexHistory, loadReviewStates, recordIndexSnapshot } from "@/lib/s
  *
  * Expensive work is cached under the "seo-growth" tag:
  *  - site crawl: 24h (≈60 page fetches + external link checks)
- *  - Google URL Inspection: 24h (≈60 of the 2,000/day quota)
+ *  - Google URL Inspection: 24h per URL (≈55 of the 2,000/day quota); the page waits at most
+ *    30s for Google and finishes the rest in the background (after()), so the next load is complete
  *  - Search Console sitemaps + page×query rows: 6h
  * The Refresh button expires the tag. Nothing runs on a schedule.
  */
@@ -47,28 +49,40 @@ const cachedCrawl = unstable_cache(
   { revalidate: DAY, tags: [SEO_GROWTH_TAG] }
 );
 
-const cachedInspection = unstable_cache(
-  async (siteUrl: string): Promise<InspectionRun> => {
+/**
+ * One cache entry per URL, so a page load only calls Google for URLs that aren't cached yet.
+ * Failed inspections throw out of the cached function and are therefore not cached.
+ */
+const cachedInspectUrl = unstable_cache(
+  async (siteUrl: string, url: string) => {
     void siteUrl; // part of the cache key
-    const run = await inspectUrls(monitoredUrls());
-    if (run.status === "ok") {
-      const states = run.results.filter((r) => r.ok).map((r) => ({ path: r.path, state: googleState(r) }));
-      if (states.length) {
-        await recordIndexSnapshot({
-          inspected: states.length,
-          indexed: states.filter((s) => s.state === "indexed").length,
-          waiting: states.filter((s) => s.state === "waiting").length,
-          unknown: states.filter((s) => s.state === "unknown_to_google").length,
-          other: states.filter((s) => !["indexed", "waiting", "unknown_to_google"].includes(s.state)).length,
-          indexedPaths: states.filter((s) => s.state === "indexed").map((s) => s.path),
-        }).catch((err) => console.error("[seo-growth] snapshot failed", err));
-      }
-    }
-    return run;
+    const r = await inspectUrl(url);
+    if (!r.ok) throw new Error(r.error ?? "URL inspection failed");
+    return r;
   },
-  ["seo-growth-inspection-v1"],
+  ["seo-growth-inspect-url-v2"],
   { revalidate: DAY, tags: [SEO_GROWTH_TAG] }
 );
+
+/** Time the page waits for Google before rendering with partial results (page maxDuration is 60s). */
+const INSPECTION_BUDGET_MS = 30_000;
+
+async function loadInspection(siteUrl: string): Promise<InspectionRun> {
+  const run = await inspectUrls(monitoredUrls(), {
+    budgetMs: INSPECTION_BUDGET_MS,
+    run: async (url) => {
+      try {
+        return await cachedInspectUrl(siteUrl, url);
+      } catch (err) {
+        return failedInspection(url, err);
+      }
+    },
+  });
+  // Keep the function alive so unfinished inspections complete and land in the cache.
+  if (run.status === "ok" && run.inflight) after(() => run.inflight!.then(() => undefined, () => undefined));
+  if (run.status === "ok") delete run.inflight;
+  return run;
+}
 
 const cachedSitemaps = unstable_cache(async (siteUrl: string) => (void siteUrl, loadSitemapStatus()), ["seo-growth-sitemaps-v1"], {
   revalidate: 6 * 60 * 60,
@@ -124,7 +138,7 @@ export async function loadSeoGrowth(now = new Date()) {
 
   const [crawl, inspection, sitemaps, gscReport, pageQueries, report, reviews, history] = await Promise.all([
     settle("Site crawl", warnings, () => cachedCrawl(origin)),
-    gscCfg ? settle("URL Inspection", warnings, () => cachedInspection(gscCfg.siteUrl)) : Promise.resolve({ status: "not_configured" } as InspectionRun),
+    gscCfg ? settle("URL Inspection", warnings, () => loadInspection(gscCfg.siteUrl)) : Promise.resolve({ status: "not_configured" } as InspectionRun),
     gscCfg ? settle("Search Console sitemaps", warnings, () => cachedSitemaps(gscCfg.siteUrl)) : Promise.resolve(null),
     loadSearchConsole(gscStart, gscEnd),
     gscCfg ? settle("Search Console queries", warnings, () => cachedPageQueries(gscCfg.siteUrl, gscStart, gscEnd)) : Promise.resolve(null),
@@ -138,6 +152,24 @@ export async function loadSeoGrowth(now = new Date()) {
   if (sitemaps && sitemaps.status === "error") warnings.push(`Search Console sitemaps: ${sitemaps.message}`);
   if (reviews?.error) warnings.push(`Review states: ${reviews.error}`);
   if (report?.loadError) warnings.push(`First-party analytics: ${report.loadError}`);
+
+  // One index snapshot per day, only once every monitored URL has a Google result.
+  if (inspection?.status === "ok" && inspection.pending === 0 && history) {
+    const today = now.toISOString().slice(0, 10);
+    const states = inspection.results.filter((r) => r.ok).map((r) => ({ path: r.path, state: googleState(r) }));
+    if (states.length && !history.some((h) => h.at.slice(0, 10) === today)) {
+      after(() =>
+        recordIndexSnapshot({
+          inspected: states.length,
+          indexed: states.filter((x) => x.state === "indexed").length,
+          waiting: states.filter((x) => x.state === "waiting").length,
+          unknown: states.filter((x) => x.state === "unknown_to_google").length,
+          other: states.filter((x) => !["indexed", "waiting", "unknown_to_google"].includes(x.state)).length,
+          indexedPaths: states.filter((x) => x.state === "indexed").map((x) => x.path),
+        }).catch((err) => console.error("[seo-growth] snapshot failed", err))
+      );
+    }
+  }
 
   const health = assessPages({ inventory, crawl, inspection, canonicalOrigin: origin, now });
   const checks = siteChecks({ crawl, sitemaps: sitemapList, canonicalOrigin: origin, inventory });

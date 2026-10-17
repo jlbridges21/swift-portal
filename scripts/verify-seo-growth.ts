@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { decodeEntities, extractPage, isNoindex, parseRobots, parseSitemap, robotsAllows, toInternalPath } from "../src/lib/seo-growth/html-extract";
 import { crawlSite, type CrawlResult, type PageCrawl } from "../src/lib/seo-growth/crawl";
-import { parseInspection, type InspectionRun, type UrlInspection } from "../src/lib/seo-growth/url-inspection";
+import { inspectUrls, parseInspection, type InspectionRun, type UrlInspection } from "../src/lib/seo-growth/url-inspection";
 import { assessPages, googleState, siteChecks } from "../src/lib/seo-growth/health";
 import { auditContent, keywordOverlap } from "../src/lib/seo-growth/content-audit";
 import { buildOpportunities, priorityScore } from "../src/lib/seo-growth/opportunities";
@@ -207,6 +207,26 @@ async function main() {
   assert(googleState(inspection("/a", { verdict: "FAIL", coverageState: "Excluded by 'noindex' tag" })) === "excluded", "noindex exclusion");
   assert(googleState(undefined) === "not_checked" && googleState(inspection("/a", { ok: false, error: "x" })) === "error", "missing / failed inspection");
 
+  section("URL Inspection time budget");
+  process.env.GSC_SITE_URL ??= "sc-domain:example.test";
+  process.env.GSC_CLIENT_EMAIL ??= "test@example.test";
+  process.env.GSC_PRIVATE_KEY ??= "test";
+  const urls = Array.from({ length: 10 }, (_, i) => `${ORIGIN}/p${i}`);
+  let calls = 0;
+  const slow = async (url: string) => {
+    calls++;
+    await new Promise((r) => setTimeout(r, url.endsWith("p9") ? 400 : 10));
+    return { ...inspection(new URL(url).pathname), checkedAt: `2026-10-16T00:00:0${url.slice(-1)}Z` };
+  };
+  const partial = await inspectUrls(urls, { concurrency: 3, budgetMs: 150, run: slow });
+  assert(partial.status === "ok" && partial.pending === 1 && partial.results.length === 9, "budget returns finished results and counts the pending one");
+  assert(partial.status === "ok" && !!partial.inflight, "unfinished work is exposed so it can complete in the background");
+  if (partial.status === "ok") await partial.inflight;
+  assert(calls === 10, "every URL is still inspected exactly once");
+  const full = await inspectUrls(urls, { concurrency: 4, run: slow });
+  assert(full.status === "ok" && full.pending === 0 && full.results.map((r) => r.path).join() === urls.map((u) => new URL(u).pathname).join(), "without a budget all results return in input order");
+  assert(full.status === "ok" && full.checkedAt === "2026-10-16T00:00:00Z", "checkedAt is the oldest result");
+
   // ------------------------------------------------------------------ page health
   section("Page health");
   const good = (path: string, body = "<h1>T</h1><p>words</p>") => extractPage(html({ title: "T", desc: "D", canonical: `${ORIGIN}${path}`, body }), `${ORIGIN}${path}`, HOSTS, NOW);
@@ -234,6 +254,7 @@ async function main() {
     siteUrl: "sc-domain:shootportal.app",
     checkedAt: NOW.toISOString(),
     skipped: 0,
+    pending: 0,
     results: [
       inspection("/"),
       inspection("/l"),
