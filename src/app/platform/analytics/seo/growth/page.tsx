@@ -9,7 +9,8 @@ import { MAX_INSPECTIONS } from "@/lib/seo-growth/url-inspection";
 import type { HealthStatus } from "@/lib/seo-growth/health";
 import { KpiCard, Notice, Panel, fmtInt, fmtMoney, fmtPct } from "@/components/platform/analytics/ui";
 import { TrendChart } from "@/components/platform/analytics/charts";
-import { GROWTH_VIEWS, GrowthTabs, RefreshButton, type GrowthView } from "@/components/platform/seo-growth/nav";
+import { GrowthTabs, RefreshButton } from "@/components/platform/seo-growth/nav";
+import { parseGrowthView } from "@/lib/seo-growth/views";
 import { HEALTH_COLORS, HEALTH_LABELS, HealthBadge, SampleBadge } from "@/components/platform/seo-growth/badges";
 import { OpportunityList } from "@/components/platform/seo-growth/opportunity-list";
 import { PageHealthTable } from "@/components/platform/seo-growth/page-health-table";
@@ -28,7 +29,7 @@ function when(iso: string | null | undefined) {
 export default async function SeoGrowthPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   await requireSuperAdminPage();
   const sp = await searchParams;
-  const view: GrowthView = GROWTH_VIEWS.some((v) => v.key === sp.view) ? (sp.view as GrowthView) : "overview";
+  const view = parseGrowthView(sp.view);
   const data = await loadSeoGrowth();
 
   const reviews = Object.fromEntries(data.reviews);

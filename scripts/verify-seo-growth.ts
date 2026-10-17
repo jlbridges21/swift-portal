@@ -416,6 +416,18 @@ async function main() {
     const code = src(`src/app/api/platform/seo-growth/${r}/route.ts`);
     assert(/const auth = await requireSuperAdminApi\(\);\s*if \(!auth\.ok\) return auth\.response;/.test(code), `${r} API rejects non-super-admins before doing anything`);
   }
+  section("Server/client boundary");
+  const { readdirSync } = await import("node:fs");
+  const dir = "src/components/platform/seo-growth";
+  for (const f of readdirSync(join(__dirname, "..", dir))) {
+    const code = src(`${dir}/${f}`);
+    if (!/^["']use client["']/.test(code.trimStart())) continue;
+    const values = [...code.matchAll(/^export (?:const|let|var|enum|class)\s+(\w+)|^export function ([a-z]\w*)/gm)].map((m) => m[1] ?? m[2]);
+    assert(values.length === 0, `${f} ("use client") exports only components (found: ${values.join(", ") || "none"}); server code would get client references for anything else`);
+  }
+  const { parseGrowthView } = await import("../src/lib/seo-growth/views");
+  assert(parseGrowthView("indexing") === "indexing" && parseGrowthView("bogus") === "overview" && parseGrowthView(undefined) === "overview", "view param parsed with overview fallback");
+
   assert(!/NEXT_PUBLIC_/.test(src("src/lib/seo-growth/url-inspection.ts") + src("src/lib/seo-growth/data.ts")), "Google credentials are never exposed to the client bundle");
 
   console.log(`\n${passes} passed, ${failures} failed`);

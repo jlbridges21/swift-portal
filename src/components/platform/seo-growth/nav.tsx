@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { GROWTH_VIEWS, type GrowthView } from "@/lib/seo-growth/views";
 
 /** Performance (Search Console report) vs. Growth engine, shown on both SEO pages. */
 export function SeoSubNav() {
@@ -37,17 +38,6 @@ export function SeoSubNav() {
   );
 }
 
-export const GROWTH_VIEWS = [
-  { key: "overview", label: "Overview" },
-  { key: "opportunities", label: "Opportunities" },
-  { key: "indexing", label: "Indexing" },
-  { key: "content", label: "Content" },
-  { key: "gaps", label: "Content gaps" },
-  { key: "conversions", label: "Conversions" },
-  { key: "roadmap", label: "Roadmap" },
-] as const;
-
-export type GrowthView = (typeof GROWTH_VIEWS)[number]["key"];
 
 export function GrowthTabs({ view, counts }: { view: GrowthView; counts: Partial<Record<GrowthView, number>> }) {
   return (
