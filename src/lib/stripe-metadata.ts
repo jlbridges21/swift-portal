@@ -26,6 +26,15 @@ export function buildStripePaymentMetadata(params: {
   return meta;
 }
 
+/** Card fee the client paid on top of the invoice amount (cents), stamped on card checkouts. */
+export const CLIENT_FEE_METADATA_KEY = "client_fee_cents";
+
+export function parseClientFeeFromMetadata(metadata: Stripe.Metadata | null | undefined): number {
+  const raw = metadata?.[CLIENT_FEE_METADATA_KEY];
+  const n = raw ? Number.parseInt(raw, 10) : 0;
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 export function parsePaymentIdFromMetadata(
   metadata: Stripe.Metadata | null | undefined
 ): string | undefined {

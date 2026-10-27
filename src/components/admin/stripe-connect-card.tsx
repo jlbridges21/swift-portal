@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CreditCard, ExternalLink, Link2, Loader2 } from "lucide-react";
+import { CheckCircle2, CreditCard, ExternalLink, Landmark, Link2, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 type ConnectStatus = "not_connected" | "pending" | "active" | "restricted" | "disabled";
@@ -17,6 +17,8 @@ interface ConnectState {
   connectedAt: string | null;
   hasAccount: boolean;
   dashboardUrl: string;
+  achEnabled?: boolean;
+  achSettingsUrl?: string;
 }
 
 function statusLabel(status: ConnectStatus): string {
@@ -39,6 +41,7 @@ export function StripeConnectCard() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [state, setState] = useState<ConnectState | null>(null);
+  const [checking, setChecking] = useState(false);
 
   async function loadStatus() {
     setLoading(true);
@@ -48,6 +51,22 @@ export function StripeConnectCard() {
       if (res.ok) setState(data as ConnectState);
     } finally {
       setLoading(false);
+    }
+  }
+
+  /** Re-read the account from Stripe after the owner turns on ACH there. */
+  async function checkBankPayments() {
+    setChecking(true);
+    try {
+      const res = await fetch("/api/stripe/connect", { credentials: "include" });
+      const data = (await res.json()) as ConnectState;
+      if (res.ok) {
+        setState(data);
+        if (data.achEnabled) toast.success("Bank payments are on. Clients can now pay by bank transfer (ACH).");
+        else toast.message("Bank payments aren't on yet. Stripe can take a few minutes after you turn on ACH Direct Debit.");
+      }
+    } finally {
+      setChecking(false);
     }
   }
 
@@ -116,10 +135,13 @@ export function StripeConnectCard() {
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </div>
         ) : state.isPlatform ? (
-          <p className="text-sm text-muted">
-            This business uses the platform Stripe account. Payments continue to settle here — no connected-account
-            onboarding.
-          </p>
+          <>
+            <p className="text-sm text-muted">
+              This business uses the platform Stripe account. Payments continue to settle here — no connected-account
+              onboarding.
+            </p>
+            <BankPaymentsPanel state={state} checking={checking} onCheck={checkBankPayments} />
+          </>
         ) : (
           <>
             <p className="text-sm text-muted">
@@ -142,9 +164,72 @@ export function StripeConnectCard() {
                 {starting ? "Redirecting…" : connectLabel}
               </Button>
             )}
+            {state.status === "active" ? <BankPaymentsPanel state={state} checking={checking} onCheck={checkBankPayments} /> : null}
           </>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Bank (ACH) payments. On Standard Stripe accounts only the account owner can turn on
+ * ACH Direct Debit, in their own Stripe Dashboard; ShootPortal then offers it to clients
+ * automatically. Bank payments are paid out to the same bank account as card payments.
+ */
+function BankPaymentsPanel({ state, checking, onCheck }: { state: ConnectState; checking: boolean; onCheck: () => void }) {
+  const on = Boolean(state.achEnabled);
+  return (
+    <div id="settings-bank-payments" className="scroll-mt-24 rounded-xl border border-border p-4">
+      <div className="flex items-start gap-3">
+        <Landmark className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-heading">
+            Bank transfers (ACH)
+            {on ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 surface-dark:bg-emerald-950/40 surface-dark:text-emerald-300">
+                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> On
+              </span>
+            ) : (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-muted surface-dark:bg-subtle">Off</span>
+            )}
+          </p>
+          {on ? (
+            <p className="mt-1 text-sm leading-relaxed text-muted">
+              Clients can choose <span className="font-medium text-heading">Bank account</span> when they pay. They connect their bank securely through
+              Stripe, the payment shows as processing for a few business days, and it&apos;s deposited to the same bank account as your card payouts.
+              Stripe charges 0.8% per bank payment (max $5).
+            </p>
+          ) : (
+            <>
+              <p className="mt-1 text-sm leading-relaxed text-muted">
+                Let clients pay straight from their bank account. Stripe charges 0.8% (max $5) instead of about 3% for cards, and the money is
+                deposited to the same bank account as your card payouts.
+              </p>
+              <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-heading">
+                <li>Open your Stripe payment method settings.</li>
+                <li>
+                  Find <span className="font-medium">ACH Direct Debit</span> and turn it on. Stripe may ask a few questions first.
+                </li>
+                <li>Come back here and click Check again.</li>
+              </ol>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {state.achSettingsUrl ? (
+                  <a href={state.achSettingsUrl} target="_blank" rel="noopener noreferrer">
+                    <Button variant="accent" size="sm">
+                      <ExternalLink className="h-4 w-4" /> Open Stripe settings
+                    </Button>
+                  </a>
+                ) : null}
+                <Button variant="outline" size="sm" disabled={checking} onClick={onCheck}>
+                  {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  {checking ? "Checking…" : "Check again"}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

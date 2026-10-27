@@ -54,6 +54,11 @@ export interface PaymentAutomationSettings {
   depositAmountCents: number;
   /** When a deposit is due, the client may pay the full quote instead. */
   allowClientPayInFull: boolean;
+  /**
+   * Clients pay the card processing fee on card payments (lib/card-fee.ts). Off by default.
+   * Bank (ACH) payments never carry it.
+   */
+  passCardFeeToClient: boolean;
 }
 
 export interface ProposalAutomationSettings {
@@ -278,6 +283,7 @@ export function buildDefaultWorkflowSettings(): WorkflowSettings {
       depositPercent: 50,
       depositAmountCents: 0,
       allowClientPayInFull: true,
+      passCardFeeToClient: false,
     },
     proposals: {
       autoArchivePreviousVersions: true,
@@ -364,6 +370,7 @@ export function sanitizePaymentAutomation(payments: PaymentAutomationSettings): 
     ...payments,
     autoCreatePaymentLinkOnApproval: payments.autoCreatePaymentLinkOnApproval !== false,
     allowClientPayInFull: payments.allowClientPayInFull !== false,
+    passCardFeeToClient: payments.passCardFeeToClient === true,
     depositMode: mode,
     depositPercent: Number.isFinite(percent) ? Math.round(percent) : 50,
     depositAmountCents: Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0,

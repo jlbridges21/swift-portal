@@ -1,5 +1,6 @@
 "use client";
 
+import { isPaymentCovered } from "@/lib/payment-status";
 import { useState, Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -17,7 +18,7 @@ import { Model3dCard } from "@/components/projects/model-3d-card";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
 import { NextStepBanner } from "@/components/projects/next-step-banner";
-import { PaymentsSection } from "@/components/projects/payments-section";
+import { PaymentOptionsProvider, PaymentsSection, type ClientPaymentOptions } from "@/components/projects/payments-section";
 import { ClientMessagesChat } from "@/components/projects/client-messages-chat";
 import { getClientNextStep } from "@/lib/journey";
 import { usePortalBrand } from "@/components/brand/brand-provider";
@@ -87,6 +88,7 @@ interface ProjectPageClientProps {
   depositPercent?: number;
   depositAmountCents?: number;
   allowClientPayInFull?: boolean;
+  paymentOptions?: ClientPaymentOptions;
 }
 
 const REVISION_STATUS_LABEL: Record<string, string> = {
@@ -159,6 +161,7 @@ export function ProjectPageClient({
   depositPercent = 50,
   depositAmountCents = 0,
   allowClientPayInFull = false,
+  paymentOptions = { bankAvailable: false, passCardFee: false },
 }: ProjectPageClientProps) {
   const router = useRouter();
   const brand = usePortalBrand();
@@ -244,18 +247,21 @@ export function ProjectPageClient({
         return { label: `${formatCurrency(balance)} still owed`, variant: "warning" as const };
       }
       if (balance === 0 && paid > 0) {
-        return { label: "Paid", variant: "success" as const };
+        const processing = payments.some((payment) => payment.quote_id === linkedQuote.id && payment.status === "processing");
+        return processing ? { label: "Payment processing", variant: "success" as const } : { label: "Paid", variant: "success" as const };
       }
       return undefined;
     }
     const outstanding = pendingPayments.length;
-    const paidCents = payments.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amount, 0);
-    const allPaid = payments.length > 0 && payments.every((p) => p.status === "paid" || p.status === "cancelled");
+    const paidCents = payments.filter((p) => isPaymentCovered(p.status)).reduce((sum, p) => sum + p.amount, 0);
+    const allPaid = payments.length > 0 && payments.every((p) => isPaymentCovered(p.status) || p.status === "cancelled");
     if (outstanding > 0) {
       return { label: "Payment due", variant: "warning" as const };
     }
     if (allPaid && paidCents > 0) {
-      return { label: "Paid", variant: "success" as const };
+      return payments.some((p) => p.status === "processing")
+        ? { label: "Payment processing", variant: "success" as const }
+        : { label: "Paid", variant: "success" as const };
     }
     return undefined;
   })();
@@ -331,6 +337,7 @@ export function ProjectPageClient({
   }
 
   return (
+    <PaymentOptionsProvider value={paymentOptions}>
     <div className="min-h-screen bg-[#F8FAFC] surface-dark:bg-background">
       <HashScrollHandler />
       {isPreview ? (
@@ -884,6 +891,7 @@ export function ProjectPageClient({
         onConfirm={(q) => void confirmPhotoDownload(q)}
       />
     </div>
+    </PaymentOptionsProvider>
   );
 }
 

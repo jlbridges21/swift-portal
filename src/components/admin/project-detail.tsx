@@ -19,6 +19,7 @@ import { RevisionDrawer } from "@/components/admin/revision-drawer";
 import { PROJECT_STATUSES } from "@/lib/constants";
 import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
 import { QuoteSection } from "@/components/projects/quote-section";
+import { BankPaymentsNotice } from "@/components/admin/bank-payments-notice";
 import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
 import type { Project, Client, MediaAsset, Tour, Project3dModel, Payment, ShootProposal, ActivityLog, Revision, ProjectQuote, AssetReview, MediaFolder } from "@/lib/types";
 import type { DepositMode } from "@/lib/workflow-settings";
@@ -1615,6 +1616,7 @@ export function AdminProjectDetail({
                 </Button>
               </form>
             )}
+            <BankPaymentsNotice className="mb-4" />
             {paymentList.map((p) => (
               <div key={`payment-${p.id}`} className="border-b border-border py-4 last:border-0">
                 <AdminPaymentActions

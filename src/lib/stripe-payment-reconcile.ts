@@ -2,11 +2,15 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins } from "@/lib/notifications";
-import { isPaymentComplete } from "@/lib/payment-status";
+import { isPaymentComplete, isPaymentCovered } from "@/lib/payment-status";
 import { getStripeForStoredAccount } from "@/lib/stripe-connect";
 import { resolveStripeReceipt } from "@/lib/stripe-receipt";
+import { parseClientFeeFromMetadata } from "@/lib/stripe-metadata";
+import { isProcessingBankIntent, paymentIntentIdFromSession as intentIdOfSession } from "@/lib/stripe-async-payments";
 import {
   findPaymentFromStripe,
+  handleBankPaymentFailed,
+  handlePaymentProcessing,
   handlePaymentSuccess,
   resolvePaymentFromCheckoutSession,
 } from "@/lib/stripe-payments";
@@ -18,10 +22,16 @@ export type StripeSucceededPayment = {
   paymentIntentId: string;
   receiptUrl: string | null;
   cardLast4?: string | null;
+  methodType?: "card" | "us_bank_account" | null;
   metadata: Stripe.Metadata;
   amountReceived: number;
   paidAt: string;
 };
+
+/** Amount Stripe should have collected: the payment plus any card fee the client paid on top. */
+export function expectedChargeCents(amountCents: number, metadata: Stripe.Metadata | null | undefined): number {
+  return amountCents + parseClientFeeFromMetadata(metadata);
+}
 
 export type ReconcilePaymentResult = {
   paymentId: string;
@@ -69,7 +79,7 @@ export function pickAuthoritativeSucceededSession(
       (session) =>
         session.payment_status === "paid" &&
         typeof session.amount_total === "number" &&
-        session.amount_total === expectedAmountCents
+        session.amount_total === expectedChargeCents(expectedAmountCents, session.metadata)
     )
     .sort((a, b) => (a.created ?? 0) - (b.created ?? 0));
 
@@ -123,6 +133,7 @@ async function sessionToSucceededPayment(
 
   let receiptUrl: string | null = null;
   let cardLast4: string | null = null;
+  let methodType: "card" | "us_bank_account" | null = null;
   try {
     const receipt = await resolveStripeReceipt({
       paymentIntentId,
@@ -130,6 +141,7 @@ async function sessionToSucceededPayment(
     });
     receiptUrl = receipt.receiptUrl;
     cardLast4 = receipt.cardLast4;
+    methodType = receipt.methodType ?? null;
   } catch {
     receiptUrl = null;
   }
@@ -139,6 +151,7 @@ async function sessionToSucceededPayment(
     paymentIntentId,
     receiptUrl,
     cardLast4,
+    methodType,
     metadata,
     amountReceived: session.amount_total ?? 0,
     paidAt: new Date((session.created ?? 0) * 1000).toISOString(),
@@ -187,6 +200,7 @@ export async function findSucceededStripePaymentForRecord(
       ) {
         let receiptUrl = payment.stripe_receipt_url;
         let cardLast4 = payment.card_last4 ?? null;
+        let methodType: "card" | "us_bank_account" | null = null;
         try {
           const receipt = await resolveStripeReceipt({
             paymentIntentId: intent.id,
@@ -194,6 +208,7 @@ export async function findSucceededStripePaymentForRecord(
           });
           receiptUrl = receipt.receiptUrl ?? receiptUrl;
           cardLast4 = receipt.cardLast4 ?? cardLast4;
+          methodType = receipt.methodType ?? null;
         } catch {
           // Keep the stored receipt. Do not invent one.
         }
@@ -202,6 +217,7 @@ export async function findSucceededStripePaymentForRecord(
           paymentIntentId: intent.id,
           receiptUrl,
           cardLast4,
+          methodType,
           metadata: intent.metadata ?? {},
           amountReceived: intent.amount_received ?? payment.amount,
           paidAt: new Date(intent.created * 1000).toISOString(),
@@ -332,6 +348,63 @@ export async function recordRefundedOrDuplicateStripeAttempt(
   });
 }
 
+/**
+ * Bank (ACH) payments that the webhooks may have missed:
+ * - pending row whose Checkout Session's debit is processing → mark processing
+ * - processing row whose debit failed → reopen (handleBankPaymentFailed)
+ * Returns null when there is nothing bank-related to do.
+ */
+async function reconcileBankPaymentState(
+  payment: Payment,
+  source: string
+): Promise<Omit<ReconcilePaymentResult, "paymentId" | "businessId"> | null> {
+  const { stripe, requestOptions } = getStripeForStoredAccount(payment.stripe_account_id);
+  const retrieveIntent = (id: string) =>
+    requestOptions ? stripe.paymentIntents.retrieve(id, {}, requestOptions) : stripe.paymentIntents.retrieve(id);
+
+  try {
+    let intent: Stripe.PaymentIntent | null = null;
+    let sessionId: string | undefined;
+    if (payment.stripe_payment_intent_id) {
+      intent = await retrieveIntent(payment.stripe_payment_intent_id);
+    } else if (payment.stripe_checkout_session_id) {
+      const session = requestOptions
+        ? await stripe.checkout.sessions.retrieve(payment.stripe_checkout_session_id, {}, requestOptions)
+        : await stripe.checkout.sessions.retrieve(payment.stripe_checkout_session_id);
+      sessionId = session.id;
+      const intentId = intentIdOfSession(session);
+      if (session.status === "complete" && intentId) intent = await retrieveIntent(intentId);
+    }
+    if (!intent) return null;
+
+    if (payment.status === "processing") {
+      if (intent.status === "processing") return { repaired: false, alreadyPaid: false, skipped: "bank_payment_processing" };
+      if (intent.status === "requires_payment_method" || intent.status === "canceled") {
+        const result = await handleBankPaymentFailed(payment, intent.last_payment_error?.message || "The bank declined the payment", intent.metadata);
+        return { repaired: result.updated, alreadyPaid: false, skipped: result.updated ? undefined : "bank_failure_not_applied" };
+      }
+      return null;
+    }
+
+    if ((payment.status === "pending" || payment.status === "sent") && isProcessingBankIntent(intent)) {
+      const result = await handlePaymentProcessing({
+        payment,
+        checkoutSessionId: sessionId ?? payment.stripe_checkout_session_id ?? undefined,
+        paymentIntentId: intent.id,
+        source: `reconcile:${source}`,
+        metadata: intent.metadata,
+      });
+      return { repaired: result.updated, alreadyPaid: false, skipped: result.updated ? undefined : "bank_processing_not_applied" };
+    }
+  } catch (err) {
+    console.warn("[stripe-reconcile] bank payment state lookup failed", {
+      paymentId: payment.id,
+      error: err instanceof Error ? err.message : err,
+    });
+  }
+  return null;
+}
+
 /** Idempotent — safe if webhook already recorded the payment. */
 export async function reconcilePaymentFromStripe(
   payment: Payment,
@@ -356,10 +429,13 @@ export async function reconcilePaymentFromStripe(
 
   const stripeMatch = await findSucceededStripePaymentForRecord(payment);
   if (!stripeMatch) {
+    // No settled money. A bank debit may have started (missed webhook) or failed while processing.
+    const bank = await reconcileBankPaymentState(payment, source);
+    if (bank) return { ...base, ...bank };
     return { ...base, skipped: "no_succeeded_stripe_payment" };
   }
 
-  if (stripeMatch.amountReceived > 0 && stripeMatch.amountReceived !== payment.amount) {
+  if (stripeMatch.amountReceived > 0 && stripeMatch.amountReceived !== expectedChargeCents(payment.amount, stripeMatch.metadata)) {
     console.error("[stripe-reconcile] amount mismatch — refusing auto-repair", {
       paymentId: payment.id,
       expected: payment.amount,
@@ -383,6 +459,9 @@ export async function reconcilePaymentFromStripe(
       checkoutSessionId: stripeMatch.checkoutSessionId || payment.stripe_checkout_session_id || undefined,
       paymentIntentId: stripeMatch.paymentIntentId,
       receiptUrl: stripeMatch.receiptUrl,
+      cardLast4: stripeMatch.cardLast4,
+      paymentMethodType: stripeMatch.methodType ?? null,
+      clientFeeCents: parseClientFeeFromMetadata(stripeMatch.metadata),
       source: `reconcile:${source}`,
       metadata: stripeMatch.metadata,
     });
@@ -414,7 +493,7 @@ export async function reconcileProjectOutstandingPayments(
     .select("*")
     .eq("business_id", businessId)
     .eq("project_id", projectId)
-    .in("status", ["pending", "sent"])
+    .in("status", ["pending", "sent", "processing"])
     .order("created_at", { ascending: true });
 
   const results: ReconcilePaymentResult[] = [];
@@ -464,11 +543,17 @@ export async function ensureCheckoutNotAlreadyPaid(
   payment: Payment,
   source: string
 ): Promise<{ blocked: boolean; message?: string; reconciled?: boolean }> {
-  if (isPaymentComplete(payment.status)) {
-    return { blocked: true, message: "This payment has already been completed." };
+  if (isPaymentCovered(payment.status)) {
+    return {
+      blocked: true,
+      message: payment.status === "processing" ? "This payment is already processing." : "This payment has already been completed.",
+    };
   }
 
   const reconcile = await reconcilePaymentFromStripe(payment, `${source}:preflight`);
+  if (reconcile.skipped === "bank_payment_processing") {
+    return { blocked: true, message: "This payment is already processing." };
+  }
   if (reconcile.repaired || reconcile.alreadyPaid) {
     return {
       blocked: true,
@@ -518,11 +603,30 @@ export async function scanOutstandingPaymentsForReconciliation(options?: {
     .order("created_at", { ascending: true })
     .limit(limit);
 
+  // Bank (ACH) payments in flight: settle or reopen any whose webhook was missed.
+  const { data: processingRows } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("status", "processing")
+    .order("processing_started_at", { ascending: true })
+    .limit(limit);
+  const processingResults: ReconcilePaymentResult[] = [];
+  if (!dryRun) {
+    for (const row of processingRows ?? []) {
+      try {
+        const result = await reconcilePaymentFromStripe(row as Payment, "cron:processing");
+        if (result.repaired) processingResults.push(result);
+      } catch (err) {
+        processingResults.push({ paymentId: (row as Payment).id, businessId: (row as Payment).business_id ?? null, repaired: false, alreadyPaid: false, skipped: err instanceof Error ? err.message : "failed" });
+      }
+    }
+  }
+
   const { data: businesses } = await supabase.from("businesses").select("id, name").is("deleted_at", null);
   const businessNames = new Map((businesses ?? []).map((b) => [b.id as string, b.name as string]));
 
   const drift: PaymentReconciliationDrift[] = [];
-  const repaired: ReconcilePaymentResult[] = [];
+  const repaired: ReconcilePaymentResult[] = [...processingResults];
   const errors: string[] = [];
 
   for (const row of outstanding ?? []) {
@@ -576,7 +680,7 @@ export async function scanOutstandingPaymentsForReconciliation(options?: {
     });
   }
 
-  return { scanned: outstanding?.length ?? 0, drift, repaired, errors };
+  return { scanned: (outstanding?.length ?? 0) + (processingRows?.length ?? 0), drift, repaired, errors };
 }
 
 /** Resolve checkout session object the same way the webhook does (for tests / tooling). */

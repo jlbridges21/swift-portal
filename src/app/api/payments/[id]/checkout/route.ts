@@ -4,9 +4,11 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAuth } from "@/lib/auth";
 import { canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { getStripeForBusiness, portalCheckoutBaseUrl, StripeConnectNotReadyError } from "@/lib/stripe-connect";
-import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
-import { isPaymentComplete } from "@/lib/payment-status";
+import { getStripeForBusiness, isBankPaymentAvailable, portalCheckoutBaseUrl, StripeConnectNotReadyError } from "@/lib/stripe-connect";
+import { buildStripePaymentMetadata, CLIENT_FEE_METADATA_KEY } from "@/lib/stripe-metadata";
+import { isPaymentComplete, isPaymentCovered } from "@/lib/payment-status";
+import { CARD_FEE_LINE_NAME, cardFeeCents } from "@/lib/card-fee";
+import { buildPaymentCheckoutParams } from "@/lib/checkout-session-params";
 import { ensureCheckoutNotAlreadyPaid } from "@/lib/stripe-payment-reconcile";
 import { depositPaymentDescription, fullPaymentDescription, resolveDepositCharge, resolveQuoteDepositTerms } from "@/lib/payment-quote";
 import { getAppSettings } from "@/lib/app-settings";
@@ -15,6 +17,15 @@ import type { StripeConnectRequestOptions } from "@/lib/stripe";
 import type Stripe from "stripe";
 
 const ALREADY_PAID_MESSAGE = "This payment has already been completed.";
+const PROCESSING_MESSAGE = "This payment is already processing. Bank payments usually clear in a few business days.";
+const BANK_UNAVAILABLE_MESSAGE = "Bank payments aren't available for this business. Please pay by card.";
+
+/** card = cards and wallets (plus the business's other Stripe methods); bank = US bank account (ACH). */
+type CheckoutMethod = "card" | "bank";
+
+function coveredMessage(status: string): string {
+  return status === "processing" ? PROCESSING_MESSAGE : ALREADY_PAID_MESSAGE;
+}
 
 class CheckoutChoiceError extends Error {
   status: number;
@@ -45,7 +56,12 @@ async function authorizePaymentAccess(payment: Payment) {
   return { ok: true as const, profile };
 }
 
-async function createCheckoutSession(payment: Payment, businessId: string, business: { slug: string; custom_domain?: string | null }) {
+async function createCheckoutSession(
+  payment: Payment,
+  businessId: string,
+  business: { slug: string; custom_domain?: string | null },
+  method: CheckoutMethod = "card"
+) {
   const appUrl = portalCheckoutBaseUrl(business);
   if (!appUrl) {
     return { ok: false as const, response: NextResponse.json({ error: "App URL not configured" }, { status: 500 }) };
@@ -70,26 +86,21 @@ async function createCheckoutSession(payment: Payment, businessId: string, busin
 
   const { stripe, requestOptions, stripeAccountId } = stripeContext;
 
-  const sessionParams = {
-    mode: "payment" as const,
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: payment.description.slice(0, 250),
-          },
-          unit_amount: payment.amount,
-        },
-        quantity: 1,
-      },
-    ],
-    metadata,
-    payment_intent_data: { metadata },
-    client_reference_id: payment.id,
-    success_url: `${appUrl}/dashboard/projects/${payment.project_id}?payment=success#payments`,
-    cancel_url: `${appUrl}/dashboard/projects/${payment.project_id}?payment=cancelled#payments`,
-  };
+  if (method === "bank" && !(await isBankPaymentAvailable(businessId))) {
+    return { ok: false as const, response: NextResponse.json({ error: BANK_UNAVAILABLE_MESSAGE }, { status: 400 }) };
+  }
+
+  const settings = await getAppSettings(businessId);
+  const feeCents = method === "card" && settings.workflow.payments.passCardFeeToClient ? cardFeeCents(payment.amount) : 0;
+  const sessionMetadata: Stripe.MetadataParam = { ...metadata, ...(feeCents > 0 ? { [CLIENT_FEE_METADATA_KEY]: String(feeCents) } : {}) };
+
+  const sessionParams = buildPaymentCheckoutParams({
+    payment,
+    method,
+    feeCents,
+    metadata: sessionMetadata,
+    appUrl,
+  });
 
   const session = requestOptions
     ? await stripe.checkout.sessions.create(sessionParams, requestOptions)
@@ -162,6 +173,8 @@ async function paymentLinkChargeCents(
   if (items.data.length === 0) return null;
   let total = 0;
   for (const item of items.data) {
+    // The client's card fee is on top of the deposit; compare the deposit itself.
+    if (item.description === CARD_FEE_LINE_NAME) continue;
     const unit = item.price?.unit_amount;
     if (unit == null) return null;
     total += unit * (item.quantity ?? 1);
@@ -232,7 +245,7 @@ async function settlePayInFull(payment: Payment, businessId: string): Promise<Pa
     .select("amount, status")
     .eq("quote_id", payment.quote_id);
   const paidCents = (rows ?? [])
-    .filter((row) => row.status === "paid")
+    .filter((row) => isPaymentCovered(row.status))
     .reduce((sum, row) => sum + row.amount, 0);
   if (paidCents > 0) {
     throw new CheckoutChoiceError("A payment was already recorded for this quote.", 409);
@@ -269,8 +282,8 @@ async function settlePayInFull(payment: Payment, businessId: string): Promise<Pa
 
   const settled = (updated as Payment | null) ?? (await loadPayment(payment.id, businessId));
   if (!settled) throw new CheckoutChoiceError("Payment could not be updated.", 409);
-  if (isPaymentComplete(settled.status)) {
-    throw new CheckoutChoiceError(ALREADY_PAID_MESSAGE, 409);
+  if (isPaymentCovered(settled.status)) {
+    throw new CheckoutChoiceError(coveredMessage(settled.status), 409);
   }
   if (settled.amount !== quote.total_cents) {
     throw new CheckoutChoiceError("Payment amount was not updated.", 409);
@@ -314,7 +327,7 @@ async function settleDeposit(payment: Payment, businessId: string): Promise<Paym
     .select("amount, status")
     .eq("quote_id", payment.quote_id);
   const paidCents = (rows ?? [])
-    .filter((row) => row.status === "paid")
+    .filter((row) => isPaymentCovered(row.status))
     .reduce((sum, row) => sum + row.amount, 0);
   if (paidCents > 0) {
     throw new CheckoutChoiceError("A payment was already recorded for this quote.", 409);
@@ -356,8 +369,8 @@ async function settleDeposit(payment: Payment, businessId: string): Promise<Paym
 
   const settled = (updated as Payment | null) ?? (await loadPayment(payment.id, businessId));
   if (!settled) throw new CheckoutChoiceError("Payment could not be updated.", 409);
-  if (isPaymentComplete(settled.status)) {
-    throw new CheckoutChoiceError(ALREADY_PAID_MESSAGE, 409);
+  if (isPaymentCovered(settled.status)) {
+    throw new CheckoutChoiceError(coveredMessage(settled.status), 409);
   }
   if (settled.amount !== targetCents) {
     throw new CheckoutChoiceError("Payment amount was not updated.", 409);
@@ -390,8 +403,8 @@ export async function GET(
     if (!auth.ok) return auth.response;
     if (!tenant) return missingTenantResponse(auth.profile.role);
 
-    if (isPaymentComplete(payment.status)) {
-      const redirectUrl = `${portalCheckoutBaseUrl(tenant.business)}/dashboard/projects/${payment.project_id}?payment=already_completed#payments`;
+    if (isPaymentCovered(payment.status)) {
+      const redirectUrl = `${portalCheckoutBaseUrl(tenant.business)}/dashboard/projects/${payment.project_id}?payment=${payment.status === "processing" ? "processing" : "already_completed"}#payments`;
       return NextResponse.redirect(redirectUrl);
     }
 
@@ -401,7 +414,8 @@ export async function GET(
       return NextResponse.redirect(redirectUrl);
     }
 
-    const result = await createCheckoutSession(payment, tenant.businessId, tenant.business);
+    const method: CheckoutMethod = new URL(_request.url).searchParams.get("method") === "bank" ? "bank" : "card";
+    const result = await createCheckoutSession(payment, tenant.businessId, tenant.business, method);
     if (!result.ok) return result.response;
 
     return NextResponse.redirect(result.session.url!);
@@ -434,19 +448,28 @@ export async function POST(
     if (!auth.ok) return auth.response;
     if (!tenant) return missingTenantResponse(auth.profile.role);
 
-    if (isPaymentComplete(payment.status)) {
-      return NextResponse.json({ error: ALREADY_PAID_MESSAGE }, { status: 409 });
+    if (isPaymentCovered(payment.status)) {
+      return NextResponse.json({ error: coveredMessage(payment.status) }, { status: 409 });
     }
 
     let choice: string | undefined;
+    let methodRaw: string | undefined;
     try {
       const body = await request.json();
       if (body && typeof body.choice === "string") choice = body.choice;
+      if (body && typeof body.method === "string") methodRaw = body.method;
     } catch {
       choice = undefined;
     }
     if (choice && choice !== "full" && choice !== "deposit") {
       return NextResponse.json({ error: "Unknown checkout choice." }, { status: 400 });
+    }
+    if (methodRaw && methodRaw !== "card" && methodRaw !== "bank") {
+      return NextResponse.json({ error: "Unknown payment method." }, { status: 400 });
+    }
+    const method: CheckoutMethod = methodRaw === "bank" ? "bank" : "card";
+    if (method === "bank" && !(await isBankPaymentAvailable(tenant.businessId))) {
+      return NextResponse.json({ error: BANK_UNAVAILABLE_MESSAGE }, { status: 400 });
     }
 
     const paymentToCharge =
@@ -464,7 +487,7 @@ export async function POST(
       return NextResponse.json({ error: block.message ?? ALREADY_PAID_MESSAGE }, { status: 409 });
     }
 
-    const result = await createCheckoutSession(paymentToCharge, tenant.businessId, tenant.business);
+    const result = await createCheckoutSession(paymentToCharge, tenant.businessId, tenant.business, method);
     if (!result.ok) return result.response;
 
     return NextResponse.json({ url: result.session.url, sessionId: result.session.id });

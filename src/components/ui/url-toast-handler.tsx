@@ -25,7 +25,7 @@ export function UrlToastHandler() {
     next.delete("welcome");
     next.delete("payment");
     const qs = next.toString();
-    const hash = payment === "success" || payment === "already_completed" || payment === "cancelled" ? "#payments" : "";
+    const hash = payment ? "#payments" : "";
     const nextUrl = `${pathname}${qs ? `?${qs}` : ""}${hash}`;
 
     // Child effects run before the root <Toaster> subscribes. On a full load
@@ -39,12 +39,14 @@ export function UrlToastHandler() {
           toast.success(`Welcome to ${brand.portalName}! Your project has been created.`);
         }
         if (payment === "success") toast.success("Payment received — thank you!");
+        if (payment === "bank_started") toast.success("Bank payment started. It usually clears in a few business days.");
+        if (payment === "processing") toast.info("This payment is already processing.");
         if (payment === "already_completed") toast.info("This payment has already been completed.");
         if (payment === "cancelled") toast.message("Payment cancelled — you can try again when ready.");
       }, 0);
     }
 
-    if (payment === "success") {
+    if (payment === "success" || payment === "bank_started") {
       const projectMatch = pathname.match(/\/dashboard\/projects\/([^/]+)/);
       const projectId = projectMatch?.[1];
       if (projectId) {

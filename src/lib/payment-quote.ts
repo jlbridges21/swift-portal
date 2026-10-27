@@ -1,3 +1,4 @@
+import { isPaymentCovered } from "@/lib/payment-status";
 import type { Payment, ProjectQuote } from "@/lib/types";
 import { getServicePaymentDescription } from "@/lib/service-templates";
 import { formatCurrency } from "@/lib/utils";
@@ -88,9 +89,10 @@ export function paymentsForQuote(payments: Payment[], quoteId: string): Payment[
   return payments.filter((p) => p.quote_id === quoteId);
 }
 
+/** Paid plus processing (bank payments on their way): what the client has covered. */
 export function paidCentsForQuote(payments: Payment[], quoteId: string): number {
   return paymentsForQuote(payments, quoteId)
-    .filter((p) => p.status === "paid")
+    .filter((p) => isPaymentCovered(p.status))
     .reduce((sum, p) => sum + p.amount, 0);
 }
 

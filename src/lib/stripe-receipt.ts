@@ -9,11 +9,14 @@ import { getStripeForStoredAccount } from "@/lib/stripe-connect";
 export type StripeReceiptDetails = {
   receiptUrl: string | null;
   cardLast4: string | null;
+  /** "card" or "us_bank_account" when the charge says so. */
+  methodType?: "card" | "us_bank_account" | null;
 };
 
 type ChargeLike = {
   receipt_url?: string | null;
   payment_method_details?: {
+    type?: string | null;
     card?: { last4?: string | null } | null;
   } | null;
 };
@@ -21,9 +24,11 @@ type ChargeLike = {
 export function receiptDetailsFromCharge(charge: ChargeLike | null | undefined): StripeReceiptDetails {
   const receiptUrl = charge?.receipt_url?.trim() || null;
   const last4 = charge?.payment_method_details?.card?.last4?.trim() || null;
+  const type = charge?.payment_method_details?.type;
   return {
     receiptUrl: receiptUrl || null,
     cardLast4: last4 && /^\d{4}$/.test(last4) ? last4 : null,
+    methodType: type === "card" || type === "us_bank_account" ? type : null,
   };
 }
 

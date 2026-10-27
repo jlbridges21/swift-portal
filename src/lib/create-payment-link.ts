@@ -1,3 +1,6 @@
+import { cardFeeCents, CARD_FEE_LINE_NAME } from "@/lib/card-fee";
+import { CLIENT_FEE_METADATA_KEY } from "@/lib/stripe-metadata";
+import type Stripe from "stripe";
 import { setProjectStatus } from "@/lib/status-automation";
 import { getAppSettings } from "@/lib/app-settings";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
@@ -163,7 +166,12 @@ export async function createPaymentLink(input: CreatePaymentLinkInput): Promise<
     clientId: input.clientId,
   });
   const tenantOrigin = await resolvePortalOrigin(input.businessId);
-  const paymentLinkParams = {
+  // Card fee pass-through: the emailed Stripe link is card-only with a fee line (clients who
+  // want to pay by bank do it from the portal, where they choose the method). Otherwise the
+  // link offers whatever the business enabled in Stripe, bank (ACH) included.
+  const feeCents = appSettings.workflow.payments.passCardFeeToClient ? cardFeeCents(amount) : 0;
+  const feeMetadata: Record<string, string> = feeCents > 0 ? { [CLIENT_FEE_METADATA_KEY]: String(feeCents) } : {};
+  const paymentLinkParams: Stripe.PaymentLinkCreateParams = {
     line_items: [
       {
         price_data: {
@@ -176,14 +184,28 @@ export async function createPaymentLink(input: CreatePaymentLinkInput): Promise<
         },
         quantity: 1,
       },
+      ...(feeCents > 0
+        ? [
+            {
+              price_data: {
+                currency: "usd",
+                product_data: { name: CARD_FEE_LINE_NAME, description: "Pay by bank from your project page to avoid this fee." },
+                unit_amount: feeCents,
+              },
+              quantity: 1,
+            },
+          ]
+        : []),
     ],
+    ...(feeCents > 0 ? { payment_method_types: ["card" as const] } : {}),
     metadata: {
       ...stripeMetadata,
+      ...feeMetadata,
       project_name: project.project_name || "",
       ...(input.quoteId ? { quote_id: input.quoteId } : {}),
     },
     payment_intent_data: {
-      metadata: stripeMetadata,
+      metadata: { ...stripeMetadata, ...feeMetadata },
     },
     after_completion: {
       type: "redirect" as const,

@@ -19,6 +19,17 @@ export interface BusinessStripeIntegration {
   stripe_charges_enabled: boolean;
   stripe_payouts_enabled: boolean;
   stripe_connected_at: string | null;
+  /** v106: account can take ACH Direct Debit (bank payments). */
+  stripe_ach_enabled?: boolean | null;
+}
+
+const LEGACY_INTEGRATION_COLUMNS =
+  "business_id, stripe_account_id, stripe_account_status, stripe_charges_enabled, stripe_payouts_enabled, stripe_connected_at";
+const INTEGRATION_COLUMNS = `${LEGACY_INTEGRATION_COLUMNS}, stripe_ach_enabled`;
+
+/** Before migration v106 runs, stripe_ach_enabled does not exist; card payments must keep working. */
+function isMissingAchColumn(error: { message?: string } | null | undefined): boolean {
+  return Boolean(error?.message && /stripe_ach_enabled/.test(error.message));
 }
 
 export const STRIPE_CONNECT_NOT_READY_MESSAGE =
@@ -73,6 +84,16 @@ export function stripeDashboardUrl(): string {
     : "https://dashboard.stripe.com/test";
 }
 
+/** ACH Direct Debit is usable on this account (capability active and charges on). */
+export function accountAcceptsAch(account: Pick<Stripe.Account, "capabilities" | "charges_enabled">): boolean {
+  return Boolean(account.charges_enabled) && account.capabilities?.us_bank_account_ach_payments === "active";
+}
+
+/** Where the business owner turns on ACH Direct Debit in their own Stripe Dashboard. */
+export function stripeAchSettingsUrl(): string {
+  return `${stripeDashboardUrl()}/settings/payment_methods`;
+}
+
 export function mapStripeAccountStatus(account: Stripe.Account): {
   status: StripeAccountStatus;
   chargesEnabled: boolean;
@@ -99,13 +120,11 @@ export async function loadBusinessStripeIntegration(
   businessId: string
 ): Promise<BusinessStripeIntegration | null> {
   const db = await createTenantServiceClient(businessId);
-  const { data } = await db
-    .from("business_integrations")
-    .select(
-      "business_id, stripe_account_id, stripe_account_status, stripe_charges_enabled, stripe_payouts_enabled, stripe_connected_at"
-    )
-    .eq("business_id", businessId)
-    .maybeSingle();
+  const { data, error } = await db.from("business_integrations").select(INTEGRATION_COLUMNS).eq("business_id", businessId).maybeSingle();
+  if (isMissingAchColumn(error)) {
+    const legacy = await db.from("business_integrations").select(LEGACY_INTEGRATION_COLUMNS).eq("business_id", businessId).maybeSingle();
+    return (legacy.data as BusinessStripeIntegration | null) ?? null;
+  }
   return (data as BusinessStripeIntegration | null) ?? null;
 }
 
@@ -113,13 +132,11 @@ export async function loadIntegrationByStripeAccount(
   stripeAccountId: string
 ): Promise<BusinessStripeIntegration | null> {
   const supabase = await createServiceClient();
-  const { data } = await supabase
-    .from("business_integrations")
-    .select(
-      "business_id, stripe_account_id, stripe_account_status, stripe_charges_enabled, stripe_payouts_enabled, stripe_connected_at"
-    )
-    .eq("stripe_account_id", stripeAccountId)
-    .maybeSingle();
+  const { data, error } = await supabase.from("business_integrations").select(INTEGRATION_COLUMNS).eq("stripe_account_id", stripeAccountId).maybeSingle();
+  if (isMissingAchColumn(error)) {
+    const legacy = await supabase.from("business_integrations").select(LEGACY_INTEGRATION_COLUMNS).eq("stripe_account_id", stripeAccountId).maybeSingle();
+    return (legacy.data as BusinessStripeIntegration | null) ?? null;
+  }
   return (data as BusinessStripeIntegration | null) ?? null;
 }
 
@@ -179,23 +196,22 @@ export async function applyStripeAccountSnapshot(
       ? existing?.stripe_connected_at ?? new Date().toISOString()
       : existing?.stripe_connected_at ?? null;
 
-  const { data, error } = await db
+  const row = {
+    business_id: businessId,
+    stripe_account_id: account.id,
+    stripe_account_status: mapped.status,
+    stripe_charges_enabled: mapped.chargesEnabled,
+    stripe_payouts_enabled: mapped.payoutsEnabled,
+    stripe_connected_at: connectedAt,
+  };
+  let { data, error } = await db
     .from("business_integrations")
-    .upsert(
-      {
-        business_id: businessId,
-        stripe_account_id: account.id,
-        stripe_account_status: mapped.status,
-        stripe_charges_enabled: mapped.chargesEnabled,
-        stripe_payouts_enabled: mapped.payoutsEnabled,
-        stripe_connected_at: connectedAt,
-      },
-      { onConflict: "business_id" }
-    )
-    .select(
-      "business_id, stripe_account_id, stripe_account_status, stripe_charges_enabled, stripe_payouts_enabled, stripe_connected_at"
-    )
+    .upsert({ ...row, stripe_ach_enabled: accountAcceptsAch(account) }, { onConflict: "business_id" })
+    .select(INTEGRATION_COLUMNS)
     .single();
+  if (isMissingAchColumn(error)) {
+    ({ data, error } = await db.from("business_integrations").upsert(row, { onConflict: "business_id" }).select(LEGACY_INTEGRATION_COLUMNS).single());
+  }
 
   if (error || !data) {
     throw new Error(error?.message || "Failed to update Stripe connection status");
@@ -266,6 +282,8 @@ export async function getLiveConnectStatus(businessId: string): Promise<{
   connectedAt: string | null;
   hasAccount: boolean;
   dashboardUrl: string;
+  achEnabled: boolean;
+  achSettingsUrl: string;
 }> {
   if (isPlatformStripeBusiness(businessId)) {
     return {
@@ -276,6 +294,8 @@ export async function getLiveConnectStatus(businessId: string): Promise<{
       connectedAt: null,
       hasAccount: true,
       dashboardUrl: stripeDashboardUrl(),
+      achEnabled: (await bankPaymentSchemaReady(businessId)) && (await platformAcceptsAch()),
+      achSettingsUrl: stripeAchSettingsUrl(),
     };
   }
 
@@ -302,5 +322,52 @@ export async function getLiveConnectStatus(businessId: string): Promise<{
     connectedAt: integration?.stripe_connected_at ?? null,
     hasAccount: Boolean(accountId),
     dashboardUrl: stripeDashboardUrl(),
+    achEnabled: integration?.stripe_account_status === "active" && Boolean(integration?.stripe_ach_enabled),
+    achSettingsUrl: stripeAchSettingsUrl(),
   };
+}
+
+/** Migration v106 has run (bank payments can be recorded). Remembered once true. */
+const SCHEMA_READY = new Map<"v106", true>();
+async function bankPaymentSchemaReady(businessId: string): Promise<boolean> {
+  if (SCHEMA_READY.has("v106")) return true;
+  const db = await createTenantServiceClient(businessId);
+  const { error } = await db.from("business_integrations").select("stripe_ach_enabled").limit(1);
+  if (error) return false;
+  SCHEMA_READY.set("v106", true);
+  return true;
+}
+
+/** Platform capability rarely changes; avoid a Stripe call on every project page view. */
+const PLATFORM_ACH_CACHE = new Map<"platform", { value: boolean; at: number }>();
+const PLATFORM_ACH_TTL_MS = 10 * 60 * 1000;
+
+/** The legacy platform business charges on the platform account; read its capability (cached). */
+async function platformAcceptsAch(): Promise<boolean> {
+  const cached = PLATFORM_ACH_CACHE.get("platform");
+  if (cached && Date.now() - cached.at < PLATFORM_ACH_TTL_MS) return cached.value;
+  try {
+    const { stripe } = getStripe();
+    const value = accountAcceptsAch(await stripe.accounts.retrieveCurrent());
+    PLATFORM_ACH_CACHE.set("platform", { value, at: Date.now() });
+    return value;
+  } catch (err) {
+    console.warn("[stripe-connect] platform ACH capability lookup failed", err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
+/**
+ * Can this business offer bank (ACH) payments right now? Uses the stored capability, which
+ * account.updated webhooks and every Settings visit refresh. Never throws.
+ */
+export async function isBankPaymentAvailable(businessId: string): Promise<boolean> {
+  // The platform business reads ACH from Stripe live; only offer it once v106 can record it.
+  if (isPlatformStripeBusiness(businessId)) return (await bankPaymentSchemaReady(businessId)) && platformAcceptsAch();
+  try {
+    const integration = await loadBusinessStripeIntegration(businessId);
+    return Boolean(integration?.stripe_account_id && integration.stripe_account_status === "active" && integration.stripe_ach_enabled);
+  } catch {
+    return false;
+  }
 }

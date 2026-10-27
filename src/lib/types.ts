@@ -31,10 +31,13 @@ export type PaymentStatus =
   | "draft"
   | "sent"
   | "pending"
+  /** Bank (ACH) payment authorized; Stripe is collecting it. Counts toward the balance. */
+  | "processing"
   | "paid"
   | "failed"
   | "expired"
   | "cancelled";
+export type PaymentMethodType = "card" | "us_bank_account" | "manual" | "other";
 export type MediaType = "photo" | "video" | "document";
 export type MediaSource = "upload" | "youtube" | "kuula" | "external";
 export type MediaVisibility = "client" | "admin" | "both";
@@ -316,6 +319,11 @@ export interface Payment {
   stripe_receipt_url: string | null;
   card_last4?: string | null;
   stripe_account_id?: string | null;
+  /** card | us_bank_account | manual | other (v106). Null on rows paid before v106. */
+  payment_method_type?: PaymentMethodType | null;
+  processing_started_at?: string | null;
+  /** Card fee the client paid on top of amount (v106). */
+  client_fee_cents?: number | null;
   paid_at: string | null;
   created_at: string;
   updated_at: string;

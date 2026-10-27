@@ -1048,6 +1048,35 @@ export function AdminSettingsClient({
             <h2 className="text-lg font-semibold text-heading">Payments</h2>
             <p className="mt-1 mb-4 text-sm text-muted">Connect your Stripe account so clients pay you directly.</p>
             {payments}
+            <Card className="shadow-sm" id="settings-card-fee">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Card processing fee</CardTitle>
+                <p className="text-sm text-muted">
+                  Choose who pays Stripe&apos;s card fee. Bank (ACH) payments never carry it.
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-hidden rounded-xl border border-border p-0">
+                <div className="px-4 py-3">
+                  <RowToggle
+                    id="passCardFeeToClient"
+                    label="Clients pay the card processing fee"
+                    checked={settings.workflow.payments.passCardFeeToClient}
+                    onChange={(v) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        workflow: { ...prev.workflow, payments: { ...prev.workflow.payments, passCardFeeToClient: v } },
+                      }))
+                    }
+                  />
+                  <p className="mt-2 px-4 text-xs leading-relaxed text-muted">
+                    When on, card checkouts add a &ldquo;Card processing fee&rdquo; line so you keep the full invoice amount (about 2.9% + 30¢,
+                    never more than 3%). For example, a $500 invoice costs a card-paying client $515. Clients see the fee before they pay
+                    and can avoid it by paying by bank. Surcharge rules vary: card networks don&apos;t allow them on debit cards and some
+                    states restrict them, so check what applies to your business before turning this on.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
             <Card className="shadow-sm" id="settings-download-gate">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Download access</CardTitle>

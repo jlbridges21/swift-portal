@@ -11,13 +11,16 @@ import { loadPartnerByStripeConnectAccountId } from "@/lib/partner-stripe-connec
 import {
   checkPaymentBusinessAttribution,
   findPaymentFromStripe,
+  handleBankPaymentFailed,
   handleCheckoutExpired,
   handlePaymentFailed,
+  handlePaymentProcessing,
   handlePaymentSuccess,
   resolvePaymentFromCheckoutSession,
   resolvePaymentFromPaymentIntent,
 } from "@/lib/stripe-payments";
-import { sanitizeMetadataForLog } from "@/lib/stripe-metadata";
+import { parseClientFeeFromMetadata, sanitizeMetadataForLog } from "@/lib/stripe-metadata";
+import { sessionIsProcessingBankPayment } from "@/lib/stripe-async-payments";
 import { isStripeEventProcessed, markStripeEventProcessed } from "@/lib/stripe-webhook-events";
 import { loadStripeReceipt, stripeIdsFromInvoice } from "@/lib/stripe-receipt";
 import type { Payment } from "@/lib/types";
@@ -29,6 +32,52 @@ function logConnect(message: string, data: Record<string, unknown>) {
   console.info(`[stripe-connect-webhook] ${message}`, JSON.stringify(data));
 }
 
+/** The payment exists and belongs to the business that owns this connected account. */
+function connectPaymentMatches(
+  eventType: string,
+  connectBusinessId: string,
+  payment: Payment | null,
+  options: { checkoutSessionId?: string; paymentIntentId?: string; metadata?: Stripe.Metadata | null }
+): payment is Payment {
+  if (!payment) {
+    logConnect("payment not found", {
+      eventType,
+      connectBusinessId,
+      metadata: sanitizeMetadataForLog(options.metadata),
+      checkoutSessionId: options.checkoutSessionId,
+      paymentIntentId: options.paymentIntentId,
+    });
+    return false;
+  }
+  const attribution = checkPaymentBusinessAttribution(payment, options.metadata);
+  if (!attribution.ok || attribution.businessId !== connectBusinessId) {
+    console.error("[stripe-connect-webhook] payment business mismatch — writing nothing", {
+      eventType,
+      paymentId: payment.id,
+      reason: attribution.ok ? "connected_account_mismatch" : attribution.reason,
+      connectBusinessId,
+    });
+    return false;
+  }
+  return true;
+}
+
+async function processConnectPaymentProcessing(
+  eventType: string,
+  connectBusinessId: string,
+  payment: Payment | null,
+  options: { checkoutSessionId?: string; paymentIntentId?: string; metadata?: Stripe.Metadata | null }
+) {
+  if (!connectPaymentMatches(eventType, connectBusinessId, payment, options)) return;
+  await handlePaymentProcessing({
+    payment,
+    checkoutSessionId: options.checkoutSessionId,
+    paymentIntentId: options.paymentIntentId,
+    source: eventType,
+    metadata: options.metadata,
+  });
+}
+
 async function processConnectPaymentSuccess(
   eventType: string,
   connectBusinessId: string,
@@ -38,42 +87,11 @@ async function processConnectPaymentSuccess(
     paymentIntentId?: string;
     receiptUrl?: string | null;
     cardLast4?: string | null;
+    methodType?: "card" | "us_bank_account" | null;
     metadata?: Stripe.Metadata | null;
   }
 ) {
-  if (!payment) {
-    logConnect("payment not found", {
-      eventType,
-      connectBusinessId,
-      metadata: sanitizeMetadataForLog(options.metadata),
-      checkoutSessionId: options.checkoutSessionId,
-      paymentIntentId: options.paymentIntentId,
-    });
-    return;
-  }
-
-  const attribution = checkPaymentBusinessAttribution(payment, options.metadata);
-  if (!attribution.ok) {
-    console.error("[stripe-connect-webhook] business attribution failed — writing nothing", {
-      eventType,
-      paymentId: payment.id,
-      reason: attribution.reason,
-      paymentBusinessId: attribution.paymentBusinessId,
-      metadataBusinessId: attribution.metadataBusinessId,
-      connectBusinessId,
-    });
-    return;
-  }
-
-  if (attribution.businessId !== connectBusinessId) {
-    console.error("[stripe-connect-webhook] payment business does not match connected account — writing nothing", {
-      eventType,
-      paymentId: payment.id,
-      paymentBusinessId: attribution.businessId,
-      connectBusinessId,
-    });
-    return;
-  }
+  if (!connectPaymentMatches(eventType, connectBusinessId, payment, options)) return;
 
   await handlePaymentSuccess({
     payment,
@@ -83,6 +101,8 @@ async function processConnectPaymentSuccess(
     cardLast4: options.cardLast4,
     source: eventType,
     metadata: options.metadata,
+    paymentMethodType: options.methodType ?? null,
+    clientFeeCents: parseClientFeeFromMetadata(options.metadata),
   });
 }
 
@@ -170,16 +190,26 @@ export async function POST(request: Request) {
         break;
       }
 
-      case "checkout.session.completed": {
+      case "checkout.session.completed":
+      case "checkout.session.async_payment_succeeded": {
         const session = event.data.object as Stripe.Checkout.Session;
-        if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
-          recordEvent = true;
-          break;
-        }
         const paymentIntentId =
           typeof session.payment_intent === "string"
             ? session.payment_intent
             : session.payment_intent?.id;
+        if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
+          // Bank (ACH) debit authorized but not yet collected: mark it processing.
+          if (await sessionIsProcessingBankPayment(session, connectedAccountId)) {
+            const payment = await resolvePaymentFromCheckoutSession(session, connectedAccountId);
+            await processConnectPaymentProcessing(event.type, connectBusinessId, payment, {
+              checkoutSessionId: session.id,
+              paymentIntentId,
+              metadata: session.metadata,
+            });
+          }
+          recordEvent = true;
+          break;
+        }
         const payment = await resolvePaymentFromCheckoutSession(session, connectedAccountId);
         const receipt = await loadStripeReceipt({
           paymentIntentId,
@@ -190,8 +220,32 @@ export async function POST(request: Request) {
           paymentIntentId,
           receiptUrl: receipt.receiptUrl,
           cardLast4: receipt.cardLast4,
+          methodType: receipt.methodType,
           metadata: session.metadata,
         });
+        recordEvent = true;
+        break;
+      }
+
+      case "checkout.session.async_payment_failed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const payment = await resolvePaymentFromCheckoutSession(session, connectedAccountId);
+        if (connectPaymentMatches(event.type, connectBusinessId, payment, { checkoutSessionId: session.id, metadata: session.metadata })) {
+          await handleBankPaymentFailed(payment, "The bank declined the payment", session.metadata);
+        }
+        recordEvent = true;
+        break;
+      }
+
+      case "payment_intent.processing": {
+        const intent = event.data.object as Stripe.PaymentIntent;
+        if (intent.payment_method_types?.includes("us_bank_account")) {
+          const payment = await resolvePaymentFromPaymentIntent(intent);
+          await processConnectPaymentProcessing(event.type, connectBusinessId, payment, {
+            paymentIntentId: intent.id,
+            metadata: intent.metadata,
+          });
+        }
         recordEvent = true;
         break;
       }
@@ -226,7 +280,9 @@ export async function POST(request: Request) {
           recordEvent = true;
           break;
         }
-        if (payment.stripe_checkout_session_id) {
+        // Checkout rows are recorded by checkout.session.* events — except a processing bank
+        // payment, where this event is the backstop if async_payment_succeeded is not subscribed.
+        if (payment.stripe_checkout_session_id && payment.status !== "processing") {
           recordEvent = true;
           break;
         }
@@ -238,6 +294,7 @@ export async function POST(request: Request) {
           paymentIntentId: intent.id,
           receiptUrl: receipt.receiptUrl,
           cardLast4: receipt.cardLast4,
+          methodType: receipt.methodType,
           metadata: intent.metadata,
         });
         recordEvent = true;
@@ -255,11 +312,9 @@ export async function POST(request: Request) {
         if (payment) {
           const attribution = checkPaymentBusinessAttribution(payment, intent.metadata);
           if (attribution.ok && attribution.businessId === connectBusinessId) {
-            await handlePaymentFailed(
-              payment,
-              intent.last_payment_error?.message || "Payment failed",
-              intent.metadata
-            );
+            const reason = intent.last_payment_error?.message || "Payment failed";
+            if (payment.status === "processing") await handleBankPaymentFailed(payment, reason, intent.metadata);
+            else await handlePaymentFailed(payment, reason, intent.metadata);
           } else {
             console.error("[stripe-connect-webhook] payment_failed rejected — business mismatch", {
               paymentId: payment.id,

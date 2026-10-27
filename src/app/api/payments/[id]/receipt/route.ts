@@ -95,6 +95,8 @@ async function loadPaymentRecordInput(
     stripe_payment_intent_id?: string | null;
     stripe_checkout_session_id?: string | null;
     stripe_receipt_url?: string | null;
+    payment_method_type?: string | null;
+    client_fee_cents?: number | null;
   }
 ): Promise<PaymentRecordInput> {
   const db = await createTenantServiceClient(businessId);
@@ -128,7 +130,14 @@ async function loadPaymentRecordInput(
     propertyAddress: project?.property_address || "",
     amountLabel: formatCurrency(payment.amount),
     paidAtLabel: formatDate(payment.paid_at),
-    recordedAs: paidWithStripe ? "Paid with Stripe" : "Marked paid by the business",
+    recordedAs:
+      payment.payment_method_type === "us_bank_account"
+        ? "Paid by bank transfer (ACH) through Stripe"
+        : payment.payment_method_type === "manual" || !paidWithStripe
+          ? "Marked paid by the business"
+          : payment.client_fee_cents
+            ? `Paid with Stripe (plus ${formatCurrency(payment.client_fee_cents)} card processing fee)`
+            : "Paid with Stripe",
     reference: payment.id,
     cardLast4: payment.card_last4,
   };

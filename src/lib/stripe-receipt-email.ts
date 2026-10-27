@@ -30,6 +30,7 @@ function receiptBody(args: {
   paidAt: string | null;
   cardLast4: string | null;
   receiptUrl: string | null;
+  bankTransfer?: boolean;
 }): string {
   const when = args.paidAt
     ? new Date(args.paidAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
@@ -38,7 +39,8 @@ function receiptBody(args: {
     `${args.amountLabel} was paid for ${args.projectLabel}.`,
     `Paid ${when}.`,
   ];
-  if (args.cardLast4) lines.push(`Card ending ${args.cardLast4}.`);
+  if (args.bankTransfer) lines.push("Paid by bank transfer (ACH).");
+  else if (args.cardLast4) lines.push(`Card ending ${args.cardLast4}.`);
   if (args.receiptUrl) lines.push(`Stripe receipt: ${args.receiptUrl}`);
   return lines.join(" ");
 }
@@ -52,6 +54,7 @@ export function buildReceiptMail(args: {
   cardLast4: string | null;
   receiptUrl: string | null;
   portalUrl: string;
+  bankTransfer?: boolean;
 }): ReceiptMail {
   const subject = args.audience === "client" ? "Your payment receipt" : "Payment receipt";
   return {
@@ -211,6 +214,7 @@ export async function sendPaymentReceiptEmails(
     paidAt: args.payment.paid_at,
     cardLast4: args.cardLast4,
     receiptUrl: args.receiptUrl,
+    bankTransfer: args.payment.payment_method_type === "us_bank_account",
   };
 
   if (args.sendClient) {

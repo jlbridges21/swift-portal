@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ProposalPaymentLinkActions } from "@/components/admin/proposal-payment-link-actions";
+import { BankPaymentsNotice } from "@/components/admin/bank-payments-notice";
 import {
   DownloadEstimatePdfButton,
   EstimatePdfPreview,
@@ -971,6 +972,7 @@ export function QuoteSection({
                   : null
             }
           />
+          {asAdmin && activeDisplay.kind === "official" ? <BankPaymentsNotice className="mt-3" /> : null}
           </div>
         )}
 

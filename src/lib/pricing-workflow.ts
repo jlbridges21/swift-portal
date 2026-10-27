@@ -1,3 +1,4 @@
+import { isPaymentCovered } from "@/lib/payment-status";
 import type { Payment, ProjectQuote } from "@/lib/types";
 import { isOutstandingPayment } from "@/components/projects/payments-section";
 import {
@@ -16,6 +17,8 @@ export type WorkflowStepStatus =
   | "Sent"
   | "Approved"
   | "Payment Sent"
+  /** Bank (ACH) payment authorized; clears in a few business days. */
+  | "Processing"
   | "Paid";
 
 export function preliminaryStepStatus(quote: ProjectQuote | null): WorkflowStepStatus {
@@ -42,13 +45,14 @@ export function paymentStepStatus(
   const list = quote ? payments.filter((p) => p.quote_id === quote.id) : payments;
   if (!list.length) return "Not Started";
   if (list.some((p) => isOutstandingPayment(p.status))) return "Payment Sent";
-  const paidCents = list.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amount, 0);
+  const paidCents = list.filter((p) => isPaymentCovered(p.status)).reduce((sum, p) => sum + p.amount, 0);
+  const processing = list.some((p) => p.status === "processing");
   if (quote) {
-    if (paidCents >= quote.total_cents && paidCents > 0) return "Paid";
+    if (paidCents >= quote.total_cents && paidCents > 0) return processing ? "Processing" : "Paid";
     if (paidCents > 0) return "Payment Sent";
     return "Not Started";
   }
-  if (paidCents > 0 && list.every((p) => p.status === "paid" || p.status === "cancelled")) return "Paid";
+  if (paidCents > 0 && list.every((p) => isPaymentCovered(p.status) || p.status === "cancelled")) return processing ? "Processing" : "Paid";
   return "Not Started";
 }
 
@@ -61,6 +65,7 @@ export function workflowStatusVariant(
       return "success";
     case "Sent":
     case "Payment Sent":
+    case "Processing":
       return "warning";
     case "Draft":
       return "default";
@@ -88,10 +93,13 @@ export function paymentSummaryLabel(
       if (open) return `${formatCurrency(open.amount)} due`;
       return `${formatCurrency(balance)} still owed`;
     }
-    if (paid > 0) return `${formatCurrency(paid)} paid`;
+    if (paid > 0) {
+      const processing = payments.some((p) => p.quote_id === quote.id && p.status === "processing");
+      return processing ? `${formatCurrency(paid)} paid (bank payment processing)` : `${formatCurrency(paid)} paid`;
+    }
   }
   const outstanding = payments.filter((p) => isOutstandingPayment(p.status));
-  const paid = payments.filter((p) => p.status === "paid");
+  const paid = payments.filter((p) => isPaymentCovered(p.status));
   if (paid.length && !outstanding.length) return `${formatCurrency(paid.reduce((s, p) => s + p.amount, 0))} paid`;
   if (outstanding.length) return `${formatCurrency(outstanding[0].amount)} due`;
   if (paid.length) return `${formatCurrency(paid.reduce((s, p) => s + p.amount, 0))} paid`;

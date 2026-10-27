@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { isOutstandingPayment } from "@/components/projects/payments-section";
 import { useMarkPaymentPaid } from "@/lib/use-mark-payment-paid";
+import { paymentMethodLabel } from "@/lib/payment-status";
 import { cn } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -47,8 +48,15 @@ export function AdminPaymentActions({
         <p className="text-xs text-muted mt-0.5">
           {formatDate(payment.created_at)}
           {payment.paid_at && ` · Paid ${formatDate(payment.paid_at)}`}
-          {payment.status === "paid" && payment.card_last4 ? ` · Card ending ${payment.card_last4}` : ""}
+          {(payment.status === "paid" || payment.status === "processing") && paymentMethodLabel(payment) ? ` · ${paymentMethodLabel(payment)}` : ""}
+          {payment.client_fee_cents ? ` · client paid ${formatCurrency(payment.client_fee_cents)} card fee` : ""}
         </p>
+        {payment.status === "processing" ? (
+          <p className="mt-1 text-xs text-sky-700 surface-dark:text-sky-300">
+            Bank payment{payment.processing_started_at ? ` started ${formatDate(payment.processing_started_at)}` : ""}. It usually clears in a few
+            business days; you&apos;ll be notified when it does.
+          </p>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         <p className="font-medium">{formatCurrency(payment.amount)}</p>
@@ -57,9 +65,11 @@ export function AdminPaymentActions({
             "text-xs font-medium capitalize",
             payment.status === "paid"
               ? "text-emerald-600"
-              : payment.status === "cancelled"
-                ? "text-muted"
-                : "text-amber-600"
+              : payment.status === "processing"
+                ? "text-sky-700 surface-dark:text-sky-300"
+                : payment.status === "cancelled"
+                  ? "text-muted"
+                  : "text-amber-600"
           )}
         >
           {payment.status}
@@ -89,7 +99,7 @@ export function AdminPaymentActions({
             </Button>
           </a>
         ) : null}
-        {link && payment.status !== "paid" && (
+        {link && payment.status !== "paid" && payment.status !== "processing" && (
           <>
             <a href={link} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" size="sm" className="min-h-11">

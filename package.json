@@ -16,6 +16,7 @@
     "test:comped-access": "npx tsx scripts/verify-comped-access.ts",
     "test:stripe-billing-guards": "npx tsx scripts/verify-stripe-billing-guards.ts",
     "test:stripe-payment-reconcile": "npx tsx scripts/verify-stripe-payment-reconcile.ts",
+    "test:ach-payments": "npx tsx scripts/verify-ach-payments.ts",
     "test:project-folder-zip": "npx tsx scripts/verify-project-folder-zip.ts",
     "test:photo-shares": "npx tsx scripts/verify-photo-shares.ts",
     "test:paywall-checkout-http": "npx tsx scripts/verify-paywall-checkout-http.ts",

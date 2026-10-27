@@ -4,13 +4,16 @@ import { getStripe } from "@/lib/stripe";
 import {
   checkPaymentBusinessAttribution,
   findPaymentFromStripe,
+  handleBankPaymentFailed,
   handleCheckoutExpired,
   handlePaymentFailed,
+  handlePaymentProcessing,
   handlePaymentSuccess,
   resolvePaymentFromCheckoutSession,
   resolvePaymentFromPaymentIntent,
 } from "@/lib/stripe-payments";
-import { sanitizeMetadataForLog } from "@/lib/stripe-metadata";
+import { parseClientFeeFromMetadata, sanitizeMetadataForLog } from "@/lib/stripe-metadata";
+import { sessionIsProcessingBankPayment } from "@/lib/stripe-async-payments";
 import { isStripeEventProcessed, markStripeEventProcessed } from "@/lib/stripe-webhook-events";
 import { shouldSkipInvoiceAsShootPortalBilling } from "@/lib/stripe-billing";
 import { loadStripeReceipt, stripeIdsFromInvoice } from "@/lib/stripe-receipt";
@@ -30,6 +33,7 @@ async function processPaymentSuccess(
     paymentIntentId?: string;
     receiptUrl?: string | null;
     cardLast4?: string | null;
+    methodType?: "card" | "us_bank_account" | null;
     metadata?: Stripe.Metadata | null;
   }
 ) {
@@ -72,6 +76,8 @@ async function processPaymentSuccess(
       cardLast4: options.cardLast4,
       source: eventType,
       metadata: options.metadata,
+      paymentMethodType: options.methodType ?? null,
+      clientFeeCents: parseClientFeeFromMetadata(options.metadata),
     });
 
     logWebhook("payment update complete", {
@@ -131,7 +137,8 @@ export async function POST(request: Request) {
 
   try {
     switch (event.type) {
-      case "checkout.session.completed": {
+      case "checkout.session.completed":
+      case "checkout.session.async_payment_succeeded": {
         const session = event.data.object as Stripe.Checkout.Session;
 
         // Flow A (ShootPortal SaaS) must never touch payment records — billing webhook owns it.
@@ -147,6 +154,21 @@ export async function POST(request: Request) {
         }
 
         if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
+          // Bank (ACH) debit authorized but not yet collected: mark it processing.
+          if (await sessionIsProcessingBankPayment(session, null)) {
+            const payment = await resolvePaymentFromCheckoutSession(session);
+            if (payment && checkPaymentBusinessAttribution(payment, session.metadata).ok) {
+              await handlePaymentProcessing({
+                payment,
+                checkoutSessionId: session.id,
+                paymentIntentId: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id,
+                source: event.type,
+                metadata: session.metadata,
+              });
+            }
+            recordEvent = true;
+            break;
+          }
           logWebhook("checkout session skipped — unpaid", {
             eventType: event.type,
             sessionId: session.id,
@@ -171,8 +193,30 @@ export async function POST(request: Request) {
           paymentIntentId,
           receiptUrl: receipt.receiptUrl,
           cardLast4: receipt.cardLast4,
+          methodType: receipt.methodType,
           metadata: session.metadata,
         });
+        recordEvent = true;
+        break;
+      }
+
+      case "checkout.session.async_payment_failed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.mode === "subscription") break;
+        const payment = await resolvePaymentFromCheckoutSession(session);
+        if (payment) await handleBankPaymentFailed(payment, "The bank declined the payment", session.metadata);
+        recordEvent = true;
+        break;
+      }
+
+      case "payment_intent.processing": {
+        const intent = event.data.object as Stripe.PaymentIntent;
+        if (intent.payment_method_types?.includes("us_bank_account")) {
+          const payment = await resolvePaymentFromPaymentIntent(intent);
+          if (payment && checkPaymentBusinessAttribution(payment, intent.metadata).ok) {
+            await handlePaymentProcessing({ payment, paymentIntentId: intent.id, source: event.type, metadata: intent.metadata });
+          }
+        }
         recordEvent = true;
         break;
       }
@@ -204,7 +248,7 @@ export async function POST(request: Request) {
           break;
         }
 
-        if (payment.stripe_checkout_session_id) {
+        if (payment.stripe_checkout_session_id && payment.status !== "processing") {
           logWebhook("payment_intent skipped — handled by checkout.session.completed", {
             eventType: event.type,
             paymentId: payment.id,
@@ -223,6 +267,7 @@ export async function POST(request: Request) {
           paymentIntentId: intent.id,
           receiptUrl: receipt.receiptUrl,
           cardLast4: receipt.cardLast4,
+          methodType: receipt.methodType,
           metadata: intent.metadata,
         });
         recordEvent = true;
@@ -247,11 +292,9 @@ export async function POST(request: Request) {
             paymentId: payment.id,
             businessId: payment.business_id,
           });
-          await handlePaymentFailed(
-            payment,
-            intent.last_payment_error?.message || "Payment failed",
-            intent.metadata
-          );
+          const reason = intent.last_payment_error?.message || "Payment failed";
+          if (payment.status === "processing") await handleBankPaymentFailed(payment, reason, intent.metadata);
+          else await handlePaymentFailed(payment, reason, intent.metadata);
         }
         recordEvent = true;
         break;

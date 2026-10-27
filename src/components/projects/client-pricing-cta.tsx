@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { isPaymentCovered } from "@/lib/payment-status";
 import type { Payment, Project, ProjectQuote } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,10 +37,10 @@ export function ClientPricingCta({
   const outstanding = scoped.filter((p) => isOutstandingPayment(p.status));
   const paidCents = activeQuote
     ? paidCentsForQuote(payments, activeQuote.id)
-    : scoped.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amount, 0);
+    : scoped.filter((p) => isPaymentCovered(p.status)).reduce((sum, p) => sum + p.amount, 0);
   const balance = activeQuote ? quoteOutstandingBalanceCents(activeQuote, payments) : null;
   const settled =
-    balance != null ? balance === 0 && paidCents > 0 : scoped.length > 0 && scoped.every((p) => p.status === "paid" || p.status === "cancelled") && paidCents > 0;
+    balance != null ? balance === 0 && paidCents > 0 : scoped.length > 0 && scoped.every((p) => isPaymentCovered(p.status) || p.status === "cancelled") && paidCents > 0;
   const hasPaid = paidCents > 0;
   const openPayment = outstanding[0];
   const payChoice =

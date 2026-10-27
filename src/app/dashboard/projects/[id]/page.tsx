@@ -9,6 +9,7 @@ import { getClientVisibleQuotes } from "@/lib/quote-display";
 import { getAppSettings } from "@/lib/app-settings";
 import { requireTenantContext } from "@/lib/tenant";
 import { reconcileProjectPaymentsOnLoad } from "@/lib/stripe-payment-reconcile";
+import { isBankPaymentAvailable } from "@/lib/stripe-connect";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import {
   filterMediaForVideoReviewDelivery,
@@ -213,6 +214,10 @@ async function ProjectContent({
         depositPercent={appSettings.workflow.payments.depositPercent}
         depositAmountCents={appSettings.workflow.payments.depositAmountCents}
         allowClientPayInFull={appSettings.workflow.payments.allowClientPayInFull}
+        paymentOptions={{
+          bankAvailable: canViewFinancials && payments.some((p) => p.status === "pending" || p.status === "sent") ? await isBankPaymentAvailable(tenant.businessId) : false,
+          passCardFee: appSettings.workflow.payments.passCardFeeToClient,
+        }}
         assetReviews={canViewFinancials ? assetReviews : []}
         mediaFolders={mediaFolders ?? []}
         videoReviews={videoReviews}
