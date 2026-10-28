@@ -18,6 +18,29 @@ import {
   MAX_CONCURRENT_UPLOADS,
   TUS_RETRY_DELAYS_MS,
 } from "../src/lib/upload/constants";
+import { getTusUploadHeaders } from "../src/lib/upload/tus-config";
+
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||= "test-anon-key";
+
+/**
+ * Browser tus-js uses XHR, whose setRequestHeader APPENDS ("a, b") instead of replacing.
+ * Node's stack replaces, which hid a duplicate-authorization bug — emulate XHR here.
+ */
+const xhrLikeStack: tus.HttpStack = (() => {
+  const inner = new tus.DefaultHttpStack({});
+  return {
+    getName: () => "xhr-like",
+    createRequest(method: string, url: string) {
+      const req = inner.createRequest(method, url);
+      const set = req.setHeader.bind(req);
+      req.setHeader = (header: string, value: string) => {
+        const prev = req.getHeader(header);
+        set(header, prev ? `${prev}, ${value}` : value);
+      };
+      return req;
+    },
+  };
+})();
 
 let failures = 0;
 function check(name: string, ok: boolean, detail?: unknown) {
@@ -61,9 +84,12 @@ check("save failures unchanged", msg({ failurePhase: "after_binary", step: "savi
 // --- Concurrency limits ------------------------------------------------------------
 check("overall concurrency ≤ 3", MAX_CONCURRENT_UPLOADS <= 3);
 check("one resumable at a time", MAX_CONCURRENT_RESUMABLE_UPLOADS === 1);
+check("static TUS headers carry no authorization", !Object.keys(getTusUploadHeaders()).some((h) => h.toLowerCase() === "authorization"));
 
 // --- Mock TUS server: token rotates mid-upload ---------------------------------------
-async function mockTusRun(mode: "old" | "new"): Promise<{ ok: boolean; error?: string; bytes: number }> {
+type MockMode = "old" | "new" | "duplicate-auth";
+
+async function mockTusRun(mode: MockMode): Promise<{ ok: boolean; error?: string; bytes: number }> {
   let validToken = "t1";
   let offset = 0;
   let patches = 0;
@@ -74,6 +100,7 @@ async function mockTusRun(mode: "old" | "new"): Promise<{ ok: boolean; error?: s
       res.writeHead(status, { "Tus-Resumable": "1.0.0", ...headers });
       res.end(body);
     };
+    // A duplicated header arrives as "Bearer x, Bearer x" — storage rejects it as a bad JWT.
     const authed = req.headers.authorization === `Bearer ${validToken}`;
     if (!authed) {
       req.resume();
@@ -108,9 +135,15 @@ async function mockTusRun(mode: "old" | "new"): Promise<{ ok: boolean; error?: s
       endpoint: `http://127.0.0.1:${port}/files`,
       chunkSize: 1024,
       retryDelays: [...TUS_RETRY_DELAYS_MS].map(() => 10),
-      headers: { authorization: `Bearer ${cachedToken}` },
+      httpStack: xhrLikeStack,
+      // Production ("new") headers come from getTusUploadHeaders(), which must not carry
+      // authorization; "duplicate-auth" reproduces the regression of setting it in both places.
+      headers:
+        mode === "new"
+          ? getTusUploadHeaders()
+          : { ...getTusUploadHeaders(), authorization: `Bearer ${cachedToken}` },
       storeFingerprintForResuming: false,
-      ...(mode === "new"
+      ...(mode !== "old"
         ? {
             onBeforeRequest: async (req: tus.HttpRequest) => {
               if (forceRefresh) {
@@ -145,6 +178,8 @@ async function main() {
   const oldRun = await mockTusRun("old");
   check("old config fails when token rotates mid-upload (reproduces bug)", !oldRun.ok, oldRun);
   console.log(`      old config stopped at ${oldRun.bytes} / 5120 bytes: ${oldRun.error ?? ""}`);
+  const dupRun = await mockTusRun("duplicate-auth");
+  check("auth in static headers + onBeforeRequest fails under XHR (regression reproduced)", !dupRun.ok, dupRun);
   const newRun = await mockTusRun("new");
   check("new config refreshes token and finishes the same upload", newRun.ok && newRun.bytes === 5 * 1024, newRun);
 

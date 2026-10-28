@@ -40,7 +40,8 @@ export interface UploadManagerItem {
   pendingSave?: PendingSavePayload;
   retryContext?: UploadRetryContext;
   technicalDetails?: UploadTechnicalDetails;
-  autoRetryCount?: number;
+  /** Transient, non-error status while an upload recovers (e.g. "Reconnecting…"). */
+  notice?: string;
 }
 
 export interface EnqueueUploadsOptions {

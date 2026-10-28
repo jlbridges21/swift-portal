@@ -174,6 +174,9 @@ export function userFacingUploadError(technical: UploadTechnicalDetails): string
   const step = technical.step;
   const status = technical.statusCode;
 
+  if (step === "sign_request" && technical.failureKind === "network") {
+    return "Couldn't reach the server to start this upload. Check your connection and tap Retry upload.";
+  }
   if (step === "validating" || step === "sign_request") {
     return technical.error;
   }

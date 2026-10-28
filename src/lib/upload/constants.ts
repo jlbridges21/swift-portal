@@ -13,9 +13,16 @@ export const MAX_CONCURRENT_UPLOADS = 3;
 /** Max resumable (TUS) uploads at once — large videos go one at a time, photos fill the other slots. */
 export const MAX_CONCURRENT_RESUMABLE_UPLOADS = 1;
 
-/** Automatic retries for transient binary/network failures (not validation errors). */
-export const UPLOAD_AUTO_RETRY_LIMIT = 3;
-export const UPLOAD_AUTO_RETRY_BASE_MS = 2000;
+/**
+ * Transient failures (network, stall, server, expired token) retry in place — the file
+ * keeps its slot and resumes. Only give up after this many attempts in a row that moved
+ * no new bytes; any forward progress resets the count. Offline time doesn't count.
+ */
+export const UPLOAD_MAX_ATTEMPTS_WITHOUT_PROGRESS = 8;
+export const UPLOAD_RETRY_BASE_MS = 2000;
+export const UPLOAD_RETRY_MAX_DELAY_MS = 30_000;
+/** Metadata save retries after the bytes are in storage (complete is idempotent per file_path). */
+export const UPLOAD_SAVE_AUTO_RETRIES = 4;
 
 /** TUS chunk size — Supabase recommends 6MB for resumable uploads. */
 export const UPLOAD_CHUNK_SIZE_BYTES = 6 * 1024 * 1024;

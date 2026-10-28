@@ -18,15 +18,20 @@ export function getTusUploadEndpoint(): string {
   return `${supabaseUrl.replace(/\/$/, "")}/storage/v1/upload/resumable`;
 }
 
-/** Headers required by Supabase Storage TUS (authorization + apikey). */
-export function getTusUploadHeaders(accessToken: string): Record<string, string> {
+/**
+ * Static headers for Supabase Storage TUS (apikey + upsert policy). The `authorization`
+ * header is deliberately NOT included: it is set per request in `onBeforeRequest` so a
+ * long upload always sends a fresh token. In the browser tus-js uses XHR, whose
+ * setRequestHeader APPENDS — setting it here too would send "Bearer a, Bearer b",
+ * which storage rejects as an invalid JWT on every request.
+ */
+export function getTusUploadHeaders(): Record<string, string> {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!anonKey) {
     throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not configured.");
   }
 
   return {
-    authorization: `Bearer ${accessToken}`,
     apikey: anonKey,
     "x-upsert": "false",
   };

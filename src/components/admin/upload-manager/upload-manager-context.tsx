@@ -15,14 +15,18 @@ import {
   MAX_CONCURRENT_RESUMABLE_UPLOADS,
   MAX_CONCURRENT_UPLOADS,
   shouldUseTusUpload,
-  UPLOAD_AUTO_RETRY_BASE_MS,
-  UPLOAD_AUTO_RETRY_LIMIT,
+  UPLOAD_MAX_ATTEMPTS_WITHOUT_PROGRESS,
+  UPLOAD_RETRY_BASE_MS,
+  UPLOAD_RETRY_MAX_DELAY_MS,
+  UPLOAD_SAVE_AUTO_RETRIES,
   uploadMediaFile,
   retryMediaSave,
   validateMediaFileBeforeUpload,
   UploadSaveError,
   UploadBinaryError,
+  type PendingSavePayload,
   type UploadMediaMetadata,
+  type UploadProgressUpdate,
 } from "@/lib/upload";
 import { userFacingUploadError } from "@/lib/upload/upload-errors";
 import { resolveUploadTitle } from "@/lib/upload/titles";
@@ -67,6 +71,22 @@ function inferMediaType(file: File): "photo" | "video" | "document" | null {
   return null;
 }
 
+/**
+ * Wait before retrying an upload. While the browser reports offline, wait (without
+ * limit) for the connection to come back instead of burning attempts.
+ */
+async function waitBeforeRetry(delayMs: number, setNotice: (notice: string) => void): Promise<void> {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    setNotice("Waiting for internet connection…");
+    await new Promise<void>((resolve) => window.addEventListener("online", () => resolve(), { once: true }));
+    setNotice("Reconnecting…");
+    await new Promise((r) => setTimeout(r, 1000));
+    return;
+  }
+  setNotice("Connection interrupted — reconnecting…");
+  await new Promise((r) => setTimeout(r, delayMs));
+}
+
 function technicalFromError(err: unknown) {
   if (err instanceof UploadSaveError || err instanceof UploadBinaryError) {
     return err.technical;
@@ -80,7 +100,6 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
   const itemsRef = useRef(items);
 
   const inFlightRef = useRef(new Set<string>());
-  const retryAfterRef = useRef(new Map<string, number>());
   const progressThrottleRef = useRef(
     new Map<string, { patch: Partial<UploadManagerItem>; timer: ReturnType<typeof setTimeout> | null }>()
   );
@@ -158,29 +177,24 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       const item = itemsRef.current.find((i) => i.id === itemId);
       if (!item?.retryContext) return;
 
-      const { file, mediaType, projectId, metadata, resumeFilePath } = item.retryContext;
+      const { file, mediaType, projectId, metadata } = item.retryContext;
       const batchId = itemId.split("::")[0];
+      let resumeFilePath = item.retryContext.resumeFilePath;
 
-      try {
-        const { asset } = await uploadMediaFile({
-          projectId,
-          file,
-          mediaType,
-          metadata,
-          resumeFilePath,
-          onProgress: ({ phase, progress, bytesLoaded, bytesTotal, resuming }) => {
-            const status = mapPhaseToStatus(phase);
-            patchItemProgress(itemId, {
-              phase,
-              progress,
-              bytesLoaded,
-              bytesTotal,
-              resuming,
-              status: status === "complete" ? "processing" : status,
-            });
-          },
+      const onProgress = ({ phase, progress, bytesLoaded, bytesTotal, resuming }: UploadProgressUpdate) => {
+        const status = mapPhaseToStatus(phase);
+        patchItemProgress(itemId, {
+          phase,
+          progress,
+          bytesLoaded,
+          bytesTotal,
+          resuming,
+          // An in-flight file never shows as queued/complete until it truly is.
+          status: status === "complete" ? "processing" : status === "queued" ? "uploading" : status,
         });
+      };
 
+      const succeed = (asset: Record<string, unknown>) => {
         flushProgress(itemId);
         const saved = asset as unknown as MediaAsset;
         patchItem(itemId, {
@@ -190,73 +204,112 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
           bytesLoaded: file.size,
           bytesTotal: file.size,
           error: undefined,
+          notice: undefined,
           technicalDetails: undefined,
           pendingSave: undefined,
         });
         assetListenersRef.current.get(itemId)?.(saved);
         finishBatchSlot(batchId, saved);
-      } catch (err) {
-        flushProgress(itemId);
-        const technical = technicalFromError(err);
-        const userMsg = technical
-          ? userFacingUploadError(technical)
-          : err instanceof Error
-            ? err.message
-            : "Upload failed";
+      };
 
-        // Keep the storage path of a failed resumable upload so the next attempt
-        // (automatic or Retry upload) resumes the bytes storage already has.
-        const current = itemsRef.current.find((i) => i.id === itemId) ?? item;
-        const resumable =
-          err instanceof UploadBinaryError && err.uploadMethod === "tus" && !!err.filePath;
-        const nextRetryContext =
-          resumable && current.retryContext
-            ? { ...current.retryContext, resumeFilePath: err.filePath }
-            : current.retryContext;
+      // Retry transient failures in place (this file keeps its slot, so the queue never
+      // jumps ahead), resuming TUS uploads from the bytes storage already has.
+      let attemptsWithoutProgress = 0;
+      let bestBytes = 0;
+      let lastErr: unknown;
 
-        const retries = current.autoRetryCount ?? 0;
-        const retryable =
-          err instanceof UploadBinaryError && technical?.retryable !== false && retries < UPLOAD_AUTO_RETRY_LIMIT;
-
-        if (retryable) {
-          const next = retries + 1;
-          const delay = UPLOAD_AUTO_RETRY_BASE_MS * 2 ** (next - 1);
-          retryAfterRef.current.set(itemId, Date.now() + delay);
-          patchItem(itemId, {
-            status: "queued",
-            phase: "queued",
-            progress: 0,
-            bytesLoaded: resumable ? current.bytesLoaded : 0,
-            autoRetryCount: next,
-            retryContext: nextRetryContext,
-            technicalDetails: technical,
-            error: `Retrying (${next}/${UPLOAD_AUTO_RETRY_LIMIT})${resumable ? " — will resume" : ""}…`,
+      for (;;) {
+        try {
+          const { asset } = await uploadMediaFile({
+            projectId,
+            file,
+            mediaType,
+            metadata,
+            resumeFilePath,
+            onProgress,
           });
-          setTimeout(() => pumpRef.current(), delay + 10);
+          succeed(asset);
           return;
-        }
+        } catch (err) {
+          lastErr = err;
+          if (!(err instanceof UploadBinaryError) || !err.retryable) break;
 
-        if (err instanceof UploadSaveError) {
-          patchItem(itemId, {
-            status: "save_failed",
-            phase: "failed",
-            progress: 95,
-            error: userMsg,
-            technicalDetails: technical,
-            pendingSave: { ...err.pendingSave, failedStep: err.step },
-          });
-          finishBatchSlot(batchId, null, `${file.name}: ${userMsg}`);
-        } else {
-          patchItem(itemId, {
-            status: "failed",
-            phase: "failed",
-            error: userMsg,
-            technicalDetails: technical,
-            retryContext: nextRetryContext,
-          });
-          finishBatchSlot(batchId, null, `${file.name}: ${userMsg}`);
+          if (err.uploadMethod === "tus" && err.filePath) {
+            resumeFilePath = err.filePath;
+            const ctx = itemsRef.current.find((i) => i.id === itemId)?.retryContext;
+            if (ctx) patchItem(itemId, { retryContext: { ...ctx, resumeFilePath } });
+          }
+
+          const reached = err.technical.bytesUploaded ?? 0;
+          if (reached > bestBytes) {
+            bestBytes = reached;
+            attemptsWithoutProgress = 0;
+          } else {
+            attemptsWithoutProgress += 1;
+          }
+          if (attemptsWithoutProgress >= UPLOAD_MAX_ATTEMPTS_WITHOUT_PROGRESS) break;
+
+          flushProgress(itemId);
+          const delay = Math.min(
+            UPLOAD_RETRY_MAX_DELAY_MS,
+            UPLOAD_RETRY_BASE_MS * 2 ** Math.max(0, attemptsWithoutProgress - 1)
+          );
+          await waitBeforeRetry(delay, (notice) =>
+            patchItem(itemId, { status: "uploading", notice, technicalDetails: err.technical })
+          );
+          patchItem(itemId, { notice: undefined });
         }
       }
+
+      // Bytes are in storage but the metadata save failed — retry the save (idempotent
+      // per file_path) before asking the user to do anything.
+      if (lastErr instanceof UploadSaveError) {
+        let pending: PendingSavePayload = { ...lastErr.pendingSave, failedStep: lastErr.step };
+        for (let attempt = 1; attempt <= UPLOAD_SAVE_AUTO_RETRIES; attempt += 1) {
+          await waitBeforeRetry(UPLOAD_RETRY_BASE_MS * 2 ** (attempt - 1), (notice) =>
+            patchItem(itemId, { status: "processing", notice })
+          );
+          patchItem(itemId, { notice: undefined });
+          try {
+            const { asset } = await retryMediaSave(pending, onProgress, file);
+            succeed(asset);
+            return;
+          } catch (err) {
+            lastErr = err;
+            if (!(err instanceof UploadSaveError)) break;
+            pending = { ...err.pendingSave, failedStep: err.step };
+          }
+        }
+      }
+
+      flushProgress(itemId);
+      const technical = technicalFromError(lastErr);
+      const userMsg = technical
+        ? userFacingUploadError(technical)
+        : lastErr instanceof Error
+          ? lastErr.message
+          : "Upload failed";
+
+      if (lastErr instanceof UploadSaveError) {
+        patchItem(itemId, {
+          status: "save_failed",
+          phase: "failed",
+          progress: 95,
+          error: userMsg,
+          notice: undefined,
+          technicalDetails: technical,
+          pendingSave: { ...lastErr.pendingSave, failedStep: lastErr.step },
+        });
+      } else {
+        patchItem(itemId, {
+          status: "failed",
+          phase: "failed",
+          error: userMsg,
+          notice: undefined,
+          technicalDetails: technical,
+        });
+      }
+      finishBatchSlot(batchId, null, `${file.name}: ${userMsg}`);
     },
     [finishBatchSlot, flushProgress, patchItem, patchItemProgress]
   );
@@ -266,7 +319,6 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const pumpQueue = useCallback(() => {
-    const now = Date.now();
     while (inFlightRef.current.size < MAX_CONCURRENT_UPLOADS) {
       // Large (TUS) files upload one at a time so each finishes quickly with full
       // bandwidth; small photos keep flowing through the remaining slots.
@@ -278,19 +330,17 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       const next = itemsRef.current.find((i) => {
         if (i.status !== "queued") return false;
         if (inFlightRef.current.has(i.id)) return false;
-        if (resumableInFlight >= MAX_CONCURRENT_RESUMABLE_UPLOADS && isResumableItem(i)) return false;
-        const after = retryAfterRef.current.get(i.id);
-        return !after || after <= now;
+        return !(resumableInFlight >= MAX_CONCURRENT_RESUMABLE_UPLOADS && isResumableItem(i));
       });
       if (!next) break;
 
       inFlightRef.current.add(next.id);
-      retryAfterRef.current.delete(next.id);
       patchItem(next.id, {
         status: "uploading",
         phase: "validating",
         startedAt: Date.now(),
-        error: next.error?.startsWith("Retrying") ? undefined : next.error,
+        error: undefined,
+        notice: undefined,
       });
 
       void (async () => {
@@ -361,7 +411,6 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
           bytesTotal: file.size,
           mimeType: validation.mimeType,
           startedAt: Date.now(),
-          autoRetryCount: 0,
           retryContext: {
             file,
             mediaType,
@@ -427,7 +476,6 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
   const retryItem = useCallback((id: string) => {
     const item = itemsRef.current.find((i) => i.id === id);
     if (!item?.retryContext) return;
-    retryAfterRef.current.delete(id);
     patchItem(id, {
       status: "queued",
       phase: "queued",
@@ -436,7 +484,7 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       technicalDetails: undefined,
       pendingSave: undefined,
       resuming: undefined,
-      autoRetryCount: 0,
+      notice: undefined,
       startedAt: Date.now(),
     });
     queueMicrotask(() => pumpRef.current());

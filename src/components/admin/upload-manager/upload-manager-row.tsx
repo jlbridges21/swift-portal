@@ -17,10 +17,8 @@ function statusText(item: UploadManagerItem): string {
   if (item.status === "complete") return "Complete";
   if (item.status === "save_failed") return "Save failed";
   if (item.status === "failed") return item.error || "Upload failed";
-  if (item.status === "queued") {
-    if (item.error?.startsWith("Retrying")) return item.error;
-    return "Queued";
-  }
+  if (item.status === "queued") return "Queued";
+  if (item.notice) return item.notice;
   if (item.status === "processing") {
     if (item.phase === "saving") return "Saving…";
     if (item.phase === "finalizing") return "Finalizing…";
@@ -40,7 +38,7 @@ function technicalSummary(item: UploadManagerItem): string | undefined {
     t.statusCode && `HTTP ${t.statusCode}`,
     `step: ${t.step}`,
     t.uploadMethod,
-    t.bytesUploaded != null && `${formatFileSize(t.bytesUploaded)} acknowledged`,
+    t.bytesUploaded != null && `${formatFileSize(t.bytesUploaded)} sent`,
     t.error,
   ]
     .filter(Boolean)

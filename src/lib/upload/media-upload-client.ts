@@ -121,6 +121,8 @@ function binaryError(
     failurePhase?: UploadTechnicalDetails["failurePhase"];
     failureKind?: UploadFailureKind;
     bytesUploaded?: number;
+    /** Override the kind-based default (e.g. signed out = never retry). */
+    retryable?: boolean;
   }
 ): UploadBinaryError {
   const failurePhase = ctx.failurePhase ?? "during_binary";
@@ -140,7 +142,7 @@ function binaryError(
     failurePhase,
     failureKind,
     bytesUploaded: ctx.bytesUploaded,
-    retryable: failurePhase !== "before_binary" && isTransientUploadFailure(failureKind),
+    retryable: ctx.retryable ?? (failurePhase !== "before_binary" && isTransientUploadFailure(failureKind)),
     rawDetails: ctx.rawDetails,
   };
   return new UploadBinaryError(message, technical);
@@ -159,20 +161,34 @@ async function fetchSign(
     ...uploadLogContext(file, mimeType, projectId, resumeFilePath),
   });
 
-  const res = await fetch("/api/media/upload/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({
-      projectId: projectId ?? undefined,
-      fileName: file.name,
-      mimeType,
-      fileSize: file.size,
-      mediaType,
-      resumeFilePath: resumeFilePath || undefined,
-    }),
-  });
-  const data = (await res.json()) as SignResponse & CompleteApiResponse;
+  let res: Response;
+  let data: SignResponse & CompleteApiResponse;
+  try {
+    res = await fetch("/api/media/upload/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        projectId: projectId ?? undefined,
+        fileName: file.name,
+        mimeType,
+        fileSize: file.size,
+        mediaType,
+        resumeFilePath: resumeFilePath || undefined,
+      }),
+    });
+    data = (await res.json()) as SignResponse & CompleteApiResponse;
+  } catch (err) {
+    // Connection blip before any bytes moved — safe to retry.
+    throw binaryError(err instanceof Error ? err.message : "Could not reach server to prepare upload", {
+      ...uploadLogContext(file, mimeType, projectId, resumeFilePath),
+      step: "sign_request",
+      uploadMethod: "tus",
+      failurePhase: "before_binary",
+      failureKind: "network",
+      retryable: true,
+    });
+  }
   if (!res.ok) {
     logUploadStep("error", {
       step: "sign_request",
@@ -186,6 +202,7 @@ async function fetchSign(
       uploadMethod: "tus",
       statusCode: res.status,
       failurePhase: "before_binary",
+      retryable: res.status >= 500 || res.status === 429,
     });
   }
 
@@ -415,6 +432,7 @@ function uploadViaTus({
           bucket,
           statusCode: 401,
           failureKind: "auth",
+          retryable: false,
         })
       );
       return;
@@ -424,7 +442,7 @@ function uploadViaTus({
     let tusHeaders: Record<string, string>;
     try {
       endpoint = getTusUploadEndpoint();
-      tusHeaders = getTusUploadHeaders(token);
+      tusHeaders = getTusUploadHeaders();
     } catch (configErr) {
       reject(
         binaryError(configErr instanceof Error ? configErr.message : "TUS configuration error", {
@@ -445,6 +463,7 @@ function uploadViaTus({
     let stallWatchdog: ReturnType<typeof setInterval> | null = null;
     let resumed = false;
     let forceTokenRefresh = false;
+    let currentToken = token;
     let authRetries = 0;
     let lastBytesUploaded = 0;
     let maxBytesUploaded = 0;
@@ -535,11 +554,13 @@ function uploadViaTus({
       },
       // Fresh token on every request: the access token from upload start can expire
       // mid-file (long videos, or many files sharing bandwidth).
+      // Must be the ONLY place authorization is set (see getTusUploadHeaders).
       onBeforeRequest: async (req) => {
         const refresh = forceTokenRefresh;
         forceTokenRefresh = false;
         const fresh = await getUploadAccessToken(refresh).catch(() => null);
-        if (fresh) req.setHeader("authorization", `Bearer ${fresh}`);
+        if (fresh) currentToken = fresh;
+        req.setHeader("authorization", `Bearer ${currentToken}`);
       },
       onShouldRetry: (err) => {
         const kind = tusErrorKind(err);
