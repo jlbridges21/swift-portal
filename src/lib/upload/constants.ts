@@ -5,13 +5,17 @@ export const MAX_DOCUMENT_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
 
 /**
  * Max files uploading binary/signing/saving at once.
- * Tune here: higher saturates bandwidth more; lower is gentler on browser/Supabase.
+ * Tune here: higher splits bandwidth across more files, so each upload takes longer
+ * and is more exposed to stalls and token expiry; lower is gentler on browser/Supabase.
  */
-export const MAX_CONCURRENT_UPLOADS = 5;
+export const MAX_CONCURRENT_UPLOADS = 3;
+
+/** Max resumable (TUS) uploads at once — large videos go one at a time, photos fill the other slots. */
+export const MAX_CONCURRENT_RESUMABLE_UPLOADS = 1;
 
 /** Automatic retries for transient binary/network failures (not validation errors). */
-export const UPLOAD_AUTO_RETRY_LIMIT = 2;
-export const UPLOAD_AUTO_RETRY_BASE_MS = 1000;
+export const UPLOAD_AUTO_RETRY_LIMIT = 3;
+export const UPLOAD_AUTO_RETRY_BASE_MS = 2000;
 
 /** TUS chunk size — Supabase recommends 6MB for resumable uploads. */
 export const UPLOAD_CHUNK_SIZE_BYTES = 6 * 1024 * 1024;
@@ -19,8 +23,18 @@ export const UPLOAD_CHUNK_SIZE_BYTES = 6 * 1024 * 1024;
 /** Files above this size use Supabase TUS resumable uploads. */
 export const DIRECT_UPLOAD_THRESHOLD_BYTES = 6 * 1024 * 1024;
 
-/** Supabase TUS retry schedule (ms). */
-export const TUS_RETRY_DELAYS_MS = [0, 3000, 5000, 10000, 20000] as const;
+/**
+ * Supabase TUS per-chunk retry schedule (ms). tus-js resets the attempt counter whenever
+ * a chunk makes progress, so this is the budget for one stuck chunk, not the whole file.
+ */
+export const TUS_RETRY_DELAYS_MS = [0, 1000, 3000, 5000, 10000, 20000, 30000] as const;
+
+/** Abort and resume a TUS chunk when no bytes have been acknowledged for this long. */
+export const TUS_STALL_TIMEOUT_MS = 60_000;
+/** Give up on the attempt (auto-retry takes over) after this many stall-resumes in a row. */
+export const TUS_MAX_STALL_RESUMES = 3;
+/** Refresh the Supabase access token before a TUS request if it expires within this window. */
+export const TUS_TOKEN_REFRESH_MARGIN_MS = 5 * 60_000;
 
 export function shouldUseTusUpload(fileSize: number): boolean {
   return fileSize > DIRECT_UPLOAD_THRESHOLD_BYTES;

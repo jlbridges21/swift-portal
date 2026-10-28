@@ -1,8 +1,11 @@
 import * as tus from "tus-js-client";
 import { createClient } from "@/lib/supabase/client";
 import {
+  TUS_MAX_STALL_RESUMES,
   TUS_RETRY_DELAYS_MS,
+  TUS_STALL_TIMEOUT_MS,
   TUS_SUCCESS_FALLBACK_MS,
+  TUS_TOKEN_REFRESH_MARGIN_MS,
   UPLOAD_CHUNK_SIZE_BYTES,
   shouldUseTusUpload,
   type UploadPhase,
@@ -20,7 +23,10 @@ import {
 import {
   UploadBinaryError,
   UploadSaveError,
+  classifyUploadFailure,
+  isTransientUploadFailure,
   parseTusClientError,
+  type UploadFailureKind,
   type UploadTechnicalDetails,
 } from "./upload-errors";
 import type { PendingSavePayload } from "./pending-save";
@@ -51,6 +57,11 @@ export interface UploadMediaOptions {
   onProgress: (update: UploadProgressUpdate) => void;
   signal?: AbortSignal;
   metadata?: UploadMediaMetadata;
+  /**
+   * Storage path from an earlier failed TUS attempt of this same file. Reusing it lets
+   * the retry resume from the bytes storage already has instead of starting over.
+   */
+  resumeFilePath?: string;
 }
 
 export interface UploadMediaResult {
@@ -108,8 +119,13 @@ function binaryError(
     statusCode?: number;
     rawDetails?: unknown;
     failurePhase?: UploadTechnicalDetails["failurePhase"];
+    failureKind?: UploadFailureKind;
+    bytesUploaded?: number;
   }
 ): UploadBinaryError {
+  const failurePhase = ctx.failurePhase ?? "during_binary";
+  const failureKind =
+    ctx.failureKind ?? (failurePhase === "during_binary" ? classifyUploadFailure(ctx.statusCode, message) : undefined);
   const technical: UploadTechnicalDetails = {
     step: ctx.step,
     error: message,
@@ -121,8 +137,10 @@ function binaryError(
     fileName: ctx.fileName,
     fileSize: ctx.fileSize,
     fileType: ctx.fileType,
-    failurePhase: ctx.failurePhase ?? "during_binary",
-    retryable: ctx.failurePhase !== "before_binary",
+    failurePhase,
+    failureKind,
+    bytesUploaded: ctx.bytesUploaded,
+    retryable: failurePhase !== "before_binary" && isTransientUploadFailure(failureKind),
     rawDetails: ctx.rawDetails,
   };
   return new UploadBinaryError(message, technical);
@@ -337,20 +355,57 @@ function uploadViaSignedPut(
   });
 }
 
-function uploadViaTus(
-  file: File,
-  bucket: string,
-  filePath: string,
-  mimeType: string,
-  projectId: string | null,
-  onProgress: (pct: number, loaded: number, total: number, resuming?: boolean) => void,
-  onBinaryComplete: () => void,
-  signal?: AbortSignal
-): Promise<{ resumed: boolean }> {
+/**
+ * Current Supabase access token, refreshed first when it is close to expiry (or when
+ * storage just rejected it). Called before every TUS request so a long upload never
+ * sends a token that expired after the upload started.
+ */
+async function getUploadAccessToken(forceRefresh: boolean): Promise<string | null> {
+  const supabase = createClient();
+  const { data } = await supabase.auth.getSession();
+  let session = data.session;
+  const expiresAtMs = session?.expires_at ? session.expires_at * 1000 : 0;
+  if (session && (forceRefresh || expiresAtMs - Date.now() < TUS_TOKEN_REFRESH_MARGIN_MS)) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    if (refreshed.session) session = refreshed.session;
+  }
+  return session?.access_token ?? null;
+}
+
+function tusErrorKind(err: unknown): UploadFailureKind {
+  const parsed = parseTusClientError(err);
+  return classifyUploadFailure(parsed.statusCode, parsed.body ?? parsed.message);
+}
+
+interface TusUploadArgs {
+  file: File;
+  bucket: string;
+  filePath: string;
+  mimeType: string;
+  projectId: string | null;
+  onProgress: (pct: number, loaded: number, total: number, resuming?: boolean) => void;
+  onBinaryComplete: () => void;
+  signal?: AbortSignal;
+  /**
+   * True when re-uploading to a path from an earlier attempt: if that attempt actually
+   * finished, storage answers 409 "already exists" — treat it as done (complete verifies).
+   */
+  allowExistingObject?: boolean;
+}
+
+function uploadViaTus({
+  file,
+  bucket,
+  filePath,
+  mimeType,
+  projectId,
+  onProgress,
+  onBinaryComplete,
+  signal,
+  allowExistingObject,
+}: TusUploadArgs): Promise<{ resumed: boolean }> {
   return new Promise(async (resolve, reject) => {
-    const supabase = createClient();
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
+    const token = await getUploadAccessToken(false).catch(() => null);
     if (!token) {
       reject(
         binaryError("Session expired. Refresh and sign in again.", {
@@ -359,6 +414,7 @@ function uploadViaTus(
           uploadMethod: "tus",
           bucket,
           statusCode: 401,
+          failureKind: "auth",
         })
       );
       return;
@@ -376,6 +432,7 @@ function uploadViaTus(
           step: "uploading_binary",
           uploadMethod: "tus",
           bucket,
+          failureKind: "rejected",
         })
       );
       return;
@@ -385,21 +442,29 @@ function uploadViaTus(
     let binaryCompleteFired = false;
     let waitLogInterval: ReturnType<typeof setInterval> | null = null;
     let successFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    let stallWatchdog: ReturnType<typeof setInterval> | null = null;
     let resumed = false;
+    let forceTokenRefresh = false;
+    let authRetries = 0;
+    let lastBytesUploaded = 0;
+    let maxBytesUploaded = 0;
+    let lastProgressAt = Date.now();
+    let stallResumes = 0;
     const uploadStartedAt = Date.now();
 
-    const clearSuccessFallback = () => {
+    const clearTimers = () => {
+      if (waitLogInterval) clearInterval(waitLogInterval);
+      if (stallWatchdog) clearInterval(stallWatchdog);
       if (successFallbackTimer) {
         clearTimeout(successFallbackTimer);
         successFallbackTimer = null;
       }
     };
 
-    const finish = (via: "onSuccess" | "onProgress" | "success_fallback") => {
+    const finish = (via: "onSuccess" | "onProgress" | "success_fallback" | "already_exists") => {
       if (settled) return;
       settled = true;
-      if (waitLogInterval) clearInterval(waitLogInterval);
-      clearSuccessFallback();
+      clearTimers();
       signal?.removeEventListener("abort", onAbort);
       logUploadTimeline("storage_upload_finished", `tus via=${via}`);
       logUploadStep("info", {
@@ -407,19 +472,23 @@ function uploadViaTus(
         ...uploadLogContext(file, mimeType, projectId, filePath),
         uploadMethod: "tus",
         bucket,
-        details: { via, elapsedMs: Date.now() - uploadStartedAt, resumed },
+        details: { via, elapsedMs: Date.now() - uploadStartedAt, resumed, stallResumes },
       });
       if (!binaryCompleteFired) onBinaryComplete();
       resolve({ resumed });
     };
 
-    const fail = (error: unknown) => {
+    const fail = (error: unknown, kindOverride?: UploadFailureKind) => {
       if (settled) return;
-      settled = true;
-      if (waitLogInterval) clearInterval(waitLogInterval);
-      clearSuccessFallback();
-      signal?.removeEventListener("abort", onAbort);
       const parsed = parseTusClientError(error);
+      const failureKind = kindOverride ?? classifyUploadFailure(parsed.statusCode, parsed.body ?? parsed.message);
+      if (failureKind === "already_exists" && allowExistingObject) {
+        finish("already_exists");
+        return;
+      }
+      settled = true;
+      clearTimers();
+      signal?.removeEventListener("abort", onAbort);
       logUploadStep("error", {
         step: "uploading_binary",
         ...uploadLogContext(file, mimeType, projectId, filePath),
@@ -427,7 +496,15 @@ function uploadViaTus(
         bucket,
         statusCode: parsed.statusCode,
         providerMessage: parsed.message,
-        details: { endpoint, body: parsed.body?.slice(0, 300) },
+        details: {
+          endpoint,
+          failureKind,
+          bytesUploaded: lastBytesUploaded,
+          elapsedMs: Date.now() - uploadStartedAt,
+          stallResumes,
+          authRetries,
+          body: parsed.body?.slice(0, 300),
+        },
       });
       reject(
         binaryError(parsed.message, {
@@ -436,6 +513,8 @@ function uploadViaTus(
           uploadMethod: "tus",
           bucket,
           statusCode: parsed.statusCode,
+          failureKind,
+          bytesUploaded: lastBytesUploaded,
           rawDetails: { endpoint, body: parsed.body },
         })
       );
@@ -454,8 +533,35 @@ function uploadViaTus(
         contentType: mimeType,
         cacheControl: "3600",
       },
-      onError: fail,
+      // Fresh token on every request: the access token from upload start can expire
+      // mid-file (long videos, or many files sharing bandwidth).
+      onBeforeRequest: async (req) => {
+        const refresh = forceTokenRefresh;
+        forceTokenRefresh = false;
+        const fresh = await getUploadAccessToken(refresh).catch(() => null);
+        if (fresh) req.setHeader("authorization", `Bearer ${fresh}`);
+      },
+      onShouldRetry: (err) => {
+        const kind = tusErrorKind(err);
+        if (kind === "auth") {
+          // Expired/rejected token — refresh and retry the same chunk a couple of times.
+          forceTokenRefresh = true;
+          authRetries += 1;
+          return authRetries <= 2;
+        }
+        return kind === "network" || kind === "server" || kind === "stalled" || kind === "unknown";
+      },
+      onError: (err) => fail(err),
       onProgress: (bytesUploaded, bytesTotal) => {
+        // After a resume tus restarts from the server's offset, which can be below the
+        // bytes previously sent — any movement counts as progress for the watchdog.
+        if (bytesUploaded !== lastBytesUploaded) lastProgressAt = Date.now();
+        if (bytesUploaded > maxBytesUploaded) {
+          maxBytesUploaded = bytesUploaded;
+          stallResumes = 0;
+          authRetries = 0;
+        }
+        lastBytesUploaded = bytesUploaded;
         const pct = binaryUploadProgressPct(bytesUploaded, bytesTotal);
         onProgress(pct, bytesUploaded, bytesTotal, resumed);
 
@@ -500,10 +606,40 @@ function uploadViaTus(
     });
 
     const onAbort = () => {
-      upload.abort(true);
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      void upload.abort(true);
       reject(new Error("Upload cancelled"));
     };
     signal?.addEventListener("abort", onAbort);
+
+    // tus-js has no request timeout: a PATCH whose connection silently stalls would hang
+    // forever. Abort the stuck request and resume from the server's offset instead.
+    stallWatchdog = setInterval(() => {
+      if (settled || binaryCompleteFired) return;
+      if (Date.now() - lastProgressAt < TUS_STALL_TIMEOUT_MS) return;
+      stallResumes += 1;
+      lastProgressAt = Date.now();
+      logUploadStep("warn", {
+        step: "uploading_binary",
+        ...uploadLogContext(file, mimeType, projectId, filePath),
+        uploadMethod: "tus",
+        bucket,
+        details: { stalled: true, stallResumes, bytesUploaded: lastBytesUploaded },
+      });
+      if (stallResumes > TUS_MAX_STALL_RESUMES) {
+        void upload.abort(false);
+        fail(
+          new Error(`Upload stalled: no data acknowledged for ${TUS_STALL_TIMEOUT_MS / 1000}s`),
+          "stalled"
+        );
+        return;
+      }
+      void upload.abort(false).then(() => {
+        if (!settled) upload.start();
+      });
+    }, 5_000);
 
     logUploadTimeline("storage_upload_started", `tus endpoint=${endpoint}`);
     logUploadStep("info", {
@@ -515,12 +651,17 @@ function uploadViaTus(
     });
 
     try {
-      const previous = await upload.findPreviousUploads();
-      if (previous.length) {
+      // Only resume an upload aimed at this exact object. The tus fingerprint is just
+      // name/size/mtime, so an older attempt at a different storage path would match too
+      // and the bytes would land somewhere `complete` never looks.
+      const previous = (await upload.findPreviousUploads()).find(
+        (p) => p.metadata?.objectName === filePath && p.metadata?.bucketName === bucket
+      );
+      if (previous) {
         resumed = true;
         logUploadTimeline("tus_resume_previous");
         onProgress(5, 0, file.size, true);
-        upload.resumeFromPreviousUpload(previous[0]);
+        upload.resumeFromPreviousUpload(previous);
       }
       upload.start();
     } catch (err) {
@@ -621,15 +762,16 @@ export async function retryMediaSave(
     };
 
     if (useTus) {
-      await uploadViaTus(
+      await uploadViaTus({
         file,
-        sign.bucket,
-        cleanPending.filePath,
-        cleanPending.mimeType,
-        cleanPending.projectId,
-        report,
-        onBinaryComplete
-      );
+        bucket: sign.bucket,
+        filePath: cleanPending.filePath,
+        mimeType: cleanPending.mimeType,
+        projectId: cleanPending.projectId,
+        onProgress: report,
+        onBinaryComplete,
+        allowExistingObject: true,
+      });
     } else if (sign.signedUrl) {
       await uploadViaSignedPut(
         sign.signedUrl,
@@ -665,7 +807,7 @@ export async function retryMediaSave(
 
 /** Upload a media file directly to Supabase Storage with validation, progress, and finalize. */
 export async function uploadMediaFile(options: UploadMediaOptions): Promise<UploadMediaResult> {
-  const { projectId, file, mediaType, onProgress, signal, metadata } = options;
+  const { projectId, file, mediaType, onProgress, signal, metadata, resumeFilePath } = options;
 
   resetUploadTimeline();
   logUploadTimeline("started", file.name);
@@ -692,14 +834,20 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
   logUploadTimeline("upload_method_select", mimeType);
   onProgress({ phase: "queued", progress: 2, bytesTotal: file.size });
 
-  const sign = await fetchSign(projectId, file, mediaType, mimeType).catch((err) => {
+  const useTus = shouldUseTusUpload(file.size);
+  const sign = await fetchSign(
+    projectId,
+    file,
+    mediaType,
+    mimeType,
+    useTus ? resumeFilePath : undefined
+  ).catch((err) => {
     if (err instanceof UploadBinaryError) {
       logUploadFailure(err.technical);
       throw err;
     }
     throw err;
   });
-  const useTus = shouldUseTusUpload(file.size);
   logUploadTimeline("upload_method_selected", useTus ? "tus" : "signed_put");
 
   onProgress({ phase: "uploading", progress: 5, bytesLoaded: 0, bytesTotal: file.size });
@@ -744,16 +892,17 @@ export async function uploadMediaFile(options: UploadMediaOptions): Promise<Uplo
     };
 
     if (useTus) {
-      const tusResult = await uploadViaTus(
+      const tusResult = await uploadViaTus({
         file,
-        sign.bucket,
-        sign.filePath,
+        bucket: sign.bucket,
+        filePath: sign.filePath,
         mimeType,
         projectId,
-        report,
+        onProgress: report,
         onBinaryComplete,
-        signal
-      );
+        signal,
+        allowExistingObject: !!resumeFilePath,
+      });
       tusResumed = tusResult.resumed;
       logUploadBinaryTiming({
         fileName: file.name,

@@ -31,6 +31,22 @@ function statusText(item: UploadManagerItem): string {
   return "Uploading…";
 }
 
+/** Hover detail for support: cause, HTTP status, step, and how far the upload got. */
+function technicalSummary(item: UploadManagerItem): string | undefined {
+  const t = item.technicalDetails;
+  if (!t) return undefined;
+  return [
+    t.failureKind && `cause: ${t.failureKind}`,
+    t.statusCode && `HTTP ${t.statusCode}`,
+    `step: ${t.step}`,
+    t.uploadMethod,
+    t.bytesUploaded != null && `${formatFileSize(t.bytesUploaded)} acknowledged`,
+    t.error,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function UploadManagerRowInner({ item, onRetry, onRetrySave }: UploadManagerRowProps) {
   const showBar =
     item.status === "uploading" ||
@@ -69,7 +85,9 @@ function UploadManagerRowInner({ item, onRetry, onRetrySave }: UploadManagerRowP
             </div>
           ) : null}
           {(item.status === "failed" || item.status === "save_failed") && item.error ? (
-            <p className="mt-1 line-clamp-2 text-[11px] text-destructive">{item.error}</p>
+            <p className="mt-1 line-clamp-2 text-[11px] text-destructive" title={technicalSummary(item)}>
+              {item.error}
+            </p>
           ) : null}
         </div>
 

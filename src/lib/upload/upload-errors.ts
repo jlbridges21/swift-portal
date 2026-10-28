@@ -2,6 +2,18 @@ import type { PendingSavePayload } from "./pending-save";
 
 export type UploadFailurePhase = "before_binary" | "during_binary" | "after_binary";
 
+/** What went wrong during the binary transfer — drives retry policy and the user-facing message. */
+export type UploadFailureKind =
+  | "network"
+  | "stalled"
+  | "auth"
+  | "upload_expired"
+  | "too_large"
+  | "already_exists"
+  | "server"
+  | "rejected"
+  | "unknown";
+
 export interface UploadTechnicalDetails {
   step: string;
   error: string;
@@ -14,8 +26,11 @@ export interface UploadTechnicalDetails {
   fileSize?: number;
   fileType?: string;
   failurePhase?: UploadFailurePhase;
+  failureKind?: UploadFailureKind;
   retryable?: boolean;
   supabaseError?: string;
+  /** Bytes the server had acknowledged when the failure happened (TUS). */
+  bytesUploaded?: number;
   rawDetails?: unknown;
 }
 
@@ -113,6 +128,48 @@ export function parseTusClientError(error: unknown): {
   return { message: error.message };
 }
 
+const AUTH_ERROR_RE = /jwt|exp"? claim|token.*expired|expired.*token|unauthori[sz]ed|invalid signature|session/i;
+
+/**
+ * Classify a storage upload failure. Supabase reports an expired access token on TUS
+ * PATCH as a 4xx (400/401/403 depending on version) with a JWT message in the body.
+ */
+export function classifyUploadFailure(statusCode: number | undefined, text: string | undefined): UploadFailureKind {
+  const body = text ?? "";
+  if (!statusCode) {
+    if (/stall/i.test(body)) return "stalled";
+    if (/session expired/i.test(body)) return "auth";
+    return "network";
+  }
+  if (statusCode === 413 || /too large|payload too large|exceeds/i.test(body)) return "too_large";
+  if (statusCode === 401 || statusCode === 403) return "auth";
+  if (statusCode === 400 && AUTH_ERROR_RE.test(body)) return "auth";
+  if (statusCode === 404 || statusCode === 410) return "upload_expired";
+  if (statusCode === 409 && /already exists|duplicate/i.test(body)) return "already_exists";
+  if (statusCode === 409 || statusCode === 423 || statusCode === 429 || statusCode >= 500) return "server";
+  if (statusCode >= 400) return "rejected";
+  return "unknown";
+}
+
+/** Failures worth retrying automatically (the next attempt resumes TUS uploads where possible). */
+export function isTransientUploadFailure(kind: UploadFailureKind | undefined): boolean {
+  return (
+    kind === undefined ||
+    kind === "network" ||
+    kind === "stalled" ||
+    kind === "auth" ||
+    kind === "upload_expired" ||
+    kind === "server" ||
+    kind === "unknown"
+  );
+}
+
+function mediaLabel(fileType: string | undefined): string {
+  if (fileType?.startsWith("video/")) return "Video";
+  if (fileType?.startsWith("image/")) return "Photo";
+  return "File";
+}
+
 export function userFacingUploadError(technical: UploadTechnicalDetails): string {
   const step = technical.step;
   const status = technical.statusCode;
@@ -120,11 +177,17 @@ export function userFacingUploadError(technical: UploadTechnicalDetails): string
   if (step === "validating" || step === "sign_request") {
     return technical.error;
   }
-  if (status === 413 || /too large|payload too large|exceeds/i.test(technical.error)) {
-    return "Video exceeds storage size limit. Check Supabase bucket file_size_limit.";
+  const label = mediaLabel(technical.fileType);
+  const kind =
+    technical.failurePhase === "during_binary"
+      ? technical.failureKind ?? classifyUploadFailure(status, technical.error)
+      : undefined;
+
+  if (kind === "too_large" || status === 413 || /too large|payload too large|exceeds/i.test(technical.error)) {
+    return `${label} exceeds the storage size limit for this bucket.`;
   }
-  if (status === 401 || status === 403 || /unauthorized|forbidden|jwt|session/i.test(technical.error)) {
-    return "Session expired or storage permission denied. Refresh and sign in again.";
+  if (kind === "auth" || status === 401 || status === 403 || /unauthorized|forbidden|jwt/i.test(technical.error)) {
+    return "Your sign-in session expired or storage denied access mid-upload. Refresh the page, sign in, then tap Retry upload.";
   }
   if (technical.failurePhase === "after_binary" || step === "storage_verify" || step === "saving_metadata") {
     // Surface the real cause (e.g. object missing) — never mask as a generic "save failed".
@@ -135,7 +198,21 @@ export function userFacingUploadError(technical: UploadTechnicalDetails): string
     return "Upload reached storage but metadata save failed. Tap Retry save.";
   }
   if (technical.failurePhase === "during_binary") {
-    return "Video upload failed during storage upload. Check connection and tap Retry upload.";
+    const resumeHint = technical.uploadMethod === "tus" ? " Tap Retry upload to resume." : " Tap Retry upload.";
+    switch (kind) {
+      case "stalled":
+        return `${label} upload stalled — storage stopped acknowledging data after several attempts.${resumeHint}`;
+      case "upload_expired":
+        return `${label} upload session expired on the storage server. Tap Retry upload to start it again.`;
+      case "server":
+        return `Storage server error${status ? ` (HTTP ${status})` : ""} while uploading ${label.toLowerCase()}.${resumeHint}`;
+      case "rejected":
+        return `Storage rejected the ${label.toLowerCase()} upload (HTTP ${status}): ${technical.error.slice(0, 120)}`;
+      case "network":
+        return `${label} upload lost its connection to storage and could not reconnect after several retries.${resumeHint}`;
+      default:
+        return `${label} upload failed during storage upload: ${technical.error.slice(0, 120)}.${resumeHint}`;
+    }
   }
   return technical.error.length > 160 ? `${technical.error.slice(0, 157)}…` : technical.error;
 }

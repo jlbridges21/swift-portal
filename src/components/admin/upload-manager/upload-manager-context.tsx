@@ -12,7 +12,9 @@ import {
 } from "react";
 import type { MediaAsset } from "@/lib/types";
 import {
+  MAX_CONCURRENT_RESUMABLE_UPLOADS,
   MAX_CONCURRENT_UPLOADS,
+  shouldUseTusUpload,
   UPLOAD_AUTO_RETRY_BASE_MS,
   UPLOAD_AUTO_RETRY_LIMIT,
   uploadMediaFile,
@@ -156,7 +158,7 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       const item = itemsRef.current.find((i) => i.id === itemId);
       if (!item?.retryContext) return;
 
-      const { file, mediaType, projectId, metadata } = item.retryContext;
+      const { file, mediaType, projectId, metadata, resumeFilePath } = item.retryContext;
       const batchId = itemId.split("::")[0];
 
       try {
@@ -165,6 +167,7 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
           file,
           mediaType,
           metadata,
+          resumeFilePath,
           onProgress: ({ phase, progress, bytesLoaded, bytesTotal, resuming }) => {
             const status = mapPhaseToStatus(phase);
             patchItemProgress(itemId, {
@@ -201,7 +204,17 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
             ? err.message
             : "Upload failed";
 
-        const retries = item.autoRetryCount ?? 0;
+        // Keep the storage path of a failed resumable upload so the next attempt
+        // (automatic or Retry upload) resumes the bytes storage already has.
+        const current = itemsRef.current.find((i) => i.id === itemId) ?? item;
+        const resumable =
+          err instanceof UploadBinaryError && err.uploadMethod === "tus" && !!err.filePath;
+        const nextRetryContext =
+          resumable && current.retryContext
+            ? { ...current.retryContext, resumeFilePath: err.filePath }
+            : current.retryContext;
+
+        const retries = current.autoRetryCount ?? 0;
         const retryable =
           err instanceof UploadBinaryError && technical?.retryable !== false && retries < UPLOAD_AUTO_RETRY_LIMIT;
 
@@ -213,8 +226,11 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
             status: "queued",
             phase: "queued",
             progress: 0,
+            bytesLoaded: resumable ? current.bytesLoaded : 0,
             autoRetryCount: next,
-            error: `Retrying (${next}/${UPLOAD_AUTO_RETRY_LIMIT})…`,
+            retryContext: nextRetryContext,
+            technicalDetails: technical,
+            error: `Retrying (${next}/${UPLOAD_AUTO_RETRY_LIMIT})${resumable ? " — will resume" : ""}…`,
           });
           setTimeout(() => pumpRef.current(), delay + 10);
           return;
@@ -236,6 +252,7 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
             phase: "failed",
             error: userMsg,
             technicalDetails: technical,
+            retryContext: nextRetryContext,
           });
           finishBatchSlot(batchId, null, `${file.name}: ${userMsg}`);
         }
@@ -244,12 +261,24 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
     [finishBatchSlot, flushProgress, patchItem, patchItemProgress]
   );
 
+  const isResumableItem = useCallback((i: UploadManagerItem) => {
+    return shouldUseTusUpload(i.retryContext?.file.size ?? i.fileSize);
+  }, []);
+
   const pumpQueue = useCallback(() => {
     const now = Date.now();
     while (inFlightRef.current.size < MAX_CONCURRENT_UPLOADS) {
+      // Large (TUS) files upload one at a time so each finishes quickly with full
+      // bandwidth; small photos keep flowing through the remaining slots.
+      let resumableInFlight = 0;
+      for (const id of inFlightRef.current) {
+        const inFlight = itemsRef.current.find((i) => i.id === id);
+        if (inFlight && isResumableItem(inFlight)) resumableInFlight += 1;
+      }
       const next = itemsRef.current.find((i) => {
         if (i.status !== "queued") return false;
         if (inFlightRef.current.has(i.id)) return false;
+        if (resumableInFlight >= MAX_CONCURRENT_RESUMABLE_UPLOADS && isResumableItem(i)) return false;
         const after = retryAfterRef.current.get(i.id);
         return !after || after <= now;
       });
@@ -273,7 +302,7 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
         }
       })();
     }
-  }, [patchItem, runOneUpload]);
+  }, [isResumableItem, patchItem, runOneUpload]);
 
   useEffect(() => {
     pumpRef.current = pumpQueue;

@@ -45,6 +45,7 @@ import { ALLOWED_VIDEO_MIME_TYPES } from "@/lib/upload/constants";
 import { toast } from "sonner";
 import { useVideoReviewDeleteHandler } from "@/components/admin/video-review-admin-actions";
 import { AdminVideoGridCard } from "@/components/admin/admin-video-grid-card";
+import { SortableVideoItem, SortableVideoList } from "@/components/admin/sortable-video-grid";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import type { ProjectShareRow } from "@/lib/project-shares";
 import { ProjectShareModal } from "@/components/admin/project-share-modal";
@@ -525,6 +526,43 @@ export function AdminProjectDetail({
     });
     router.refresh();
     toast.success("Order updated");
+  }
+
+  /** Persist the full video order (drag-and-drop and arrows), optimistic with rollback. */
+  async function reorderVideos(orderedIds: string[]): Promise<boolean> {
+    const previous = media;
+    const position = new Map(orderedIds.map((id, i) => [id, i]));
+    setMedia((prev) =>
+      prev.map((m) => (position.has(m.id) ? { ...m, display_order: position.get(m.id)! } : m))
+    );
+    const res = await fetch("/api/media/reorder", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        project_id: initialProject.id,
+        items: orderedIds.map((id, i) => ({ id, display_order: i, type: "media" })),
+      }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setMedia(previous);
+      const data = await res?.json().catch(() => ({}));
+      toast.error((data as { error?: string } | undefined)?.error || "Failed to save video order");
+      return false;
+    }
+    router.refresh();
+    return true;
+  }
+
+  function moveVideo(id: string, direction: "up" | "down") {
+    const ids = videos.map((v) => v.id);
+    const from = ids.indexOf(id);
+    const to = direction === "up" ? from - 1 : from + 1;
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    void reorderVideos(ids).then((ok) => {
+      if (ok) toast.success("Order updated");
+    });
   }
 
   async function setHeroMedia(mediaId: string) {
@@ -1284,70 +1322,78 @@ export function AdminProjectDetail({
             <p className="text-sm text-muted py-4 text-center">No videos yet</p>
           ) : null}
           {videoEntries.length > 0 ? (
-            <VideoGrid
-              entries={videoEntries}
-              projectId={initialProject.id}
-              reviewByAssetId={reviewByAssetId}
-              getDownloadUrl={async (asset, thumb) => {
-                const qs = thumb ? "?thumb=1" : "";
-                const res = await fetch(`/api/media/download/${asset.id}${qs}`, {
-                  credentials: "include",
-                });
-                const data = (await res.json()) as { url?: string | null };
-                return data.url ?? null;
-              }}
-              reviewPathPrefix="/admin/projects"
-              isAdmin
-              renderAdminCard={(entry, _index, openPlayer, thumbUrl) => {
-                const v = entry.video;
-                const i = videos.findIndex((row) => row.id === v.id);
-                if (i < 0) return null;
-                const badge = !isClientVisibleMedia(v)
-                  ? "Hidden"
-                  : isHero(v.id)
-                    ? "Hero"
-                    : v.media_source === "youtube"
-                      ? "YouTube"
-                      : "Upload";
-                return (
-                  <AdminVideoGridCard
-                    video={v}
-                    thumbUrl={thumbUrl}
-                    onPlay={openPlayer}
-                    onEdit={() => {
-                      setEditingMedia(v.id);
-                      setEditMediaForm({
-                        title: mediaDisplayName(v),
-                        youtube_url: v.youtube_url || "",
-                      });
-                    }}
-                    onDelete={() => void deleteMedia(v.id)}
-                    onUp={() => moveItem("media", v.id, "up", videos)}
-                    onDown={() => moveItem("media", v.id, "down", videos)}
-                    canUp={i > 0}
-                    canDown={i < videos.length - 1}
-                    badge={badge}
-                    onToggleVisibility={() =>
-                      void toggleMediaVisibility(v.id, !isClientVisibleMedia(v))
-                    }
-                    visibleToClient={isClientVisibleMedia(v)}
-                    onSetHero={() => void setHeroMedia(v.id)}
-                    isEditing={editingMedia === v.id}
-                    editTitle={editMediaForm.title}
-                    editYoutubeUrl={editMediaForm.youtube_url}
-                    onEditTitleChange={(title) => setEditMediaForm((f) => ({ ...f, title }))}
-                    onEditYoutubeUrlChange={(youtube_url) =>
-                      setEditMediaForm((f) => ({ ...f, youtube_url }))
-                    }
-                    onSaveEdit={() => void saveMediaEdit(v.id)}
-                    onCancelEdit={() => setEditingMedia(null)}
-                    projectId={initialProject.id}
-                    reviewItem={reviewByAssetId.get(v.id) ?? null}
-                    onReviewsChange={() => void refreshVideoReviews()}
-                  />
-                );
-              }}
-            />
+            <SortableVideoList
+              id={`admin-video-grid-${initialProject.id}`}
+              ids={videos.map((v) => v.id)}
+              onReorder={(ids) => void reorderVideos(ids)}
+            >
+              <VideoGrid
+                entries={videoEntries}
+                projectId={initialProject.id}
+                reviewByAssetId={reviewByAssetId}
+                getDownloadUrl={async (asset, thumb) => {
+                  const qs = thumb ? "?thumb=1" : "";
+                  const res = await fetch(`/api/media/download/${asset.id}${qs}`, {
+                    credentials: "include",
+                  });
+                  const data = (await res.json()) as { url?: string | null };
+                  return data.url ?? null;
+                }}
+                reviewPathPrefix="/admin/projects"
+                isAdmin
+                renderAdminCard={(entry, _index, openPlayer, thumbUrl) => {
+                  const v = entry.video;
+                  const i = videos.findIndex((row) => row.id === v.id);
+                  if (i < 0) return null;
+                  const badge = !isClientVisibleMedia(v)
+                    ? "Hidden"
+                    : isHero(v.id)
+                      ? "Hero"
+                      : v.media_source === "youtube"
+                        ? "YouTube"
+                        : "Upload";
+                  return (
+                    <SortableVideoItem video={v} thumbUrl={thumbUrl} disabled={editingMedia === v.id}>
+                      <AdminVideoGridCard
+                        video={v}
+                        thumbUrl={thumbUrl}
+                        onPlay={openPlayer}
+                        onEdit={() => {
+                          setEditingMedia(v.id);
+                          setEditMediaForm({
+                            title: mediaDisplayName(v),
+                            youtube_url: v.youtube_url || "",
+                          });
+                        }}
+                        onDelete={() => void deleteMedia(v.id)}
+                        onUp={() => moveVideo(v.id, "up")}
+                        onDown={() => moveVideo(v.id, "down")}
+                        canUp={i > 0}
+                        canDown={i < videos.length - 1}
+                        badge={badge}
+                        onToggleVisibility={() =>
+                          void toggleMediaVisibility(v.id, !isClientVisibleMedia(v))
+                        }
+                        visibleToClient={isClientVisibleMedia(v)}
+                        onSetHero={() => void setHeroMedia(v.id)}
+                        isEditing={editingMedia === v.id}
+                        editTitle={editMediaForm.title}
+                        editYoutubeUrl={editMediaForm.youtube_url}
+                        onEditTitleChange={(title) => setEditMediaForm((f) => ({ ...f, title }))}
+                        onEditYoutubeUrlChange={(youtube_url) =>
+                          setEditMediaForm((f) => ({ ...f, youtube_url }))
+                        }
+                        onSaveEdit={() => void saveMediaEdit(v.id)}
+                        onCancelEdit={() => setEditingMedia(null)}
+                        projectId={initialProject.id}
+                        reviewItem={reviewByAssetId.get(v.id) ?? null}
+                        onReviewsChange={() => void refreshVideoReviews()}
+                      />
+                    </SortableVideoItem>
+                  );
+                }}
+              />
+            </SortableVideoList>
           ) : null}
         </CardContent>
       </Card>

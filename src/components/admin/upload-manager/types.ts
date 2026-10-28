@@ -20,6 +20,8 @@ export interface UploadRetryContext {
   mediaType: "photo" | "video" | "document";
   projectId: string | null;
   metadata?: UploadMediaMetadata;
+  /** Storage path of an earlier failed TUS attempt; retries resume it. */
+  resumeFilePath?: string;
 }
 
 export interface UploadManagerItem {
