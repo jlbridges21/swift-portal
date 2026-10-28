@@ -5,6 +5,7 @@ import { setProjectStatus } from "@/lib/status-automation";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { sendPaymentReceiptEmails } from "@/lib/stripe-receipt-email";
 import { getAppSettings } from "@/lib/app-settings";
+import { shouldSendClientPaymentReceipt } from "@/lib/workflow-settings";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { getStripeForStoredAccount } from "@/lib/stripe-connect";
 import { parseBusinessIdFromMetadata, parsePaymentIdFromMetadata } from "@/lib/stripe-metadata";
@@ -264,7 +265,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     projectLabel,
     receiptUrl: receiptSaved,
     cardLast4: cardLast4Saved,
-    sendClient: payWorkflow.autoSendReceipt,
+    sendClient: shouldSendClientPaymentReceipt(appSettings.workflow),
   });
 
   return { alreadyPaid: false, paymentId: payment.id, updated: true, businessId };

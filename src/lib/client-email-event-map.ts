@@ -5,7 +5,7 @@
 
 import type { NotificationEventKey } from "@/lib/app-settings";
 import type { PremiumEmailTemplate } from "@/lib/email-templates";
-import type { MessageTemplateKey } from "@/lib/workflow-settings";
+import { isMessageTemplateEnabled, type MessageTemplateKey, type WorkflowSettings } from "@/lib/workflow-settings";
 
 export type ClientEmailEventMapping = {
   /** Editable workflow.messages key, or null for generic (no customizable template). */
@@ -160,4 +160,12 @@ export function resolveClientEmailMapping(
 ): ClientEmailEventMapping {
   if (!eventKey) return NEUTRAL_CLIENT_EMAIL_FALLBACK;
   return CLIENT_EMAIL_EVENT_MAP[eventKey] ?? NEUTRAL_CLIENT_EMAIL_FALLBACK;
+}
+
+/** False when the business turned off the automated email this event sends (Settings → Automated Emails). */
+export function isClientEmailEventEnabled(
+  workflow: Pick<WorkflowSettings, "messages"> | null | undefined,
+  eventKey: NotificationEventKey | null | undefined
+): boolean {
+  return isMessageTemplateEnabled(workflow, resolveClientEmailMapping(eventKey).messageKey);
 }

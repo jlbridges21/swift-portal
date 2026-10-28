@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import {
   MESSAGE_TEMPLATE_DEFINITIONS,
   buildDefaultWorkflowSettings,
@@ -44,7 +46,10 @@ export function EmailTemplatesSettingsCard({
     business_name: businessName?.trim() || SAMPLE_VARS.business_name,
   };
 
-  function patchMessage(key: MessageTemplateKey, patch: { subject?: string; body?: string }) {
+  function patchMessage(
+    key: MessageTemplateKey,
+    patch: { subject?: string; body?: string; enabled?: boolean }
+  ) {
     const current = workflow.messages[key];
     onChange({
       ...workflow,
@@ -60,7 +65,8 @@ export function EmailTemplatesSettingsCard({
       ...workflow,
       messages: {
         ...workflow.messages,
-        [key]: { ...defaults[key] },
+        // Reset restores the wording only; on/off stays as the business set it.
+        [key]: { ...defaults[key], enabled: workflow.messages[key].enabled },
       },
     });
   }
@@ -82,6 +88,7 @@ export function EmailTemplatesSettingsCard({
         </div>
         {templates.map((tpl) => {
           const current = workflow.messages[tpl.key];
+          const enabled = current.enabled !== false;
           const isCustom =
             current.subject !== defaults[tpl.key].subject ||
             current.body !== defaults[tpl.key].body;
@@ -92,25 +99,48 @@ export function EmailTemplatesSettingsCard({
             workflowKey: tpl.key,
           });
           return (
-            <Card key={tpl.key} className="shadow-sm">
+            <Card
+              key={tpl.key}
+              className={cn("shadow-sm transition-colors", !enabled && "bg-slate-50 surface-dark:bg-subtle")}
+            >
               <CardHeader className="pb-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
+                  <div className={cn(!enabled && "opacity-60")}>
                     <CardTitle className="text-base">{tpl.label}</CardTitle>
                     <p className="mt-1 text-sm text-muted">{tpl.description}</p>
                   </div>
-                  {isCustom && (
-                    <button
-                      type="button"
-                      className="shrink-0 text-xs font-medium text-accent hover:underline"
-                      onClick={() => resetMessage(tpl.key)}
-                    >
-                      Reset to default
-                    </button>
-                  )}
+                  <div className="flex shrink-0 items-center gap-4">
+                    {isCustom && (
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-accent hover:underline"
+                        onClick={() => resetMessage(tpl.key)}
+                      >
+                        Reset to default
+                      </button>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn("text-xs font-medium", enabled ? "text-heading" : "text-muted")}
+                        aria-hidden
+                      >
+                        {enabled ? "On" : "Off"}
+                      </span>
+                      <Switch
+                        checked={enabled}
+                        onCheckedChange={(next) => patchMessage(tpl.key, { enabled: next })}
+                        aria-label={`Send the ${tpl.label} email`}
+                      />
+                    </div>
+                  </div>
                 </div>
+                {!enabled && (
+                  <p className="mt-2 text-xs text-muted">
+                    This email is off and won&apos;t be sent. Your wording is saved for when you turn it back on.
+                  </p>
+                )}
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className={cn("space-y-4", !enabled && "opacity-60 focus-within:opacity-100")}>
                 <div className="space-y-1.5">
                   <Label htmlFor={`email-subject-${tpl.key}`}>Subject</Label>
                   <Input

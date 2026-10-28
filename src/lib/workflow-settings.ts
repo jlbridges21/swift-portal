@@ -111,10 +111,12 @@ export type MessageTemplateKey =
 export interface MessageTemplateContent {
   subject: string;
   body: string;
+  /** Off stops this email from sending. Missing or anything but `false` means on. */
+  enabled: boolean;
 }
 
-/** Stored shape may still be a plain string (legacy body-only). */
-export type StoredMessageTemplate = string | MessageTemplateContent;
+/** Stored shape may still be a plain string (legacy body-only) or lack `enabled`. */
+export type StoredMessageTemplate = string | (Omit<MessageTemplateContent, "enabled"> & { enabled?: unknown });
 
 export const MESSAGE_TEMPLATE_DEFINITIONS: {
   key: MessageTemplateKey;
@@ -183,7 +185,7 @@ export const MESSAGE_TEMPLATE_DEFINITIONS: {
   {
     key: "payment_received",
     label: "Payment received",
-    description: "Thank-you email after a successful client payment (when used).",
+    description: "Thank-you and receipt email sent to the client after a successful payment.",
     audience: "client",
     placeholders: "{{client_name}}, {{payment_amount}}, {{portal_link}}",
   },
@@ -200,17 +202,33 @@ export function normalizeMessageTemplate(
   value: StoredMessageTemplate | undefined | null,
   fallback: MessageTemplateContent
 ): MessageTemplateContent {
-  if (!value) return { ...fallback };
+  if (!value) return { ...fallback, enabled: true };
   if (typeof value === "string") {
     return {
       subject: fallback.subject,
       body: value.trim() || fallback.body,
+      enabled: true,
     };
   }
   return {
     subject: value.subject?.trim() || fallback.subject,
     body: value.body?.trim() || fallback.body,
+    enabled: value.enabled !== false,
   };
+}
+
+/** Whether an automated email is turned on. Unknown keys and missing settings count as on. */
+export function isMessageTemplateEnabled(
+  workflow: Pick<WorkflowSettings, "messages"> | null | undefined,
+  key: MessageTemplateKey | null | undefined
+): boolean {
+  if (!key) return true;
+  return workflow?.messages?.[key]?.enabled !== false;
+}
+
+/** Client payment receipts go out only when receipts are on and the "Payment received" email is on. */
+export function shouldSendClientPaymentReceipt(workflow: Pick<WorkflowSettings, "payments" | "messages">): boolean {
+  return workflow.payments.autoSendReceipt !== false && isMessageTemplateEnabled(workflow, "payment_received");
 }
 
 export function getMessageTemplateBody(
@@ -311,42 +329,52 @@ export function buildDefaultWorkflowSettings(): WorkflowSettings {
       new_request_confirmation: {
         subject: "We received your project request",
         body: "Hi {{client_name}}, we received your request for {{property_address}}. We'll review the details and follow up shortly. View your portal: {{portal_link}}",
+        enabled: true,
       },
       preliminary_estimate_ready: {
         subject: "You have a new project in {{portal_name}}",
         body: "Your automatically generated preliminary estimate is ready to review in {{portal_name}}. {{portal_link}}",
+        enabled: true,
       },
       proposal_ready: {
         subject: "Your {{business_name}} proposal is ready",
         body: "Hi {{client_name}}, your official proposal for {{project_name}} is ready to review. {{portal_link}}",
+        enabled: true,
       },
       scheduling_request: {
         subject: "Your shoot time is ready to review",
         body: "Hi {{client_name}}, please review the proposed shoot time on {{shoot_date}}. {{portal_link}}",
+        enabled: true,
       },
       shoot_time_declined: {
         subject: "Your shoot time was declined",
         body: "Hi {{client_name}}, a proposed shoot time was declined. Please open {{portal_name}} to suggest another time: {{portal_link}}",
+        enabled: true,
       },
       shoot_confirmed: {
         subject: "Your shoot is confirmed",
         body: "Hi {{client_name}}, your shoot at {{property_address}} is confirmed for {{shoot_date}}.",
+        enabled: true,
       },
       deliverables_ready: {
         subject: "Your deliverables are ready to review",
         body: "Hi {{client_name}}, your deliverables for {{project_name}} are ready for review. {{portal_link}}",
+        enabled: true,
       },
       payment_request: {
         subject: "Your payment link is ready",
         body: "Hi {{client_name}}, your final payment of {{payment_amount}} is ready. Complete payment here: {{portal_link}}",
+        enabled: true,
       },
       payment_received: {
         subject: "Payment received — thank you",
         body: "Thank you, {{client_name}}! We received your payment of {{payment_amount}}. Your downloads are now unlocked. {{portal_link}}",
+        enabled: true,
       },
       project_completed: {
         subject: "Your project is complete",
         body: "Hi {{client_name}}, {{project_name}} is complete. Thank you for choosing {{business_name}}! {{portal_link}}",
+        enabled: true,
       },
     },
     businessDefaults: {

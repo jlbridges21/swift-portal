@@ -6,7 +6,7 @@ import type { PremiumEmailContent, PremiumEmailTemplate } from "@/lib/email-temp
 import type { NotificationType } from "@/lib/types";
 import { renderWorkflowTemplate } from "@/lib/workflow-template-render";
 import { businessPortalHref, getBusinessPortalOriginById } from "@/lib/portal-url";
-import { resolveClientEmailMapping } from "@/lib/client-email-event-map";
+import { isClientEmailEventEnabled, resolveClientEmailMapping } from "@/lib/client-email-event-map";
 
 /** Payment-related emails always send even if the client opted out of marketing-style emails. */
 const CRITICAL_CLIENT_EMAIL_TYPES = new Set<NotificationType>([
@@ -343,6 +343,12 @@ export async function sendClientEmailNotification(
     return { sent: false, reason: "no_email" };
   }
 
+  const appSettings = await getAppSettings(options.businessId);
+  if (!isClientEmailEventEnabled(appSettings.workflow, options.eventKey)) {
+    console.info("[email] skipped — turned off in Automated Emails:", options.eventKey, options.userId);
+    return { sent: false, reason: "email_turned_off" };
+  }
+
   const isCritical = CRITICAL_CLIENT_EMAIL_TYPES.has(options.eventType);
 
   if (!isCritical) {
@@ -353,7 +359,6 @@ export async function sendClientEmailNotification(
     }
   }
 
-  const appSettings = await getAppSettings(options.businessId);
   const presentation = assembleClientEmailPresentation(appSettings, {
     eventType: options.eventType,
     eventKey: options.eventKey,
