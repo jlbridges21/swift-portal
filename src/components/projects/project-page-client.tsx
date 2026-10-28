@@ -493,7 +493,7 @@ export function ProjectPageClient({
                   downloadsAllowed={downloadsUnlocked}
                   onDownload={handleDownload}
                   canAccessVideoReviews={canAccessVideoReviews}
-                  compactInitialCount={4}
+                  compactRows={2}
                 />
               </div>
             ) : (
@@ -682,7 +682,7 @@ export function ProjectPageClient({
                   onDownload={handleDownload}
                   isAdmin={!!isAdmin}
                   canAccessVideoReviews={canAccessVideoReviews || !!isAdmin}
-                  compactInitialCount={4}
+                  compactRows={2}
                 />
               </div>
             ) : (

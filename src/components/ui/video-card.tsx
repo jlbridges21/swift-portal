@@ -67,3 +67,6 @@ export function VideoCard({
 /** Larger cards than photo tiles — two-up on mobile, two on large, three on xl. */
 export const VIDEO_GRID_CLASS =
   "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0";
+
+/** Column counts of VIDEO_GRID_CLASS — keep in sync when changing the grid breakpoints. */
+export const VIDEO_GRID_COLUMNS = { base: 2, xl: 3 } as const;

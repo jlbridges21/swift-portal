@@ -11,7 +11,7 @@
  * own invite path scoped to this business.
  */
 
-import { randomBytes } from "crypto";
+import { randomInt } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
@@ -24,9 +24,22 @@ import { ensureClientPortalLink, profileBelongsToBusiness } from "@/lib/client-p
 import { sendBrandedEmail } from "@/lib/email";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
 
+export const TEMP_PASSWORD_CONFIRM = "SET TEMP PASSWORD";
+
+/** No 0/O/o, 1/l/I or punctuation — the client may have to retype it from a message. */
+const TEMP_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+const TEMP_PASSWORD_LENGTH = 20; // ~115 bits
+
 function generateTempPassword(): string {
-  return randomBytes(24).toString("base64url");
+  let out = "";
+  for (let i = 0; i < TEMP_PASSWORD_LENGTH; i++) {
+    out += TEMP_PASSWORD_ALPHABET[randomInt(TEMP_PASSWORD_ALPHABET.length)];
+  }
+  return out;
 }
+
+/** Shown to the owner when a temp password would not let this client sign in. */
+export class TempPasswordUnavailableError extends Error {}
 
 export type ClientPortalAccountStatus = {
   accountStatus: "no_account" | "invited_unconfirmed" | "has_account";
@@ -283,9 +296,9 @@ export async function setClientPortalTempPassword(
   businessId: string,
   actor: { id: string; email: string | null },
   confirm: string
-): Promise<{ temporaryPassword: string }> {
-  if (confirm !== "SET TEMP PASSWORD") {
-    throw new Error('Type SET TEMP PASSWORD to confirm.');
+): Promise<{ temporaryPassword: string; email: string }> {
+  if (confirm !== TEMP_PASSWORD_CONFIRM) {
+    throw new Error(`Type ${TEMP_PASSWORD_CONFIRM} to confirm.`);
   }
 
   const { client, db } = await assertBusinessClient(clientId, businessId);
@@ -294,9 +307,11 @@ export async function setClientPortalTempPassword(
     throw new Error(linked.message);
   }
 
+  const email = client.email.trim().toLowerCase();
   const temporaryPassword = generateTempPassword();
   const displayName = client.full_name?.trim() || client.name;
-  let userId = client.user_id;
+  // ensureClientPortalLink may have just linked an existing login by email; `client` predates that.
+  let userId = linked.userId ?? client.user_id;
 
   if (userId) {
     const { data: profile } = await db.raw
@@ -307,19 +322,55 @@ export async function setClientPortalTempPassword(
     if (!profile || !profileBelongsToBusiness(profile, businessId)) {
       throw new Error("This login belongs to another business and cannot be updated here.");
     }
-    const { data: authData } = await db.raw.auth.admin.getUserById(userId);
-    const { error } = await db.raw.auth.admin.updateUserById(userId, {
+    if (profile.role !== "client") {
+      throw new TempPasswordUnavailableError(
+        "This email belongs to a team login, not a client portal login. Use the password reset email instead."
+      );
+    }
+
+    const { data: authData, error: getError } = await db.raw.auth.admin.getUserById(userId);
+    if (getError || !authData.user) {
+      throw new Error(getError?.message || "Portal login not found. Send a reset email instead.");
+    }
+    const authUser = authData.user;
+
+    // The client signs in with the CRM email; a password on a differently-addressed login is useless.
+    if (authUser.email?.trim().toLowerCase() !== email) {
+      throw new TempPasswordUnavailableError(
+        `This client's portal login uses ${authUser.email ?? "a different email"}, not ${client.email}. Fix the client's email or send a reset email instead.`
+      );
+    }
+    const providers = new Set(
+      (authUser.identities ?? []).map((identity) => identity.provider)
+    );
+    if (providers.size > 0 && !providers.has("email")) {
+      throw new TempPasswordUnavailableError(
+        `This client signs in with ${[...providers].map(providerLabel).join(" / ")}, so a password won't work for them. Ask them to use "Continue with Google" on the sign-in page, or send a password reset email so they can add a password themselves.`
+      );
+    }
+
+    const bannedUntil = (authUser as { banned_until?: string | null }).banned_until;
+    if (bannedUntil && new Date(bannedUntil).getTime() > Date.now()) {
+      throw new TempPasswordUnavailableError(
+        "This portal login is blocked in Supabase Auth, so no password will work until it's unblocked."
+      );
+    }
+
+    const { data: updated, error } = await db.raw.auth.admin.updateUserById(userId, {
       password: temporaryPassword,
       email_confirm: true,
       user_metadata: {
-        ...authData.user?.user_metadata,
+        ...authUser.user_metadata,
         must_change_password: true,
       },
     });
     if (error) throw new Error(error.message);
+    if (updated.user?.user_metadata?.must_change_password !== true) {
+      throw new Error("Supabase did not save the temporary password. Send a reset email instead.");
+    }
   } else {
     const { data: authUser, error: authError } = await db.raw.auth.admin.createUser({
-      email: client.email,
+      email,
       password: temporaryPassword,
       email_confirm: true,
       user_metadata: {
@@ -361,5 +412,10 @@ export async function setClientPortalTempPassword(
     }
   );
 
-  return { temporaryPassword };
+  return { temporaryPassword, email };
+}
+
+function providerLabel(provider: string): string {
+  if (provider === "google") return "Google";
+  return provider.charAt(0).toUpperCase() + provider.slice(1);
 }

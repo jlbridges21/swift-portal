@@ -87,6 +87,9 @@ async function main() {
   assert(adminCardSrc.includes("line-clamp-2"), "long titles clamped");
   assert(gridSrc.includes("renderAdminCard"), "admin card hook on VideoGrid");
   assert(gridSrc.includes("min-w-0"), "grid items min-w-0");
+  assert(gridSrc.includes("CollapsibleVideoRows"), "collapsed grid shows full rows");
+  assert(gridSrc.includes('"hidden xl:block"'), "3rd-column overflow only revealed at xl (CSS, no hydration flash)");
+  assert(cardSrc.includes("VIDEO_GRID_COLUMNS = { base: 2, xl: 3 }"), "column counts mirror VIDEO_GRID_CLASS");
   console.log("\n=== Mobile grid choice ===");
   console.log("375px: two-up grid (grid-cols-2) — readable 16:9 cards; player rail stacks below (flex-col).");
 

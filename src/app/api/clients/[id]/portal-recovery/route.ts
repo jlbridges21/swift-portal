@@ -5,6 +5,7 @@ import {
   getClientPortalAccountStatus,
   sendClientPortalPasswordReset,
   setClientPortalTempPassword,
+  TempPasswordUnavailableError,
 } from "@/lib/client-portal-recovery";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
@@ -95,6 +96,12 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     return NextResponse.json({ error: "Unknown action." }, { status: 400 });
   } catch (error) {
+    if (error instanceof TempPasswordUnavailableError) {
+      return NextResponse.json(
+        { error: error.message, code: "temp_password_unavailable" },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Recovery failed" },
       { status: 400 }

@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clapperboard, Download, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Clapperboard, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SafeAreaCloseButton } from "@/components/ui/safe-area-close-button";
-import { VideoCard, VIDEO_GRID_CLASS } from "@/components/ui/video-card";
+import { VideoCard, VIDEO_GRID_CLASS, VIDEO_GRID_COLUMNS } from "@/components/ui/video-card";
 import { VideoPosterSurface } from "@/components/ui/video-poster-surface";
-import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
 import { createThumbRequestQueue } from "@/lib/media-thumb-client";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import type { MediaAsset } from "@/lib/types";
@@ -33,7 +32,8 @@ export type VideoGridProps = {
   onDownload?: (video: MediaAsset) => void;
   /** Admin-only: show Start video review in player when no review exists. */
   isAdmin?: boolean;
-  compactInitialCount?: number;
+  /** Collapse to this many full grid rows (column count follows the breakpoint) with a "View N more" toggle. */
+  compactRows?: number;
   /** Public link visitors without a session: review links prompt sign-in. Omit when authenticated. */
   signInHref?: string;
   /** Show review entry on cards and in player (authenticated viewers with review access). */
@@ -60,7 +60,7 @@ export function VideoGrid({
   downloadsAllowed = true,
   onDownload,
   isAdmin = false,
-  compactInitialCount,
+  compactRows,
   signInHref,
   canAccessVideoReviews = false,
   thumbnailsEndpoint,
@@ -93,7 +93,7 @@ export function VideoGrid({
 
   if (!entries.length) return null;
 
-  const renderCard = (entry: VideoGridEntry, index: number) => {
+  const renderCard = (entry: VideoGridEntry, index: number, className?: string) => {
     const openPlayer = () => openPlayerAt(index);
     const reviewItem = reviewByAssetId.get(entry.video.id) ?? null;
     const reviewHref = buildReviewHref({
@@ -107,13 +107,13 @@ export function VideoGrid({
     });
     if (renderAdminCard) {
       return (
-        <div key={entry.video.id} className="min-w-0">
+        <div key={entry.video.id} className={cn("min-w-0", className)}>
           {renderAdminCard(entry, index, openPlayer, thumbUrls[entry.video.id])}
         </div>
       );
     }
     return (
-      <div key={entry.video.id} className="min-w-0">
+      <div key={entry.video.id} className={cn("min-w-0", className)}>
         <VideoCard
           video={entry.video}
           thumbUrl={thumbUrls[entry.video.id]}
@@ -133,16 +133,8 @@ export function VideoGrid({
 
   return (
     <>
-      {compactInitialCount != null && entries.length > compactInitialCount ? (
-        <ExpandableMediaList
-          items={entries}
-          initialCount={compactInitialCount}
-          labelSingular="video"
-          labelPlural="videos"
-          listClassName={VIDEO_GRID_CLASS}
-          viewAllLabel={(n) => `View all ${n} videos`}
-          renderItem={(entry, index) => renderCard(entry, index)}
-        />
+      {compactRows != null && entries.length > compactRows * VIDEO_GRID_COLUMNS.base ? (
+        <CollapsibleVideoRows entries={entries} rows={compactRows} renderCard={renderCard} />
       ) : (
         <div className={VIDEO_GRID_CLASS}>
           {entries.map((entry, index) => renderCard(entry, index))}
@@ -169,6 +161,74 @@ export function VideoGrid({
         />
       )}
     </>
+  );
+}
+
+function moreVideosLabel(n: number) {
+  return `View ${n} more ${n === 1 ? "video" : "videos"}`;
+}
+
+/**
+ * Collapsed state shows exactly `rows` full rows at every breakpoint. Visibility is
+ * pure CSS (mirrors VIDEO_GRID_CLASS columns), so SSR and hydration match with no flash.
+ */
+function CollapsibleVideoRows({
+  entries,
+  rows,
+  renderCard,
+}: {
+  entries: VideoGridEntry[];
+  rows: number;
+  renderCard: (entry: VideoGridEntry, index: number, className?: string) => ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const baseCount = rows * VIDEO_GRID_COLUMNS.base;
+  const xlCount = rows * VIDEO_GRID_COLUMNS.xl;
+  const baseRemaining = entries.length - baseCount;
+  const xlRemaining = Math.max(0, entries.length - xlCount);
+  const visible = expanded ? entries : entries.slice(0, xlCount);
+
+  function toggle() {
+    if (expanded) {
+      const top = containerRef.current?.getBoundingClientRect().top ?? 0;
+      if (top < 0) containerRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+    setExpanded((v) => !v);
+  }
+
+  return (
+    <div ref={containerRef} className="scroll-mt-24 space-y-4">
+      <div className={VIDEO_GRID_CLASS}>
+        {visible.map((entry, index) =>
+          renderCard(entry, index, !expanded && index >= baseCount ? "hidden xl:block" : undefined)
+        )}
+      </div>
+      {baseRemaining > 0 ? (
+        <Button
+          type="button"
+          variant="outline"
+          className={cn("w-full min-h-11", xlRemaining === 0 && "xl:hidden")}
+          aria-expanded={expanded}
+          onClick={toggle}
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="h-4 w-4" />
+              Show fewer videos
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-4 w-4" />
+              <span className="xl:hidden">{moreVideosLabel(baseRemaining)}</span>
+              {xlRemaining > 0 ? (
+                <span className="hidden xl:inline">{moreVideosLabel(xlRemaining)}</span>
+              ) : null}
+            </>
+          )}
+        </Button>
+      ) : null}
+    </div>
   );
 }
 
