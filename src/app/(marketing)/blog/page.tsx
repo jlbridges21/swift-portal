@@ -14,6 +14,7 @@ import { marketingPageMetadata } from "@/lib/marketing";
 import { getAllArticles, getCategoryCounts, getFeaturedArticle, toCardData } from "@/lib/blog/registry";
 import { blogIndexJsonLd, jsonLdString } from "@/lib/blog/structured-data";
 import { loadBlogRenderContext } from "@/lib/blog/render-context";
+import { TRIAL_SIGNUP_HREF } from "@/lib/signup-intent";
 
 export const revalidate = 300;
 
@@ -140,7 +141,7 @@ export default async function BlogIndexPage() {
               </p>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
                 <Link
-                  href="/signup"
+                  href={TRIAL_SIGNUP_HREF}
                   data-sp-cta="blog:index-cta"
                   className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-[#4F46E5] px-7 text-base font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:bg-[#4338CA]"
                 >

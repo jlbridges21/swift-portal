@@ -17,6 +17,7 @@ import {
   MarketingAnalytics,
 } from "@/components/analytics/marketing-analytics";
 import { MarketingScrollReset } from "@/components/marketing/marketing-scroll-reset";
+import { TRIAL_SIGNUP_HREF } from "@/lib/signup-intent";
 
 const NAV = [
   { href: "/#product-demo", label: "Product" },
@@ -75,7 +76,7 @@ export function MarketingHeader({ className }: { className?: string }) {
               Log in
             </Button>
           </Link>
-          <Link href="/signup">
+          <Link href={TRIAL_SIGNUP_HREF}>
             <Button
               className="min-h-11 px-4 text-white hover:opacity-95"
               style={{ backgroundColor: MARKETING_BRAND.indigo }}
@@ -154,7 +155,7 @@ export function MarketingFooter() {
               </Link>
             </li>
             <li>
-              <Link href="/signup" className="hover:text-white">
+              <Link href={TRIAL_SIGNUP_HREF} className="hover:text-white">
                 Start free trial
               </Link>
             </li>
@@ -264,7 +265,7 @@ export function MarketingCtaBand({
           <p className="mt-2 text-sm text-[#475569]">{trialLabel}</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Link href="/signup">
+          <Link href={TRIAL_SIGNUP_HREF}>
             <Button
               className="min-h-11 px-6 text-white"
               style={{ backgroundColor: MARKETING_BRAND.indigo }}

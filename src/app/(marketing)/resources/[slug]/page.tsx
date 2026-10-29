@@ -24,6 +24,7 @@ import type { ResourceId } from "@/lib/resources/registry";
 import { DocumentBuilder } from "@/components/tools/quote-builder";
 import type { DocKind, QuoteTemplateKey } from "@/lib/tools/quote-model";
 import { FinalCta, SECTION_X, Section, SolutionFaq } from "@/components/solutions/solution-sections";
+import { TRIAL_SIGNUP_HREF } from "@/lib/signup-intent";
 
 export const revalidate = 300;
 
@@ -247,7 +248,7 @@ export default async function ResourcePage({ params }: { params: Promise<{ slug:
               <p className="mt-3 leading-relaxed text-slate-300">{c.productBridge.body}</p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
-                  href="/signup"
+                  href={TRIAL_SIGNUP_HREF}
                   data-sp-cta={`resourcepage:${r.id}:bridge`}
                   className="inline-flex min-h-12 items-center rounded-xl bg-[#4F46E5] px-6 font-semibold text-white hover:bg-[#4338CA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >

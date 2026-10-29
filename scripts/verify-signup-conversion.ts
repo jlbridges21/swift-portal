@@ -64,12 +64,14 @@ const iso = (ms: number) => new Date(ms).toISOString();
 // Signup intent
 // ---------------------------------------------------------------------------
 {
-  const trial = intentFromSearchParams({});
-  assert(trial.path === "trial" && trial.interval === null, "no plan param ⇒ free trial path (existing default)");
+  const def = intentFromSearchParams({});
+  assert(def.path === "subscribe" && def.interval === "annual", "plain /signup ⇒ plan picker, annual preselected");
+  const trial = intentFromSearchParams({ intent: "trial", source: "demo" });
+  assert(trial.path === "trial" && trial.interval === null && trial.source === "demo", "?intent=trial ⇒ free trial view");
   const annual = intentFromSearchParams({ plan: "annual", source: "demo" });
   assert(annual.path === "subscribe" && annual.interval === "annual" && annual.source === "demo", "?plan=annual&source=demo ⇒ subscribe annual, demo attribution");
   assert(intentFromSearchParams({ plan: "monthly" }).interval === "monthly", "?plan=monthly ⇒ monthly");
-  assert(intentFromSearchParams({ plan: "lifetime" }).path === "trial", "unknown plan ⇒ trial (never invents a plan)");
+  assert(intentFromSearchParams({ plan: "lifetime" }).interval === "annual", "unknown plan ⇒ default annual picker (no invented plan)");
   assert(intentFromSearchParams({ plan: "annual", source: "<script>" }).source === null, "source is strictly validated");
   const round = parseSignupIntentCookie(serializeSignupIntent(annual));
   assert(round?.path === "subscribe" && round.interval === "annual" && round.source === "demo", "intent cookie round-trips");
@@ -82,7 +84,8 @@ const iso = (ms: number) => new Date(ms).toISOString();
   assert(signupIntentCookieDomain("localhost", "localhost:3000") === null, "localhost cookie stays host-only");
   assert(signupIntentCookieDomain("evil.com", "shootportal.app") === null, "foreign host never gets a Domain cookie");
   assert(signupHref({ interval: "annual", source: "demo" }) === "/signup?plan=annual&source=demo", "signupHref builds subscribe link");
-  assert(signupHref() === "/signup", "signupHref default is the trial link");
+  assert(signupHref() === "/signup?intent=trial", "signupHref default is the trial link");
+  assert(signupHref({ source: "demo" }) === "/signup?intent=trial&source=demo", "trial link keeps attribution");
 }
 
 // ---------------------------------------------------------------------------

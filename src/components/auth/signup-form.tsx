@@ -253,32 +253,46 @@ export function SignupForm({
               </div>
             )}
             {intent.path === "subscribe" && (
-              <div className="mb-5 rounded-xl border border-border bg-background p-3">
-                <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Billing">
-                  {(["monthly", "annual"] as const).map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      role="radio"
-                      aria-checked={intent.interval === option}
-                      onClick={() => chooseInterval(option)}
-                      className={cn(
-                        "min-h-11 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                        intent.interval === option
-                          ? "border-accent bg-accent/10 text-heading"
-                          : "border-border bg-card text-muted hover:text-heading"
-                      )}
-                    >
-                      {option === "monthly" ? "Monthly" : "Annual"}
-                      {option === "annual" && pricing?.annualPerMonthCents != null ? (
-                        <span className="block text-xs font-normal">Best value</span>
-                      ) : (
-                        <span className="block text-xs font-normal">Flexible</span>
-                      )}
-                    </button>
-                  ))}
+              <div className="mb-5">
+                <div className="rounded-xl border border-border bg-background p-3">
+                  <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Billing">
+                    {(["monthly", "annual"] as const).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        role="radio"
+                        aria-checked={intent.interval === option}
+                        onClick={() => chooseInterval(option)}
+                        className={cn(
+                          "min-h-11 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                          intent.interval === option
+                            ? "border-accent bg-accent/10 text-heading"
+                            : "border-border bg-card text-muted hover:text-heading"
+                        )}
+                      >
+                        {option === "monthly" ? "Monthly" : "Annual"}
+                        {option === "annual" && pricing?.annualPerMonthCents != null ? (
+                          <span className="block text-xs font-normal">Best value</span>
+                        ) : (
+                          <span className="block text-xs font-normal">Flexible</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-center text-xs text-muted">{planSummary}</p>
                 </div>
-                <p className="mt-2 text-center text-xs text-muted">{planSummary}</p>
+                {trialDays > 0 && (
+                  <p className="mt-3 text-center text-sm text-muted">
+                    Not quite ready?{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-accent hover:underline"
+                      onClick={() => setIntent((prev) => ({ ...prev, path: "trial", interval: null }))}
+                    >
+                      Start a {trialDays}-day free trial instead
+                    </button>
+                  </p>
+                )}
               </div>
             )}
             <div className="mb-2 space-y-4">
@@ -382,31 +396,16 @@ export function SignupForm({
                 {busy ? "Creating…" : subscribing ? "Create account & continue to payment" : "Create account"}
               </Button>
             </form>
-            {trialDays > 0 && (
+            {trialDays > 0 && intent.path === "trial" && (
               <p className="mt-4 text-center text-sm text-muted">
-                {intent.path === "subscribe" ? (
-                  <>
-                    Not quite ready?{" "}
-                    <button
-                      type="button"
-                      className="font-medium text-accent hover:underline"
-                      onClick={() => setIntent((prev) => ({ ...prev, path: "trial", interval: null }))}
-                    >
-                      Start a {trialDays}-day free trial instead
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    Ready to buy?{" "}
-                    <button
-                      type="button"
-                      className="font-medium text-accent hover:underline"
-                      onClick={() => chooseInterval("annual")}
-                    >
-                      Subscribe now
-                    </button>
-                  </>
-                )}
+                Ready to buy?{" "}
+                <button
+                  type="button"
+                  className="font-medium text-accent hover:underline"
+                  onClick={() => chooseInterval("annual")}
+                >
+                  Subscribe now
+                </button>
               </p>
             )}
             <p className="mt-6 text-center text-sm text-muted">

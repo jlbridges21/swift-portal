@@ -5,6 +5,7 @@ import { BlogCoverArt } from "@/components/blog/cover-art";
 import { ArticleTocSpy } from "@/components/blog/article-toc-spy";
 import type { BlogArticle, BlogAuthor, BlogRenderContext } from "@/lib/blog/types";
 import { formatBlogDate } from "@/lib/blog/format";
+import { TRIAL_SIGNUP_HREF } from "@/lib/signup-intent";
 
 export function ArticleLayout({
   article,
@@ -187,7 +188,7 @@ export function ArticleLayout({
                   Requests, estimates, scheduling, payments, and delivery in one portal.
                 </p>
                 <Link
-                  href="/signup"
+                  href={TRIAL_SIGNUP_HREF}
                   data-sp-cta="blog:sidebar"
                   className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#4F46E5] px-4 text-sm font-semibold text-white transition hover:bg-[#4338CA]"
                 >
@@ -288,7 +289,7 @@ function ArticleFinalCta({ article, ctx }: { article: BlogArticle; ctx: BlogRend
         <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-slate-300">{article.cta.body}</p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
-            href="/signup"
+            href={TRIAL_SIGNUP_HREF}
             data-sp-cta="blog:final-cta"
             className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-[#4F46E5] px-7 text-base font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:bg-[#4338CA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0F172A]"
           >

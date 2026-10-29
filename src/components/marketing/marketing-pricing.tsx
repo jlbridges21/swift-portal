@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TRIAL_SIGNUP_HREF } from "@/lib/signup-intent";
 
 /** Capabilities that exist in the product today — never list FUTURE_ENTITLEMENTS as shipping. */
 const BASE_CAPABILITIES = [
@@ -140,7 +141,7 @@ export function MarketingPricingGrid({
                 </li>
               ))}
             </ul>
-            <Link href="/signup" className="mt-8 block">
+            <Link href={TRIAL_SIGNUP_HREF} className="mt-8 block">
               <Button
                 className={cn(
                   "min-h-11 w-full",

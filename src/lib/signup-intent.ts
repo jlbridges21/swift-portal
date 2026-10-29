@@ -6,7 +6,8 @@
  * billing webhook / server-side Checkout Session verification.
  *
  * How it travels:
- * - Marketing CTAs link to /signup?plan=monthly|annual (&source=demo). No plan = free trial.
+ * - /signup shows the plan picker (annual preselected); ?plan=monthly|annual preselects a plan.
+ *   Free-trial CTAs link to /signup?intent=trial (TRIAL_SIGNUP_HREF).
  * - The signup form sends it in the POST body and also writes SIGNUP_INTENT_COOKIE so Google
  *   sign-up (OAuth → /finish-setup) and existing-user login keep it.
  * - Once the business exists, the choice is stored on business_billing_journey (server-side),
@@ -53,9 +54,9 @@ export function intentFromSearchParams(params: {
   const interval = parseSignupInterval(first(params.plan));
   const explicit = first(params.intent);
   const source = parseSignupSource(first(params.source));
-  if (interval) return { path: "subscribe", interval, source };
-  if (explicit === "subscribe") return { path: "subscribe", interval: null, source };
-  return { path: "trial", interval: null, source };
+  if (explicit === "trial") return { path: "trial", interval: null, source };
+  // Default view is the plan picker (annual preselected); free-trial CTAs pass ?intent=trial.
+  return { path: "subscribe", interval: interval ?? "annual", source };
 }
 
 /** Normalize a POST body / untrusted object into an intent. Unknown ⇒ trial (today's default). */
@@ -108,12 +109,15 @@ export function signupIntentCookieDomain(hostname: string, platformRootDomain: s
   return null;
 }
 
-/** /signup link for a marketing CTA. */
+/** Free-trial CTA target (plain /signup opens the plan picker). */
+export const TRIAL_SIGNUP_HREF = "/signup?intent=trial";
+
+/** /signup link for a marketing CTA. No interval ⇒ the free-trial view. */
 export function signupHref(intent: { interval?: SignupInterval | null; source?: string | null } = {}): string {
   const params = new URLSearchParams();
   if (intent.interval) params.set("plan", intent.interval);
+  else params.set("intent", "trial");
   const source = parseSignupSource(intent.source);
   if (source) params.set("source", source);
-  const qs = params.toString();
-  return qs ? `/signup?${qs}` : "/signup";
+  return `/signup?${params.toString()}`;
 }
