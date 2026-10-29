@@ -64,6 +64,10 @@ export type PartnerRow = {
   stripe_connect_account_status?: string | null;
   stripe_connect_payouts_enabled?: boolean | null;
   stripe_connect_mode?: "test" | "live" | null;
+  /** v108: false = enrolled but never accrues commissions or receives payouts. Missing ⇒ eligible. */
+  commission_eligible?: boolean | null;
+  commission_eligibility_note?: string | null;
+  commission_eligibility_updated_at?: string | null;
   created_at: string;
   updated_at: string;
   /** Phase 2: count of attributed businesses (read-only). */

@@ -28,6 +28,7 @@ export function SignupForm({
   oauthAllowed,
   initialIntent = DEFAULT_INTENT,
   pricing,
+  adminDemo = null,
 }: {
   platformRootDomain: string;
   /** Studio plan trial_days for new signups (from plans table). */
@@ -36,6 +37,11 @@ export function SignupForm({
   /** From /signup?plan=monthly|annual&source=… — Subscribe Now vs free trial. */
   initialIntent?: SignupIntent;
   pricing?: { monthlyCents: number | null; annualPerMonthCents: number | null };
+  /**
+   * Set only when the server verified a super admin on /signup?source=admin-demo. Shows the
+   * "Create without partner referral" option. The server re-verifies on submit.
+   */
+  adminDemo?: { adminEmail: string | null } | null;
 }) {
   const [intent, setIntent] = useState<SignupIntent>(() =>
     initialIntent.path === "subscribe" && !initialIntent.interval
@@ -63,6 +69,13 @@ export function SignupForm({
       /* cookies blocked — the POST body still carries the choice */
     }
   }, [intent, platformRootDomain]);
+
+  const [skipReferral, setSkipReferral] = useState(true);
+  function toggleSkipReferral(next: boolean) {
+    setSkipReferral(next);
+    // The source carries the choice through Google sign-up (finish-setup re-verifies the admin).
+    setIntent((prev) => ({ ...prev, source: next ? "admin-demo" : "demo" }));
+  }
 
   function chooseInterval(next: SignupInterval) {
     setIntent((prev) => ({ ...prev, path: "subscribe", interval: next }));
@@ -132,6 +145,7 @@ export function SignupForm({
           signupPath: intent.path,
           interval: intent.interval,
           source: intent.source,
+          skipPartnerReferral: adminDemo != null && skipReferral,
         }),
       });
       const data = (await res.json()) as {
@@ -218,6 +232,26 @@ export function SignupForm({
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {adminDemo && (
+              <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-semibold">Admin demo signup</p>
+                <label className="mt-2 flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={skipReferral}
+                    onChange={(e) => toggleSkipReferral(e.target.checked)}
+                  />
+                  <span>
+                    Create without partner referral
+                    <span className="block text-xs">
+                      Ignores any partner referral saved in this browser, so this account gets no partner
+                      discount and earns no partner commission.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
             {intent.path === "subscribe" && (
               <div className="mb-5 rounded-xl border border-border bg-background p-3">
                 <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Billing">

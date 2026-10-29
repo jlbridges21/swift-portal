@@ -2,6 +2,9 @@ import { requireSuperAdminPage } from "@/lib/admin-access";
 import { NewBusinessForm } from "@/components/platform/new-business-form";
 import { listActivePlans } from "@/lib/entitlements";
 import { listActivePartnersForSelect } from "@/lib/partners";
+import { cookies } from "next/headers";
+import { PARTNER_REF_COOKIE, verifyPartnerRefCookie } from "@/lib/partner-referral";
+import { AdminDemoSignupTools } from "@/components/platform/admin-demo-signup-tools";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +22,11 @@ export default async function NewBusinessPage() {
         invites the first admin. Does not copy another business&apos;s sender email. Optional partner
         attribution is written once at create (manual source).
       </p>
+      <div className="mb-8">
+        <AdminDemoSignupTools
+          browserReferralCode={verifyPartnerRefCookie((await cookies()).get(PARTNER_REF_COOKIE)?.value)?.code ?? null}
+        />
+      </div>
       <NewBusinessForm plans={plans} partners={partners} />
     </main>
   );

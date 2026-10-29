@@ -8,7 +8,7 @@
 import type Stripe from "stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStripe, getStripeMode, type StripeMode } from "@/lib/stripe";
-import { computePartnerBalance } from "@/lib/partner-commissions";
+import { computePartnerBalance, isPartnerCommissionEligible } from "@/lib/partner-commissions";
 import { writePlatformAudit } from "@/lib/platform-audit";
 import {
   automatedPayoutIdempotencyKey,
@@ -37,7 +37,8 @@ export type PayoutSkipReason =
   | "zero_payable"
   | "already_paid_this_period"
   | "insufficient_platform_balance"
-  | "kill_switch";
+  | "kill_switch"
+  | "commission_ineligible";
 
 export type PartnerPayoutEvaluation = {
   partnerId: string;
@@ -109,15 +110,16 @@ type PartnerRow = {
   stripe_connect_requirements_summary: string | null;
   stripe_connect_mode: string | null;
   stripe_connect_account_status: string | null;
+  /** v108; missing before the migration ⇒ eligible. */
+  commission_eligible?: boolean | null;
 };
 
 export async function listActivePartnersForPayoutRun(): Promise<PartnerRow[]> {
   const raw = await createServiceClient();
   const { data, error } = await raw
     .from("partners")
-    .select(
-      "id, email, name, brand_name, status, stripe_connect_account_id, stripe_connect_payouts_enabled, stripe_connect_requirements_due, stripe_connect_requirements_summary, stripe_connect_mode, stripe_connect_account_status"
-    )
+    // "*" so commission_eligible is included once v108 runs without breaking before it.
+    .select("*")
     .eq("status", "active")
     .order("id", { ascending: true });
   if (error) throw new Error(error.message);
@@ -152,6 +154,10 @@ export async function evaluatePartnerForPayout(args: {
 
   if (partner.status !== "active") {
     return { ...base, eligible: false, skipReason: "partner_not_active" };
+  }
+  // Checked before any Stripe transfer; record_partner_payout enforces it again in the DB.
+  if (!isPartnerCommissionEligible(partner)) {
+    return { ...base, eligible: false, skipReason: "commission_ineligible" };
   }
 
   // Always load the ledger before Connect short-circuits so skip-email gating can
@@ -916,9 +922,7 @@ export async function loadPartnerNextPayoutInfo(partnerId: string): Promise<Part
   const raw = await createServiceClient();
   const { data: partner } = await raw
     .from("partners")
-    .select(
-      "id, email, name, brand_name, status, stripe_connect_account_id, stripe_connect_payouts_enabled, stripe_connect_requirements_due, stripe_connect_requirements_summary, stripe_connect_mode, stripe_connect_account_status"
-    )
+    .select("*")
     .eq("id", partnerId)
     .maybeSingle();
   if (!partner) {

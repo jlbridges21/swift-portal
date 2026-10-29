@@ -40,6 +40,7 @@ export async function POST(request: Request) {
       promoCode,
       actorEmail: profile.email ?? "",
       actorUserId: profile.id,
+      businessId: tenant.businessId,
     });
 
     if (!preview.ok || !preview.partnerId) {

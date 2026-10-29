@@ -24,6 +24,9 @@ import { PartnerReferralDiscountOverrideWarnings } from "@/components/platform/p
 import { PlatformPartnersProgramShell } from "@/components/platform/platform-partners-program-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
+import { cookies } from "next/headers";
+import { PARTNER_REF_COOKIE, verifyPartnerRefCookie } from "@/lib/partner-referral";
+import { AdminDemoSignupTools } from "@/components/platform/admin-demo-signup-tools";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +89,12 @@ export default async function PlatformPartnersPage() {
         Program metrics, partner performance, applications, manual payouts, and automated payout
         runs (OFF by default).
       </p>
+
+      <div className="mb-8">
+        <AdminDemoSignupTools
+          browserReferralCode={verifyPartnerRefCookie((await cookies()).get(PARTNER_REF_COOKIE)?.value)?.code ?? null}
+        />
+      </div>
 
       <PlatformPartnersProgramShell
         overview={

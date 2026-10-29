@@ -136,6 +136,12 @@ export type CreateBusinessInput = {
    * (source `manual`). Ignored on signup — signup uses the signed ref cookie.
    */
   referredByPartnerId?: string | null;
+  /**
+   * Signup only: a VERIFIED super admin demo signup (see admin-demo-signup.ts). Skips partner
+   * attribution for this one business — the browser's sp_partner_ref cookie is ignored, not
+   * cleared. Callers must set this only after resolveAdminDemoAuthorization() returned ok.
+   */
+  skipPartnerAttribution?: { actorId: string; actorEmail: string | null } | null;
 };
 
 export type CreateBusinessResult = {
@@ -255,6 +261,56 @@ async function tryAttributeNewBusiness(args: {
       detail: err instanceof Error ? err.message : String(err),
     });
     return false;
+  }
+}
+
+/**
+ * Admin demo signup: no attribution. Log which partner cookie (if any) was ignored so the
+ * skip is auditable. Never throws.
+ */
+async function recordAdminDemoAttributionSkip(args: {
+  businessId: string;
+  adminEmail: string;
+  actor: { actorId: string; actorEmail: string | null };
+}): Promise<void> {
+  try {
+    let ignoredCode: string | null = null;
+    let ignoredPartnerId: string | null = null;
+    try {
+      const jar = await cookies();
+      const claims = verifyPartnerRefCookie(jar.get(PARTNER_REF_COOKIE)?.value);
+      const partner = await resolveActivePartnerFromRefClaims(claims);
+      ignoredCode = claims?.code ?? null;
+      ignoredPartnerId = partner?.id ?? null;
+    } catch {
+      /* no cookie store */
+    }
+    const raw = await createServiceClient();
+    const { error } = await raw.from("partner_referral_attribution_events").insert({
+      business_id: args.businessId,
+      after_partner_id: ignoredPartnerId,
+      after_code_used: ignoredCode,
+      actor_user_id: args.actor.actorId,
+      actor_email: args.actor.actorEmail,
+      reason: "Super admin demo signup — partner referral skipped",
+      outcome: "skipped_admin_demo",
+      metadata: { signup_email: args.adminEmail },
+    });
+    if (error) console.warn("[partner-ref] admin demo skip event not recorded", error.message);
+    await writePlatformAudit({
+      actorUserId: args.actor.actorId,
+      actorEmail: args.actor.actorEmail,
+      action: "signup.admin_demo_bypass",
+      targetBusinessId: args.businessId,
+      targetType: "business",
+      targetId: args.businessId,
+      metadata: { ignored_referral_code: ignoredCode, ignored_partner_id: ignoredPartnerId },
+    });
+  } catch (err) {
+    console.error("[partner-ref] admin demo skip logging failed", {
+      businessId: args.businessId,
+      detail: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -417,13 +473,21 @@ export async function createBusinessForPlatform(
   let createdUserId: string | null = null;
 
   // Attribution is creation-only and must never block provisioning.
-  await tryAttributeNewBusiness({
-    businessId,
-    source,
-    adminEmail,
-    signupUserId: input.existingUserId ?? null,
-    referredByPartnerId: source === "platform" ? input.referredByPartnerId : null,
-  });
+  if (source === "signup" && input.skipPartnerAttribution) {
+    await recordAdminDemoAttributionSkip({
+      businessId,
+      adminEmail,
+      actor: input.skipPartnerAttribution,
+    });
+  } else {
+    await tryAttributeNewBusiness({
+      businessId,
+      source,
+      adminEmail,
+      signupUserId: input.existingUserId ?? null,
+      referredByPartnerId: source === "platform" ? input.referredByPartnerId : null,
+    });
+  }
 
   // First-party marketing attribution (docs/ANALYTICS.md). Self-serve only; never throws.
   if (source === "signup") await recordSignupAttribution(businessId);

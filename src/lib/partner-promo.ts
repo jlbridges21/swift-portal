@@ -29,6 +29,9 @@ export type AttributionEventOutcome =
   | "refused_self_referral"
   | "refused_partner_inactive"
   | "refused_invalid_code"
+  | "refused_removed_by_admin"
+  | "removed"
+  | "skipped_admin_demo"
   | "noop";
 
 export type PromoAttributionResult = {
@@ -82,6 +85,25 @@ async function insertAttributionEvent(args: {
     return null;
   }
   return (data?.id as string | undefined) ?? null;
+}
+
+/**
+ * True when a super admin removed this business's attribution to this partner (v108 archive).
+ * Missing table (before migration v108) ⇒ false.
+ */
+export async function wasReferralRemovedByAdmin(
+  businessId: string,
+  partnerId: string
+): Promise<boolean> {
+  const raw = await createServiceClient();
+  const { data, error } = await raw
+    .from("partner_referral_removals")
+    .select("id")
+    .eq("business_id", businessId)
+    .eq("partner_id", partnerId)
+    .limit(1);
+  if (error) return false;
+  return (data?.length ?? 0) > 0;
 }
 
 /** Case-insensitive active partner lookup by promo code. */
@@ -204,6 +226,29 @@ export async function applyPromoCodeAtCheckout(args: {
       promoCode: partner.promo_code,
       discountPartnerId: null,
       message: "That promo code is no longer available.",
+      eventId,
+    };
+  }
+
+  // A super admin removed this business from this partner — never re-attribute it to the same
+  // partner automatically (or give that partner's discount). Other partners' codes still work.
+  if (await wasReferralRemovedByAdmin(args.businessId, partner.id)) {
+    const eventId = await insertAttributionEvent({
+      businessId: args.businessId,
+      actorUserId: args.actorUserId,
+      actorEmail: args.actorEmail,
+      reason: "Promo code belongs to a partner this business was removed from by a super admin",
+      outcome: "refused_removed_by_admin",
+      afterPartnerId: partner.id,
+      afterCodeUsed: partner.promo_code,
+    });
+    return {
+      ok: false,
+      outcome: "refused_removed_by_admin",
+      partnerId: partner.id,
+      promoCode: partner.promo_code,
+      discountPartnerId: null,
+      message: "That promo code can’t be used on this account.",
       eventId,
     };
   }
@@ -483,6 +528,8 @@ export async function previewPromoCodeDiscount(args: {
   promoCode: string;
   actorEmail: string;
   actorUserId: string;
+  /** When set, refuse codes of a partner this business was removed from (matches checkout). */
+  businessId?: string | null;
 }): Promise<{
   ok: boolean;
   message: string | null;
@@ -529,6 +576,15 @@ export async function previewPromoCodeDiscount(args: {
     return {
       ok: false,
       message: "You can’t use your own partner promo code.",
+      partnerId: partner.id,
+      promoCode: partner.promo_code,
+      brandName: partner.brand_name,
+    };
+  }
+  if (args.businessId && (await wasReferralRemovedByAdmin(args.businessId, partner.id))) {
+    return {
+      ok: false,
+      message: "That promo code can’t be used on this account.",
       partnerId: partner.id,
       promoCode: partner.promo_code,
       brandName: partner.brand_name,

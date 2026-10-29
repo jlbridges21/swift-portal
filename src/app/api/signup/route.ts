@@ -15,6 +15,7 @@ import {
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { normalizeSignupIntent, parseSignupIntentCookie, SIGNUP_INTENT_COOKIE } from "@/lib/signup-intent";
 import { recordSignupJourney, signupProvisioningOverrides } from "@/lib/billing-journey";
+import { resolveAdminDemoAuthorization } from "@/lib/admin-demo-signup";
 import {
   newSignupRequestId,
   signupErrorResponse,
@@ -63,6 +64,8 @@ export async function POST(request: Request) {
     signupPath?: string;
     interval?: string;
     source?: string;
+    /** "Create without partner referral" — honored ONLY for a verified super admin (server-side). */
+    skipPartnerReferral?: boolean;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -187,6 +190,9 @@ export async function POST(request: Request) {
           h.get("cookie")?.split(/;\s*/).find((c) => c.startsWith(`${SIGNUP_INTENT_COOKIE}=`))?.split("=")[1]
         ) ?? normalizeSignupIntent(null);
 
+  // Admin demo bypass: the flag alone grants nothing — authorization is re-checked here.
+  const demo = body.skipPartnerReferral === true ? await resolveAdminDemoAuthorization() : null;
+
   try {
     const result = await createBusinessForPlatform(
       {
@@ -198,6 +204,7 @@ export async function POST(request: Request) {
         password,
         source: "signup",
         ...signupProvisioningOverrides(intent),
+        skipPartnerAttribution: demo?.ok ? { actorId: demo.actorId, actorEmail: demo.actorEmail } : null,
       },
       SYSTEM_SIGNUP_ACTOR
     );

@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSuperAdminPage } from "@/lib/admin-access";
 import { getPartnerById } from "@/lib/partners";
+import { isPartnerCommissionEligible } from "@/lib/partner-commissions";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { PlatformPartnerDetailNav } from "@/components/platform/platform-partner-detail-nav";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +34,12 @@ export default async function PlatformPartnerDetailLayout({
             </span>
             <span className="text-heading">{partner.brand_name}</span>
           </nav>
-          <h1 className="mt-1 text-2xl font-bold text-heading">{partner.brand_name}</h1>
+          <h1 className="mt-1 flex flex-wrap items-center gap-2 text-2xl font-bold text-heading">
+            {partner.brand_name}
+            {!isPartnerCommissionEligible(partner) ? (
+              <Badge variant="warning">Commissions off · demo account</Badge>
+            ) : null}
+          </h1>
           <p className="text-sm text-muted">
             {partner.name} · {partner.email} ·{" "}
             <span className="font-mono">{partner.referral_code}</span> ·{" "}

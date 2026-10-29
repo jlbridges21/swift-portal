@@ -165,6 +165,10 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/partner-referral.ts",
   "src/lib/partner-promo.ts",
   "src/lib/partner-commissions.ts",
+  // Super-admin partner referral removal + commission eligibility (platform-scoped partner tables).
+  "src/lib/partner-referral-admin.ts",
+  // Re-checks profiles.role = super_admin for the demo-signup referral bypass.
+  "src/lib/admin-demo-signup.ts",
   "src/lib/partner-dashboard.ts",
   "src/lib/partner-payouts.ts",
   "src/lib/partner-payout-automation.ts",

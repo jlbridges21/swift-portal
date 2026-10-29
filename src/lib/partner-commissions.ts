@@ -61,6 +61,14 @@ export type PartnerBalance = {
   stripeMode: "test" | "live";
 };
 
+/**
+ * Single source of truth for "can this partner earn / be paid commissions".
+ * Missing column (before migration v108) ⇒ eligible, matching the column default.
+ */
+export function isPartnerCommissionEligible(partner: { commission_eligible?: boolean | null }): boolean {
+  return partner.commission_eligible !== false;
+}
+
 function roundCommissionCents(sourceAmountCents: number, ratePct: number): number {
   return Math.round((sourceAmountCents * ratePct) / 100);
 }
@@ -153,7 +161,8 @@ export async function maybeCreateCommissionForPayment(args: {
 
   const { data: partner } = await raw
     .from("partners")
-    .select("id, status, commission_rate_pct, user_id, email")
+    // "*" so this keeps working before migration v108 adds commission_eligible.
+    .select("*")
     .eq("id", referral.partner_id)
     .maybeSingle();
   if (!partner) {
@@ -162,6 +171,11 @@ export async function maybeCreateCommissionForPayment(args: {
   // Policy: suspended partners earn nothing on NEW payments; existing rows stay.
   if (partner.status !== "active") {
     return { created: false, reason: "partner_suspended" };
+  }
+  // Commission-ineligible partners (e.g. the owner's demo account) stay enrolled but never
+  // accrue. Also enforced by the partner_commissions_eligibility_guard trigger (v108).
+  if (!isPartnerCommissionEligible(partner)) {
+    return { created: false, reason: "partner_commission_ineligible" };
   }
 
   // Self-referral guard (money-critical): never commission a business owned by the partner.
@@ -213,6 +227,13 @@ export async function maybeCreateCommissionForPayment(args: {
     // Unique on subscription_payment_id WHERE kind=commission — retry / race.
     if (error.code === "23505" || /duplicate|unique/i.test(error.message)) {
       return { created: false, reason: "already_commissioned" };
+    }
+    // DB guard (v108): partner turned ineligible or referral removed between read and insert.
+    if (/partner_commission_ineligible|partner_commission_no_active_referral/.test(error.message)) {
+      return {
+        created: false,
+        reason: error.message.includes("ineligible") ? "partner_commission_ineligible" : "no_referral",
+      };
     }
     throw new Error(error.message);
   }

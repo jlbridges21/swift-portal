@@ -441,7 +441,18 @@ export async function updateSession(request: NextRequest) {
       return applyPathCookie(redirectViaSessionContinue(request, dest), resolution);
     }
 
-    if (user && (path === "/login" || path === "/signup") && !businessUnavailable) {
+    // Super admin demo signup (/signup?source=admin-demo) stays on the page; the page and
+    // /api/signup re-verify super_admin server-side before offering or honoring the bypass.
+    const superAdminDemoSignup =
+      profile?.role === "super_admin" &&
+      path === "/signup" &&
+      request.nextUrl.searchParams.get("source") === "admin-demo";
+    if (
+      user &&
+      (path === "/login" || path === "/signup") &&
+      !businessUnavailable &&
+      !superAdminDemoSignup
+    ) {
       if (profile?.role === "super_admin") {
         const url = request.nextUrl.clone();
         url.pathname = "/platform";

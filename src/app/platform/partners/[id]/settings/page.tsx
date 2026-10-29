@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireSuperAdminPage } from "@/lib/admin-access";
 import { getPartnerById } from "@/lib/partners";
 import { PartnerPlatformSettingsForm } from "@/components/platform/partner-platform-settings-form";
+import { PartnerCommissionEligibilityCard } from "@/components/platform/partner-commission-eligibility-card";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,13 @@ export default async function PlatformPartnerSettingsPage({
           audit trail as editing from the partners list.
         </p>
       </div>
+      <PartnerCommissionEligibilityCard
+        partnerId={partner.id}
+        eligible={partner.commission_eligible !== false}
+        note={partner.commission_eligibility_note ?? null}
+        updatedAt={partner.commission_eligibility_updated_at ?? null}
+        migrationPending={partner.commission_eligible === undefined}
+      />
       <PartnerPlatformSettingsForm partner={partner} />
     </div>
   );

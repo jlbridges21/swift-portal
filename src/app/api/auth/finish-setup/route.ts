@@ -14,6 +14,7 @@ import {
 } from "@/lib/signup-validation";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { normalizeSignupIntent, parseSignupIntentCookie, SIGNUP_INTENT_COOKIE } from "@/lib/signup-intent";
+import { ADMIN_DEMO_SOURCE, resolveAdminDemoAuthorization } from "@/lib/admin-demo-signup";
 import { recordSignupJourney, signupProvisioningOverrides } from "@/lib/billing-journey";
 import {
   newSignupRequestId,
@@ -197,6 +198,11 @@ export async function POST(request: Request) {
       h.get("cookie")?.split(/;\s*/).find((c) => c.startsWith(`${SIGNUP_INTENT_COOKIE}=`))?.split("=")[1]
     ) ?? normalizeSignupIntent(null);
 
+  // Admin demo via Google: the choice rides in the intent source; the signed demo cookie (minted
+  // for a super admin) is what authorizes it — this session is the new customer, not the admin.
+  const demo =
+    intent.source === ADMIN_DEMO_SOURCE ? await resolveAdminDemoAuthorization() : null;
+
   try {
     const result = await createBusinessForPlatform(
       {
@@ -208,6 +214,7 @@ export async function POST(request: Request) {
         source: "signup",
         existingUserId: user.id,
         ...signupProvisioningOverrides(intent),
+        skipPartnerAttribution: demo?.ok ? { actorId: demo.actorId, actorEmail: demo.actorEmail } : null,
       },
       { id: user.id, email }
     );

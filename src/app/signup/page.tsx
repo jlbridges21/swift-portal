@@ -11,6 +11,7 @@ import { assertActivePlanKey, resolvePlanTrialDays, FALLBACK_TRIAL_DAYS } from "
 import { isOAuthAllowedHostname } from "@/lib/oauth-origins";
 import { warnOAuthCustomDomainAllowlistGaps } from "@/lib/oauth-allowlist-audit";
 import { intentFromSearchParams } from "@/lib/signup-intent";
+import { ADMIN_DEMO_SOURCE, resolveAdminDemoAuthorization } from "@/lib/admin-demo-signup";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,10 @@ export default async function SignupPage({
     console.warn("[signup] could not load studio trial_days — using fallback", err);
   }
 
+  // ?source=admin-demo grants nothing by itself: the option only appears for a verified super
+  // admin (signed demo cookie or super_admin session). Everyone else gets normal signup.
+  const demo = intent.source === ADMIN_DEMO_SOURCE ? await resolveAdminDemoAuthorization() : null;
+
   const h = await headers();
   const hostname =
     (h.get("x-forwarded-host") || h.get("host") || "").split(",")[0]?.split(":")[0]?.trim() ?? "";
@@ -53,6 +58,7 @@ export default async function SignupPage({
         oauthAllowed={oauthAllowed}
         initialIntent={intent}
         pricing={pricing}
+        adminDemo={demo?.ok ? { adminEmail: demo.actorEmail } : null}
       />
       <MarketingScrollReset />
       <MarketingAnalytics eventType="signup_start" />

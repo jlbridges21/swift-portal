@@ -112,6 +112,8 @@ export function formatPartnerPayoutSkipReason(
       return "ShootPortal could not complete the transfer right now. We will retry on the next run.";
     case "kill_switch":
       return "Payouts were paused by ShootPortal. No action needed on your side.";
+    case "commission_ineligible":
+      return "This is a demo partner account. Commissions are not earned or paid out.";
     default:
       return reason.replace(/_/g, " ");
   }

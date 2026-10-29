@@ -6,7 +6,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStripeMode } from "@/lib/stripe";
 import { writePlatformAudit } from "@/lib/platform-audit";
-import { computePartnerBalance } from "@/lib/partner-commissions";
+import { computePartnerBalance, isPartnerCommissionEligible } from "@/lib/partner-commissions";
 import { getPartnerById } from "@/lib/partners";
 import type { PartnerAccess } from "@/lib/partner-dashboard";
 import {
@@ -157,6 +157,11 @@ export async function recordPartnerPayout(input: RecordPayoutInput): Promise<{
 
   const partner = await getPartnerById(input.partnerId);
   if (!partner) throw new Error("Partner not found.");
+  if (!isPartnerCommissionEligible(partner)) {
+    throw new Error(
+      "This partner is not eligible for commissions (demo account). Payouts are blocked — turn commission eligibility back on in Settings first if this is intentional."
+    );
+  }
 
   const mode = getStripeMode();
   const raw = await createServiceClient();
