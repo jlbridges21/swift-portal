@@ -9,7 +9,6 @@ import { PartnerLandingPhoto } from "@/components/partner/partner-landing-photo"
 import { PLATFORM_BUSINESS_DEFAULTS, type PortalBrand } from "@/lib/portal-brand";
 import { PORTAL_LOGO_SIZE } from "@/lib/brand-logo-size";
 import type { ResolvedPartnerLandingContent } from "@/lib/partner-landing-resolve";
-import { TRIAL_SIGNUP_HREF } from "@/lib/signup-intent";
 
 /** ShootPortal chrome for partner landings — client-safe (no host/headers). */
 function shootPortalBrand(): PortalBrand {
@@ -101,7 +100,7 @@ export function PartnerLandingPublicView({ content }: Props) {
                 </p>
               ) : null}
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href={TRIAL_SIGNUP_HREF}>
+                <Link href="/signup">
                   <Button
                     className="min-h-11 px-6 hover:opacity-95"
                     style={{

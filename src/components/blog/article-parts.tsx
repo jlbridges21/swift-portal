@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { ArrowRight, Check, ExternalLink, Info, Lightbulb, Minus, TriangleAlert } from "lucide-react";
 import { blogPath, type BlogSlug } from "@/lib/blog/slugs";
 import { cn } from "@/lib/utils";
-import { TRIAL_SIGNUP_HREF } from "@/lib/signup-intent";
 
 /**
  * Building blocks for article bodies. Server components only; article
@@ -40,7 +39,7 @@ export function SiteLink({
     | "/photography-business-management-software";
   children: ReactNode;
 }) {
-  return <Link href={href === "/signup" ? TRIAL_SIGNUP_HREF : href}>{children}</Link>;
+  return <Link href={href}>{children}</Link>;
 }
 
 /** Outbound link to an official third-party source. */
@@ -315,7 +314,7 @@ export function InlineCta({
         </div>
         <div className="shrink-0">
           <Link
-            href={href === "/signup" ? TRIAL_SIGNUP_HREF : href}
+            href={href}
             data-sp-cta="blog:inline-cta"
             className="mk-btn inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#4F46E5] px-5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:bg-[#4338CA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0F172A]"
           >

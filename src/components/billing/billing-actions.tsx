@@ -161,8 +161,15 @@ export function StartTrialInsteadButton({ trialDays }: { trialDays: number }) {
 
   return (
     <div className="space-y-1">
-      <Button type="button" variant="link" className="h-auto p-0" disabled={loading} onClick={onClick}>
-        {loading ? "Starting your trial…" : `Start Free Trial — ${trialDays} days, no credit card required`}
+      <Button
+        type="button"
+        variant="outline"
+        className="min-h-11 whitespace-nowrap border-accent px-5 font-semibold text-accent"
+        disabled={loading}
+        onClick={onClick}
+        aria-label={`Start a ${trialDays}-day free trial, no credit card required`}
+      >
+        {loading ? "Starting your trial…" : "Start Free Trial"}
       </Button>
       {error && (
         <p className="text-xs text-destructive" role="alert">
@@ -184,5 +191,37 @@ export function CheckoutConfirmationRefresher({ attempt }: { attempt: number }) 
     }, 2500);
     return () => window.clearTimeout(t);
   }, [attempt]);
+  return null;
+}
+
+/**
+ * Subscribe Now signups: open Stripe Checkout for the plan they picked at signup, without an
+ * extra click. Runs once per account (the server only renders this before any checkout exists);
+ * on failure it falls back to the normal plan picker.
+ */
+export function AutoStartCheckout({ planKey, interval }: { planKey: string; interval: "monthly" | "annual" }) {
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/billing/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ planKey, interval, context: "signup" }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { url?: string };
+        if (!cancelled && res.ok && data.url) {
+          window.location.replace(data.url);
+          return;
+        }
+      } catch {
+        /* fall through to the picker */
+      }
+      if (!cancelled) window.location.replace(`/billing?checkout=error&plan=${interval}`);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [planKey, interval]);
   return null;
 }

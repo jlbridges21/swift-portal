@@ -11,7 +11,6 @@ import { getSolutionPage, type SolutionKey } from "@/lib/solutions";
 import type { SolutionImageAsset, SolutionVideoAsset } from "@/lib/solution-media";
 import { DemoVideo, LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
 import { cn } from "@/lib/utils";
-import { TRIAL_SIGNUP_HREF } from "@/lib/signup-intent";
 
 /**
  * Building blocks for the commercial "Solutions" landing pages. Server components;
@@ -49,7 +48,7 @@ export function TrialButton({
 }) {
   return (
     <Link
-      href={TRIAL_SIGNUP_HREF}
+      href="/signup"
       data-sp-cta={ctaId}
       className={cn(
         "group inline-flex items-center justify-center gap-2 rounded-xl bg-[#4F46E5] font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:bg-[#4338CA] hover:shadow-indigo-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",

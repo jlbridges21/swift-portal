@@ -36,7 +36,6 @@ import {
   FileText,
   UserPlus,
 } from "lucide-react";
-import { TRIAL_SIGNUP_HREF } from "@/lib/signup-intent";
 
 const FEATURES = [
   {
@@ -188,7 +187,7 @@ export function PlatformLanding({
               and payments in one simple portal built for real estate media professionals.
             </p>
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-              <Link href={TRIAL_SIGNUP_HREF} className="inline-flex" data-sp-cta="home:hero">
+              <Link href="/signup" className="inline-flex" data-sp-cta="home:hero">
                 <Button className="min-h-12 bg-[#4F46E5] px-7 text-base font-semibold text-white shadow-md shadow-indigo-500/25 hover:bg-[#4338CA] focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-2">
                   {trialDays > 0 ? `Start your ${trialDays}-day free trial` : "Start free"}
                 </Button>

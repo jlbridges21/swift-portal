@@ -7,7 +7,7 @@
  *
  * How it travels:
  * - /signup shows the plan picker (annual preselected); ?plan=monthly|annual preselects a plan.
- *   Free-trial CTAs link to /signup?intent=trial (TRIAL_SIGNUP_HREF).
+ *   Free-trial CTAs link to plain /signup too; ?intent=trial opens the trial form directly.
  * - The signup form sends it in the POST body and also writes SIGNUP_INTENT_COOKIE so Google
  *   sign-up (OAuth → /finish-setup) and existing-user login keep it.
  * - Once the business exists, the choice is stored on business_billing_journey (server-side),
@@ -55,7 +55,7 @@ export function intentFromSearchParams(params: {
   const explicit = first(params.intent);
   const source = parseSignupSource(first(params.source));
   if (explicit === "trial") return { path: "trial", interval: null, source };
-  // Default view is the plan picker (annual preselected); free-trial CTAs pass ?intent=trial.
+  // Default view is the plan picker (annual preselected); ?intent=trial opens the trial form.
   return { path: "subscribe", interval: interval ?? "annual", source };
 }
 
@@ -109,15 +109,15 @@ export function signupIntentCookieDomain(hostname: string, platformRootDomain: s
   return null;
 }
 
-/** Free-trial CTA target (plain /signup opens the plan picker). */
-export const TRIAL_SIGNUP_HREF = "/signup?intent=trial";
-
-/** /signup link for a marketing CTA. No interval ⇒ the free-trial view. */
+/**
+ * /signup link for a marketing CTA. Free-trial buttons also land on the plan picker (plain
+ * /signup); visitors choose "Start a 14-day free trial instead" there. ?intent=trial still works.
+ */
 export function signupHref(intent: { interval?: SignupInterval | null; source?: string | null } = {}): string {
   const params = new URLSearchParams();
   if (intent.interval) params.set("plan", intent.interval);
-  else params.set("intent", "trial");
   const source = parseSignupSource(intent.source);
   if (source) params.set("source", source);
-  return `/signup?${params.toString()}`;
+  const qs = params.toString();
+  return qs ? `/signup?${qs}` : "/signup";
 }

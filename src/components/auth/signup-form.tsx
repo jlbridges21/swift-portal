@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { suggestSlugFromName } from "@/lib/signup-validation";
 import { AuthDivider, GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { createClient } from "@/lib/supabase/client";
+import { resolvePostLoginRedirect } from "@/lib/auth-post-login-client";
 import {
   serializeSignupIntent,
   SIGNUP_INTENT_COOKIE,
@@ -94,7 +96,8 @@ export function SignupForm({
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ message: string; portalUrl: string } | null>(null);
+  const [done, setDone] = useState<{ message: string; portalUrl: string; confirmEmail: boolean } | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
     if (!slugTouched) {
@@ -155,6 +158,7 @@ export function SignupForm({
         suggestion?: string;
         message?: string;
         portalUrl?: string;
+        requiresEmailConfirmation?: boolean;
       };
       if (!res.ok) {
         if (data.suggestion) {
@@ -170,9 +174,28 @@ export function SignupForm({
               : "";
         throw new Error(`${base}${support}`);
       }
+      if (data.requiresEmailConfirmation === false) {
+        // No email step: sign in now and go straight on (Subscribe Now → secure checkout,
+        // free trial → portal setup). The login page is only a fallback.
+        setSigningIn(true);
+        const { error: signInError } = await createClient().auth.signInWithPassword({ email, password });
+        const destination = signInError ? null : await resolvePostLoginRedirect("/admin");
+        if (destination?.ok) {
+          window.location.assign(destination.redirect);
+          return;
+        }
+        setSigningIn(false);
+        setDone({
+          message: "Your account is ready. Log in with the email and password you just chose to continue.",
+          portalUrl: data.portalUrl || "",
+          confirmEmail: false,
+        });
+        return;
+      }
       setDone({
         message: data.message || "Check your email to confirm your account.",
         portalUrl: data.portalUrl || "",
+        confirmEmail: true,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
@@ -188,13 +211,13 @@ export function SignupForm({
         <main className="flex flex-1 items-center justify-center px-4 py-16">
           <Card className="w-full max-w-md">
             <CardHeader>
-              <CardTitle>Confirm your email</CardTitle>
+              <CardTitle>{done.confirmEmail ? "Confirm your email" : "Your account is ready"}</CardTitle>
               <CardDescription>{done.message}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
               {done.portalUrl && (
                 <p className="text-muted">
-                  After confirming, your portal will be{" "}
+                  {done.confirmEmail ? "After confirming, your portal will be" : "Your portal is"}{" "}
                   <a className="text-accent underline" href={done.portalUrl}>
                     {done.portalUrl}
                   </a>
@@ -392,8 +415,16 @@ export function SignupForm({
                 />
               </div>
               {error && <p className="text-sm text-red-600">{error}</p>}
-              <Button type="submit" variant="accent" className="w-full min-h-11" disabled={busy}>
-                {busy ? "Creating…" : subscribing ? "Create account & continue to payment" : "Create account"}
+              <Button type="submit" variant="accent" className="w-full min-h-11" disabled={busy || signingIn}>
+                {signingIn
+                  ? subscribing
+                    ? "Taking you to secure checkout…"
+                    : "Opening your portal…"
+                  : busy
+                    ? "Creating…"
+                    : subscribing
+                      ? "Create account & continue to payment"
+                      : "Create account"}
               </Button>
             </form>
             {trialDays > 0 && intent.path === "trial" && (

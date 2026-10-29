@@ -18,6 +18,7 @@ import { metadataFromBusiness } from "@/lib/site-metadata";
 import type { Metadata } from "next";
 import { getTenantContext } from "@/lib/tenant";
 import {
+  AutoStartCheckout,
   CheckoutConfirmationRefresher,
   ManageBillingButton,
   StartTrialInsteadButton,
@@ -224,6 +225,52 @@ export default async function BillingPage({
   const trialEndInFuture = Boolean(scheduled) || (sub.status === "trialing" && !sub.isExpired);
   const attempt = Math.max(0, Math.min(10, Number.parseInt(sp.attempt ?? "0", 10) || 0));
 
+  // Subscribe Now signup arriving for the first time: go straight to Stripe Checkout for the plan
+  // they picked. Only before any checkout was opened, so backing out of Stripe lands here instead.
+  const checkoutPlanKey = currentPlan?.key ?? publicPlans[0]?.key ?? null;
+  const autoCheckoutInterval =
+    awaitingFirst &&
+    !sp.checkout &&
+    !tenant.impersonating &&
+    anyModePriceConfigured &&
+    checkoutPlanKey &&
+    journey?.signup_path === "subscribe" &&
+    !journey.last_checkout_session_id
+      ? preferredInterval ?? journey.preferred_interval
+      : null;
+
+  if (autoCheckoutInterval && checkoutPlanKey) {
+    return (
+      <BrandProvider brand={brand}>
+        <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-accent/20 border-t-accent" aria-hidden />
+          <h1 className="mt-6 text-xl font-semibold text-heading" role="status" aria-live="polite">
+            Taking you to secure checkout…
+          </h1>
+          <p className="mt-2 max-w-sm text-sm text-muted">
+            {intervalLabel(autoCheckoutInterval)} plan · you&apos;ll enter your payment details on Stripe.
+          </p>
+          <AutoStartCheckout planKey={checkoutPlanKey} interval={autoCheckoutInterval} />
+        </div>
+      </BrandProvider>
+    );
+  }
+
+  const trialOffer =
+    awaitingFirst && trialOfferAvailable && offerTrialDays > 0 ? (
+      <Card className="mb-6 border-2 border-dashed border-accent/40 bg-accent/5">
+        <CardContent className="flex flex-col items-center gap-3 p-5 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div>
+            <p className="font-semibold text-heading">Not quite ready to subscribe?</p>
+            <p className="mt-0.5 text-sm text-muted">
+              Try ShootPortal free for {offerTrialDays} days. No credit card required.
+            </p>
+          </div>
+          <StartTrialInsteadButton trialDays={offerTrialDays} />
+        </CardContent>
+      </Card>
+    ) : null;
+
   return (
     <BrandProvider brand={brand}>
       {tenant.impersonating && (
@@ -286,9 +333,11 @@ export default async function BillingPage({
                 <CheckoutConfirmationRefresher attempt={attempt} />
               </CardContent>
             </Card>
-          ) : sp.checkout === "cancelled" && showPicker ? (
+          ) : (sp.checkout === "cancelled" || sp.checkout === "error") && showPicker ? (
             <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted" role="status">
-              Checkout was canceled and you haven&apos;t been charged. Pick a plan whenever you&apos;re ready.
+              {sp.checkout === "error"
+                ? "We couldn't open checkout automatically. Choose your plan below to continue."
+                : "Checkout was canceled and you haven't been charged. Pick a plan whenever you're ready."}
             </div>
           ) : null}
 
@@ -392,6 +441,7 @@ export default async function BillingPage({
                 </p>
               ) : (
                 <BillingPlansWithPromo
+                  afterPlans={trialOffer}
                   mode={pickerMode}
                   firstChargeDateLabel={pickerMode === "schedule" ? trialEndLabel : null}
                   preferredInterval={preferredInterval}
@@ -426,14 +476,6 @@ export default async function BillingPage({
                   })}
                 />
               )}
-              {awaitingFirst && trialOfferAvailable && offerTrialDays > 0 ? (
-                <div className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-sm text-muted">
-                  <p>Not quite ready? Try ShootPortal free for {offerTrialDays} days.</p>
-                  <div className="mt-1 flex justify-center">
-                    <StartTrialInsteadButton trialDays={offerTrialDays} />
-                  </div>
-                </div>
-              ) : null}
             </>
           )}
         </main>

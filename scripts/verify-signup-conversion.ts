@@ -84,8 +84,8 @@ const iso = (ms: number) => new Date(ms).toISOString();
   assert(signupIntentCookieDomain("localhost", "localhost:3000") === null, "localhost cookie stays host-only");
   assert(signupIntentCookieDomain("evil.com", "shootportal.app") === null, "foreign host never gets a Domain cookie");
   assert(signupHref({ interval: "annual", source: "demo" }) === "/signup?plan=annual&source=demo", "signupHref builds subscribe link");
-  assert(signupHref() === "/signup?intent=trial", "signupHref default is the trial link");
-  assert(signupHref({ source: "demo" }) === "/signup?intent=trial&source=demo", "trial link keeps attribution");
+  assert(signupHref() === "/signup", "trial buttons land on plain /signup (plan picker)");
+  assert(signupHref({ source: "demo" }) === "/signup?source=demo", "trial link keeps attribution");
 }
 
 // ---------------------------------------------------------------------------

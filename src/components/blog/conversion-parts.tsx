@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TRIAL_SIGNUP_HREF } from "@/lib/signup-intent";
 
 /**
  * Conversion building blocks for blog articles. Every product statement in
@@ -90,7 +89,7 @@ export function TrialCard({
           <div className="mt-2 text-[0.98rem] leading-relaxed text-[#475569]">{body}</div>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
-              href={TRIAL_SIGNUP_HREF}
+              href="/signup"
               data-sp-cta="blog:trial-card"
               className="mk-btn inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#4F46E5] px-5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:bg-[#4338CA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-2"
             >

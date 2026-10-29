@@ -43,9 +43,18 @@ type Props = {
   preferredInterval?: "monthly" | "annual" | null;
   /** Attribution only. */
   context?: string;
+  /** Rendered right under the plan cards (e.g. the free-trial alternative). */
+  afterPlans?: React.ReactNode;
 };
 
-export function BillingPlansWithPromo({ plans, mode, firstChargeDateLabel, preferredInterval, context = "billing" }: Props) {
+export function BillingPlansWithPromo({
+  plans,
+  mode,
+  firstChargeDateLabel,
+  preferredInterval,
+  context = "billing",
+  afterPlans,
+}: Props) {
   const [promo, setPromo] = useState<BillingPromoState>({
     promoCode: null,
     appliedLabel: null,
@@ -170,6 +179,8 @@ export function BillingPlansWithPromo({ plans, mode, firstChargeDateLabel, prefe
           : "You'll be charged today through Stripe's secure checkout. Cancel anytime from Manage billing."}
         {promo.promoCode ? ` Promo ${promo.promoCode} applied.` : ""}
       </p>
+
+      {afterPlans}
 
       {primaryPlan && (
         <div className="mb-8">

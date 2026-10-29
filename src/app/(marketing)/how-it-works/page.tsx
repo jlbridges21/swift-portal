@@ -22,7 +22,6 @@ import {
 } from "@/lib/entitlements";
 import { formatPlanPrice } from "@/lib/plan-catalog";
 import { Button } from "@/components/ui/button";
-import { TRIAL_SIGNUP_HREF } from "@/lib/signup-intent";
 
 export const revalidate = 300;
 
@@ -122,7 +121,7 @@ export default async function HowItWorksPage() {
                 project.
               </p>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-                <Link href={TRIAL_SIGNUP_HREF} className="inline-flex" data-sp-cta="hiw:hero">
+                <Link href="/signup" className="inline-flex" data-sp-cta="hiw:hero">
                   <Button className="min-h-12 bg-[#4F46E5] px-7 text-base font-semibold text-white shadow-md shadow-indigo-500/25 hover:bg-[#4338CA] focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-2">
                     {trialDays > 0 ? `Start your ${trialDays}-day free trial` : "Start free"}
                   </Button>
@@ -311,7 +310,7 @@ export default async function HowItWorksPage() {
                 schedule, messages, media, invoice, and payment all stay together.
               </p>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-                <Link href={TRIAL_SIGNUP_HREF} className="inline-flex" data-sp-cta="hiw:final">
+                <Link href="/signup" className="inline-flex" data-sp-cta="hiw:final">
                   <Button className="min-h-12 bg-[#4F46E5] px-7 text-base font-semibold text-white hover:bg-[#4338CA]">
                     Start your free trial
                   </Button>

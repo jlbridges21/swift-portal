@@ -705,7 +705,13 @@ export async function updateSession(request: NextRequest) {
     // super_admin is never gated; impersonation keeps access and shows state in UI.
     // -------------------------------------------------------------------------
     if (profile && profile.role !== "super_admin" && ownBusiness) {
-      const sub = getSubscriptionState(ownBusiness);
+      let sub = getSubscriptionState(ownBusiness);
+      if (sub.requiresPayment && profile.business_id) {
+        // The host lookup is cached per instance for 30s. Before blocking, re-read: the admin may
+        // have just paid or started their free trial on another instance.
+        const fresh = await lookupBusinessByIdFresh(profile.business_id);
+        if (fresh) sub = getSubscriptionState(fresh);
+      }
       if (sub.requiresPayment) {
         if (profile.role === "admin") {
           // Escape hatch only — see PAYWALL_API_EXEMPT_PREFIXES in subscription.ts.

@@ -17,6 +17,7 @@ import {
 } from "@/lib/auth-fragment";
 import { AuthDivider, GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { getCanonicalAuthConfirmUrl } from "@/lib/auth-confirm";
+import { resolvePostLoginRedirect } from "@/lib/auth-post-login-client";
 
 export function LoginForm({
   showRequestLink,
@@ -162,25 +163,14 @@ export function LoginForm({
       return;
     }
 
-    const destRes = await fetch("/api/auth/post-login", {
-      method: "POST",
-      credentials: "include",
-    });
-    const destBody = (await destRes.json().catch(() => ({}))) as {
-      redirect?: string;
-      error?: string;
-    };
-
-    if (!destRes.ok) {
-      setError(
-        destBody.error ||
-          "This portal is unavailable. Your business is suspended or no longer active."
-      );
+    const destination = await resolvePostLoginRedirect(redirect);
+    if (!destination.ok) {
+      setError(destination.error);
       setLoading(false);
       return;
     }
 
-    const dest = destBody.redirect || redirect;
+    const dest = destination.redirect;
     if (dest.startsWith("http://") || dest.startsWith("https://")) {
       window.location.assign(dest);
       return;
