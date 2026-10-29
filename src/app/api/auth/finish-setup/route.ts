@@ -13,6 +13,8 @@ import {
   suggestSlugFromName,
 } from "@/lib/signup-validation";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
+import { normalizeSignupIntent, parseSignupIntentCookie, SIGNUP_INTENT_COOKIE } from "@/lib/signup-intent";
+import { recordSignupJourney, signupProvisioningOverrides } from "@/lib/billing-journey";
 import {
   newSignupRequestId,
   signupErrorResponse,
@@ -189,6 +191,12 @@ export async function POST(request: Request) {
     });
   }
 
+  // Google sign-up: the choice made on /signup travels in the intent cookie through OAuth.
+  const intent =
+    parseSignupIntentCookie(
+      h.get("cookie")?.split(/;\s*/).find((c) => c.startsWith(`${SIGNUP_INTENT_COOKIE}=`))?.split("=")[1]
+    ) ?? normalizeSignupIntent(null);
+
   try {
     const result = await createBusinessForPlatform(
       {
@@ -199,13 +207,15 @@ export async function POST(request: Request) {
         adminName: ownerName,
         source: "signup",
         existingUserId: user.id,
+        ...signupProvisioningOverrides(intent),
       },
       { id: user.id, email }
     );
 
     allowSignupSuccess(ip);
+    await recordSignupJourney(result.businessId, intent, intent.path === "trial" ? new Date() : null);
 
-    const path = "/onboarding";
+    const path = intent.path === "subscribe" ? "/billing" : "/onboarding";
     return NextResponse.json({
       ok: true,
       slug: result.slug,

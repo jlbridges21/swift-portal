@@ -52,6 +52,7 @@ export const RESERVED_APP_ROUTE_SLUGS = [
   "signup",
   "staff",
   "finish-setup",
+  "get-started",
   "terms",
   // Marketing "Solutions" landing pages (src/lib/solutions.ts)
   "real-estate-photography-software",

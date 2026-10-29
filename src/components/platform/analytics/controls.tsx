@@ -10,6 +10,7 @@ const TABS = [
   { href: "/platform/analytics/acquisition", label: "Acquisition" },
   { href: "/platform/analytics/blog", label: "Blog" },
   { href: "/platform/analytics/accounts", label: "Accounts" },
+  { href: "/platform/analytics/conversions", label: "Conversions" },
   { href: "/platform/analytics/seo", label: "SEO" },
   { href: "/platform/analytics/definitions", label: "Definitions" },
   { href: "/platform/analytics/diagnostics", label: "Diagnostics" },

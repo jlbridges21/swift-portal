@@ -17,7 +17,11 @@ import { Logo } from "@/components/brand/logo";
 import { metadataFromBusiness } from "@/lib/site-metadata";
 import type { Metadata } from "next";
 import { getTenantContext } from "@/lib/tenant";
-import { ManageBillingButton } from "@/components/billing/billing-actions";
+import {
+  CheckoutConfirmationRefresher,
+  ManageBillingButton,
+  StartTrialInsteadButton,
+} from "@/components/billing/billing-actions";
 import { BillingPlansWithPromo } from "@/components/billing/billing-plans-with-promo";
 import {
   customerIdForMode,
@@ -25,6 +29,20 @@ import {
   loadBillingBusiness,
 } from "@/lib/stripe-billing";
 import { getStripeMode } from "@/lib/stripe";
+import { canStartDeferredTrial, isAwaitingFirstSubscription } from "@/lib/subscription";
+import {
+  confirmBillingCheckoutSession,
+  previewScheduledChargeCents,
+  trialHandoffMode,
+  type CheckoutConfirmation,
+} from "@/lib/billing-subscriptions";
+import { loadBillingJourney } from "@/lib/billing-journey";
+import { parseSignupInterval } from "@/lib/signup-intent";
+import { formatBillingDate, formatUsd, getScheduledPlan, intervalLabel } from "@/lib/trial-conversion";
+import { invalidateHostLookupCache } from "@/lib/host-resolution";
+import { subscriptionIdForMode } from "@/lib/stripe-billing";
+import { adminHomePath } from "@/lib/onboarding";
+import { assertActivePlanKey, resolvePlanTrialDays } from "@/lib/entitlements";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +57,20 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-export default async function BillingPage() {
+type BillingSearchParams = {
+  checkout?: string;
+  session_id?: string;
+  plan?: string;
+  attempt?: string;
+};
+
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<BillingSearchParams>;
+}) {
   const { tenant } = await requireAdminPage({ adminOnly: true });
+  const sp = await searchParams;
 
   let settings;
   try {
@@ -67,6 +97,20 @@ export default async function BillingPage() {
   }
 
   const brand = getPortalBrandFromSettings(settings);
+
+  // Back from Stripe Checkout: verify the session with Stripe (never the browser) and sync now,
+  // so a delayed webhook can't leave a paying customer on the paywall.
+  let confirmation: CheckoutConfirmation | null = null;
+  if (sp.checkout === "success" && sp.session_id) {
+    try {
+      confirmation = await confirmBillingCheckoutSession(sp.session_id, tenant.businessId);
+      if (confirmation.state === "activated" || confirmation.state === "scheduled") invalidateHostLookupCache();
+    } catch (err) {
+      console.error("[billing] checkout confirmation failed", err);
+      confirmation = { state: "processing" };
+    }
+  }
+
   const billingRow = await loadBillingBusiness(tenant.businessId);
   const stripeMode = getStripeMode();
   const publicPlans = await listPublicPlansWithModePrices(stripeMode);
@@ -97,33 +141,88 @@ export default async function BillingPage() {
     console.error("[billing] referral discount display resolve failed — showing list prices", err);
   }
 
-  const sub = getSubscriptionState({
+  // Fresh row (confirmation above may have just synced it); tenant.business can be cached.
+  const bizState = {
     ...tenant.business,
+    ...(billingRow
+      ? {
+          subscription_status: billingRow.subscription_status,
+          trial_ends_at: billingRow.trial_ends_at,
+          plan: billingRow.plan,
+        }
+      : {}),
     subscription_current_period_end: billingRow?.subscription_current_period_end,
     subscription_cancel_at_period_end: billingRow?.subscription_cancel_at_period_end,
-  });
-  const planLabel = currentPlan?.name || tenant.business.plan || "Unknown plan";
+  };
+  const sub = getSubscriptionState(bizState);
+  const planLabel = currentPlan?.name || bizState.plan || "Unknown plan";
   const hasStripeCustomer = Boolean(billingRow && customerIdForMode(billingRow, stripeMode));
+
+  const journey = await loadBillingJourney(tenant.businessId);
+  const scheduled = getScheduledPlan({ ...bizState, journey });
+  const awaitingFirst = !sub.isComped && isAwaitingFirstSubscription(bizState);
+  const trialOfferAvailable = Boolean(billingRow && canStartDeferredTrial(billingRow));
+  let offerTrialDays = 0;
+  if (trialOfferAvailable) {
+    try {
+      offerTrialDays = resolvePlanTrialDays(await assertActivePlanKey(bizState.plan || "studio"), "billing_trial_offer");
+    } catch {
+      offerTrialDays = 0;
+    }
+  }
+  const preferredInterval = parseSignupInterval(sp.plan) ?? journey?.preferred_interval ?? null;
+  const handoff = billingRow ? trialHandoffMode(billingRow) : { kind: "none" as const, trialEndUnix: null };
+  const pickerMode: "pay_now" | "schedule" = handoff.kind === "none" ? "pay_now" : "schedule";
+  const trialEndLabel = bizState.trial_ends_at ? formatBillingDate(bizState.trial_ends_at) : null;
+
+  let scheduledChargeCents: number | null = null;
+  if (scheduled && !scheduled.canceled) {
+    scheduledChargeCents =
+      (await previewScheduledChargeCents(billingRow ? subscriptionIdForMode(billingRow, stripeMode) : null)) ??
+      scheduled.amountCents;
+  }
+  const scheduledName = scheduled?.interval ? `${intervalLabel(scheduled.interval)} Plan` : "Plan";
+  const showPicker =
+    !sub.isComped && !scheduled && (sub.requiresPayment || sub.status === "trialing" || awaitingFirst);
 
   const headline = sub.isComped
     ? "You’re covered"
-    : sub.requiresPayment
-      ? "Reactivate your portal"
-      : sub.status === "trialing"
-        ? "You’re on a trial"
-        : sub.status === "past_due"
-          ? "Payment needs attention"
-          : "Billing";
+    : scheduled
+      ? scheduled.canceled
+        ? "Your scheduled plan was canceled"
+        : `Your ${scheduledName} Is Scheduled`
+      : awaitingFirst
+        ? "Complete your subscription"
+        : sub.requiresPayment
+          ? "Reactivate your portal"
+          : sub.status === "trialing"
+            ? "Love ShootPortal? Lock In Your Plan."
+            : sub.status === "past_due"
+              ? "Payment needs attention"
+              : "Billing";
 
   const description = sub.isComped
     ? "No payment required. Your studio keeps full access under complimentary ShootPortal access."
-    : sub.requiresPayment
-      ? sub.reason || "Subscribe to restore full admin access."
-      : sub.status === "trialing" && sub.daysLeftInTrial != null
-        ? `${sub.daysLeftInTrial} day${sub.daysLeftInTrial === 1 ? "" : "s"} left on your trial. Subscribe anytime — you won’t be charged until the trial ends.`
-        : sub.status === "past_due"
-          ? "Your account stays open while payment is retried. Update your card in Manage billing."
-          : sub.reason || "Your ShootPortal subscription is active.";
+    : scheduled
+      ? scheduled.canceled
+        ? `You won't be charged. Your free trial still ends on ${formatBillingDate(scheduled.firstPaymentAt)}. Use Manage billing to restore the plan before then.`
+        : `Your first payment${scheduledChargeCents != null ? ` of ${formatUsd(scheduledChargeCents)}` : ""} is scheduled for ${formatBillingDate(scheduled.firstPaymentAt)}, when your free trial ends. Until then, enjoy full access.`
+      : awaitingFirst
+        ? "Choose monthly or annual billing to activate your ShootPortal account. Your subscription starts as soon as payment goes through."
+        : sub.requiresPayment
+          ? sub.reason || "Subscribe to restore full admin access."
+          : sub.status === "trialing" && sub.daysLeftInTrial != null
+            ? "Choose your plan today. You won't be charged until your free trial ends."
+            : sub.status === "past_due"
+              ? "Your account stays open while payment is retried. Update your card in Manage billing."
+              : sub.reason || "Your ShootPortal subscription is active.";
+
+  const continuePath = adminHomePath({
+    onboardingCompletedAt: tenant.business.onboarding_completed_at,
+    onboardingState: tenant.business.onboarding_state,
+  });
+  const trialEndInFuture = Boolean(scheduled) || (sub.status === "trialing" && !sub.isExpired);
+  const attempt = Math.max(0, Math.min(10, Number.parseInt(sp.attempt ?? "0", 10) || 0));
 
   return (
     <BrandProvider brand={brand}>
@@ -150,8 +249,56 @@ export default async function BillingPage() {
           </div>
         </header>
         <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8 pb-16">
+          {confirmation && (confirmation.state === "activated" || confirmation.state === "scheduled") ? (
+            <Card className="mb-8 border-accent ring-2 ring-accent/15">
+              <CardContent className="space-y-3 p-6 text-center sm:p-8">
+                <p className="text-sm font-semibold uppercase tracking-wide text-accent">
+                  {confirmation.state === "activated" ? "Payment complete" : "Plan locked in"}
+                </p>
+                <h2 className="text-2xl font-bold text-heading">
+                  {confirmation.state === "activated"
+                    ? "You're all set — welcome to ShootPortal!"
+                    : `Your ${confirmation.interval ? intervalLabel(confirmation.interval) : ""} Plan Is Scheduled`.replace("  ", " ")}
+                </h2>
+                <p className="text-muted">
+                  {confirmation.state === "activated"
+                    ? `Your ${confirmation.interval ? `${intervalLabel(confirmation.interval).toLowerCase()} ` : ""}subscription is active. A receipt is on its way to your email.`
+                    : confirmation.firstPaymentAt
+                      ? `You won't be charged until ${formatBillingDate(confirmation.firstPaymentAt)}, when your free trial ends. Keep exploring in the meantime.`
+                      : "You won't be charged until your free trial ends."}
+                </p>
+                <Link href={continuePath === "/onboarding" ? "/onboarding" : "/admin"} className="inline-block pt-2">
+                  <Button variant="accent" className="min-h-11 px-6">
+                    {continuePath === "/onboarding" ? "Set up your studio" : "Go to your dashboard"}
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          ) : confirmation?.state === "processing" ? (
+            <Card className="mb-8" role="status" aria-live="polite">
+              <CardContent className="p-6 text-center">
+                <p className="font-semibold text-heading">Confirming your payment…</p>
+                <p className="mt-1 text-sm text-muted">
+                  {attempt >= 6
+                    ? "This is taking longer than usual. Refresh in a minute — you won't be charged twice."
+                    : "This only takes a moment. Please keep this page open."}
+                </p>
+                <CheckoutConfirmationRefresher attempt={attempt} />
+              </CardContent>
+            </Card>
+          ) : sp.checkout === "cancelled" && showPicker ? (
+            <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted" role="status">
+              Checkout was canceled and you haven&apos;t been charged. Pick a plan whenever you&apos;re ready.
+            </div>
+          ) : null}
+
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-heading sm:text-3xl">{headline}</h1>
+            {sub.status === "trialing" && !sub.isExpired && sub.daysLeftInTrial != null && !scheduled ? (
+              <p className="mt-3 inline-flex rounded-full bg-accent/10 px-3 py-1 text-sm font-semibold text-accent">
+                Free Trial — {sub.daysLeftInTrial} Day{sub.daysLeftInTrial === 1 ? "" : "s"} Remaining
+              </p>
+            ) : null}
             <p className="mt-2 text-muted">{description}</p>
           </div>
 
@@ -170,7 +317,9 @@ export default async function BillingPage() {
                 )}
               </p>
               <div className="flex flex-wrap gap-2">
-                <Badge variant={sub.requiresPayment ? "warning" : "success"}>{sub.status}</Badge>
+                <Badge variant={sub.requiresPayment ? "warning" : "success"}>
+                  {scheduled ? "scheduled" : awaitingFirst ? "awaiting payment" : sub.status}
+                </Badge>
                 {sub.isComped && (
                   <Badge variant="success">
                     {tenant.business.comped_until == null ? "No payment required" : "Complimentary"}
@@ -198,12 +347,13 @@ export default async function BillingPage() {
                   </p>
                 </div>
               )}
-              {!sub.isComped && tenant.business.trial_ends_at && (
+              {!sub.isComped && bizState.trial_ends_at && (
                 <p className="text-muted">
-                  Trial ends {new Date(tenant.business.trial_ends_at).toLocaleString()}
+                  Trial {trialEndInFuture ? "ends" : "ended"}{" "}
+                  {new Date(bizState.trial_ends_at).toLocaleString()}
                 </p>
               )}
-              {!sub.isComped && billingRow?.subscription_current_period_end && (
+              {!sub.isComped && !scheduled && billingRow?.subscription_current_period_end && (
                 <p className="text-muted">
                   Current period ends{" "}
                   {new Date(billingRow.subscription_current_period_end).toLocaleString()}
@@ -220,11 +370,17 @@ export default async function BillingPage() {
             </CardContent>
           </Card>
 
-          {!sub.isComped && (
+          {!sub.isComped && !showPicker && hasStripeCustomer && (
+            <p className="mb-8 text-sm text-muted">
+              {scheduled && !scheduled.canceled
+                ? "Need to update your card or cancel before your first payment? Use Manage billing."
+                : "Use Manage billing to update your payment method, see invoices, or cancel."}
+            </p>
+          )}
+
+          {showPicker && (
             <>
-              <h2 className="mb-3 text-lg font-semibold text-heading">
-                {publicPlans.length === 1 ? "Plan" : "Plans"}
-              </h2>
+              <h2 className="mb-3 text-lg font-semibold text-heading">Choose your plan</h2>
               {!anyModePriceConfigured ? (
                 <p className="mb-8 text-sm text-muted">
                   Billing isn&apos;t set up for this studio yet. Contact ShootPortal support.
@@ -236,9 +392,9 @@ export default async function BillingPage() {
                 </p>
               ) : (
                 <BillingPlansWithPromo
-                  currentPlanKey={tenant.business.plan}
-                  requiresPayment={sub.requiresPayment}
-                  status={sub.status}
+                  mode={pickerMode}
+                  firstChargeDateLabel={pickerMode === "schedule" ? trialEndLabel : null}
+                  preferredInterval={preferredInterval}
                   plans={publicPlans.map((plan) => {
                     const cookieMonthlyDisplay =
                       monthlyReferralDiscount?.eligible && plan.price_monthly_cents != null
@@ -270,6 +426,14 @@ export default async function BillingPage() {
                   })}
                 />
               )}
+              {awaitingFirst && trialOfferAvailable && offerTrialDays > 0 ? (
+                <div className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-sm text-muted">
+                  <p>Not quite ready? Try ShootPortal free for {offerTrialDays} days.</p>
+                  <div className="mt-1 flex justify-center">
+                    <StartTrialInsteadButton trialDays={offerTrialDays} />
+                  </div>
+                </div>
+              ) : null}
             </>
           )}
         </main>

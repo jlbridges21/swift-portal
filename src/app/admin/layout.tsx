@@ -14,6 +14,10 @@ import { parseSurfaceMode } from "@/lib/brand-color";
 import { showFinishSetupBanner } from "@/lib/onboarding";
 import { staffCan, staffVisibleNavAreas } from "@/lib/staff-access";
 import { w9CountryDecision } from "@/lib/w9-country";
+import { TrialConversionModal } from "@/components/admin/trial-conversion-modal";
+import { loadTrialUiContext } from "@/lib/billing-journey";
+import { decideTrialModal, formatBillingDate, getScheduledPlan, trialModalCopy } from "@/lib/trial-conversion";
+import { assertActivePlanKey, resolvePlanTrialDays } from "@/lib/entitlements";
 import type { Metadata, Viewport } from "next";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -61,6 +65,47 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       impersonating: tenant.impersonating,
     });
 
+  // Trial / scheduled-plan UI for owner admins. Best-effort: any failure just hides it.
+  const subStatus = tenant.business.subscription_status;
+  const wantsTrialUi = !isStaff && (subStatus === "trialing" || subStatus === "active");
+  const ownerTrialing = wantsTrialUi && subStatus === "trialing" && profile.role === "admin" && !tenant.impersonating;
+  const trialUi = wantsTrialUi
+    ? await loadTrialUiContext(tenant.businessId, profile.id, { needModalState: ownerTrialing })
+    : null;
+  const scheduledPlan = trialUi ? getScheduledPlan({ ...tenant.business, journey: trialUi.journey }) : null;
+  let trialModal: React.ReactNode = null;
+  if (ownerTrialing && trialUi) {
+    const decision = decideTrialModal({
+      subscription_status: subStatus,
+      trial_ends_at: tenant.business.trial_ends_at,
+      trialStartedAt: trialUi.journey?.trial_started_at ?? trialUi.businessCreatedAt,
+      scheduled: Boolean(scheduledPlan),
+      seen: trialUi.seen,
+    });
+    let plan: Awaited<ReturnType<typeof assertActivePlanKey>> | null = null;
+    if (decision.show) {
+      try {
+        plan = await assertActivePlanKey(tenant.business.plan || "studio");
+      } catch (err) {
+        console.warn("[admin] trial modal skipped", err instanceof Error ? err.message : err);
+      }
+    }
+    if (decision.show && plan) {
+      trialModal = (
+        <TrialConversionModal
+          milestone={decision.milestone}
+          trialDay={decision.trialDay}
+          copy={trialModalCopy(decision.milestone, decision.msRemaining, resolvePlanTrialDays(plan, "trial_modal"))}
+          planKey={plan.key}
+          monthlyCents={plan.price_monthly_cents}
+          annualPerMonthCents={plan.price_annual_cents}
+          trialEndLabel={formatBillingDate(decision.trialEndsAt)}
+          canCheckout={plan.is_public && plan.key !== "founding"}
+        />
+      );
+    }
+  }
+
   return (
     <BrandProvider brand={brand} surfaceMode={parseSurfaceMode(settings.business.surfaceMode)}>
       <AdminCapabilitiesProvider
@@ -92,8 +137,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             compedUntil={tenant.business.comped_until}
             subscriptionCurrentPeriodEnd={tenant.business.subscription_current_period_end}
             subscriptionCancelAtPeriodEnd={tenant.business.subscription_cancel_at_period_end}
+            scheduled={scheduledPlan}
           />
         )}
+        {trialModal}
         {finishBanner ? <FinishSetupBanner /> : null}
         <AdminShell
           showPartner={showPartner}

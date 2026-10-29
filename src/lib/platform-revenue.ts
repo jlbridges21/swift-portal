@@ -397,3 +397,27 @@ export async function listClientPaymentsProcessed(
 
   return { totalCents, byBusiness, lines };
 }
+
+/**
+ * Paid (amount > 0) ShootPortal subscription invoices for a business other than `excludeInvoiceId`.
+ * Used to tell a first payment (trial converted / new subscriber) from a renewal. Errors → -1
+ * (treated as "not first", so conversion events are never double-counted).
+ */
+export async function countPriorPaidSubscriptionInvoices(
+  businessId: string,
+  excludeInvoiceId: string
+): Promise<number> {
+  try {
+    const supabase = await createServiceClient();
+    const { count, error } = await supabase
+      .from("platform_subscription_payments")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .gt("amount_paid_cents", 0)
+      .neq("stripe_invoice_id", excludeInvoiceId);
+    if (error) return -1;
+    return count ?? 0;
+  } catch {
+    return -1;
+  }
+}

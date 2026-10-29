@@ -222,6 +222,8 @@ export const PAYWALL_API_EXEMPT_PREFIXES = [
   "/api/billing/checkout",
   /** Customer Portal: update card, invoices, resubscribe, cancel. */
   "/api/billing/portal",
+  /** Subscribe Now account that never paid: one-time "start my free trial instead". */
+  "/api/billing/start-trial",
   /** Anonymous public project link — must work even when subscription paused. */
   "/api/public",
 ] as const;
@@ -260,4 +262,37 @@ export function isClientMutatingApi(pathname: string, method: string): boolean {
   if (pathname === "/api/request" || pathname.startsWith("/api/request/")) return true;
   if (/^\/api\/projects\/[^/]+\/messages\/?$/.test(pathname)) return true;
   return false;
+}
+
+/**
+ * A Subscribe Now signup that has not paid yet: created without a trial (trial_ends_at NULL,
+ * status trial_expired) so the paywall IS the checkout. Distinct from an expired trial.
+ */
+export function isAwaitingFirstSubscription(business: {
+  subscription_status?: string | null;
+  trial_ends_at?: string | null;
+}): boolean {
+  return business.subscription_status === "trial_expired" && !business.trial_ends_at;
+}
+
+/**
+ * The one-time "start my free trial instead" fallback: self-serve signup, never trialed,
+ * never subscribed. trial_ends_at is only ever NULL before a trial starts, so this cannot
+ * restart or extend an existing trial.
+ */
+export function canStartDeferredTrial(business: {
+  created_via?: string | null;
+  subscription_status?: string | null;
+  trial_ends_at?: string | null;
+  stripe_subscription_id?: string | null;
+  stripe_subscription_id_test?: string | null;
+  stripe_subscription_id_live?: string | null;
+}): boolean {
+  return (
+    business.created_via === "signup" &&
+    isAwaitingFirstSubscription(business) &&
+    !business.stripe_subscription_id &&
+    !business.stripe_subscription_id_test &&
+    !business.stripe_subscription_id_live
+  );
 }

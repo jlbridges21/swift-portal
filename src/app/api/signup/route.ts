@@ -13,6 +13,8 @@ import {
   suggestSlugFromName,
 } from "@/lib/signup-validation";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
+import { normalizeSignupIntent, parseSignupIntentCookie, SIGNUP_INTENT_COOKIE } from "@/lib/signup-intent";
+import { recordSignupJourney, signupProvisioningOverrides } from "@/lib/billing-journey";
 import {
   newSignupRequestId,
   signupErrorResponse,
@@ -57,6 +59,10 @@ export async function POST(request: Request) {
     email?: string;
     password?: string;
     ownerName?: string;
+    /** "trial" (default) | "subscribe" — Subscribe Now accounts are created without a trial. */
+    signupPath?: string;
+    interval?: string;
+    source?: string;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -173,6 +179,14 @@ export async function POST(request: Request) {
     });
   }
 
+  // Body is primary; the intent cookie covers older cached forms.
+  const intent =
+    body.signupPath !== undefined
+      ? normalizeSignupIntent(body)
+      : parseSignupIntentCookie(
+          h.get("cookie")?.split(/;\s*/).find((c) => c.startsWith(`${SIGNUP_INTENT_COOKIE}=`))?.split("=")[1]
+        ) ?? normalizeSignupIntent(null);
+
   try {
     const result = await createBusinessForPlatform(
       {
@@ -183,11 +197,13 @@ export async function POST(request: Request) {
         adminName: ownerName,
         password,
         source: "signup",
+        ...signupProvisioningOverrides(intent),
       },
       SYSTEM_SIGNUP_ACTOR
     );
 
     allowSignupSuccess(ip);
+    await recordSignupJourney(result.businessId, intent, intent.path === "trial" ? new Date() : null);
 
     return NextResponse.json({
       ok: true,
@@ -195,8 +211,11 @@ export async function POST(request: Request) {
       portalUrl: result.portalUrl,
       requiresEmailConfirmation: result.requiresEmailConfirmation !== false,
       requestId,
+      signupPath: intent.path,
       message:
-        "Check your email to confirm your account, then sign in to open your portal.",
+        intent.path === "subscribe"
+          ? "Check your email to confirm your account, then sign in to finish your subscription."
+          : "Check your email to confirm your account, then sign in to open your portal.",
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

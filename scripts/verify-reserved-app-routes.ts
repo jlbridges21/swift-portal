@@ -29,6 +29,7 @@ function topLevelRouteSegments(): string[] {
 
 const CRITICAL = [
   "pricing",
+  "get-started",
   "signup",
   "login",
   "admin",

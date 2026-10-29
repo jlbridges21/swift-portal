@@ -94,6 +94,11 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/analytics/lifecycle.ts",
   "src/lib/analytics/report-data.ts",
   "src/app/api/cron/analytics-retention/route.ts",
+  // Signup paths / trial conversion (docs/SIGNUP-CONVERSION.md): platform-only v107 tables keyed
+  // by business_id, super-admin conversion report, one-time deferred-trial start (own business).
+  "src/lib/billing-journey.ts",
+  "src/lib/analytics/conversions.ts",
+  "src/app/api/billing/start-trial/route.ts",
   // SEO Growth Engine: super-admin-only reads/writes of platform_audit_log (seo.* actions).
   "src/lib/seo-growth/store.ts",
   "src/lib/supabase/server.ts",

@@ -34,6 +34,13 @@ import {
   paywallApiBody,
 } from "@/lib/subscription";
 import { NEEDS_PASSWORD_COOKIE } from "@/lib/auth-password-gate";
+import { getPlatformRootDomain } from "@/lib/site-metadata";
+import {
+  parseSignupIntentCookie,
+  parseSignupInterval,
+  SIGNUP_INTENT_COOKIE,
+  signupIntentCookieDomain,
+} from "@/lib/signup-intent";
 import { needsOnboardingRedirect } from "@/lib/onboarding";
 import {
   isActiveStaff,
@@ -453,7 +460,14 @@ export async function updateSession(request: NextRequest) {
           onboardingState: ownBusiness.onboarding_state,
           role: profile.role,
         });
-      const destPath = adminPaywalled
+      // Signed-in admin clicked Subscribe Now (/signup?plan=…): go straight to plan checkout.
+      const subscribeInterval =
+        profile?.role === "admin" && path === "/signup"
+          ? parseSignupInterval(request.nextUrl.searchParams.get("plan"))
+          : null;
+      const destPath = subscribeInterval
+        ? `/billing?plan=${subscribeInterval}`
+        : adminPaywalled
         ? "/billing"
         : needsWizard
           ? "/onboarding"
@@ -711,6 +725,29 @@ export async function updateSession(request: NextRequest) {
             );
           }
         }
+      }
+    }
+
+    // Subscribe Now intent carried through an existing-user login (cookie set on /signup for the
+    // platform root domain). A trialing admin landing on /admin or /onboarding is sent to plan
+    // selection once; the cookie is then cleared. Paywalled accounts already land on /billing.
+    if (
+      !isApi &&
+      method === "GET" &&
+      profile?.role === "admin" &&
+      ownBusiness &&
+      ownBusiness.subscription_status === "trialing" &&
+      (path === "/admin" || path === "/onboarding")
+    ) {
+      const intent = parseSignupIntentCookie(request.cookies.get(SIGNUP_INTENT_COOKIE)?.value);
+      if (intent?.path === "subscribe") {
+        const url = request.nextUrl.clone();
+        url.pathname = `${resolution.pathPrefix}/billing`;
+        url.search = intent.interval ? `?plan=${intent.interval}` : "";
+        const res = NextResponse.redirect(url);
+        const domain = signupIntentCookieDomain(inboundHost(request), getPlatformRootDomain());
+        res.cookies.set(SIGNUP_INTENT_COOKIE, "", { path: "/", maxAge: 0, ...(domain ? { domain } : {}) });
+        return applyPathCookie(res, resolution);
       }
     }
 

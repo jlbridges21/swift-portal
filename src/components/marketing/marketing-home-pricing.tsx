@@ -9,6 +9,8 @@ import {
 } from "@/lib/plan-catalog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { signupHref } from "@/lib/signup-intent";
+import { formatUsd } from "@/lib/trial-conversion";
 
 type BillingInterval = "monthly" | "annual";
 
@@ -126,19 +128,42 @@ export function MarketingHomePricing({
           ) : null}
         </div>
 
-        {trialDays > 0 ? (
-          <p className="mt-4 text-sm font-medium text-[#0F172A]">
-            {trialDays} days free. No credit card required.
-          </p>
-        ) : null}
+        <p className="mt-4 text-sm text-[#475569]">Cancel anytime.</p>
 
-        <p className="mt-2 text-sm text-[#475569]">Cancel anytime.</p>
-
-        <Link href="/signup" className="mt-6 block" data-sp-cta={ctaId}>
-          <Button className="min-h-12 w-full bg-[#4F46E5] text-base font-semibold text-white hover:bg-[#4338CA]">
-            Start your free trial
-          </Button>
-        </Link>
+        {/* Two clear paths: try free first, or pay now and skip the trial. */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          {trialDays > 0 ? (
+            <div>
+              <Link href={signupHref()} className="block" data-sp-cta={ctaId}>
+                <Button className="min-h-12 w-full bg-[#4F46E5] text-base font-semibold text-white hover:bg-[#4338CA]">
+                  Start Free Trial
+                </Button>
+              </Link>
+              <p className="mt-2 text-center text-xs text-[#475569]">
+                {trialDays} days free. No credit card required.
+              </p>
+            </div>
+          ) : null}
+          <div className={trialDays > 0 ? undefined : "sm:col-span-2"}>
+            <Link
+              href={signupHref({ interval })}
+              className="block"
+              data-sp-cta={ctaId ? `${ctaId}_subscribe_${interval}` : undefined}
+            >
+              <Button
+                variant="outline"
+                className="min-h-12 w-full border-[#4F46E5] bg-white text-base font-semibold text-[#4F46E5] hover:bg-[#EEF2FF]"
+              >
+                Subscribe Now
+              </Button>
+            </Link>
+            <p className="mt-2 text-center text-xs text-[#475569]">
+              {interval === "annual" && annualMonthlyCents != null
+                ? `${formatUsd(annualMonthlyCents * 12)}/year, billed today. No trial needed.`
+                : `${formatUsd(monthlyCents)}/month, billed today. No trial needed.`}
+            </p>
+          </div>
+        </div>
       </article>
 
       <p className="mt-6 text-center text-sm text-[#475569]">

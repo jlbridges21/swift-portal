@@ -17,9 +17,20 @@ function logBilling(message: string, data: Record<string, unknown>) {
 }
 
 async function handleSubscriptionObject(
-  subscription: Stripe.Subscription,
+  eventSubscription: Stripe.Subscription,
   source: string
 ): Promise<void> {
+  // Events can arrive late or out of order — always apply Stripe's CURRENT state.
+  let subscription = eventSubscription;
+  try {
+    subscription = await getStripe().stripe.subscriptions.retrieve(eventSubscription.id);
+  } catch (err) {
+    logBilling("fresh subscription retrieve failed — using event payload", {
+      source,
+      subscriptionId: eventSubscription.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
   const result = await syncFromStripeSubscription(subscription, source);
   logBilling("subscription sync", {
     source,
@@ -112,6 +123,22 @@ export async function POST(request: Request) {
 
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+        if (session.mode === "setup" && isShootPortalBillingMetadata(session.metadata)) {
+          // Trial user picked a plan with < 48h of trial left: card collected, now create the
+          // subscription that bills at the stored trial end (idempotent per session).
+          const { createSubscriptionFromSetupSession } = await import("@/lib/billing-subscriptions");
+          const created = await createSubscriptionFromSetupSession(session, event.type);
+          logBilling("setup checkout → scheduled subscription", {
+            sessionId: session.id,
+            ok: created.ok,
+            reason: created.reason,
+            subscriptionId: created.subscription?.id,
+          });
+          if (!created.ok) break; // not marked processed → Stripe retries
+          recordEvent = true;
+          recordBusinessId = session.metadata?.business_id ?? null;
+          break;
+        }
         if (session.mode !== "subscription") {
           logBilling("rejected — not subscription checkout (tenant→client must use payments webhook)", {
             eventType: event.type,
@@ -156,6 +183,13 @@ export async function POST(request: Request) {
 
         const { stripe } = getStripe();
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        // Second checkout completed while another plan is already live → cancel + refund it.
+        const { cancelIfDuplicateSubscription } = await import("@/lib/billing-subscriptions");
+        if (await cancelIfDuplicateSubscription(subscription, attribution.business)) {
+          recordEvent = true;
+          recordBusinessId = attribution.business.id;
+          break;
+        }
         await handleSubscriptionObject(subscription, event.type);
         recordEvent = true;
         recordBusinessId = attribution.business.id;
@@ -186,6 +220,13 @@ export async function POST(request: Request) {
         }
 
         await handleSubscriptionObject(subscription, event.type);
+        const invoiceBusinessId = subscription.metadata.business_id ?? null;
+        let isFirstPaidInvoice = false;
+        if (event.type === "invoice.paid" && invoiceBusinessId && (invoice.amount_paid ?? 0) > 0) {
+          // Before the ledger write below: no earlier paid ShootPortal invoice ⇒ first payment.
+          const { countPriorPaidSubscriptionInvoices } = await import("@/lib/platform-revenue");
+          isFirstPaidInvoice = (await countPriorPaidSubscriptionInvoices(invoiceBusinessId, invoice.id ?? "")) === 0;
+        }
         if (event.type === "invoice.paid") {
           const businessId = subscription.metadata.business_id ?? null;
           if (businessId) {
@@ -199,6 +240,16 @@ export async function POST(request: Request) {
               ...recorded,
             });
           }
+        }
+        if (invoiceBusinessId) {
+          const { recordInvoiceConversion } = await import("@/lib/billing-subscriptions");
+          await recordInvoiceConversion({
+            invoice,
+            subscription,
+            businessId: invoiceBusinessId,
+            eventType: event.type,
+            isFirstPaidInvoice,
+          });
         }
         recordEvent = true;
         recordBusinessId = subscription.metadata.business_id ?? null;

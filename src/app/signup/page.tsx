@@ -10,18 +10,31 @@ import { SignupForm } from "@/components/auth/signup-form";
 import { assertActivePlanKey, resolvePlanTrialDays, FALLBACK_TRIAL_DAYS } from "@/lib/entitlements";
 import { isOAuthAllowedHostname } from "@/lib/oauth-origins";
 import { warnOAuthCustomDomainAllowlistGaps } from "@/lib/oauth-allowlist-audit";
+import { intentFromSearchParams } from "@/lib/signup-intent";
 
 export const dynamic = "force-dynamic";
 
-export default async function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ plan?: string; source?: string; intent?: string }>;
+}) {
   const host = await getPublicHostContext();
   // Defense in depth — middleware also blocks tenant hosts.
   if (host.kind === "tenant") notFound();
 
+  // ?plan=monthly|annual ⇒ Subscribe Now path; no plan ⇒ free trial (unchanged default).
+  const intent = intentFromSearchParams(await searchParams);
+
   let trialDays = FALLBACK_TRIAL_DAYS;
+  let pricing: { monthlyCents: number | null; annualPerMonthCents: number | null } = {
+    monthlyCents: null,
+    annualPerMonthCents: null,
+  };
   try {
     const studio = await assertActivePlanKey("studio");
     trialDays = resolvePlanTrialDays(studio, "signup_page");
+    pricing = { monthlyCents: studio.price_monthly_cents, annualPerMonthCents: studio.price_annual_cents };
   } catch (err) {
     console.warn("[signup] could not load studio trial_days — using fallback", err);
   }
@@ -38,6 +51,8 @@ export default async function SignupPage() {
         platformRootDomain={getPlatformRootDomain()}
         trialDays={trialDays}
         oauthAllowed={oauthAllowed}
+        initialIntent={intent}
+        pricing={pricing}
       />
       <MarketingScrollReset />
       <MarketingAnalytics eventType="signup_start" />

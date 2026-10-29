@@ -17,6 +17,16 @@ import {
   isStripeDiscountApplyError,
   logStripeError,
 } from "@/lib/stripe-errors";
+import {
+  findLiveBillingSubscription,
+  SETUP_COUPON_META_KEY,
+  SETUP_INTERVAL_META_KEY,
+  SETUP_PRICE_META_KEY,
+  trialHandoffMode,
+} from "@/lib/billing-subscriptions";
+import { loadBillingJourney, recordConversionEvent, upsertBillingJourney } from "@/lib/billing-journey";
+import { parseSignupSource } from "@/lib/signup-intent";
+import { DAY_MS } from "@/lib/trial-conversion";
 import type Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -33,6 +43,8 @@ export async function POST(request: Request) {
       planKey?: string;
       interval?: BillingInterval;
       promoCode?: string;
+      /** Where the plan was chosen (attribution only): billing | get_started | modal_day5 … */
+      context?: string;
     };
 
     const planKey = typeof body.planKey === "string" ? body.planKey.trim() : "";
@@ -86,6 +98,33 @@ export async function POST(request: Request) {
     }
 
     const customerId = await ensureStripeCustomer(business, profile.email);
+    const { stripe } = getStripe();
+
+    // One live subscription per business — a second Checkout would charge twice.
+    const live = await findLiveBillingSubscription(business);
+    if (live) {
+      return NextResponse.json(
+        {
+          error: "Your ShootPortal plan is already set up. Use Manage billing to update or change it.",
+          code: "already_subscribed",
+        },
+        { status: 409 }
+      );
+    }
+
+    // Close any earlier open Checkout for this business so two tabs can't both complete.
+    const journey = await loadBillingJourney(business.id);
+    if (journey?.last_checkout_session_id) {
+      try {
+        const previous = await stripe.checkout.sessions.retrieve(journey.last_checkout_session_id);
+        if (previous.status === "open") await stripe.checkout.sessions.expire(previous.id);
+      } catch (err) {
+        console.info("[billing/checkout] previous session not expired (ignored)", {
+          businessId: business.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
 
     const meta = billingMetadata(business.id);
     const subscriptionData: {
@@ -93,29 +132,13 @@ export async function POST(request: Request) {
       trial_end?: number;
     } = { metadata: meta };
 
-    const hasTrialHandoff =
-      business.subscription_status === "trialing" &&
-      business.trial_ends_at &&
-      Number.isFinite(new Date(business.trial_ends_at).getTime());
-
-    let trialEndApplied = false;
-    if (hasTrialHandoff && business.trial_ends_at) {
-      const trialEndSec = Math.floor(new Date(business.trial_ends_at).getTime() / 1000);
-      const nowSec = Math.floor(Date.now() / 1000);
-      const minTrialLeadSec = 2 * 24 * 60 * 60 + 60;
-      if (trialEndSec > nowSec + minTrialLeadSec) {
-        subscriptionData.trial_end = trialEndSec;
-        trialEndApplied = true;
-      } else {
-        console.info("[billing/checkout] omitting trial_end — less than 2 days remaining", {
-          businessId: business.id,
-          trialEndsAt: business.trial_ends_at,
-          mode,
-        });
-      }
+    // Trial users schedule billing for the STORED trial end (never recalculated or extended).
+    // ≥ 48h left: Checkout trial_end. < 48h: Checkout setup mode, subscription created after.
+    const handoff = trialHandoffMode(business);
+    const trialEndApplied = handoff.kind === "trial_end";
+    if (handoff.kind === "trial_end" && handoff.trialEndUnix) {
+      subscriptionData.trial_end = handoff.trialEndUnix;
     }
-
-    const { stripe } = getStripe();
 
     // Partner referral / promo discount — apply at Checkout via `discounts` only.
     // Never set allow_promotion_codes (conflicts with discounts → Stripe 400).
@@ -227,7 +250,7 @@ export async function POST(request: Request) {
         line_items: [{ price: priceId, quantity: 1 }],
         metadata: meta,
         subscription_data: subscriptionData,
-        success_url: `${origin}/billing?checkout=success`,
+        success_url: `${origin}/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/billing?checkout=cancelled`,
         client_reference_id: business.id,
       };
@@ -237,11 +260,30 @@ export async function POST(request: Request) {
       return params;
     };
 
+    // Card only now; the subscription (and any discount) is created when setup completes.
+    const buildSetupParams = (): CheckoutSessionParams => ({
+      mode: "setup",
+      customer: customerId,
+      currency: "usd",
+      metadata: {
+        ...meta,
+        [SETUP_PRICE_META_KEY]: priceId,
+        [SETUP_INTERVAL_META_KEY]: interval,
+        ...(checkoutDiscounts?.[0]?.coupon ? { [SETUP_COUPON_META_KEY]: checkoutDiscounts[0].coupon } : {}),
+      },
+      setup_intent_data: { metadata: meta },
+      success_url: `${origin}/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/billing?checkout=cancelled`,
+      client_reference_id: business.id,
+    });
+
     let session: Stripe.Checkout.Session;
     try {
-      session = await stripe.checkout.sessions.create(buildParams(checkoutDiscounts));
+      session = await stripe.checkout.sessions.create(
+        handoff.kind === "setup" ? buildSetupParams() : buildParams(checkoutDiscounts)
+      );
     } catch (createErr) {
-      if (checkoutDiscounts && isStripeDiscountApplyError(createErr)) {
+      if (handoff.kind !== "setup" && checkoutDiscounts && isStripeDiscountApplyError(createErr)) {
         logStripeError("billing/checkout", createErr, {
           businessId: business.id,
           interval,
@@ -266,6 +308,39 @@ export async function POST(request: Request) {
 
     if (!session.url) {
       return NextResponse.json({ error: "Checkout session missing URL." }, { status: 500 });
+    }
+
+    await upsertBillingJourney(business.id, {
+      last_checkout_session_id: session.id,
+      last_checkout_at: new Date().toISOString(),
+    });
+    const context = parseSignupSource(body.context);
+    const source = journey?.signup_source ?? null;
+    const trialStart = journey?.trial_started_at ? new Date(journey.trial_started_at).getTime() : NaN;
+    const eventProps = {
+      interval,
+      signup_path: journey?.signup_path ?? null,
+      source,
+      context,
+      checkout_kind: handoff.kind === "none" ? "pay_now" : "scheduled",
+      trial_day:
+        handoff.kind !== "none" && Number.isFinite(trialStart)
+          ? Math.floor((Date.now() - trialStart) / DAY_MS) + 1
+          : null,
+    };
+    await recordConversionEvent({
+      businessId: business.id,
+      type: handoff.kind === "none" ? "immediate_checkout_started" : "trial_plan_selected",
+      dedupeKey: `checkout_started:${session.id}`,
+      properties: eventProps,
+    });
+    if (source === "demo" || source === "get_started" || context === "get_started") {
+      await recordConversionEvent({
+        businessId: business.id,
+        type: "demo_checkout_started",
+        dedupeKey: `demo_checkout_started:${session.id}`,
+        properties: eventProps,
+      });
     }
 
     return NextResponse.json({

@@ -202,6 +202,12 @@ export function PlatformLanding({
               </a>
             </div>
             <TrialFacts trialDays={trialDays} className="mt-5 justify-center" />
+            <p className="mt-3 text-sm text-[#475569]">
+              Already know you want it?{" "}
+              <a href="#pricing" className="font-semibold text-[#4F46E5] underline-offset-4 hover:underline">
+                Choose a plan and subscribe now
+              </a>
+            </p>
           </div>
 
           <figure className="relative mx-auto mt-14 max-w-5xl lg:mt-16">
@@ -417,7 +423,7 @@ export function PlatformLanding({
       </section>
 
       {/* Pricing */}
-      <section className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
+      <section id="pricing" className="scroll-mt-20 border-b border-[#E2E8F0] bg-[#F8FAFC]">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
           <div className="mx-auto max-w-2xl text-center">
             <SectionEyebrow>SIMPLE PRICING</SectionEyebrow>

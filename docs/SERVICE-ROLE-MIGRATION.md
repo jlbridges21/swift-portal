@@ -208,3 +208,17 @@ Service-role users added for first-party marketing analytics (design: `docs/ANAL
 ## SEO Growth Engine
 
 - `src/lib/seo-growth/store.ts` — super-admin only (callers pass `requireSuperAdminPage` / `requireSuperAdminApi`). Reads and appends `platform_audit_log` rows with `seo.*` actions (opportunity review state, Google index snapshots). Touches no tenant tables; no new tables or policies.
+
+## Signup paths & trial conversion (v107)
+
+Service-role users added for the two signup paths, early subscription during a trial, and trial
+conversion modals (design: `docs/SIGNUP-CONVERSION.md`). New tables `business_billing_journey`,
+`trial_modal_events`, `billing_conversion_events` have RLS enabled with no policies and privileges
+revoked from `anon`/`authenticated`.
+
+- `src/lib/billing-journey.ts` — reads/writes only the v107 tables, always filtered by the
+  caller's `business_id` (and `user_id` for modal state); one `businesses.created_at` read for the
+  caller's own business.
+- `src/lib/analytics/conversions.ts` — super-admin conversion report (`/platform/analytics/conversions`).
+- `src/app/api/billing/start-trial/route.ts` — owner admin's own business only (`getTenantContext`),
+  conditional one-time update while `trial_ends_at IS NULL`.

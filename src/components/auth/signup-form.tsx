@@ -9,17 +9,64 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { suggestSlugFromName } from "@/lib/signup-validation";
 import { AuthDivider, GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import {
+  serializeSignupIntent,
+  SIGNUP_INTENT_COOKIE,
+  SIGNUP_INTENT_MAX_AGE_SECONDS,
+  signupIntentCookieDomain,
+  type SignupIntent,
+  type SignupInterval,
+} from "@/lib/signup-intent";
+import { annualTotalCents, formatUsd } from "@/lib/trial-conversion";
+import { cn } from "@/lib/utils";
+
+const DEFAULT_INTENT: SignupIntent = { path: "trial", interval: null, source: null };
 
 export function SignupForm({
   platformRootDomain,
   trialDays,
   oauthAllowed,
+  initialIntent = DEFAULT_INTENT,
+  pricing,
 }: {
   platformRootDomain: string;
   /** Studio plan trial_days for new signups (from plans table). */
   trialDays: number;
   oauthAllowed?: boolean;
+  /** From /signup?plan=monthly|annual&source=… — Subscribe Now vs free trial. */
+  initialIntent?: SignupIntent;
+  pricing?: { monthlyCents: number | null; annualPerMonthCents: number | null };
 }) {
+  const [intent, setIntent] = useState<SignupIntent>(() =>
+    initialIntent.path === "subscribe" && !initialIntent.interval
+      ? { ...initialIntent, interval: "annual" }
+      : initialIntent
+  );
+  const subscribing = intent.path === "subscribe" || trialDays <= 0;
+  const annualTotal = pricing ? annualTotalCents(pricing) : null;
+  const planSummary =
+    intent.interval === "monthly"
+      ? pricing?.monthlyCents != null
+        ? `${formatUsd(pricing.monthlyCents)}/month, billed monthly`
+        : "Billed monthly"
+      : annualTotal != null
+        ? `${formatUsd(annualTotal)}/year (${formatUsd(pricing?.annualPerMonthCents)}/month), billed once a year`
+        : "Billed annually";
+
+  // Keep the choice through Google sign-up (OAuth → /finish-setup) and existing-user login.
+  useEffect(() => {
+    try {
+      const domain = signupIntentCookieDomain(window.location.hostname, platformRootDomain);
+      const secure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = `${SIGNUP_INTENT_COOKIE}=${encodeURIComponent(serializeSignupIntent(intent))}; Path=/; Max-Age=${SIGNUP_INTENT_MAX_AGE_SECONDS}; SameSite=Lax${domain ? `; Domain=${domain}` : ""}${secure}`;
+    } catch {
+      /* cookies blocked — the POST body still carries the choice */
+    }
+  }, [intent, platformRootDomain]);
+
+  function chooseInterval(next: SignupInterval) {
+    setIntent((prev) => ({ ...prev, path: "subscribe", interval: next }));
+  }
   const [name, setName] = useState("");
   const [ownerName, setOwnerName] = useState("");
   const [email, setEmail] = useState("");
@@ -76,7 +123,16 @@ export function SignupForm({
       const res = await fetch("/api/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, slug, email, password, ownerName }),
+        body: JSON.stringify({
+          name,
+          slug,
+          email,
+          password,
+          ownerName,
+          signupPath: intent.path,
+          interval: intent.interval,
+          source: intent.source,
+        }),
       });
       const data = (await res.json()) as {
         error?: string;
@@ -153,15 +209,44 @@ export function SignupForm({
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle>
-              {trialDays > 0 ? "Start your free trial" : "Create your studio"}
+              {subscribing ? "Create your account" : "Start your free trial"}
             </CardTitle>
             <CardDescription>
-              {trialDays > 0
-                ? `${trialDays} days on Studio — no credit card required.`
-                : "Studio plan — subscribe after you create your account."}
+              {subscribing
+                ? "Subscribe to ShootPortal. You'll enter payment details securely on the next step."
+                : `${trialDays} days free. No credit card required.`}
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {intent.path === "subscribe" && (
+              <div className="mb-5 rounded-xl border border-border bg-background p-3">
+                <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Billing">
+                  {(["monthly", "annual"] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      role="radio"
+                      aria-checked={intent.interval === option}
+                      onClick={() => chooseInterval(option)}
+                      className={cn(
+                        "min-h-11 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                        intent.interval === option
+                          ? "border-accent bg-accent/10 text-heading"
+                          : "border-border bg-card text-muted hover:text-heading"
+                      )}
+                    >
+                      {option === "monthly" ? "Monthly" : "Annual"}
+                      {option === "annual" && pricing?.annualPerMonthCents != null ? (
+                        <span className="block text-xs font-normal">Best value</span>
+                      ) : (
+                        <span className="block text-xs font-normal">Flexible</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-center text-xs text-muted">{planSummary}</p>
+              </div>
+            )}
             <div className="mb-2 space-y-4">
               {oauthAllowed !== false && (
                 <>
@@ -260,9 +345,36 @@ export function SignupForm({
               </div>
               {error && <p className="text-sm text-red-600">{error}</p>}
               <Button type="submit" variant="accent" className="w-full min-h-11" disabled={busy}>
-                {busy ? "Creating…" : "Create account"}
+                {busy ? "Creating…" : subscribing ? "Create account & continue to payment" : "Create account"}
               </Button>
             </form>
+            {trialDays > 0 && (
+              <p className="mt-4 text-center text-sm text-muted">
+                {intent.path === "subscribe" ? (
+                  <>
+                    Not quite ready?{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-accent hover:underline"
+                      onClick={() => setIntent((prev) => ({ ...prev, path: "trial", interval: null }))}
+                    >
+                      Start a {trialDays}-day free trial instead
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Ready to buy?{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-accent hover:underline"
+                      onClick={() => chooseInterval("annual")}
+                    >
+                      Subscribe now
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
             <p className="mt-6 text-center text-sm text-muted">
               Already have an account?{" "}
               <Link href="/login" className="text-accent hover:underline">

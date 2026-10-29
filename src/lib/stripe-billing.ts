@@ -37,6 +37,8 @@ export type BillingBusinessRow = {
   billing_email: string | null;
   subscription_current_period_end: string | null;
   subscription_cancel_at_period_end: boolean;
+  /** 'signup' | 'platform' — selected by loadBillingBusiness. */
+  created_via?: string | null;
 };
 
 export type PlanBillingRow = {
@@ -194,7 +196,7 @@ export async function loadBillingBusiness(
   const { data, error } = await supabase
     .from("businesses")
     .select(
-      "id, name, slug, custom_domain, plan, subscription_status, trial_ends_at, comped_until, comped_reason, stripe_customer_id, stripe_subscription_id, stripe_customer_id_test, stripe_customer_id_live, stripe_subscription_id_test, stripe_subscription_id_live, billing_email, subscription_current_period_end, subscription_cancel_at_period_end"
+      "id, name, slug, custom_domain, plan, subscription_status, trial_ends_at, comped_until, comped_reason, stripe_customer_id, stripe_subscription_id, stripe_customer_id_test, stripe_customer_id_live, stripe_subscription_id_test, stripe_subscription_id_live, billing_email, subscription_current_period_end, subscription_cancel_at_period_end, created_via"
     )
     .eq("id", businessId)
     .is("deleted_at", null)
@@ -545,6 +547,35 @@ export async function ensureStripeCustomer(
   return customer.id;
 }
 
+function trialStillRunning(trialEndsAt: string | null | undefined, now = Date.now()): boolean {
+  if (!trialEndsAt) return false;
+  const end = new Date(trialEndsAt).getTime();
+  return Number.isFinite(end) && end > now;
+}
+
+/**
+ * businesses.subscription_status to store for a Stripe status. A scheduled plan canceled before
+ * its first charge keeps the ORIGINAL trial (never extended, never reset) so the normal
+ * trial-expiration paywall applies at trial_ends_at.
+ */
+export function resolveSnapshotStatus(
+  stripeStatus: Stripe.Subscription.Status,
+  trialEndsAt: string | null | undefined,
+  now = Date.now()
+): SubscriptionStatus | null {
+  const mapped = mapStripeSubscriptionStatus(stripeStatus);
+  if (mapped === "canceled" && trialStillRunning(trialEndsAt, now)) return "trialing";
+  return mapped;
+}
+
+/** Statuses where a Stripe subscription still bills (or will bill) the customer. */
+export const LIVE_STRIPE_SUBSCRIPTION_STATUSES: ReadonlySet<Stripe.Subscription.Status> = new Set([
+  "active",
+  "trialing",
+  "past_due",
+  "unpaid",
+]);
+
 export async function applySubscriptionSnapshot(options: {
   businessId: string;
   currentStatus: string;
@@ -554,6 +585,8 @@ export async function applySubscriptionSnapshot(options: {
   currentPeriodEndUnix: number | null;
   planKey?: string | null;
   customerId?: string | null;
+  /** businesses.trial_ends_at — a plan canceled before billing starts falls back to the trial. */
+  trialEndsAt?: string | null;
   source: string;
 }): Promise<{ applied: boolean; reason?: string }> {
   if (!shouldApplyStripeSubscriptionUpdate(options.currentStatus)) {
@@ -566,7 +599,7 @@ export async function applySubscriptionSnapshot(options: {
     return { applied: false, reason: "comped" };
   }
 
-  const mapped = mapStripeSubscriptionStatus(options.stripeStatus);
+  const mapped = resolveSnapshotStatus(options.stripeStatus, options.trialEndsAt);
   if (!mapped) {
     console.info("[stripe-billing] skipped — unmapped stripe status", {
       source: options.source,
@@ -625,10 +658,24 @@ export async function syncFromStripeSubscription(
   });
   if (!attribution.ok) return { applied: false, reason: attribution.reason };
 
+  // Out-of-order / stale events: a canceled or never-completed subscription must not overwrite
+  // the business once it tracks a different (newer) subscription.
+  const tracked = subscriptionIdForMode(attribution.business);
+  if (tracked && tracked !== subscription.id && !LIVE_STRIPE_SUBSCRIPTION_STATUSES.has(subscription.status)) {
+    console.info("[stripe-billing] skipped — stale subscription (business tracks another)", {
+      source,
+      businessId: attribution.business.id,
+      trackedSubscriptionId: tracked,
+      eventSubscriptionId: subscription.id,
+      stripeStatus: subscription.status,
+    });
+    return { applied: false, reason: "stale_subscription" };
+  }
+
   const priceId = subscription.items?.data?.[0]?.price?.id ?? null;
   const planKey = priceId ? await findPlanKeyByStripePriceId(priceId) : null;
 
-  return applySubscriptionSnapshot({
+  const result = await applySubscriptionSnapshot({
     businessId: attribution.business.id,
     currentStatus: attribution.business.subscription_status,
     stripeStatus: subscription.status,
@@ -637,8 +684,16 @@ export async function syncFromStripeSubscription(
     currentPeriodEndUnix: subscriptionCurrentPeriodEndUnix(subscription),
     planKey,
     customerId,
+    trialEndsAt: attribution.business.trial_ends_at,
     source,
   });
+
+  if (result.applied) {
+    // Display snapshot + conversion events (best-effort, never affects billing).
+    const { recordSubscriptionJourney } = await import("@/lib/billing-subscriptions");
+    await recordSubscriptionJourney(subscription, attribution.business);
+  }
+  return result;
 }
 
 export async function shouldSkipInvoiceAsShootPortalBilling(
