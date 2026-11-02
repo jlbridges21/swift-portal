@@ -10,6 +10,7 @@ import { canAccessClient, isOwnerAdmin, staffCan, visibleProjectIdsFor } from "@
 import { w9CountryDecision } from "@/lib/w9-country";
 import { getAppSettings } from "@/lib/app-settings";
 import { isTaxInformationReady } from "@/lib/w9-generate";
+import { getProjectHeroPosterUrlMap } from "@/lib/cover";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -34,6 +35,9 @@ export default async function AdminClientDetailPage({ params }: PageProps) {
   });
   if (!data) notFound();
 
+  // Projects here are already scoped to what this viewer may see.
+  const projectCovers = await getProjectHeroPosterUrlMap(data.projects, businessId);
+
   const isStaff = profile.role === "staff";
   const canViewMoney = staffCan(profile, "money.view");
   const country = isOwnerAdmin(profile) ? await w9CountryDecision(businessId) : null;
@@ -56,6 +60,7 @@ export default async function AdminClientDetailPage({ params }: PageProps) {
           data={data}
           canViewMoney={canViewMoney}
           w9={country?.us ? { taxReady } : null}
+          projectCovers={projectCovers}
         />
       </main>
     </div>

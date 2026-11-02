@@ -34,7 +34,11 @@ export default function NewProjectPage() {
     fetch("/api/clients")
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) setClients(data);
+        if (!Array.isArray(data)) return;
+        setClients(data);
+        // "New Project" from a client (Client View, Clients table) → ?client=<id>
+        const preset = new URLSearchParams(window.location.search).get("client");
+        if (preset && data.some((c: ClientOption) => c.id === preset)) setClientId(preset);
       });
   }, []);
 

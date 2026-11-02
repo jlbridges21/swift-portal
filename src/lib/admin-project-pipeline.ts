@@ -73,6 +73,11 @@ export interface PipelineProjectRow {
   updated_at: string;
   deleted_at?: string | null;
   clients: { name: string; company: string | null; deleted_at?: string | null } | null;
+  /** Primary client (Client View filtering). */
+  client_id?: string | null;
+  /** Project hero (Set as cover) — Client View card images. */
+  cover_image_id?: string | null;
+  cover_image_url?: string | null;
   pendingPayment?: boolean;
   recentActivity?: string;
   confirmedShootAt?: string | null;
@@ -227,6 +232,9 @@ function enrichProjects(
     updated_at: p.updated_at as string,
     deleted_at: (p.deleted_at as string | null) ?? null,
     clients: p.clients as PipelineProjectRow["clients"],
+    client_id: (p.client_id as string | null) ?? null,
+    cover_image_id: (p.cover_image_id as string | null) ?? null,
+    cover_image_url: (p.cover_image_url as string | null) ?? null,
     pendingPayment: pendingSet.has(p.id as string),
     recentActivity: latestActivity.get(p.id as string),
     confirmedShootAt: confirmedShootMap.get(p.id as string) ?? null,

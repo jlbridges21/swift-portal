@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
 import { ClientW9Panel } from "@/components/admin/client-w9-panel";
 import { ClientPortalRecoveryCard } from "@/components/admin/client-portal-recovery-card";
+import { ProjectCoverImage } from "@/components/projects/project-cover-image";
 import type { Payment } from "@/lib/types";
 
 export type { ClientListRow } from "@/lib/clients-crm";
@@ -317,12 +318,15 @@ interface ClientCrmProfileProps {
   canViewMoney?: boolean;
   /** Owner/admin on a US business. Staff and non-US businesses omit the panel. */
   w9?: { taxReady: boolean } | null;
+  /** project id → hero poster URL (project's chosen cover). */
+  projectCovers?: Record<string, string | null>;
 }
 
 export function ClientCrmProfile({
   data: initialData,
   canViewMoney = true,
   w9 = null,
+  projectCovers,
 }: ClientCrmProfileProps) {
   const router = useRouter();
   const [data, setData] = useState(initialData);
@@ -579,11 +583,11 @@ export function ClientCrmProfile({
       {/* Projects */}
       <section>
         <h2 className="text-base font-semibold text-heading mb-3">Projects</h2>
-        <ProjectGroup title="Active" projects={activeProjects} empty="No active projects." />
+        <ProjectGroup title="Active" projects={activeProjects} covers={projectCovers} empty="No active projects." />
         {awaitingPayment.length > 0 && (
-          <ProjectGroup title="Awaiting Payment" projects={awaitingPayment} />
+          <ProjectGroup title="Awaiting Payment" projects={awaitingPayment} covers={projectCovers} />
         )}
-        <ProjectGroup title="Delivered / Completed" projects={deliveredProjects} empty="No delivered projects yet." />
+        <ProjectGroup title="Delivered / Completed" projects={deliveredProjects} covers={projectCovers} empty="No delivered projects yet." />
       </section>
 
       {/* Payments */}
@@ -784,10 +788,12 @@ function ProjectGroup({
   title,
   projects,
   empty,
+  covers,
 }: {
   title: string;
   projects: ClientCrmProfile["projects"];
   empty?: string;
+  covers?: Record<string, string | null>;
 }) {
   if (!projects.length) {
     if (!empty) return null;
@@ -805,17 +811,26 @@ function ProjectGroup({
       <div className="space-y-2">
         {projects.map((project) => (
           <Link key={project.id} href={`/admin/projects/${project.id}`}>
-            <div className="rounded-xl border border-border bg-white surface-dark:bg-card p-4 shadow-sm hover:bg-slate-50/80 surface-dark:hover:bg-subtle/80 transition-colors">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="font-medium text-heading">{project.project_name}</p>
-                  <p className="text-sm text-muted">{project.property_address}</p>
-                  <p className="text-xs text-muted mt-0.5">{project.service_type}</p>
+            <div className="flex items-center gap-4 rounded-xl border border-border bg-white surface-dark:bg-card p-4 shadow-sm hover:bg-slate-50/80 surface-dark:hover:bg-subtle/80 transition-colors">
+              {covers ? (
+                <ProjectCoverImage
+                  src={covers[project.id]}
+                  sizes="96px"
+                  className="hidden h-16 w-24 shrink-0 rounded-lg sm:block"
+                />
+              ) : null}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-heading">{project.project_name}</p>
+                    <p className="text-sm text-muted">{project.property_address}</p>
+                    <p className="text-xs text-muted mt-0.5">{project.service_type}</p>
+                  </div>
+                  <StatusBadge status={project.status} />
                 </div>
-                <StatusBadge status={project.status} />
-              </div>
-              <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted">
-                {project.shoot_date && <span>Shoot {formatDate(project.shoot_date)}</span>}
+                <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted">
+                  {project.shoot_date && <span>Shoot {formatDate(project.shoot_date)}</span>}
+                </div>
               </div>
             </div>
           </Link>

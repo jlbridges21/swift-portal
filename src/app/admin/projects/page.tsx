@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { Header, PageHeader } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { requireAdminPage } from "@/lib/admin-access";
@@ -12,6 +13,8 @@ import {
 } from "@/lib/admin-project-pipeline";
 import { listAssignableStaff, listProjectStaffUserIdsByBusiness } from "@/lib/staff";
 import { isOwnerAdmin, staffCan, visibleProjectIdsFor } from "@/lib/staff-access";
+import { parseProjectsViewCookie, PROJECTS_VIEW_COOKIE } from "@/lib/client-view";
+import { loadClientViewData } from "@/lib/client-view-data";
 
 interface PageProps {
   searchParams: Promise<{ view?: string; stage?: string; status?: string }>;
@@ -66,6 +69,17 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
       ? staffAll
       : staffAll.filter((s) => visibleStaffIds.has(s.id) || s.id === profile.id);
 
+  // Saved per-user view preference. Hidden projects always use the Pipeline View.
+  const savedView = parseProjectsViewCookie(
+    (await cookies()).get(PROJECTS_VIEW_COOKIE)?.value,
+    profile.id
+  );
+  const initialView = showDeleted ? "pipeline" : savedView;
+  const clientView =
+    initialView === "client"
+      ? await loadClientViewData({ businessId: tenant.businessId, profile, projects })
+      : null;
+
   const stageConfig = stage ? PIPELINE_STAGE_CONFIG[stage] : null;
   const filteredCount = stage ? stageCounts[stage] : null;
   const isStaff = profile.role === "staff";
@@ -114,6 +128,18 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
           projectStaffIds={projectStaffIds}
           currentUserId={profile.id}
           isStaff={isStaff}
+          initialView={initialView}
+          clientView={clientView}
+          clientViewPermissions={
+            showDeleted
+              ? undefined
+              : {
+                  canCreateProject: canCreate,
+                  canCreateClient: staffCan(profile, "clients.create"),
+                  canOpenClients: staffCan(profile, "area.clients"),
+                  canOpenCalendar: staffCan(profile, "area.calendar"),
+                }
+          }
         />
       </main>
     </div>

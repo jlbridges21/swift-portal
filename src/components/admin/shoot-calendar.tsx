@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { RemoteImage } from "@/components/ui/remote-image";
+import { CoverPlaceholder } from "@/components/projects/cover-placeholder";
 import { getStatusColor, getStatusLabel } from "@/lib/constants";
 import { useAsyncAction } from "@/lib/use-async-action";
 import {
@@ -220,7 +221,7 @@ function ShootEventCard({
         {shoot.cover_url ? (
           <RemoteImage src={shoot.cover_url} alt="" fill className="object-cover" sizes="64px" />
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-muted">—</div>
+          <CoverPlaceholder variant="thumb" />
         )}
       </div>
       <div className="min-w-0 flex-1">
@@ -1316,7 +1317,7 @@ export function ShootCalendar({
                 {selected.cover_url ? (
                   <RemoteImage src={selected.cover_url} alt="" fill className="object-cover" sizes="80px" />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-xs text-muted">—</div>
+                  <CoverPlaceholder variant="thumb" />
                 )}
               </div>
               <div className="min-w-0 flex-1">

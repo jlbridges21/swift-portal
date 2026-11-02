@@ -38,6 +38,7 @@ export function AdminProjectsStaffFilter({
   projectStaffIds,
   onFilterChange,
   defaultSelected,
+  trailing,
 }: {
   staff: StaffOption[];
   /** project_id → user_id[] */
@@ -45,6 +46,8 @@ export function AdminProjectsStaffFilter({
   onFilterChange: (selected: string[]) => void;
   /** Initial selection (e.g. staff "assigned to me"). Overrides empty session storage. */
   defaultSelected?: string[];
+  /** Rendered right after the "Filter by staff" button (e.g. the Client View toggle). */
+  trailing?: React.ReactNode;
 }) {
   const [selected, setSelected] = useState<string[]>(defaultSelected ?? []);
   const [open, setOpen] = useState(false);
@@ -104,6 +107,7 @@ export function AdminProjectsStaffFilter({
             </Badge>
           ) : null}
         </Button>
+        {trailing}
         {selected.length > 0 ? (
           <>
             <span className="max-w-xs truncate text-xs text-muted" title={label}>

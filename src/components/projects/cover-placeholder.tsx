@@ -3,10 +3,25 @@ import { cn } from "@/lib/utils";
 
 interface CoverPlaceholderProps {
   className?: string;
-  variant?: "card" | "hero";
+  /** "thumb" = icon only, for small project cards. */
+  variant?: "card" | "hero" | "thumb";
 }
 
 export function CoverPlaceholder({ className, variant = "card" }: CoverPlaceholderProps) {
+  if (variant === "thumb") {
+    return (
+      <div
+        className={cn(
+          "flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 via-primary to-slate-900",
+          className
+        )}
+      >
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20">
+          <Camera className="h-4 w-4 text-white/80" />
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       className={cn(

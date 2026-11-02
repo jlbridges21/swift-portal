@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MediaAsset, Project } from "@/lib/types";
 import { getYouTubeEmbedUrl, getYouTubeThumbnail } from "@/lib/youtube";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { signMediaThumbnailUrl, type ThumbSignAsset } from "@/lib/media-signed-thumbs";
 
 export type HeroMedia =
   | { type: "image"; url: string }
@@ -183,4 +184,69 @@ export async function getProjectHeroMedia(
   }
 
   return null;
+}
+
+type PosterAsset = ThumbSignAsset & Pick<MediaAsset, "youtube_url">;
+
+const POSTER_ASSET_COLUMNS =
+  "id, business_id, file_path, file_name, file_size, mime_type, media_type, media_source, thumbnail_url, youtube_url";
+
+async function posterUrlForAsset(
+  storage: SupabaseClient,
+  asset: PosterAsset
+): Promise<string | null> {
+  if (asset.media_source === "youtube") return getYouTubeThumbnail(asset.youtube_url || "") || null;
+  return signMediaThumbnailUrl(storage, "project-media", asset);
+}
+
+/**
+ * Card-sized hero posters for many projects at once (Client View, client
+ * profile). Same precedence as getProjectHeroPosterUrl — the project's chosen
+ * cover (cover_image_id), then cover_image_url, then the first gallery photo —
+ * but signs thumbnails instead of full-size originals so a board of cards
+ * stays light. Callers must pass only projects the viewer may already see.
+ */
+export async function getProjectHeroPosterUrlMap(
+  projects: Pick<Project, "id" | "cover_image_id" | "cover_image_url">[],
+  businessId: string
+): Promise<Record<string, string | null>> {
+  const result: Record<string, string | null> = {};
+  if (projects.length === 0) return result;
+  const db = await createTenantServiceClient(businessId);
+
+  const coverIds = projects.map((p) => p.cover_image_id).filter((id): id is string => Boolean(id));
+  const coverById = new Map<string, PosterAsset>();
+  if (coverIds.length) {
+    const { data } = await db.from("media_assets").select(POSTER_ASSET_COLUMNS).in("id", coverIds);
+    for (const row of (data ?? []) as PosterAsset[]) coverById.set(row.id, row);
+  }
+
+  await Promise.all(
+    projects.map(async (project) => {
+      const cover = project.cover_image_id ? coverById.get(project.cover_image_id) : undefined;
+      if (cover) {
+        const url = await posterUrlForAsset(db.raw, cover);
+        if (url) {
+          result[project.id] = url;
+          return;
+        }
+      }
+      if (project.cover_image_url) {
+        result[project.id] = project.cover_image_url;
+        return;
+      }
+      const { data: first } = await db
+        .from("media_assets")
+        .select(POSTER_ASSET_COLUMNS)
+        .eq("project_id", project.id)
+        .eq("media_type", "photo")
+        .order("display_order", { ascending: true })
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      result[project.id] = first ? await posterUrlForAsset(db.raw, first as PosterAsset) : null;
+    })
+  );
+
+  return result;
 }
