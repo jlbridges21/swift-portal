@@ -3,69 +3,89 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bell, Loader2, Smartphone } from "lucide-react";
+import { Bell, CheckCircle2, Loader2, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import {
-  enableAdminPushNotifications,
-  getLocalPushSubscriptionStatus,
-  isOneSignalConfigured,
-} from "@/lib/onesignal-client";
+  deniedPermissionMessage,
+  pushSetupTip,
+  unsupportedPushMessage,
+  type PushEnvironment,
+  type PushPermission,
+} from "@/lib/push-platform";
+import {
+  enableWebPush,
+  getDevicePushSubscription,
+  readPushEnvironment,
+  readPushPermission,
+} from "@/lib/web-push-client";
 import { useIsMobileOrPwa } from "@/lib/use-mobile-or-pwa";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 
 interface PushStatus {
   configured: boolean;
+  vapidPublicKey: string | null;
+  /** Account has push turned on (any device, including legacy OneSignal). */
   enabled: boolean;
-  subscriptionId: string | null;
-  localOptedIn: boolean;
+  /** This device has a Web Push subscription the server knows about. */
+  deviceRegistered: boolean;
+  permission: PushPermission;
+  env: PushEnvironment;
+}
+
+async function checkDeviceRegistered(vapidPublicKey: string): Promise<boolean> {
+  const subscription = await getDevicePushSubscription(vapidPublicKey);
+  if (!subscription) return false;
+  const res = await fetch("/api/admin/push", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "check", endpoint: subscription.endpoint }),
+  });
+  if (!res.ok) return false;
+  const data = await res.json().catch(() => ({}));
+  return data.registered === true;
 }
 
 export function PushNotificationsCard() {
   const brand = usePortalBrand();
   const isMobileOrPwa = useIsMobileOrPwa();
   const [status, setStatus] = useState<PushStatus | null>(null);
-  const [setupNeeded, setSetupNeeded] = useState<boolean | null>(null);
   const [enabling, setEnabling] = useState(false);
   const [testing, setTesting] = useState(false);
+  /** Keep the card up after enabling so the admin can send a test push. */
+  const [justEnabled, setJustEnabled] = useState(false);
 
   const refreshStatus = useCallback(async () => {
-    if (!isMobileOrPwa) {
-      setSetupNeeded(false);
-      return;
-    }
+    if (!isMobileOrPwa) return;
 
+    const env = readPushEnvironment();
+    const permission = readPushPermission();
     try {
       const res = await fetch("/api/admin/push", { credentials: "include" });
       const data = res.ok ? await res.json() : null;
-
-      const configured = data?.configured ?? isOneSignalConfigured();
-      const enabled = data?.enabled ?? false;
-      const subscriptionId = data?.subscriptionId ?? null;
-
-      if (!configured) {
-        setStatus({ configured, enabled, subscriptionId, localOptedIn: false });
-        setSetupNeeded(false);
-        return;
-      }
-
-      const local = await getLocalPushSubscriptionStatus();
-      const isFullySubscribed = enabled && local.optedIn;
+      const vapidPublicKey: string | null = data?.vapidPublicKey ?? null;
+      const deviceRegistered =
+        vapidPublicKey && env.support === "supported" && permission === "granted"
+          ? await checkDeviceRegistered(vapidPublicKey).catch(() => false)
+          : false;
 
       setStatus({
-        configured,
-        enabled,
-        subscriptionId,
-        localOptedIn: local.optedIn,
+        configured: Boolean(data?.configured && vapidPublicKey),
+        vapidPublicKey,
+        enabled: data?.enabled ?? false,
+        deviceRegistered,
+        permission,
+        env,
       });
-      setSetupNeeded(!isFullySubscribed);
     } catch {
       setStatus({
-        configured: isOneSignalConfigured(),
+        configured: false,
+        vapidPublicKey: null,
         enabled: false,
-        subscriptionId: null,
-        localOptedIn: false,
+        deviceRegistered: false,
+        permission,
+        env,
       });
-      setSetupNeeded(true);
     }
   }, [isMobileOrPwa]);
 
@@ -74,44 +94,29 @@ export function PushNotificationsCard() {
   }, [refreshStatus]);
 
   async function handleEnable() {
-    if (!isOneSignalConfigured()) {
-      toast.error("Push notifications are not configured for this environment.");
+    if (!status?.vapidPublicKey) {
+      toast.error("Push notifications aren't available right now. Please try again later.");
       return;
     }
 
     setEnabling(true);
     try {
-      const profileRes = await fetch("/api/profile", { credentials: "include" });
-      if (!profileRes.ok) throw new Error("Could not verify admin profile");
-      const { profile } = await profileRes.json();
-      if (profile?.role !== "admin" && profile?.role !== "super_admin") {
-        throw new Error("Admin access required");
-      }
-      if (!profile.business_id) throw new Error("No business context on this account.");
-
-      const { subscriptionId, optedIn } = await enableAdminPushNotifications(
-        profile.id,
-        profile.business_id
-      );
-
-      const saveRes = await fetch("/api/admin/push", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "subscribe", subscriptionId }),
-      });
-
-      if (!saveRes.ok) throw new Error("Failed to save push preferences");
-
-      if (optedIn) {
+      // Permission is requested first inside enableWebPush (iOS needs the tap gesture).
+      const result = await enableWebPush({ vapidPublicKey: status.vapidPublicKey, env: status.env });
+      if (result.status === "enabled") {
+        setJustEnabled(true);
         toast.success("Push notifications enabled on this device");
+      } else if (result.status === "denied") {
+        toast.message("Notifications are blocked. See the steps on this card to turn them on.");
+      } else if (result.status === "dismissed") {
+        toast.message("Notifications weren't enabled. Tap Enable Notifications when you're ready.");
       } else {
-        toast.message("Permission was not granted. You can try again from your browser settings.");
+        toast.error(result.message);
       }
-
       await refreshStatus();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to enable push notifications");
+      console.error("[push] enable failed:", error);
+      toast.error("Couldn't enable notifications on this device. Please try again.");
     } finally {
       setEnabling(false);
     }
@@ -128,23 +133,26 @@ export function PushNotificationsCard() {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || data.detail || "Failed to send test push");
+        toast.error("Couldn't send a test notification. Try enabling notifications on this device again.");
+        return;
       }
 
       toast.success("Test push sent — check this device");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to send test push");
+    } catch {
+      toast.error("Couldn't send a test notification. Check your connection and try again.");
     } finally {
       setTesting(false);
     }
   }
 
-  if (!isMobileOrPwa || setupNeeded === null || setupNeeded === false) {
-    return null;
-  }
+  if (!isMobileOrPwa || !status || !status.configured) return null;
 
-  const isEnabledOnDevice = Boolean(status?.enabled && status?.localOptedIn);
+  const isEnabledOnDevice = status.deviceRegistered && status.permission === "granted";
+  if (isEnabledOnDevice && !justEnabled) return null;
+
+  const unsupportedMessage = unsupportedPushMessage(status.env, brand.portalName);
+  const isDenied = !unsupportedMessage && status.permission === "denied";
+  const tip = pushSetupTip(status.env, brand.portalName);
 
   return (
     <Card className="mb-10 border-sky-100 bg-gradient-to-br from-sky-50/50 to-white surface-dark:from-background surface-dark:to-background">
@@ -159,53 +167,76 @@ export function PushNotificationsCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {status?.enabled && !status.localOptedIn && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Push is enabled on your account. Tap below to activate notifications on this device.
+        {unsupportedMessage ? (
+          <div className="flex items-start gap-2 rounded-lg border border-border bg-white/80 surface-dark:bg-card/80 px-4 py-3 text-sm text-muted">
+            <Smartphone className="h-4 w-4 shrink-0 mt-0.5" />
+            <p>{unsupportedMessage}</p>
           </div>
-        )}
-
-        <div className="flex flex-wrap gap-3">
-          <Button
-            variant="accent"
-            className="min-h-11"
-            onClick={handleEnable}
-            disabled={!status?.configured || enabling || isEnabledOnDevice}
-          >
-            {enabling ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Enabling…
-              </>
-            ) : (
-              <>
-                <Bell className="h-4 w-4" />
-                Enable Notifications
-              </>
+        ) : (
+          <>
+            {isEnabledOnDevice && (
+              <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                <p>Notifications are on for this device.</p>
+              </div>
             )}
-          </Button>
 
-          {isEnabledOnDevice && status?.configured && (
-            <Button variant="outline" className="min-h-11" onClick={handleTestPush} disabled={testing}>
-              {testing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Sending…
-                </>
-              ) : (
-                "Send Test Push"
+            {!isEnabledOnDevice && status.enabled && !isDenied && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                Push is enabled on your account. Tap below to activate notifications on this device.
+              </div>
+            )}
+
+            {isDenied && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {deniedPermissionMessage(status.env, brand.portalName)}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-3">
+              {!isEnabledOnDevice && (
+                <Button
+                  variant="accent"
+                  className="min-h-11"
+                  onClick={isDenied ? refreshStatus : handleEnable}
+                  disabled={enabling}
+                >
+                  {enabling ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Enabling…
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="h-4 w-4" />
+                      {isDenied ? "I've allowed notifications" : "Enable Notifications"}
+                    </>
+                  )}
+                </Button>
               )}
-            </Button>
-          )}
-        </div>
 
-        <div className="flex items-start gap-2 rounded-lg border border-border bg-white/80 surface-dark:bg-card/80 px-4 py-3 text-sm text-muted">
-          <Smartphone className="h-4 w-4 shrink-0 mt-0.5" />
-          <p>
-            For iPhone lock-screen alerts, open {brand.portalName} from your Home Screen icon, then enable
-            notifications here.
-          </p>
-        </div>
+              {isEnabledOnDevice && (
+                <Button variant="outline" className="min-h-11" onClick={handleTestPush} disabled={testing}>
+                  {testing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sending…
+                    </>
+                  ) : (
+                    "Send Test Push"
+                  )}
+                </Button>
+              )}
+            </div>
+
+            {tip && (
+              <div className="flex items-start gap-2 rounded-lg border border-border bg-white/80 surface-dark:bg-card/80 px-4 py-3 text-sm text-muted">
+                <Smartphone className="h-4 w-4 shrink-0 mt-0.5" />
+                <p>{tip}</p>
+              </div>
+            )}
+          </>
+        )}
       </CardContent>
     </Card>
   );

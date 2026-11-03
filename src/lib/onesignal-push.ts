@@ -3,6 +3,9 @@ import { getAppSettings } from "@/lib/app-settings";
 import { getBusinessPortalOriginById, joinPortalPath } from "@/lib/portal-url";
 import { LEGACY_DEFAULT_BUSINESS_ID } from "@/lib/tenant";
 import { isLiveBusiness } from "@/lib/business-live";
+import { SITE_ICONS } from "@/lib/site-metadata";
+import { toSameOriginPushPath } from "@/lib/push-platform";
+import { isWebPushConfigured, sendWebPushToProfiles, type WebPushPayload } from "@/lib/web-push";
 
 const ONESIGNAL_API_URL = "https://api.onesignal.com/notifications?c=push";
 
@@ -141,8 +144,40 @@ async function callOneSignal(
   }
 }
 
+function isOneSignalConfiguredServer(): boolean {
+  const { appId, apiKey } = getOneSignalConfig();
+  return Boolean(appId && apiKey);
+}
+
+async function pushIconForBusiness(businessId: string): Promise<string> {
+  try {
+    const settings = await getAppSettings(businessId);
+    return settings.business.faviconUrl || SITE_ICONS.icon192;
+  } catch {
+    return SITE_ICONS.icon192;
+  }
+}
+
 /**
- * Send a web push notification to subscribed portal admins via OneSignal.
+ * Merge the two delivery channels. Web Push (VAPID) covers every portal origin
+ * on iOS and Android; OneSignal remains for devices subscribed before Web Push
+ * existed (only possible on the OneSignal app's single configured origin).
+ */
+function combineResults(
+  webPush: { attempted: number; delivered: number; detail?: string },
+  oneSignal: PushSendResult | null
+): PushSendResult {
+  if (webPush.delivered > 0 || oneSignal?.sent) return { sent: true };
+  if (!isWebPushConfigured() && !oneSignal) return { sent: false, reason: "not_configured" };
+  const details = [webPush.detail, oneSignal?.detail].filter(Boolean).join("; ");
+  if (webPush.attempted === 0 && (!oneSignal || oneSignal.reason === "no_recipients" || oneSignal.reason === "not_configured")) {
+    return { sent: false, reason: "no_recipients", detail: details || undefined };
+  }
+  return { sent: false, reason: oneSignal?.reason ?? "api_error", detail: details || undefined };
+}
+
+/**
+ * Send a push notification to subscribed portal admins (Web Push + OneSignal legacy).
  * Never throws — failures are logged and returned to callers.
  */
 export async function sendAdminPushNotification(
@@ -157,6 +192,25 @@ export async function sendAdminPushNotification(
   const filters = adminPushFilters(options.businessId);
 
   const adminIds = await getPushEnabledAdminIds(options.businessId);
+
+  const webPushPayload: WebPushPayload = {
+    title,
+    body: message,
+    url: toSameOriginPushPath(targetUrl),
+    icon: await pushIconForBusiness(options.businessId),
+    eventType: options.eventType,
+  };
+  const webPushResult = await sendWebPushToProfiles(
+    options.businessId,
+    adminIds,
+    webPushPayload,
+    `admin_event:${options.eventType ?? "unknown"}`
+  );
+
+  if (!isOneSignalConfiguredServer()) {
+    return combineResults(webPushResult, null);
+  }
+
   const payload: Record<string, unknown> = {
     target_channel: "push",
     headings: { en: title },
@@ -174,21 +228,36 @@ export async function sendAdminPushNotification(
     payload.include_aliases = { external_id: adminIds };
   }
 
-  return callOneSignal(payload, `admin_event:${options.eventType ?? "unknown"}`);
+  const oneSignalResult = await callOneSignal(payload, `admin_event:${options.eventType ?? "unknown"}`);
+  return combineResults(webPushResult, oneSignalResult);
 }
 
-/** Send a test push to the current admin device. */
+/** Send a test push to the current admin's devices. */
 export async function sendAdminTestPush(
   userId: string,
   businessId: string
 ): Promise<PushSendResult> {
-  const { appId } = getOneSignalConfig();
-  if (!appId) {
-    return { sent: false, reason: "not_configured" };
-  }
-
   const appUrl = await getBusinessPortalOriginById(businessId);
   const settings = await getAppSettings(businessId);
+
+  const webPushResult = await sendWebPushToProfiles(
+    businessId,
+    [userId],
+    {
+      title: `${settings.business.portalName} Test`,
+      body: "Push notifications are working.",
+      url: "/admin",
+      icon: settings.business.faviconUrl || SITE_ICONS.icon192,
+      tag: "push-test",
+      eventType: "test",
+    },
+    "admin_test:web_push"
+  );
+  if (webPushResult.delivered > 0) return { sent: true };
+
+  if (!isOneSignalConfiguredServer()) {
+    return combineResults(webPushResult, null);
+  }
 
   const db = await createTenantServiceClient(businessId);
   const { data: profile } = await db.raw
@@ -222,18 +291,20 @@ export async function sendAdminTestPush(
     );
   }
 
-  return callOneSignal(
+  const byExternalId = await callOneSignal(
     {
       ...basePayload,
       include_aliases: { external_id: [userId] },
     },
     "admin_test:external_id"
   );
+  return combineResults(webPushResult, byExternalId);
 }
 
+/** Pass `subscriptionId: undefined` (Web Push) to keep any legacy OneSignal id intact. */
 export async function markAdminPushEnabled(
   userId: string,
-  subscriptionId: string | null,
+  subscriptionId: string | null | undefined,
   businessId: string
 ) {
   const db = await createTenantServiceClient(businessId);
@@ -241,7 +312,7 @@ export async function markAdminPushEnabled(
     .from("profiles")
     .update({
       push_notifications_enabled: true,
-      onesignal_subscription_id: subscriptionId,
+      ...(subscriptionId !== undefined ? { onesignal_subscription_id: subscriptionId } : {}),
     })
     .eq("id", userId)
     .eq("business_id", businessId);

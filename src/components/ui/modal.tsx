@@ -22,10 +22,12 @@ export function Modal({ open, onClose, title, children, className, footer }: Mod
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKey);
+    // Restore the previous value so a modal opened on top of another keeps the page locked.
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
     };
   }, [open, onClose]);
 

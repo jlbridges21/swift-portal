@@ -24,6 +24,7 @@
     "test:plan-stripe-prices": "npx tsx scripts/verify-plan-stripe-price-consistency.ts",
     "test:analytics": "npx tsx scripts/verify-analytics.ts",
     "test:client-view": "npx tsx scripts/verify-client-view.ts",
+    "test:push-platform": "npx tsx scripts/verify-push-platform.ts",
     "test:seo-growth": "npx tsx scripts/verify-seo-growth.ts",
     "seo:audit": "npx tsx scripts/seo-audit.ts",
     "setup:stripe-billing": "npx tsx scripts/setup-stripe-billing.ts",
@@ -67,9 +68,11 @@
     "tailwindcss": "^4.3.1",
     "tus-js-client": "^4.3.1",
     "typescript": "^6.0.3",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/archiver": "^8.0.0"
+    "@types/archiver": "^8.0.0",
+    "@types/web-push": "^3.6.4"
   }
 }

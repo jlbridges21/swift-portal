@@ -320,6 +320,11 @@ interface ClientCrmProfileProps {
   w9?: { taxReady: boolean } | null;
   /** project id → hero poster URL (project's chosen cover). */
   projectCovers?: Record<string, string | null>;
+  /**
+   * Shown inside the Projects → Client View modal: hiding the client closes the
+   * modal (via onHidden) and restoring stays put, instead of navigating.
+   */
+  embedded?: { onHidden: () => void };
 }
 
 export function ClientCrmProfile({
@@ -327,6 +332,7 @@ export function ClientCrmProfile({
   canViewMoney = true,
   w9 = null,
   projectCovers,
+  embedded,
 }: ClientCrmProfileProps) {
   const router = useRouter();
   const [data, setData] = useState(initialData);
@@ -384,7 +390,12 @@ export function ClientCrmProfile({
     const res = await fetch(`/api/clients/${client.id}`, { method: "DELETE" });
     if (!res.ok) throw new Error("Failed to hide client");
     toast.success("Client hidden from dashboard");
-    router.push("/admin/clients");
+    if (embedded) {
+      setShowDeleteConfirm(false);
+      embedded.onHidden();
+    } else {
+      router.push("/admin/clients");
+    }
     router.refresh();
   }, { loadingLabel: "Hiding..." });
 
@@ -396,7 +407,11 @@ export function ClientCrmProfile({
     });
     if (!res.ok) throw new Error("Failed to restore client");
     toast.success("Client restored");
-    router.push(`/admin/clients/${client.id}`);
+    if (embedded) {
+      setData((d) => ({ ...d, client: { ...d.client, deleted_at: null } }));
+    } else {
+      router.push(`/admin/clients/${client.id}`);
+    }
     router.refresh();
   }, { loadingLabel: "Restoring..." });
 

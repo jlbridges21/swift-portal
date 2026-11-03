@@ -3,14 +3,9 @@ import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { requireAdminPage } from "@/lib/admin-access";
 import { notFound } from "next/navigation";
-import { getClientCrmProfile } from "@/lib/clients-crm";
 import { ClientCrmProfile } from "@/components/admin/clients-table";
 import { ChevronLeft } from "lucide-react";
-import { canAccessClient, isOwnerAdmin, staffCan, visibleProjectIdsFor } from "@/lib/staff-access";
-import { w9CountryDecision } from "@/lib/w9-country";
-import { getAppSettings } from "@/lib/app-settings";
-import { isTaxInformationReady } from "@/lib/w9-generate";
-import { getProjectHeroPosterUrlMap } from "@/lib/cover";
+import { loadClientProfileView } from "@/lib/client-profile-view";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -19,30 +14,11 @@ interface PageProps {
 export default async function AdminClientDetailPage({ params }: PageProps) {
   const { profile, tenant } = await requireAdminPage({ area: "clients" });
   const { id } = await params;
-  const businessId = tenant.businessId;
 
-  if (!(await canAccessClient(businessId, profile, id))) {
-    notFound();
-  }
-
-  const projectIds = isOwnerAdmin(profile)
-    ? ("all" as const)
-    : await visibleProjectIdsFor(businessId, profile);
-
-  const data = await getClientCrmProfile(id, businessId, {
-    includeDeleted: true,
-    projectIds,
-  });
-  if (!data) notFound();
-
-  // Projects here are already scoped to what this viewer may see.
-  const projectCovers = await getProjectHeroPosterUrlMap(data.projects, businessId);
+  const view = await loadClientProfileView({ businessId: tenant.businessId, profile, clientId: id });
+  if (!view) notFound();
 
   const isStaff = profile.role === "staff";
-  const canViewMoney = staffCan(profile, "money.view");
-  const country = isOwnerAdmin(profile) ? await w9CountryDecision(businessId) : null;
-  const taxReady =
-    country?.us === true ? isTaxInformationReady((await getAppSettings(businessId)).tax) : false;
 
   return (
     <div className="min-h-screen bg-background">
@@ -57,10 +33,10 @@ export default async function AdminClientDetailPage({ params }: PageProps) {
           </Link>
         </div>
         <ClientCrmProfile
-          data={data}
-          canViewMoney={canViewMoney}
-          w9={country?.us ? { taxReady } : null}
-          projectCovers={projectCovers}
+          data={view.data}
+          canViewMoney={view.canViewMoney}
+          w9={view.w9}
+          projectCovers={view.projectCovers}
         />
       </main>
     </div>

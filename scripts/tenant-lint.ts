@@ -83,6 +83,7 @@ const BUSINESS_OWNED_TABLES = new Set([
   "video_reviews",
   "w9_sends",
   "w9_send_files",
+  "web_push_subscriptions",
 ]);
 
 /** createServiceClient() / SERVICE_ROLE_KEY — each file is justified in SERVICE-ROLE-MIGRATION.md */
@@ -300,9 +301,7 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/app/auth/callback/route.ts",
 ]);
 
-const MODULE_LET_ALLOWLIST = new Set([
-  "src/lib/onesignal-client.ts",
-]);
+const MODULE_LET_ALLOWLIST = new Set<string>([]);
 
 const BRAND_LITERAL_ALLOWLIST = new Set([
   "src/lib/site-metadata.ts",

@@ -25,6 +25,10 @@ import { ClientViewBoard } from "@/components/admin/client-view/client-view-boar
 import { ClientViewList } from "@/components/admin/client-view/client-view-list";
 import { ClientViewCalendar } from "@/components/admin/client-view/client-view-calendar";
 import {
+  ClientProfileModalProvider,
+  useOpenClientProfile,
+} from "@/components/admin/client-view/client-profile-modal";
+import {
   useProjectStageMove,
   type ClientViewProjectRow,
 } from "@/components/admin/client-view/client-view-shared";
@@ -142,177 +146,179 @@ export function ClientView({
   if (!data) return <ClientViewSkeleton />;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)]">
-      <ClientSidebar
-        clients={clients}
-        counts={counts}
-        selectedId={effectiveId}
-        onSelect={selectClient}
-        canCreateClient={permissions.canCreateClient}
-        onClientCreated={(client) => {
-          setAddedClients((prev) => [
-            ...prev,
-            {
-              id: client.id,
-              name: client.name,
-              company: client.company ?? null,
-              email: permissions.canOpenClients ? client.email ?? null : null,
-              phone: permissions.canOpenClients ? client.phone ?? null : null,
-            },
-          ]);
-          selectClient(client.id);
-          router.refresh();
-        }}
-      />
+    <ClientProfileModalProvider>
+      <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)]">
+        <ClientSidebar
+          clients={clients}
+          counts={counts}
+          selectedId={effectiveId}
+          onSelect={selectClient}
+          canCreateClient={permissions.canCreateClient}
+          onClientCreated={(client) => {
+            setAddedClients((prev) => [
+              ...prev,
+              {
+                id: client.id,
+                name: client.name,
+                company: client.company ?? null,
+                email: permissions.canOpenClients ? client.email ?? null : null,
+                phone: permissions.canOpenClients ? client.phone ?? null : null,
+              },
+            ]);
+            selectClient(client.id);
+            router.refresh();
+          }}
+        />
 
-      <section className="min-w-0 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
-        {isAll || !selectedClient ? (
-          <AllClientsHeader projectCount={clientProjects.length} clientCount={clients.length} />
-        ) : (
-          <ClientHeader
-            client={selectedClient}
-            projectCount={clientProjects.length}
-            permissions={permissions}
-          />
-        )}
-
-        {stage && stageLabel ? (
-          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2 text-sm">
-            <span className="font-medium text-heading">Showing: {stageLabel}</span>
-            <Link href="/admin/projects" className="inline-flex items-center gap-1 text-xs text-muted hover:text-heading">
-              <X className="h-3.5 w-3.5" /> Clear filter
-            </Link>
-          </div>
-        ) : null}
-
-        <div className="mt-4 flex flex-col gap-3 border-y border-border py-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <div role="tablist" aria-label="Project views" className="-mx-1 flex gap-1 overflow-x-auto px-1">
-            {TABS.map(({ value, label, icon: Icon }) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={tab === value}
-                onClick={() => setTab(value)}
-                className={cn(
-                  "inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors",
-                  tab === value ? "bg-accent-subtle text-accent" : "text-muted hover:bg-slate-50 hover:text-heading surface-dark:hover:bg-subtle"
-                )}
-              >
-                <Icon className="h-4 w-4" aria-hidden />
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setFilterOpen((o) => !o)}
-                aria-expanded={filterOpen}
-                className={cn(activeServices.length > 0 && "border-accent text-accent")}
-              >
-                <Filter className="h-3.5 w-3.5" />
-                Filter
-                {activeServices.length > 0 ? (
-                  <span className="rounded-full bg-accent px-1.5 text-[10px] font-semibold text-accent-foreground">
-                    {activeServices.length}
-                  </span>
-                ) : null}
-              </Button>
-              {filterOpen ? (
-                <>
-                  <button
-                    type="button"
-                    aria-label="Close filter"
-                    className="fixed inset-0 z-20 cursor-default"
-                    onClick={() => setFilterOpen(false)}
-                  />
-                  <div className="absolute right-0 z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card p-3 shadow-lg">
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="text-xs font-semibold text-heading">Package / service</p>
-                      {activeServices.length > 0 ? (
-                        <button type="button" onClick={() => setServices([])} className="text-xs text-accent hover:underline">
-                          Clear
-                        </button>
-                      ) : null}
-                    </div>
-                    {serviceOptions.length === 0 ? (
-                      <p className="py-2 text-xs text-muted">No packages on these projects yet.</p>
-                    ) : (
-                      <ul className="max-h-64 space-y-0.5 overflow-y-auto">
-                        {serviceOptions.map((service) => (
-                          <li key={service}>
-                            <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 surface-dark:hover:bg-subtle">
-                              <input
-                                type="checkbox"
-                                checked={activeServices.includes(service)}
-                                onChange={() =>
-                                  setServices((prev) =>
-                                    prev.includes(service) ? prev.filter((s) => s !== service) : [...prev, service]
-                                  )
-                                }
-                              />
-                              <span className="truncate">{service}</span>
-                            </label>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </>
-              ) : null}
-            </div>
-
-            <label className="relative inline-flex h-8 items-center rounded-md border border-border bg-card text-xs font-medium text-foreground hover:bg-accent-subtle">
-              <ArrowUpDown className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-muted" aria-hidden />
-              <span className="sr-only">Sort projects</span>
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as ClientViewSort)}
-                className="h-full cursor-pointer appearance-none rounded-md bg-transparent pl-8 pr-3 outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                {CLIENT_VIEW_SORTS.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    Sort: {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </div>
-
-        <div className="pt-4">
-          {tab === "pipeline" ? (
-            <ClientViewBoard
-              projects={shown}
-              heroUrls={data.heroUrls}
-              showClientName={isAll}
-              canOpenClients={permissions.canOpenClients}
-              onMove={moveProject}
-            />
-          ) : tab === "list" ? (
-            <ClientViewList
-              projects={shown}
-              heroUrls={data.heroUrls}
-              showClientName={isAll}
-              canOpenClients={permissions.canOpenClients}
-              onMove={moveProject}
-            />
+        <section className="min-w-0 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+          {isAll || !selectedClient ? (
+            <AllClientsHeader projectCount={clientProjects.length} clientCount={clients.length} />
           ) : (
-            <ClientViewCalendar
-              projects={shown}
-              heroUrls={data.heroUrls}
-              showClientName={isAll}
-              canOpenCalendar={permissions.canOpenCalendar}
+            <ClientHeader
+              client={selectedClient}
+              projectCount={clientProjects.length}
+              permissions={permissions}
             />
           )}
-        </div>
-      </section>
-    </div>
+
+          {stage && stageLabel ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2 text-sm">
+              <span className="font-medium text-heading">Showing: {stageLabel}</span>
+              <Link href="/admin/projects" className="inline-flex items-center gap-1 text-xs text-muted hover:text-heading">
+                <X className="h-3.5 w-3.5" /> Clear filter
+              </Link>
+            </div>
+          ) : null}
+
+          <div className="mt-4 flex flex-col gap-3 border-y border-border py-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <div role="tablist" aria-label="Project views" className="-mx-1 flex gap-1 overflow-x-auto px-1">
+              {TABS.map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === value}
+                  onClick={() => setTab(value)}
+                  className={cn(
+                    "inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors",
+                    tab === value ? "bg-accent-subtle text-accent" : "text-muted hover:bg-slate-50 hover:text-heading surface-dark:hover:bg-subtle"
+                  )}
+                >
+                  <Icon className="h-4 w-4" aria-hidden />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFilterOpen((o) => !o)}
+                  aria-expanded={filterOpen}
+                  className={cn(activeServices.length > 0 && "border-accent text-accent")}
+                >
+                  <Filter className="h-3.5 w-3.5" />
+                  Filter
+                  {activeServices.length > 0 ? (
+                    <span className="rounded-full bg-accent px-1.5 text-[10px] font-semibold text-accent-foreground">
+                      {activeServices.length}
+                    </span>
+                  ) : null}
+                </Button>
+                {filterOpen ? (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Close filter"
+                      className="fixed inset-0 z-20 cursor-default"
+                      onClick={() => setFilterOpen(false)}
+                    />
+                    <div className="absolute right-0 z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card p-3 shadow-lg">
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-xs font-semibold text-heading">Package / service</p>
+                        {activeServices.length > 0 ? (
+                          <button type="button" onClick={() => setServices([])} className="text-xs text-accent hover:underline">
+                            Clear
+                          </button>
+                        ) : null}
+                      </div>
+                      {serviceOptions.length === 0 ? (
+                        <p className="py-2 text-xs text-muted">No packages on these projects yet.</p>
+                      ) : (
+                        <ul className="max-h-64 space-y-0.5 overflow-y-auto">
+                          {serviceOptions.map((service) => (
+                            <li key={service}>
+                              <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 surface-dark:hover:bg-subtle">
+                                <input
+                                  type="checkbox"
+                                  checked={activeServices.includes(service)}
+                                  onChange={() =>
+                                    setServices((prev) =>
+                                      prev.includes(service) ? prev.filter((s) => s !== service) : [...prev, service]
+                                    )
+                                  }
+                                />
+                                <span className="truncate">{service}</span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+
+              <label className="relative inline-flex h-8 items-center rounded-md border border-border bg-card text-xs font-medium text-foreground hover:bg-accent-subtle">
+                <ArrowUpDown className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-muted" aria-hidden />
+                <span className="sr-only">Sort projects</span>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as ClientViewSort)}
+                  className="h-full cursor-pointer appearance-none rounded-md bg-transparent pl-8 pr-3 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  {CLIENT_VIEW_SORTS.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      Sort: {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="pt-4">
+            {tab === "pipeline" ? (
+              <ClientViewBoard
+                projects={shown}
+                heroUrls={data.heroUrls}
+                showClientName={isAll}
+                canOpenClients={permissions.canOpenClients}
+                onMove={moveProject}
+              />
+            ) : tab === "list" ? (
+              <ClientViewList
+                projects={shown}
+                heroUrls={data.heroUrls}
+                showClientName={isAll}
+                canOpenClients={permissions.canOpenClients}
+                onMove={moveProject}
+              />
+            ) : (
+              <ClientViewCalendar
+                projects={shown}
+                heroUrls={data.heroUrls}
+                showClientName={isAll}
+                canOpenCalendar={permissions.canOpenCalendar}
+              />
+            )}
+          </div>
+        </section>
+      </div>
+    </ClientProfileModalProvider>
   );
 }
 
@@ -348,6 +354,7 @@ function ClientHeader({
   permissions: ClientViewPermissions;
 }) {
   const router = useRouter();
+  const openClientProfile = useOpenClientProfile();
   const [anchor, setAnchor] = useState<ActionMenuAnchor | null>(null);
 
   const menuItems: ActionMenuItem[] = [];
@@ -356,7 +363,8 @@ function ClientHeader({
       id: "profile",
       label: "View client profile",
       icon: User,
-      onSelect: () => router.push(`/admin/clients/${client.id}`),
+      onSelect: () =>
+        openClientProfile ? openClientProfile(client.id) : router.push(`/admin/clients/${client.id}`),
     });
   }
   if (client.email) {

@@ -10,6 +10,7 @@ import { formatShootDateTime } from "@/lib/scheduling";
 import { CLIENT_VIEW_STAGES, STAGE_ACCENTS, projectShootAt } from "@/lib/client-view";
 import type { PipelineProjectRow } from "@/lib/admin-project-pipeline";
 import { cn } from "@/lib/utils";
+import { useOpenClientProfile } from "@/components/admin/client-view/client-profile-modal";
 
 export type ClientViewProjectRow = PipelineProjectRow;
 
@@ -107,6 +108,7 @@ export function ProjectActionsButton({
   className?: string;
 }) {
   const router = useRouter();
+  const openClientProfile = useOpenClientProfile();
   const [anchor, setAnchor] = useState<ActionMenuAnchor | null>(null);
 
   const items: ActionMenuItem[] = [
@@ -139,7 +141,11 @@ export function ProjectActionsButton({
         id: "client",
         label: "View client profile",
         icon: User,
-        onSelect: () => router.push(`/admin/clients/${project.client_id}`),
+        onSelect: () => {
+          const clientId = project.client_id!;
+          if (openClientProfile) openClientProfile(clientId);
+          else router.push(`/admin/clients/${clientId}`);
+        },
       }
     );
   }
