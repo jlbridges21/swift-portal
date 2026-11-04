@@ -702,6 +702,24 @@ BEGIN
   IF v_n > 0 THEN RAISE EXCEPTION 'CLIENT LEAK: business_integrations (%)', v_n; END IF;
   PERFORM _tenant_test_bump();
 
+  -- 8. v110 privilege guard: a logged-in client cannot escalate their own profile.
+  --    Each UPDATE must raise; reaching the RAISE after it means the hole is open.
+  BEGIN
+    UPDATE profiles SET role = 'super_admin' WHERE id = v_tenant_b_client_user_id;
+    RAISE EXCEPTION 'PRIVILEGE ESCALATION: client set own role = super_admin';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  PERFORM _tenant_test_bump();
+  BEGIN
+    UPDATE profiles SET role = 'admin', business_id = v_swift_bid WHERE id = v_tenant_b_client_user_id;
+    RAISE EXCEPTION 'PRIVILEGE ESCALATION: client made self admin of Swift';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  PERFORM _tenant_test_bump();
+  -- Ordinary edits still allowed (value restored by teardown / next setup).
+  UPDATE profiles SET full_name = full_name WHERE id = v_tenant_b_client_user_id;
+  PERFORM _tenant_test_bump();
+
   RESET ROLE;
   SELECT assertions INTO v_assertions FROM _tenant_test_state LIMIT 1;
   RAISE NOTICE 'ALL TENANT ISOLATION TESTS PASSED — % assertions', v_assertions;

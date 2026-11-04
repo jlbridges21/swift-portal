@@ -705,8 +705,11 @@ export async function createBusinessForPlatform(
       }
       createdUserId = newUserId;
 
-      // Belt-and-suspenders: trigger should have set business_id; ensure role/name
-      await raw
+      // This write is what makes the new owner an admin of their business.
+      // Since v110 the signup trigger ignores role/business metadata (anyone can
+      // forge it via the public signUp API), so this server-side write is the
+      // single source of truth. It must succeed, or provisioning rolls back.
+      const { error: promoteErr } = await raw
         .from("profiles")
         .update({
           role: "admin",
@@ -716,6 +719,7 @@ export async function createBusinessForPlatform(
           email: adminEmail,
         })
         .eq("id", createdUserId);
+      if (promoteErr) throw new Error(promoteErr.message || "Could not set up your admin account.");
 
       await ensureBusinessOwnerUserId(businessId, createdUserId);
 

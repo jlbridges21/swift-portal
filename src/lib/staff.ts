@@ -405,7 +405,9 @@ export async function inviteStaffMember(args: {
   }
 
   const userId = sent.userId;
-  await raw
+  // Since v110 the signup trigger creates every user as a plain client, so this
+  // server-side write is what actually makes the invitee staff. Fail loudly.
+  const { error: staffProfileErr } = await raw
     .from("profiles")
     .upsert({
       id: userId,
@@ -417,6 +419,12 @@ export async function inviteStaffMember(args: {
       staff_permissions: emptyStaffPermissions(),
       disabled_at: null,
     });
+  if (staffProfileErr) {
+    return {
+      ok: false,
+      error: staffProfileErr.message || "Could not create the staff account.",
+    };
+  }
 
   void writePlatformAudit({
     actorUserId: args.actor.id,
