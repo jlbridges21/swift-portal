@@ -14,6 +14,10 @@ import { AdminOpsDashboard } from "@/components/admin/admin-ops-dashboard";
 import { SetupChecklistCard } from "@/components/admin/setup-checklist-card";
 import { fetchAdminDashboardData } from "@/lib/admin-dashboard";
 import { loadSetupChecklistSnapshot } from "@/lib/setup-checklist";
+import { getPortalBrandFromSettings } from "@/lib/portal-brand";
+import { BusinessAnalytics } from "@/components/admin/dashboard-analytics/business-analytics";
+import { defaultAnalyticsRange, safeTimeZone } from "@/lib/dashboard-analytics";
+import { loadDashboardAnalytics } from "@/lib/dashboard-analytics-server";
 
 export default async function AdminDashboard() {
   // Double-gate: middleware also redirects staff off /admin, but page must refuse
@@ -23,7 +27,21 @@ export default async function AdminDashboard() {
   const supabase = await createClient();
   const bid = tenant.businessId;
 
-  const [{ data: recentProjects }, { data: recentActivity }, dashboardData, settings, checklist] =
+  // Analytics use the business timezone for calendar days (default: last 30 days ending today).
+  // They start as soon as settings resolve, in parallel with the operational queries.
+  const settingsPromise = getAppSettings(bid);
+  const analyticsPromise = settingsPromise.then(async (s) => {
+    const timeZone = safeTimeZone(s.workflow.businessDefaults.timezone);
+    const range = defaultAnalyticsRange(timeZone);
+    try {
+      return { range, data: await loadDashboardAnalytics(bid, range, timeZone) };
+    } catch (err) {
+      console.error("[admin dashboard] analytics failed to load", err);
+      return { range, data: null };
+    }
+  });
+
+  const [{ data: recentProjects }, { data: recentActivity }, dashboardData, settings, checklist, analytics] =
     await Promise.all([
       supabase
         .from("projects")
@@ -39,9 +57,12 @@ export default async function AdminDashboard() {
         .order("created_at", { ascending: false })
         .limit(12),
       fetchAdminDashboardData(bid),
-      getAppSettings(bid),
+      settingsPromise,
       loadSetupChecklistSnapshot(bid),
+      analyticsPromise,
     ]);
+
+  const brand = getPortalBrandFromSettings(settings);
 
   return (
     <div className="min-h-screen w-full bg-background">
@@ -70,6 +91,19 @@ export default async function AdminDashboard() {
         <PushNotificationsCard />
 
         <AdminOpsDashboard data={dashboardData} />
+
+        {analytics.data ? (
+          <BusinessAnalytics
+            initial={analytics.data}
+            today={analytics.range.to}
+            primaryColor={brand.primaryColor}
+            accentColor={brand.accentColor}
+          />
+        ) : (
+          <p className="mt-10 rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted">
+            Business analytics could not be loaded. Refresh the page to try again.
+          </p>
+        )}
 
         <div className="mt-10 grid w-full max-w-full min-w-0 gap-8 lg:grid-cols-3">
           <div className="min-w-0 lg:col-span-2">

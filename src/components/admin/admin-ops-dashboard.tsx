@@ -21,7 +21,6 @@ import {
   Inbox,
   Pencil,
   Send,
-  Truck,
   Upload,
   Users,
 } from "lucide-react";
@@ -156,30 +155,6 @@ export function AdminOpsDashboard({ data }: AdminOpsDashboardProps) {
                 minute: "2-digit",
               })}
             />
-          ))}
-        </DashboardSection>
-
-        <DashboardSection
-          title="Editing Queue"
-          icon={Pencil}
-          href={pipelineStageHref("editing")}
-          emptyMessage="Editing queue is clear"
-          isEmpty={data.editingQueue.length === 0}
-        >
-          {data.editingQueue.map((p) => (
-            <ProjectRow key={`edit-${p.id}`} project={p} meta={`Updated ${formatRelativeTime(p.updated_at)}`} />
-          ))}
-        </DashboardSection>
-
-        <DashboardSection
-          title="Ready for Delivery"
-          icon={Truck}
-          href={pipelineStageHref("in_review")}
-          emptyMessage="Nothing waiting for delivery"
-          isEmpty={data.readyForDelivery.length === 0}
-        >
-          {data.readyForDelivery.map((p) => (
-            <ProjectRow key={`delivery-${p.id}`} project={p} showStatus />
           ))}
         </DashboardSection>
 
