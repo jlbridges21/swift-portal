@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PortalAccessStatus, type PortalAccessSnapshot } from "@/components/admin/portal-access-status";
 import type { ClientPortalAccountStatus } from "@/lib/client-portal-recovery";
 
 type Props = {
@@ -14,14 +15,6 @@ type Props = {
   clientEmail: string;
   initialStatus: ClientPortalAccountStatus;
 };
-
-function portalStatusBadge(accountStatus: ClientPortalAccountStatus["accountStatus"]) {
-  if (accountStatus === "has_account") return <Badge variant="success">Portal account active</Badge>;
-  if (accountStatus === "invited_unconfirmed") {
-    return <Badge variant="warning">Invited — not confirmed</Badge>;
-  }
-  return <Badge variant="default">No portal account</Badge>;
-}
 
 export function ClientPortalRecoveryCard({ clientId, clientEmail, initialStatus: portalStatus }: Props) {
   const router = useRouter();
@@ -33,6 +26,8 @@ export function ClientPortalRecoveryCard({ clientId, clientEmail, initialStatus:
   );
   const [confirmTempOpen, setConfirmTempOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [access, setAccess] = useState<PortalAccessSnapshot | null>(null);
+  const isActive = access ? access.state === "active" : portalStatus.accountStatus === "has_account";
 
   async function sendReset() {
     setBusy(true);
@@ -109,19 +104,12 @@ export function ClientPortalRecoveryCard({ clientId, clientEmail, initialStatus:
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Portal access</CardTitle>
-        <p className="text-sm text-muted">
-          Restore this client&apos;s portal login without learning their password. Reset email is
-          the safe default; temporary passwords force a change on first sign-in.
-        </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          {portalStatusBadge(portalStatus.accountStatus)}
-          {portalStatus.mustChangePassword ? (
-            <Badge variant="warning">Must change password on login</Badge>
-          ) : null}
-        </div>
-        <p className="text-sm text-muted">{portalStatus.message}</p>
+        <PortalAccessStatus clientId={clientId} variant="full" onChange={setAccess} />
+        {isActive && portalStatus.mustChangePassword ? (
+          <Badge variant="warning">Must change password on login</Badge>
+        ) : null}
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         {notice ? <p className="text-sm text-green-700">{notice}</p> : null}
@@ -164,6 +152,12 @@ export function ClientPortalRecoveryCard({ clientId, clientEmail, initialStatus:
           </div>
         ) : null}
 
+        {isActive ? (
+          <div className="space-y-3 border-t border-border pt-4">
+            <p className="text-sm text-muted">
+              Locked out? Restore access without learning their password. The reset email is the safe default;
+              temporary passwords force a change on first sign-in.
+            </p>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button
             type="button"
@@ -184,6 +178,8 @@ export function ClientPortalRecoveryCard({ clientId, clientEmail, initialStatus:
             Set temporary password…
           </Button>
         </div>
+          </div>
+        ) : null}
         <ConfirmDialog
           open={confirmTempOpen}
           onClose={() => setConfirmTempOpen(false)}
@@ -203,11 +199,6 @@ export function ClientPortalRecoveryCard({ clientId, clientEmail, initialStatus:
             option.
           </p>
         </ConfirmDialog>
-        <p className="text-xs text-muted">
-          Password reset uses your business portal origin and the prefetch-safe{" "}
-          <code className="text-[11px]">/auth/confirm</code> flow. If they have no account yet,
-          they receive the same invite path used elsewhere in ShootPortal.
-        </p>
       </CardContent>
     </Card>
   );

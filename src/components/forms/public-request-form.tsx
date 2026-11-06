@@ -11,36 +11,31 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ServiceSelect } from "@/components/forms/service-select";
-import { createClient } from "@/lib/supabase/client";
 import { AddressFields } from "@/components/forms/address-fields";
-import { CheckCircle, Lock, LogIn } from "lucide-react";
+import { CheckCircle2, Loader2, UserRound } from "lucide-react";
 
 export function PublicRequestForm({
   instantPreliminaryEstimate = true,
+  signedInClient = null,
 }: {
   /** When false, inquiry mode: no service field, no estimate language. */
   instantPreliminaryEstimate?: boolean;
+  /** Signed-in client of this business: contact details come from their account. */
+  signedInClient?: { name: string; email: string } | null;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [accountExists, setAccountExists] = useState(false);
+  const [submittedInline, setSubmittedInline] = useState<string | null>(null);
   const inquiryMode = !instantPreliminaryEstimate;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError("");
-    setAccountExists(false);
 
-    const formData = new FormData(e.currentTarget);
-    const data = Object.fromEntries(formData.entries());
-
-    if (data.password !== data.confirm_password) {
-      setError("Passwords do not match.");
-      setLoading(false);
-      return;
-    }
+    const data = Object.fromEntries(new FormData(e.currentTarget).entries());
 
     try {
       const res = await fetch("/api/request", {
@@ -48,53 +43,65 @@ export function PublicRequestForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-
-      const body = await res.json();
-
-      if (res.status === 409) {
-        setAccountExists(true);
-        setError(body.message);
-        setLoading(false);
-        return;
-      }
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        projectId?: string;
+        thankYouUrl?: string | null;
+      };
 
       if (!res.ok) {
-        throw new Error(body.error || "Failed to submit request");
+        throw new Error(body.message || body.error || "We couldn't submit your request. Please try again.");
       }
 
-      const supabase = createClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: data.email as string,
-        password: data.password as string,
-      });
-
-      if (signInError) {
-        router.push("/login?message=Account created. Please sign in.");
+      if (body.thankYouUrl) {
+        router.push(body.thankYouUrl);
         return;
       }
-
-      router.push(`/dashboard/projects/${body.projectId}?welcome=1`);
-      router.refresh();
+      // Saved, but no confirmation link could be built — confirm inline.
+      setSubmittedInline(body.projectId ?? "");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
       setLoading(false);
     }
+  }
+
+  if (submittedInline !== null) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Header />
+        <main className="flex-1 px-4 py-12 sm:px-6 lg:px-8">
+          <Card className="mx-auto max-w-xl text-center shadow-sm">
+            <CardContent className="space-y-3 py-10">
+              <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
+              <h1 className="text-2xl font-bold text-heading">Request received</h1>
+              <p className="text-muted">
+                Thanks! Your request is in. You don&apos;t need to do anything else — check your email for a
+                confirmation.
+              </p>
+            </CardContent>
+          </Card>
+        </main>
+        <Footer />
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
-      <main className="flex-1 px-4 py-12 sm:px-6 lg:px-8">
+      <main className="flex-1 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
         <div className="mx-auto max-w-2xl">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-heading">
+          <div className="mb-6 text-center sm:mb-8">
+            <h1 className="text-2xl font-bold tracking-tight text-heading sm:text-3xl">
               {inquiryMode ? "Send an Inquiry" : "Request a Shoot"}
             </h1>
             <p className="mt-2 text-muted">
               {inquiryMode
-                ? "Tell us about your property and create your client portal account in one step."
-                : "Submit your project details and create your client portal account in one step."}
+                ? "Tell us about your property. No account needed."
+                : "Tell us about your project. No account needed — it takes about a minute."}
             </p>
           </div>
 
@@ -103,39 +110,63 @@ export function PublicRequestForm({
               <CardTitle>{inquiryMode ? "Project Inquiry" : "Project Request"}</CardTitle>
               <CardDescription>
                 {inquiryMode
-                  ? "Your inquiry will appear in your portal immediately after submission."
-                  : "Your project will appear in your portal immediately after submission."}
+                  ? "We'll review your inquiry and follow up by email."
+                  : "You'll see a preliminary estimate as soon as you submit."}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
-                <section className="space-y-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Contact</h3>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="first_name">First Name *</Label>
-                      <Input id="first_name" name="first_name" required placeholder="John" autoComplete="given-name" />
+                {signedInClient ? (
+                  <section className="flex items-start gap-3 rounded-xl border border-border bg-slate-50 p-4 surface-dark:bg-subtle">
+                    <UserRound className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+                    <div className="min-w-0 text-sm">
+                      <p className="font-medium text-heading">
+                        Submitting as {signedInClient.name || signedInClient.email}
+                      </p>
+                      <p className="truncate text-muted">{signedInClient.email}</p>
+                      <p className="mt-1 text-xs text-muted">
+                        This request will be added to your portal account.
+                      </p>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="last_name">Last Name *</Label>
-                      <Input id="last_name" name="last_name" required placeholder="Smith" autoComplete="family-name" />
+                  </section>
+                ) : (
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Contact</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="first_name">First Name *</Label>
+                        <Input id="first_name" name="first_name" required placeholder="John" autoComplete="given-name" className="min-h-11" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="last_name">Last Name *</Label>
+                        <Input id="last_name" name="last_name" required placeholder="Smith" autoComplete="family-name" className="min-h-11" />
+                      </div>
                     </div>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email *</Label>
-                      <Input id="email" name="email" type="email" required placeholder="john@example.com" autoComplete="email" />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email *</Label>
+                        <Input
+                          id="email"
+                          name="email"
+                          type="email"
+                          inputMode="email"
+                          required
+                          placeholder="john@example.com"
+                          autoComplete="email"
+                          className="min-h-11"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Phone</Label>
+                        <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="(555) 123-4567" className="min-h-11" />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="company">Company</Label>
+                        <Input id="company" name="company" autoComplete="organization" placeholder="Brokerage or company" className="min-h-11" />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Phone</Label>
-                      <Input id="phone" name="phone" type="tel" placeholder="(555) 123-4567" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company">Company</Label>
-                      <Input id="company" name="company" placeholder="Brokerage or company" />
-                    </div>
-                  </div>
-                </section>
+                  </section>
+                )}
 
                 <section className="space-y-4">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Project</h3>
@@ -143,7 +174,7 @@ export function PublicRequestForm({
                   {inquiryMode ? (
                     <div className="space-y-2">
                       <Label htmlFor="preferred_date">Preferred Date</Label>
-                      <Input id="preferred_date" name="preferred_date" type="date" />
+                      <Input id="preferred_date" name="preferred_date" type="date" className="min-h-11" />
                     </div>
                   ) : (
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -153,7 +184,7 @@ export function PublicRequestForm({
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="preferred_date">Preferred Date</Label>
-                        <Input id="preferred_date" name="preferred_date" type="date" />
+                        <Input id="preferred_date" name="preferred_date" type="date" className="min-h-11" />
                       </div>
                     </div>
                   )}
@@ -172,51 +203,33 @@ export function PublicRequestForm({
                   </div>
                 </section>
 
-                <section className="space-y-4 rounded-lg border border-border bg-slate-50 p-4">
-                  <div className="flex items-center gap-2">
-                    <Lock className="h-4 w-4 text-accent" />
-                    <h3 className="text-sm font-semibold text-heading">Portal Account</h3>
-                  </div>
-                  <p className="text-xs text-muted">
-                    {inquiryMode
-                      ? "Create a password to access your project status, messages, and updates."
-                      : "Create a password to access your project status, media, and invoices."}
-                  </p>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="password">Password *</Label>
-                      <Input id="password" name="password" type="password" required minLength={8} placeholder="Min. 8 characters" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="confirm_password">Confirm Password *</Label>
-                      <Input id="confirm_password" name="confirm_password" type="password" required minLength={8} />
-                    </div>
-                  </div>
-                </section>
-
                 {error && (
-                  <div className={`rounded-lg p-4 text-sm ${accountExists ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"}`}>
+                  <div role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-700">
                     {error}
-                    {accountExists && (
-                      <Link href="/login" className="mt-3 inline-flex">
-                        <Button variant="accent" size="sm">
-                          <LogIn className="h-4 w-4" />
-                          Log In to Your Portal
-                        </Button>
-                      </Link>
-                    )}
                   </div>
                 )}
 
-                <Button type="submit" variant="accent" size="lg" className="w-full" disabled={loading}>
-                  {loading
-                    ? inquiryMode
-                      ? "Sending your inquiry..."
-                      : "Creating your portal..."
-                    : inquiryMode
-                      ? "Send Inquiry & Create Account"
-                      : "Submit Request & Create Account"}
+                <Button type="submit" variant="accent" size="lg" className="min-h-12 w-full" disabled={loading}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {inquiryMode ? "Sending..." : "Submitting..."}
+                    </>
+                  ) : inquiryMode ? (
+                    "Send Inquiry"
+                  ) : (
+                    "Submit Request"
+                  )}
                 </Button>
+                {!signedInClient && (
+                  <p className="text-center text-xs text-muted">
+                    Already have a portal account?{" "}
+                    <Link href="/login?redirect=/dashboard/request" className="font-medium text-accent hover:underline">
+                      Log in
+                    </Link>{" "}
+                    to submit from your portal.
+                  </p>
+                )}
               </form>
             </CardContent>
           </Card>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { getProfile } from "@/lib/auth";
 import { notifyAdmins, notifyClient } from "@/lib/notifications";
 import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
 import { defaultProjectTitle, resolveAddressFromBody } from "@/lib/address";
@@ -16,43 +17,35 @@ import {
   normalizeProjectMediaSections,
   projectColumnsFromMediaSections,
 } from "@/lib/project-media-sections";
+import {
+  THANK_YOU_PATH,
+  normalizeEmail,
+  resolveRequestScenario,
+  sealActivationToken,
+  type RequestScenario,
+} from "@/lib/portal-activation";
+import { ensureClientLoginPlaceholder } from "@/lib/portal-activation-server";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Public project request. No password and no login required:
+ * creates or links the client, creates the project in New Requests, notifies
+ * the business, and returns a thank-you URL carrying a sealed request token
+ * (optional portal activation happens there).
+ *
+ * Scenarios (see portal-activation.ts): A new client · B existing client
+ * without an active portal · C existing active portal · D signed-in client.
+ * An existing client's details are never overwritten from this public form.
+ */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-
-    const {
-      email,
-      phone,
-      company,
-      service_requested,
-      preferred_date,
-      notes,
-      password,
-      confirm_password,
-    } = body;
-
-    const person = resolvePersonName({
-      first_name: body.first_name,
-      last_name: body.last_name,
-      name: body.name,
-    });
+    const { phone, company, service_requested, preferred_date, notes } = body;
 
     const { property_address, error: addressError } = resolveAddressFromBody(body);
     if (addressError) {
       return NextResponse.json({ error: addressError }, { status: 400 });
-    }
-
-    if (!person.firstName || !person.lastName || !email || !password) {
-      return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
-    }
-
-    if (password !== confirm_password) {
-      return NextResponse.json({ error: "Passwords do not match." }, { status: 400 });
-    }
-
-    if (password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
     }
 
     const resolved = await resolvePublicSignupBusinessId(body);
@@ -62,9 +55,7 @@ export async function POST(request: Request) {
     const businessId = resolved.businessId;
     const appSettingsEarly = await getAppSettings(businessId);
     const instantPreliminary = appSettingsEarly.proposals.autoPreliminaryEstimate !== false;
-    const serviceRequested = instantPreliminary
-      ? String(service_requested ?? "").trim()
-      : "";
+    const serviceRequested = instantPreliminary ? String(service_requested ?? "").trim() : "";
     if (instantPreliminary && !serviceRequested) {
       return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
     }
@@ -72,97 +63,126 @@ export async function POST(request: Request) {
     const raw = await createServiceClient();
     const db = await createTenantServiceClient(businessId);
 
-    const { data: existingClients } = await raw
-      .from("clients")
-      .select("id, business_id, email")
-      .ilike("email", email)
-      .is("deleted_at", null);
-
-    const otherBusiness = (existingClients ?? []).find(
-      (c) => c.business_id && c.business_id !== businessId
-    );
-    if (otherBusiness) {
-      return NextResponse.json(
-        {
-          error: "email_other_business",
-          message:
-            "This email is already associated with another business. One person cannot be a client of two businesses.",
-        },
-        { status: 409 }
-      );
+    // ── Scenario D: signed in as a client of THIS business ──
+    const profile = await getProfile();
+    let sessionClient: {
+      id: string;
+      email: string | null;
+      name: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    } | null = null;
+    // The tenant-scoped lookup proves the client belongs to this business
+    // (older client profiles may not carry business_id).
+    if (
+      profile?.role === "client" &&
+      profile.client_id &&
+      (!profile.business_id || profile.business_id === businessId)
+    ) {
+      const { data } = await db
+        .from("clients")
+        .select("id, email, name, first_name, last_name, deleted_at")
+        .eq("id", profile.client_id)
+        .maybeSingle();
+      if (data && !data.deleted_at) sessionClient = data;
     }
 
-    const sameBusiness = (existingClients ?? []).find((c) => c.business_id === businessId);
-    if (sameBusiness) {
-      return NextResponse.json(
-        {
-          error: "account_exists",
-          message:
-            "An account already exists with this email. Please log in to request a new shoot from your portal.",
-        },
-        { status: 409 }
-      );
+    const person = sessionClient
+      ? resolvePersonName({
+          first_name: sessionClient.first_name,
+          last_name: sessionClient.last_name,
+          name: sessionClient.name || profile?.full_name,
+        })
+      : resolvePersonName({
+          first_name: body.first_name,
+          last_name: body.last_name,
+          name: body.name,
+        });
+    const email = sessionClient ? normalizeEmail(sessionClient.email) : normalizeEmail(body.email);
+
+    if (!sessionClient && (!person.firstName || !person.lastName || !email)) {
+      return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
+    }
+    if (!sessionClient && !EMAIL_RE.test(email)) {
+      return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
     }
 
-    const { data: authUser, error: authError } = await raw.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: person.fullName, role: "client", business_id: businessId },
-    });
+    let clientId: string;
+    let existingClient: { id: string; portalActive: boolean } | null = null;
+    let newClientPortalActive = false;
 
-    if (authError) {
-      const msg = authError.message.toLowerCase();
-      if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
+    if (sessionClient) {
+      clientId = sessionClient.id;
+    } else {
+      const { data: candidates } = await raw
+        .from("clients")
+        .select("id, business_id, email")
+        .ilike("email", email)
+        .is("deleted_at", null);
+      // ilike treats _ and % as wildcards — only exact (case-insensitive) matches count.
+      const matches = (candidates ?? []).filter((c) => normalizeEmail(c.email) === email);
+
+      if (matches.some((c) => c.business_id && c.business_id !== businessId)) {
         return NextResponse.json(
           {
-            error: "account_exists",
+            error: "email_other_business",
             message:
-              "An account already exists with this email. Please log in to request a new shoot from your portal.",
+              "This email is already associated with another business. Please use a different email address.",
           },
           { status: 409 }
         );
       }
-      return NextResponse.json({ error: authError.message }, { status: 400 });
+
+      const sameBusiness = matches.find((c) => c.business_id === businessId);
+      if (sameBusiness) {
+        clientId = sameBusiness.id;
+        await fillBlankClientFields(db, clientId, {
+          first_name: person.firstName,
+          last_name: person.lastName,
+          full_name: person.fullName,
+          name: person.fullName,
+          phone: phone || null,
+          company: company || null,
+          referral_source: body.referral_source || null,
+        });
+        const login = await ensureClientLoginPlaceholder(clientId, businessId);
+        existingClient = {
+          id: clientId,
+          portalActive: Boolean(login.userId && !login.foreign && login.emailConfirmedAt),
+        };
+      } else {
+        const { data: client, error: clientError } = await db
+          .from("clients")
+          .insert({
+            name: person.fullName,
+            first_name: person.firstName,
+            last_name: person.lastName,
+            full_name: person.fullName,
+            email,
+            phone: phone || null,
+            company: company || null,
+            notes: notes || null,
+            referral_source: body.referral_source || null,
+          })
+          .select("id")
+          .single();
+        if (clientError || !client) {
+          return NextResponse.json({ error: clientError?.message || "Could not save your details." }, { status: 500 });
+        }
+        clientId = client.id;
+        const login = await ensureClientLoginPlaceholder(clientId, businessId);
+        newClientPortalActive = Boolean(login.userId && !login.foreign && login.emailConfirmedAt);
+      }
     }
 
-    if (!authUser.user) {
-      return NextResponse.json({ error: "Failed to create account." }, { status: 500 });
-    }
+    const scenario: RequestScenario = resolveRequestScenario({
+      sessionClientId: sessionClient?.id ?? null,
+      existingClient,
+      newClientPortalActive,
+    });
 
-    const userId = authUser.user.id;
-
-    const { data: client, error: clientError } = await db
-      .from("clients")
-      .insert({
-        name: person.fullName,
-        first_name: person.firstName,
-        last_name: person.lastName,
-        full_name: person.fullName,
-        email,
-        phone: body.phone || null,
-        company: body.company || null,
-        notes: body.notes || null,
-        referral_source: body.referral_source || null,
-        user_id: userId,
-      })
-      .select()
-      .single();
-
-    if (clientError) {
-      await raw.auth.admin.deleteUser(userId);
-      return NextResponse.json({ error: clientError.message }, { status: 500 });
-    }
-
-    await raw
-      .from("profiles")
-      .update({
-        client_id: client.id,
-        full_name: person.fullName,
-        role: "client",
-        business_id: businessId,
-      })
-      .eq("id", userId);
+    const { data: linkedClient } = await db.from("clients").select("user_id").eq("id", clientId).maybeSingle();
+    const actorUserId = sessionClient ? profile!.id : (linkedClient?.user_id as string | null) ?? null;
 
     const projectName = defaultProjectTitle(property_address, serviceRequested);
     const serviceId = await resolveServiceId(businessId, serviceRequested);
@@ -173,7 +193,7 @@ export async function POST(request: Request) {
     const { data: project, error: projectError } = await db
       .from("projects")
       .insert({
-        client_id: client.id,
+        client_id: clientId,
         project_name: projectName,
         property_address,
         service_type: serviceRequested,
@@ -191,8 +211,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: projectError.message }, { status: 500 });
     }
 
-    await linkProjectToProperty(project.id, client.id, property_address, businessId);
-    await touchClientActivity(client.id, businessId);
+    await linkProjectToProperty(project.id, clientId, property_address, businessId);
+    await touchClientActivity(clientId, businessId);
 
     const { data: lead } = await db
       .from("leads")
@@ -214,7 +234,7 @@ export async function POST(request: Request) {
       .single();
 
     const activityServiceLabel = serviceRequested || "inquiry";
-    await db.from("activity_logs").insert([
+    const activities: Record<string, unknown>[] = [
       {
         activity_type: "proposal_submitted",
         description: instantPreliminary
@@ -222,24 +242,41 @@ export async function POST(request: Request) {
           : `Inquiry submitted for ${property_address}`,
         lead_id: lead?.id,
         project_id: project.id,
-        user_id: userId,
-        metadata: { email, service: activityServiceLabel, auto_created: true, inquiry: !instantPreliminary },
-      },
-      {
-        activity_type: "account_created",
-        description: `Client account created for ${person.fullName}`,
-        project_id: project.id,
-        user_id: userId,
-        metadata: { client_id: client.id },
+        client_id: clientId,
+        user_id: actorUserId,
+        visibility: "both",
+        metadata: {
+          email,
+          service: activityServiceLabel,
+          auto_created: true,
+          inquiry: !instantPreliminary,
+          request_scenario: scenario,
+        },
       },
       {
         activity_type: "project_created",
         description: `Project "${projectName}" created`,
         project_id: project.id,
-        user_id: userId,
-        metadata: { client_id: client.id },
+        client_id: clientId,
+        user_id: actorUserId,
+        lead_id: null,
+        visibility: "both",
+        metadata: { client_id: clientId },
       },
-    ]);
+    ];
+    if (scenario === "A") {
+      activities.push({
+        activity_type: "client_created",
+        description: `Client record created for ${person.fullName} from a project request`,
+        project_id: project.id,
+        client_id: clientId,
+        user_id: actorUserId,
+        lead_id: null,
+        visibility: "admin",
+        metadata: { client_id: clientId, portal: "not_activated" },
+      });
+    }
+    await db.from("activity_logs").insert(activities);
 
     await notifyAdmins({
       type: "proposal_submitted",
@@ -253,14 +290,16 @@ export async function POST(request: Request) {
       businessId,
     });
 
+    // Confirmation email: clients without an active portal get a one-step
+    // activation link (see clientEmailCtaUrl); active clients get the project link.
     await notifyClient({
-      clientId: client.id,
+      clientId,
       type: "proposal_submitted",
       eventKey: "new_project_request",
       title: instantPreliminary ? "We received your project request" : "We received your inquiry",
       body: instantPreliminary
-        ? `Thanks ${person.fullName} — we received your request for ${serviceRequested} at ${property_address}.`
-        : `Thanks ${person.fullName} — we received your inquiry for ${property_address}. We'll follow up shortly.`,
+        ? `Thanks ${person.firstName || person.fullName} — we received your request for ${serviceRequested} at ${property_address}. You don't need to do anything else; we'll follow up shortly.`
+        : `Thanks ${person.firstName || person.fullName} — we received your inquiry for ${property_address}. You don't need to do anything else; we'll follow up shortly.`,
       link: `/dashboard/projects/${project.id}`,
       projectId: project.id,
       businessId,
@@ -268,7 +307,7 @@ export async function POST(request: Request) {
 
     if (instantPreliminary && serviceRequested) {
       await createPreliminaryEstimate(project.id, serviceRequested, {
-        userId,
+        userId: actorUserId,
         skipIfExists: true,
         businessId,
       });
@@ -276,7 +315,7 @@ export async function POST(request: Request) {
 
     const ghlPayload = await buildPortalLeadPayload({
       businessId,
-      clientId: client.id,
+      clientId,
       projectId: project.id,
       firstName: person.firstName,
       lastName: person.lastName,
@@ -298,13 +337,52 @@ export async function POST(request: Request) {
 
     await syncNewProjectLeadToGhl(project.id, ghlPayload, businessId);
 
+    let thankYouUrl: string | null = null;
+    try {
+      const token = sealActivationToken({
+        kind: "request",
+        businessId,
+        clientId,
+        email,
+        projectId: project.id,
+        freshClient: scenario === "A",
+      });
+      thankYouUrl = `${THANK_YOU_PATH}?t=${encodeURIComponent(token)}`;
+    } catch (err) {
+      // The request is saved either way; the form falls back to an inline confirmation.
+      console.error("[request] thank-you token unavailable:", err instanceof Error ? err.message : err);
+    }
+
     return NextResponse.json({
       success: true,
       projectId: project.id,
-      email,
+      scenario,
+      thankYouUrl,
     });
   } catch (err) {
-    console.error("Request signup error:", err);
+    console.error("Request submission error:", err);
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
+  }
+}
+
+/** Public form input only fills empty fields on an existing client — never overwrites. */
+async function fillBlankClientFields(
+  db: Awaited<ReturnType<typeof createTenantServiceClient>>,
+  clientId: string,
+  incoming: Record<string, string | null>
+) {
+  const columns = Object.keys(incoming);
+  const { data: current } = await db.from("clients").select(columns.join(", ")).eq("id", clientId).maybeSingle();
+  if (!current) return;
+  const row = current as unknown as Record<string, unknown>;
+  const patch: Record<string, string> = {};
+  for (const [key, value] of Object.entries(incoming)) {
+    const existing = row[key];
+    if (value && (existing === null || existing === undefined || String(existing).trim() === "")) {
+      patch[key] = value;
+    }
+  }
+  if (Object.keys(patch).length) {
+    await db.from("clients").update(patch).eq("id", clientId);
   }
 }

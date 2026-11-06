@@ -106,7 +106,11 @@ Status key: **done** = converted this batch; **pending** = still raw service rol
 | `src/app/api/quotes/route.ts` | **done** (prompt 12). GET cookie RLS + extra `business_id`. POST/PATCH fail-closed tenant wrapper. `archivePreviousOfficialQuotes(businessId, …)`. |
 | `src/app/api/profile/route.ts` | **done** (prompt 12b). Cookie RLS GET + extra `business_id` on clients. PATCH: profiles via `.raw`, clients via tenant wrapper. Fail-closed. |
 | `src/app/api/profile/avatar/route.ts` | **done** (prompt 12b). Fail-closed. Storage + profiles via `.raw`. Path prefix is prompt 13. |
-| `src/app/api/request/route.ts` | **done** (prompt 12b). Public signup stamps `business_id` on auth metadata, profile, client, project, lead, activity. Cross-business email rejected. |
+| `src/app/api/request/route.ts` | **done** (prompt 12b). Public request stamps `business_id` on client, project, lead, activity. Cross-business email rejected. No password: same-business email attaches to the existing client (blank fields only), new clients get an unconfirmed placeholder login via `portal-activation-server`. Raw `clients` email lookup stays (cross-tenant uniqueness), matched exactly. |
+| `src/lib/portal-activation-server.ts` | **done** (optional portal activation). Tenant wrapper for `clients` / `projects` / `project_clients` / `activity_logs`; `.raw` only for `profiles` and `auth.admin.*` (placeholder login without password, client-chosen password on activation). Token business must match the host business before any read. |
+| `src/app/api/portal/activate/route.ts` | N/A — no service client; passes the host business into `portal-activation-server`. Public, token-authorized. |
+| `src/app/api/portal/activation/resend/route.ts` | N/A — no service client; emails a fresh link only to the client's address on file. |
+| `src/app/api/clients/[id]/portal-invite/route.ts` | N/A — no service client; owner-only, tenant from session context. |
 | `src/app/api/request/logged-in/route.ts` | **done** (prompt 12b). Authenticated user's business only; never reads a business id from the body. |
 | `src/app/api/shoot-proposals/route.ts` | **done** (prompt 12b). Tenant wrapper on writes. Activity + `notify*` receive `businessId`. |
 | `src/app/api/tours/route.ts` | **done** (prompt 10). Storage delete via `.raw`. |

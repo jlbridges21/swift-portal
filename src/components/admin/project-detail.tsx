@@ -60,6 +60,7 @@ import {
   type MediaSectionKey,
   type ProjectMediaSections,
 } from "@/lib/project-media-sections";
+import { PortalAccessStatus } from "@/components/admin/portal-access-status";
 
 function dedupeMedia<T extends { id: string }>(items: T[]): T[] {
   const seen = new Set<string>();
@@ -784,30 +785,6 @@ export function AdminProjectDetail({
     }
   }
 
-  async function enablePortalForClient(clientId: string) {
-    const password = window.prompt(
-      "Set a portal password for this client (min 8 characters). They can change it after logging in."
-    );
-    if (!password) return;
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters");
-      return;
-    }
-    const res = await fetch(`/api/clients/${clientId}/portal`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ password }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      toast.error((data as { error?: string }).error || "Failed to enable portal");
-      return;
-    }
-    toast.success(data.message || "Portal access enabled");
-    router.refresh();
-  }
-
   async function removeProjectClient(pcId: string) {
     if (pcId === "primary-fallback") return;
     if (!confirm("Remove this client from the project?")) return;
@@ -1169,7 +1146,7 @@ export function AdminProjectDetail({
         onSetPrimary={setPrimaryClient}
         onRemove={removeProjectClient}
         onCreateClient={() => setShowCreateClient(true)}
-        onEnablePortal={enablePortalForClient}
+        projectId={initialProject.id}
       />
 
       <Suspense fallback={null}>
@@ -1837,7 +1814,7 @@ function ProjectClientsCard({
   onSetPrimary,
   onRemove,
   onCreateClient,
-  onEnablePortal,
+  projectId,
 }: {
   primaryClient: Client;
   primaryClientId: string;
@@ -1854,7 +1831,7 @@ function ProjectClientsCard({
   onSetPrimary: (pcId: string, clientId: string) => void;
   onRemove: (pcId: string) => void;
   onCreateClient: () => void;
-  onEnablePortal: (clientId: string) => void;
+  projectId: string;
 }) {
   const associated = useMemo(() => {
     const rows = [...projectClients];
@@ -1878,8 +1855,8 @@ function ProjectClientsCard({
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-xs text-muted">
-          Every assigned client with portal access can see this project in their login. Clients without a portal login
-          will not see it until you enable access.
+          Portal access is optional. Quotes, scheduling, messages and invoices work for every client; clients who
+          activate their portal also see this project when they sign in.
         </p>
         {associated.length > 0 ? (
           <div className="space-y-2">
@@ -1887,32 +1864,19 @@ function ProjectClientsCard({
               const client = pc.clients as (Client & { user_id?: string | null }) | undefined;
               const displayName = client?.full_name || client?.name || "Client";
               const contact = client?.email || client?.phone;
-              const hasPortal = !!(client?.user_id);
               return (
                 <div
                   key={pc.id}
-                  className="flex items-center gap-2 rounded-xl border border-border bg-white surface-dark:bg-card p-3 text-sm shadow-sm"
+                  className="rounded-xl border border-border bg-white surface-dark:bg-card p-3 text-sm shadow-sm"
                 >
+                <div className="flex items-center gap-2">
                   <Link
                     href={`/admin/clients/${pc.client_id}`}
                     className="min-h-11 min-w-0 flex-1 rounded-lg transition-colors hover:bg-slate-50 surface-dark:hover:bg-subtle active:bg-slate-100 surface-dark:active:bg-subtle -m-1 p-1"
                   >
                     <p className="font-medium text-heading">{displayName}</p>
                     {contact && <p className="text-xs text-muted truncate">{contact}</p>}
-                    <p className={cn("mt-0.5 text-[11px] font-medium", hasPortal ? "text-emerald-700" : "text-amber-700")}>
-                      {hasPortal ? "Portal access linked" : "No portal login — project hidden from them"}
-                    </p>
                   </Link>
-                  {!hasPortal && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="min-h-11 shrink-0 text-xs"
-                      onClick={() => onEnablePortal(pc.client_id)}
-                    >
-                      Enable Portal
-                    </Button>
-                  )}
                   {pc.is_primary ? (
                     <span className="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
                       Primary
@@ -1940,6 +1904,12 @@ function ProjectClientsCard({
                       )}
                     </div>
                   )}
+                </div>
+                <PortalAccessStatus
+                  clientId={pc.client_id}
+                  projectId={projectId}
+                  className="mt-2 border-t border-border pt-2"
+                />
                 </div>
               );
             })}

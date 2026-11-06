@@ -3,6 +3,7 @@ import { logProjectActivity } from "@/lib/activity";
 import { notifyClient } from "@/lib/notifications";
 import { ensureClientPortalAccessForEmail } from "@/lib/client-portal-link";
 import { idempotencyKey } from "@/lib/idempotency";
+import { PORTAL_INVITE_SENT_ACTIVITY } from "@/lib/portal-activation";
 
 /**
  * Notify a client that an admin added them to a project.
@@ -90,6 +91,17 @@ export async function notifyClientAddedToProject(options: {
       },
     }
   );
+
+  if (isInvite) {
+    // Counts as a portal invite for the admin "Portal Invite Sent" state.
+    await logProjectActivity(PORTAL_INVITE_SENT_ACTIVITY, "Portal invite sent with project access email", {
+      businessId: options.businessId,
+      projectId: options.projectId,
+      clientId: options.clientId,
+      visibility: "admin",
+      metadata: { source: "client_added_to_project" },
+    });
+  }
 
   return {
     notified: true,

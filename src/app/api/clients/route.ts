@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdmin } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
+import { createPortalInvite } from "@/lib/portal-activation-server";
 import {
   canAccessClient,
   isOwnerAdmin,
@@ -80,6 +81,12 @@ export async function POST(request: Request) {
     if (!body.name || !body.email) {
       return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
     }
+    if (typeof body.password === "string" && body.password) {
+      return NextResponse.json(
+        { error: "Client passwords can't be set by the business. Send a portal invite instead." },
+        { status: 400 }
+      );
+    }
 
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
@@ -102,39 +109,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    if (body.password) {
-      const { data: authUser, error: authError } = await db.raw.auth.admin.createUser({
-        email: body.email,
-        password: body.password,
-        email_confirm: true,
-        user_metadata: { full_name: body.name, role: "client", business_id: businessId },
+    if (body.send_portal_invite === true && client.email) {
+      // Owners never set client passwords — the client chooses one from the invite.
+      const invite = await createPortalInvite({
+        businessId,
+        clientId: client.id,
+        send: true,
+        actorId: profile.id,
+        source: "owner",
       });
-
-      if (authError) {
-        console.error("Auth user creation failed:", authError.message);
+      if (!invite.ok) {
         return NextResponse.json(
-          { error: `Client created but portal login failed: ${authError.message}` },
+          { ...client, error: `Client created but the portal invite failed: ${invite.error}` },
           { status: 207 }
         );
-      }
-
-      if (authUser.user) {
-        await db
-          .from("clients")
-          .update({ user_id: authUser.user.id })
-          .eq("id", client.id);
-
-        await db.raw
-          .from("profiles")
-          .update({
-            client_id: client.id,
-            role: "client",
-            email_notifications_enabled: true,
-            in_app_notifications_enabled: true,
-          })
-          .eq("id", authUser.user.id);
-
-        return NextResponse.json({ ...client, user_id: authUser.user.id });
       }
     }
 

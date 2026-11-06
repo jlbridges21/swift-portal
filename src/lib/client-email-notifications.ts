@@ -7,6 +7,8 @@ import type { NotificationType } from "@/lib/types";
 import { renderWorkflowTemplate } from "@/lib/workflow-template-render";
 import { businessPortalHref, getBusinessPortalOriginById } from "@/lib/portal-url";
 import { isClientEmailEventEnabled, resolveClientEmailMapping } from "@/lib/client-email-event-map";
+import { isActivationUrl } from "@/lib/portal-activation";
+import { clientEmailCtaUrl } from "@/lib/portal-activation-server";
 
 /** Payment-related emails always send even if the client opted out of marketing-style emails. */
 const CRITICAL_CLIENT_EMAIL_TYPES = new Set<NotificationType>([
@@ -43,6 +45,18 @@ export interface ClientEmailNotificationResult {
 async function resolvePortalUrl(businessId: string, path?: string): Promise<string | undefined> {
   if (!path) return undefined;
   return businessPortalHref(businessId, path);
+}
+
+/** Portal URL for active clients; activation link (same destination) for clients without a portal login. */
+async function resolveClientCtaUrl(options: ClientEmailNotificationOptions): Promise<string | undefined> {
+  if (!options.url) return undefined;
+  if (/^https?:\/\//.test(options.url)) return options.url;
+  return clientEmailCtaUrl({
+    businessId: options.businessId,
+    clientId: options.clientId,
+    path: options.url,
+    projectId: options.projectId,
+  });
 }
 
 export function getClientEmailPresentation(
@@ -256,7 +270,7 @@ export function assembleClientEmailPresentation(
     client_name: "",
     project_name: options.projectName ?? "",
     property_address: "",
-    portal_link: options.url ?? "",
+    portal_link: options.resolvedUrl ?? options.url ?? "",
     portal_name: brandNames.portalName,
     business_name: brandNames.businessName,
   };
@@ -280,7 +294,7 @@ export function assembleClientEmailPresentation(
     }
   }
 
-  return getClientEmailPresentation(
+  const presentation = getClientEmailPresentation(
     options.eventType,
     title,
     body,
@@ -290,6 +304,21 @@ export function assembleClientEmailPresentation(
     subjectOverride,
     options.eventKey
   );
+  return withActivationCta(presentation);
+}
+
+/**
+ * Clients without an active portal get a one-step activation link as the CTA
+ * (see clientEmailCtaUrl). Label it so they know a password is optional.
+ */
+export function withActivationCta(presentation: PremiumEmailContent): PremiumEmailContent {
+  if (!isActivationUrl(presentation.ctaUrl)) return presentation;
+  return {
+    ...presentation,
+    ctaLabel: "Create Account & View My Project",
+    secondaryInfo:
+      "Creating a portal account is optional — it lets you track progress, approve proposals, and download media. The secure link expires in 7 days.",
+  };
 }
 
 const PREVIEW_PROJECT_NAME = "Sample project";
@@ -368,7 +397,7 @@ export async function sendClientEmailNotification(
     projectName: options.projectName,
     projectStatus: options.projectStatus,
     subject: options.subject,
-    resolvedUrl: await resolvePortalUrl(options.businessId, options.url),
+    resolvedUrl: await resolveClientCtaUrl(options),
     brandNames: {
       businessName: appSettings.business.businessName,
       portalName: appSettings.business.portalName,

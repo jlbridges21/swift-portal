@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
 
   const body = await request.json();
-  const { project_id, client_id, is_primary, password } = body;
+  const { project_id, client_id, is_primary } = body;
 
   if (!project_id || !client_id) {
     return NextResponse.json({ error: "project_id and client_id required" }, { status: 400 });
@@ -72,12 +72,8 @@ export async function POST(request: Request) {
   const wasAlreadyOnProject = Boolean(existingAssignment?.id);
 
   // Link existing portal account by email / user_id before assigning
-  let portal = await ensureClientPortalLink(client_id, businessId);
-
-  if (!portal.hasPortal && typeof password === "string" && password.length >= 8) {
-    const { enableClientPortalAccess } = await import("@/lib/client-portal-link");
-    portal = await enableClientPortalAccess(client_id, password, businessId);
-  }
+  // Owner-supplied passwords are no longer accepted — clients activate via invite.
+  const portal = await ensureClientPortalLink(client_id, businessId);
 
   const makePrimary = Boolean(is_primary) || priorClientCount === 0;
 

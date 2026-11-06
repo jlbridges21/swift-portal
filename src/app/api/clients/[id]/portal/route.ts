@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/api-auth";
-import {
-  enableClientPortalAccess,
-  ensureClientPortalLink,
-  getClientPortalStatus,
-} from "@/lib/client-portal-link";
+import { ensureClientPortalLink, getClientPortalStatus } from "@/lib/client-portal-link";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 
 interface RouteParams {
@@ -34,34 +30,15 @@ export async function GET(_request: Request, { params }: RouteParams) {
   });
 }
 
-export async function POST(request: Request, { params }: RouteParams) {
+/**
+ * Retired: businesses no longer set client passwords. Use
+ * POST /api/clients/[id]/portal-invite (send or copy an activation link).
+ */
+export async function POST() {
   const auth = await requireAdminApi({ adminOnly: true });
   if (!auth.ok) return auth.response;
-
-  const { id } = await params;
-  const body = await request.json().catch(() => ({}));
-  const password = typeof body.password === "string" ? body.password : "";
-
-  if (password.length < 8) {
-    return NextResponse.json(
-      { error: "Password must be at least 8 characters" },
-      { status: 400 }
-    );
-  }
-
-  const tenant = await getTenantContext();
-  if (!tenant) return missingTenantResponse(auth.profile.role);
-  const businessId = tenant.businessId;
-  const result = await enableClientPortalAccess(id, password, businessId);
-  if (!result.hasPortal) {
-    return NextResponse.json({ error: result.message }, { status: 400 });
-  }
-
-  return NextResponse.json({
-    success: true,
-    has_portal: true,
-    user_id: result.userId,
-    created: result.created ?? false,
-    message: result.message,
-  });
+  return NextResponse.json(
+    { error: "Client passwords can't be set by the business. Send a portal invite instead." },
+    { status: 410 }
+  );
 }
