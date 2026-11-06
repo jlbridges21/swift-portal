@@ -12,6 +12,10 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   aggregateDashboardAnalytics,
+  drilldownAttributions,
+  moveColumn,
+  normalizeColumnPrefs,
+  parseServiceKeysParam,
   analyticsPalette,
   buildBuckets,
   buildServiceBreakdown,
@@ -190,7 +194,7 @@ function main() {
   eq(onlyForeign.summary.newProjects, 1, "business B sees only its own project");
   const loader = src("src/lib/dashboard-analytics-server.ts");
   const froms = loader.match(/\.from\("[a-z_]+"\)/g) ?? [];
-  const scoped = loader.match(/\.from\("[a-z_]+"\)\s*\n?\s*\.select\([^)]*\)\s*\n?\s*\.eq\("business_id", businessId\)/g) ?? [];
+  const scoped = loader.match(/\.from\("[a-z_]+"\)\s*\n?\s*\.select\((?:[^()]|\([^()]*\))*\)\s*\n?\s*\.eq\("business_id", businessId\)/g) ?? [];
   assert(froms.length >= 4 && froms.length === scoped.length, `every loader query is filtered by business_id (${scoped.length}/${froms.length})`);
   const route = src("src/app/api/admin/dashboard/analytics/route.ts");
   assert(/requireAdmin\(\)/.test(route), "API route is owner-admin only (no staff gate)");
@@ -248,6 +252,54 @@ function main() {
     const x = analyticsPalette(p!, a!);
     assert(new Set(x.services).size === x.services.length && x.services.length === 6, `palette for ${p}/${a} has 6 distinct colors`);
   }
+
+  section("Drill-downs");
+  const period = drilldownAttributions(fixture, { kind: "period" });
+  const att = (id: string) => period.find((a) => a.projectId === id);
+  eq(period.reduce((a, x) => a + x.paidCents, 0), r.summary.paymentsNetCents, "period rows' payments add up to the chart's net revenue");
+  eq(period.reduce((a, x) => a + x.invoicedCents, 0), r.summary.invoicesCents, "period rows' invoices add up to the chart's invoice total");
+  eq(period.filter((x) => x.isNew).length, r.summary.newProjects, "period rows flag exactly the chart's new projects");
+  eq(period[0]?.projectId, "P1", "largest amount listed first");
+  eq([att("P1")?.paidCents, att("P1")?.paymentCount, att("P1")?.invoicedCents], [200_000, 2, 200_000], "deposit + balance both attributed to P1");
+  eq([att("P4")?.paidCents, att("P4")?.refundedCents], [0, 30_000], "refunded project nets to zero and shows the refund");
+  eq([att("P5")?.isNew, att("P5")?.paidCents], [false, -5_000], "older project appears when refunded in the period");
+  assert(!att("P7") && !att("PX") && !att("P8"), "deleted, foreign, and out-of-range projects are not listed");
+  for (const d of ["2026-10-03", "2026-10-15", "2026-10-19"]) {
+    const sub = drilldownAttributions({ ...fixture, range: { from: d, to: d } }, { kind: "period" });
+    eq(sub.reduce((a, x) => a + x.paidCents, 0), r.revenue.payments[day(d)], `drill-down for ${d} matches that chart point`);
+  }
+  const weekRange = { from: "2026-10-12", to: "2026-10-18" };
+  const weekRows = drilldownAttributions({ ...fixture, range: weekRange }, { kind: "period" });
+  const weekBucket = buildBuckets(r.days, "weekly").find((b) => b.start === weekRange.from)!;
+  eq(weekRows.reduce((a, x) => a + x.paidCents, 0), sumIntoBuckets(r.revenue.payments, [weekBucket])[0], "weekly drill-down matches the weekly point");
+  const svc = (keys: string[]) => drilldownAttributions(fixture, { kind: "service", serviceKeys: keys }).map((a) => a.projectId).sort();
+  eq(svc(["video"]), ["P2", "P4"], "service drill-down lists every project with that service (multi-service P2 included)");
+  eq(svc([NO_SERVICE_KEY]), ["P3"], "'No service set' lists projects without a service");
+  eq(svc(["photo", "drone"]), ["P1", "P2", "P6"], "'Other' (several keys) lists projects with any of them, created in range only");
+  eq(svc(["video"]).length, sv.slices.find((x) => x.key === "video")?.count, "service drill-down count equals the slice count");
+  eq(drilldownAttributions({ ...fixture, businessId: B }, { kind: "service", serviceKeys: ["photo"] }).map((a) => a.projectId), ["PX"], "other business sees only its own project");
+
+  eq(parseServiceKeysParam(null), null, "no service param → period mode");
+  eq(parseServiceKeysParam([]), null, "empty list → period mode");
+  eq(parseServiceKeysParam(["9b2f1c1e-3c55-4d1e-9a51-0f6b8b1f2a10", "type:photos, drone", "__none__"]), ["9b2f1c1e-3c55-4d1e-9a51-0f6b8b1f2a10", "type:photos, drone", "__none__"], "valid service keys accepted, including a free-text name with a comma");
+  eq(parseServiceKeysParam(["photo"]), "invalid", "arbitrary service key rejected");
+  eq(parseServiceKeysParam([""]), "invalid", "empty service param rejected");
+  eq(parseServiceKeysParam(Array.from({ length: 51 }, (_, i) => `type:${i}`)), "invalid", "more than 50 keys rejected");
+  const droute = src("src/app/api/admin/dashboard/analytics/projects/route.ts");
+  assert(/requireAdmin\(\)/.test(droute) && /searchParams\.has\("business_id"\)/.test(droute) && /tenant\.businessId/.test(droute), "drill-down route: owner-only, session tenant, business_id param rejected");
+  assert(/"invalid"/.test(droute), "drill-down route rejects invalid service keys");
+
+  section("Column preferences");
+  const ALL = ["project", "client", "status", "paid", "created", "email"];
+  const DEF = ["project", "client", "paid"];
+  eq(normalizeColumnPrefs(null, ALL, DEF, ["project"]), { order: ["project", "client", "paid", "status", "created", "email"], visible: ["project", "client", "paid"] }, "no stored prefs → defaults first");
+  eq(normalizeColumnPrefs("garbage", ALL, DEF, ["project"]).visible, ["project", "client", "paid"], "malformed prefs → defaults");
+  const stored = { order: ["created", "client", "gone", "project", "paid", "status"], visible: ["created", "gone", "paid"] };
+  eq(normalizeColumnPrefs(stored, ALL, DEF, ["project"]), { order: ["created", "client", "project", "paid", "status", "email"], visible: ["created", "project", "paid"] }, "stored order kept, removed column dropped, new column appended hidden, locked column forced visible");
+  eq(normalizeColumnPrefs(stored, [...ALL, "lifetime"], [...DEF, "lifetime"], ["project"]).visible.includes("lifetime"), true, "a new default column appears for existing users");
+  eq(moveColumn(["a", "b", "c"], "c", -1), ["a", "c", "b"], "move earlier");
+  eq(moveColumn(["a", "b", "c"], "a", -1), ["a", "b", "c"], "cannot move past the start");
+  eq(moveColumn(["a", "b", "c"], "a", 2), ["b", "c", "a"], "move to the end");
 
   section("Client/server module boundary");
   const dir = "src/components/admin/dashboard-analytics";

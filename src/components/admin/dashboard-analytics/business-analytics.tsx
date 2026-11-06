@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, Check, Info, Loader2, PieChart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -14,13 +14,16 @@ import {
   formatCents,
   formatDayRange,
   isIsoDay,
+  OTHER_SERVICE_KEY,
   sumIntoBuckets,
+  type ServiceSlice,
   type AnalyticsGrouping,
   type DashboardAnalytics,
   type RevenueView,
 } from "@/lib/dashboard-analytics";
 import { RevenueProjectsChart } from "@/components/admin/dashboard-analytics/revenue-projects-chart";
 import { ServiceDoughnut } from "@/components/admin/dashboard-analytics/service-doughnut";
+import { DrilldownModal, type DrilldownRequest } from "@/components/admin/dashboard-analytics/drilldown-modal";
 
 const PRESETS = [
   { label: "7D", days: 7 },
@@ -143,6 +146,8 @@ export function BusinessAnalytics({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const first = useRef(true);
+  const [drill, setDrill] = useState<DrilldownRequest | null>(null);
+  const closeDrill = useCallback(() => setDrill(null), []);
 
   const palette = useMemo(() => analyticsPalette(primaryColor, accentColor), [primaryColor, accentColor]);
 
@@ -212,6 +217,35 @@ export function BusinessAnalytics({
         ? `No ${view === "payments" ? "payments received" : "invoices issued"} in this range.`
         : "No new projects in this range."
     : null;
+
+  const openPeriod = (index: number) => {
+    const b = buckets[index];
+    if (!b) return;
+    setDrill({
+      mode: "period",
+      title: b.title,
+      subtitle: "Projects created, paid, or invoiced in this period.",
+      from: b.start,
+      to: b.end,
+      view,
+    });
+  };
+
+  const openService = (slice: ServiceSlice) => {
+    const keys = slice.key === OTHER_SERVICE_KEY ? (slice.members ?? []).map((m) => m.key) : [slice.key];
+    if (!keys.length) return;
+    const names =
+      slice.key === OTHER_SERVICE_KEY ? ` (${(slice.members ?? []).map((m) => m.label).join(", ")})` : "";
+    setDrill({
+      mode: "service",
+      title: slice.key === OTHER_SERVICE_KEY ? "Other services" : slice.label,
+      subtitle: `Projects created ${formatDayRange(data.range.from, data.range.to)}${names}.`,
+      from: data.range.from,
+      to: data.range.to,
+      serviceKeys: keys,
+      view,
+    });
+  };
 
   const applyPreset = (days: number) => {
     setTo(today);
@@ -340,7 +374,12 @@ export function BusinessAnalytics({
                 dashed: palette.projectsDashed,
               }}
               emptyMessage={emptyMessage}
+              onSelect={openPeriod}
             />
+            <p className="-mt-2 text-center text-[11px] text-muted">
+              <span className="hidden sm:inline">Click</span>
+              <span className="sm:hidden">Tap twice on</span> a point to see its projects.
+            </p>
 
             <div className="grid min-w-0 gap-3 sm:grid-cols-3">
               <SummaryStat label={`Total revenue · ${revenueLabel}`} value={formatCents(revenueTotal)} hint={revenueHint} />
@@ -379,16 +418,22 @@ export function BusinessAnalytics({
             </CardTitle>
           </CardHeader>
           <CardContent className="min-w-0 space-y-4">
-            <ServiceDoughnut data={data.services} colors={palette.services} otherColor={palette.other} />
+            <ServiceDoughnut
+              data={data.services}
+              colors={palette.services}
+              otherColor={palette.other}
+              onSelect={openService}
+            />
             {data.services.uniqueProjects > 0 ? (
               <p className="text-xs leading-relaxed text-muted">
                 Projects created in this range. A project with several services counts once for each, so percentages
-                are of {data.services.associations} service association{data.services.associations === 1 ? "" : "s"}.
+                are of {data.services.associations} service association{data.services.associations === 1 ? "" : "s"}. Select a slice or service to see its projects.
               </p>
             ) : null}
           </CardContent>
         </Card>
       </div>
+      <DrilldownModal request={drill} onClose={closeDrill} />
     </section>
   );
 }

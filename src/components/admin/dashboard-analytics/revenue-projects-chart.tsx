@@ -52,11 +52,14 @@ export function RevenueProjectsChart({
   revenue,
   projects,
   emptyMessage,
+  onSelect,
 }: {
   buckets: AnalyticsBucket[];
   revenue: Metric;
   projects: Metric;
   emptyMessage?: string | null;
+  /** Click (mouse), second tap on the same point (touch), or Enter opens a drill-down. */
+  onSelect?: (index: number) => void;
 }) {
   const { tip, active, show: showTip, clear, hostRef } = useChartTooltip<number>();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -100,6 +103,7 @@ export function RevenueProjectsChart({
     const rows = [];
     if (showRev) rows.push({ label: revenue.label, value: formatCents(revenue.values[i] ?? 0), color: revenue.color });
     if (showProj) rows.push({ label: projects.label, value: String(projects.values[i] ?? 0), color: projects.color });
+    if (onSelect && rows.length) rows.push({ label: "Click to list projects", value: "", emphasis: false });
     showTip(i, { x: anchor.x, y: anchor.y, title: b.title, rows });
   };
 
@@ -125,7 +129,30 @@ export function RevenueProjectsChart({
     show(i, e.pointerType === "mouse" ? { x: e.clientX, y: e.clientY } : anchorAt(i));
   };
 
+  // Touch: the first tap reads the value; tapping the same point again opens it.
+  const onPointerDown = (e: ReactPointerEvent<SVGRectElement>) => {
+    if (!n || (!showRev && !showProj)) return;
+    const i = indexAt(e.clientX);
+    if (e.pointerType !== "mouse" && onSelect && active === i) {
+      onSelect(i);
+      return;
+    }
+    onPointer(e);
+  };
+
+  const onClick = (e: React.MouseEvent<SVGRectElement>) => {
+    if (!onSelect || !n || (!showRev && !showProj)) return;
+    const pe = e.nativeEvent as PointerEvent;
+    if (pe.pointerType && pe.pointerType !== "mouse") return;
+    onSelect(indexAt(e.clientX));
+  };
+
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (onSelect && active !== null && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      onSelect(active);
+      return;
+    }
     if (!n || !["ArrowRight", "ArrowLeft", "Home", "End"].includes(e.key)) return;
     e.preventDefault();
     const cur = active ?? (e.key === "ArrowLeft" ? n : -1);
@@ -147,7 +174,7 @@ export function RevenueProjectsChart({
       tabIndex={0}
       onKeyDown={onKey}
       onBlur={clear}
-      aria-label={`${[showRev && revenue.label, showProj && projects.label].filter(Boolean).join(" and ") || "No metrics"} by period. Use arrow keys to read values.`}
+      aria-label={`${[showRev && revenue.label, showProj && projects.label].filter(Boolean).join(" and ") || "No metrics"} by period. Use arrow keys to read values${onSelect ? " and Enter to list the projects" : ""}.`}
       className="relative rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2"
     >
       <div ref={boxRef} className="w-full min-w-0">
@@ -254,11 +281,12 @@ export function RevenueProjectsChart({
             height={H - PAD_B + 6}
             fill="transparent"
             onPointerMove={onPointer}
-            onPointerDown={onPointer}
+            onPointerDown={onPointerDown}
+            onClick={onClick}
             onPointerLeave={(e) => {
               if (e.pointerType === "mouse") clear();
             }}
-            style={{ cursor: noneEnabled ? "default" : "crosshair" }}
+            style={{ cursor: noneEnabled ? "default" : onSelect ? "pointer" : "crosshair" }}
           />
         </svg>
       </div>

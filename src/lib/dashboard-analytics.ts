@@ -249,7 +249,7 @@ export interface ServiceSlice {
   /** Share of service associations (0–1). */
   share: number;
   /** For the "Other" slice: the services grouped into it. */
-  members?: { label: string; count: number }[];
+  members?: { key: string; label: string; count: number }[];
 }
 
 export interface ServiceBreakdown {
@@ -452,7 +452,7 @@ export function buildServiceBreakdown(
       label: `Other (${rest.length})`,
       count,
       share: associations ? count / associations : 0,
-      members: rest.map((s) => ({ label: s.label, count: s.count })),
+      members: rest.map((s) => ({ key: s.key, label: s.label, count: s.count })),
     });
   }
 
@@ -462,6 +462,151 @@ export function buildServiceBreakdown(
     associations,
     configuredServices: services.length,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Drill-downs (projects behind a chart point or a service slice)
+// ---------------------------------------------------------------------------
+
+export type DrilldownSelector = { kind: "period" } | { kind: "service"; serviceKeys: string[] };
+
+export interface DrilldownAttribution {
+  projectId: string;
+  /** Created inside the range. */
+  isNew: boolean;
+  createdAt: string | null;
+  /** Net payments received in the range (refunds subtracted). */
+  paidCents: number;
+  refundedCents: number;
+  paymentCount: number;
+  invoicedCents: number;
+  invoiceCount: number;
+  /** Known only for projects created in the range; the loader resolves the rest. */
+  serviceKeys: string[];
+}
+
+export interface DrilldownRow {
+  id: string;
+  name: string;
+  address: string;
+  status: string;
+  createdAt: string;
+  shootDate: string | null;
+  clientId: string | null;
+  clientName: string | null;
+  clientCompany: string | null;
+  clientEmail: string | null;
+  services: string[];
+  isNew: boolean;
+  paidCents: number;
+  refundedCents: number;
+  paymentCount: number;
+  invoicedCents: number;
+  invoiceCount: number;
+  /** Every paid payment on the project, any date. */
+  lifetimePaidCents: number;
+}
+
+export interface DrilldownResponse {
+  range: AnalyticsRange;
+  timeZone: string;
+  rows: DrilldownRow[];
+  /** More projects matched than the table lists. */
+  truncated: boolean;
+  refundsTracked: boolean;
+}
+
+const SERVICE_KEY_RE = /^(?:[0-9a-f-]{36}|type:.{1,200}|__none__)$/i;
+
+/**
+ * Validates repeated `service` parameters (one key each; free-text service names may
+ * contain commas). Null = absent (period mode); "invalid" = reject.
+ */
+export function parseServiceKeysParam(raw: string[] | null | undefined): string[] | null | "invalid" {
+  if (!raw || raw.length === 0) return null;
+  const keys = [...new Set(raw.map((k) => k.trim()))];
+  if (keys.some((k) => !k)) return "invalid";
+  if (!keys.length || keys.length > 50 || keys.some((k) => !SERVICE_KEY_RE.test(k))) return "invalid";
+  return keys;
+}
+
+/**
+ * Same rules as aggregateDashboardAnalytics, per project, so a drill-down row's
+ * amounts add up to the chart value it was opened from.
+ *   period  → projects created, paid, refunded, or invoiced in the range.
+ *   service → projects created in the range with any of the given services
+ *             (NO_SERVICE_KEY matches projects without one).
+ * Sorted by the largest amount in the range, then newest first.
+ */
+export function drilldownAttributions(input: DashboardAnalyticsInput, selector: DrilldownSelector): DrilldownAttribution[] {
+  const tz = safeTimeZone(input.timeZone);
+  const { from, to } = input.range;
+  const inRange = (iso: string) => {
+    const d = zonedDay(iso, tz);
+    return d >= from && d <= to;
+  };
+  const own = <T extends { business_id: string }>(rows: T[]) => rows.filter((r) => r.business_id === input.businessId);
+
+  const map = new Map<string, DrilldownAttribution>();
+  const get = (projectId: string) => {
+    let a = map.get(projectId);
+    if (!a) {
+      a = { projectId, isNew: false, createdAt: null, paidCents: 0, refundedCents: 0, paymentCount: 0, invoicedCents: 0, invoiceCount: 0, serviceKeys: [] };
+      map.set(projectId, a);
+    }
+    return a;
+  };
+
+  const seenProjects = new Set<string>();
+  for (const p of own(input.projects)) {
+    if (p.deleted || seenProjects.has(p.id) || !inRange(p.created_at)) continue;
+    seenProjects.add(p.id);
+    const a = get(p.id);
+    a.isNew = true;
+    a.createdAt = p.created_at;
+    a.serviceKeys = [...new Set((p.service_keys ?? []).filter(Boolean))];
+  }
+
+  const seenPayments = new Set<string>();
+  for (const p of own(input.payments)) {
+    if (seenPayments.has(p.id)) continue;
+    seenPayments.add(p.id);
+    if (p.project_deleted) continue;
+    const amount = Math.max(0, Math.round(Number(p.amount) || 0));
+    if (p.status === "paid" && inRange(paymentReceivedAt(p))) {
+      const a = get(p.project_id);
+      a.paidCents += amount;
+      a.paymentCount++;
+    }
+    if (isIssuedPaymentStatus(p.status) && inRange(p.created_at)) {
+      const a = get(p.project_id);
+      a.invoicedCents += amount;
+      a.invoiceCount++;
+    }
+  }
+
+  for (const r of own(input.refunds)) {
+    if (r.project_deleted || !inRange(r.refunded_at)) continue;
+    const amount = Math.max(0, Math.round(Number(r.amount) || 0));
+    const a = get(r.project_id);
+    a.paidCents -= amount;
+    a.refundedCents += amount;
+  }
+
+  let rows = [...map.values()];
+  if (selector.kind === "service") {
+    const wanted = new Set(selector.serviceKeys);
+    rows = rows.filter((a) => a.isNew && (a.serviceKeys.length ? a.serviceKeys : [NO_SERVICE_KEY]).some((k) => wanted.has(k)));
+  }
+
+  const weight = (a: DrilldownAttribution) => Math.max(Math.abs(a.paidCents), a.invoicedCents);
+  return rows.sort(
+    (x, y) =>
+      weight(y) - weight(x) ||
+      Number(y.isNew) - Number(x.isNew) ||
+      (y.createdAt ?? "").localeCompare(x.createdAt ?? "") ||
+      x.projectId.localeCompare(y.projectId)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -735,4 +880,53 @@ export function niceAxis(max: number, intervals = 4): { max: number; step: numbe
   let step = nice * pow;
   if (step < 1 && Number.isInteger(max)) step = 1;
   return { max: step * intervals, step };
+}
+
+// ---------------------------------------------------------------------------
+// Drill-down table column preferences (stored per viewer in localStorage)
+// ---------------------------------------------------------------------------
+
+export interface ColumnPrefs {
+  /** Every known column, in display order. */
+  order: string[];
+  /** Visible columns. */
+  visible: string[];
+}
+
+/**
+ * Reconciles stored preferences with the current column list: unknown keys are dropped,
+ * columns added since are appended (visible only if they are a default), locked columns
+ * are always visible, and anything malformed falls back to the defaults.
+ */
+export function normalizeColumnPrefs(
+  stored: unknown,
+  allKeys: string[],
+  defaultVisible: string[],
+  locked: string[] = []
+): ColumnPrefs {
+  const known = new Set(allKeys);
+  const defaults: ColumnPrefs = {
+    order: [...defaultVisible.filter((k) => known.has(k)), ...allKeys.filter((k) => !defaultVisible.includes(k))],
+    visible: [...new Set([...locked, ...defaultVisible])].filter((k) => known.has(k)),
+  };
+  const s = stored as Partial<ColumnPrefs> | null;
+  if (!s || !Array.isArray(s.order) || !Array.isArray(s.visible)) return defaults;
+
+  const order = [...new Set(s.order.filter((k): k is string => typeof k === "string" && known.has(k)))];
+  const added = allKeys.filter((k) => !order.includes(k));
+  const visible = new Set(s.visible.filter((k): k is string => typeof k === "string" && known.has(k)));
+  for (const k of added) if (defaultVisible.includes(k)) visible.add(k);
+  for (const k of locked) visible.add(k);
+  const fullOrder = [...order, ...added];
+  return { order: fullOrder, visible: fullOrder.filter((k) => visible.has(k)) };
+}
+
+export function moveColumn(order: string[], key: string, delta: number): string[] {
+  const i = order.indexOf(key);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= order.length) return order;
+  const next = [...order];
+  next.splice(i, 1);
+  next.splice(j, 0, key);
+  return next;
 }

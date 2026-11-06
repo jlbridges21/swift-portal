@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChartTooltip, anchorFor, useChartTooltip, type TooltipRow } from "@/components/platform/analytics/chart-tooltip";
-import { OTHER_SERVICE_KEY, type ServiceBreakdown } from "@/lib/dashboard-analytics";
+import { OTHER_SERVICE_KEY, type ServiceBreakdown, type ServiceSlice } from "@/lib/dashboard-analytics";
 import { cn } from "@/lib/utils";
 
 /**
@@ -42,10 +42,13 @@ export function ServiceDoughnut({
   data,
   colors,
   otherColor,
+  onSelect,
 }: {
   data: ServiceBreakdown;
   colors: string[];
   otherColor: string;
+  /** Click or tap a slice or legend row to list its projects. */
+  onSelect?: (slice: ServiceSlice) => void;
 }) {
   const { tip, active, show: showTip, clear, hostRef } = useChartTooltip<string>();
 
@@ -94,6 +97,7 @@ export function ServiceDoughnut({
     if ((s.members?.length ?? 0) > 6) {
       rows.push({ label: `+${s.members!.length - 6} more`, value: "", emphasis: false });
     }
+    if (onSelect) rows.push({ label: "Click to list projects", value: "", emphasis: false });
     showTip(s.key, { x: anchor.x, y: anchor.y, title: s.label, rows });
   };
 
@@ -102,6 +106,11 @@ export function ServiceDoughnut({
     onPointerMove: (e: React.PointerEvent<Element>) => e.pointerType === "mouse" && show(s, { x: e.clientX, y: e.clientY }),
     onPointerDown: (e: React.PointerEvent<Element>) => show(s, anchorFor(e, e.currentTarget)),
     onPointerLeave: (e: React.PointerEvent<Element>) => e.pointerType === "mouse" && clear(),
+    onClick: () => {
+      if (!onSelect) return;
+      clear();
+      onSelect(s);
+    },
   });
 
   return (
@@ -114,7 +123,7 @@ export function ServiceDoughnut({
             fill={a.color}
             fillRule="evenodd"
             opacity={active === null || active === a.key ? 1 : 0.35}
-            className="cursor-default transition-opacity"
+            className={cn("transition-opacity", onSelect ? "cursor-pointer" : "cursor-default")}
             {...handlers(a)}
           />
         ))}
@@ -132,10 +141,11 @@ export function ServiceDoughnut({
             <button
               type="button"
               className={cn(
-                "flex w-full min-w-0 cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/60",
-                active === s.key ? "bg-subtle" : "bg-transparent"
+                "flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/60",
+                active === s.key ? "bg-subtle" : "bg-transparent",
+                onSelect ? "cursor-pointer hover:bg-subtle" : "cursor-default"
               )}
-              aria-label={`${s.label}: ${s.count} projects, ${pct(s.share)} of service associations`}
+              aria-label={`${s.label}: ${s.count} projects, ${pct(s.share)} of service associations${onSelect ? ". Open to list the projects." : ""}`}
               {...handlers(s)}
               onFocus={(e) => show(s, anchorFor(e, e.currentTarget))}
               onBlur={clear}
