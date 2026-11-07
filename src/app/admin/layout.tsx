@@ -173,6 +173,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             subscriptionCancelAtPeriodEnd={tenant.business.subscription_cancel_at_period_end}
             scheduled={scheduledPlan}
             introOffer={introOffer}
+            offer={offer}
           />
         )}
         {trialModal}
