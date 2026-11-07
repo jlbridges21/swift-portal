@@ -7,6 +7,9 @@ import { listAllPlans, type PlanRow } from "@/lib/entitlements";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BusinessAcquisitionCard } from "@/components/platform/analytics/business-acquisition-card";
+import { loadEconomicsDataset } from "@/lib/platform-economics";
+import { BusinessEconomicsSummary } from "@/components/platform/economics/business-summary";
+import { BusinessEconomicsHistoryCharts } from "@/components/platform/economics/business-history";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +20,16 @@ export default async function PlatformBusinessDetailPage({
 }) {
   await requireSuperAdminPage();
   const { id } = await params;
-  const [detail, plans] = await Promise.all([loadBusinessDetail(id), listAllPlans()]);
+  const [detail, plans, economics] = await Promise.all([
+    loadBusinessDetail(id),
+    listAllPlans(),
+    loadEconomicsDataset().catch((err) => {
+      console.error("[platform/business] economics failed", err instanceof Error ? err.message : err);
+      return null;
+    }),
+  ]);
   if (!detail) notFound();
+  const economicsRow = economics?.rows.find((r) => r.id === id) ?? null;
 
   const currentPlan: PlanRow | null = plans.find((p) => p.key === detail.business.plan) ?? null;
 
@@ -92,6 +103,21 @@ export default async function PlatformBusinessDetailPage({
         Created {formatDate(detail.business.created_at)}
         {detail.business.is_protected ? " · protected (undeletable)" : ""}
       </p>
+
+      {economicsRow && economics ? (
+        <Card className="mb-6">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Economics</CardTitle>
+            <Link href={`/platform/economics/businesses?focus=${id}`} className="text-sm text-accent underline">
+              Compare with other businesses
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <BusinessEconomicsSummary row={economicsRow} windowDays={economics.egressWindow.windowDays} />
+            <BusinessEconomicsHistoryCharts businessId={id} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <BusinessAcquisitionCard
         businessId={detail.business.id}

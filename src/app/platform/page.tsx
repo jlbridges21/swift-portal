@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { loadPlatformAudit, loadPlatformBusinesses, platformTotals } from "@/lib/platform-dashboard";
 import { sumShootPortalSubscriptionRevenueCents } from "@/lib/platform-revenue";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { PlatformBusinessesTable } from "@/components/platform/platform-businesses-table";
+import { PlatformBusinessesTable, type BusinessEconomicsCell } from "@/components/platform/platform-businesses-table";
+import { loadBusinessEconomicsMap } from "@/lib/platform-economics";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +17,27 @@ export default async function PlatformHomePage({
 }) {
   await requireSuperAdminPage();
   const { notice, name } = await searchParams;
-  const businesses = await loadPlatformBusinesses();
+  const [businesses, economicsMap] = await Promise.all([loadPlatformBusinesses(), loadBusinessEconomicsMap()]);
   const totals = platformTotals(businesses);
   const shootPortalRevenueCents = await sumShootPortalSubscriptionRevenueCents();
+  // Storage + estimated monthly infrastructure cost per business (null if economics failed to load).
+  const economics: Record<string, BusinessEconomicsCell> | null = economicsMap
+    ? Object.fromEntries(
+        [...economicsMap.rows.entries()].map(([id, r]) => [
+          id,
+          {
+            storageBytes: r.storageBytes,
+            allowanceGb: r.allowanceGb,
+            utilization: r.utilization,
+            monthlyCost: r.cost.total,
+            storageCost: r.cost.storage,
+            bandwidthCost: r.cost.supabaseEgress + r.cost.vercelTransfer,
+            monthlyEgressBytes: r.monthlyEgressBytes,
+            mrr: r.mrr,
+          },
+        ])
+      )
+    : null;
   const recent = await loadPlatformAudit({ limit: 12 });
   const named = name?.trim() || "Business";
 
@@ -110,11 +129,14 @@ export default async function PlatformHomePage({
       </div>
 
       <Card className="mb-8">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>All businesses</CardTitle>
+          <Link href="/platform/economics/businesses" className="text-sm text-accent underline">
+            Platform economics
+          </Link>
         </CardHeader>
         <CardContent>
-          <PlatformBusinessesTable businesses={businesses} />
+          <PlatformBusinessesTable businesses={businesses} economics={economics} />
         </CardContent>
       </Card>
 

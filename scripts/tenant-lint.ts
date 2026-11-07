@@ -150,6 +150,10 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/lib/platform-business-bulk.ts",
   "src/lib/custom-domain.ts",
   "src/lib/platform-dashboard.ts",
+  // Platform Economics (docs/PLATFORM-ECONOMICS.md): cross-tenant storage/egress/revenue
+  // aggregates for super admins, and best-effort egress metering RPC.
+  "src/lib/platform-economics.ts",
+  "src/lib/egress-metering.ts",
   "src/lib/setup-checklist.ts",
   "src/lib/platform-revenue.ts",
   "src/app/api/platform/revenue/subscriptions/route.ts",
@@ -270,6 +274,10 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/lib/platform-onboard.ts",
   "src/lib/custom-domain.ts",
   "src/lib/platform-dashboard.ts",
+  // Platform Economics (docs/PLATFORM-ECONOMICS.md): cross-tenant storage/egress/revenue
+  // aggregates for super admins, and best-effort egress metering RPC.
+  "src/lib/platform-economics.ts",
+  "src/lib/egress-metering.ts",
   "src/lib/setup-checklist.ts",
   "src/lib/platform-revenue.ts",
   "src/app/api/platform/revenue/subscriptions/route.ts",

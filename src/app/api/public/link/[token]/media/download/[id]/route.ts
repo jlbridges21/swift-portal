@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordEgress } from "@/lib/egress-metering";
 import { getPublicHostContext } from "@/lib/host-resolution";
 import {
   DOWNLOAD_GATE_API_MESSAGE,
@@ -89,6 +90,7 @@ export async function GET(
       asset,
       searchParams,
       extraHeaders: PUBLIC_LINK_CACHE_HEADERS,
+      meterBusinessId: ctx.businessId,
     });
   }
 
@@ -129,6 +131,8 @@ export async function GET(
     return NextResponse.json({ error: "Failed to generate preview URL" }, { status: 500 });
   }
 
+  // Estimated: one full file size per signed original handed out (locked previews excluded).
+  if (!options) recordEgress(ctx.businessId, "signed_delivery", asset.file_size ?? 0);
   return NextResponse.json(
     { url: data.signedUrl, preview: forcePreview, downloadsAllowed },
     { headers: PUBLIC_LINK_CACHE_HEADERS }

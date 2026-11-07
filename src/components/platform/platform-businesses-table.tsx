@@ -19,6 +19,23 @@ import {
   type BulkItemResult,
 } from "@/lib/platform-business-bulk.shared";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatBytes, formatUsd } from "@/lib/economics/assumptions";
+import { StorageCell } from "@/components/platform/economics/ui";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+
+/** Per-business infrastructure metrics (Platform Economics). Optional — table works without. */
+export type BusinessEconomicsCell = {
+  storageBytes: number;
+  allowanceGb: number | null;
+  utilization: number | null;
+  monthlyCost: number;
+  storageCost: number;
+  bandwidthCost: number;
+  monthlyEgressBytes: number;
+  mrr: number;
+};
+
+type SortKey = "storage" | "cost";
 
 type ConfirmState = {
   action: BulkBusinessAction;
@@ -55,9 +72,16 @@ function actionLabel(action: BulkBusinessAction): string {
   }
 }
 
-export function PlatformBusinessesTable({ businesses }: { businesses: PlatformBusinessRow[] }) {
+export function PlatformBusinessesTable({
+  businesses,
+  economics,
+}: {
+  businesses: PlatformBusinessRow[];
+  economics?: Record<string, BusinessEconomicsCell> | null;
+}) {
   const router = useRouter();
   const [filter, setFilter] = useState("");
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [confirmPhrase, setConfirmPhrase] = useState("");
@@ -76,15 +100,43 @@ export function PlatformBusinessesTable({ businesses }: { businesses: PlatformBu
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return businesses;
-    return businesses.filter(
-      (b) =>
-        b.name.toLowerCase().includes(q) ||
-        b.slug.toLowerCase().includes(q) ||
-        b.plan.toLowerCase().includes(q) ||
-        b.status.toLowerCase().includes(q)
+    const rows = !q
+      ? businesses
+      : businesses.filter(
+          (b) =>
+            b.name.toLowerCase().includes(q) ||
+            b.slug.toLowerCase().includes(q) ||
+            b.plan.toLowerCase().includes(q) ||
+            b.status.toLowerCase().includes(q)
+        );
+    if (!sort || !economics) return rows;
+    const val = (b: PlatformBusinessRow) => {
+      const e = economics[b.id];
+      if (!e) return -1;
+      return sort.key === "storage" ? e.storageBytes : e.monthlyCost;
+    };
+    return [...rows].sort((a, b) => (sort.dir === "asc" ? val(a) - val(b) : val(b) - val(a)));
+  }, [businesses, filter, sort, economics]);
+
+  function sortHeader(key: SortKey, label: string, title: string) {
+    const active = sort?.key === key;
+    const Icon = active ? (sort!.dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+    return (
+      <th className="py-2 pr-3 font-medium" aria-sort={active ? (sort!.dir === "asc" ? "ascending" : "descending") : "none"}>
+        <button
+          type="button"
+          title={title}
+          className={`inline-flex items-center gap-1 whitespace-nowrap hover:text-heading ${active ? "text-heading" : ""}`}
+          onClick={() =>
+            setSort((s) => (s?.key !== key ? { key, dir: "desc" } : s.dir === "desc" ? { key, dir: "asc" } : null))
+          }
+        >
+          {label}
+          <Icon className="h-3 w-3" aria-hidden />
+        </button>
+      </th>
     );
-  }, [businesses, filter]);
+  }
 
   const selectedRows = useMemo(
     () => businesses.filter((b) => selected.has(b.id)),
@@ -453,7 +505,7 @@ export function PlatformBusinessesTable({ businesses }: { businesses: PlatformBu
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1020px] text-left text-sm">
+        <table className={`w-full text-left text-sm ${economics ? "min-w-[1260px]" : "min-w-[1020px]"}`}>
           <thead>
             <tr className="border-b border-border text-muted">
               <th className="py-2 pr-2 font-medium w-10">
@@ -473,6 +525,10 @@ export function PlatformBusinessesTable({ businesses }: { businesses: PlatformBu
               <th className="py-2 pr-3 font-medium">Clients</th>
               <th className="py-2 pr-3 font-medium">Projects</th>
               <th className="py-2 pr-3 font-medium">Media</th>
+              {economics ? sortHeader("storage", "Storage", "Measured storage vs plan allowance. Click to sort.") : null}
+              {economics
+                ? sortHeader("cost", "Monthly cost", "Estimated monthly infrastructure cost (storage + bandwidth, marginal rates). Click to sort.")
+                : null}
               <th className="py-2 pr-3 font-medium">Revenue</th>
               <th className="py-2 pr-3 font-medium">Stripe</th>
               <th className="py-2 pr-3 font-medium">Created</th>
@@ -554,6 +610,34 @@ export function PlatformBusinessesTable({ businesses }: { businesses: PlatformBu
                   <td className="py-3 pr-3">{b.clientCount}</td>
                   <td className="py-3 pr-3">{b.projectCount}</td>
                   <td className="py-3 pr-3">{b.mediaCount}</td>
+                  {economics ? (
+                    <td className="py-3 pr-3">
+                      {economics[b.id] ? (
+                        <StorageCell
+                          bytes={economics[b.id]!.storageBytes}
+                          allowanceGb={economics[b.id]!.allowanceGb}
+                          utilization={economics[b.id]!.utilization}
+                        />
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                  ) : null}
+                  {economics ? (
+                    <td className="py-3 pr-3 whitespace-nowrap tabular-nums">
+                      {economics[b.id] ? (
+                        <Link
+                          href={`/platform/economics/businesses?focus=${b.id}`}
+                          className="hover:underline"
+                          title={`Storage ${formatUsd(economics[b.id]!.storageCost)} · bandwidth ${formatUsd(economics[b.id]!.bandwidthCost)} (${formatBytes(economics[b.id]!.monthlyEgressBytes)} delivered, 30d) · MRR ${formatUsd(economics[b.id]!.mrr)}. Estimated at list unit prices.`}
+                        >
+                          {formatUsd(economics[b.id]!.monthlyCost)}/mo
+                        </Link>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                  ) : null}
                   <td className="py-3 pr-3">{formatCurrency(b.lifetimeRevenueCents)}</td>
                   <td className="py-3 pr-3">{b.stripeStatus}</td>
                   <td className="py-3 pr-3">{formatDate(b.created_at)}</td>
@@ -563,7 +647,7 @@ export function PlatformBusinessesTable({ businesses }: { businesses: PlatformBu
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={13} className="py-6 text-center text-muted">
+                <td colSpan={economics ? 15 : 13} className="py-6 text-center text-muted">
                   No businesses match this filter.
                 </td>
               </tr>

@@ -226,3 +226,19 @@ revoked from `anon`/`authenticated`.
 - `src/lib/analytics/conversions.ts` — super-admin conversion report (`/platform/analytics/conversions`).
 - `src/app/api/billing/start-trial/route.ts` — owner admin's own business only (`getTenantContext`),
   conditional one-time update while `trial_ends_at IS NULL`.
+
+## Platform Economics (v112)
+
+Service-role users added for super-admin infrastructure / revenue analytics (design:
+`docs/PLATFORM-ECONOMICS.md`). New tables `platform_storage_snapshots`,
+`business_storage_snapshots`, `business_egress_daily`, `platform_economics_settings`,
+`platform_expense_entries`, `platform_pricing_scenarios` have RLS enabled with no policies and
+privileges revoked from `anon`/`authenticated`. New functions (`platform_storage_usage_by_business`,
+`platform_media_monthly`, `platform_download_estimates`, `record_business_egress`) are
+`SECURITY DEFINER` with EXECUTE granted to `service_role` only.
+
+- `src/lib/platform-economics.ts` — super-admin reads (callers pass `requireSuperAdminPage` /
+  `requireSuperAdminApi`): cross-tenant storage, egress, subscription revenue and plan fields;
+  writes only the v112 tables. Also on `FROM_UNSCOPED_ALLOWLIST`.
+- `src/lib/egress-metering.ts` — fire-and-forget `record_business_egress` RPC from download
+  routes. The business id always comes from the route's already-authorized tenant / share context.

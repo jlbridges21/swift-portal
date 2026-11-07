@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordEgress } from "@/lib/egress-metering";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
 import { clientIp, PUBLIC_LINK_CACHE_HEADERS } from "@/lib/public-link-api";
 import {
@@ -64,6 +65,8 @@ async function streamPreview(photo: ShareablePhoto, businessId: string, edge: nu
       if (res.ok && res.body) {
         body = res.body;
         contentType = res.headers.get("content-type") || contentType;
+        const len = Number(res.headers.get("content-length"));
+        recordEgress(businessId, "proxied_download", Number.isFinite(len) && len > 0 ? len : 0, { imageTransforms: 1 });
       }
     }
   }
@@ -80,6 +83,7 @@ async function streamPreview(photo: ShareablePhoto, businessId: string, edge: nu
         .jpeg({ quality: 80 })
         .toBuffer();
       contentType = "image/jpeg";
+      recordEgress(businessId, "proxied_download", file.size);
     } catch (err) {
       console.error("[photo-share] preview resize failed", { mediaId: photo.id, err });
       return deny(502, "We couldn't load this photo. Please try again.");
@@ -131,6 +135,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       bucket: BUCKET,
       asset: photo,
       searchParams: url.searchParams,
+      meterBusinessId: share.businessId,
       onSuccess: () => {
         void trackMediaDownload({
           businessId: share.businessId,

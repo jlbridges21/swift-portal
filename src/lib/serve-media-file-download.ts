@@ -8,6 +8,7 @@ import {
   type DownloadQuality,
 } from "@/lib/download-quality";
 import { downloadFileName } from "@/lib/media-display-name";
+import { recordEgress } from "@/lib/egress-metering";
 
 type DownloadAsset = {
   id: string;
@@ -31,8 +32,10 @@ export async function serveMediaFileDownload(opts: {
   inline?: boolean;
   extraHeaders?: HeadersInit;
   onSuccess?: () => void;
+  /** Business to attribute the streamed bytes to (Platform Economics egress metering). */
+  meterBusinessId?: string | null;
 }): Promise<NextResponse> {
-  const { storage, bucket, asset, searchParams, inline = false, extraHeaders, onSuccess } = opts;
+  const { storage, bucket, asset, searchParams, inline = false, extraHeaders, onSuccess, meterBusinessId } = opts;
   const quality = parseDownloadQuality(searchParams.get(DOWNLOAD_QUALITY_PARAM));
   const disposition = inline ? "inline" : "attachment";
 
@@ -56,6 +59,7 @@ export async function serveMediaFileDownload(opts: {
     }
 
     onSuccess?.();
+    recordEgress(meterBusinessId, "proxied_download", fileData.size);
 
     const filename =
       asset.media_type === "photo"
@@ -97,12 +101,18 @@ export async function serveMediaFileDownload(opts: {
     !signed.transformed && "reason" in signed ? signed.reason : undefined;
   let body: ReadableStream<Uint8Array> | Blob | null = null;
   let contentType = asset.mime_type || "image/jpeg";
+  let meteredBytes: number | null = null;
+  const lengthOf = (res: Response) => {
+    const n = Number(res.headers.get("content-length"));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
 
   if (signed.transformed) {
     const res = await fetch(signed.signedUrl, { cache: "no-store" });
     if (res.ok && res.body) {
       body = res.body;
       contentType = res.headers.get("content-type") || contentType;
+      meteredBytes = lengthOf(res);
     } else {
       console.warn("[media/download] MLS transform fetch failed; falling back to original", {
         mediaId: asset.id,
@@ -116,6 +126,7 @@ export async function serveMediaFileDownload(opts: {
     if (res.ok && res.body) {
       body = res.body;
       contentType = res.headers.get("content-type") || contentType;
+      meteredBytes = lengthOf(res) ?? asset.file_size ?? null;
     }
   }
 
@@ -134,11 +145,15 @@ export async function serveMediaFileDownload(opts: {
       );
     }
     body = fileData;
+    meteredBytes = fileData.size;
     fellBack = true;
     fallbackReason = fallbackReason ?? "sign_failed_no_transform";
   }
 
   onSuccess?.();
+  recordEgress(meterBusinessId, "proxied_download", meteredBytes ?? asset.file_size ?? 0, {
+    imageTransforms: signed.transformed && !fellBack ? 1 : 0,
+  });
 
   const filename = downloadFileNameForQuality(asset, "mls", {
     mlsFellBackToPrint: fellBack,

@@ -28,6 +28,7 @@
     "test:seo-growth": "npx tsx scripts/verify-seo-growth.ts",
     "test:dashboard-analytics": "npx tsx scripts/verify-dashboard-analytics.ts",
     "test:portal-activation": "npx tsx scripts/verify-portal-activation.ts",
+    "test:platform-economics": "npx tsx scripts/verify-platform-economics.ts",
     "seo:audit": "npx tsx scripts/seo-audit.ts",
     "setup:stripe-billing": "npx tsx scripts/setup-stripe-billing.ts",
     "tenant-lint": "npx tsx scripts/tenant-lint.ts && npx tsx scripts/verify-marketing-css.ts",

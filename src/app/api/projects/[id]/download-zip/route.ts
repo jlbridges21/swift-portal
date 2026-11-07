@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordEgress } from "@/lib/egress-metering";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import {
@@ -184,6 +185,7 @@ export async function GET(
     void zipStream.completion
       .then((result) => {
         if (auth.shareId) void touchProjectShareAccess(auth.shareId);
+        recordEgress(tenant.businessId, "zip_download", result.totalBytes, { requests: 1 });
         zipLog("zip_ready", ctx, {
           fileCount: result.fileCount,
           skippedCount: result.skipped.length,

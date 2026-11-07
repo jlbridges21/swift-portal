@@ -24,23 +24,42 @@ function shortDay(day: string) {
   return `${Number(m)}/${Number(d)}`;
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Axis/tooltip labels. "month" expects YYYY-MM-01 keys. */
+function axisLabel(day: string, mode: "day" | "month") {
+  if (mode === "day") return shortDay(day);
+  const [, m] = day.split("-");
+  return MONTHS[Number(m) - 1] ?? day;
+}
+
+function titleLabel(day: string, mode: "day" | "month") {
+  if (mode === "day") return formatDay(day);
+  const [y, m] = day.split("-");
+  return `${MONTHS[Number(m) - 1] ?? m} ${y}`;
+}
+
 type Point = { day: string; [k: string]: number | string };
 
 export function TrendChart({
   points,
   series,
   height = 200,
+  xMode = "day",
+  empty = "No data in this range yet.",
 }: {
   points: Point[];
   series: { key: string; label: string; color: string; type?: ValueType }[];
   height?: number;
+  xMode?: "day" | "month";
+  empty?: string;
 }) {
   const { tip, active, show: showTip, clear, hostRef } = useChartTooltip<number>();
   const svgRef = useRef<SVGSVGElement>(null);
 
   const values = points.flatMap((p) => series.map((s) => Number(p[s.key] ?? 0)));
   const max = Math.max(1, ...values);
-  if (!points.length || values.every((v) => v === 0)) return <EmptyChart>No data in this range yet.</EmptyChart>;
+  if (!points.length || values.every((v) => v === 0)) return <EmptyChart>{empty}</EmptyChart>;
 
   const W = 720;
   const H = height;
@@ -58,7 +77,7 @@ export function TrendChart({
     showTip(i, {
       x: anchor.x,
       y: anchor.y,
-      title: formatDay(p.day),
+      title: titleLabel(p.day, xMode),
       rows: series.map((s) => ({ label: s.label, value: formatValue(Number(p[s.key] ?? 0), s.type ?? "int"), color: s.color })),
     });
   };
@@ -117,7 +136,7 @@ export function TrendChart({
           <g key={t}>
             <line x1={padL} x2={W - 8} y1={y(t)} y2={y(t)} stroke="currentColor" className="text-border" strokeDasharray="3 4" />
             <text x={padL - 6} y={y(t) + 4} textAnchor="end" fontSize="10" className="fill-current text-muted">
-              {formatValue(t, series[0]?.type === "money" ? "money" : "int")}
+              {formatValue(t, series[0]?.type === "money" ? "money" : series[0]?.type === "decimal" ? "decimal" : "int")}
             </text>
           </g>
         ))}
@@ -148,7 +167,7 @@ export function TrendChart({
         {points.map((p, i) =>
           i % labelEvery === 0 || i === points.length - 1 ? (
             <text key={p.day} x={x(i)} y={H - 6} textAnchor="middle" fontSize="10" className="fill-current text-muted">
-              {shortDay(p.day)}
+              {axisLabel(p.day, xMode)}
             </text>
           ) : null
         )}
@@ -178,12 +197,14 @@ export function ColumnChart({
   label,
   color = "#4F46E5",
   type = "int",
+  xMode = "day",
 }: {
   points: Point[];
   valueKey: string;
   label: string;
   color?: string;
   type?: ValueType;
+  xMode?: "day" | "month";
 }) {
   const { tip, active, show: showTip, clear, hostRef } = useChartTooltip<number>();
   const vals = points.map((p) => Number(p[valueKey] ?? 0));
@@ -193,7 +214,7 @@ export function ColumnChart({
   const labelEvery = Math.max(1, Math.ceil(points.length / 8));
 
   const show = (i: number, anchor: { x: number; y: number }) =>
-    showTip(i, { x: anchor.x, y: anchor.y, title: formatDay(points[i]!.day), rows: [{ label, value: formatValue(vals[i]!, type), color }] });
+    showTip(i, { x: anchor.x, y: anchor.y, title: titleLabel(points[i]!.day, xMode), rows: [{ label, value: formatValue(vals[i]!, type), color }] });
 
   return (
     <div ref={hostRef}>
@@ -202,7 +223,7 @@ export function ColumnChart({
           <button
             key={p.day}
             type="button"
-            aria-label={`${formatDay(p.day)}: ${formatValue(vals[i]!, type)} ${label.toLowerCase()}`}
+            aria-label={`${titleLabel(p.day, xMode)}: ${formatValue(vals[i]!, type)} ${label.toLowerCase()}`}
             className="group relative flex h-full flex-1 cursor-default items-end rounded-sm outline-none focus-visible:bg-indigo-50"
             onPointerEnter={(e) => show(i, anchorFor(e, e.currentTarget.firstElementChild ?? e.currentTarget))}
             onPointerMove={(e) => e.pointerType === "mouse" && show(i, { x: e.clientX, y: e.clientY })}
@@ -228,7 +249,7 @@ export function ColumnChart({
       <div className="mt-1 flex gap-[2px] text-[10px] text-muted" aria-hidden>
         {points.map((p, i) => (
           <span key={p.day} className="flex-1 text-center">
-            {i % labelEvery === 0 ? shortDay(p.day) : ""}
+            {i % labelEvery === 0 ? axisLabel(p.day, xMode) : ""}
           </span>
         ))}
       </div>

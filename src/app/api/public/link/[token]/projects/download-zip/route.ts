@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordEgress } from "@/lib/egress-metering";
 import { getPublicHostContext } from "@/lib/host-resolution";
 import { getAppSettings } from "@/lib/app-settings";
 import {
@@ -116,6 +117,11 @@ export async function GET(
       : buildZipFilename(project.project_name, project.property_address, quality);
 
     const zip = createProjectZipStream(db.raw, downloadable, logCtx, quality);
+    void zip.completion
+      .then((result) => recordEgress(ctx.businessId, "zip_download", result.totalBytes, { requests: 1 }))
+      .catch(() => {
+        // Stream errors are logged by createProjectZipStream; metering only counts completed ZIPs.
+      });
     return new NextResponse(zip.stream, {
       headers: {
         "Content-Type": "application/zip",

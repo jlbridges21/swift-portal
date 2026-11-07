@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordEgress } from "@/lib/egress-metering";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProfile } from "@/lib/auth";
 import {
@@ -133,6 +134,7 @@ export async function GET(
       asset,
       searchParams,
       inline,
+      meterBusinessId: tenant.businessId,
       onSuccess: () => {
         recordShareAccess();
         const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
@@ -207,6 +209,9 @@ export async function GET(
   }
 
   recordShareAccess();
+  // Full-size originals handed to the browser (video playback, full view). Estimated: one
+  // file size per issue. Locked previews are transformed (~1200px) and not counted.
+  if (!options) recordEgress(tenant.businessId, "signed_delivery", asset.file_size ?? 0);
   return NextResponse.json({
     url: data.signedUrl,
     preview: forcePreview,
