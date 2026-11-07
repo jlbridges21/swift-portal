@@ -155,7 +155,7 @@ export function MarketingHomePricing({
                 variant="outline"
                 className="min-h-12 w-full border-[#4F46E5] bg-white text-base font-semibold text-[#4F46E5] hover:bg-[#EEF2FF]"
               >
-                Subscribe &amp; Save {introOfferSavingsLabel()}
+                Subscribe &amp; Save {introOfferSavingsLabel(interval)}
               </Button>
             </Link>
             <p className="mt-2 text-center text-xs text-[#475569]">

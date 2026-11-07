@@ -186,7 +186,7 @@ export function BillingPlansWithPromo({
         const badgeFor = (q: IntervalQuote | undefined, fallback: string | null) =>
           q && q.savingsCents > 0
             ? effectiveKind === "intro"
-              ? `Save ${save}`
+              ? `Save ${formatUsd(q.savingsCents)}`
               : `Partner discount`
             : fallback;
         return (

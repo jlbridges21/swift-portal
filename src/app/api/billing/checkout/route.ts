@@ -256,7 +256,7 @@ export async function POST(request: Request) {
           });
           return NextResponse.json(
             {
-              error: `We couldn't apply your ${introOfferSavingsLabel()} Subscribe & Save discount just now. Please try again in a moment — you haven't been charged.`,
+              error: `We couldn't apply your ${introOfferSavingsLabel(interval)} Subscribe & Save discount just now. Please try again in a moment — you haven't been charged.`,
               code: "offer_unavailable",
             },
             { status: 503 }
@@ -278,7 +278,7 @@ export async function POST(request: Request) {
     if (expectedOffer === "intro" && !introApplied) {
       return NextResponse.json(
         {
-          error: `The ${introOfferSavingsLabel()} Subscribe & Save offer is no longer available for this account, so your price has been updated. Review it and try again — you haven't been charged.`,
+          error: `The ${introOfferSavingsLabel(interval)} Subscribe & Save offer is no longer available for this account, so your price has been updated. Review it and try again — you haven't been charged.`,
           code: "offer_unavailable",
         },
         { status: 409 }
@@ -313,7 +313,7 @@ export async function POST(request: Request) {
         logStripeError("billing/checkout", createErr, { businessId: business.id, interval, mode, intro: true });
         return NextResponse.json(
           {
-            error: `We couldn't apply your ${introOfferSavingsLabel()} Subscribe & Save discount just now. Please try again in a moment — you haven't been charged.`,
+            error: `We couldn't apply your ${introOfferSavingsLabel(interval)} Subscribe & Save discount just now. Please try again in a moment — you haven't been charged.`,
             code: "offer_unavailable",
           },
           { status: 503 }

@@ -201,7 +201,7 @@ export type TrialModalCopy = {
 
 /**
  * Modal copy. Subscribing during a trial bills TODAY and ends the trial, so no milestone promises
- * "you won't be charged until your trial ends". `introSavings` ("$15") is set only while the
+ * "you won't be charged until your trial ends". `introSavings` ("up to $25") is set only while the
  * Subscribe & Save offer is available to this account (never for partner-referred accounts).
  */
 export function trialModalCopy(

@@ -57,7 +57,7 @@ export function SubscriptionBanner({
               <>Scheduled plan canceled — your free trial ends <strong>{date}</strong>.</>
             ) : introLive ? (
               <>
-                Your {name} Starts <strong>{date}</strong>. Prefer to start today? Save {introOfferSavingsLabel()} when
+                Your {name} Starts <strong>{date}</strong>. Prefer to start today? Save {introOfferSavingsLabel(scheduled.interval ?? undefined)} when
                 you start before then.
               </>
             ) : (
@@ -196,7 +196,7 @@ function TrialOfferBanner({
                 : "mr-2 hidden rounded-full bg-emerald-600 px-2 py-0.5 align-middle text-[11px] font-bold uppercase tracking-wide text-white sm:inline-block"
             }
           >
-            {save ? `Save ${save}` : "Partner price"}
+            {save ? "Trial offer" : "Partner price"}
           </span>
           <strong className="font-semibold">
             {save

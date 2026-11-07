@@ -56,17 +56,18 @@ function pure() {
   assert(m.firstChargeCents === 2400 && m.introInvoices === 3 && m.savingsCents === 1500, "monthly intro: $24 today, 3 discounted months, $15 saved");
   assert(m.summary === "$24/month for your first 3 months, then $29/month", `monthly summary copy (${m.summary})`);
   const a = quoteInterval("annual", 28800, true);
-  assert(a.firstChargeCents === 27300 && a.introInvoices === 1 && a.savingsCents === 1500, "annual intro: $273 today, $15 saved");
-  assert(a.summary === "$273 for your first year, then $288/year" && a.renewal === "Renews at $288/year", "annual summary + renewal copy");
+  assert(a.firstChargeCents === 26300 && a.introInvoices === 1 && a.savingsCents === 2500, "annual intro: $263 today, $25 saved");
+  assert(a.summary === "$263 for your first year, then $288/year" && a.renewal === "Renews at $288/year", "annual summary + renewal copy");
   const plain = quoteInterval("monthly", 2900, false);
   assert(plain.firstChargeCents === 2900 && plain.savingsCents === 0, "no offer ⇒ regular $29");
   const plan = quotePlan({ monthlyCents: 2900, annualPerMonthCents: 2400 }, true);
-  assert(plan.annual?.regularCents === 28800 && plan.annual.firstChargeCents === 27300, "plans row: annual = price_annual_cents × 12");
-  assert(introOfferSavingsLabel() === "$15", "headline savings = $15");
+  assert(plan.annual?.regularCents === 28800 && plan.annual.firstChargeCents === 26300, "plans row: annual = price_annual_cents × 12");
+  assert(introOfferSavingsLabel() === "up to $25", "headline savings = up to $25");
+  assert(introOfferSavingsLabel("monthly") === "$15" && introOfferSavingsLabel("annual") === "$25", "per-interval savings: $15 monthly, $25 annual");
   assert(introOfferTerms("six_month") === null, "an interval without terms (future 6-month plan) has no intro offer");
   assert(introOfferTerms("constructor") === null, "terms lookup is not fooled by prototype keys");
   assert(introOfferCouponId("monthly", introOfferTerms("monthly")!) === "sp_intro_monthly_500_3mo_v1", "deterministic monthly coupon id");
-  assert(introOfferCouponId("annual", introOfferTerms("annual")!) === "sp_intro_annual_1500_once_v1", "deterministic annual coupon id");
+  assert(introOfferCouponId("annual", introOfferTerms("annual")!) === "sp_intro_annual_2500_once_v1", "deterministic annual coupon id");
 
   // ── Window ─────────────────────────────────────────────────────────────
   const created = daysAgo(3);
@@ -108,7 +109,7 @@ function pure() {
   assert(why({ ...trial, subscription_status: "active", liveSubscription: { status: "active", hasDiscount: false } }) === "already_subscribed", "paying $29/month customer (Scenario F) ⇒ no intro");
   assert(why({ ...trial, subscription_status: "past_due", liveSubscription: { status: "past_due", hasDiscount: false } }) === "already_subscribed", "past_due ⇒ no intro");
   const sched = decideIntroOffer({ ...trial, subscription_status: "active", liveSubscription: { status: "trialing", hasDiscount: false } }, NOW);
-  assert(sched.eligible && sched.kind === "start_scheduled_now", "Scenario D: scheduled $288 plan inside the trial ⇒ may voluntarily start now at $273");
+  assert(sched.eligible && sched.kind === "start_scheduled_now", "Scenario D: scheduled $288 plan inside the trial ⇒ may voluntarily start now at $263");
   assert(why({ ...trial, subscription_status: "active", liveSubscription: { status: "trialing", hasDiscount: true } }) === "existing_discount", "scheduled plan with a referral discount keeps it (no stacking)");
   assert(why({ ...trial, subscription_status: "active", created_at: daysAgo(15), trial_ends_at: daysAgo(1), liveSubscription: { status: "trialing", hasDiscount: false } }) === "expired", "scheduled plan after the window ⇒ no intro");
 
@@ -116,9 +117,9 @@ function pure() {
   assert(introCountdownLabel(6 * DAY_MS - 1000) === "6 days" && introCountdownLabel(DAY_MS + 1) === "2 days", "countdown rounds up to whole days");
   assert(introCountdownLabel(5 * 3600_000) === "5 hours", "under a day ⇒ hours");
   const calm = introOfferPromptCopy(6 * DAY_MS);
-  assert(!calm.urgent && calm.headline === "Enjoying ShootPortal? Subscribe before your trial ends and save $15!", "mid-trial copy is calm");
+  assert(!calm.urgent && calm.headline === "Enjoying ShootPortal? Subscribe before your trial ends and save up to $25!", "mid-trial copy is calm");
   const urgent = introOfferPromptCopy(3 * DAY_MS - 1000);
-  assert(urgent.urgent && urgent.headline === "Your free trial ends in 3 days. Subscribe now to save $15 on your first subscription.", "last 3 days: countdown copy");
+  assert(urgent.urgent && urgent.headline === "Your free trial ends in 3 days. Subscribe now to save up to $25 on your first subscription.", "last 3 days: countdown copy");
 }
 
 async function pureServer() {
@@ -149,7 +150,7 @@ async function stripeE2E() {
 
   const monthlyCoupon = await ensureIntroOfferCoupon("monthly");
   const annualCoupon = await ensureIntroOfferCoupon("annual");
-  assert(monthlyCoupon === "sp_intro_monthly_500_3mo_v1" && annualCoupon === "sp_intro_annual_1500_once_v1", "intro coupons created / verified in Stripe");
+  assert(monthlyCoupon === "sp_intro_monthly_500_3mo_v1" && annualCoupon === "sp_intro_annual_2500_once_v1", "intro coupons created / verified in Stripe");
   assert((await ensureIntroOfferCoupon("monthly")) === monthlyCoupon, "coupon ensure is idempotent");
   assert((await ensureIntroOfferCoupon("six_month")) === null, "no coupon for an interval without terms");
 
@@ -210,7 +211,7 @@ async function stripeE2E() {
       );
     }
 
-    // Scenario A — immediate annual with intro: $273, renews $288.
+    // Scenario A — immediate annual with intro: $263, renews $288.
     {
       const clock = await newClock("verify s&s: annual intro");
       const { customer } = await customerOn(clock.id, "pm_card_visa");
@@ -223,7 +224,7 @@ async function stripeE2E() {
       });
       await advance(clock.id, clock.frozen_time + 366 * DAY);
       const amounts = await paidAmounts(sub.id);
-      assert(JSON.stringify(amounts.slice(0, 2)) === JSON.stringify([27300, 28800]), `Scenario A: $273 today, $288 at renewal (got ${amounts.join(", ")})`);
+      assert(JSON.stringify(amounts.slice(0, 2)) === JSON.stringify([26300, 28800]), `Scenario A: $263 today, $288 at renewal (got ${amounts.join(", ")})`);
     }
 
     // Scenario D (no action) — grandfathered scheduled $288 annual bills exactly as scheduled.
@@ -238,7 +239,7 @@ async function stripeE2E() {
       assert(after.status === "active" && JSON.stringify(await paidAmounts(sub.id)) === "[28800]", "Scenario D: $288 charged on the original date when the customer does nothing");
     }
 
-    // Scenario D (voluntary) — start the SAME subscription now at $273.
+    // Scenario D (voluntary) — start the SAME subscription now at $263.
     {
       const clock = await newClock("verify s&s: grandfathered start now");
       const { customer } = await customerOn(clock.id, "pm_card_visa");
@@ -261,15 +262,15 @@ async function stripeE2E() {
       assert(updated.metadata.business_id === fakeBusinessId && updated.metadata.shootportal_billing === "true", "billing metadata preserved on update (webhook still attributes it)");
       const subs = await stripe.subscriptions.list({ customer: customer.id, status: "all" });
       assert(subs.data.length === 1, "exactly one subscription on the customer");
-      assert(JSON.stringify(await paidAmounts(sub.id)) === "[27300]", "Scenario D: $273 charged once, immediately");
+      assert(JSON.stringify(await paidAmounts(sub.id)) === "[26300]", "Scenario D: $263 charged once, immediately");
       // A second tab sends the identical request (same state ⇒ same key and params).
       const otherTab = await stripe.subscriptions.update(sub.id, params, { idempotencyKey: key });
       assert(otherTab.id === sub.id && (otherTab.discounts?.length ?? 0) <= 1, "another tab gets the same single result");
-      assert(JSON.stringify(await paidAmounts(sub.id)) === "[27300]", "another tab charges nothing more");
+      assert(JSON.stringify(await paidAmounts(sub.id)) === "[26300]", "another tab charges nothing more");
       await advance(clock.id, trialEnd + 3600);
-      assert(JSON.stringify(await paidAmounts(sub.id)) === "[27300]", "no extra charge on the original scheduled date");
+      assert(JSON.stringify(await paidAmounts(sub.id)) === "[26300]", "no extra charge on the original scheduled date");
       await advance(clock.id, clock.frozen_time + 367 * DAY);
-      assert(JSON.stringify(await paidAmounts(sub.id)) === "[27300,28800]", "renews at $288 a year after starting");
+      assert(JSON.stringify(await paidAmounts(sub.id)) === "[26300,28800]", "renews at $288 a year after starting");
     }
 
     // Monthly scheduled → start now: $24 × 3 then $29.

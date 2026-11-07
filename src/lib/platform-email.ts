@@ -37,7 +37,7 @@ export type PlatformLifecycleVariables = {
   billingUrl: string;
   ownerName: string;
   /**
-   * "Subscribe before November 20 and save $15 on your first subscription." while this account
+   * "Subscribe before November 20 and save up to $25 on your first subscription." while this account
    * can claim Subscribe & Save; empty otherwise (expired window, referred, already paying).
    */
   subscribeSaveOffer: string;

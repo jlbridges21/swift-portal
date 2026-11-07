@@ -48,7 +48,7 @@ export default async function SignupPage({
   const demo = intent.source === ADMIN_DEMO_SOURCE ? await resolveAdminDemoAuthorization() : null;
 
   // Same pricing the account will get at checkout: a valid partner referral cookie ⇒ partner
-  // pricing (never stacked with Subscribe & Save); otherwise the $15 Subscribe & Save offer.
+  // pricing (never stacked with Subscribe & Save); otherwise the Subscribe & Save offer ($15 monthly / $25 annual).
   let offer: OfferDisplay & { partnerName: string | null } = {
     kind: "intro",
     quotes: quotePlan(pricing, true),

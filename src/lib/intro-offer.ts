@@ -1,5 +1,5 @@
 /**
- * Subscribe & Save — the general new-customer introductory offer ($15 off the first paid
+ * Subscribe & Save — the general new-customer introductory offer ($15 off monthly / $25 off annual, first paid
  * subscription). Pure and client-safe: no DB, no Stripe, no device clock assumptions (callers
  * pass server timestamps). Server-side loading + Stripe coupons: intro-offer-server.ts.
  *
@@ -42,7 +42,7 @@ export type IntroOfferTerms = {
  */
 export const INTRO_OFFER_TERMS: Readonly<Record<string, IntroOfferTerms>> = {
   monthly: { amountOffCents: 500, duration: { kind: "repeating", months: 3 }, discountedInvoices: 3 },
-  annual: { amountOffCents: 1500, duration: { kind: "once" }, discountedInvoices: 1 },
+  annual: { amountOffCents: 2500, duration: { kind: "once" }, discountedInvoices: 1 },
 };
 
 export function introOfferTerms(interval: string | null | undefined): IntroOfferTerms | null {
@@ -50,18 +50,29 @@ export function introOfferTerms(interval: string | null | undefined): IntroOffer
   return Object.prototype.hasOwnProperty.call(INTRO_OFFER_TERMS, interval) ? INTRO_OFFER_TERMS[interval] : null;
 }
 
-/** Total saved over the discounted invoices: $5 × 3 = $15, $15 × 1 = $15. */
+/** Total saved over the discounted invoices: monthly $5 × 3 = $15, annual $25 × 1 = $25. */
 export function introOfferSavingsCents(terms: IntroOfferTerms): number {
   return terms.amountOffCents * terms.discountedInvoices;
 }
 
-/** Largest saving across intervals — the "$15" in headline copy. */
+/** Largest saving across intervals (annual $25). */
 export function introOfferHeadlineSavingsCents(): number {
   return Math.max(0, ...Object.values(INTRO_OFFER_TERMS).map(introOfferSavingsCents));
 }
 
-export function introOfferSavingsLabel(): string {
-  return formatUsd(introOfferHeadlineSavingsCents());
+/**
+ * Savings for copy. With an interval: that interval's saving ("$15" monthly, "$25" annual).
+ * Without: "$X" when every interval saves the same, else "up to $25" — so "save up to $25"
+ * never overstates what a monthly subscriber gets.
+ */
+export function introOfferSavingsLabel(interval?: string): string {
+  if (interval) {
+    const t = introOfferTerms(interval);
+    return t ? formatUsd(introOfferSavingsCents(t)) : formatUsd(0);
+  }
+  const all = Object.values(INTRO_OFFER_TERMS).map(introOfferSavingsCents);
+  const max = introOfferHeadlineSavingsCents();
+  return all.every((c) => c === max) ? formatUsd(max) : `up to ${formatUsd(max)}`;
 }
 
 /** Stable, mode-agnostic Stripe coupon id for the terms (test and live each hold their own). */

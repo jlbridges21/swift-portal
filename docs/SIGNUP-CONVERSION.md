@@ -4,19 +4,23 @@
 > older sections below describe the original v107 flow and are kept for the pieces still in use
 > (setup-mode sessions opened before the change, conversion events, trial modals' timing).
 
-## Subscribe & Save — $15 introductory offer (migration v111)
+## Subscribe & Save — introductory offer: $15 monthly / $25 annual (migration v111)
 
 Two signup paths on `/signup`: **Start Free Trial** (14 days, no card) and **Subscribe & Save**
-(pay today, $15 off). Rules: `src/lib/intro-offer.ts` (pure); loading / Stripe coupons /
+(pay today: $15 off monthly over 3 months, or $25 off the first annual payment). Rules: `src/lib/intro-offer.ts` (pure); loading / Stripe coupons /
 redemption: `src/lib/intro-offer-server.ts`; tests: `scripts/verify-subscribe-and-save.ts`.
 
 | Interval | Regular | Intro | Stripe coupon (auto-created per mode) |
 | --- | --- | --- | --- |
 | Monthly | $29/month | $24/month for 3 months, then $29 | `sp_intro_monthly_500_3mo_v1` ($5 off, repeating 3 months) |
-| Annual | $288/year | $273 first year, renews $288 | `sp_intro_annual_1500_once_v1` ($15 off, once) |
+| Annual | $288/year | $263 first year, renews $288 | `sp_intro_annual_2500_once_v1` ($25 off, once) |
 
 Terms live in `INTRO_OFFER_TERMS` keyed by interval; an interval with no entry (e.g. a future
-six-month plan) simply has no intro offer.
+six-month plan) simply has no intro offer. Headline copy says "save up to $25"
+(`introOfferSavingsLabel()`); plan cards and checkout messages use each interval's own amount.
+The annual offer was $15 off ($273, coupon `sp_intro_annual_1500_once_v1`) before Nov 2026 — that
+coupon is no longer used; changing an amount always creates a new coupon id, so subscriptions that
+already redeemed the old one are unaffected.
 
 **Eligibility** (`decideIntroOffer`) — all must hold, otherwise regular price (fail closed):
 - Inside the original window: `min(trial_ends_at, created_at + plans.trial_days)`. Switching paths,
@@ -60,7 +64,7 @@ allows switching between monthly and annual, a customer switching mid-intro keep
 their intro coupon on the new interval — disable plan switching there if that matters.
 
 **Tests:** `npx tsx scripts/verify-subscribe-and-save.ts` (rules) and `… --stripe` (test mode, test
-clocks: $24×3→$29, $273→$288, grandfathered plan untouched, start-now charges once on the same
+clocks: $24×3→$29, $263→$288, grandfathered plan untouched, start-now charges once on the same
 subscription, declined start-now changes nothing, concurrent start-now gives one result).
 
 Two ways to start, a post-demo page, scheduling a plan during a trial, and in-app trial reminders.
