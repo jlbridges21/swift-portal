@@ -19,7 +19,8 @@ import {
   type SignupIntent,
   type SignupInterval,
 } from "@/lib/signup-intent";
-import { annualTotalCents, formatUsd } from "@/lib/trial-conversion";
+import { formatUsd } from "@/lib/trial-conversion";
+import { introOfferSavingsLabel, quotePlan, type OfferDisplay } from "@/lib/intro-offer";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_INTENT: SignupIntent = { path: "trial", interval: null, source: null };
@@ -30,6 +31,7 @@ export function SignupForm({
   oauthAllowed,
   initialIntent = DEFAULT_INTENT,
   pricing,
+  offer = null,
   adminDemo = null,
 }: {
   platformRootDomain: string;
@@ -39,6 +41,8 @@ export function SignupForm({
   /** From /signup?plan=monthly|annual&source=… — Subscribe Now vs free trial. */
   initialIntent?: SignupIntent;
   pricing?: { monthlyCents: number | null; annualPerMonthCents: number | null };
+  /** Prices to show for Subscribe & Save (intro offer) or a partner referral — never both. */
+  offer?: (OfferDisplay & { partnerName?: string | null }) | null;
   /**
    * Set only when the server verified a super admin on /signup?source=admin-demo. Shows the
    * "Create without partner referral" option. The server re-verifies on submit.
@@ -51,15 +55,11 @@ export function SignupForm({
       : initialIntent
   );
   const subscribing = intent.path === "subscribe" || trialDays <= 0;
-  const annualTotal = pricing ? annualTotalCents(pricing) : null;
-  const planSummary =
-    intent.interval === "monthly"
-      ? pricing?.monthlyCents != null
-        ? `${formatUsd(pricing.monthlyCents)}/month, billed monthly`
-        : "Billed monthly"
-      : annualTotal != null
-        ? `${formatUsd(annualTotal)}/year (${formatUsd(pricing?.annualPerMonthCents)}/month), billed once a year`
-        : "Billed annually";
+  const offerKind = offer?.kind ?? "intro";
+  const quotes = offer?.quotes ?? (pricing ? quotePlan(pricing, true) : {});
+  const save = introOfferSavingsLabel();
+  const selectedQuote = quotes[intent.interval === "monthly" ? "monthly" : "annual"] ?? null;
+  const referralHasDiscount = Object.values(quotes).some((q) => (q?.savingsCents ?? 0) > 0);
 
   // Keep the choice through Google sign-up (OAuth → /finish-setup) and existing-user login.
   useEffect(() => {
@@ -243,16 +243,10 @@ export function SignupForm({
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
       <main className="flex flex-1 items-center justify-center px-4 py-16">
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-lg">
           <CardHeader className="text-center">
-            <CardTitle>
-              {subscribing ? "Create your account" : "Start your free trial"}
-            </CardTitle>
-            <CardDescription>
-              {subscribing
-                ? "Subscribe to ShootPortal. You'll enter payment details securely on the next step."
-                : `${trialDays} days free. No credit card required.`}
-            </CardDescription>
+            <CardTitle>Get started with ShootPortal</CardTitle>
+            <CardDescription>Choose how you&apos;d like to begin. Same full product either way.</CardDescription>
           </CardHeader>
           <CardContent>
             {adminDemo && (
@@ -275,11 +269,70 @@ export function SignupForm({
                 </label>
               </div>
             )}
-            {intent.path === "subscribe" && (
+
+            <div
+              className={cn("mb-5 grid gap-3", trialDays > 0 && "sm:grid-cols-2")}
+              role="radiogroup"
+              aria-label="How would you like to start?"
+            >
+              {trialDays > 0 && (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={!subscribing}
+                  onClick={() => setIntent((prev) => ({ ...prev, path: "trial", interval: null }))}
+                  data-sp-cta="signup:path_trial"
+                  className={cn(
+                    "flex min-h-11 flex-col rounded-xl border-2 p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                    !subscribing ? "border-accent bg-accent/5" : "border-border bg-card hover:border-accent/50"
+                  )}
+                >
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                    {trialDays} days free
+                  </span>
+                  <span className="mt-1 text-base font-bold text-heading">Start Free Trial</span>
+                  <span className="mt-1 text-sm text-muted">
+                    Try ShootPortal free for {trialDays} days. No credit card required.
+                  </span>
+                </button>
+              )}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={subscribing}
+                onClick={() => chooseInterval(intent.interval ?? "annual")}
+                data-sp-cta="signup:path_subscribe"
+                className={cn(
+                  "relative flex min-h-11 flex-col rounded-xl border-2 p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                  subscribing ? "border-accent bg-accent/5" : "border-border bg-card hover:border-accent/50"
+                )}
+              >
+                {offerKind === "intro" && (
+                  <span className="absolute -top-2.5 right-3 rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">
+                    Save {save}
+                  </span>
+                )}
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted">Skip the trial</span>
+                <span className="mt-1 text-base font-bold text-heading">
+                  {offerKind === "intro" ? "Subscribe & Save" : "Subscribe Now"}
+                </span>
+                <span className="mt-1 text-sm text-muted">
+                  {offerKind === "intro"
+                    ? `Ready to get started? Subscribe today and save ${save}.`
+                    : offerKind === "referral" && referralHasDiscount
+                      ? `Subscribe today with your ${offer?.partnerName ? `${offer.partnerName} ` : ""}partner discount.`
+                      : "Ready to get started? Subscribe today."}
+                </span>
+              </button>
+            </div>
+
+            {subscribing ? (
               <div className="mb-5">
-                <div className="rounded-xl border border-border bg-background p-3">
-                  <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Billing">
-                    {(["monthly", "annual"] as const).map((option) => (
+                <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Billing">
+                  {(["monthly", "annual"] as const).map((option) => {
+                    const q = quotes[option];
+                    const discounted = q && q.savingsCents > 0;
+                    return (
                       <button
                         key={option}
                         type="button"
@@ -287,36 +340,63 @@ export function SignupForm({
                         aria-checked={intent.interval === option}
                         onClick={() => chooseInterval(option)}
                         className={cn(
-                          "min-h-11 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                          "flex min-h-11 flex-col items-start rounded-lg border px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                           intent.interval === option
                             ? "border-accent bg-accent/10 text-heading"
                             : "border-border bg-card text-muted hover:text-heading"
                         )}
                       >
-                        {option === "monthly" ? "Monthly" : "Annual"}
-                        {option === "annual" && pricing?.annualPerMonthCents != null ? (
-                          <span className="block text-xs font-normal">Best value</span>
+                        <span className="flex w-full items-center justify-between gap-1 font-semibold text-heading">
+                          {option === "monthly" ? "Monthly" : "Annual"}
+                          {option === "annual" && <span className="text-xs font-medium text-emerald-700">Best value</span>}
+                        </span>
+                        {q ? (
+                          <>
+                            <span className="mt-1 text-lg font-bold text-heading">
+                              {discounted && (
+                                <span className="mr-1.5 text-sm font-normal text-muted line-through">
+                                  {formatUsd(q.regularCents)}
+                                </span>
+                              )}
+                              {formatUsd(q.firstChargeCents)}
+                              <span className="text-xs font-normal text-muted">
+                                {option === "monthly" ? "/mo" : discounted ? " first year" : "/yr"}
+                              </span>
+                            </span>
+                            <span className="text-xs text-muted">
+                              {discounted
+                                ? option === "monthly"
+                                  ? `for ${q.introInvoices} months, then ${formatUsd(q.regularCents)}/mo`
+                                  : `then ${formatUsd(q.regularCents)}/year`
+                                : option === "monthly"
+                                  ? "Billed monthly"
+                                  : "Billed once a year"}
+                            </span>
+                          </>
                         ) : (
-                          <span className="block text-xs font-normal">Flexible</span>
+                          <span className="text-xs">{option === "monthly" ? "Billed monthly" : "Billed annually"}</span>
                         )}
                       </button>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-center text-xs text-muted">{planSummary}</p>
+                    );
+                  })}
                 </div>
-                {trialDays > 0 && (
-                  <p className="mt-3 text-center text-sm text-muted">
-                    Not quite ready?{" "}
-                    <button
-                      type="button"
-                      className="font-medium text-accent hover:underline"
-                      onClick={() => setIntent((prev) => ({ ...prev, path: "trial", interval: null }))}
-                    >
-                      Start a {trialDays}-day free trial instead
-                    </button>
+                {selectedQuote && (
+                  <p className="mt-3 rounded-lg bg-background px-3 py-2 text-center text-xs text-muted">
+                    You&apos;ll pay <strong className="text-heading">{formatUsd(selectedQuote.firstChargeCents)} today</strong>{" "}
+                    on the next step.{" "}
+                    {selectedQuote.interval === "annual" ? selectedQuote.renewal : `${selectedQuote.summary}`}.
+                    {selectedQuote.savingsCents > 0 ? ` You save ${formatUsd(selectedQuote.savingsCents)}.` : ""} Cancel
+                    anytime.
                   </p>
                 )}
               </div>
+            ) : (
+              offerKind === "intro" && (
+                <p className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-sm text-emerald-900">
+                  Starting with the trial? You can still claim <strong>{save} off</strong> by subscribing any time
+                  before your trial ends.
+                </p>
+              )
             )}
             <div className="mb-2 space-y-4">
               {oauthAllowed !== false && (
@@ -424,21 +504,9 @@ export function SignupForm({
                     ? "Creating…"
                     : subscribing
                       ? "Create account & continue to payment"
-                      : "Create account"}
+                      : "Start my free trial"}
               </Button>
             </form>
-            {trialDays > 0 && intent.path === "trial" && (
-              <p className="mt-4 text-center text-sm text-muted">
-                Ready to buy?{" "}
-                <button
-                  type="button"
-                  className="font-medium text-accent hover:underline"
-                  onClick={() => chooseInterval("annual")}
-                >
-                  Subscribe now
-                </button>
-              </p>
-            )}
             <p className="mt-6 text-center text-sm text-muted">
               Already have an account?{" "}
               <Link href="/login" className="text-accent hover:underline">

@@ -1,5 +1,68 @@
 # Signup paths, early subscription & trial conversion
 
+> **Subscribe & Save (v111) changed the trial-conversion rules.** Read the next section first; the
+> older sections below describe the original v107 flow and are kept for the pieces still in use
+> (setup-mode sessions opened before the change, conversion events, trial modals' timing).
+
+## Subscribe & Save — $15 introductory offer (migration v111)
+
+Two signup paths on `/signup`: **Start Free Trial** (14 days, no card) and **Subscribe & Save**
+(pay today, $15 off). Rules: `src/lib/intro-offer.ts` (pure); loading / Stripe coupons /
+redemption: `src/lib/intro-offer-server.ts`; tests: `scripts/verify-subscribe-and-save.ts`.
+
+| Interval | Regular | Intro | Stripe coupon (auto-created per mode) |
+| --- | --- | --- | --- |
+| Monthly | $29/month | $24/month for 3 months, then $29 | `sp_intro_monthly_500_3mo_v1` ($5 off, repeating 3 months) |
+| Annual | $288/year | $273 first year, renews $288 | `sp_intro_annual_1500_once_v1` ($15 off, once) |
+
+Terms live in `INTRO_OFFER_TERMS` keyed by interval; an interval with no entry (e.g. a future
+six-month plan) simply has no intro offer.
+
+**Eligibility** (`decideIntroOffer`) — all must hold, otherwise regular price (fail closed):
+- Inside the original window: `min(trial_ends_at, created_at + plans.trial_days)`. Switching paths,
+  returning to checkout, or a deferred "start my trial instead" never moves it later.
+- Not comped; **no partner referral** (any `partner_referrals` row — the referral offer always
+  wins and never stacks, even for an interval where the referral gives no discount; a partner
+  promo code entered at checkout counts as a referral).
+- Never paid a ShootPortal invoice (platform ledger, and Stripe at checkout); not already redeemed
+  (`business_billing_journey.intro_offer_redeemed_at`, written once).
+- No live subscription — except a pre-existing plan still in its Stripe trial (see below).
+
+**Trial users now pay today.** New checkouts never attach `trial_end` and never use setup mode:
+subscribing during a trial charges immediately (with the intro coupon when eligible). When Stripe
+reports the subscription active while the stored trial is still running, the billing sync sets
+`businesses.trial_ends_at` to that moment (`trialEndForBillingStart`) — the trial is over, banners /
+modals / trial emails stop, and canceling later never falls back into a free trial. Failed or
+abandoned checkout ⇒ `incomplete` / no subscription ⇒ nothing changes.
+
+**Existing scheduled plans are grandfathered.** A subscription created before this change that is
+`trialing` until the stored trial end is never modified by the deploy: it bills its original amount
+on its original date. The owner may *choose* to start it early on `/billing` (Start Plan Now panel →
+`POST /api/billing/start-plan-now`): explicit checkbox + button, amount re-verified server-side
+(`expectedChargeCents`), owner only (never during impersonation). It updates the **same**
+subscription — `trial_end: now`, intro coupon if eligible, `payment_behavior: error_if_incomplete`
+(a declined card leaves it exactly as it was). The idempotency key and parameters are derived from
+the subscription state, so two tabs / double-clicks get one Stripe result (a second update could
+otherwise re-attach the one-time coupon to the renewal).
+
+**Where the offer shows:** `/signup`, `/get-started`, marketing pricing, `/billing` (prices, due
+today, next payment, countdown pill), trial banner (calm → urgent countdown in the last 3 days),
+trial modals, Command Center card, and the optional `{{subscribeSaveOffer}}` lifecycle-email
+variable (empty when not available). Referred accounts see partner pricing instead. Expired windows
+show regular prices. Checkout receives `expectedOffer`; if a shown intro price can no longer be
+honored it returns `409 offer_unavailable` (nothing charged) and the page refreshes prices. If the
+intro coupon can't be verified, checkout stops (503) rather than charging more than shown.
+
+**Deploy:** run `supabase/migration-v111-subscribe-and-save.sql` (additive: redemption columns + two
+event types), then deploy. Coupons are created on first use in each Stripe mode; nothing else to
+configure. No existing subscription is touched. Check in the Stripe dashboard: if the Customer Portal
+allows switching between monthly and annual, a customer switching mid-intro keeps whatever remains of
+their intro coupon on the new interval — disable plan switching there if that matters.
+
+**Tests:** `npx tsx scripts/verify-subscribe-and-save.ts` (rules) and `… --stripe` (test mode, test
+clocks: $24×3→$29, $273→$288, grandfathered plan untouched, start-now charges once on the same
+subscription, declined start-now changes nothing, concurrent start-now gives one result).
+
 Two ways to start, a post-demo page, scheduling a plan during a trial, and in-app trial reminders.
 Billing still runs on the existing platform Stripe account (`src/lib/stripe-billing.ts`), the
 existing Checkout route and the existing billing webhook. Prices come from the `plans` table and

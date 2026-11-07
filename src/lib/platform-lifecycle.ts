@@ -246,8 +246,26 @@ export async function buildLifecycleVariables(
       })
     : "";
 
+  // Same rules as checkout; any failure ⇒ empty (no promise we might not honor).
+  let subscribeSaveOffer = "";
+  try {
+    const { loadIntroOfferContext } = await import("@/lib/intro-offer-server");
+    const { introOfferSavingsLabel } = await import("@/lib/intro-offer");
+    const { decision } = await loadIntroOfferContext(
+      { id: business.id, subscription_status: business.subscription_status ?? "", trial_ends_at: business.trial_ends_at ?? null },
+      {}
+    );
+    if (decision.eligible && decision.kind === "checkout") {
+      const ends = new Date(decision.endsAt).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
+      subscribeSaveOffer = `Subscribe before ${ends} and save ${introOfferSavingsLabel()} on your first subscription.`;
+    }
+  } catch {
+    subscribeSaveOffer = "";
+  }
+
   return {
     businessName: business.name || "your studio",
+    subscribeSaveOffer,
     daysRemaining,
     trialEndDate,
     planName,

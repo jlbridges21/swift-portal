@@ -193,7 +193,7 @@ export function LifecycleEmailsManager({
         <p className="mt-2 text-sm text-muted">
           Variables:{" "}
           <code className="text-xs">
-            {"{{businessName}} {{daysRemaining}} {{trialEndDate}} {{planName}} {{planPrice}} {{billingUrl}} {{ownerName}}"}
+            {"{{businessName}} {{daysRemaining}} {{trialEndDate}} {{planName}} {{planPrice}} {{billingUrl}} {{ownerName}} {{subscribeSaveOffer}}"}
             {" · Partner: {{partnerName}} {{commissionRatePct}} {{referralLink}} {{landingPageUrl}} {{partnerDashboardUrl}} {{inviteUrl}}"}
           </code>
         </p>

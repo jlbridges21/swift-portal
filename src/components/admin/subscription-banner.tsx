@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSubscriptionState } from "@/lib/subscription";
 import { formatBillingDate, intervalLabel, type ScheduledPlan } from "@/lib/trial-conversion";
+import { introCountdownLabel, introOfferPromptCopy, introOfferSavingsLabel } from "@/lib/intro-offer";
 
 export function SubscriptionBanner({
   subscriptionStatus,
@@ -9,6 +10,7 @@ export function SubscriptionBanner({
   subscriptionCurrentPeriodEnd,
   subscriptionCancelAtPeriodEnd,
   scheduled,
+  introOffer = null,
 }: {
   subscriptionStatus: string;
   trialEndsAt: string | null;
@@ -17,6 +19,8 @@ export function SubscriptionBanner({
   subscriptionCancelAtPeriodEnd?: boolean | null;
   /** Trial user who already picked a plan (billing starts at the stored trial end). */
   scheduled?: ScheduledPlan | null;
+  /** Subscribe & Save window (server time) when this account can still claim it. */
+  introOffer?: { endsAt: string; nowMs: number } | null;
 }) {
   const sub = getSubscriptionState({
     subscription_status: subscriptionStatus,
@@ -29,6 +33,9 @@ export function SubscriptionBanner({
   // Comped businesses: no trial / past_due / upgrade banners.
   if (sub.isComped) return null;
 
+  const introMs = introOffer ? new Date(introOffer.endsAt).getTime() - introOffer.nowMs : 0;
+  const introLive = introOffer != null && introMs > 0;
+
   if (scheduled) {
     const date = formatBillingDate(scheduled.firstPaymentAt);
     const name = scheduled.interval ? `${intervalLabel(scheduled.interval)} Plan` : "Plan";
@@ -38,6 +45,11 @@ export function SubscriptionBanner({
           <p>
             {scheduled.canceled ? (
               <>Scheduled plan canceled — your free trial ends <strong>{date}</strong>.</>
+            ) : introLive ? (
+              <>
+                Your {name} Starts <strong>{date}</strong>. Prefer to start today? Save {introOfferSavingsLabel()} when
+                you start before then.
+              </>
             ) : (
               <>
                 Your {name} Starts <strong>{date}</strong>. You won&apos;t be charged before then.
@@ -45,7 +57,7 @@ export function SubscriptionBanner({
             )}
           </p>
           <Link href="/billing" className="font-medium underline underline-offset-2">
-            Billing
+            {introLive && !scheduled.canceled ? "Start & Save" : "Billing"}
           </Link>
         </div>
       </div>
@@ -54,6 +66,38 @@ export function SubscriptionBanner({
 
   if (sub.status === "trialing" && !sub.requiresPayment && sub.daysLeftInTrial != null) {
     const days = sub.daysLeftInTrial;
+    if (introLive) {
+      const copy = introOfferPromptCopy(introMs);
+      return (
+        <div
+          className={
+            copy.urgent
+              ? "border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-950"
+              : "border-b border-sky-200 bg-sky-50 px-4 py-2.5 text-sm text-sky-950"
+          }
+        >
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
+            <p>
+              {copy.urgent ? (
+                <>
+                  Your free trial ends in <strong>{introCountdownLabel(introMs)}</strong>. Subscribe now to save{" "}
+                  {introOfferSavingsLabel()} on your first subscription.
+                </>
+              ) : (
+                <>
+                  Free Trial — <strong>{days}</strong> Day{days === 1 ? "" : "s"} Remaining ·{" "}
+                  <span className="hidden sm:inline">Enjoying ShootPortal? </span>Subscribe before your trial ends and
+                  save {introOfferSavingsLabel()}!
+                </>
+              )}
+            </p>
+            <Link href="/billing" className="font-semibold underline underline-offset-2" data-sp-cta="banner:subscribe_save">
+              Subscribe &amp; Save
+            </Link>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="border-b border-sky-200 bg-sky-50 px-4 py-2.5 text-sm text-sky-950">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
@@ -61,7 +105,7 @@ export function SubscriptionBanner({
             Free Trial — <strong>{days}</strong> Day{days === 1 ? "" : "s"} Remaining
           </p>
           <Link href="/billing" className="font-medium underline underline-offset-2">
-            Choose a Plan
+            Subscribe Now
           </Link>
         </div>
       </div>

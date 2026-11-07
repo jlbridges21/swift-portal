@@ -568,6 +568,23 @@ export function resolveSnapshotStatus(
   return mapped;
 }
 
+/**
+ * When Stripe has started billing (subscription active / past_due, no Stripe trial pending) but
+ * the stored free trial is still running, the trial ends now. Returns the ISO time to store, or
+ * null to leave trial_ends_at alone. A plan that simply reached its scheduled trial end has a
+ * stored trial end that is already past, so nothing changes for it.
+ */
+export function trialEndForBillingStart(
+  subscription: Pick<Stripe.Subscription, "status" | "trial_end">,
+  trialEndsAt: string | null | undefined,
+  now = Date.now()
+): string | null {
+  if (subscription.status !== "active" && subscription.status !== "past_due") return null;
+  if (typeof subscription.trial_end === "number" && subscription.trial_end * 1000 > now) return null;
+  if (!trialStillRunning(trialEndsAt, now)) return null;
+  return new Date(now).toISOString();
+}
+
 /** Statuses where a Stripe subscription still bills (or will bill) the customer. */
 export const LIVE_STRIPE_SUBSCRIPTION_STATUSES: ReadonlySet<Stripe.Subscription.Status> = new Set([
   "active",
@@ -587,6 +604,12 @@ export async function applySubscriptionSnapshot(options: {
   customerId?: string | null;
   /** businesses.trial_ends_at — a plan canceled before billing starts falls back to the trial. */
   trialEndsAt?: string | null;
+  /**
+   * Stripe is already billing (paid now, or a scheduled plan started early) while the stored
+   * free trial is still running: end the trial at this moment so every screen, reminder and
+   * the cancel-before-billing rule see a paid account, not a trial.
+   */
+  endTrialAt?: string | null;
   source: string;
 }): Promise<{ applied: boolean; reason?: string }> {
   if (!shouldApplyStripeSubscriptionUpdate(options.currentStatus)) {
@@ -599,7 +622,8 @@ export async function applySubscriptionSnapshot(options: {
     return { applied: false, reason: "comped" };
   }
 
-  const mapped = resolveSnapshotStatus(options.stripeStatus, options.trialEndsAt);
+  const effectiveTrialEndsAt = options.endTrialAt ?? options.trialEndsAt;
+  const mapped = resolveSnapshotStatus(options.stripeStatus, effectiveTrialEndsAt);
   if (!mapped) {
     console.info("[stripe-billing] skipped — unmapped stripe status", {
       source: options.source,
@@ -620,6 +644,7 @@ export async function applySubscriptionSnapshot(options: {
       : null,
   };
   if (options.planKey) patch.plan = options.planKey;
+  if (options.endTrialAt) patch.trial_ends_at = options.endTrialAt;
   if (options.customerId) {
     patch.stripe_customer_id = options.customerId;
     patch[customerColumn(mode)] = options.customerId;
@@ -637,6 +662,7 @@ export async function applySubscriptionSnapshot(options: {
     stripe_subscription_id: options.stripeSubscriptionId,
     plan: options.planKey ?? undefined,
     cancel_at_period_end: options.cancelAtPeriodEnd,
+    ...(options.endTrialAt ? { trial_ended_at: options.endTrialAt } : {}),
   });
 
   return { applied: true };
@@ -674,6 +700,7 @@ export async function syncFromStripeSubscription(
 
   const priceId = subscription.items?.data?.[0]?.price?.id ?? null;
   const planKey = priceId ? await findPlanKeyByStripePriceId(priceId) : null;
+  const endTrialAt = trialEndForBillingStart(subscription, attribution.business.trial_ends_at);
 
   const result = await applySubscriptionSnapshot({
     businessId: attribution.business.id,
@@ -685,6 +712,7 @@ export async function syncFromStripeSubscription(
     planKey,
     customerId,
     trialEndsAt: attribution.business.trial_ends_at,
+    endTrialAt,
     source,
   });
 
@@ -692,6 +720,8 @@ export async function syncFromStripeSubscription(
     // Display snapshot + conversion events (best-effort, never affects billing).
     const { recordSubscriptionJourney } = await import("@/lib/billing-subscriptions");
     await recordSubscriptionJourney(subscription, attribution.business);
+    const { recordIntroOfferRedemption } = await import("@/lib/intro-offer-server");
+    await recordIntroOfferRedemption(subscription, attribution.business.id);
   }
   return result;
 }

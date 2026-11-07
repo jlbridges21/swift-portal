@@ -18,6 +18,8 @@ import { TrialConversionModal } from "@/components/admin/trial-conversion-modal"
 import { loadTrialUiContext } from "@/lib/billing-journey";
 import { decideTrialModal, formatBillingDate, getScheduledPlan, trialModalCopy } from "@/lib/trial-conversion";
 import { assertActivePlanKey, resolvePlanTrialDays } from "@/lib/entitlements";
+import { offerDisplayForBusiness } from "@/lib/intro-offer-server";
+import { introOfferSavingsLabel, requestNowMs, type OfferDisplay } from "@/lib/intro-offer";
 import type { Metadata, Viewport } from "next";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -73,6 +75,32 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     ? await loadTrialUiContext(tenant.businessId, profile.id, { needModalState: ownerTrialing })
     : null;
   const scheduledPlan = trialUi ? getScheduledPlan({ ...tenant.business, journey: trialUi.journey }) : null;
+
+  // Subscribe & Save prompts: trial users (and scheduled-plan users still inside their original
+  // window). DB-only and best-effort — any failure just hides the promotion. Paying customers
+  // never reach this (no trial UI), so they never see trial conversion prompts.
+  const wantsOffer =
+    !isStaff && (subStatus === "trialing" || Boolean(scheduledPlan && !scheduledPlan.canceled));
+  let offer: OfferDisplay | null = null;
+  if (wantsOffer) {
+    try {
+      const plan = await assertActivePlanKey(tenant.business.plan || "studio");
+      offer = await offerDisplayForBusiness(
+        {
+          id: tenant.businessId,
+          subscription_status: subStatus,
+          trial_ends_at: tenant.business.trial_ends_at,
+        },
+        { monthlyCents: plan.price_monthly_cents, annualPerMonthCents: plan.price_annual_cents },
+        // Scheduled plan stand-in; the billing page re-checks Stripe (existing discounts) before offering.
+        { liveSubscription: scheduledPlan ? { status: "trialing", hasDiscount: false } : null }
+      );
+    } catch (err) {
+      console.warn("[admin] offer display skipped", err instanceof Error ? err.message : err);
+    }
+  }
+  const nowMs = requestNowMs();
+  const introOffer = offer?.kind === "intro" && offer.endsAt ? { endsAt: offer.endsAt, nowMs } : null;
   let trialModal: React.ReactNode = null;
   if (ownerTrialing && trialUi) {
     const decision = decideTrialModal({
@@ -95,7 +123,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <TrialConversionModal
           milestone={decision.milestone}
           trialDay={decision.trialDay}
-          copy={trialModalCopy(decision.milestone, decision.msRemaining, resolvePlanTrialDays(plan, "trial_modal"))}
+          copy={trialModalCopy(
+            decision.milestone,
+            decision.msRemaining,
+            resolvePlanTrialDays(plan, "trial_modal"),
+            introOffer ? introOfferSavingsLabel() : null
+          )}
+          offer={offer}
           planKey={plan.key}
           monthlyCents={plan.price_monthly_cents}
           annualPerMonthCents={plan.price_annual_cents}
@@ -138,6 +172,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             subscriptionCurrentPeriodEnd={tenant.business.subscription_current_period_end}
             subscriptionCancelAtPeriodEnd={tenant.business.subscription_cancel_at_period_end}
             scheduled={scheduledPlan}
+            introOffer={introOffer}
           />
         )}
         {trialModal}

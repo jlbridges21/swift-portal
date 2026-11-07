@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { formatUsd, isCalmAdminPath, type TrialMilestone, type TrialModalCopy } from "@/lib/trial-conversion";
+import type { OfferDisplay } from "@/lib/intro-offer";
 import { cn } from "@/lib/utils";
 
 /** One trial modal per browser session, across tabs of the same session storage. */
@@ -21,6 +22,8 @@ type Props = {
   /** "November 15" — the stored trial end. */
   trialEndLabel: string;
   canCheckout: boolean;
+  /** What checkout will charge (Subscribe & Save, referral, or regular). */
+  offer?: Pick<OfferDisplay, "kind" | "quotes"> | null;
 };
 
 function post(milestone: TrialMilestone, action: "viewed" | "dismissed" | "cta", trialDay: number) {
@@ -41,6 +44,7 @@ export function TrialConversionModal({
   annualPerMonthCents,
   trialEndLabel,
   canCheckout,
+  offer = null,
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -100,7 +104,12 @@ export function TrialConversionModal({
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planKey, interval, context: `modal_${milestone}` }),
+        body: JSON.stringify({
+          planKey,
+          interval,
+          context: `modal_${milestone}`,
+          ...(offer ? { expectedOffer: offer.kind } : {}),
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string; code?: string };
       if (res.ok && data.url) {
@@ -110,6 +119,11 @@ export function TrialConversionModal({
       if (data.code === "already_subscribed") {
         close("cta");
         router.refresh();
+        return;
+      }
+      if (data.code === "offer_unavailable") {
+        close("cta");
+        router.push("/billing");
         return;
       }
       setError(data.error?.trim() || "Could not open checkout. You can also choose a plan from Billing.");
@@ -123,24 +137,34 @@ export function TrialConversionModal({
   if (!open) return null;
 
   const annualTotal = annualPerMonthCents != null ? annualPerMonthCents * 12 : null;
+  const mq = offer?.quotes.monthly ?? null;
+  const aq = offer?.quotes.annual ?? null;
   const plans = [
     {
       key: "monthly" as const,
       title: "Monthly",
-      price: `${formatUsd(monthlyCents)}/month`,
-      note: "Billed monthly",
+      was: mq && mq.savingsCents > 0 ? `${formatUsd(mq.regularCents)}` : null,
+      price: `${formatUsd(mq?.firstChargeCents ?? monthlyCents)}/month`,
+      note: mq && mq.savingsCents > 0 ? `First ${mq.introInvoices} months, then ${formatUsd(mq.regularCents)}/month` : "Billed monthly",
+      todayCents: mq?.firstChargeCents ?? monthlyCents,
     },
     ...(annualTotal != null
       ? [
           {
             key: "annual" as const,
             title: "Annual",
-            price: `${formatUsd(annualTotal)}/year`,
-            note: `${formatUsd(annualPerMonthCents)}/month · Best Value`,
+            was: aq && aq.savingsCents > 0 ? `${formatUsd(aq.regularCents)}` : null,
+            price: aq && aq.savingsCents > 0 ? `${formatUsd(aq.firstChargeCents)} first year` : `${formatUsd(annualTotal)}/year`,
+            note:
+              aq && aq.savingsCents > 0
+                ? `Then ${formatUsd(aq.regularCents)}/year · Best Value`
+                : `${formatUsd(annualPerMonthCents)}/month · Best Value`,
+            todayCents: aq?.firstChargeCents ?? annualTotal,
           },
         ]
       : []),
   ];
+  const selected = plans.find((p) => p.key === interval) ?? plans[0];
   const showPlans = copy.showPlans && canCheckout;
 
   return (
@@ -210,13 +234,17 @@ export function TrialConversionModal({
                   className="sr-only"
                 />
                 <span className="text-sm font-semibold text-heading">{p.title}</span>
-                <span className="text-lg font-bold text-heading">{p.price}</span>
+                <span className="text-lg font-bold text-heading">
+                  {p.was ? <span className="mr-1 text-sm font-normal text-muted line-through">{p.was}</span> : null}
+                  {p.price}
+                </span>
                 <span className="text-xs text-muted">{p.note}</span>
               </label>
             ))}
           </div>
           <p className="mt-3 text-xs text-muted">
-            You won&apos;t be charged until your free trial ends on {trialEndLabel}.
+            {selected?.todayCents != null ? `${formatUsd(selected.todayCents)} today on Stripe's secure checkout. ` : ""}
+            Subscribing ends your free trial (otherwise it ends {trialEndLabel}). Cancel anytime.
           </p>
         </fieldset>
       ) : null}

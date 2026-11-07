@@ -199,16 +199,29 @@ export type TrialModalCopy = {
   secondaryOpensPlans: boolean;
 };
 
-export function trialModalCopy(milestone: TrialMilestone, msRemaining: number, trialDays = 14): TrialModalCopy {
+/**
+ * Modal copy. Subscribing during a trial bills TODAY and ends the trial, so no milestone promises
+ * "you won't be charged until your trial ends". `introSavings` ("$15") is set only while the
+ * Subscribe & Save offer is available to this account (never for partner-referred accounts).
+ */
+export function trialModalCopy(
+  milestone: TrialMilestone,
+  msRemaining: number,
+  trialDays = 14,
+  introSavings: string | null = null
+): TrialModalCopy {
   // Headline case: "4 Days", "6 Hours".
   const left = remainingLabel(msRemaining).replace(/\b[a-z]/g, (c) => c.toUpperCase());
   const endsWithinDay = msRemaining <= DAY_MS;
   const endsWithinTwoDays = msRemaining <= 2 * DAY_MS;
+  const save = introSavings;
   switch (milestone) {
     case "day1":
       return {
         headline: "Welcome to ShootPortal!",
-        body: `Your ${trialDays}-day free trial is officially underway. You've got full access to explore everything ShootPortal has to offer.`,
+        body: save
+          ? `Your ${trialDays}-day free trial is officially underway. You've got full access to explore everything ShootPortal has to offer — and if you subscribe before your trial ends, you'll save ${save}.`
+          : `Your ${trialDays}-day free trial is officially underway. You've got full access to explore everything ShootPortal has to offer.`,
         primary: "Start Exploring",
         secondary: "View Plans",
         showPlans: false,
@@ -217,8 +230,10 @@ export function trialModalCopy(milestone: TrialMilestone, msRemaining: number, t
     case "day2":
       return {
         headline: "Finding Your Groove with ShootPortal?",
-        body: "Your trial is just getting started. If you already know ShootPortal is right for your business, you can choose your plan today and won't be charged until your trial ends.",
-        primary: "Choose a Plan",
+        body: save
+          ? `If you already know ShootPortal is right for your business, subscribe today and save ${save}. Subscribing ends your free trial and starts your paid plan right away.`
+          : "If you already know ShootPortal is right for your business, you can subscribe today. Subscribing ends your free trial and starts your paid plan right away.",
+        primary: save ? "Subscribe & Save" : "Subscribe Now",
         secondary: "Keep Exploring",
         showPlans: true,
         secondaryOpensPlans: false,
@@ -226,8 +241,10 @@ export function trialModalCopy(milestone: TrialMilestone, msRemaining: number, t
     case "day5":
       return {
         headline: "Make ShootPortal Part of Your Workflow.",
-        body: "Enjoying ShootPortal? Lock in your monthly or annual plan now and keep using the platform without interruption when your trial ends. Your first payment won't happen until then.",
-        primary: "Lock In My Plan",
+        body: save
+          ? `Enjoying ShootPortal? Subscribe before your trial ends and save ${save} on your first subscription.`
+          : "Enjoying ShootPortal? Subscribe now and keep using the platform without interruption.",
+        primary: save ? "Subscribe & Save" : "Subscribe Now",
         secondary: "Remind Me Later",
         showPlans: true,
         secondaryOpensPlans: false,
@@ -235,8 +252,10 @@ export function trialModalCopy(milestone: TrialMilestone, msRemaining: number, t
     case "day10":
       return {
         headline: `Your Free Trial Ends in ${left}.`,
-        body: "Want to keep your projects, clients, and workflow moving without interruption? Choose a plan now and your subscription will begin when your trial ends.",
-        primary: "Choose My Plan",
+        body: save
+          ? `Subscribe now to save ${save} on your first subscription and keep your projects, clients, and workflow moving without interruption.`
+          : "Want to keep your projects, clients, and workflow moving without interruption? Subscribe now to keep full access.",
+        primary: save ? "Subscribe & Save" : "Subscribe Now",
         secondary: "Continue Trial",
         showPlans: true,
         secondaryOpensPlans: false,
@@ -248,8 +267,10 @@ export function trialModalCopy(milestone: TrialMilestone, msRemaining: number, t
           : endsWithinTwoDays
             ? "Your ShootPortal Trial Ends Tomorrow."
             : `Your ShootPortal Trial Ends in ${left}.`,
-        body: "Keep everything running smoothly. Select your monthly or annual plan now to avoid losing access when your trial ends.",
-        primary: "Continue with ShootPortal",
+        body: save
+          ? `Keep everything running smoothly. Subscribe before your trial ends to save ${save} — after that, regular pricing applies.`
+          : "Keep everything running smoothly. Subscribe now to avoid losing access when your trial ends.",
+        primary: save ? "Subscribe & Save" : "Continue with ShootPortal",
         secondary: "Maybe Later",
         showPlans: true,
         secondaryOpensPlans: false,

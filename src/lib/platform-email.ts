@@ -36,6 +36,11 @@ export type PlatformLifecycleVariables = {
   planPrice: string;
   billingUrl: string;
   ownerName: string;
+  /**
+   * "Subscribe before November 20 and save $15 on your first subscription." while this account
+   * can claim Subscribe & Save; empty otherwise (expired window, referred, already paying).
+   */
+  subscribeSaveOffer: string;
 };
 
 export const PLATFORM_LIFECYCLE_VARIABLE_FALLBACKS: PlatformLifecycleVariables = {
@@ -46,6 +51,7 @@ export const PLATFORM_LIFECYCLE_VARIABLE_FALLBACKS: PlatformLifecycleVariables =
   planPrice: "the price on Billing",
   billingUrl: "https://shootportal.app/billing",
   ownerName: "there",
+  subscribeSaveOffer: "",
 };
 
 const resendClients = new Map<string, Resend>();
@@ -105,7 +111,8 @@ export function renderPlatformLifecycleTemplate(
   return renderEmailTemplate(template, resolved, {
     // Some templates omit these; others require them — allow empty only when unused.
     // If a template references an empty one, renderEmailTemplate still throws.
-    allowEmpty: [],
+    // subscribeSaveOffer is intentionally empty whenever the offer isn't available.
+    allowEmpty: ["subscribeSaveOffer"],
   });
 }
 

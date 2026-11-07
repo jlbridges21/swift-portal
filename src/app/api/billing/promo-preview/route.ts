@@ -103,6 +103,8 @@ export async function POST(request: Request) {
       discountReason: discount.reason ?? null,
       amountOffCents: discount.config?.amountOffCents ?? null,
       durationMonths: discount.config?.durationMonths ?? null,
+      annualAmountOffCents:
+        discount.eligible && discount.config?.annualEnabled ? discount.config.annualAmountOffCents : null,
       priceDisplay,
     });
   } catch (err) {

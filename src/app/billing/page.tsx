@@ -6,10 +6,6 @@ import { BrandProvider } from "@/components/brand/brand-provider";
 import { ImpersonationBanner } from "@/components/platform/impersonation-banner";
 import { getSubscriptionState } from "@/lib/subscription";
 import { formatPlanPrice } from "@/lib/plan-catalog";
-import {
-  formatReferralPlanPriceDisplay,
-  resolveReferralDiscountForBusiness,
-} from "@/lib/partner-referral-discount";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,8 +17,11 @@ import {
   AutoStartCheckout,
   CheckoutConfirmationRefresher,
   ManageBillingButton,
+  StartPlanNowPanel,
   StartTrialInsteadButton,
 } from "@/components/billing/billing-actions";
+import { offerDisplayForBusiness } from "@/lib/intro-offer-server";
+import { introCountdownLabel, introOfferSavingsLabel, quotePlan, requestNowMs, type OfferDisplay } from "@/lib/intro-offer";
 import { BillingPlansWithPromo } from "@/components/billing/billing-plans-with-promo";
 import {
   customerIdForMode,
@@ -34,7 +33,6 @@ import { canStartDeferredTrial, isAwaitingFirstSubscription } from "@/lib/subscr
 import {
   confirmBillingCheckoutSession,
   previewScheduledChargeCents,
-  trialHandoffMode,
   type CheckoutConfirmation,
 } from "@/lib/billing-subscriptions";
 import { loadBillingJourney } from "@/lib/billing-journey";
@@ -118,30 +116,6 @@ export default async function BillingPage({
   const currentPlan = publicPlans.find((p) => p.key === tenant.business.plan) ?? null;
   const anyModePriceConfigured = publicPlans.some((p) => Boolean(p.stripe_price_monthly_id));
 
-  // Same resolver as checkout — display and charge cannot diverge.
-  let monthlyReferralDiscount = null as Awaited<
-    ReturnType<typeof resolveReferralDiscountForBusiness>
-  > | null;
-  let annualReferralDiscount = null as Awaited<
-    ReturnType<typeof resolveReferralDiscountForBusiness>
-  > | null;
-  try {
-    const [monthly, annual] = await Promise.all([
-      resolveReferralDiscountForBusiness({
-        businessId: tenant.businessId,
-        interval: "monthly",
-      }),
-      resolveReferralDiscountForBusiness({
-        businessId: tenant.businessId,
-        interval: "annual",
-      }),
-    ]);
-    monthlyReferralDiscount = monthly;
-    annualReferralDiscount = annual;
-  } catch (err) {
-    console.error("[billing] referral discount display resolve failed — showing list prices", err);
-  }
-
   // Fresh row (confirmation above may have just synced it); tenant.business can be cached.
   const bizState = {
     ...tenant.business,
@@ -172,9 +146,37 @@ export default async function BillingPage({
     }
   }
   const preferredInterval = parseSignupInterval(sp.plan) ?? journey?.preferred_interval ?? null;
-  const handoff = billingRow ? trialHandoffMode(billingRow) : { kind: "none" as const, trialEndUnix: null };
-  const pickerMode: "pay_now" | "schedule" = handoff.kind === "none" ? "pay_now" : "schedule";
-  const trialEndLabel = bizState.trial_ends_at ? formatBillingDate(bizState.trial_ends_at) : null;
+
+  // One offer per account, from the same rules checkout enforces: partner referral pricing,
+  // else Subscribe & Save inside the original trial window, else regular prices.
+  const offersByPlan = new Map<string, OfferDisplay>();
+  let offerKind: OfferDisplay["kind"] = "none";
+  let introEndsAt: string | null = null;
+  if (billingRow && !sub.isComped) {
+    try {
+      let shared: Awaited<ReturnType<typeof offerDisplayForBusiness>>["intro"] | undefined;
+      for (const plan of publicPlans) {
+        const display = await offerDisplayForBusiness(
+          { ...billingRow, subscription_status: bizState.subscription_status, trial_ends_at: bizState.trial_ends_at },
+          { monthlyCents: plan.price_monthly_cents, annualPerMonthCents: plan.price_annual_cents },
+          { intro: shared }
+        );
+        shared = display.intro;
+        offersByPlan.set(plan.key, display);
+        offerKind = display.kind;
+        introEndsAt = display.endsAt;
+      }
+    } catch (err) {
+      console.error("[billing] offer display failed — showing regular prices", err);
+      offersByPlan.clear();
+      offerKind = "none";
+      introEndsAt = null;
+    }
+  }
+  const introMsLeft = introEndsAt ? new Date(introEndsAt).getTime() - requestNowMs() : 0;
+  const introLive = offerKind === "intro" && introMsLeft > 0;
+  const save = introOfferSavingsLabel();
+  const trialRunning = sub.status === "trialing" && !sub.isExpired;
 
   let scheduledChargeCents: number | null = null;
   if (scheduled && !scheduled.canceled) {
@@ -197,7 +199,9 @@ export default async function BillingPage({
         : sub.requiresPayment
           ? "Reactivate your portal"
           : sub.status === "trialing"
-            ? "Love ShootPortal? Lock In Your Plan."
+            ? introLive
+              ? "Subscribe & Save"
+              : "Subscribe to ShootPortal"
             : sub.status === "past_due"
               ? "Payment needs attention"
               : "Billing";
@@ -209,11 +213,15 @@ export default async function BillingPage({
         ? `You won't be charged. Your free trial still ends on ${formatBillingDate(scheduled.firstPaymentAt)}. Use Manage billing to restore the plan before then.`
         : `Your first payment${scheduledChargeCents != null ? ` of ${formatUsd(scheduledChargeCents)}` : ""} is scheduled for ${formatBillingDate(scheduled.firstPaymentAt)}, when your free trial ends. Until then, enjoy full access.`
       : awaitingFirst
-        ? "Choose monthly or annual billing to activate your ShootPortal account. Your subscription starts as soon as payment goes through."
+        ? introLive
+          ? `Choose monthly or annual billing to activate your ShootPortal account and save ${save}. Your subscription starts as soon as payment goes through.`
+          : "Choose monthly or annual billing to activate your ShootPortal account. Your subscription starts as soon as payment goes through."
         : sub.requiresPayment
           ? sub.reason || "Subscribe to restore full admin access."
-          : sub.status === "trialing" && sub.daysLeftInTrial != null
-            ? "Choose your plan today. You won't be charged until your free trial ends."
+          : trialRunning
+            ? introLive
+              ? `Your free trial ends in ${introCountdownLabel(introMsLeft)}. Subscribe now and save ${save} — subscribing ends your trial and starts billing today.`
+              : "Subscribing ends your free trial and starts your paid plan today. Everything you've set up stays exactly as it is."
             : sub.status === "past_due"
               ? "Your account stays open while payment is retried. Update your card in Manage billing."
               : sub.reason || "Your ShootPortal subscription is active.";
@@ -348,6 +356,11 @@ export default async function BillingPage({
                 Free Trial — {sub.daysLeftInTrial} Day{sub.daysLeftInTrial === 1 ? "" : "s"} Remaining
               </p>
             ) : null}
+            {introLive && showPicker && introEndsAt ? (
+              <p className="mt-3 ml-0 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-800 sm:ml-2">
+                Save {save} — offer ends {formatBillingDate(introEndsAt)}
+              </p>
+            ) : null}
             <p className="mt-2 text-muted">{description}</p>
           </div>
 
@@ -419,6 +432,13 @@ export default async function BillingPage({
             </CardContent>
           </Card>
 
+          {scheduled && !scheduled.canceled && !sub.isComped && !tenant.impersonating ? (
+            <StartPlanNowPanel
+              scheduledDateLabel={formatBillingDate(scheduled.firstPaymentAt)}
+              scheduledAmountCents={scheduledChargeCents}
+            />
+          ) : null}
+
           {!sub.isComped && !showPicker && hasStripeCustomer && (
             <p className="mb-8 text-sm text-muted">
               {scheduled && !scheduled.canceled
@@ -442,38 +462,21 @@ export default async function BillingPage({
               ) : (
                 <BillingPlansWithPromo
                   afterPlans={trialOffer}
-                  mode={pickerMode}
-                  firstChargeDateLabel={pickerMode === "schedule" ? trialEndLabel : null}
+                  offerKind={offerKind}
+                  trialing={trialRunning}
                   preferredInterval={preferredInterval}
-                  plans={publicPlans.map((plan) => {
-                    const cookieMonthlyDisplay =
-                      monthlyReferralDiscount?.eligible && plan.price_monthly_cents != null
-                        ? formatReferralPlanPriceDisplay({
-                            listPriceCents: plan.price_monthly_cents,
-                            discount: monthlyReferralDiscount,
-                            interval: "monthly",
-                          })
-                        : null;
-                    const cookieAnnualDisplay =
-                      plan.price_annual_cents != null && annualReferralDiscount?.eligible
-                        ? formatReferralPlanPriceDisplay({
-                            listPriceCents: plan.price_annual_cents,
-                            discount: annualReferralDiscount,
-                            interval: "annual",
-                          })
-                        : null;
-                    return {
-                      id: plan.id,
-                      key: plan.key,
-                      name: plan.name,
-                      price_monthly_cents: plan.price_monthly_cents,
-                      price_annual_cents: plan.price_annual_cents,
-                      stripe_price_monthly_id: plan.stripe_price_monthly_id,
-                      stripe_price_annual_id: plan.stripe_price_annual_id,
-                      cookieMonthlyDisplay,
-                      cookieAnnualDisplay,
-                    };
-                  })}
+                  plans={publicPlans.map((plan) => ({
+                    id: plan.id,
+                    key: plan.key,
+                    name: plan.name,
+                    price_monthly_cents: plan.price_monthly_cents,
+                    price_annual_cents: plan.price_annual_cents,
+                    stripe_price_monthly_id: plan.stripe_price_monthly_id,
+                    stripe_price_annual_id: plan.stripe_price_annual_id,
+                    quotes:
+                      offersByPlan.get(plan.key)?.quotes ??
+                      quotePlan({ monthlyCents: plan.price_monthly_cents, annualPerMonthCents: plan.price_annual_cents }, false),
+                  }))}
                 />
               )}
             </>

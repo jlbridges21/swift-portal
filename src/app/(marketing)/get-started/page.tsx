@@ -10,6 +10,7 @@ import { marketingPageMetadata } from "@/lib/marketing";
 import { assertActivePlanKey, FALLBACK_TRIAL_DAYS, resolvePlanTrialDays } from "@/lib/entitlements";
 import { parseSignupSource, signupHref } from "@/lib/signup-intent";
 import { formatUsd } from "@/lib/trial-conversion";
+import { introOfferSavingsLabel, quoteInterval } from "@/lib/intro-offer";
 
 /**
  * Post-demo subscription page. Shared after a live demo (e.g. /get-started?source=demo).
@@ -54,6 +55,10 @@ export default async function GetStartedPage({
     console.warn("[get-started] could not load studio plan", err);
   }
   const annualTotal = annualPerMonthCents != null ? annualPerMonthCents * 12 : null;
+  // Subscribe & Save prices for new customers (partner referrals see their own pricing at signup).
+  const monthlyIntro = monthlyCents != null ? quoteInterval("monthly", monthlyCents, true) : null;
+  const annualIntro = annualTotal != null ? quoteInterval("annual", annualTotal, true) : null;
+  const save = introOfferSavingsLabel();
 
   return (
     <BrandProvider brand={platformPortalBrand()}>
@@ -81,10 +86,19 @@ export default async function GetStartedPage({
               <article className="mk-reveal flex flex-col rounded-3xl border border-[#E2E8F0] bg-white p-7 shadow-sm">
                 <h2 className="text-lg font-semibold text-[#0F172A]">Monthly</h2>
                 <p className="mt-4 flex items-baseline gap-1">
-                  <span className="text-4xl font-bold tracking-tight text-[#0F172A]">{formatUsd(monthlyCents)}</span>
+                  {monthlyIntro && monthlyIntro.savingsCents > 0 ? (
+                    <span className="mr-1 text-lg text-[#94A3B8] line-through">{formatUsd(monthlyCents)}</span>
+                  ) : null}
+                  <span className="text-4xl font-bold tracking-tight text-[#0F172A]">
+                    {formatUsd(monthlyIntro?.firstChargeCents ?? monthlyCents)}
+                  </span>
                   <span className="text-base text-[#475569]">/month</span>
                 </p>
-                <p className="mt-1 text-sm text-[#475569]">Billed monthly</p>
+                <p className="mt-1 text-sm text-[#475569]">
+                  {monthlyIntro && monthlyIntro.savingsCents > 0
+                    ? `${monthlyIntro.summary} · save ${formatUsd(monthlyIntro.savingsCents)}`
+                    : "Billed monthly"}
+                </p>
                 <ul className="mt-6 flex-1 space-y-2.5">
                   {INCLUDED.map((line) => (
                     <li key={line} className="flex gap-2 text-sm text-[#475569]">
@@ -106,11 +120,18 @@ export default async function GetStartedPage({
                 </span>
                 <h2 className="text-lg font-semibold text-[#0F172A]">Annual</h2>
                 <p className="mt-4 flex items-baseline gap-1">
-                  <span className="text-4xl font-bold tracking-tight text-[#0F172A]">{formatUsd(annualTotal)}</span>
-                  <span className="text-base text-[#475569]">/year</span>
+                  {annualIntro && annualIntro.savingsCents > 0 ? (
+                    <span className="mr-1 text-lg text-[#94A3B8] line-through">{formatUsd(annualTotal)}</span>
+                  ) : null}
+                  <span className="text-4xl font-bold tracking-tight text-[#0F172A]">
+                    {formatUsd(annualIntro?.firstChargeCents ?? annualTotal)}
+                  </span>
+                  <span className="text-base text-[#475569]">{annualIntro && annualIntro.savingsCents > 0 ? " first year" : "/year"}</span>
                 </p>
                 <p className="mt-1 text-sm text-[#475569]">
-                  Equivalent to {formatUsd(annualPerMonthCents)}/month · {formatUsd(annualTotal)} billed once a year
+                  {annualIntro && annualIntro.savingsCents > 0
+                    ? `Then ${formatUsd(annualTotal)}/year · save ${formatUsd(annualIntro.savingsCents)}`
+                    : `Equivalent to ${formatUsd(annualPerMonthCents)}/month · ${formatUsd(annualTotal)} billed once a year`}
                 </p>
                 <ul className="mt-6 flex-1 space-y-2.5">
                   {INCLUDED.map((line) => (
@@ -129,12 +150,16 @@ export default async function GetStartedPage({
             </div>
 
             <p className="mx-auto mt-6 max-w-xl text-center text-sm text-[#64748B]">
-              Secure checkout through Stripe. Your subscription starts as soon as payment goes through.
+              Subscribe today and save {save}. Secure checkout through Stripe — your subscription starts as soon as
+              payment goes through.
             </p>
 
             {trialDays > 0 ? (
               <div className="mx-auto mt-12 max-w-xl rounded-2xl border border-dashed border-[#CBD5E1] bg-white/70 px-6 py-5 text-center">
-                <p className="text-sm text-[#475569]">Not quite ready? Try ShootPortal free for {trialDays} days.</p>
+                <p className="text-sm text-[#475569]">
+                  Not quite ready? Try ShootPortal free for {trialDays} days — you can still save {save} by subscribing
+                  before your trial ends.
+                </p>
                 <Link
                   href={signupHref({ source })}
                   className="mt-1 inline-block text-sm font-semibold text-[#4F46E5] underline-offset-4 hover:underline"

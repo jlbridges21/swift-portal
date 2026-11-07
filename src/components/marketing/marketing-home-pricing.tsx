@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { signupHref } from "@/lib/signup-intent";
 import { formatUsd } from "@/lib/trial-conversion";
+import { introOfferSavingsLabel, quoteInterval } from "@/lib/intro-offer";
 
 type BillingInterval = "monthly" | "annual";
 
@@ -154,13 +155,15 @@ export function MarketingHomePricing({
                 variant="outline"
                 className="min-h-12 w-full border-[#4F46E5] bg-white text-base font-semibold text-[#4F46E5] hover:bg-[#EEF2FF]"
               >
-                Subscribe Now
+                Subscribe &amp; Save {introOfferSavingsLabel()}
               </Button>
             </Link>
             <p className="mt-2 text-center text-xs text-[#475569]">
               {interval === "annual" && annualMonthlyCents != null
-                ? `${formatUsd(annualMonthlyCents * 12)}/year, billed today. No trial needed.`
-                : `${formatUsd(monthlyCents)}/month, billed today. No trial needed.`}
+                ? `${quoteInterval("annual", annualMonthlyCents * 12, true).summary}. Billed today.`
+                : monthlyCents != null
+                  ? `${quoteInterval("monthly", monthlyCents, true).summary}. Billed today.`
+                  : "Billed today. No trial needed."}
             </p>
           </div>
         </div>

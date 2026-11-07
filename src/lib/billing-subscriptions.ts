@@ -27,7 +27,14 @@ import { loadBillingJourney, recordConversionEvent, upsertBillingJourney } from 
 import { DAY_MS } from "@/lib/trial-conversion";
 import type { SignupInterval } from "@/lib/signup-intent";
 
-/** Metadata keys on setup-mode Checkout Sessions. */
+/** Subscription metadata: account state when Checkout started (trial | subscribe | expired). */
+export const CHECKOUT_FROM_META_KEY = "sp_checkout_from";
+
+/**
+ * Metadata keys on setup-mode Checkout Sessions. New checkouts no longer use setup mode (trial
+ * users now pay today); kept so a session opened before that change still completes exactly as
+ * the customer agreed (first charge at their stored trial end).
+ */
 export const SETUP_PRICE_META_KEY = "sp_schedule_price";
 export const SETUP_COUPON_META_KEY = "sp_schedule_coupon";
 export const SETUP_INTERVAL_META_KEY = "sp_schedule_interval";
@@ -56,7 +63,8 @@ export function intervalFromSubscription(sub: Stripe.Subscription): SignupInterv
 }
 
 /**
- * How a trial user's plan is collected. Pure — used by checkout and tests.
+ * LEGACY (sessions opened before Subscribe & Save): how a trial user's plan was collected.
+ * New checkouts always charge today. Still used to finish a setup-mode session created earlier.
  *  - "trial_end": Checkout subscription mode with subscription_data.trial_end (≥ 48h left)
  *  - "setup":     Checkout setup mode, subscription created server-side (< 48h left)
  *  - "none":      no trial left (new Subscribe Now accounts, expired trials) → charge now
@@ -389,8 +397,16 @@ export async function recordInvoiceConversion(input: {
       properties: {
         ...props,
         amount_cents: invoice.amount_paid ?? null,
-        // scheduled during the trial vs. subscribed after the trial had already expired
-        timing: subscription.trial_end ? "scheduled_during_trial" : Date.now() > trialEnd ? "after_expiry" : "during_trial",
+        // started early / paid during the trial / scheduled for trial end / after expiry
+        timing: subscription.metadata?.sp_started_early === "true"
+          ? "started_early"
+          : subscription.metadata?.[CHECKOUT_FROM_META_KEY] === "trial"
+            ? "during_trial"
+            : subscription.trial_end
+              ? "scheduled_during_trial"
+              : Date.now() > trialEnd
+                ? "after_expiry"
+                : "during_trial",
       },
     });
   }

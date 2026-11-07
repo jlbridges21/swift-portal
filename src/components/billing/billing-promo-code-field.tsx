@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { formatPlanPrice } from "@/lib/plan-catalog";
+import { quoteWithDiscount, type OfferDisplay } from "@/lib/intro-offer";
 
 export type BillingPromoState = {
   promoCode: string | null;
@@ -21,6 +22,11 @@ export type BillingPromoState = {
     discountedPriceCents: number;
     headline: string;
   } | null;
+  /**
+   * Prices once a partner code is accepted. A partner code is a referral: its pricing replaces
+   * Subscribe & Save (never stacked), even when that partner offers no discount.
+   */
+  quotes: OfferDisplay["quotes"] | null;
 };
 
 type Props = {
@@ -43,6 +49,7 @@ export function BillingPromoCodeField({
   const [headline, setHeadline] = useState<string | null>(null);
   const [monthlyOverride, setMonthlyOverride] = useState<BillingPromoState["monthlyOverride"]>(null);
   const [annualOverride, setAnnualOverride] = useState<BillingPromoState["annualOverride"]>(null);
+  const [quotes, setQuotes] = useState<BillingPromoState["quotes"]>(null);
 
   const emit = useCallback(
     (next: {
@@ -51,6 +58,7 @@ export function BillingPromoCodeField({
       error: string | null;
       monthlyOverride: BillingPromoState["monthlyOverride"];
       annualOverride: BillingPromoState["annualOverride"];
+      quotes: BillingPromoState["quotes"];
     }) => {
       onChange(next);
     },
@@ -64,8 +72,9 @@ export function BillingPromoCodeField({
       error,
       monthlyOverride,
       annualOverride,
+      quotes: applied ? quotes : null,
     });
-  }, [applied, error, monthlyOverride, annualOverride, emit]);
+  }, [applied, error, monthlyOverride, annualOverride, quotes, emit]);
 
   async function applyCode() {
     const code = input.trim();
@@ -97,12 +106,43 @@ export function BillingPromoCodeField({
         promoCode?: string;
         brandName?: string;
         discountEligible?: boolean;
+        amountOffCents?: number | null;
+        durationMonths?: number | null;
         priceDisplay?: {
           listPriceCents: number;
           discountedPriceCents: number;
           headline: string;
         } | null;
       };
+      const annualData = annualRes
+        ? ((await annualRes.json().catch(() => null)) as {
+            ok?: boolean;
+            discountEligible?: boolean;
+            annualAmountOffCents?: number | null;
+            priceDisplay?: { listPriceCents: number; discountedPriceCents: number; headline: string } | null;
+          } | null)
+        : null;
+      // What checkout will actually charge with this code (referral pricing only).
+      const nextQuotes: NonNullable<BillingPromoState["quotes"]> = {};
+      if (listMonthlyCents != null) {
+        nextQuotes.monthly = quoteWithDiscount(
+          "monthly",
+          listMonthlyCents,
+          monthly.discountEligible && monthly.amountOffCents && monthly.durationMonths
+            ? { amountOffCents: monthly.amountOffCents, invoices: monthly.durationMonths }
+            : null
+        );
+      }
+      if (listAnnualCents != null) {
+        nextQuotes.annual = quoteWithDiscount(
+          "annual",
+          listAnnualCents * 12,
+          annualData?.ok && annualData.discountEligible && annualData.annualAmountOffCents
+            ? { amountOffCents: annualData.annualAmountOffCents, invoices: 1 }
+            : null
+        );
+      }
+      setQuotes(monthlyRes.ok && monthly.ok ? nextQuotes : null);
 
       if (!monthlyRes.ok || !monthly.ok) {
         setApplied(null);
@@ -135,16 +175,8 @@ export function BillingPromoCodeField({
       );
       setError(null);
 
-      if (annualRes) {
-        const annual = (await annualRes.json()) as {
-          ok?: boolean;
-          discountEligible?: boolean;
-          priceDisplay?: {
-            listPriceCents: number;
-            discountedPriceCents: number;
-            headline: string;
-          } | null;
-        };
+      if (annualData) {
+        const annual = annualData;
         if (annual.ok && annual.discountEligible && annual.priceDisplay) {
           setAnnualOverride({
             listPriceCents: annual.priceDisplay.listPriceCents,
@@ -160,6 +192,7 @@ export function BillingPromoCodeField({
       setApplied(null);
       setMonthlyOverride(null);
       setAnnualOverride(null);
+      setQuotes(null);
     } finally {
       setBusy(false);
     }
@@ -172,6 +205,7 @@ export function BillingPromoCodeField({
     setHeadline(null);
     setMonthlyOverride(null);
     setAnnualOverride(null);
+    setQuotes(null);
   }
 
   return (

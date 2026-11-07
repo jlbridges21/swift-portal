@@ -17,13 +17,9 @@ import {
   isStripeDiscountApplyError,
   logStripeError,
 } from "@/lib/stripe-errors";
-import {
-  findLiveBillingSubscription,
-  SETUP_COUPON_META_KEY,
-  SETUP_INTERVAL_META_KEY,
-  SETUP_PRICE_META_KEY,
-  trialHandoffMode,
-} from "@/lib/billing-subscriptions";
+import { CHECKOUT_FROM_META_KEY, findLiveBillingSubscription } from "@/lib/billing-subscriptions";
+import { ensureIntroOfferCoupon, loadIntroOfferContext } from "@/lib/intro-offer-server";
+import { INTRO_OFFER_META_KEY, introOfferMetaValue, introOfferSavingsLabel } from "@/lib/intro-offer";
 import { loadBillingJourney, recordConversionEvent, upsertBillingJourney } from "@/lib/billing-journey";
 import { parseSignupSource } from "@/lib/signup-intent";
 import { DAY_MS } from "@/lib/trial-conversion";
@@ -45,6 +41,11 @@ export async function POST(request: Request) {
       promoCode?: string;
       /** Where the plan was chosen (attribution only): billing | get_started | modal_day5 … */
       context?: string;
+      /**
+       * The offer the customer was shown ("intro" | "referral" | "none"). If we can no longer
+       * honor a shown intro price we stop with 409 offer_unavailable instead of charging more.
+       */
+      expectedOffer?: string;
     };
 
     const planKey = typeof body.planKey === "string" ? body.planKey.trim() : "";
@@ -127,18 +128,17 @@ export async function POST(request: Request) {
     }
 
     const meta = billingMetadata(business.id);
-    const subscriptionData: {
-      metadata: Record<string, string>;
-      trial_end?: number;
-    } = { metadata: meta };
-
-    // Trial users schedule billing for the STORED trial end (never recalculated or extended).
-    // ≥ 48h left: Checkout trial_end. < 48h: Checkout setup mode, subscription created after.
-    const handoff = trialHandoffMode(business);
-    const trialEndApplied = handoff.kind === "trial_end";
-    if (handoff.kind === "trial_end" && handoff.trialEndUnix) {
-      subscriptionData.trial_end = handoff.trialEndUnix;
-    }
+    // Every new checkout charges today — trial users included (paying ends their trial; the
+    // billing sync records that). No trial_end is ever attached to a new subscription.
+    const checkoutFrom =
+      business.subscription_status === "trialing" && sub.daysLeftInTrial != null && !sub.isExpired
+        ? "trial"
+        : business.subscription_status === "trial_expired" && !business.trial_ends_at
+          ? "subscribe"
+          : "expired";
+    const subscriptionData: { metadata: Record<string, string> } = {
+      metadata: { ...meta, [CHECKOUT_FROM_META_KEY]: checkoutFrom },
+    };
 
     // Partner referral / promo discount — apply at Checkout via `discounts` only.
     // Never set allow_promotion_codes (conflicts with discounts → Stripe 400).
@@ -195,7 +195,6 @@ export async function POST(request: Request) {
               couponId: discount.couponId,
               amountOffCents: discount.config?.amountOffCents,
               durationMonths: discount.config?.durationMonths,
-              trialEndApplied,
               viaPromo: Boolean(promoCode),
             });
           } else {
@@ -241,6 +240,51 @@ export async function POST(request: Request) {
       });
     }
 
+    // Subscribe & Save: only without any partner referral (the referral offer always wins and
+    // never stacks), only inside the original trial window, only for never-paid accounts.
+    // Checked AFTER promo attribution above so a promo code entered here counts as a referral.
+    let introApplied = false;
+    if (!checkoutDiscounts) {
+      const intro = await loadIntroOfferContext(business, { authoritative: true, liveSubscription: null });
+      if (intro.decision.eligible) {
+        const couponId = await ensureIntroOfferCoupon(interval);
+        if (!couponId) {
+          console.error("[billing/checkout] ALERT intro coupon unavailable — not charging a higher price", {
+            businessId: business.id,
+            interval,
+            mode,
+          });
+          return NextResponse.json(
+            {
+              error: `We couldn't apply your ${introOfferSavingsLabel()} Subscribe & Save discount just now. Please try again in a moment — you haven't been charged.`,
+              code: "offer_unavailable",
+            },
+            { status: 503 }
+          );
+        }
+        checkoutDiscounts = [{ coupon: couponId }];
+        introApplied = true;
+        subscriptionData.metadata[INTRO_OFFER_META_KEY] = introOfferMetaValue(interval);
+        console.info("[billing/checkout] intro offer attached", {
+          businessId: business.id,
+          interval,
+          mode,
+          couponId,
+          windowEndsAt: intro.decision.endsAt,
+        });
+      }
+    }
+    const expectedOffer = typeof body.expectedOffer === "string" ? body.expectedOffer : null;
+    if (expectedOffer === "intro" && !introApplied) {
+      return NextResponse.json(
+        {
+          error: `The ${introOfferSavingsLabel()} Subscribe & Save offer is no longer available for this account, so your price has been updated. Review it and try again — you haven't been charged.`,
+          code: "offer_unavailable",
+        },
+        { status: 409 }
+      );
+    }
+
     const buildParams = (discounts: { coupon: string }[] | undefined): CheckoutSessionParams => {
       // Only attach `discounts` when we have a coupon. Never set allow_promotion_codes —
       // ShootPortal collects partner promo codes in-app and maps them to this same path.
@@ -260,30 +304,22 @@ export async function POST(request: Request) {
       return params;
     };
 
-    // Card only now; the subscription (and any discount) is created when setup completes.
-    const buildSetupParams = (): CheckoutSessionParams => ({
-      mode: "setup",
-      customer: customerId,
-      currency: "usd",
-      metadata: {
-        ...meta,
-        [SETUP_PRICE_META_KEY]: priceId,
-        [SETUP_INTERVAL_META_KEY]: interval,
-        ...(checkoutDiscounts?.[0]?.coupon ? { [SETUP_COUPON_META_KEY]: checkoutDiscounts[0].coupon } : {}),
-      },
-      setup_intent_data: { metadata: meta },
-      success_url: `${origin}/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/billing?checkout=cancelled`,
-      client_reference_id: business.id,
-    });
-
     let session: Stripe.Checkout.Session;
     try {
-      session = await stripe.checkout.sessions.create(
-        handoff.kind === "setup" ? buildSetupParams() : buildParams(checkoutDiscounts)
-      );
+      session = await stripe.checkout.sessions.create(buildParams(checkoutDiscounts));
     } catch (createErr) {
-      if (handoff.kind !== "setup" && checkoutDiscounts && isStripeDiscountApplyError(createErr)) {
+      if (introApplied && isStripeDiscountApplyError(createErr)) {
+        // Never silently drop a promised intro price.
+        logStripeError("billing/checkout", createErr, { businessId: business.id, interval, mode, intro: true });
+        return NextResponse.json(
+          {
+            error: `We couldn't apply your ${introOfferSavingsLabel()} Subscribe & Save discount just now. Please try again in a moment — you haven't been charged.`,
+            code: "offer_unavailable",
+          },
+          { status: 503 }
+        );
+      }
+      if (checkoutDiscounts && isStripeDiscountApplyError(createErr)) {
         logStripeError("billing/checkout", createErr, {
           businessId: business.id,
           interval,
@@ -300,6 +336,7 @@ export async function POST(request: Request) {
             couponId: checkoutDiscounts[0]?.coupon,
           }
         );
+        delete subscriptionData.metadata[INTRO_OFFER_META_KEY];
         session = await stripe.checkout.sessions.create(buildParams(undefined));
       } else {
         throw createErr;
@@ -322,15 +359,17 @@ export async function POST(request: Request) {
       signup_path: journey?.signup_path ?? null,
       source,
       context,
-      checkout_kind: handoff.kind === "none" ? "pay_now" : "scheduled",
+      checkout_kind: "pay_now",
+      checkout_from: checkoutFrom,
+      offer: introApplied ? "intro" : checkoutDiscounts ? "referral" : "none",
       trial_day:
-        handoff.kind !== "none" && Number.isFinite(trialStart)
+        checkoutFrom === "trial" && Number.isFinite(trialStart)
           ? Math.floor((Date.now() - trialStart) / DAY_MS) + 1
           : null,
     };
     await recordConversionEvent({
       businessId: business.id,
-      type: handoff.kind === "none" ? "immediate_checkout_started" : "trial_plan_selected",
+      type: checkoutFrom === "trial" ? "trial_plan_selected" : "immediate_checkout_started",
       dedupeKey: `checkout_started:${session.id}`,
       properties: eventProps,
     });
@@ -346,6 +385,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       url: session.url,
       mode,
+      offer: introApplied ? "intro" : checkoutDiscounts ? "referral" : "none",
       ...(promoAttributionMessage ? { attributionMessage: promoAttributionMessage } : {}),
     });
   } catch (err) {

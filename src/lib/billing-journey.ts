@@ -39,6 +39,9 @@ export const CONVERSION_EVENT_TYPES = [
   "trial_converted_to_paid",
   "subscription_payment_succeeded",
   "subscription_payment_failed",
+  // migration v111
+  "intro_offer_redeemed",
+  "scheduled_plan_started_early",
 ] as const;
 
 export type ConversionEventType = (typeof CONVERSION_EVENT_TYPES)[number];

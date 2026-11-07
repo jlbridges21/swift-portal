@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getPublicHostContext } from "@/lib/host-resolution";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { MarketingAnalytics } from "@/components/analytics/marketing-analytics";
@@ -12,6 +12,9 @@ import { isOAuthAllowedHostname } from "@/lib/oauth-origins";
 import { warnOAuthCustomDomainAllowlistGaps } from "@/lib/oauth-allowlist-audit";
 import { intentFromSearchParams } from "@/lib/signup-intent";
 import { ADMIN_DEMO_SOURCE, resolveAdminDemoAuthorization } from "@/lib/admin-demo-signup";
+import { PARTNER_REF_COOKIE } from "@/lib/partner-referral";
+import { offerDisplayForSignup } from "@/lib/intro-offer-server";
+import { quotePlan, type OfferDisplay } from "@/lib/intro-offer";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +47,23 @@ export default async function SignupPage({
   // admin (signed demo cookie or super_admin session). Everyone else gets normal signup.
   const demo = intent.source === ADMIN_DEMO_SOURCE ? await resolveAdminDemoAuthorization() : null;
 
+  // Same pricing the account will get at checkout: a valid partner referral cookie ⇒ partner
+  // pricing (never stacked with Subscribe & Save); otherwise the $15 Subscribe & Save offer.
+  let offer: OfferDisplay & { partnerName: string | null } = {
+    kind: "intro",
+    quotes: quotePlan(pricing, true),
+    endsAt: null,
+    partnerName: null,
+  };
+  try {
+    const jar = await cookies();
+    offer = await offerDisplayForSignup(pricing, jar.get(PARTNER_REF_COOKIE)?.value ?? null, {
+      ignoreReferral: Boolean(demo?.ok),
+    });
+  } catch (err) {
+    console.warn("[signup] offer display failed — showing Subscribe & Save", err);
+  }
+
   const h = await headers();
   const hostname =
     (h.get("x-forwarded-host") || h.get("host") || "").split(",")[0]?.split(":")[0]?.trim() ?? "";
@@ -58,6 +78,7 @@ export default async function SignupPage({
         oauthAllowed={oauthAllowed}
         initialIntent={intent}
         pricing={pricing}
+        offer={offer}
         adminDemo={demo?.ok ? { adminEmail: demo.actorEmail } : null}
       />
       <MarketingScrollReset />
