@@ -18,10 +18,6 @@ import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { BusinessAnalytics } from "@/components/admin/dashboard-analytics/business-analytics";
 import { defaultAnalyticsRange, safeTimeZone } from "@/lib/dashboard-analytics";
 import { loadDashboardAnalytics } from "@/lib/dashboard-analytics-server";
-import { SubscribeSaveCard } from "@/components/admin/subscribe-save-card";
-import { offerDisplayForBusiness } from "@/lib/intro-offer-server";
-import { assertActivePlanKey } from "@/lib/entitlements";
-import { requestNowMs, type OfferDisplay } from "@/lib/intro-offer";
 
 export default async function AdminDashboard() {
   // Double-gate: middleware also redirects staff off /admin, but page must refuse
@@ -68,19 +64,7 @@ export default async function AdminDashboard() {
 
   const brand = getPortalBrandFromSettings(settings);
 
-  // Trial owners only (never staff, never support impersonation, never paying accounts).
-  let introOffer: OfferDisplay | null = null;
-  if (tenant.business.subscription_status === "trialing" && !tenant.impersonating) {
-    try {
-      const plan = await assertActivePlanKey(tenant.business.plan || "studio");
-      introOffer = await offerDisplayForBusiness(
-        { id: bid, subscription_status: tenant.business.subscription_status, trial_ends_at: tenant.business.trial_ends_at },
-        { monthlyCents: plan.price_monthly_cents, annualPerMonthCents: plan.price_annual_cents }
-      );
-    } catch (err) {
-      console.warn("[admin dashboard] subscribe & save card skipped", err instanceof Error ? err.message : err);
-    }
-  }
+  // Subscribe & Save is promoted once, in the trial banner above every admin page (admin/layout).
 
   return (
     <div className="min-h-screen w-full bg-background">
@@ -97,8 +81,6 @@ export default async function AdminDashboard() {
             </Button>
           </Link>
         </PageHeader>
-
-        {introOffer ? <SubscribeSaveCard offer={introOffer} nowMs={requestNowMs()} /> : null}
 
         {checklist.incomplete ? (
           <SetupChecklistCard

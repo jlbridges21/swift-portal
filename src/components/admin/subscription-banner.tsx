@@ -126,13 +126,13 @@ export function SubscriptionBanner({
   return null;
 }
 
-function introLine(q: IntervalQuote): string {
+function shortPrice(q: IntervalQuote): string {
   if (q.interval === "monthly") {
     return q.introInvoices > 1
-      ? `${formatUsd(q.introChargeCents)}/mo for your first ${q.introInvoices} months (normally ${formatUsd(q.regularCents)})`
-      : `${formatUsd(q.firstChargeCents)} your first month (normally ${formatUsd(q.regularCents)})`;
+      ? `${formatUsd(q.introChargeCents)}/mo for ${q.introInvoices} months`
+      : `${formatUsd(q.firstChargeCents)} your first month`;
   }
-  return `${formatUsd(q.firstChargeCents)} your first year (normally ${formatUsd(q.regularCents)})`;
+  return `${formatUsd(q.firstChargeCents)} your first year`;
 }
 
 /**
@@ -173,59 +173,62 @@ function TrialOfferBanner({
 
   const urgent = kind === "intro" ? introOfferPromptCopy(introMs).urgent : days <= 3;
   const save = kind === "intro" ? introOfferSavingsLabel() : null;
-  const countdown =
-    kind === "intro" ? `Offer ends with your trial in ${introCountdownLabel(introMs)}` : `${dayLabel} left in your free trial`;
+  const countdown = kind === "intro" ? introCountdownLabel(introMs) : dayLabel;
+  const prices = discounted.map((q) => shortPrice(q)).join(" or ");
 
+  // One slim row on every admin page — the single place Subscribe & Save is promoted in the app
+  // (besides the billing page itself and the milestone modal). Calm until the last 3 days.
   return (
     <div
       className={
         urgent
-          ? "border-b border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 px-4 py-3 text-amber-950"
-          : "border-b border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-sky-50 px-4 py-3 text-emerald-950"
+          ? "border-b border-amber-200 bg-amber-50 px-4 py-2 text-amber-950"
+          : "border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-emerald-950"
       }
       data-sp-banner={kind === "intro" ? "trial:subscribe_save" : "trial:referral"}
     >
-      <div className="mx-auto flex max-w-7xl flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <div className="flex min-w-0 items-start gap-3">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+        <p className="min-w-0 text-sm leading-snug">
           <span
             className={
               urgent
-                ? "mt-0.5 shrink-0 rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white"
-                : "mt-0.5 shrink-0 rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white"
+                ? "mr-2 hidden rounded-full bg-amber-500 px-2 py-0.5 align-middle text-[11px] font-bold uppercase tracking-wide text-white sm:inline-block"
+                : "mr-2 hidden rounded-full bg-emerald-600 px-2 py-0.5 align-middle text-[11px] font-bold uppercase tracking-wide text-white sm:inline-block"
             }
           >
             {save ? `Save ${save}` : "Partner price"}
           </span>
-          <div className="min-w-0 text-sm">
-            <p className="font-semibold">
-              {save
-                ? urgent
-                  ? `Last chance — start your subscription today and save ${save}`
-                  : `Start your subscription today and save ${save}`
-                : "Start your subscription today with your partner discount"}
-              <span className="font-normal opacity-80"> · {countdown}</span>
-            </p>
-            <p className="mt-0.5 opacity-90">
-              {discounted.map((q, i) => (
-                <span key={q.interval}>
-                  {i > 0 ? <span className="opacity-60"> or </span> : null}
-                  {introLine(q)}
-                </span>
-              ))}
-              <span className="hidden md:inline opacity-80"> · Keeps everything from your trial.</span>
-            </p>
-          </div>
-        </div>
+          <strong className="font-semibold">
+            {save
+              ? urgent
+                ? `Last chance to save ${save}`
+                : `Start your subscription today and save ${save}`
+              : "Start today with your partner discount"}
+          </strong>
+          <span className="hidden opacity-80 lg:inline"> — {prices}</span>
+          <span className="opacity-80">
+            {" "}
+            · {kind === "intro" ? "ends in" : ""} {countdown}
+            {kind === "intro" ? "" : " left in trial"}
+          </span>
+        </p>
         <Link
           href="/billing"
           className={
             urgent
-              ? "inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
-              : "inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+              ? "inline-flex min-h-9 shrink-0 items-center rounded-md bg-amber-600 px-3 text-sm font-semibold text-white transition hover:bg-amber-700"
+              : "inline-flex min-h-9 shrink-0 items-center rounded-md bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
           }
           data-sp-cta={kind === "intro" ? "banner:subscribe_save" : "banner:subscribe_referral"}
         >
-          {save ? `Subscribe & Save ${save}` : "Subscribe Now"}
+          {save ? (
+            <>
+              <span className="sm:hidden">Save {save}</span>
+              <span className="hidden sm:inline">Subscribe &amp; Save {save}</span>
+            </>
+          ) : (
+            "Subscribe Now"
+          )}
         </Link>
       </div>
     </div>

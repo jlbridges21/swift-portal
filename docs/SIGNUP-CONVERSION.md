@@ -46,8 +46,8 @@ the subscription state, so two tabs / double-clicks get one Stripe result (a sec
 otherwise re-attach the one-time coupon to the renewal).
 
 **Where the offer shows:** `/signup`, `/get-started`, marketing pricing, `/billing` (prices, due
-today, next payment, countdown pill), trial banner (calm → urgent countdown in the last 3 days),
-trial modals, Command Center card, and the optional `{{subscribeSaveOffer}}` lifecycle-email
+today, next payment, countdown pill), trial banner (one slim row on every admin page — the only in-app
+promotion; calm → urgent in the last 3 days), trial milestone modals, and the optional `{{subscribeSaveOffer}}` lifecycle-email
 variable (empty when not available). Referred accounts see partner pricing instead. Expired windows
 show regular prices. Checkout receives `expectedOffer`; if a shown intro price can no longer be
 honored it returns `409 offer_unavailable` (nothing charged) and the page refreshes prices. If the
