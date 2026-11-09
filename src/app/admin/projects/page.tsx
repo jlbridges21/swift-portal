@@ -14,7 +14,8 @@ import {
 import { listAssignableStaff, listProjectStaffUserIdsByBusiness } from "@/lib/staff";
 import { isOwnerAdmin, staffCan, visibleProjectIdsFor } from "@/lib/staff-access";
 import { parseProjectsViewCookie, PROJECTS_VIEW_COOKIE } from "@/lib/client-view";
-import { loadClientViewData } from "@/lib/client-view-data";
+import { loadClientViewData, loadProjectHeroPosters } from "@/lib/client-view-data";
+import { loadProjectStorageBytes } from "@/lib/project-storage";
 
 interface PageProps {
   searchParams: Promise<{ view?: string; stage?: string; status?: string }>;
@@ -75,9 +76,18 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
     profile.id
   );
   const initialView = showDeleted ? "pipeline" : savedView;
+
+  // Card extras (hero posters, storage) stream in after the board renders —
+  // not awaited here, so they never hold up the page. One batch for all cards.
+  const heroUrls = loadProjectHeroPosters(tenant.businessId, projects);
+  const storageBytes = loadProjectStorageBytes(
+    tenant.businessId,
+    projects.map((p) => p.id)
+  );
+
   const clientView =
     initialView === "client"
-      ? await loadClientViewData({ businessId: tenant.businessId, profile, projects })
+      ? await loadClientViewData({ businessId: tenant.businessId, profile, projects, heroUrls })
       : null;
 
   const stageConfig = stage ? PIPELINE_STAGE_CONFIG[stage] : null;
@@ -130,6 +140,8 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
           isStaff={isStaff}
           initialView={initialView}
           clientView={clientView}
+          heroUrls={heroUrls}
+          storageBytes={storageBytes}
           clientViewPermissions={
             showDeleted
               ? undefined

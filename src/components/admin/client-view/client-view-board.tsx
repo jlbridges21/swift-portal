@@ -7,6 +7,8 @@ import { ProjectCoverImage } from "@/components/projects/project-cover-image";
 import { CLIENT_VIEW_STAGES, STAGE_ACCENTS } from "@/lib/client-view";
 import type { ProjectStatus } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { ProjectStorageLabel } from "@/components/admin/project-card-extras";
+import type { ProjectStorageMap } from "@/lib/project-storage";
 import {
   formatCardDate,
   ProjectActionsButton,
@@ -17,12 +19,14 @@ import {
 export function ClientViewBoard({
   projects,
   heroUrls,
+  storageBytes,
   showClientName,
   canOpenClients,
   onMove,
 }: {
   projects: ClientViewProjectRow[];
   heroUrls: Record<string, string | null> | null;
+  storageBytes?: Promise<ProjectStorageMap | null>;
   showClientName: boolean;
   canOpenClients: boolean;
   onMove: (project: ClientViewProjectRow, next: ProjectStatus) => void;
@@ -93,6 +97,7 @@ export function ClientViewBoard({
                     <ClientProjectCard
                       project={project}
                       heroUrl={heroUrls ? heroUrls[project.id] ?? null : undefined}
+                      storageBytes={storageBytes}
                       showClientName={showClientName}
                       canOpenClients={canOpenClients}
                       onMove={onMove}
@@ -123,6 +128,7 @@ export function ClientViewBoard({
 function ClientProjectCard({
   project,
   heroUrl,
+  storageBytes,
   showClientName,
   canOpenClients,
   onMove,
@@ -130,6 +136,7 @@ function ClientProjectCard({
   project: ClientViewProjectRow;
   /** undefined = still loading. */
   heroUrl: string | null | undefined;
+  storageBytes?: Promise<ProjectStorageMap | null>;
   showClientName: boolean;
   canOpenClients: boolean;
   onMove: (project: ClientViewProjectRow, next: ProjectStatus) => void;
@@ -160,10 +167,14 @@ function ClientProjectCard({
             </p>
           ) : null}
           <ServicePill service={project.service_type} />
-          <p className="flex items-center gap-1.5 pr-8 pt-0.5 text-xs text-muted">
-            <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            {date ? <span className="text-foreground">{date}</span> : <span>Not scheduled</span>}
-          </p>
+          {/* pr-9 keeps the storage label clear of the "···" actions button. */}
+          <div className="flex items-center gap-2 pr-9 pt-0.5 text-xs text-muted">
+            <p className="flex min-w-0 items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              {date ? <span className="truncate text-foreground">{date}</span> : <span className="truncate">Not scheduled</span>}
+            </p>
+            <ProjectStorageLabel projectId={project.id} storage={storageBytes} className="ml-auto text-[11px]" />
+          </div>
         </div>
       </Link>
       {project.pendingPayment ? (

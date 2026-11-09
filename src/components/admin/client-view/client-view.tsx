@@ -24,6 +24,7 @@ import { ClientSidebar } from "@/components/admin/client-view/client-sidebar";
 import { ClientViewBoard } from "@/components/admin/client-view/client-view-board";
 import { ClientViewList } from "@/components/admin/client-view/client-view-list";
 import { ClientViewCalendar } from "@/components/admin/client-view/client-view-calendar";
+import type { ProjectStorageMap } from "@/lib/project-storage";
 import {
   ClientProfileModalProvider,
   useOpenClientProfile,
@@ -88,6 +89,7 @@ export function ClientView({
   permissions,
   stage,
   stageLabel,
+  storageBytes,
 }: {
   /** Pipeline projects after staff visibility + "Filter by staff". */
   projects: ClientViewProjectRow[];
@@ -96,6 +98,8 @@ export function ClientView({
   permissions: ClientViewPermissions;
   stage?: PipelineStageParam | null;
   stageLabel?: string;
+  /** Per-project media storage, streamed from the server. */
+  storageBytes?: Promise<ProjectStorageMap | null>;
 }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string>(ALL_CLIENTS);
@@ -295,6 +299,7 @@ export function ClientView({
               <ClientViewBoard
                 projects={shown}
                 heroUrls={data.heroUrls}
+                storageBytes={storageBytes}
                 showClientName={isAll}
                 canOpenClients={permissions.canOpenClients}
                 onMove={moveProject}
@@ -303,6 +308,7 @@ export function ClientView({
               <ClientViewList
                 projects={shown}
                 heroUrls={data.heroUrls}
+                storageBytes={storageBytes}
                 showClientName={isAll}
                 canOpenClients={permissions.canOpenClients}
                 onMove={moveProject}

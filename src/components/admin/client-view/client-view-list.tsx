@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { ProjectCoverImage } from "@/components/projects/project-cover-image";
 import { cn, formatDate } from "@/lib/utils";
+import { ProjectStorageLabel } from "@/components/admin/project-card-extras";
+import type { ProjectStorageMap } from "@/lib/project-storage";
 import type { ProjectStatus } from "@/lib/constants";
 import {
   formatCardDate,
@@ -20,12 +22,14 @@ const GRID =
 export function ClientViewList({
   projects,
   heroUrls,
+  storageBytes,
   showClientName,
   canOpenClients,
   onMove,
 }: {
   projects: ClientViewProjectRow[];
   heroUrls: Record<string, string | null> | null;
+  storageBytes?: Promise<ProjectStorageMap | null>;
   showClientName: boolean;
   canOpenClients: boolean;
   onMove: (project: ClientViewProjectRow, next: ProjectStatus) => void;
@@ -69,6 +73,7 @@ export function ClientViewList({
                     <div className="mt-1 flex flex-wrap gap-1.5 md:hidden">
                       <StagePill status={project.status} />
                       {date ? <span className="text-[11px] text-muted">{date}</span> : null}
+                      <ProjectStorageLabel projectId={project.id} storage={storageBytes} className="text-[11px]" />
                     </div>
                   </div>
                 </div>
@@ -80,6 +85,7 @@ export function ClientViewList({
                 </div>
                 <span className="hidden whitespace-nowrap text-xs text-foreground md:block">
                   {date ?? <span className="text-muted">Not scheduled</span>}
+                  <ProjectStorageLabel projectId={project.id} storage={storageBytes} className="mt-0.5 flex text-[11px]" />
                 </span>
                 <span className="hidden text-xs text-muted xl:block">{formatDate(project.updated_at)}</span>
               </Link>

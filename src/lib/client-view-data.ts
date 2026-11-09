@@ -22,6 +22,8 @@ export async function loadClientViewData(options: {
   businessId: string;
   profile: Profile;
   projects: PipelineProjectRow[];
+  /** Hero posters already being loaded for the page (shared with the Pipeline View). */
+  heroUrls?: Promise<Record<string, string | null>>;
 }): Promise<ClientViewData> {
   const { businessId, profile, projects } = options;
   const supabase = await createClient();
@@ -53,14 +55,7 @@ export async function loadClientViewData(options: {
           .eq("business_id", businessId)
           .in("project_id", projectIds)
       : Promise.resolve({ data: [] as { project_id: string; client_id: string }[] }),
-    getProjectHeroPosterUrlMap(
-      projects.map((p) => ({
-        id: p.id,
-        cover_image_id: p.cover_image_id ?? null,
-        cover_image_url: p.cover_image_url ?? null,
-      })),
-      businessId
-    ),
+    options.heroUrls ?? loadProjectHeroPosters(businessId, projects),
   ]);
 
   const projectClientIds: ProjectClientMap = {};
@@ -80,4 +75,28 @@ export async function loadClientViewData(options: {
   }));
 
   return { clients, projectClientIds, heroUrls };
+}
+
+/**
+ * Card hero posters for a board of projects (Pipeline View and Client View).
+ * Same images Client View has always shown; never throws — failures fall back
+ * to the placeholder.
+ */
+export async function loadProjectHeroPosters(
+  businessId: string,
+  projects: PipelineProjectRow[]
+): Promise<Record<string, string | null>> {
+  try {
+    return await getProjectHeroPosterUrlMap(
+      projects.map((p) => ({
+        id: p.id,
+        cover_image_id: p.cover_image_id ?? null,
+        cover_image_url: p.cover_image_url ?? null,
+      })),
+      businessId
+    );
+  } catch (err) {
+    console.error("[client-view] hero posters failed", err);
+    return {};
+  }
 }

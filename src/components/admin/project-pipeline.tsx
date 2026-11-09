@@ -11,6 +11,8 @@ import { formatShootDateTime } from "@/lib/scheduling";
 import type { PipelineProjectRow, PipelineStageParam } from "@/lib/admin-project-pipeline";
 import { GripVertical, ExternalLink, Calendar, CreditCard, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { toast } from "sonner";
+import { ProjectHeroBand, ProjectStorageLabel } from "@/components/admin/project-card-extras";
+import type { ProjectStorageMap } from "@/lib/project-storage";
 
 interface ProjectPipelineProps {
   projects: PipelineProjectRow[];
@@ -18,6 +20,10 @@ interface ProjectPipelineProps {
   stageLabel?: string;
   scrollToStatus?: ProjectStatus;
   filteredCount?: number | null;
+  /** Card hero posters, streamed from the server (same images as Client View). */
+  heroUrls?: Promise<Record<string, string | null>>;
+  /** Per-project media storage, streamed from the server. */
+  storageBytes?: Promise<ProjectStorageMap | null>;
 }
 
 export function ProjectPipeline({
@@ -26,6 +32,8 @@ export function ProjectPipeline({
   stageLabel,
   scrollToStatus,
   filteredCount,
+  heroUrls,
+  storageBytes,
 }: ProjectPipelineProps) {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -192,7 +200,21 @@ export function ProjectPipeline({
                           draggingId === project.id ? "opacity-50" : ""
                         }`}
                       >
-                        <Card className="shadow-sm hover:shadow-md transition-shadow">
+                        <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                          {heroUrls ? (
+                            <Link
+                              href={`/admin/projects/${project.id}`}
+                              tabIndex={-1}
+                              aria-hidden
+                              className="block border-b border-border"
+                            >
+                              <ProjectHeroBand
+                                projectId={project.id}
+                                heroUrls={heroUrls}
+                                className="aspect-[16/7] w-full"
+                              />
+                            </Link>
+                          ) : null}
                           <CardContent className="p-3 space-y-2">
                             <div className="flex gap-1.5">
                               <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted mt-0.5" />
@@ -234,11 +256,18 @@ export function ProjectPipeline({
                                 {project.recentActivity}
                               </p>
                             )}
-                            <Link href={`/admin/projects/${project.id}`}>
-                              <Button variant="ghost" size="sm" className="h-6 w-full text-[10px]">
-                                <ExternalLink className="h-3 w-3" /> Open
-                              </Button>
-                            </Link>
+                            <div className="flex items-center gap-2">
+                              <Link href={`/admin/projects/${project.id}`} className="min-w-0 flex-1">
+                                <Button variant="ghost" size="sm" className="h-6 w-full text-[10px]">
+                                  <ExternalLink className="h-3 w-3" /> Open
+                                </Button>
+                              </Link>
+                              <ProjectStorageLabel
+                                projectId={project.id}
+                                storage={storageBytes}
+                                className="pr-0.5"
+                              />
+                            </div>
                           </CardContent>
                         </Card>
                       </div>

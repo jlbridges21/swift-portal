@@ -12,6 +12,7 @@ import {
 import type { PipelineProjectRow, PipelineStageParam } from "@/lib/admin-project-pipeline";
 import type { ProjectStatus } from "@/lib/constants";
 import type { ClientViewData } from "@/lib/client-view-data";
+import type { ProjectStorageMap } from "@/lib/project-storage";
 import {
   PROJECTS_VIEW_COOKIE,
   PROJECTS_VIEW_COOKIE_MAX_AGE,
@@ -41,6 +42,8 @@ export function AdminProjectsWithStaffFilter({
   initialView = "pipeline",
   clientView = null,
   clientViewPermissions,
+  heroUrls,
+  storageBytes,
 }: {
   projects: PipelineProjectRow[];
   stage?: PipelineStageParam | null;
@@ -58,6 +61,10 @@ export function AdminProjectsWithStaffFilter({
   clientView?: ClientViewData | null;
   /** When absent the Client View toggle is hidden (e.g. Hidden projects page). */
   clientViewPermissions?: ClientViewPermissions;
+  /** Card hero posters, streamed from the server. */
+  heroUrls?: Promise<Record<string, string | null>>;
+  /** Per-project media storage, streamed from the server. */
+  storageBytes?: Promise<ProjectStorageMap | null>;
 }) {
   const router = useRouter();
   const [view, setView] = useState<ProjectsViewMode>(initialView);
@@ -109,6 +116,7 @@ export function AdminProjectsWithStaffFilter({
           permissions={clientViewPermissions}
           stage={stage}
           stageLabel={stageLabel}
+          storageBytes={storageBytes}
         />
       ) : (
         <ProjectPipeline
@@ -117,6 +125,8 @@ export function AdminProjectsWithStaffFilter({
           stageLabel={stageLabel}
           scrollToStatus={scrollToStatus}
           filteredCount={staffFilteredCount}
+          heroUrls={heroUrls}
+          storageBytes={storageBytes}
         />
       )}
     </div>
