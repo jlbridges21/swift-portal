@@ -14,7 +14,9 @@ import { getAppSettings } from "@/lib/app-settings";
 import { resolveServiceId } from "@/lib/business-services";
 import { resolvePublicSignupBusinessId } from "@/lib/tenant";
 import {
+  isMissingFinancialSectionColumnError,
   normalizeProjectMediaSections,
+  withoutFinancialSectionColumns,
   projectColumnsFromMediaSections,
 } from "@/lib/project-media-sections";
 import {
@@ -190,22 +192,31 @@ export async function POST(request: Request) {
       normalizeProjectMediaSections(appSettingsEarly.mediaSectionDefaults)
     );
 
-    const { data: project, error: projectError } = await db
+    const projectInsert = {
+      client_id: clientId,
+      project_name: projectName,
+      property_address,
+      service_type: serviceRequested,
+      service_id: serviceId,
+      status: "new_request",
+      notes: notes || null,
+      shoot_date: preferred_date || null,
+      ghl_sync_status: "pending",
+      ...sectionDefaults,
+    };
+    let { data: project, error: projectError } = await db
       .from("projects")
-      .insert({
-        client_id: clientId,
-        project_name: projectName,
-        property_address,
-        service_type: serviceRequested,
-        service_id: serviceId,
-        status: "new_request",
-        notes: notes || null,
-        shoot_date: preferred_date || null,
-        ghl_sync_status: "pending",
-        ...sectionDefaults,
-      })
+      .insert(projectInsert)
       .select()
       .single();
+    if (projectError && isMissingFinancialSectionColumnError(projectError)) {
+      // Pre-v113 database: create without the estimates/payments visibility columns.
+      ({ data: project, error: projectError } = await db
+        .from("projects")
+        .insert(withoutFinancialSectionColumns(projectInsert))
+        .select()
+        .single());
+    }
 
     if (projectError) {
       return NextResponse.json({ error: projectError.message }, { status: 500 });

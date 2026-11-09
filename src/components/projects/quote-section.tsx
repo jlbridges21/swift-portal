@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,8 @@ interface QuoteSectionProps {
   depositAmountCents?: number;
   /** Manual travel fees. Omitted on the client page. */
   travel?: TravelSettings | null;
+  /** Admin-only control rendered beside the section title (e.g. client visibility toggle). */
+  titleAccessory?: ReactNode;
 }
 
 type QuoteFormState = {
@@ -94,6 +96,7 @@ export function QuoteSection({
   depositPercent = 50,
   depositAmountCents = 0,
   travel = null,
+  titleAccessory,
 }: QuoteSectionProps) {
   const router = useRouter();
   const brand = usePortalBrand();
@@ -922,10 +925,13 @@ export function QuoteSection({
   return (
     <section id="quote" className="scroll-mt-20">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900 surface-dark:text-heading sm:text-2xl">
-          <FileText className="h-5 w-5 text-accent" />
-          {sectionTitle}
-        </h2>
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900 surface-dark:text-heading sm:text-2xl">
+            <FileText className="h-5 w-5 text-accent" />
+            {sectionTitle}
+          </h2>
+          {asAdmin && titleAccessory}
+        </div>
         {asAdmin && !showForm && (
           <Button variant="outline" size="sm" onClick={openCreateForm}>
             {hasOfficialProposal(quotes) ? "New Official Proposal" : "Create Official Proposal"}

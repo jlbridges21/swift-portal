@@ -57,7 +57,7 @@ import { useAsyncAction } from "@/lib/use-async-action";
 import {
   MEDIA_SECTION_LABELS,
   mediaSectionsFromProject,
-  type MediaSectionKey,
+  type ProjectSectionKey,
   type ProjectMediaSections,
 } from "@/lib/project-media-sections";
 import { PortalAccessStatus } from "@/components/admin/portal-access-status";
@@ -77,7 +77,7 @@ function ClientSectionVisibilityToggle({
   saving,
   onChange,
 }: {
-  sectionKey: MediaSectionKey;
+  sectionKey: ProjectSectionKey;
   visible: boolean;
   saving: boolean;
   onChange: (visible: boolean) => void;
@@ -212,7 +212,7 @@ export function AdminProjectDetail({
   const [mediaSections, setMediaSections] = useState<ProjectMediaSections>(() =>
     mediaSectionsFromProject(initialProject)
   );
-  const [sectionSaving, setSectionSaving] = useState<MediaSectionKey | null>(null);
+  const [sectionSaving, setSectionSaving] = useState<ProjectSectionKey | null>(null);
 
   const reviewByAssetId = useMemo(() => {
     const map = new Map<string, VideoReviewListItem>();
@@ -299,6 +299,8 @@ export function AdminProjectDetail({
         client_section_tours: initialProject.client_section_tours,
         client_section_models: initialProject.client_section_models,
         client_section_documents: initialProject.client_section_documents,
+        client_section_estimates: initialProject.client_section_estimates,
+        client_section_payments: initialProject.client_section_payments,
       })
     );
   }, [
@@ -307,6 +309,8 @@ export function AdminProjectDetail({
     initialProject.client_section_tours,
     initialProject.client_section_models,
     initialProject.client_section_documents,
+    initialProject.client_section_estimates,
+    initialProject.client_section_payments,
   ]);
 
   const [form, setForm] = useState({
@@ -382,7 +386,7 @@ export function AdminProjectDetail({
     }
   }
 
-  async function setClientSectionVisible(key: MediaSectionKey, visible: boolean) {
+  async function setClientSectionVisible(key: ProjectSectionKey, visible: boolean) {
     const prev = mediaSections;
     const next = { ...mediaSections, [key]: visible };
     setMediaSections(next);
@@ -396,7 +400,7 @@ export function AdminProjectDetail({
       });
       if (!res.ok) {
         setMediaSections(prev);
-        toast.error("Failed to update client section visibility");
+        toast.error(await readServerError(res, "Failed to update client section visibility"));
         return;
       }
       toast.success(
@@ -1170,6 +1174,14 @@ export function AdminProjectDetail({
           projectName={initialProject.project_name}
           propertyAddress={initialProject.property_address}
           serviceType={initialProject.service_type}
+          titleAccessory={
+            <ClientSectionVisibilityToggle
+              sectionKey="estimates"
+              visible={mediaSections.estimates}
+              saving={sectionSaving === "estimates"}
+              onChange={(v) => void setClientSectionVisible("estimates", v)}
+            />
+          }
           payments={paymentList}
           depositMode={depositMode}
           depositPercent={depositPercent}
@@ -1606,10 +1618,18 @@ export function AdminProjectDetail({
       {/* Payments — hidden when staff lacks money.view */}
       {canViewMoney && (
         <Card id="payments">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" /> Payments
-            </CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" /> Payments
+              </CardTitle>
+              <ClientSectionVisibilityToggle
+                sectionKey="payments"
+                visible={mediaSections.payments}
+                saving={sectionSaving === "payments"}
+                onChange={(v) => void setClientSectionVisible("payments", v)}
+              />
+            </div>
             <Button
               variant="outline"
               size="sm"

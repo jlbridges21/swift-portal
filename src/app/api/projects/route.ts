@@ -14,7 +14,9 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { resolveServiceId } from "@/lib/business-services";
 import { getAppSettings, type NotificationEventKey } from "@/lib/app-settings";
 import {
+  isMissingFinancialSectionColumnError,
   normalizeProjectMediaSections,
+  withoutFinancialSectionColumns,
   parseMediaSectionsPatch,
   projectColumnsFromMediaSections,
 } from "@/lib/project-media-sections";
@@ -82,23 +84,32 @@ export async function POST(request: Request) {
       normalizeProjectMediaSections(appSettings.mediaSectionDefaults)
     );
 
-    const { data: project, error } = await supabase
+    const projectInsert = {
+      business_id: businessId,
+      client_id: body.client_id,
+      project_name: projectName,
+      property_address,
+      service_type: body.service_type,
+      service_id: serviceId,
+      status: body.status || "new_request",
+      shoot_date: null,
+      delivery_date: body.delivery_date || null,
+      notes: body.notes || null,
+      ...sectionDefaults,
+    };
+    let { data: project, error } = await supabase
       .from("projects")
-      .insert({
-        business_id: businessId,
-        client_id: body.client_id,
-        project_name: projectName,
-        property_address,
-        service_type: body.service_type,
-        service_id: serviceId,
-        status: body.status || "new_request",
-        shoot_date: null,
-        delivery_date: body.delivery_date || null,
-        notes: body.notes || null,
-        ...sectionDefaults,
-      })
+      .insert(projectInsert)
       .select()
       .single();
+    if (error && isMissingFinancialSectionColumnError(error)) {
+      // Pre-v113 database: create without the estimates/payments visibility columns.
+      ({ data: project, error } = await supabase
+        .from("projects")
+        .insert(withoutFinancialSectionColumns(projectInsert))
+        .select()
+        .single());
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -173,6 +184,8 @@ export async function PATCH(request: Request) {
     delete updates.client_section_tours;
     delete updates.client_section_models;
     delete updates.client_section_documents;
+    delete updates.client_section_estimates;
+    delete updates.client_section_payments;
 
     if (media_sections !== undefined) {
       const parsed = parseMediaSectionsPatch(media_sections);
@@ -200,13 +213,31 @@ export async function PATCH(request: Request) {
       .eq("business_id", businessId)
       .single();
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("projects")
       .update(updates)
       .eq("id", id)
       .eq("business_id", businessId)
       .select()
       .single();
+
+    if (error && isMissingFinancialSectionColumnError(error)) {
+      // Pre-v113 database: estimates/payments columns don't exist yet. Media toggles
+      // still save; hiding estimates or payments needs the migration.
+      if (updates.client_section_estimates === false || updates.client_section_payments === false) {
+        return NextResponse.json(
+          { error: "Hiding Estimates & Proposals or Payments needs database migration v113." },
+          { status: 409 }
+        );
+      }
+      ({ data, error } = await supabase
+        .from("projects")
+        .update(withoutFinancialSectionColumns(updates))
+        .eq("id", id)
+        .eq("business_id", businessId)
+        .select()
+        .single());
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

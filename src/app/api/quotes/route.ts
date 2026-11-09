@@ -98,6 +98,16 @@ export async function GET(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (profile.role === "client") {
+    // Estimates & Proposals hidden from clients on this project → nothing to list.
+    const { data: sectionRow } = await supabase
+      .from("projects")
+      .select("*")
+      .eq("id", projectId)
+      .eq("business_id", bid)
+      .maybeSingle();
+    if (sectionRow && (sectionRow as { client_section_estimates?: boolean }).client_section_estimates === false) {
+      return NextResponse.json([]);
+    }
     return NextResponse.json(
       (data ?? []).map((row: { travel_one_way_miles?: unknown }) => {
         const { travel_one_way_miles: _miles, ...rest } = row;

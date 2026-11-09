@@ -1157,6 +1157,18 @@ export function AdminSettingsClient({
                     checked={settings.mediaSectionDefaults.documents}
                     onChange={(v) => patchMediaSectionDefaults({ documents: v })}
                   />
+                  <RowToggle
+                    id="mediaDefaultEstimates"
+                    label="Estimates & Proposals visible to clients by default"
+                    checked={settings.mediaSectionDefaults.estimates}
+                    onChange={(v) => patchMediaSectionDefaults({ estimates: v })}
+                  />
+                  <RowToggle
+                    id="mediaDefaultPayments"
+                    label="Payments visible to clients by default"
+                    checked={settings.mediaSectionDefaults.payments}
+                    onChange={(v) => patchMediaSectionDefaults({ payments: v })}
+                  />
                 </div>
               </CardContent>
             </Card>

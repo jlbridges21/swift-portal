@@ -208,6 +208,9 @@ export interface Project {
   client_section_tours?: boolean;
   client_section_models?: boolean;
   client_section_documents?: boolean;
+  /** Client-facing Estimates & Proposals / Payments sections (v113). Admins always see both. */
+  client_section_estimates?: boolean;
+  client_section_payments?: boolean;
   created_at: string;
   updated_at: string;
   clients?: Client;

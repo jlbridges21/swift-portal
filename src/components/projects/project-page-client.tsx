@@ -201,6 +201,9 @@ export function ProjectPageClient({
   const toursHidden = revealHiddenSections && !isMediaSectionVisibleForClient(mediaSections, "tours");
   const modelsHidden = revealHiddenSections && !isMediaSectionVisibleForClient(mediaSections, "models");
   const documentsHidden = revealHiddenSections && !isMediaSectionVisibleForClient(mediaSections, "documents");
+  // Visibility only — the server already withholds hidden quotes/payments from clients.
+  const showEstimates = revealHiddenSections || isMediaSectionVisibleForClient(mediaSections, "estimates");
+  const showPayments = revealHiddenSections || isMediaSectionVisibleForClient(mediaSections, "payments");
   const mirrorClient = !isAdmin || !!isPreview;
   /** True when any visible section has files — used for Download All / deliverable review, not section chrome. */
   const hasAnyMedia =
@@ -211,9 +214,19 @@ export function ProjectPageClient({
     (showDocuments && documents.length > 0);
   const anySectionVisible = showPhotos || showVideos || showTours || showModels || showDocuments;
   const pendingPayments = payments.filter((p) => p.status === "pending" || p.status === "sent");
-  const clientStep = getClientNextStep(project, pendingPayments.length > 0, shootProposals, brand.name, {
-    hasQuote: quotes.length > 0,
-  });
+  const rawClientStep = getClientNextStep(
+    project,
+    showPayments && pendingPayments.length > 0,
+    shootProposals,
+    brand.name,
+    { hasQuote: showEstimates && quotes.length > 0 }
+  );
+  // Don't point the banner at a section the client can't see.
+  const clientStep =
+    (rawClientStep.actionHref === "#quote" && !showEstimates) ||
+    (rawClientStep.actionHref === "#payments" && !showPayments)
+      ? { ...rawClientStep, actionLabel: undefined, actionHref: undefined }
+      : rawClientStep;
   const uploadedVideos = videos.filter((v) => v.media_source !== "youtube");
   const youtubeVideos = videos.filter((v) => v.media_source === "youtube");
   const videoEntries = useMemo(() => videosToGridEntries(videos), [videos]);
@@ -231,6 +244,7 @@ export function ProjectPageClient({
   const paymentStatus = (() => {
     if (!canViewFinancials) return undefined;
     if (!isClientView && !isPreview) return undefined;
+    if (!showPayments) return undefined;
     const linkedQuote = quotes.find((quote) =>
       payments.some((payment) => payment.quote_id === quote.id && payment.status !== "cancelled")
     );
@@ -368,7 +382,7 @@ export function ProjectPageClient({
         {(isClientView || isPreview) && canViewFinancials && (
           <ProjectQuickActions
             status={project.status}
-            hasPendingPayment={pendingPayments.length > 0}
+            hasPendingPayment={showPayments && pendingPayments.length > 0}
             hasMedia={hasAnyMedia}
             projectId={project.id}
             downloadableFileCount={downloadableFileCount}
@@ -391,7 +405,7 @@ export function ProjectPageClient({
         </Card>
         )}
 
-        {(isClientView || isPreview) && canViewFinancials && (
+        {(isClientView || isPreview) && canViewFinancials && (showEstimates || (showPayments && payments.length > 0)) && (
           <ClientPricingCta
             project={project}
             quotes={quotes}
@@ -403,7 +417,7 @@ export function ProjectPageClient({
           />
         )}
 
-        {canViewFinancials && (
+        {canViewFinancials && showEstimates && (
         <QuoteSection
           projectId={project.id}
           quotes={quotes}
@@ -815,7 +829,7 @@ export function ProjectPageClient({
           />
         )}
 
-        {canViewFinancials && (
+        {canViewFinancials && showPayments && (
         <PaymentsSection
           payments={payments}
           quotes={quotes}

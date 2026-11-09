@@ -62,7 +62,7 @@ export default async function ClientDashboard() {
   const emptyProposals = Promise.resolve({ data: [] as never[] });
   const emptyQuotes = Promise.resolve({ data: [] as never[] });
 
-  const [{ data: projects }, { data: payments }, { data: activities }, { data: shootProposals }, { data: allQuotes }] = await Promise.all([
+  const [{ data: projects }, { data: allPayments }, { data: activities }, { data: shootProposals }, { data: allClientQuotes }] = await Promise.all([
     projectQuery,
     isSharedViewer ? emptyPayments : supabase.from("payments").select("*, projects(project_name)").eq("business_id", tenant.businessId).order("created_at", { ascending: false }),
     isSharedViewer ? emptyActivities : supabase
@@ -74,6 +74,18 @@ export default async function ClientDashboard() {
     isSharedViewer ? emptyProposals : supabase.from("shoot_proposals").select("*").eq("business_id", tenant.businessId).in("status", ["confirmed", "pending"]),
     isSharedViewer ? emptyQuotes : supabase.from("project_quotes").select("*").eq("business_id", tenant.businessId).in("status", ["sent", "approved"]).order("updated_at", { ascending: false }),
   ]);
+
+  // Per-project client visibility: drop payments / estimates for projects that hide them.
+  const hiddenPaymentProjects = new Set(
+    (projects ?? []).filter((p) => p.client_section_payments === false).map((p) => p.id)
+  );
+  const hiddenEstimateProjects = new Set(
+    (projects ?? []).filter((p) => p.client_section_estimates === false).map((p) => p.id)
+  );
+  const payments = (allPayments ?? []).filter(
+    (p) => !p.project_id || !hiddenPaymentProjects.has(p.project_id)
+  );
+  const allQuotes = (allClientQuotes ?? []).filter((q) => !hiddenEstimateProjects.has(q.project_id));
 
   const proposalsByProject = new Map<string, ShootProposal[]>();
   shootProposals?.forEach((p) => {

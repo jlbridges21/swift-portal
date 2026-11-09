@@ -152,6 +152,8 @@ export interface MediaSectionDefaultsSettings {
   tours: boolean;
   models: boolean;
   documents: boolean;
+  estimates: boolean;
+  payments: boolean;
 }
 
 /** Optional setup items a studio may keep as ShootPortal defaults (persisted). */
@@ -295,6 +297,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     tours: true,
     models: true,
     documents: true,
+    estimates: true,
+    payments: true,
   },
   workflow: buildDefaultWorkflowSettings(),
   integrations: {
@@ -383,6 +387,8 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
       tours: stored.mediaSectionDefaults?.tours !== false,
       models: stored.mediaSectionDefaults?.models !== false,
       documents: stored.mediaSectionDefaults?.documents !== false,
+      estimates: stored.mediaSectionDefaults?.estimates !== false,
+      payments: stored.mediaSectionDefaults?.payments !== false,
     },
     workflow: mergeWorkflowSettings(stored.workflow),
     integrations: {

@@ -179,6 +179,10 @@ async function ProjectContent({
   const hero = await getProjectHeroMedia(supabase, projectRow, tenant.businessId, {
     photosSectionVisible: revealHiddenSections || mediaSections.photos,
   });
+  // Hidden Estimates & Proposals / Payments: withhold the data, not just the UI.
+  const showEstimates = revealHiddenSections || mediaSections.estimates;
+  const showPayments = revealHiddenSections || mediaSections.payments;
+  const visiblePayments = showPayments ? payments : [];
   const photos = visibleMedia.filter((m) => m.media_type === "photo");
   const videos = visibleMedia.filter((m) => m.media_type === "video");
   const documents = visibleMedia.filter((m) => m.media_type === "document");
@@ -197,12 +201,12 @@ async function ProjectContent({
         tours={visibleTours}
         models={visibleModels}
         mediaSections={mediaSections}
-        payments={payments}
+        payments={visiblePayments}
         revisions={revisions}
         shootProposals={shootProposals}
         activities={canViewFinancials ? filterClientVisibleActivities(activities) : []}
         quotes={
-          canViewFinancials
+          canViewFinancials && showEstimates
             ? getClientVisibleQuotes(quotes, {
                 showPreliminaryToClients: appSettings.proposals.showPreliminaryToClients,
               })
@@ -215,7 +219,7 @@ async function ProjectContent({
         depositAmountCents={appSettings.workflow.payments.depositAmountCents}
         allowClientPayInFull={appSettings.workflow.payments.allowClientPayInFull}
         paymentOptions={{
-          bankAvailable: canViewFinancials && payments.some((p) => p.status === "pending" || p.status === "sent") ? await isBankPaymentAvailable(tenant.businessId) : false,
+          bankAvailable: canViewFinancials && visiblePayments.some((p) => p.status === "pending" || p.status === "sent") ? await isBankPaymentAvailable(tenant.businessId) : false,
           passCardFee: appSettings.workflow.payments.passCardFeeToClient,
         }}
         assetReviews={canViewFinancials ? assetReviews : []}
