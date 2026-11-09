@@ -45,6 +45,7 @@ export default async function AdminMediaPage({ searchParams }: PageProps) {
         <MediaLibraryClient
           initialAssets={result.assets}
           initialTotal={result.total}
+          initialKindCounts={result.kindCounts}
           filterOptions={filterOptions}
           openUploadOnMount={sp.upload === "1"}
           initialQuery={initialQuery}

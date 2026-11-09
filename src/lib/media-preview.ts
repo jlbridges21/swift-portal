@@ -95,7 +95,7 @@ export function shouldFetchImageThumbnail(
 export function shouldFetchLibraryThumbnail(
   asset: Pick<LibraryAsset, "kind" | "mime_type" | "file_name" | "media_source">
 ): boolean {
-  if (asset.kind === "tour" || asset.kind === "document") return false;
+  if (asset.kind === "tour" || asset.kind === "model" || asset.kind === "document") return false;
   if (asset.media_source === "youtube") return false;
   return asset.kind === "photo" || asset.kind === "video";
 }
@@ -119,5 +119,6 @@ export function libraryKindLabel(kind: LibraryAssetKind): string {
   if (kind === "video") return "Video";
   if (kind === "photo") return "Photo";
   if (kind === "tour") return "360 Tour";
+  if (kind === "model") return "3D Model";
   return "Document";
 }

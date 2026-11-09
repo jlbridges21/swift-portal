@@ -1,7 +1,15 @@
 import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supabase/tenant-service";
-import type { MediaAsset, Tour } from "@/lib/types";
+import type { MediaAsset, Project3dModel, Tour } from "@/lib/types";
 
-export type LibraryAssetKind = "photo" | "video" | "document" | "tour";
+export type LibraryAssetKind = "photo" | "video" | "document" | "tour" | "model";
+
+/** Kinds that are stored files (downloadable / deletable from the library). */
+export const LIBRARY_FILE_KINDS: LibraryAssetKind[] = ["photo", "video", "document"];
+/** Kinds that are external links (360° tours, 3D model embeds). */
+export const LIBRARY_LINK_KINDS: LibraryAssetKind[] = ["tour", "model"];
+export const LIBRARY_ASSET_KINDS: LibraryAssetKind[] = [...LIBRARY_FILE_KINDS, ...LIBRARY_LINK_KINDS];
+
+const MEDIA_TABLE_KINDS = new Set<string>(LIBRARY_FILE_KINDS);
 
 export interface LibraryAsset {
   id: string;
@@ -45,19 +53,24 @@ export interface LibraryAsset {
   camera_model: string | null;
   orientation: string | null;
   version: number;
+  /** True when a stored file backs this asset (not YouTube / Kuula / external embeds). */
+  has_file: boolean;
 }
 
 export interface LibraryFilters {
   q?: string;
-  type?: string;
-  service?: string;
-  propertyType?: string;
-  projectStatus?: string;
-  source?: string;
+  /** Asset kinds (OR within the list). Empty / undefined = all kinds. */
+  types?: string[];
+  /** Project service types (OR within the list). */
+  services?: string[];
+  clientIds?: string[];
+  propertyIds?: string[];
+  /** Legacy single-value preset ("today" | "7d" | "30d" | "year"). */
   datePreset?: string;
+  /** ISO timestamps, inclusive. Take precedence over datePreset. */
   dateFrom?: string;
   dateTo?: string;
-  clientId?: string;
+  /** Legacy single property filter (related assets). */
   propertyId?: string;
   favoritesOnly?: boolean;
   page?: number;
@@ -72,6 +85,8 @@ export interface LibraryResult {
   page: number;
   limit: number;
   hasMore: boolean;
+  /** Matching asset count per kind (whole result set, not just this page). */
+  kindCounts: Partial<Record<LibraryAssetKind, number>>;
 }
 
 export interface MediaAssetEvent {
@@ -170,14 +185,6 @@ function dateRangeFromPreset(preset?: string): { from?: string; to?: string } {
   return {};
 }
 
-function matchesProjectStatus(status: string, filter?: string): boolean {
-  if (!filter || filter === "all") return true;
-  if (filter === "active") return status !== "delivered";
-  if (filter === "awaiting_payment") return status === "awaiting_payment";
-  if (filter === "delivered") return status === "delivered";
-  return true;
-}
-
 function matchesSearch(asset: LibraryAsset, q: string): boolean {
   const hay = [
     asset.title,
@@ -261,6 +268,15 @@ async function attachFolderNames(
   );
 }
 
+function mediaRowHasFile(row: MediaAsset): boolean {
+  return (
+    Boolean(row.file_path) &&
+    row.media_source !== "youtube" &&
+    row.media_source !== "kuula" &&
+    row.media_source !== "external"
+  );
+}
+
 function mapUnassignedMediaRow(row: MediaAsset): LibraryAsset {
   return {
     id: row.id,
@@ -303,6 +319,7 @@ function mapUnassignedMediaRow(row: MediaAsset): LibraryAsset {
     camera_model: row.camera_model ?? null,
     orientation: row.orientation ?? null,
     version: row.version ?? 1,
+    has_file: mediaRowHasFile(row),
   };
 }
 
@@ -353,6 +370,7 @@ function mapMediaRowWithProject(
     camera_model: row.camera_model ?? null,
     orientation: row.orientation ?? null,
     version: row.version ?? 1,
+    has_file: mediaRowHasFile(row),
   };
 }
 
@@ -400,41 +418,166 @@ function mapTourRowWithProject(row: Tour, project: ProjectRow): LibraryAsset {
     camera_model: null,
     orientation: null,
     version: 1,
+    has_file: false,
   };
 }
 
-async function fetchMediaAssets(businessId: string, filters: LibraryFilters): Promise<LibraryAsset[]> {
-  const db = await createTenantServiceClient(businessId);
+function mapModelRowWithProject(row: Project3dModel, project: ProjectRow): LibraryAsset {
+  const client = unwrapRelation(project.clients);
+  const property = unwrapRelation(project.properties);
+  return {
+    id: row.id,
+    kind: "model",
+    title: row.title,
+    file_name: null,
+    thumbnail_url: null,
+    project_id: row.project_id,
+    project_name: project.project_name,
+    folder_id: null,
+    folder_name: null,
+    project_status: project.status,
+    service_type: project.service_type,
+    property_address: project.property_address,
+    property_type: property?.property_type ?? null,
+    client_id: project.client_id,
+    client_name: client?.full_name || client?.name || "—",
+    client_company: client?.company ?? null,
+    property_id: project.property_id,
+    media_source: row.provider,
+    file_size: null,
+    width: null,
+    height: null,
+    duration_seconds: null,
+    download_count: 0,
+    is_favorite: false,
+    tags: [],
+    description: row.description ?? null,
+    alt_text: null,
+    notes: null,
+    created_at: row.created_at,
+    captured_at: null,
+    is_cover: false,
+    mime_type: null,
+    youtube_url: null,
+    embed_url: row.embed_url,
+    kuula_url: null,
+    visibility: row.client_visible === false ? "admin" : "client",
+    downloadable: null,
+    camera_model: null,
+    orientation: null,
+    version: 1,
+    has_file: false,
+  };
+}
+
+/** Normalized filter values shared by every source query. */
+interface ResolvedFilters {
+  kinds: Set<LibraryAssetKind>;
+  services: Set<string>;
+  clientIds: Set<string>;
+  propertyIds: Set<string>;
+  from?: string;
+  to?: string;
+  /** Project ids that match the client/property filters (null = not narrowed). */
+  narrowedProjectIds: string[] | null;
+  /** Staff scope; "all" or explicit ids. */
+  scope: "all" | string[];
+}
+
+const MAX_NARROWED_PROJECT_IDS = 150;
+
+function cleanList(values?: (string | null | undefined)[]): string[] {
+  return [...new Set((values ?? []).map((v) => (v ?? "").trim()).filter(Boolean))];
+}
+
+async function resolveFilters(
+  db: TenantServiceClient,
+  filters: LibraryFilters
+): Promise<ResolvedFilters> {
+  const kinds = new Set(
+    cleanList(filters.types).filter((k): k is LibraryAssetKind =>
+      (LIBRARY_ASSET_KINDS as string[]).includes(k)
+    )
+  );
+  const clientIds = new Set(cleanList(filters.clientIds));
+  const propertyIds = new Set(cleanList([...(filters.propertyIds ?? []), filters.propertyId]));
   const presetRange = dateRangeFromPreset(filters.datePreset);
-  const from = filters.dateFrom ?? presetRange.from;
-  const to = filters.dateTo ?? presetRange.to;
 
-  if (filters.type === "tour" || filters.source === "kuula") {
-    return [];
-  }
-
-  if (filters.projectIds && filters.projectIds !== "all" && filters.projectIds.length === 0) {
-    return [];
-  }
-
-  let query = db.from("media_assets").select("*").order("created_at", { ascending: false });
-
-  if (filters.type && filters.type !== "tour") {
-    if (filters.type === "video") {
-      query = query.in("media_type", ["video"]);
-    } else {
-      query = query.eq("media_type", filters.type);
+  // Narrow the DB queries to projects owned by the selected clients / properties so
+  // the per-source row caps still cover the matching rows. Post-filtering below keeps
+  // the result exact either way.
+  let narrowedProjectIds: string[] | null = null;
+  if (clientIds.size || propertyIds.size) {
+    let pq = db.from("projects").select("id");
+    if (clientIds.size) pq = pq.in("client_id", [...clientIds]);
+    if (propertyIds.size) pq = pq.in("property_id", [...propertyIds]);
+    const { data, error } = await pq.limit(MAX_NARROWED_PROJECT_IDS + 1);
+    if (!error && data && data.length <= MAX_NARROWED_PROJECT_IDS) {
+      narrowedProjectIds = data.map((r) => r.id as string);
     }
   }
-  if (filters.source && filters.source !== "kuula") {
-    query = query.eq("media_source", filters.source);
+
+  return {
+    kinds,
+    services: new Set(cleanList(filters.services)),
+    clientIds,
+    propertyIds,
+    from: filters.dateFrom || presetRange.from,
+    to: filters.dateTo || presetRange.to,
+    narrowedProjectIds,
+    scope: filters.projectIds ?? "all",
+  };
+}
+
+function wantsKind(rf: ResolvedFilters, kind: LibraryAssetKind): boolean {
+  return rf.kinds.size === 0 || rf.kinds.has(kind);
+}
+
+/** Project ids a project-bound source (tours, 3D models) may read; null = unrestricted. */
+function projectIdConstraint(rf: ResolvedFilters): string[] | null {
+  const scope = rf.scope === "all" ? null : rf.scope;
+  const narrowed = rf.narrowedProjectIds;
+  if (scope && narrowed) {
+    const allowed = new Set(scope);
+    return narrowed.filter((id) => allowed.has(id));
   }
-  if (filters.clientId) query = query.eq("client_id", filters.clientId);
-  if (filters.propertyId) query = query.eq("property_id", filters.propertyId);
-  if (from) query = query.gte("created_at", from);
-  if (to) query = query.lte("created_at", to);
-  if (filters.projectIds && filters.projectIds !== "all") {
-    query = query.in("project_id", filters.projectIds);
+  return scope ?? narrowed;
+}
+
+async function fetchMediaAssets(
+  db: TenantServiceClient,
+  rf: ResolvedFilters,
+  favoritesOnly: boolean
+): Promise<LibraryAsset[]> {
+  const mediaKinds = [...MEDIA_TABLE_KINDS].filter((k) => wantsKind(rf, k as LibraryAssetKind));
+  if (!mediaKinds.length) return [];
+  if (rf.scope !== "all" && rf.scope.length === 0) return [];
+
+  let query = db
+    .from("media_assets")
+    .select("*")
+    .in("media_type", mediaKinds)
+    .order("created_at", { ascending: false });
+
+  if (rf.from) query = query.gte("created_at", rf.from);
+  if (rf.to) query = query.lte("created_at", rf.to);
+  if (rf.scope !== "all") query = query.in("project_id", rf.scope);
+  if (favoritesOnly) query = query.eq("is_favorite", true);
+
+  // Media rows can carry client_id / property_id directly (unassigned uploads) or
+  // inherit them from their project — match either.
+  if (rf.narrowedProjectIds) {
+    const pids = rf.narrowedProjectIds;
+    if (rf.clientIds.size) {
+      const parts = [`client_id.in.(${[...rf.clientIds].join(",")})`];
+      if (pids.length) parts.push(`project_id.in.(${pids.join(",")})`);
+      query = query.or(parts.join(","));
+    }
+    if (rf.propertyIds.size) {
+      const parts = [`property_id.in.(${[...rf.propertyIds].join(",")})`];
+      if (pids.length) parts.push(`project_id.in.(${pids.join(",")})`);
+      query = query.or(parts.join(","));
+    }
   }
 
   const { data, error } = await query.limit(2000);
@@ -445,18 +588,12 @@ async function fetchMediaAssets(businessId: string, filters: LibraryFilters): Pr
   }
 
   const rows = (data ?? []) as MediaAsset[];
-  let filtered = rows;
-
-  if (filters.favoritesOnly) {
-    filtered = filtered.filter((r) => (r as MediaAsset & { is_favorite?: boolean }).is_favorite === true);
-  }
-
   const projectMap = await loadProjectMap(
     db,
-    filtered.map((r) => r.project_id).filter((id): id is string => !!id)
+    rows.map((r) => r.project_id).filter((id): id is string => !!id)
   );
 
-  const mapped = filtered.map((row) => {
+  const mapped = rows.map((row) => {
     if (!row.project_id) return mapUnassignedMediaRow(row);
     const project = projectMap.get(row.project_id);
     if (!project) return mapUnassignedMediaRow(row);
@@ -465,24 +602,20 @@ async function fetchMediaAssets(businessId: string, filters: LibraryFilters): Pr
   return attachFolderNames(db, mapped);
 }
 
-async function fetchTourAssets(businessId: string, filters: LibraryFilters): Promise<LibraryAsset[]> {
-  if (filters.type && filters.type !== "tour") return [];
-  if (filters.source && filters.source !== "kuula") return [];
-  if (filters.projectIds && filters.projectIds !== "all" && filters.projectIds.length === 0) {
-    return [];
-  }
-
-  const db = await createTenantServiceClient(businessId);
-  const presetRange = dateRangeFromPreset(filters.datePreset);
-  const from = filters.dateFrom ?? presetRange.from;
-  const to = filters.dateTo ?? presetRange.to;
+async function fetchTourAssets(
+  db: TenantServiceClient,
+  rf: ResolvedFilters,
+  favoritesOnly: boolean
+): Promise<LibraryAsset[]> {
+  if (!wantsKind(rf, "tour")) return [];
+  const pids = projectIdConstraint(rf);
+  if (pids && pids.length === 0) return [];
 
   let query = db.from("tours").select("*").order("created_at", { ascending: false });
-  if (from) query = query.gte("created_at", from);
-  if (to) query = query.lte("created_at", to);
-  if (filters.projectIds && filters.projectIds !== "all") {
-    query = query.in("project_id", filters.projectIds);
-  }
+  if (rf.from) query = query.gte("created_at", rf.from);
+  if (rf.to) query = query.lte("created_at", rf.to);
+  if (pids) query = query.in("project_id", pids);
+  if (favoritesOnly) query = query.eq("is_favorite", true);
 
   const { data, error } = await query.limit(500);
   if (error) {
@@ -490,15 +623,8 @@ async function fetchTourAssets(businessId: string, filters: LibraryFilters): Pro
     return [];
   }
 
-  let rows = (data ?? []) as Tour[];
-  if (filters.favoritesOnly) {
-    rows = rows.filter((r) => r.is_favorite === true);
-  }
-
-  const projectMap = await loadProjectMap(
-    db,
-    rows.map((r) => r.project_id)
-  );
+  const rows = (data ?? []) as Tour[];
+  const projectMap = await loadProjectMap(db, rows.map((r) => r.project_id));
 
   return rows
     .map((row) => {
@@ -509,25 +635,61 @@ async function fetchTourAssets(businessId: string, filters: LibraryFilters): Pro
     .filter((a): a is LibraryAsset => a !== null);
 }
 
-export async function queryMediaLibrary(
+async function fetchModelAssets(
+  db: TenantServiceClient,
+  rf: ResolvedFilters,
+  favoritesOnly: boolean
+): Promise<LibraryAsset[]> {
+  // 3D models have no favorite flag, so a favorites-only view never includes them.
+  if (!wantsKind(rf, "model") || favoritesOnly) return [];
+  const pids = projectIdConstraint(rf);
+  if (pids && pids.length === 0) return [];
+
+  let query = db
+    .from("project_3d_models")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (rf.from) query = query.gte("created_at", rf.from);
+  if (rf.to) query = query.lte("created_at", rf.to);
+  if (pids) query = query.in("project_id", pids);
+
+  const { data, error } = await query.limit(500);
+  if (error) {
+    // Table missing (migration v89 not applied) or transient failure — skip models.
+    console.error("[media-library] project_3d_models query failed:", error.message);
+    return [];
+  }
+
+  const rows = (data ?? []) as Project3dModel[];
+  const projectMap = await loadProjectMap(db, rows.map((r) => r.project_id));
+
+  return rows
+    .map((row) => {
+      const project = projectMap.get(row.project_id);
+      if (!project) return null;
+      return mapModelRowWithProject(row, project);
+    })
+    .filter((a): a is LibraryAsset => a !== null);
+}
+
+/** Every asset matching the filters (newest first), before pagination. */
+export async function queryMediaLibraryAll(
   businessId: string,
   filters: LibraryFilters
-): Promise<LibraryResult> {
-  const page = Math.max(1, filters.page ?? 1);
-  const limit = Math.min(100, filters.limit ?? DEFAULT_LIMIT);
-  const includeTours = !filters.type || filters.type === "tour";
-  const includeMedia = !filters.type || filters.type !== "tour";
-
-  const [mediaRows, tourRows] = await Promise.all([
-    includeMedia ? fetchMediaAssets(businessId, filters) : Promise.resolve([]),
-    includeTours ? fetchTourAssets(businessId, filters) : Promise.resolve([]),
-  ]);
-
+): Promise<LibraryAsset[]> {
   const db = await createTenantServiceClient(businessId);
+  const rf = await resolveFilters(db, filters);
+  const favoritesOnly = filters.favoritesOnly === true;
+
+  const [mediaRows, tourRows, modelRows] = await Promise.all([
+    fetchMediaAssets(db, rf, favoritesOnly),
+    fetchTourAssets(db, rf, favoritesOnly),
+    fetchModelAssets(db, rf, favoritesOnly),
+  ]);
 
   // Deduplicate by kind+id (safety)
   const seen = new Set<string>();
-  let combined = [...mediaRows, ...tourRows].filter((a) => {
+  let combined = [...mediaRows, ...tourRows, ...modelRows].filter((a) => {
     const key = `${a.kind}:${a.id}`;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -536,26 +698,39 @@ export async function queryMediaLibrary(
 
   combined = await attachTagsToAssets(db, combined);
 
-  if (filters.service) {
-    combined = combined.filter((a) => a.service_type === filters.service);
+  // All filters combine with AND; values within one filter combine with OR.
+  if (rf.kinds.size) combined = combined.filter((a) => rf.kinds.has(a.kind));
+  if (rf.services.size) combined = combined.filter((a) => rf.services.has(a.service_type));
+  if (rf.clientIds.size) {
+    combined = combined.filter((a) => !!a.client_id && rf.clientIds.has(a.client_id));
   }
-  if (filters.propertyType) {
-    combined = combined.filter((a) => a.property_type === filters.propertyType);
+  if (rf.propertyIds.size) {
+    combined = combined.filter((a) => !!a.property_id && rf.propertyIds.has(a.property_id));
   }
-  if (filters.projectStatus) {
-    combined = combined.filter((a) => matchesProjectStatus(a.project_status, filters.projectStatus));
-  }
-  if (filters.clientId) {
-    combined = combined.filter((a) => a.client_id === filters.clientId);
-  }
-  if (filters.propertyId) {
-    combined = combined.filter((a) => a.property_id === filters.propertyId);
-  }
+  if (filters.favoritesOnly) combined = combined.filter((a) => a.is_favorite);
   if (filters.q?.trim()) {
     combined = combined.filter((a) => matchesSearch(a, filters.q!.trim()));
   }
 
   combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return combined;
+}
+
+export function countLibraryKinds(
+  assets: Pick<LibraryAsset, "kind">[]
+): Partial<Record<LibraryAssetKind, number>> {
+  const counts: Partial<Record<LibraryAssetKind, number>> = {};
+  for (const a of assets) counts[a.kind] = (counts[a.kind] ?? 0) + 1;
+  return counts;
+}
+
+export async function queryMediaLibrary(
+  businessId: string,
+  filters: LibraryFilters
+): Promise<LibraryResult> {
+  const page = Math.max(1, filters.page ?? 1);
+  const limit = Math.min(100, Math.max(1, filters.limit ?? DEFAULT_LIMIT));
+  const combined = await queryMediaLibraryAll(businessId, filters);
 
   const total = combined.length;
   const offset = (page - 1) * limit;
@@ -567,6 +742,28 @@ export async function queryMediaLibrary(
     page,
     limit,
     hasMore: offset + limit < total,
+    kindCounts: countLibraryKinds(combined),
+  };
+}
+
+/**
+ * Parse library filters from a query string. Multi-value filters accept repeated
+ * params (`type=photo&type=video`); `type` also accepts a comma list.
+ */
+export function parseLibraryFilters(
+  sp: URLSearchParams
+): Omit<LibraryFilters, "projectIds" | "page" | "limit"> {
+  const multi = (key: string) => sp.getAll(key).filter(Boolean);
+  return {
+    q: sp.get("q") ?? undefined,
+    types: multi("type").flatMap((t) => t.split(",")),
+    services: multi("service"),
+    clientIds: multi("client_id"),
+    propertyIds: multi("property_id"),
+    datePreset: sp.get("date") ?? undefined,
+    dateFrom: sp.get("date_from") ?? undefined,
+    dateTo: sp.get("date_to") ?? undefined,
+    favoritesOnly: sp.get("favorites") === "1",
   };
 }
 
@@ -575,7 +772,7 @@ async function attachTagsToAssets(
   assets: LibraryAsset[]
 ): Promise<LibraryAsset[]> {
   if (!assets.length) return assets;
-  const ids = assets.filter((a) => a.kind !== "tour").map((a) => a.id);
+  const ids = assets.filter((a) => MEDIA_TABLE_KINDS.has(a.kind)).map((a) => a.id);
   if (!ids.length) return assets;
   const { data: tagRows, error } = await db
     .from("media_asset_tags")
@@ -600,6 +797,15 @@ export async function getMediaAssetDetail(
   kind: LibraryAssetKind
 ) {
   const db = await createTenantServiceClient(businessId);
+
+  if (kind === "model") {
+    const { data } = await db.from("project_3d_models").select("*").eq("id", assetId).maybeSingle();
+    if (!data) return null;
+    const projectMap = await loadProjectMap(db, [data.project_id]);
+    const project = projectMap.get(data.project_id);
+    if (!project) return null;
+    return mapModelRowWithProject(data as Project3dModel, project);
+  }
 
   if (kind === "tour") {
     const { data } = await db.from("tours").select("*").eq("id", assetId).maybeSingle();

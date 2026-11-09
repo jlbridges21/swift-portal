@@ -6,7 +6,7 @@ import {
   getMediaDownloadHistory,
   getRelatedAssets,
 } from "@/lib/media-library";
-import type { LibraryAssetKind } from "@/lib/media-library";
+import { LIBRARY_FILE_KINDS, type LibraryAssetKind } from "@/lib/media-library";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { canAccessMediaAsset, isOwnerAdmin, visibleProjectIdsFor } from "@/lib/staff-access";
 
@@ -32,9 +32,10 @@ export async function GET(
       ? ("all" as const)
       : await visibleProjectIdsFor(tenant.businessId, profile);
 
+    const isFileKind = LIBRARY_FILE_KINDS.includes(kind);
     const [events, downloads, related] = await Promise.all([
-      kind !== "tour" ? getMediaAssetEvents(tenant.businessId, id) : Promise.resolve([]),
-      kind !== "tour" ? getMediaDownloadHistory(tenant.businessId, id) : Promise.resolve([]),
+      isFileKind ? getMediaAssetEvents(tenant.businessId, id) : Promise.resolve([]),
+      isFileKind ? getMediaDownloadHistory(tenant.businessId, id) : Promise.resolve([]),
       getRelatedAssets(tenant.businessId, asset, 6, projectIds),
     ]);
 

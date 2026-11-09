@@ -86,6 +86,8 @@ export interface DownloadableAsset {
   folder_id?: string | null;
   file_size?: number | null;
   title?: string | null;
+  /** Storage bucket override (e.g. "project-documents"); defaults to project-media. */
+  bucket?: string;
 }
 
 export interface SkippedZipFile {
@@ -184,7 +186,8 @@ async function openStorageReadStream(
   asset: DownloadableAsset,
   opts?: { transformMls?: boolean }
 ): Promise<{ ok: true; file: OpenStreamResult } | { ok: false; reason: string; storagePath: string }> {
-  const storagePath = normalizeStoragePath(rawPath);
+  const bucket = asset.bucket ?? BUCKET;
+  const storagePath = bucket === BUCKET ? normalizeStoragePath(rawPath) : rawPath.trim().replace(/^\/+/, "");
   if (!storagePath) {
     return { ok: false, reason: "invalid or empty storage path", storagePath: rawPath };
   }
@@ -195,12 +198,12 @@ async function openStorageReadStream(
     assetId: asset.id,
     mediaType: asset.media_type,
     storagePath,
-    bucket: BUCKET,
+    bucket,
     transformMls,
   });
 
   const { data: signed, error: signError } = await supabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .createSignedUrl(
       storagePath,
       300,
@@ -255,7 +258,7 @@ async function openStorageReadStream(
   }
 
   const { data: blob, error: downloadError } = await supabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .download(storagePath);
 
   if (!downloadError && blob) {
