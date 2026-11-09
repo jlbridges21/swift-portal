@@ -20,6 +20,7 @@ import {
   parseMediaSectionsPatch,
   projectColumnsFromMediaSections,
 } from "@/lib/project-media-sections";
+import { copyDefaultDocumentsToProject } from "@/lib/default-project-documents";
 
 function clientEventKeyForStatus(status: string): NotificationEventKey | undefined {
   switch (normalizeStatus(status)) {
@@ -116,6 +117,8 @@ export async function POST(request: Request) {
     }
 
     await linkProjectToProperty(project.id, body.client_id, property_address, businessId);
+    // Settings → New Project Setup → Default Documents: each project gets its own copies.
+    await copyDefaultDocumentsToProject(businessId, project.id);
 
     await supabase.from("project_clients").upsert(
       { business_id: businessId, project_id: project.id, client_id: body.client_id, is_primary: true },

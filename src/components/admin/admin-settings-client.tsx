@@ -33,6 +33,7 @@ import { sectionForHash, visibleSettingsSections, type SettingsSectionId } from 
 import { TaxInformationSettings, type W9ClientOption } from "@/components/admin/tax-information-settings";
 import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import { TravelFeesSettingsCard } from "@/components/admin/travel-fees-card";
+import { DefaultDocumentsSettingsCard } from "@/components/admin/default-documents-settings-card";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import type {
   AppSettings,
@@ -1172,6 +1173,7 @@ export function AdminSettingsClient({
                 </div>
               </CardContent>
             </Card>
+            <DefaultDocumentsSettingsCard />
           </div>
         </SettingsPanel>
 

@@ -19,6 +19,7 @@ import {
   withoutFinancialSectionColumns,
   projectColumnsFromMediaSections,
 } from "@/lib/project-media-sections";
+import { copyDefaultDocumentsToProject } from "@/lib/default-project-documents";
 import {
   THANK_YOU_PATH,
   normalizeEmail,
@@ -223,6 +224,8 @@ export async function POST(request: Request) {
     }
 
     await linkProjectToProperty(project.id, clientId, property_address, businessId);
+    // Settings → New Project Setup → Default Documents: each project gets its own copies.
+    await copyDefaultDocumentsToProject(businessId, project.id);
     await touchClientActivity(clientId, businessId);
 
     const { data: lead } = await db
