@@ -5,7 +5,6 @@ import { getPartnerById } from "@/lib/partners";
 import { isPartnerCommissionEligible } from "@/lib/partner-commissions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PlatformPartnerDetailNav } from "@/components/platform/platform-partner-detail-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -53,12 +52,8 @@ export default async function PlatformPartnerDetailLayout({
         </Link>
       </div>
 
-      <div className="flex flex-col gap-6 md:flex-row md:items-start">
-        <aside className="w-full shrink-0 md:sticky md:top-20 md:w-56">
-          <PlatformPartnerDetailNav partnerId={partner.id} />
-        </aside>
-        <div className="min-w-0 flex-1 space-y-4">{children}</div>
-      </div>
+      {/* Section tabs live in the Platform Console top bar. */}
+      <div className="min-w-0 space-y-4">{children}</div>
     </main>
   );
 }

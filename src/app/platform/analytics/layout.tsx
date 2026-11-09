@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
-import { Suspense } from "react";
 import { requireSuperAdminPage } from "@/lib/admin-access";
-import { AnalyticsTabs } from "@/components/platform/analytics/controls";
 import { reportingTimeZone } from "@/lib/analytics/range";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +17,6 @@ export default async function AnalyticsLayout({ children }: { children: ReactNod
           </p>
         </div>
       </div>
-      <Suspense fallback={<div className="h-10" />}>
-        <AnalyticsTabs />
-      </Suspense>
       <div className="mt-6">{children}</div>
     </main>
   );

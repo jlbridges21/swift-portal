@@ -1,20 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
-
-const TABS = [
-  { href: "/platform/analytics", label: "Overview" },
-  { href: "/platform/analytics/acquisition", label: "Acquisition" },
-  { href: "/platform/analytics/blog", label: "Blog" },
-  { href: "/platform/analytics/accounts", label: "Accounts" },
-  { href: "/platform/analytics/conversions", label: "Conversions" },
-  { href: "/platform/analytics/seo", label: "SEO" },
-  { href: "/platform/analytics/definitions", label: "Definitions" },
-  { href: "/platform/analytics/diagnostics", label: "Diagnostics" },
-];
 
 const PRESETS = [
   { key: "today", label: "Today" },
@@ -26,37 +14,6 @@ const PRESETS = [
 function useQuery() {
   const params = useSearchParams();
   return new URLSearchParams(params?.toString() ?? "");
-}
-
-export function AnalyticsTabs() {
-  const pathname = usePathname();
-  const q = useQuery();
-  const keep = new URLSearchParams();
-  for (const k of ["range", "from", "to"]) {
-    const v = q.get(k);
-    if (v) keep.set(k, v);
-  }
-  const suffix = keep.toString() ? `?${keep}` : "";
-  return (
-    <nav aria-label="Analytics sections" className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
-      {TABS.map((t) => {
-        const active = t.href === "/platform/analytics" ? pathname === t.href : pathname.startsWith(t.href);
-        return (
-          <Link
-            key={t.href}
-            href={`${t.href}${suffix}`}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition",
-              active ? "bg-heading text-white" : "text-muted hover:bg-subtle hover:text-heading"
-            )}
-          >
-            {t.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
 }
 
 export function RangePicker({ preset, startDay, endDay }: { preset: string; startDay: string; endDay: string }) {

@@ -209,3 +209,12 @@ body {
     padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* Platform Console (/platform only): full-screen lg editors (e.g. partner landing editor) are
+   positioned for a top header; inside the console they sit beside the sidebar and below the top bar. */
+@media (min-width: 1024px) {
+  [data-platform-console] .lg\:fixed.lg\:inset-x-0 {
+    left: var(--platform-sidebar-w, 0px);
+    top: var(--platform-sticky-top, 4rem);
+  }
+}

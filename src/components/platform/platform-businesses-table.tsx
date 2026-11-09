@@ -296,7 +296,7 @@ export function PlatformBusinessesTable({
       </div>
 
       {selected.size > 0 && !confirm && (
-        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-3 shadow-sm">
+        <div className="sticky top-[var(--platform-sticky-top,0px)] z-10 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-3 shadow-sm">
           <span className="text-sm font-medium text-heading">
             {selected.size} business{selected.size === 1 ? "" : "es"} selected
           </span>

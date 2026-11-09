@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { requireSuperAdminPage } from "@/lib/admin-access";
-import { EconomicsTabs } from "@/components/platform/economics/tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +14,6 @@ export default async function EconomicsLayout({ children }: { children: ReactNod
           What ShootPortal stores, delivers and earns — and what each business costs to serve. Internal only.
         </p>
       </div>
-      <EconomicsTabs />
       <div className="mt-6">{children}</div>
     </main>
   );
