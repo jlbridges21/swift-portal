@@ -515,7 +515,9 @@ export async function updateSession(request: NextRequest) {
       request.nextUrl.searchParams.get("source") === "admin-demo";
     if (
       user &&
-      (path === "/login" || path === "/signup") &&
+      // "/app" is the installed-app entry (manifest start_url): signed-in users skip straight
+      // to their role's home through the same destination logic as a signed-in /login visit.
+      (path === "/login" || path === "/signup" || path === "/app") &&
       !businessUnavailable &&
       !superAdminDemoSignup
     ) {

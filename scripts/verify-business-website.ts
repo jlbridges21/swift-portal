@@ -17,6 +17,8 @@ import {
 } from "../src/lib/website/settings";
 import { buildSiteView } from "../src/lib/website/view";
 import { composePortalDomainInput } from "../src/lib/custom-domain-input";
+import { appParentPath } from "../src/lib/pwa/app-nav";
+import { pwaIconUrl, pwaIconVersion } from "../src/lib/pwa/metadata";
 
 let n = 0;
 const t = (name: string, fn: () => void) => {
@@ -176,6 +178,25 @@ t("Business Website domain input allows www; portal input still refuses it", () 
   assert.equal(alternateWebsiteDomain("www.photobusiness.com"), "photobusiness.com");
   assert.equal(alternateWebsiteDomain("photobusiness.com"), "www.photobusiness.com");
   assert.equal(alternateWebsiteDomain("site.photobusiness.com"), null);
+});
+
+t("installed app: back button parents and icon URLs", () => {
+  assert.equal(appParentPath("/admin/projects/abc/marketing"), "/admin/projects/abc");
+  assert.equal(appParentPath("/admin/projects/abc/reviews/r1"), "/admin/projects/abc");
+  assert.equal(appParentPath("/admin/projects/abc"), "/admin/projects");
+  assert.equal(appParentPath("/admin/clients/abc"), "/admin/clients");
+  assert.equal(appParentPath("/dashboard/projects/abc"), "/dashboard");
+  assert.equal(appParentPath("/dashboard/projects/abc/marketing/"), "/dashboard/projects/abc");
+  for (const top of ["/admin", "/admin/projects", "/admin/messages", "/admin/calendar", "/admin/settings", "/dashboard", "/dashboard/messages"]) {
+    assert.equal(appParentPath(top), null, top);
+  }
+  assert.equal(pwaIconVersion("a", "#111"), pwaIconVersion("a", "#111"));
+  assert.notEqual(pwaIconVersion("a", "#111"), pwaIconVersion("b", "#111"));
+  assert.equal(pwaIconUrl(512, { maskable: true, version: "x1" }), "/pwa/icon?size=512&maskable=1&v=x1");
+});
+
+t("website domain sends the app entry to the portal host", () => {
+  assert.equal(classifyWebsiteDomainPath("/app").kind, "portal");
 });
 
 console.log(`\n${n} checks passed`);

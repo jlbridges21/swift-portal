@@ -34,6 +34,7 @@ export const RESERVED_APP_ROUTE_SLUGS = [
   // Top-level app route segments (src/app/*/page.tsx or route groups)
   "admin",
   "api",
+  "app",
   "auth",
   "billing",
   "blog",
@@ -48,6 +49,7 @@ export const RESERVED_APP_ROUTE_SLUGS = [
   "platform",
   "pricing",
   "privacy",
+  "pwa",
   "request",
   // Business Website internal route (tenant /portfolio, /services, /contact rewrite here)
   "site",

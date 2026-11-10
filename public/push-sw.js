@@ -8,9 +8,15 @@
  *
  * /OneSignalSDKWorker.js stays in public/ for devices subscribed through
  * OneSignal before this worker existed; enabling again replaces it.
+ *
+ * The installed app also registers it (StandaloneAppBoot) for one thing besides push: when a
+ * page load fails because the device is offline, show a small reconnect screen instead of the
+ * browser's error page. Nothing is cached — every request still goes to the network first, so
+ * sign-in, redirects and tenant routing are untouched.
  */
 
-const DEFAULT_PATH = "/admin";
+// App entry: sends owners, staff and clients to their own home (sign-in first when needed).
+const DEFAULT_PATH = "/app";
 const DEFAULT_ICON = "/icons/sp-icon-192.png";
 
 self.addEventListener("install", () => {
@@ -115,5 +121,42 @@ self.addEventListener("pushsubscriptionchange", (event) => {
         }),
       }).catch(() => {});
     })()
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Offline page for full page loads (navigations only; everything else is untouched).
+// ---------------------------------------------------------------------------
+
+const OFFLINE_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>You're offline</title>
+<style>
+  html,body{margin:0;height:100%;background:#F8FAFC;color:#0F172A;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  @media (prefers-color-scheme:dark){html,body{background:#14181F;color:#E5E7EB}}
+  main{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;box-sizing:border-box}
+  .dot{width:56px;height:56px;border-radius:16px;background:rgba(100,116,139,.15);display:flex;align-items:center;justify-content:center;margin-bottom:20px;font-size:26px}
+  h1{font-size:20px;margin:0 0 8px}
+  p{margin:0 0 24px;color:#64748B;max-width:320px;line-height:1.5}
+  button{appearance:none;border:0;border-radius:999px;padding:12px 24px;font-size:15px;font-weight:600;background:#0F172A;color:#fff}
+  @media (prefers-color-scheme:dark){button{background:#E5E7EB;color:#0F172A}}
+</style></head><body><main>
+  <div class="dot" aria-hidden="true">&#x21bb;</div>
+  <h1>You're offline</h1>
+  <p>Check your connection. We'll reconnect as soon as you're back online.</p>
+  <button type="button" onclick="location.reload()">Try again</button>
+</main><script>addEventListener("online",function(){location.reload()})</script></body></html>`;
+
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+  if (request.mode !== "navigate" || request.method !== "GET") return;
+  event.respondWith(
+    fetch(request).catch(
+      () =>
+        new Response(OFFLINE_HTML, {
+          status: 503,
+          headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+        })
+    )
   );
 });

@@ -19,12 +19,44 @@ import { AuthDivider, GoogleSignInButton } from "@/components/auth/google-sign-i
 import { getCanonicalAuthConfirmUrl } from "@/lib/auth-confirm";
 import { resolvePostLoginRedirect } from "@/lib/auth-post-login-client";
 
+/** Installed-app sign-in (/app): the business's own identity instead of the website header. */
+export type AppLoginBranding = { name: string; logoUrl: string | null };
+
+function AppBrandTop({ app }: { app: AppLoginBranding }) {
+  return (
+    <div className="flex flex-col items-center px-6 pt-12 text-center">
+      {app.logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={app.logoUrl} alt="" className="h-16 w-16 rounded-2xl object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.18)]" />
+      ) : (
+        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent text-2xl font-semibold text-accent-foreground">
+          {app.name.trim().charAt(0).toUpperCase() || "S"}
+        </span>
+      )}
+      <p className="mt-4 text-xl font-semibold text-heading">{app.name}</p>
+    </div>
+  );
+}
+
+/** A same-origin path the user was heading to (notification tap, protected link) — never another site. */
+function safeReturnPath(raw: string | null): string | null {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return null;
+  if (raw === "/" || raw === "/app" || raw.startsWith("/login") || raw.startsWith("/auth")) return null;
+  // Only specific screens (a project, a conversation…). Generic homes like "/dashboard" or "/admin"
+  // keep the server's role-aware destination (owner vs staff vs client, onboarding, billing).
+  const path = raw.split(/[?#]/)[0]!.replace(/\/+$/, "");
+  if (path.split("/").filter(Boolean).length < 2) return null;
+  return raw;
+}
+
 export function LoginForm({
   showRequestLink,
   oauthAllowed,
+  app,
 }: {
   showRequestLink: boolean;
   oauthAllowed?: boolean;
+  app?: AppLoginBranding;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -170,7 +202,11 @@ export function LoginForm({
       return;
     }
 
-    const dest = destination.redirect;
+    let dest = destination.redirect;
+    // Same-host destination: honor where the user was going (e.g. the project a notification
+    // pointed at). Access is still enforced by the proxy for that path.
+    const returnTo = safeReturnPath(searchParams.get("redirect"));
+    if (returnTo && !/^https?:\/\//.test(dest)) dest = returnTo;
     if (dest.startsWith("http://") || dest.startsWith("https://")) {
       window.location.assign(dest);
       return;
@@ -205,8 +241,8 @@ export function LoginForm({
   if (mode === "oauth_error") {
     return (
       <div className="min-h-screen flex flex-col bg-background">
-        <Header />
-        <main className="flex-1 flex items-center justify-center px-4 py-16">
+        {app ? <AppBrandTop app={app} /> : <Header />}
+        <main className={app ? "flex flex-1 items-start justify-center px-4 pt-8 pb-[max(2rem,env(safe-area-inset-bottom))]" : "flex-1 flex items-center justify-center px-4 py-16"}>
           <Card className="w-full max-w-md">
             <CardHeader className="text-center">
               <CardTitle>Google sign-in didn’t finish</CardTitle>
@@ -249,8 +285,8 @@ export function LoginForm({
   if (mode === "link_help") {
     return (
       <div className="min-h-screen flex flex-col bg-background">
-        <Header />
-        <main className="flex-1 flex items-center justify-center px-4 py-16">
+        {app ? <AppBrandTop app={app} /> : <Header />}
+        <main className={app ? "flex flex-1 items-start justify-center px-4 pt-8 pb-[max(2rem,env(safe-area-inset-bottom))]" : "flex-1 flex items-center justify-center px-4 py-16"}>
           <AuthLinkHelpCard
             errorKind={linkErrorKind}
             description={linkDescription}
@@ -269,15 +305,17 @@ export function LoginForm({
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <Header />
-      <main className="flex-1 flex items-center justify-center px-4 py-16">
+      {app ? <AppBrandTop app={app} /> : <Header />}
+      <main className={app ? "flex flex-1 items-start justify-center px-4 pt-8 pb-[max(2rem,env(safe-area-inset-bottom))]" : "flex-1 flex items-center justify-center px-4 py-16"}>
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle>{mode === "forgot" ? "Reset password" : "Sign in"}</CardTitle>
             <CardDescription>
               {mode === "forgot"
                 ? "We’ll email a link that opens on this portal so you stay on the right business."
-                : "Access your ShootPortal admin or client portal"}
+                : app
+                  ? "Sign in to your account"
+                  : "Access your ShootPortal admin or client portal"}
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -12,6 +12,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { loadSitePortfolio } from "@/lib/website/portfolio-server";
 import { buildSiteView, type SiteBusinessInput, type SiteServiceInput, type SiteView } from "@/lib/website/view";
 import type { BusinessServiceRow } from "@/lib/types";
+import { pwaAppleIcon, pwaAppleMetadata, pwaIconVersion } from "@/lib/pwa/metadata";
 
 export function siteBusinessFromSettings(settings: AppSettings): SiteBusinessInput {
   const b = settings.business;
@@ -158,6 +159,10 @@ export function siteMetadata(
       images: absImage ? [{ url: absImage, width: 1600 }] : undefined,
     },
     twitter: { card: absImage ? "summary_large_image" : "summary", title, description, images: absImage ? [absImage] : undefined },
-    icons: site.settings.business.faviconUrl ? { icon: site.settings.business.faviconUrl } : undefined,
+    icons: {
+      ...(site.settings.business.faviconUrl ? { icon: site.settings.business.faviconUrl } : {}),
+      apple: pwaAppleIcon(pwaIconVersion(site.settings.business.logoUrl, site.settings.business.brandPrimaryColor)),
+    },
+    ...pwaAppleMetadata(name),
   };
 }

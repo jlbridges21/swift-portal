@@ -227,6 +227,7 @@ export function websitePagePath(pathname: string): string | null {
 
 /** Path segments that belong to the client portal / app — on a Business Website domain they move to the portal host. */
 const PORTAL_PATH_PREFIXES = [
+  "/app",
   "/login",
   "/auth",
   "/dashboard",

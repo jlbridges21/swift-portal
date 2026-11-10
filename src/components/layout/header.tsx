@@ -8,7 +8,9 @@ import { Logo } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { Menu, Plus, Settings, X, RefreshCw, Loader2 } from "lucide-react";
+import { ChevronLeft, Menu, Plus, Settings, X, RefreshCw, Loader2 } from "lucide-react";
+import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
+import { appParentPath } from "@/lib/pwa/app-nav";
 import { AdminSearchTrigger } from "@/components/admin/admin-command-palette";
 import { useAdminSearch } from "@/components/admin/admin-search-context";
 import { useAdminCapabilities } from "@/components/admin/admin-capabilities-context";
@@ -181,11 +183,23 @@ export function Header({
   }
 
   const showAdminNav = variant === "dashboard" && isAdminChrome;
+  // Installed app on a phone: deeper screens get a native-style back button to their parent.
+  const standaloneMobile = useIsStandalonePwaMobile();
+  const backHref = standaloneMobile && variant === "dashboard" && pathname ? appParentPath(pathname) : null;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-card/90 backdrop-blur-lg safe-area-top safe-area-x relative">
       <div className="relative mx-auto flex h-14 w-full max-w-7xl items-center gap-2 px-4 sm:h-16 sm:gap-3 sm:px-6 lg:px-8">
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+          {backHref ? (
+            <Link
+              href={backHref}
+              aria-label="Back"
+              className="-ml-2 mr-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-heading active:bg-slate-100 surface-dark:active:bg-subtle md:hidden"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </Link>
+          ) : null}
           <Logo href={homeHref} compact showText={false} className="flex sm:hidden" />
           <Logo href={homeHref} compact className="hidden sm:flex lg:hidden" />
           <Logo href={homeHref} size="md" className="hidden lg:flex" />

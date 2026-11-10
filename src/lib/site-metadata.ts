@@ -1,3 +1,4 @@
+import { pwaAppleIcon, pwaAppleMetadata, pwaIconVersion } from "@/lib/pwa/metadata";
 import type { Metadata } from "next";
 
 /** Brand guide: Portal Indigo — PWA theme / status bar. */
@@ -84,6 +85,8 @@ export function metadataFromBusiness(business: {
   businessName: string;
   tagline?: string;
   faviconUrl?: string;
+  logoUrl?: string;
+  brandPrimaryColor?: string;
 }): Metadata {
   const title = `${business.portalName} | ${business.businessName}`;
   const description = business.tagline?.trim() || SITE.description;
@@ -97,8 +100,10 @@ export function metadataFromBusiness(business: {
     applicationName: business.portalName,
     icons: {
       icon: [{ url: favicon }],
-      apple: [{ url: favicon }],
+      // Home Screen icon: the business logo on a proper 180px square, not the 48px favicon.
+      apple: pwaAppleIcon(pwaIconVersion(business.logoUrl ?? "", business.brandPrimaryColor ?? "")),
     },
+    ...pwaAppleMetadata(business.businessName || business.portalName),
     openGraph: {
       siteName: business.portalName,
       title,

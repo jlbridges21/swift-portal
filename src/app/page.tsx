@@ -19,6 +19,7 @@ import { loadResolvedLandingPage } from "@/lib/resolve-landing-page";
 import { marketingPageMetadata } from "@/lib/marketing";
 import { SITE } from "@/lib/site-metadata";
 import { SiteHome } from "@/components/website/site-home";
+import { StandaloneLaunchRedirect } from "@/components/pwa/standalone-launch-redirect";
 import { SiteNavProvider } from "@/components/website/site-ui";
 import { loadPublicSite, siteMetadata, type PublicSite } from "@/lib/website/server";
 
@@ -94,6 +95,7 @@ export default async function HomePage() {
       const brand = { ...getPortalBrandFromSettings(site.settings), name: site.view.business.name };
       return (
         <BrandProvider brand={brand}>
+          {site.onWebsiteDomain ? null : <StandaloneLaunchRedirect />}
           <AuthFragmentHandler />
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: websiteJsonLd(site) }} />
           <SiteNavProvider preview={false}>
@@ -111,6 +113,7 @@ export default async function HomePage() {
     };
     return (
       <BrandProvider brand={brand}>
+        <StandaloneLaunchRedirect />
         <AuthFragmentHandler />
         <LandingPage brand={brand} page={page} />
       </BrandProvider>

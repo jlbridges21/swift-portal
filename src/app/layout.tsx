@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { SurfaceToaster } from "@/components/brand/surface-toaster";
+import { StandaloneAppBoot } from "@/components/pwa/standalone-app-boot";
 import { getCanonicalSiteUrl, SITE, SITE_ICONS } from "@/lib/site-metadata";
 import "./globals.css";
 
@@ -28,11 +29,15 @@ export const metadata: Metadata = {
   },
   description: SITE.description,
   applicationName: SITE.name,
+  // "default" (opaque) status bar: iOS draws a solid status bar above the web view instead of
+  // overlaying page content. "black-translucent" let every page scroll underneath the status bar /
+  // Dynamic Island, where iOS paints a dark legibility gradient over whatever is there — the
+  // persistent top blur over headers and menu buttons in the installed app. (startupImage pointed
+  // at a 180px icon iOS can't use as a launch image, so it is gone.)
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: SITE.name,
-    startupImage: SITE_ICONS.apple,
   },
   other: {
     "mobile-web-app-capable": "yes",
@@ -85,6 +90,7 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
         {children}
         <SurfaceToaster />
+        <StandaloneAppBoot />
       </body>
     </html>
   );
