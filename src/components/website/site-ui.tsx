@@ -106,6 +106,7 @@ export function WebsiteStyles() {
      .site-rise-3{animation:site-rise .9s .24s cubic-bezier(.2,.7,.2,1) both}
      .site-hero-zoom{animation:site-zoom 2.4s cubic-bezier(.2,.7,.2,1) both}
      @supports (animation-timeline: view()){.site-reveal{animation:site-rise linear both;animation-timeline:view();animation-range:entry 0% cover 22%}}
+     [data-site-preview] .site-reveal{animation:none!important;opacity:1;transform:none}
      @media (prefers-reduced-motion: reduce){.site-rise,.site-rise-2,.site-rise-3,.site-hero-zoom,.site-reveal{animation:none!important}}`;
   return <style dangerouslySetInnerHTML={{ __html: css }} />;
 }

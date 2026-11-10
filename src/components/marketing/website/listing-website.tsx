@@ -309,10 +309,20 @@ function Highlights({ view, skin, style }: { view: ListingView; skin: Skin; styl
   );
 }
 
+/** Photos shown before "View all photos": one large + eight small fills three full rows. */
+const GALLERY_PREVIEW_COUNT = 9;
+
 function Gallery({ view, skin, style, onOpen }: { view: ListingView; skin: Skin; style: DesignStyle; onOpen: (i: number) => void }) {
+  const [expanded, setExpanded] = useState(false);
   if (!view.gallery.length) return null;
-  const [first, ...rest] = view.gallery;
+  const total = view.gallery.length;
+  const collapsed = !expanded && total > GALLERY_PREVIEW_COUNT;
+  const [first, ...rest] = collapsed ? view.gallery.slice(0, GALLERY_PREVIEW_COUNT) : view.gallery;
   const gap = style === "luxury" ? "gap-2 @3xl:gap-3" : "gap-3";
+  const btn =
+    style === "luxury"
+      ? "border border-[var(--mk-accent)] px-7 py-3.5 text-xs uppercase tracking-[0.3em] hover:bg-[var(--mk-accent)] hover:text-black"
+      : "rounded-full px-7 py-3.5 text-sm font-semibold ring-1 ring-current/20 hover:ring-current/40";
   return (
     <section id="gallery" className={`${skin.section} px-3 py-14 @3xl:px-8 @3xl:py-20`}>
       <div className="mx-auto max-w-7xl">
@@ -336,6 +346,16 @@ function Gallery({ view, skin, style, onOpen }: { view: ListingView; skin: Skin;
             </button>
           ))}
         </div>
+        {total > GALLERY_PREVIEW_COUNT ? (
+          <div className="mt-10 flex justify-center">
+            <button type="button" onClick={(e) => {
+                if (expanded) e.currentTarget.closest("section")?.scrollIntoView({ block: "start" });
+                setExpanded(!expanded);
+              }} aria-expanded={expanded} className={`inline-flex items-center gap-2 transition ${btn}`}>
+              {expanded ? "Show fewer photos" : `View all ${total} photos`}
+            </button>
+          </div>
+        ) : null}
       </div>
     </section>
   );

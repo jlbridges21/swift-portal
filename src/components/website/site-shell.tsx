@@ -309,7 +309,7 @@ export function SiteShell({
 }) {
   const theme = SITE_THEMES[view.template];
   return (
-    <div className={cn("@container relative flex min-h-full flex-col antialiased", theme.root)} style={siteVars(view, preview, device)} data-site-template={view.template}>
+    <div className={cn("@container relative flex min-h-full flex-col antialiased", theme.root)} style={siteVars(view, preview, device)} data-site-template={view.template} data-site-preview={preview ? "" : undefined}>
       <WebsiteStyles />
       <SiteHeader view={view} theme={theme} page={page} overlay={overlayHeader} />
       <main className="flex-1">{children}</main>
