@@ -219,7 +219,7 @@ const websiteLookupCache = new Map<
  */
 export function websitePagePath(pathname: string): string | null {
   const p = pathname.length > 1 ? pathname.replace(/\/$/, "") : pathname;
-  if (p === "/portfolio" || p === "/services" || p === "/contact") return `/site${p}`;
+  if (p === "/portfolio" || p === "/services" || p === "/contact" || p === "/about") return `/site${p}`;
   const m = p.match(/^\/portfolio\/([a-z0-9]+(?:-[a-z0-9]+)*)$/);
   if (m) return `/site/portfolio/${m[1]}`;
   return null;

@@ -51,6 +51,8 @@ export async function websiteSitemapUrls(businessId: string, origin: string): Pr
   const urls: { url: string; lastModified?: Date; priority: number }[] = [{ url: `${origin}/`, priority: 1 }];
   if (portfolio.length) urls.push({ url: `${origin}/portfolio`, priority: 0.9 });
   if (services.some((s) => s.is_active)) urls.push({ url: `${origin}/services`, priority: 0.8 });
+  const { website } = await getAppSettings(businessId);
+  if (website.about.enabled) urls.push({ url: `${origin}/about`, priority: 0.7 });
   urls.push({ url: `${origin}/contact`, priority: 0.7 }, { url: `${origin}/request`, priority: 0.6 });
   for (const p of portfolio) {
     const d = new Date(p.publishedAt);

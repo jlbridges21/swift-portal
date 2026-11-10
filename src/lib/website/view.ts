@@ -155,11 +155,43 @@ export type SiteView = {
   featured: SitePortfolioProject[];
   cta: { label: string; heading: string; text: string };
   contactIntro: string;
+  /** Present only when the About Us page is enabled. */
+  about: SiteAbout | null;
+  /** Visible testimonials when the section is enabled; empty otherwise (never placeholders). */
+  testimonials: SiteTestimonial[];
   links: SiteLinks & { showClientLogin: boolean };
   nav: { key: SitePageKey; label: string; href: string }[];
 };
 
-export type SitePageKey = "home" | "portfolio" | "services" | "contact";
+export type SitePageKey = "home" | "portfolio" | "services" | "about" | "contact";
+
+export type SiteAbout = {
+  headline: string;
+  intro: string;
+  paragraphs: string[];
+  image: { url: string; alt: string } | null;
+};
+
+export type SiteTestimonial = { id: string; quote: string; name: string; title: string };
+
+/** About Us copy from known facts only (name, services, tagline) — no invented history or claims. */
+export function defaultAboutCopy(businessName: string, serviceNames: string[], tagline = "") {
+  const name = businessName.trim() || "We";
+  const svc = serviceNames.slice(0, 4).map((x) => x.trim()).filter(Boolean);
+  const offer = svc.length
+    ? `${name} offers ${listJoin(svc).toLowerCase()}.`
+    : `${name} creates professional photography and video.`;
+  return {
+    headline: `About ${businessName.trim() || "us"}`,
+    intro: tagline.trim() || `A little about ${businessName.trim() || "us"} and how we work.`,
+    paragraphs: [
+      offer,
+      "Every project starts with a conversation about what you need — the property, the event or the brand you want to show — so the shoot is planned around your goals.",
+      "Finished photos and video are delivered online, ready to share, download and use wherever you need them.",
+      "Have a project in mind? We’d love to hear about it.",
+    ].filter(Boolean),
+  };
+}
 
 type Niche = "realestate" | "aerial" | "wedding" | "portrait" | "commercial" | "video" | "general";
 
@@ -332,9 +364,23 @@ export function buildSiteView(input: {
   const nav: SiteView["nav"] = [{ key: "home", label: "Home", href: "/" }];
   if (portfolio.length) nav.push({ key: "portfolio", label: "Portfolio", href: "/portfolio" });
   if (allServices.length) nav.push({ key: "services", label: "Services", href: "/services" });
+  if (website.about.enabled) nav.push({ key: "about", label: "About", href: "/about" });
   nav.push({ key: "contact", label: "Contact", href: "/contact" });
 
   const site = (business.websiteUrl || "").trim();
+
+  function buildAbout(): SiteAbout {
+    const auto = defaultAboutCopy(name, serviceNames, business.tagline);
+    const a = website.about;
+    const body = a.body.trim();
+    const paragraphs = body ? body.split(/\n\s*\n|\n/).map((x) => x.trim()).filter(Boolean) : auto.paragraphs;
+    const image = a.imageMedia
+      ? { url: mediaUrls.image(a.imageMedia.id), alt: `${name}` }
+      : a.imageUrl
+        ? { url: a.imageUrl, alt: `${name}` }
+        : null;
+    return { headline: a.headline || auto.headline, intro: a.intro || auto.intro, paragraphs, image };
+  }
 
   return {
     template: website.template,
@@ -374,5 +420,11 @@ export function buildSiteView(input: {
       `Have a project in mind? Send us the details below and ${name} will get back to you shortly.`,
     links: { ...input.links, showClientLogin: website.showClientLogin },
     nav,
+    about: website.about.enabled ? buildAbout() : null,
+    testimonials: website.testimonials.enabled
+      ? website.testimonials.items
+          .filter((t) => t.visible && t.quote.trim())
+          .map((t) => ({ id: t.id, quote: t.quote.trim(), name: t.name.trim(), title: t.title.trim() }))
+      : [],
   };
 }

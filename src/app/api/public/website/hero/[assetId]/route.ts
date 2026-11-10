@@ -14,7 +14,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ asse
   const host = await getPublicHostContext();
   if (!isActivePublicTenant(host)) return notFound();
   const { website } = await getAppSettings(host.businessId);
-  const allowed = [website.heroImageMedia?.id, website.heroVideoMedia?.id].includes(assetId);
+  // Hero photo/video, or the About Us photo while that page is on — nothing else.
+  const allowed = [website.heroImageMedia?.id, website.heroVideoMedia?.id, website.about.enabled ? website.about.imageMedia?.id : undefined].includes(assetId);
   if (!allowed) return notFound();
   return serveHeroMedia(host.businessId, assetId, request, "public");
 }

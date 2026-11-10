@@ -30,6 +30,8 @@ import { buildSiteView, defaultCtaHeading, defaultWebsiteHeadline, defaultWebsit
 import { PortfolioManager, type PortfolioState } from "@/components/admin/business-website/portfolio-manager";
 import { WebsitePreview, type PreviewPage } from "@/components/admin/business-website/website-preview";
 import { MediaPickerModal } from "@/components/admin/business-website/media-picker";
+import { AboutPanel } from "@/components/admin/business-website/about-panel";
+import { TestimonialsPanel } from "@/components/admin/business-website/testimonials-panel";
 
 /** Editor preview serves the chosen (possibly unsaved) hero media through an admin-only route. */
 const ADMIN_MEDIA_URLS = {
@@ -216,7 +218,7 @@ export function BusinessWebsiteEditor({
   const suggestedCount = portfolio?.candidates.filter((c) => c.status === "suggested").length ?? 0;
 
   const [newRedirect, setNewRedirect] = useState({ from: "", to: "/" });
-  const [picker, setPicker] = useState<"photo" | "video" | null>(null);
+  const [picker, setPicker] = useState<"photo" | "video" | "about" | null>(null);
   const [showHeroUpload, setShowHeroUpload] = useState(false);
   const redirectFrom = normalizeRedirectPath(newRedirect.from);
   const redirectError =
@@ -497,12 +499,42 @@ export function BusinessWebsiteEditor({
       </SettingsCollapsible>
 
       <SettingsCollapsible
+        id="settings-website-testimonials"
+        title="Client Testimonials"
+        description={
+          website.testimonials.items.length
+            ? `${website.testimonials.enabled ? "On" : "Off"} · ${website.testimonials.items.length} review${website.testimonials.items.length === 1 ? "" : "s"}`
+            : "Showcase what your clients are saying."
+        }
+        dirty={!same(website.testimonials, saved.testimonials)}
+      >
+        <TestimonialsPanel value={website.testimonials} onChange={(testimonials) => set({ testimonials })} onPreview={() => setPage({ key: "home" })} />
+      </SettingsCollapsible>
+
+      <SettingsCollapsible
         id="settings-website-portfolio"
         title="Portfolio"
         description={portfolioLoading ? "Projects you’ve delivered." : `${publishedCount} on your website${suggestedCount ? ` · ${suggestedCount} suggested` : ""}`}
         defaultOpen={suggestedCount > 0 && publishedCount === 0}
       >
         <PortfolioManager state={portfolio} loading={portfolioLoading} onState={setPortfolio} />
+      </SettingsCollapsible>
+
+      <SettingsCollapsible
+        id="settings-website-about"
+        title="About Us"
+        description={website.about.enabled ? "On · your About page is in the website menu." : "Tell visitors a little about your business."}
+        dirty={!same(website.about, saved.about)}
+      >
+        <AboutPanel
+          value={website.about}
+          onChange={(about) => set({ about })}
+          businessName={business.businessName || business.portalName}
+          serviceNames={serviceNames}
+          tagline={business.tagline}
+          onPickPhoto={() => setPicker("about")}
+          onPreview={() => setPage({ key: "about" })}
+        />
       </SettingsCollapsible>
 
       <SettingsCollapsible id="settings-website-contact" title="Contact & Booking" description="Contact details, request form and calls to action." dirty={dirtyContactSection}>
@@ -734,11 +766,14 @@ export function BusinessWebsiteEditor({
     <>
     {picker ? (
       <MediaPickerModal
-        kind={picker}
-        selectedId={(picker === "photo" ? website.heroImageMedia?.id : website.heroVideoMedia?.id) ?? null}
+        kind={picker === "video" ? "video" : "photo"}
+        selectedId={(picker === "photo" ? website.heroImageMedia?.id : picker === "about" ? website.about.imageMedia?.id : website.heroVideoMedia?.id) ?? null}
         onClose={() => setPicker(null)}
         onSelect={(m) => {
-          set(picker === "photo" ? { heroImageMedia: m, heroImageUrl: "" } : { heroVideoMedia: m, heroVideoUrl: "" });
+          if (picker === "about") {
+            set({ about: { ...website.about, imageMedia: m, imageUrl: "" } });
+            setPage({ key: "about" });
+          } else set(picker === "photo" ? { heroImageMedia: m, heroImageUrl: "" } : { heroVideoMedia: m, heroVideoUrl: "" });
           setPicker(null);
         }}
       />

@@ -199,4 +199,44 @@ t("website domain sends the app entry to the portal host", () => {
   assert.equal(classifyWebsiteDomainPath("/app").kind, "portal");
 });
 
+t("About Us: off by default, factual defaults, nav + route", () => {
+  const base = { business: { name: "Swift Aerial Media", tagline: "", logoUrl: "", primaryColor: "#111", accentColor: "#4F46E5", email: "", phone: "", websiteUrl: "", addressLine1: "", addressLine2: "", city: "", state: "", postalCode: "", legalName: "", termsUrl: "", privacyUrl: "" }, services: [{ id: "11111111-1111-4111-8111-111111111111", name: "Aerial Photography", description: "", startingLabel: "", priceCents: null, hidePricing: false, includes: [] }], portfolio: [], links: { clientLogin: "/login", request: "/request" } };
+  const off = buildSiteView({ ...base, website: mergeWebsiteSettings(null) });
+  assert.equal(off.about, null);
+  assert.ok(!off.nav.some((n) => n.key === "about"));
+  const on = buildSiteView({ ...base, website: mergeWebsiteSettings({ about: { enabled: true } } as never) });
+  assert.ok(on.about);
+  assert.equal(on.about!.headline, "About Swift Aerial Media");
+  assert.equal(on.about!.image, null);
+  assert.ok(on.about!.paragraphs.join(" ").includes("aerial photography"));
+  assert.ok(!/years|award|certified|founded|team of/i.test(on.about!.paragraphs.join(" ") + on.about!.intro), "no invented claims");
+  assert.deepEqual(on.nav.map((n) => n.key), ["home", "services", "about", "contact"]);
+  const custom = buildSiteView({ ...base, website: mergeWebsiteSettings({ about: { enabled: true, headline: "Our story", body: "First.\n\nSecond.", imageUrl: "https://example.supabase.co/x.jpg" } } as never) });
+  assert.deepEqual(custom.about!.paragraphs, ["First.", "Second."]);
+  assert.equal(custom.about!.headline, "Our story");
+  assert.equal(websitePagePath("/about"), "/site/about");
+  assert.equal(resolveWebsiteRedirect(mergeWebsiteSettings(null), "/about-us"), "/about");
+  // A classic landing-page description (the business's own words) seeds the About text once.
+  assert.equal(mergeWebsiteSettings(undefined, { intro: { businessDescription: "We fly drones over the Gulf Coast." } } as never).about.body, "We fly drones over the Gulf Coast.");
+});
+
+t("Testimonials: off by default, only real visible reviews, never placeholders", () => {
+  const base = { business: { name: "X", tagline: "", logoUrl: "", primaryColor: "#111", accentColor: "#4F46E5", email: "", phone: "", websiteUrl: "", addressLine1: "", addressLine2: "", city: "", state: "", postalCode: "", legalName: "", termsUrl: "", privacyUrl: "" }, services: [], portfolio: [], links: { clientLogin: "/login", request: "/request" } };
+  const items = [
+    { id: "t-aaaaaa1", quote: "  Great photos, fast turnaround!  ", name: "Jamie R.", title: "Realtor", visible: true },
+    { id: "t-aaaaaa2", quote: "Hidden one", name: "", title: "", visible: false },
+    { id: "t-aaaaaa3", quote: "   ", name: "Empty", title: "", visible: true },
+    { id: "<bad>", quote: "<b>Loved</b> it", name: "", title: "", visible: true },
+  ];
+  const merged = mergeWebsiteSettings({ testimonials: { enabled: true, items } } as never);
+  assert.equal(merged.testimonials.items.length, 3, "blank review dropped");
+  assert.equal(merged.testimonials.items[2]!.quote, "Loved it");
+  const view = buildSiteView({ ...base, website: merged });
+  assert.deepEqual(view.testimonials.map((x) => x.quote), ["Great photos, fast turnaround!", "Loved it"]);
+  assert.equal(view.testimonials[1]!.name, "", "no invented attribution");
+  assert.equal(buildSiteView({ ...base, website: mergeWebsiteSettings({ testimonials: { enabled: false, items } } as never) }).testimonials.length, 0);
+  assert.equal(mergeWebsiteSettings(null).testimonials.enabled, false);
+  assert.equal(buildSiteView({ ...base, website: mergeWebsiteSettings({ testimonials: { enabled: true, items: [] } } as never) }).testimonials.length, 0);
+});
+
 console.log(`\n${n} checks passed`);

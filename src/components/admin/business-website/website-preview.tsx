@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils";
 import type { SiteView } from "@/lib/website/view";
 import { SiteNavProvider } from "@/components/website/site-ui";
 import { SiteHome } from "@/components/website/site-home";
-import { SiteContact, SitePortfolio, SiteProject, SiteRequest, SiteServices } from "@/components/website/site-pages";
+import { SiteAbout, SiteContact, SitePortfolio, SiteProject, SiteRequest, SiteServices } from "@/components/website/site-pages";
 import { SiteRequestForm } from "@/components/website/site-request-form";
 
-export type PreviewPage = { key: "home" | "portfolio" | "services" | "contact" | "request" } | { key: "project"; slug: string };
+export type PreviewPage = { key: "home" | "portfolio" | "services" | "about" | "contact" | "request" } | { key: "project"; slug: string };
 
 export function previewPageFromHref(href: string): PreviewPage | null {
   const path = href.split("?")[0]!.split("#")[0]!.replace(/\/$/, "") || "/";
@@ -17,6 +17,7 @@ export function previewPageFromHref(href: string): PreviewPage | null {
   if (path === "/portfolio") return { key: "portfolio" };
   if (path === "/services") return { key: "services" };
   if (path === "/contact") return { key: "contact" };
+  if (path === "/about") return { key: "about" };
   if (path === "/request") return { key: "request" };
   const m = path.match(/^\/portfolio\/([a-z0-9-]+)$/);
   if (m) return { key: "project", slug: m[1]! };
@@ -92,6 +93,7 @@ export function WebsitePreview({
   let content: React.ReactNode;
   if (page.key === "portfolio") content = <SitePortfolio view={view} preview device={device} />;
   else if (page.key === "services") content = <SiteServices view={view} preview device={device} />;
+  else if (page.key === "about" && view.about) content = <SiteAbout view={view} preview device={device} />;
   else if (page.key === "contact") content = <SiteContact view={view} form={form} preview device={device} />;
   else if (page.key === "request") content = <SiteRequest view={view} form={form} />;
   else if (page.key === "project" && project) content = <SiteProject view={view} project={project} preview device={device} />;
@@ -101,6 +103,7 @@ export function WebsitePreview({
     { label: "Home", page: { key: "home" }, show: true },
     { label: "Portfolio", page: { key: "portfolio" }, show: view.portfolio.length > 0 },
     { label: "Services", page: { key: "services" }, show: view.allServices.length > 0 },
+    { label: "About", page: { key: "about" }, show: Boolean(view.about) },
     { label: "Contact", page: { key: "contact" }, show: true },
   ];
 

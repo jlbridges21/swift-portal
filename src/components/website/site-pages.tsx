@@ -475,3 +475,88 @@ export function SiteRequest({ view, form }: { view: SiteView; form: ReactNode })
     </SiteShell>
   );
 }
+
+// ---------------------------------------------------------------------------
+// About Us (optional page)
+// ---------------------------------------------------------------------------
+
+export function SiteAbout({ view, preview = false, device = "desktop" }: { view: SiteView; preview?: boolean; device?: Device }) {
+  const theme = SITE_THEMES[view.template];
+  const about = view.about;
+  if (!about) return null;
+  const lux = theme.id === "luxury";
+  const [lead, ...rest] = about.paragraphs;
+  const services = view.allServices.slice(0, 8);
+
+  const body = (
+    <div className={cn("space-y-6", about.image ? "" : "mx-auto max-w-2xl", lux && !about.image && "text-center")}>
+      {lead ? (
+        <p
+          className={cn(
+            "whitespace-pre-line leading-relaxed",
+            lux ? "text-[1.6rem] leading-[1.45] text-[#EDE7DE]" : theme.id === "modern" ? "text-[1.3rem] font-medium tracking-[-0.01em]" : "text-[1.25rem]"
+          )}
+          style={lux ? { fontFamily: theme.displayFont } : undefined}
+        >
+          {lead}
+        </p>
+      ) : null}
+      {rest.map((p, i) => (
+        <p key={i} className={cn("whitespace-pre-line text-[17px] leading-relaxed", theme.muted)}>
+          {p}
+        </p>
+      ))}
+      {services.length ? (
+        <div className={cn("pt-4", lux && !about.image && "flex flex-col items-center")}>
+          <p className={cn(theme.eyebrow, lux ? "text-[var(--site-accent)]" : theme.muted)}>What we do</p>
+          <ul className={cn("mt-4 flex flex-wrap gap-2", lux && !about.image && "justify-center")}>
+            {services.map((s) => (
+              <li
+                key={s.id}
+                className={cn(
+                  "text-sm",
+                  theme.id === "modern" && "rounded-full bg-[#F5F6F8] px-3.5 py-1.5 font-medium",
+                  lux && "border border-white/15 px-3.5 py-1.5 text-[#EDE7DE]/85",
+                  theme.id === "minimal" && "border-b border-[#E2E2E2] pb-0.5"
+                )}
+              >
+                {s.name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  return (
+    <SiteShell view={view} page="about" preview={preview} device={device}>
+      <PageIntro theme={theme} eyebrow="About" title={about.headline} intro={about.intro} center={!about.image} />
+      <div className={cn(theme.container, "pb-24 @3xl:pb-32")}>
+        {about.image ? (
+          <div className="grid items-start gap-12 @4xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] @4xl:gap-20">
+            <div className={cn("site-reveal relative", lux && "@4xl:pr-6 @4xl:pb-6")}>
+              {lux ? <span className="absolute inset-0 hidden translate-x-6 translate-y-6 border border-[var(--site-accent)]/40 @4xl:block" aria-hidden /> : null}
+              <div
+                className={cn(
+                  "relative aspect-[4/3] overflow-hidden @4xl:aspect-[4/5]",
+                  theme.id === "modern" && "rounded-3xl",
+                  theme.dark ? "bg-[#171513]" : "bg-[#F2F2F0]"
+                )}
+              >
+                <SiteImg src={about.image.url} alt={about.image.alt} eager className="absolute inset-0 h-full w-full object-cover" />
+              </div>
+            </div>
+            <div className="@4xl:pt-6">{body}</div>
+          </div>
+        ) : (
+          <>
+            {lux ? <span className="mx-auto mb-14 block h-px w-16 bg-[var(--site-accent)]" aria-hidden /> : null}
+            {body}
+          </>
+        )}
+      </div>
+      <BookingCta view={view} theme={theme} />
+    </SiteShell>
+  );
+}

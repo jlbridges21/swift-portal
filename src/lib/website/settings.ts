@@ -49,6 +49,13 @@ export const WEBSITE_LIMITS = {
   portfolioCategory: 40,
   portfolioDescription: 300,
   portfolioMediaMax: 60,
+  aboutHeadline: 90,
+  aboutIntro: 280,
+  aboutBody: 2400,
+  testimonialQuote: 900,
+  testimonialName: 80,
+  testimonialTitle: 80,
+  testimonialsMax: 24,
   featuredServicesMax: 9,
 } as const;
 
@@ -72,6 +79,34 @@ const SOCIAL_HOSTS: Record<WebsiteSocialKey, string[]> = {
 };
 
 export type WebsiteRedirect = { from: string; to: string };
+
+/** Optional About Us page (/about). Off by default; empty text fields use automatic copy. */
+export type WebsiteAbout = {
+  enabled: boolean;
+  headline: string;
+  intro: string;
+  /** Paragraphs separated by blank lines. */
+  body: string;
+  /** Uploaded image URL (business-logos storage). */
+  imageUrl: string;
+  /** Photo picked from ShootPortal media — preferred over imageUrl. */
+  imageMedia: WebsiteHeroMedia | null;
+};
+
+/**
+ * A client review the business pasted in. Only `quote` is required; name/title are shown only
+ * when the business typed them. Never generated, never pulled from client records or messages.
+ */
+export type WebsiteTestimonial = {
+  id: string;
+  quote: string;
+  name: string;
+  title: string;
+  /** false = kept in settings but not shown on the website. */
+  visible: boolean;
+};
+
+export type WebsiteTestimonials = { enabled: boolean; items: WebsiteTestimonial[] };
 
 /** A photo or video chosen from the business's ShootPortal media for the homepage hero. */
 export type WebsiteHeroMedia = {
@@ -117,6 +152,8 @@ export interface WebsiteSettings {
   seoDescription: string;
   /** Old-website paths → new paths, used after moving a domain to ShootPortal. */
   redirects: WebsiteRedirect[];
+  about: WebsiteAbout;
+  testimonials: WebsiteTestimonials;
 }
 
 export interface PortfolioEntry {
@@ -176,6 +213,8 @@ export const DEFAULT_WEBSITE_SETTINGS: WebsiteSettings = {
   seoTitle: "",
   seoDescription: "",
   redirects: [],
+  about: { enabled: false, headline: "", intro: "", body: "", imageUrl: "", imageMedia: null },
+  testimonials: { enabled: false, items: [] },
 };
 
 export const DEFAULT_PORTFOLIO_SETTINGS: PortfolioSettings = { entries: [], dismissedProjectIds: [] };
@@ -329,6 +368,48 @@ function seedFromLegacy(landing: LandingSettings): Partial<WebsiteSettings> {
   return seed;
 }
 
+function normalizeAbout(raw: unknown, legacy: LandingSettings): WebsiteAbout {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<keyof WebsiteAbout, unknown>>;
+  let body = multiline(r.body, WEBSITE_LIMITS.aboutBody);
+  // First time only: a business description written for the classic landing page is the
+  // business's own words — a better starting point than automatic copy.
+  if (!raw && !body) {
+    const legacyText = legacy.intro.businessDescription.trim();
+    if (legacyText && !/\b(portal|estimate|download)\b/i.test(legacyText)) body = multiline(legacyText, WEBSITE_LIMITS.aboutBody);
+  }
+  return {
+    enabled: r.enabled === true,
+    headline: sanitizePlainText(r.headline, WEBSITE_LIMITS.aboutHeadline),
+    intro: multiline(r.intro, WEBSITE_LIMITS.aboutIntro),
+    body,
+    imageUrl: safeAssetUrl(r.imageUrl),
+    imageMedia: normalizeHeroMedia(r.imageMedia),
+  };
+}
+
+const TESTIMONIAL_ID_RE = /^[A-Za-z0-9_-]{6,48}$/;
+
+function normalizeTestimonials(raw: unknown): WebsiteTestimonials {
+  const r = (raw && typeof raw === "object" ? raw : {}) as { enabled?: unknown; items?: unknown };
+  const items: WebsiteTestimonial[] = [];
+  for (const row of Array.isArray(r.items) ? r.items : []) {
+    const t = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
+    const quote = multiline(t.quote, WEBSITE_LIMITS.testimonialQuote);
+    if (!quote) continue;
+    const id = typeof t.id === "string" && TESTIMONIAL_ID_RE.test(t.id) ? t.id : `t-${items.length}-${quote.length}`;
+    if (items.some((x) => x.id === id)) continue;
+    items.push({
+      id,
+      quote,
+      name: sanitizePlainText(t.name, WEBSITE_LIMITS.testimonialName),
+      title: sanitizePlainText(t.title, WEBSITE_LIMITS.testimonialTitle),
+      visible: t.visible !== false,
+    });
+    if (items.length >= WEBSITE_LIMITS.testimonialsMax) break;
+  }
+  return { enabled: r.enabled === true, items };
+}
+
 export function mergeWebsiteSettings(
   stored: Partial<WebsiteSettings> | null | undefined,
   legacyLanding?: Partial<LandingSettings> | null
@@ -370,6 +451,8 @@ export function mergeWebsiteSettings(
     seoTitle: sanitizePlainText(base.seoTitle, WEBSITE_LIMITS.seoTitle),
     seoDescription: sanitizePlainText(base.seoDescription, WEBSITE_LIMITS.seoDescription),
     redirects: normalizeRedirects(base.redirects),
+    about: normalizeAbout(base.about, landing),
+    testimonials: normalizeTestimonials(base.testimonials),
   };
 }
 
@@ -443,8 +526,7 @@ export function uniquePortfolioSlug(title: string, taken: Iterable<string>): str
 export const WEBSITE_PATH_ALIASES: Record<string, string> = {
   "/home": "/",
   "/index": "/",
-  "/about": "/",
-  "/about-us": "/",
+  "/about-us": "/about",
   "/work": "/portfolio",
   "/gallery": "/portfolio",
   "/galleries": "/portfolio",

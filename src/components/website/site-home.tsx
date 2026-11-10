@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowRight, ArrowUpRight, Check, Play } from "lucide-react";
-import type { SitePortfolioProject, SiteService, SiteView } from "@/lib/website/view";
+import { useRef } from "react";
+import { ArrowRight, ArrowUpRight, Check, ChevronLeft, ChevronRight, Play } from "lucide-react";
+import type { SitePortfolioProject, SiteService, SiteTestimonial, SiteView } from "@/lib/website/view";
 import { cn } from "@/lib/utils";
 import { DisplayHeading, SITE_THEMES, SiteImg, SiteLink, initials, useSiteNav, type SiteTheme } from "@/components/website/site-ui";
 import { SiteShell } from "@/components/website/site-shell";
@@ -491,6 +492,156 @@ export function BookingCta({ view, theme }: { view: SiteView; theme: SiteTheme }
 }
 
 // ---------------------------------------------------------------------------
+// Testimonials
+// ---------------------------------------------------------------------------
+
+function Attribution({ t, theme }: { t: SiteTestimonial; theme: SiteTheme }) {
+  if (!t.name && !t.title) return null;
+  if (theme.id === "luxury") {
+    return (
+      <p className={cn(theme.eyebrow, "mt-6 text-[var(--site-accent)]")}>
+        {t.name}
+        {t.name && t.title ? <span className="text-white/40"> · </span> : null}
+        {t.title ? <span className="text-white/55">{t.title}</span> : null}
+      </p>
+    );
+  }
+  return (
+    <p className="mt-6 text-sm">
+      {t.name ? <span className="font-semibold">{t.name}</span> : null}
+      {t.name && t.title ? <span className={theme.muted}>, </span> : null}
+      {t.title ? <span className={theme.muted}>{t.title}</span> : null}
+    </p>
+  );
+}
+
+function QuoteMark({ theme }: { theme: SiteTheme }) {
+  if (theme.id === "minimal") return null;
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={cn("h-6 w-6 text-[var(--site-accent)]", theme.id === "luxury" && "opacity-80")} fill="currentColor">
+      <path d="M9.5 6C6.5 7.3 4.5 10 4.5 13.6V18h5v-5H7.2c.2-2 1.4-3.6 3.3-4.6L9.5 6Zm9 0c-3 1.3-5 4-5 7.6V18h5v-5h-2.3c.2-2 1.4-3.6 3.3-4.6L18.5 6Z" />
+    </svg>
+  );
+}
+
+function TestimonialCard({ t, theme, featured = false }: { t: SiteTestimonial; theme: SiteTheme; featured?: boolean }) {
+  const text = (
+    <blockquote
+      className={cn(
+        "whitespace-pre-line",
+        theme.id === "luxury" ? (featured ? "text-[1.9rem] leading-[1.35] @3xl:text-[2.4rem]" : "text-[1.35rem] leading-[1.45]") : "",
+        theme.id === "modern" ? (featured ? "text-[1.35rem] font-medium leading-[1.5] tracking-[-0.01em] @3xl:text-[1.6rem]" : "text-[16px] leading-relaxed text-[#2B2F3A]") : "",
+        theme.id === "minimal" ? (featured ? "text-[1.4rem] leading-[1.55] @3xl:text-[1.7rem]" : "text-[16px] leading-relaxed") : ""
+      )}
+      style={theme.id === "luxury" ? { fontFamily: theme.displayFont } : undefined}
+    >
+      {featured || theme.id === "minimal" ? `“${t.quote}”` : t.quote}
+    </blockquote>
+  );
+  if (featured) {
+    return (
+      <figure className="site-reveal mx-auto flex max-w-3xl flex-col items-center text-center">
+        <QuoteMark theme={theme} />
+        <div className="mt-6">{text}</div>
+        <figcaption>
+          <Attribution t={t} theme={theme} />
+        </figcaption>
+      </figure>
+    );
+  }
+  return (
+    <figure
+      className={cn(
+        "site-reveal flex h-full flex-col",
+        theme.id === "modern" && "rounded-2xl border border-[#E7E8EC] bg-white p-7",
+        theme.id === "luxury" && "border-t border-white/12 pt-8",
+        theme.id === "minimal" && "border-l border-[#E2E2E2] pl-6"
+      )}
+    >
+      {theme.id !== "minimal" ? <QuoteMark theme={theme} /> : null}
+      <div className={cn(theme.id !== "minimal" && "mt-5")}>{text}</div>
+      <figcaption className="mt-auto">
+        <Attribution t={t} theme={theme} />
+      </figcaption>
+    </figure>
+  );
+}
+
+/** Up to three reviews sit in a grid; more become a swipeable row with arrow buttons. */
+function TestimonialCarousel({ items, theme }: { items: SiteTestimonial[]; theme: SiteTheme }) {
+  const row = useRef<HTMLDivElement>(null);
+  const scroll = (dir: number) => row.current?.scrollBy({ left: dir * row.current.clientWidth * 0.9, behavior: "smooth" });
+  const btn = cn(
+    "inline-flex h-11 w-11 items-center justify-center transition",
+    theme.id === "modern" && "rounded-full border border-[#E7E8EC] bg-white hover:border-[#0B0D12]/30",
+    theme.id === "luxury" && "border border-white/20 hover:border-[var(--site-accent)]",
+    theme.id === "minimal" && "rounded-full border border-[#E2E2E2] hover:border-[#171717]"
+  );
+  return (
+    <div>
+      <div
+        ref={row}
+        className="-mx-1 flex snap-x snap-mandatory gap-5 overflow-x-auto px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        tabIndex={0}
+        aria-label="Client testimonials"
+      >
+        {items.map((t) => (
+          <div key={t.id} className="w-[85%] shrink-0 snap-start @3xl:w-[calc(50%-10px)] @5xl:w-[calc(33.333%-14px)]">
+            <TestimonialCard t={t} theme={theme} />
+          </div>
+        ))}
+      </div>
+      <div className={cn("mt-8 flex gap-2", theme.id === "luxury" && "justify-center")}>
+        <button type="button" className={btn} onClick={() => scroll(-1)} aria-label="Previous testimonials">
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <button type="button" className={btn} onClick={() => scroll(1)} aria-label="More testimonials">
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function TestimonialsSection({ view, theme }: { view: SiteView; theme: SiteTheme }) {
+  const items = view.testimonials;
+  if (!items.length) return null;
+  const pad = theme.id === "luxury" ? "py-28 @3xl:py-32" : "py-20 @3xl:py-28";
+  return (
+    <section aria-labelledby="site-testimonials" className={cn(theme.id === "minimal" && "border-t border-[#EBEBEB]")}>
+      <div className={cn(theme.container, pad)}>
+        {items.length === 1 ? (
+          <>
+            <p id="site-testimonials" className={cn(theme.eyebrow, "mb-10 text-center", theme.id === "minimal" ? theme.muted : "text-[var(--site-accent)]")}>
+              What our clients say
+            </p>
+            <TestimonialCard t={items[0]!} theme={theme} featured />
+          </>
+        ) : (
+          <>
+            <div className={cn("mb-12", theme.id === "luxury" && "text-center")}>
+              <p className={cn(theme.eyebrow, theme.id === "minimal" ? theme.muted : "text-[var(--site-accent)]")}>Testimonials</p>
+              <DisplayHeading theme={theme} className={cn("mt-4 leading-tight", theme.id === "luxury" ? "text-[2.6rem] @3xl:text-[3.25rem]" : theme.id === "modern" ? "text-[2.25rem] @3xl:text-[3rem]" : "text-[1.9rem] @3xl:text-[2.4rem]")}>
+                <span id="site-testimonials">What our clients say</span>
+              </DisplayHeading>
+            </div>
+            {items.length <= 3 ? (
+              <div className={cn("grid gap-5", items.length === 2 ? "@3xl:grid-cols-2" : "@4xl:grid-cols-3", theme.id === "luxury" && "gap-x-12 gap-y-10")}>
+                {items.map((t) => (
+                  <TestimonialCard key={t.id} t={t} theme={theme} />
+                ))}
+              </div>
+            ) : (
+              <TestimonialCarousel items={items} theme={theme} />
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -541,6 +692,9 @@ export function SiteHome({ view, preview = false, device = "desktop" }: { view: 
           </div>
         </section>
       ) : null}
+
+      {/* Client testimonials: directly below Services, only when the business added reviews. */}
+      <TestimonialsSection view={view} theme={theme} />
 
       <BookingCta view={view} theme={theme} />
     </SiteShell>
