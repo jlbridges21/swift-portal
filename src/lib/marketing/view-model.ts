@@ -7,6 +7,8 @@
  */
 import { pickAutoHero } from "@/lib/marketing/defaults";
 import {
+  DEFAULT_FLYER,
+  FLYER_LAYOUTS,
   MAX_CAROUSEL_SLIDES,
   SOCIAL_ASSETS,
   formatOpenHouse,
@@ -16,6 +18,7 @@ import {
   type AgentInfo,
   type AssetRef,
   type CarouselSlide,
+  type FlyerConfig,
   type MarketingContent,
   type MediaIndexItem,
   type PhotoCategory,
@@ -241,6 +244,27 @@ export function supportingPhotoIds(media: MediaIndexItem[], heroId: string | nul
     if (picked.length >= n) break;
   }
   return picked;
+}
+
+/** Flyer settings, tolerant of content saved before flyer options existed. */
+export function flyerConfig(content: MarketingContent): FlyerConfig {
+  return { ...DEFAULT_FLYER, ...(content.social.flyer ?? {}) };
+}
+
+/**
+ * Supporting flyer photos, in order, sized to the chosen layout: the user's picks that are
+ * still approved (never the cover), else automatic picks.
+ */
+export function resolveFlyerPhotoIds(content: MarketingContent, media: MediaIndexItem[], coverId: string | null): string[] {
+  const cfg = flyerConfig(content);
+  const cap = FLYER_LAYOUTS.find((l) => l.key === cfg.layout)?.photos ?? 6;
+  const heroId = resolveHeroId(content, media, coverId);
+  const featured = socialFeaturedId("flyer", content, media, heroId);
+  if (cfg.photoIds) {
+    const ok = new Set(media.filter((m) => m.type === "photo").map((m) => m.id));
+    return cfg.photoIds.filter((id) => ok.has(id) && id !== featured).slice(0, cap);
+  }
+  return supportingPhotoIds(media, featured, cap);
 }
 
 const CAROUSEL_ROOMS: { cat: PhotoCategory; caption: string }[] = [

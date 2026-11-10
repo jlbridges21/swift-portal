@@ -28,19 +28,18 @@ import { MarketingFontFaces } from "@/components/marketing/website/listing-websi
 import { useKit, kitFetch, type KitApi } from "@/components/marketing/editor/use-kit";
 import {
   BrandingPanel,
-  CarouselEditor,
   DesignPicker,
   PanelSection,
   PhotosPanel,
   PropertyPanel,
   SectionsPanel,
-  SocialAssetEditor,
   SocialAssetsPanel,
 } from "@/components/marketing/editor/panels";
-import { FitSocialCanvas, SocialCanvas, WebsitePreview } from "@/components/marketing/editor/previews";
+import { WebsitePreview } from "@/components/marketing/editor/previews";
+import { SocialWorkspace } from "@/components/marketing/editor/social-workspace";
 import { buildListingView, socialAssetStatuses, type UrlResolver } from "@/lib/marketing/view-model";
 import { buildSocialItems, type SocialItem } from "@/lib/marketing/social-inputs";
-import { PRODUCT_LABEL, type MarketingProduct, type SocialAssetKey } from "@/lib/marketing/model";
+import { PRODUCT_LABEL, type MarketingProduct } from "@/lib/marketing/model";
 import { formatCents, type ProductAccess } from "@/lib/marketing/offers";
 import type { KitClientState } from "@/lib/marketing/server";
 
@@ -289,6 +288,7 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
   const hasPhotos = s.media.some((m) => m.type === "photo");
   const socialLocked = !s.access.social.hasAccess && !s.permissions.isBusiness;
   const websiteLocked = !s.access.website.hasAccess;
+  const websiteUrl = s.website.status === "published" ? s.website.liveUrl : null;
   const thumbItems = useMemo(
     () =>
       buildSocialItems({
@@ -299,8 +299,9 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
         photoUrl: (id) => (id ? kit.urls.image({ kind: "media", id }, "thumb") : null),
         watermark: socialLocked,
         includeAll: true,
+        websiteUrl,
       }),
-    [kit.content, s.media, s.coverId, view, kit.urls, socialLocked]
+    [kit.content, s.media, s.coverId, view, kit.urls, socialLocked, websiteUrl]
   );
   const focusedItem = useMemo(() => {
     const items = buildSocialItems({
@@ -311,9 +312,14 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
       photoUrl: (id) => (id ? kit.urls.image({ kind: "media", id }, "medium") : null),
       watermark: socialLocked,
       includeAll: true,
+      websiteUrl,
     });
-    return items.find((i) => i.id === selectedAsset) ?? items[0] ?? null;
-  }, [kit.content, s.media, s.coverId, view, kit.urls, socialLocked, selectedAsset]);
+    const exact = items.find((i) => i.id === selectedAsset);
+    if (exact) return exact;
+    // A removed carousel slide: stay in the carousel on its last slide.
+    const group = selectedAsset.startsWith("carousel-") ? "carousel" : null;
+    return (group ? items.filter((i) => i.group === group).pop() : null) ?? items[0] ?? null;
+  }, [kit.content, s.media, s.coverId, view, kit.urls, socialLocked, selectedAsset, websiteUrl]);
   const statuses = useMemo(() => socialAssetStatuses(kit.content, hasPhotos), [kit.content, hasPhotos]);
   const enabledIds = thumbItems.filter((i) => !i.status || (i.status.available && i.status.enabled)).filter((i) => i.group !== "carousel" || kit.content.social.includeCarousel).map((i) => i.id);
 
@@ -435,27 +441,18 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
       </PanelSection>
     </>
   );
-  const selectedKey = (focusedItem?.status?.key ?? null) as SocialAssetKey | null;
   const socialPanel = (
     <>
-      <PanelSection title="Design" subtitle="Applies to every graphic" defaultOpen>
+      <PanelSection title="Design" subtitle="Modern, Luxury or Coastal" defaultOpen>
         <DesignPicker value={kit.content.social.style} disabled={!s.permissions.canEdit} onChange={(t) => kit.update((o) => ({ ...o, social: { ...(o.social ?? {}), style: t } }))} />
       </PanelSection>
-      <PanelSection title="Graphics in your kit" subtitle="Choose what to include" defaultOpen>
-        <SocialAssetsPanel kit={kit} statuses={statuses} selected={selectedAsset} onSelect={setSelectedAsset} />
-      </PanelSection>
-      {selectedKey ? (
-        <PanelSection title={`Customize: ${focusedItem?.label}`} subtitle="Headline and featured photo" defaultOpen key={selectedKey}>
-          <SocialAssetEditor kit={kit} assetKey={selectedKey} />
-        </PanelSection>
-      ) : null}
-      <PanelSection title="Instagram carousel" subtitle="Slides, photos and order">
-        <CarouselEditor kit={kit} />
+      <PanelSection title="Graphics in your kit" subtitle="Choose what the Download Kit includes" defaultOpen>
+        <SocialAssetsPanel kit={kit} statuses={statuses} selected={selectedAsset} onSelect={(id) => { setSelectedAsset(id); setDrawer(false); }} />
       </PanelSection>
       <PanelSection title="Property details" subtitle="Shared with your website">
         <PropertyPanel kit={kit} />
       </PanelSection>
-      <PanelSection title="Agent & branding">
+      <PanelSection title="Agent & branding" subtitle="Shared with your website">
         <BrandingPanel kit={kit} />
       </PanelSection>
     </>
@@ -468,61 +465,6 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
   ) : (
     <EmptyMedia business={s.permissions.isBusiness} />
   );
-  const groups: { title: string; key: SocialItem["group"] }[] = [
-    { title: "Square posts · 1080 × 1080", key: "square" },
-    { title: "Stories · 1080 × 1920", key: "story" },
-    { title: "Instagram carousel · 1080 × 1350", key: "carousel" },
-    { title: "Property flyer · Letter PDF", key: "flyer" },
-  ];
-  const socialPreview = hasPhotos ? (
-    <div className="space-y-8 pb-24">
-      {focusedItem ? (
-        <div className="rounded-2xl border border-border bg-white p-4 shadow-sm surface-dark:bg-card">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="font-semibold text-heading">{focusedItem.label}</p>
-              {focusedItem.status && !focusedItem.status.available ? <p className="text-xs text-amber-700">{focusedItem.status.reason}</p> : null}
-            </div>
-            {s.permissions.canDownload ? (
-              <Button size="sm" variant="outline" disabled={downloading !== null || Boolean(focusedItem.status && !focusedItem.status.available)} onClick={() => void download(focusedItem)}>
-                {downloading === focusedItem.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} {focusedItem.group === "flyer" ? "Download PDF" : "Download PNG"}
-              </Button>
-            ) : null}
-          </div>
-          <FitSocialCanvas input={focusedItem.input} maxHeight={focusedItem.group === "flyer" ? 620 : 520} />
-        </div>
-      ) : null}
-      {groups.map((g) => {
-        const items = thumbItems.filter((i) => i.group === g.key);
-        if (!items.length) return null;
-        return (
-          <div key={g.key}>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">{g.title}</p>
-            <div className="flex flex-wrap gap-3">
-              {items.map((it) => {
-                const off = it.status ? !it.status.available || !it.status.enabled : !kit.content.social.includeCarousel;
-                return (
-                  <button
-                    key={it.id}
-                    type="button"
-                    onClick={() => setSelectedAsset(it.id)}
-                    className={cn("group text-left", off && "opacity-45")}
-                    title={it.label}
-                  >
-                    <SocialCanvas input={it.input} displayWidth={it.group === "story" ? 96 : it.group === "flyer" ? 128 : 150} className={cn("rounded-md ring-1 ring-black/10 transition group-hover:shadow-md", selectedAsset === it.id && "ring-2 ring-accent")} />
-                    <p className="mt-1 max-w-[150px] truncate text-[11px] text-muted">{it.label}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  ) : (
-    <EmptyMedia business={s.permissions.isBusiness} />
-  );
-
   const tabs: { id: Tab; label: string; product: MarketingProduct; chip: React.ReactNode }[] = [
     { id: "website", label: "Property Website", product: "website", chip: s.access.website.hasAccess || s.permissions.isBusiness ? websiteStatusChip(s.website) : <Chip tone={accessLabel(s.access.website).tone}>{accessLabel(s.access.website).text}</Chip> },
     { id: "social", label: "Social Media Kit", product: "social", chip: <Chip tone={accessLabel(s.access.social).tone}>{accessLabel(s.access.social).text}</Chip> },
@@ -578,6 +520,28 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
         </div>
       ) : null}
 
+      {tab === "social" && hasPhotos ? (
+        <SocialWorkspace
+          kit={kit}
+          view={view}
+          thumbItems={thumbItems}
+          focusedItem={focusedItem}
+          selected={selectedAsset}
+          onSelect={setSelectedAsset}
+          locked={socialLocked}
+          websiteUrl={websiteUrl}
+          settingsPanel={socialPanel}
+          onOpenSettings={() => setDrawer(true)}
+          canDownload={s.permissions.canDownload}
+          downloading={downloading}
+          onDownload={(it) => void download(it)}
+          purchase={
+            !s.permissions.canDownload && (s.access.social.state === "locked" || s.access.social.state === "pending_payment")
+              ? { label: s.access.social.state === "pending_payment" ? "Complete purchase" : `Unlock · ${formatCents(s.access.social.offer.priceCents)}`, onClick: () => setPurchase("social") }
+              : null
+          }
+        />
+      ) : (
       <div className="flex min-h-0 flex-1">
         {/* Desktop panel */}
         <aside className="hidden w-[380px] shrink-0 overflow-y-auto border-r border-border bg-white md:block surface-dark:bg-card">{panel}</aside>
@@ -602,15 +566,16 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
               <div className="min-h-[520px] flex-1">{websitePreview}</div>
             </div>
           ) : (
-            socialPreview
+            <EmptyMedia business={s.permissions.isBusiness} />
           )}
         </main>
       </div>
+      )}
 
       {/* Mobile bottom bar + drawer */}
       <div className="flex shrink-0 items-center gap-2 border-t border-border bg-white px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden surface-dark:bg-card">
         <Button variant="outline" className="min-h-11 flex-1" onClick={() => setDrawer(true)}>
-          <SlidersHorizontal className="h-4 w-4" /> Customize
+          <SlidersHorizontal className="h-4 w-4" /> {tab === "social" ? "Kit settings" : "Customize"}
         </Button>
         <div className="flex-[2] [&_a]:min-h-11 [&_button]:min-h-11 [&>div]:justify-end">{tab === "website" ? websiteActions : socialActions}</div>
       </div>
@@ -619,7 +584,7 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
           <button type="button" aria-label="Close" className="absolute inset-0 bg-black/40" onClick={() => setDrawer(false)} />
           <div className="absolute inset-x-0 bottom-0 flex max-h-[82dvh] flex-col rounded-t-2xl bg-white shadow-2xl surface-dark:bg-card">
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
-              <p className="text-sm font-semibold">Customize · {tab === "website" ? "Website" : "Social kit"}</p>
+              <p className="text-sm font-semibold">{tab === "website" ? "Customize · Website" : "Kit settings · apply to every graphic"}</p>
               <button type="button" onClick={() => setDrawer(false)} className="rounded-full p-2 hover:bg-slate-100" aria-label="Close">
                 <X className="h-4 w-4" />
               </button>
@@ -630,6 +595,25 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
         </div>
       ) : null}
 
+      {/* Tablet / small laptop: kit settings slide over from the left (desktop shows them as a column). */}
+      {drawer && tab === "social" ? (
+        <div className="fixed inset-0 z-50 hidden md:block xl:hidden" role="dialog" aria-modal="true" aria-label="Kit settings">
+          <button type="button" aria-label="Close" className="absolute inset-0 bg-black/30" onClick={() => setDrawer(false)} />
+          <div className="absolute inset-y-0 left-0 flex w-[360px] max-w-[90vw] flex-col bg-white shadow-2xl surface-dark:bg-card">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <div>
+                <p className="text-sm font-semibold text-heading">Kit settings</p>
+                <p className="text-[11px] text-muted">Apply to every graphic</p>
+              </div>
+              <button type="button" onClick={() => setDrawer(false)} className="rounded-full p-2 hover:bg-slate-100" aria-label="Close">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{socialPanel}</div>
+            <p className="border-t border-border px-5 py-2 text-center text-[11px] text-muted">{s.permissions.canEdit ? saveText : "View only"}</p>
+          </div>
+        </div>
+      ) : null}
       {purchase !== false ? <PurchaseDialog kit={kit} open onClose={() => setPurchase(false)} preselect={purchase} /> : null}
       <Modal
         open={confirmPublish}

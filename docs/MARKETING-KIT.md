@@ -6,7 +6,7 @@ marketing information:
 | Product | What the client gets |
 |---|---|
 | **Property Website** | A public, responsive single-property site (Modern / Luxury / Coastal) at `listings.yourstudio.com/{slug}` or the ShootPortal fallback `{portal}/l/{slug}` |
-| **Social Media Kit** | 5 square posts (1080²), 3 Stories (1080×1920), an Instagram carousel (1080×1350, up to 10 slides) and a Letter print flyer (PDF, 300 dpi) — individually or as a ZIP |
+| **Social Media Kit** | 5 square posts (1080²), 3 Stories (1080×1920), an Instagram carousel (1080×1350, up to 10 slides) and a Letter print flyer (PDF, 300 dpi, three photo layouts) — individually or as a ZIP |
 
 ## Where to find it
 
@@ -14,6 +14,31 @@ marketing information:
 - **Client:** delivered project page → “Take your listing marketing further” card → `/dashboard/projects/{id}/marketing`.
 - **Settings → Marketing Kit:** offer on/off per product, Included vs Paid, prices ($49 / $29 defaults), optional bundle price, client permissions, default design, photography credit, and the master **Offer the Marketing Kit to clients** switch (off by default — clients never see a surprise offer).
 - **Settings → Use your own web address → Property Website Address:** listing subdomain (below the client portal address).
+
+## Social Media Kit workspace
+
+Three columns, each scrolling on its own (`components/marketing/editor/social-workspace.tsx`):
+
+1. **Kit settings** (left): design, which graphics the Download Kit includes, property details, agent & branding.
+   Below 1280 px this becomes a slide-over (“Kit settings” button); on phones, the bottom sheet.
+2. **Choose an asset to edit** (middle): Posts / Stories / Carousel / Flyers, a horizontal thumbnail strip
+   (trackpad, mouse wheel or arrows), then controls for the selected asset only
+   (`social-controls.tsx`: headline, featured photo, open house; carousel slide order/photos/captions;
+   flyer layout, cover, photos, sections).
+3. **Live preview** (right): the selected asset fitted to the panel at its true aspect ratio, with
+   previous/next, expand (full screen, arrow keys) and Download PNG/PDF. Phones show it above the browser.
+
+Assets that need missing details (Open House without a date) show what's missing and a button to add it.
+
+### Property flyer
+
+`social.flyer` (in the same `marketing_kits.content` overrides — no migration): `layout`
+(`grid` Classic Grid · 6 photos, `showcase` Large + Grid · 5, `gallery` Gallery · 8), `photoIds`
+(null = automatic picks from different rooms; the cover photo is never repeated), and
+`showAgent` / `showHighlights` / `showDescription` / `showQr`. The QR code (generated locally with
+`qrcode`, drawn as SVG) links to the property website and appears only while the website is published.
+Every block has a computed height and text is trimmed to its box, so the page never overflows; missing
+facts, highlights or agent details remove their block and the photos take the space.
 
 ## Data model (migration `supabase/migration-v118-marketing-kit.sql`, additive)
 

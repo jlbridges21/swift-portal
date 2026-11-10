@@ -28,6 +28,7 @@ async function exportItems(ctx: KitContext): Promise<SocialItem[]> {
       coverId: ctx.project.cover_image_id,
       view: buildListingView({ content: ctx.content, media: ctx.media, tours: [], coverId: ctx.project.cover_image_id, businessName: ctx.businessName, urls }),
       photoUrl,
+      websiteUrl: ctx.kit.website_status === "published" ? ctx.urls.live : null,
     });
   const draft = build(tokenUrls, (id) => (id ? `media:${id}` : null));
   const tokens = new Set<string>();

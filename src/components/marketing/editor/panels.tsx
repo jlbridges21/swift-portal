@@ -56,7 +56,7 @@ import type { KitApi } from "@/components/marketing/editor/use-kit";
 
 type Group = keyof Omit<MarketingOverrides, never>;
 
-function useSetters(kit: KitApi) {
+export function useSetters(kit: KitApi) {
   const set = <G extends Group>(g: G, patch: Partial<MarketingContent[G]>) =>
     kit.update((o) => ({ ...o, [g]: { ...((o[g] as object) ?? {}), ...patch } }));
   const reset = <G extends Group>(g: G, key: keyof MarketingContent[G]) =>
@@ -84,7 +84,7 @@ export function PanelSection({ title, subtitle, children, defaultOpen = false, i
   );
 }
 
-function Field({ label, hint, children, edited, onReset }: { label: string; hint?: string; children: ReactNode; edited?: boolean; onReset?: () => void }) {
+export function Field({ label, hint, children, edited, onReset }: { label: string; hint?: string; children: ReactNode; edited?: boolean; onReset?: () => void }) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
@@ -286,7 +286,18 @@ export function PropertyPanel({ kit }: { kit: KitApi }) {
           </div>
         ) : null}
       </Field>
-      <div className="rounded-xl border border-border p-3">
+      <OpenHouseFields kit={kit} />
+    </div>
+  );
+}
+
+/** Open house on/off + date and times (shared by Property details and the Open House assets). */
+export function OpenHouseFields({ kit, compact }: { kit: KitApi; compact?: boolean }) {
+  const { set } = useSetters(kit);
+  const p = kit.content.property;
+  const ro = !kit.state.permissions.canEdit;
+  return (
+      <div className={cn("rounded-xl border p-3", compact && !p.openHouse ? "border-amber-300 bg-amber-50/60" : "border-border")}>
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">Open house</Label>
           <Switch
@@ -310,7 +321,6 @@ export function PropertyPanel({ kit }: { kit: KitApi }) {
           <p className="mt-1 text-[11px] text-muted">Turn on to add Open House posts, stories and a website banner.</p>
         )}
       </div>
-    </div>
   );
 }
 
@@ -318,7 +328,7 @@ export function PropertyPanel({ kit }: { kit: KitApi }) {
 // Photos
 // ---------------------------------------------------------------------------
 
-function Thumb({ kit, id, selected, onClick, badge, dim }: { kit: KitApi; id: string; selected?: boolean; onClick?: () => void; badge?: ReactNode; dim?: boolean }) {
+export function Thumb({ kit, id, selected, onClick, badge, dim }: { kit: KitApi; id: string; selected?: boolean; onClick?: () => void; badge?: ReactNode; dim?: boolean }) {
   return (
     <button
       type="button"
@@ -646,7 +656,7 @@ export function SocialAssetsPanel({ kit, statuses, selected, onSelect }: { kit: 
   const groups: [string, SocialAssetStatus["format"]][] = [
     ["Square posts", "square"],
     ["Stories", "story"],
-    ["Print", "flyer"],
+    ["Property flyer", "flyer"],
   ];
   return (
     <div className="space-y-4">
@@ -677,138 +687,6 @@ export function SocialAssetsPanel({ kit, statuses, selected, onSelect }: { kit: 
         <span className="text-sm">Instagram carousel</span>
         <Switch checked={kit.content.social.includeCarousel} disabled={ro} onCheckedChange={(v) => set("social", { includeCarousel: v })} />
       </label>
-    </div>
-  );
-}
-
-export function SocialAssetEditor({ kit, assetKey }: { kit: KitApi; assetKey: SocialAssetKey }) {
-  const { set } = useSetters(kit);
-  const ro = !kit.state.permissions.canEdit;
-  const c = kit.content;
-  const media = kit.state.media;
-  const heroId = resolveHeroId(c, media, kit.state.coverId);
-  const featured = socialFeaturedId(assetKey, c, media, heroId);
-  const photos = media.filter((m) => m.type === "photo");
-  return (
-    <div className="space-y-4">
-      <Field label="Headline" hint="Up to 40 characters.">
-        <Input
-          disabled={ro}
-          maxLength={40}
-          value={c.social.headlines[assetKey] ?? ""}
-          placeholder={socialHeadline(assetKey, { ...c, social: { ...c.social, headlines: {} } })}
-          onChange={(e) => set("social", { headlines: { ...c.social.headlines, [assetKey]: e.target.value } })}
-        />
-      </Field>
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <Label className="text-xs font-medium">Featured photo</Label>
-          {c.social.featured[assetKey] && !ro ? (
-            <button
-              type="button"
-              className="text-[11px] text-muted hover:text-heading"
-              onClick={() => {
-                const f = { ...c.social.featured };
-                delete f[assetKey];
-                set("social", { featured: f });
-              }}
-            >
-              Automatic
-            </button>
-          ) : null}
-        </div>
-        <div className="grid grid-cols-4 gap-1.5">
-          {photos.map((m) => (
-            <Thumb key={m.id} kit={kit} id={m.id} selected={m.id === featured} onClick={() => !ro && set("social", { featured: { ...c.social.featured, [assetKey]: m.id } })} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function CarouselEditor({ kit }: { kit: KitApi }) {
-  const { set } = useSetters(kit);
-  const ro = !kit.state.permissions.canEdit;
-  const c = kit.content;
-  const media = kit.state.media;
-  const heroId = resolveHeroId(c, media, kit.state.coverId);
-  const slides = resolveCarousel(c, media, heroId);
-  const photos = media.filter((m) => m.type === "photo");
-  const [picking, setPicking] = useState<number | null>(null);
-  const write = (next: CarouselSlide[]) => set("social", { carousel: next.slice(0, MAX_CAROUSEL_SLIDES) });
-  const kindLabel: Record<CarouselSlide["kind"], string> = { cover: "Cover", photo: "Photo", highlights: "Highlights", agent: "Agent contact" };
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] text-muted">{slides.length} slides · {c.social.carousel ? "custom" : "automatic"}</p>
-        {c.social.carousel && !ro ? (
-          <button type="button" className="text-[11px] text-muted hover:text-heading" onClick={() => set("social", { carousel: null })}>
-            Reset to automatic
-          </button>
-        ) : null}
-      </div>
-      <ol className="space-y-1.5">
-        {slides.map((s, i) => (
-          <li key={i} className="rounded-lg border border-border p-2">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold">{i + 1}</span>
-              <div className="h-10 w-12 shrink-0 overflow-hidden rounded bg-slate-100">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {s.mediaId ? <img src={kit.urls.image({ kind: "media", id: s.mediaId }, "thumb") ?? ""} alt="" className="h-full w-full object-cover" /> : null}
-              </div>
-              <span className="flex-1 text-xs font-medium">{kindLabel[s.kind]}</span>
-              {!ro ? (
-                <>
-                  <button type="button" aria-label="Move up" disabled={i === 0} onClick={() => { const n = [...slides]; [n[i - 1], n[i]] = [n[i]!, n[i - 1]!]; write(n); }} className="rounded p-1 hover:bg-slate-100 disabled:opacity-30">
-                    <ArrowUp className="h-3.5 w-3.5" />
-                  </button>
-                  <button type="button" aria-label="Move down" disabled={i === slides.length - 1} onClick={() => { const n = [...slides]; [n[i + 1], n[i]] = [n[i]!, n[i + 1]!]; write(n); }} className="rounded p-1 hover:bg-slate-100 disabled:opacity-30">
-                    <ArrowDown className="h-3.5 w-3.5" />
-                  </button>
-                  <button type="button" aria-label="Remove slide" disabled={slides.length <= 1} onClick={() => write(slides.filter((_, j) => j !== i))} className="rounded p-1 hover:bg-slate-100 disabled:opacity-30">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </>
-              ) : null}
-            </div>
-            {(s.kind === "photo" || s.kind === "cover") && !ro ? (
-              <div className="mt-2 space-y-1.5">
-                {s.kind === "photo" ? (
-                  <Input value={s.caption} maxLength={40} placeholder="Caption (optional), e.g. Kitchen" onChange={(e) => write(slides.map((x, j) => (j === i ? { ...x, caption: e.target.value } : x)))} className="h-8 text-xs" />
-                ) : null}
-                <button type="button" className="text-[11px] text-accent hover:underline" onClick={() => setPicking(picking === i ? null : i)}>
-                  {picking === i ? "Done" : "Change photo"}
-                </button>
-                {picking === i ? (
-                  <div className="grid grid-cols-5 gap-1">
-                    {photos.map((m) => (
-                      <Thumb key={m.id} kit={kit} id={m.id} selected={m.id === s.mediaId} onClick={() => write(slides.map((x, j) => (j === i ? { ...x, mediaId: m.id } : x)))} />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </li>
-        ))}
-      </ol>
-      {!ro && slides.length < MAX_CAROUSEL_SLIDES ? (
-        <div className="flex flex-wrap gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={() => write([...slides, { kind: "photo", mediaId: photos.find((p) => !slides.some((s) => s.mediaId === p.id))?.id ?? photos[0]?.id ?? null, caption: "" }])}>
-            <Plus className="h-3.5 w-3.5" /> Photo slide
-          </Button>
-          {!slides.some((s) => s.kind === "highlights") ? (
-            <Button type="button" size="sm" variant="outline" onClick={() => write([...slides, { kind: "highlights", mediaId: null, caption: "" }])}>
-              <Plus className="h-3.5 w-3.5" /> Highlights
-            </Button>
-          ) : null}
-          {!slides.some((s) => s.kind === "agent") ? (
-            <Button type="button" size="sm" variant="outline" onClick={() => write([...slides, { kind: "agent", mediaId: null, caption: "" }])}>
-              <Plus className="h-3.5 w-3.5" /> Agent slide
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
     </div>
   );
 }

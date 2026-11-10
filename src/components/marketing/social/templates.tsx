@@ -11,7 +11,7 @@
  * of relying on CSS line clamping; only use fonts registered in lib/marketing/fonts.ts.
  */
 import type { CSSProperties, ReactNode } from "react";
-import { clampText, type CarouselSlide, type DesignStyle, type SocialAssetKey } from "@/lib/marketing/model";
+import { DEFAULT_FLYER, clampText, type CarouselSlide, type DesignStyle, type FlyerConfig, type SocialAssetKey } from "@/lib/marketing/model";
 import type { ListingView } from "@/lib/marketing/view-model";
 
 export type SocialFormat = "square" | "story" | "carousel" | "flyer";
@@ -27,6 +27,11 @@ export type SocialRenderInput = {
   photo: string | null;
   supporting: string[];
   slide?: CarouselSlide & { index: number; total: number; photo: string | null };
+  /** Flyer only: layout and sections. */
+  flyer?: FlyerConfig;
+  /** Flyer only: QR code image (SVG data URI) linking to the published property website. */
+  qr?: string | null;
+  websiteUrl?: string | null;
   /** Preview-only diagonal "PREVIEW" mark (never present in exports). */
   watermark?: boolean;
 };
@@ -527,110 +532,443 @@ function AgentSlide(input: SocialRenderInput, t: Theme, u: number) {
 
 // ---------------------------------------------------------------------------
 // Flyer (US Letter, 2550 × 3300 at 300 dpi)
+//
+// Every block has a computed height, so nothing can spill off the page: photo tiles take the
+// space the text doesn't need, and text is pre-trimmed to what fits its box. Missing facts,
+// highlights, agent details or photos remove their block and the rest re-flows.
 // ---------------------------------------------------------------------------
 
-function Flyer(input: SocialRenderInput, t: Theme, u: number) {
-  const { width, height, view, style } = input;
-  const pad = 130 * u;
-  const inner = width - pad * 2;
-  const heroH = 1180 * u;
-  const thumbs = input.supporting.slice(0, 3);
-  const gap = 36 * u;
-  const thumbW = (inner - gap * 2) / 3;
-  const thumbH = 470 * u;
-  const desc = clampText(view.property.description || "", 520);
-  const highlights = view.property.highlights.slice(0, 6).map((h) => clampText(h, 44));
+type FlyerKit = {
+  t: Theme;
+  u: number;
+  light: boolean;
+  accent: string;
+  ink: string;
+  muted: string;
+  rule: string;
+  radius: number;
+  pageBg: string;
+  bandBg: string;
+};
+
+function flyerKit(input: SocialRenderInput, t: Theme, u: number): FlyerKit {
+  const { style, view } = input;
   const light = style !== "luxury";
-  const accent = style === "modern" ? view.branding.primary : t.rule;
+  return {
+    t,
+    u,
+    light,
+    accent: style === "modern" ? view.branding.primary : t.rule,
+    ink: t.ink,
+    muted: light ? (style === "coastal" ? "#5C6D71" : "#4B5563") : t.muted,
+    rule: light ? (style === "coastal" ? "#E3D8C6" : "#E5E7EB") : "rgba(255,255,255,0.16)",
+    radius: (style === "coastal" ? 30 : style === "modern" ? 14 : 0) * u,
+    pageBg: style === "luxury" ? t.bg : style === "coastal" ? "#FBF8F2" : "#FFFFFF",
+    bandBg: style === "modern" ? "#F1F5F9" : style === "coastal" ? "#F1E9DC" : "#141416",
+  };
+}
+
+/** Rough character budget for a text box (≈0.52 em per character). */
+function textBudget(width: number, height: number, fontSize: number, lineHeight = 1.5): number {
+  const perLine = Math.floor(width / (fontSize * 0.52));
+  const lines = Math.floor(height / (fontSize * lineHeight));
+  return Math.max(0, perLine * lines - 6);
+}
+
+function addressSize(text: string, base: number): number {
+  const n = text.length;
+  return n > 34 ? base * 0.68 : n > 26 ? base * 0.8 : base;
+}
+
+/** Rows of photos filling exactly `width` × `height`; the last row stretches to the full width. */
+function PhotoGrid({ srcs, width, height, cols, gap, radius }: { srcs: string[]; width: number; height: number; cols: number; gap: number; radius: number }) {
+  const rows: string[][] = [];
+  for (let i = 0; i < srcs.length; i += cols) rows.push(srcs.slice(i, i + cols));
+  const rowH = (height - gap * (rows.length - 1)) / Math.max(1, rows.length);
   return (
-    <div style={col({ width, height, background: light ? "#FFFFFF" : t.bg })}>
-      <div style={flex({ position: "relative", width, height: heroH + 110 * u })}>
-        <Photo src={input.photo} width={width} height={heroH + 110 * u} />
-        <div
-          style={flex({
-            position: "absolute",
-            left: pad,
-            bottom: 0,
-            padding: `${34 * u}px ${54 * u}px`,
-            background: style === "modern" ? view.branding.primary : style === "coastal" ? "#F4EEE3" : t.bg,
-            borderTopLeftRadius: style === "coastal" ? 36 * u : 0,
-            borderTopRightRadius: style === "coastal" ? 36 * u : 0,
-            fontFamily: t.body,
-            fontWeight: 700,
-            fontSize: 44 * u,
-            letterSpacing: 10 * u,
-            textTransform: "uppercase",
-            color: style === "modern" ? view.branding.onPrimary : t.rule,
-          })}
-        >
-          {input.headline}
-        </div>
-        {view.branding.logoUrl ? (
-          <div style={flex({ position: "absolute", right: pad, top: 90 * u, padding: `${28 * u}px ${36 * u}px`, background: "rgba(255,255,255,0.94)", borderRadius: 20 * u })}>
-            <Logo url={view.branding.logoUrl} size={110 * u} />
+    <div style={col({ width, height, gap })}>
+      {rows.map((row, r) => {
+        const w = (width - gap * (row.length - 1)) / row.length;
+        return (
+          <div key={r} style={flex({ gap, width, height: rowH })}>
+            {row.map((src, i) => (
+              <Photo key={i} src={src} width={w} height={rowH} radius={radius} />
+            ))}
           </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function HeadlineTab({ input, k }: { input: SocialRenderInput; k: FlyerKit }) {
+  const { style, view } = input;
+  const { u, t } = k;
+  return (
+    <div
+      style={flex({
+        padding: `${30 * u}px ${50 * u}px`,
+        background: style === "modern" ? view.branding.primary : style === "coastal" ? "#FBF8F2" : t.bg,
+        borderTopLeftRadius: style === "coastal" ? 30 * u : 0,
+        borderTopRightRadius: style === "coastal" ? 30 * u : 0,
+        fontFamily: t.body,
+        fontWeight: 700,
+        fontSize: 40 * u,
+        letterSpacing: 9 * u,
+        textTransform: "uppercase",
+        color: style === "modern" ? view.branding.onPrimary : t.rule,
+      })}
+    >
+      {input.headline}
+    </div>
+  );
+}
+
+function FlyerHero({ input, k, height, overlay }: { input: SocialRenderInput; k: FlyerKit; height: number; overlay?: ReactNode }) {
+  const { width, view } = input;
+  const { u } = k;
+  const pad = 120 * u;
+  return (
+    <div style={flex({ position: "relative", width, height })}>
+      <Photo src={input.photo} width={width} height={height} />
+      {overlay ?? (
+        <div style={flex({ position: "absolute", left: pad, bottom: 0 })}>
+          <HeadlineTab input={input} k={k} />
+        </div>
+      )}
+      {view.branding.logoUrl ? (
+        <div style={flex({ position: "absolute", right: pad, top: 80 * u, padding: `${26 * u}px ${34 * u}px`, background: "rgba(255,255,255,0.95)", borderRadius: 18 * u })}>
+          <Logo url={view.branding.logoUrl} size={100 * u} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TitleBlock({ input, k, width, stacked }: { input: SocialRenderInput; k: FlyerKit; width: number; stacked?: boolean }) {
+  const { view, style } = input;
+  const { u, t } = k;
+  const address = clampText(view.property.address || "Your Listing", stacked ? 48 : 36);
+  const base = (stacked ? 96 : 116) * u;
+  const price = view.priceText ? (
+    <Text style={{ fontFamily: t.head, fontWeight: t.headWeight, fontSize: (stacked ? 84 : 100) * u, color: k.accent, lineHeight: 1 }}>{view.priceText}</Text>
+  ) : null;
+  return (
+    <div style={stacked ? col({ width, gap: 18 * u }) : flex({ width, justifyContent: "space-between", alignItems: "flex-end", gap: 60 * u })}>
+      <div style={col({ gap: 14 * u, ...(stacked ? {} : { flex: 1 }) })}>
+        <Text style={{ fontFamily: t.head, fontWeight: t.headWeight, fontSize: addressSize(address, base), color: k.ink, lineHeight: 1.02, letterSpacing: style === "modern" ? -2.5 * u : 0 }}>
+          {address}
+        </Text>
+        {view.property.locality ? (
+          <Text style={{ fontFamily: t.body, fontSize: 48 * u, color: k.muted, lineHeight: 1.2, letterSpacing: style === "luxury" ? 6 * u : 0, textTransform: style === "luxury" ? "uppercase" : "none" }}>
+            {clampText(view.property.locality, 48)}
+          </Text>
         ) : null}
       </div>
-      <div style={col({ flex: 1, padding: `${80 * u}px ${pad}px ${70 * u}px`, gap: 48 * u })}>
-        <div style={flex({ justifyContent: "space-between", alignItems: "flex-end", gap: 60 * u })}>
-          <div style={col({ gap: 14 * u, flex: 1 })}>
-            <Text style={{ fontFamily: t.head, fontWeight: t.headWeight, fontSize: (style === "luxury" ? 150 : 128) * u, color: light ? t.ink : t.ink, lineHeight: 1.0, letterSpacing: style === "modern" ? -3 * u : 0 }}>
-              {clampText(view.property.address || "Your Listing", 30)}
-            </Text>
-            {view.property.locality ? (
-              <Text style={{ fontFamily: t.body, fontSize: 56 * u, color: t.muted, lineHeight: 1.2, letterSpacing: style === "luxury" ? 6 * u : 0, textTransform: style === "luxury" ? "uppercase" : "none" }}>
-                {clampText(view.property.locality, 48)}
+      {stacked && price ? <div style={flex({ marginTop: 10 * u })}>{price}</div> : price}
+    </div>
+  );
+}
+
+function FactsBar({ input, k, width, height }: { input: SocialRenderInput; k: FlyerKit; width: number; height: number }) {
+  const { u, t } = k;
+  const facts = input.view.facts.slice(0, 5);
+  return (
+    <div style={flex({ width, height, borderTop: `${4 * u}px solid ${k.rule}`, borderBottom: `${4 * u}px solid ${k.rule}` })}>
+      {facts.map((f, i) => (
+        <div key={i} style={col({ flex: 1, alignItems: "center", justifyContent: "center", gap: 6 * u, borderLeft: i ? `${4 * u}px solid ${k.rule}` : "none" })}>
+          <Text style={{ fontFamily: t.head, fontWeight: t.headWeight, fontSize: 76 * u, color: k.ink, lineHeight: 1.05 }}>{f.value}</Text>
+          <Text style={{ fontFamily: t.body, fontSize: 32 * u, letterSpacing: 4 * u, textTransform: "uppercase", color: k.muted, lineHeight: 1.2 }}>{f.label}</Text>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Facts as a 2-column stat list (narrow columns). */
+function FactsList({ input, k, width }: { input: SocialRenderInput; k: FlyerKit; width: number }) {
+  const { u, t } = k;
+  const facts = input.view.facts.slice(0, 6);
+  const cellW = (width - 30 * u) / 2;
+  return (
+    <div style={flex({ width, flexWrap: "wrap", gap: 30 * u, paddingTop: 34 * u, borderTop: `${4 * u}px solid ${k.rule}` })}>
+      {facts.map((f, i) => (
+        <div key={i} style={col({ width: cellW, gap: 4 * u })}>
+          <Text style={{ fontFamily: t.head, fontWeight: t.headWeight, fontSize: 70 * u, color: k.ink, lineHeight: 1.05 }}>{f.value}</Text>
+          <Text style={{ fontFamily: t.body, fontSize: 30 * u, letterSpacing: 4 * u, textTransform: "uppercase", color: k.muted, lineHeight: 1.2 }}>{f.label}</Text>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Description + highlights, trimmed to fit `width` × `height`. */
+function FlyerText({ input, k, width, height, stacked }: { input: SocialRenderInput; k: FlyerKit; width: number; height: number; stacked?: boolean }) {
+  const { view, style } = input;
+  const cfg = input.flyer ?? DEFAULT_FLYER;
+  const { u, t } = k;
+  const fs = 40 * u;
+  const rowH = fs * 1.35 + 20 * u;
+  const desc = cfg.showDescription ? view.property.description.trim() : "";
+  const allHighlights = cfg.showHighlights ? view.property.highlights.map((h) => h.trim()).filter(Boolean) : [];
+  if (!desc && !allHighlights.length) return null;
+  const gap = 80 * u;
+  const both = Boolean(desc && allHighlights.length);
+  const descW = both && !stacked ? (width - gap) * 0.56 : width;
+  const hiW = both && !stacked ? width - gap - descW : width;
+  let descH = height;
+  let hiH = height;
+  if (both && stacked) {
+    hiH = Math.min(height * 0.45, rowH * Math.min(allHighlights.length, 5) + 50 * u);
+    descH = height - hiH - 40 * u;
+  }
+  const maxHi = Math.max(0, Math.floor((hiH - 50 * u) / rowH));
+  const highlights = allHighlights.slice(0, maxHi).map((h) => clampText(h, Math.floor(hiW / (fs * 0.52)) - 4));
+  const descText = desc ? clampText(desc, textBudget(descW, descH, fs)) : "";
+  return (
+    <div style={stacked ? col({ width, height, gap: 40 * u }) : flex({ width, height, gap })}>
+      {descText ? (
+        <div style={col({ width: descW, height: descH, overflow: "hidden" })}>
+          <Text style={{ fontFamily: t.body, fontSize: fs, color: k.light ? "#374151" : k.muted, lineHeight: 1.5 }}>{descText}</Text>
+        </div>
+      ) : null}
+      {highlights.length ? (
+        <div style={col({ width: hiW, height: hiH, gap: 20 * u, overflow: "hidden" })}>
+          <Text style={{ fontFamily: t.body, fontWeight: 700, fontSize: 30 * u, letterSpacing: 6 * u, textTransform: "uppercase", color: k.accent, lineHeight: 1, marginBottom: 10 * u }}>
+            Highlights
+          </Text>
+          {highlights.map((h, i) => (
+            <div key={i} style={flex({ alignItems: "center", gap: 24 * u })}>
+              <div style={flex({ width: 16 * u, height: 16 * u, flexShrink: 0, borderRadius: style === "luxury" ? 0 : 8 * u, background: k.accent, ...(style === "luxury" ? { transform: "rotate(45deg)" } : {}) })} />
+              <Text style={{ fontFamily: t.body, fontSize: fs, color: k.ink, lineHeight: 1.35 }}>{h}</Text>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function flyerFooterHeight(input: SocialRenderInput): number {
+  const cfg = input.flyer ?? DEFAULT_FLYER;
+  const agent = input.view.showAgent && cfg.showAgent;
+  if (agent || input.qr) return 400;
+  return input.view.photographerCredit && input.view.businessName ? 130 : 0;
+}
+
+function FlyerFooter({ input, k, height }: { input: SocialRenderInput; k: FlyerKit; height: number }) {
+  const { view, width } = input;
+  const cfg = input.flyer ?? DEFAULT_FLYER;
+  const { u, t } = k;
+  if (!height) return null;
+  const pad = 120 * u;
+  const agent = view.showAgent && cfg.showAgent;
+  const ink = k.light ? k.ink : "#FFFFFF";
+  const muted = k.light ? k.muted : "rgba(255,255,255,0.72)";
+  const credit = view.photographerCredit && view.businessName ? `Photography by ${clampText(view.businessName, 40)}` : null;
+  const contact = [view.agent.phone, view.agent.email].filter(Boolean);
+  const qrSize = 260 * u;
+  return (
+    <div style={flex({ width, height, background: k.bandBg, padding: `0 ${pad}px`, alignItems: "center", justifyContent: "space-between", gap: 60 * u })}>
+      {agent ? (
+        <div style={flex({ alignItems: "center", gap: 50 * u, flex: 1 })}>
+          {view.agent.headshotUrl ? (
+            <Photo src={view.agent.headshotUrl} width={230 * u} height={230 * u} radius={k.t.radius === 0 && input.style === "luxury" ? 0 : 115 * u} style={{ border: `${6 * u}px solid ${k.light ? "#FFFFFF" : k.accent}` }} />
+          ) : null}
+          <div style={col({ gap: 10 * u, flex: 1 })}>
+            {view.agent.name ? <Text style={{ fontFamily: t.head, fontWeight: t.headWeight, fontSize: 68 * u, color: ink, lineHeight: 1.05 }}>{clampText(view.agent.name, 34)}</Text> : null}
+            {view.agent.title || view.agent.brokerage ? (
+              <Text style={{ fontFamily: t.body, fontSize: 38 * u, color: muted, lineHeight: 1.25 }}>{clampText([view.agent.title, view.agent.brokerage].filter(Boolean).join("  ·  "), 60)}</Text>
+            ) : null}
+            {contact.length ? (
+              <Text style={{ fontFamily: t.body, fontWeight: 600, fontSize: 40 * u, color: ink, lineHeight: 1.3, marginTop: 6 * u }}>{clampText(contact.join("   ·   "), 64)}</Text>
+            ) : null}
+            {view.agent.website || view.agent.license ? (
+              <Text style={{ fontFamily: t.body, fontSize: 32 * u, color: muted, lineHeight: 1.3 }}>
+                {clampText([view.agent.website, view.agent.license ? `Lic. ${view.agent.license}` : ""].filter(Boolean).join("  ·  "), 72)}
               </Text>
             ) : null}
           </div>
-          {view.priceText ? (
-            <Text style={{ fontFamily: t.head, fontWeight: t.headWeight, fontSize: 112 * u, color: accent, lineHeight: 1 }}>{view.priceText}</Text>
-          ) : null}
         </div>
-        {view.facts.length ? (
-          <div style={flex({ gap: 0, borderTop: `${4 * u}px solid ${light ? "#E5E7EB" : "rgba(255,255,255,0.18)"}`, borderBottom: `${4 * u}px solid ${light ? "#E5E7EB" : "rgba(255,255,255,0.18)"}` })}>
-            {view.facts.slice(0, 5).map((f, i) => (
-              <div key={i} style={col({ flex: 1, alignItems: "center", padding: `${34 * u}px 0`, borderLeft: i ? `${4 * u}px solid ${light ? "#E5E7EB" : "rgba(255,255,255,0.18)"}` : "none" })}>
-                <Text style={{ fontFamily: t.head, fontWeight: t.headWeight, fontSize: 84 * u, color: t.ink, lineHeight: 1.05 }}>{f.value}</Text>
-                <Text style={{ fontFamily: t.body, fontSize: 38 * u, letterSpacing: 4 * u, textTransform: "uppercase", color: t.muted, lineHeight: 1.2 }}>{f.label}</Text>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {thumbs.length ? (
-          <div style={flex({ gap })}>
-            {thumbs.map((src, i) => (
-              <Photo key={i} src={src} width={thumbW} height={thumbH} radius={style === "coastal" ? 28 * u : style === "modern" ? 16 * u : 0} />
-            ))}
-          </div>
-        ) : null}
-        <div style={flex({ gap: 80 * u, flex: 1 })}>
-          {desc ? (
-            <Text style={{ flex: 1.4, fontFamily: t.body, fontSize: 44 * u, color: light ? "#374151" : t.muted, lineHeight: 1.5 }}>{desc}</Text>
+      ) : (
+        <div style={col({ gap: 12 * u, flex: 1 })}>
+          {input.qr ? (
+            <Text style={{ fontFamily: t.head, fontWeight: t.headWeight, fontSize: 64 * u, color: ink, lineHeight: 1.1 }}>See every photo online</Text>
           ) : null}
-          {highlights.length ? (
-            <div style={col({ flex: 1, gap: 22 * u })}>
-              {highlights.map((h, i) => (
-                <div key={i} style={flex({ alignItems: "center", gap: 24 * u })}>
-                  <div style={flex({ width: 18 * u, height: 18 * u, borderRadius: style === "luxury" ? 0 : 9 * u, background: accent, ...(style === "luxury" ? { transform: "rotate(45deg)" } : {}) })} />
-                  <Text style={{ fontFamily: t.body, fontSize: 42 * u, color: t.ink, lineHeight: 1.3 }}>{h}</Text>
-                </div>
-              ))}
+          {input.qr && input.websiteUrl ? (
+            <Text style={{ fontFamily: t.body, fontSize: 36 * u, color: muted, lineHeight: 1.3 }}>{clampText(input.websiteUrl.replace(/^https?:\/\//, ""), 60)}</Text>
+          ) : null}
+          {credit && !input.qr ? <Text style={{ fontFamily: t.body, fontSize: 32 * u, color: muted, lineHeight: 1.2 }}>{credit}</Text> : null}
+        </div>
+      )}
+      <div style={flex({ alignItems: "center", gap: 50 * u })}>
+        {agent && (view.agent.brokerageLogoUrl || credit) ? (
+          <div style={col({ alignItems: "flex-end", justifyContent: "center", gap: 18 * u })}>
+            {view.agent.brokerageLogoUrl ? <Logo url={view.agent.brokerageLogoUrl} size={120 * u} /> : null}
+            {credit ? <Text style={{ fontFamily: t.body, fontSize: 28 * u, color: muted, lineHeight: 1.2 }}>{credit}</Text> : null}
+          </div>
+        ) : !agent && credit && input.qr ? (
+          <Text style={{ fontFamily: t.body, fontSize: 28 * u, color: muted, lineHeight: 1.2 }}>{credit}</Text>
+        ) : null}
+        {input.qr ? (
+          <div style={col({ alignItems: "center", gap: 12 * u })}>
+            <div style={flex({ padding: 14 * u, background: "#FFFFFF", borderRadius: 12 * u })}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={input.qr} alt="" width={qrSize} height={qrSize} style={{ width: qrSize, height: qrSize }} />
             </div>
-          ) : null}
-        </div>
-      </div>
-      <div style={flex({ justifyContent: "space-between", alignItems: "center", padding: `${56 * u}px ${pad}px`, background: style === "modern" ? "#F1F5F9" : style === "coastal" ? "#F4EEE3" : "#141416" })}>
-        {view.showAgent ? <AgentRow view={view} t={t} u={u * 2.1} dark={!light} /> : <div style={flex({})} />}
-        <div style={col({ alignItems: "flex-end", gap: 10 * u })}>
-          {view.agent.brokerageLogoUrl && view.showAgent ? <Logo url={view.agent.brokerageLogoUrl} size={110 * u} /> : null}
-          {view.photographerCredit && view.businessName ? (
-            <Text style={{ fontFamily: t.body, fontSize: 30 * u, color: t.muted, lineHeight: 1.2 }}>{`Photography by ${clampText(view.businessName, 40)}`}</Text>
-          ) : null}
-        </div>
+            <Text style={{ fontFamily: t.body, fontWeight: 600, fontSize: 24 * u, letterSpacing: 3 * u, textTransform: "uppercase", color: muted, lineHeight: 1 }}>Scan for details</Text>
+          </div>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function hasFlyerText(input: SocialRenderInput): boolean {
+  const cfg = input.flyer ?? DEFAULT_FLYER;
+  return Boolean((cfg.showDescription && input.view.property.description.trim()) || (cfg.showHighlights && input.view.property.highlights.some((h) => h.trim())));
+}
+
+/** Classic Grid: cover photo, title, facts, a 3-column photo grid, then details. */
+function FlyerGrid(input: SocialRenderInput, k: FlyerKit) {
+  const { width, height, view } = input;
+  const { u } = k;
+  const pad = 120 * u;
+  const inner = width - pad * 2;
+  const gap = 56 * u;
+  const footH = flyerFooterHeight(input) * u;
+  const photos = input.supporting.slice(0, 6);
+  const text = hasFlyerText(input);
+  const heroH = (!photos.length ? 1400 : text ? 1000 : 1200) * u;
+  const titleH = 236 * u;
+  const factsH = view.facts.length ? 190 * u : 0;
+  const body = height - heroH - footH - 76 * u - 70 * u;
+  const blocks = [titleH, factsH, photos.length ? 1 : 0, text ? 1 : 0].filter(Boolean).length;
+  const free = body - titleH - factsH - gap * (blocks - 1);
+  const rows = Math.ceil(photos.length / 3);
+  const gridH = photos.length ? Math.min(text ? free - 300 * u : free, rows * (text ? 600 : 900) * u) : 0;
+  const textH = free - gridH;
+  return (
+    <div style={col({ width, height, background: k.pageBg })}>
+      <FlyerHero input={input} k={k} height={heroH} />
+      <div style={col({ width, height: height - heroH - footH, padding: `${76 * u}px ${pad}px ${70 * u}px`, gap, justifyContent: text ? "flex-start" : "center" })}>
+        <TitleBlock input={input} k={k} width={inner} />
+        {factsH ? <FactsBar input={input} k={k} width={inner} height={factsH} /> : null}
+        {photos.length ? <PhotoGrid srcs={photos} width={inner} height={gridH} cols={Math.min(3, photos.length === 4 ? 2 : 3)} gap={28 * u} radius={k.radius} /> : null}
+        {text && textH > 120 * u ? <FlyerText input={input} k={k} width={inner} height={textH} /> : null}
+      </div>
+      <FlyerFooter input={input} k={k} height={footH} />
+    </div>
+  );
+}
+
+/** Large + Grid: cover photo, details column beside a large photo and a 2 × 2 grid. */
+function FlyerShowcase(input: SocialRenderInput, k: FlyerKit) {
+  const { width, height } = input;
+  const { u } = k;
+  const pad = 120 * u;
+  const inner = width - pad * 2;
+  const footH = flyerFooterHeight(input) * u;
+  const photos = input.supporting.slice(0, 5);
+  // Nothing to put in the details column: the classic grid uses the page better.
+  if (!input.view.facts.length && !hasFlyerText(input)) return FlyerGrid({ ...input, supporting: photos }, k);
+  const heroH = 1180 * u;
+  const bodyH = height - heroH - footH - 80 * u - 76 * u;
+  const colGap = 80 * u;
+  const infoW = photos.length ? 960 * u : inner;
+  const photoW = inner - infoW - colGap;
+  const g = 28 * u;
+  const largeH = photos.length > 1 ? Math.round(bodyH * 0.5) : bodyH;
+  const facts = input.view.facts.length;
+  const factsH = facts ? (Math.ceil(Math.min(facts, 6) / 2) * 140 + 34) * u : 0;
+  const v = input.view;
+  const addrLines = clampText(v.property.address || "Your Listing", 48).length > 17 ? 2 : 1;
+  const titleH = (addrLines * 104 + (v.property.locality ? 72 : 0) + (v.priceText ? 112 : 0) + 10) * u;
+  const textH = bodyH - titleH - factsH - 50 * u * (facts ? 2 : 1);
+  return (
+    <div style={col({ width, height, background: k.pageBg })}>
+      <FlyerHero input={input} k={k} height={heroH} />
+      <div style={flex({ width, height: height - heroH - footH, padding: `${80 * u}px ${pad}px ${76 * u}px`, gap: colGap })}>
+        <div style={col({ width: infoW, height: bodyH, gap: 50 * u })}>
+          <div style={col({ height: titleH, justifyContent: "flex-start" })}>
+            <TitleBlock input={input} k={k} width={infoW} stacked />
+          </div>
+          {facts ? <FactsList input={input} k={k} width={infoW} /> : null}
+          {textH > 160 * u ? <FlyerText input={input} k={k} width={infoW} height={textH} stacked /> : null}
+        </div>
+        {photos.length ? (
+          <div style={col({ width: photoW, height: bodyH, gap: g })}>
+            <Photo src={photos[0]!} width={photoW} height={largeH} radius={k.radius} />
+            {photos.length > 1 ? <PhotoGrid srcs={photos.slice(1)} width={photoW} height={bodyH - largeH - g} cols={2} gap={g} radius={k.radius} /> : null}
+          </div>
+        ) : null}
+      </div>
+      <FlyerFooter input={input} k={k} height={footH} />
+    </div>
+  );
+}
+
+/** Gallery: title over the cover photo, facts, then a 4-column photo wall. */
+function FlyerGallery(input: SocialRenderInput, k: FlyerKit) {
+  const { width, height, view, style } = input;
+  const { u, t } = k;
+  const pad = 120 * u;
+  const inner = width - pad * 2;
+  const gap = 50 * u;
+  const footH = flyerFooterHeight(input) * u;
+  const photos = input.supporting.slice(0, 8);
+  const text = hasFlyerText(input);
+  const heroH = (text ? 1260 : 1400) * u;
+  const factsH = view.facts.length ? 180 * u : 0;
+  const body = height - heroH - footH - 64 * u - 64 * u;
+  const blocks = [factsH, photos.length ? 1 : 0, text ? 1 : 0].filter(Boolean).length;
+  const free = body - factsH - gap * Math.max(0, blocks - 1);
+  const cols = photos.length <= 4 ? Math.max(1, photos.length) : 4;
+  const rows = Math.ceil(photos.length / cols);
+  const gridH = photos.length ? Math.min(text ? free - 240 * u : free, rows * (text ? 640 : 820) * u) : 0;
+  const textH = free - gridH;
+  const address = clampText(view.property.address || "Your Listing", 40);
+  const overlay = (
+    <div
+      style={col({
+        position: "absolute",
+        left: 0,
+        bottom: 0,
+        width,
+        padding: `${200 * u}px ${pad}px ${80 * u}px`,
+        gap: 16 * u,
+        backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.78) 100%)",
+      })}
+    >
+      <Text style={{ fontFamily: t.body, fontWeight: 700, fontSize: 36 * u, letterSpacing: 9 * u, textTransform: "uppercase", color: style === "modern" ? "#FFFFFF" : t.rule, lineHeight: 1 }}>{input.headline}</Text>
+      <div style={flex({ justifyContent: "space-between", alignItems: "flex-end", gap: 60 * u })}>
+        <div style={col({ gap: 12 * u, flex: 1 })}>
+          <Text style={{ fontFamily: t.head, fontWeight: t.headWeight, fontSize: addressSize(address, 120 * u), color: "#FFFFFF", lineHeight: 1.02 }}>{address}</Text>
+          {view.property.locality ? <Text style={{ fontFamily: t.body, fontSize: 46 * u, color: "rgba(255,255,255,0.85)", lineHeight: 1.2 }}>{clampText(view.property.locality, 48)}</Text> : null}
+        </div>
+        {view.priceText ? <Text style={{ fontFamily: t.head, fontWeight: t.headWeight, fontSize: 100 * u, color: "#FFFFFF", lineHeight: 1 }}>{view.priceText}</Text> : null}
+      </div>
+    </div>
+  );
+  return (
+    <div style={col({ width, height, background: k.pageBg })}>
+      <FlyerHero input={input} k={k} height={heroH} overlay={overlay} />
+      <div style={col({ width, height: height - heroH - footH, padding: `${64 * u}px ${pad}px ${64 * u}px`, gap, justifyContent: text ? "flex-start" : "center" })}>
+        {factsH ? <FactsBar input={input} k={k} width={inner} height={factsH} /> : null}
+        {photos.length ? <PhotoGrid srcs={photos} width={inner} height={gridH} cols={cols} gap={24 * u} radius={k.radius} /> : null}
+        {text && textH > 120 * u ? <FlyerText input={input} k={k} width={inner} height={textH} /> : null}
+      </div>
+      <FlyerFooter input={input} k={k} height={footH} />
+    </div>
+  );
+}
+
+function Flyer(input: SocialRenderInput, t: Theme, u: number) {
+  const k = flyerKit(input, t, u);
+  const layout = (input.flyer ?? DEFAULT_FLYER).layout;
+  if (layout === "showcase") return FlyerShowcase(input, k);
+  if (layout === "gallery") return FlyerGallery(input, k);
+  return FlyerGrid(input, k);
 }
 
 // ---------------------------------------------------------------------------

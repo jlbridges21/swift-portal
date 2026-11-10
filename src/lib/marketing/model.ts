@@ -158,6 +158,36 @@ export type SocialAssetKey = SquareKey | StoryKey | "flyer";
 export type CarouselSlideKind = "cover" | "photo" | "highlights" | "agent";
 export type CarouselSlide = { kind: CarouselSlideKind; mediaId: string | null; caption: string };
 
+export type FlyerLayout = "grid" | "showcase" | "gallery";
+
+/** Flyer photo arrangements. `photos` = supporting photos the layout shows (besides the cover). */
+export const FLYER_LAYOUTS: { key: FlyerLayout; label: string; blurb: string; photos: number }[] = [
+  { key: "grid", label: "Classic Grid", blurb: "Cover photo with a grid of 6", photos: 6 },
+  { key: "showcase", label: "Large + Grid", blurb: "Cover, then 5 photos beside the details", photos: 5 },
+  { key: "gallery", label: "Gallery", blurb: "Photo-forward with 8 photos", photos: 8 },
+];
+export const MAX_FLYER_PHOTOS = 8;
+
+export interface FlyerConfig {
+  layout: FlyerLayout;
+  /** Supporting photos in order; null = automatic picks. */
+  photoIds: string[] | null;
+  showAgent: boolean;
+  showHighlights: boolean;
+  showDescription: boolean;
+  /** QR code to the property website (only drawn while the website is published). */
+  showQr: boolean;
+}
+
+export const DEFAULT_FLYER: FlyerConfig = {
+  layout: "grid",
+  photoIds: null,
+  showAgent: true,
+  showHighlights: true,
+  showDescription: true,
+  showQr: true,
+};
+
 export interface SocialConfig {
   style: DesignStyle;
   /** Assets the user switched off. */
@@ -169,6 +199,7 @@ export interface SocialConfig {
   /** null = automatic carousel. */
   carousel: CarouselSlide[] | null;
   includeCarousel: boolean;
+  flyer: FlyerConfig;
 }
 
 export interface MarketingContent {
@@ -267,6 +298,7 @@ export function mergeContent(defaults: MarketingContent, overrides: MarketingOve
       ...(o.social ?? {}),
       featured: { ...defaults.social.featured, ...(o.social?.featured ?? {}) },
       headlines: { ...defaults.social.headlines, ...(o.social?.headlines ?? {}) },
+      flyer: { ...DEFAULT_FLYER, ...(defaults.social.flyer ?? {}), ...(o.social?.flyer ?? {}) },
     },
   };
 }
@@ -484,6 +516,16 @@ export function sanitizeOverrides(raw: unknown, uploadPrefix: string): Marketing
         .slice(0, MAX_CAROUSEL_SLIDES);
     }
     if (typeof s.includeCarousel === "boolean") o.includeCarousel = s.includeCarousel;
+    if (s.flyer && typeof s.flyer === "object") {
+      const f = s.flyer as Record<string, unknown>;
+      const fl: FlyerConfig = { ...DEFAULT_FLYER };
+      if (FLYER_LAYOUTS.some((l) => l.key === f.layout)) fl.layout = f.layout as FlyerLayout;
+      fl.photoIds = Array.isArray(f.photoIds) ? Array.from(new Set(f.photoIds.filter(isUuid))).slice(0, MAX_FLYER_PHOTOS) : null;
+      for (const k of ["showAgent", "showHighlights", "showDescription", "showQr"] as const) {
+        if (typeof f[k] === "boolean") fl[k] = f[k] as boolean;
+      }
+      o.flyer = fl;
+    }
     out.social = o;
   }
 

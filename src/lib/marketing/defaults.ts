@@ -6,6 +6,7 @@
  * branding. Unknown facts stay empty and their template sections hide themselves.
  */
 import {
+  DEFAULT_FLYER,
   DEFAULT_SECTION_ORDER,
   type AgentInfo,
   type Branding,
@@ -159,6 +160,7 @@ export function buildDefaults(input: DefaultsInput): MarketingContent {
       headlines: {},
       carousel: null,
       includeCarousel: true,
+      flyer: { ...DEFAULT_FLYER },
     },
   };
 }

@@ -4,15 +4,17 @@
  */
 import { FORMAT_SIZE, SOCIAL_ASSETS, type MarketingContent, type MediaIndexItem, type SocialAssetKey } from "@/lib/marketing/model";
 import {
+  flyerConfig,
   resolveCarousel,
+  resolveFlyerPhotoIds,
   resolveHeroId,
   socialAssetStatuses,
   socialFeaturedId,
   socialHeadline,
-  supportingPhotoIds,
   type ListingView,
   type SocialAssetStatus,
 } from "@/lib/marketing/view-model";
+import { qrSvgDataUri } from "@/lib/marketing/qr";
 import type { SocialRenderInput } from "@/components/marketing/social/templates";
 
 export type SocialItem = {
@@ -45,6 +47,8 @@ export function buildSocialItems(args: {
   watermark?: boolean;
   /** Include disabled/unavailable assets (editor shows them greyed out). */
   includeAll?: boolean;
+  /** Public property website URL while it is published (flyer QR code); null hides the QR. */
+  websiteUrl?: string | null;
 }): SocialItem[] {
   const { content, media, view, photoUrl } = args;
   const heroId = resolveHeroId(content, media, args.coverId);
@@ -53,6 +57,9 @@ export function buildSocialItems(args: {
   const base = socialFileBase(content.property.address);
   const style = content.social.style;
   const items: SocialItem[] = [];
+  const flyer = flyerConfig(content);
+  const flyerPhotos = resolveFlyerPhotoIds(content, media, args.coverId);
+  const qr = flyer.showQr && args.websiteUrl ? qrSvgDataUri(args.websiteUrl) : null;
 
   for (const a of SOCIAL_ASSETS) {
     const status = statuses.get(a.key)!;
@@ -74,7 +81,8 @@ export function buildSocialItems(args: {
         view,
         headline: socialHeadline(a.key, content),
         photo: photoUrl(featured),
-        supporting: a.format === "flyer" ? supportingPhotoIds(media, featured, 3).map((id) => photoUrl(id)).filter((u): u is string => Boolean(u)) : [],
+        supporting: a.format === "flyer" ? flyerPhotos.map((id) => photoUrl(id)).filter((u): u is string => Boolean(u)) : [],
+        ...(a.format === "flyer" ? { flyer, qr, websiteUrl: args.websiteUrl ?? null } : {}),
         watermark: args.watermark,
       },
     });

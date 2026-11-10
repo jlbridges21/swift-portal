@@ -17,9 +17,11 @@ import sharp from "sharp";
 import { buildDefaults, classifyPhoto, draftDescription, slugCandidates, slugifyAddress } from "@/lib/marketing/defaults";
 import { mergeContent, sanitizeOverrides, FORMAT_SIZE, type MediaIndexItem, type MarketingContent } from "@/lib/marketing/model";
 import { mergeMarketingKitSettings, purchasePriceCents, resolveAccess, resolveOffer, sanitizeOfferOverrides, type PurchaseRow } from "@/lib/marketing/offers";
-import { buildListingView, type UrlResolver } from "@/lib/marketing/view-model";
+import { buildListingView, resolveFlyerPhotoIds, socialFeaturedId, type UrlResolver } from "@/lib/marketing/view-model";
+import { qrSvgDataUri } from "@/lib/marketing/qr";
+import { DEFAULT_FLYER, FLYER_LAYOUTS } from "@/lib/marketing/model";
 import { buildSocialItems } from "@/lib/marketing/social-inputs";
-import { renderItem } from "@/lib/marketing/render";
+import { renderFlyerPdf, renderItem, renderPng } from "@/lib/marketing/render";
 import { listingHostRewrite } from "@/lib/host-resolution";
 import { suggestListingDomain } from "@/lib/marketing/listing-url";
 
@@ -209,6 +211,67 @@ ok("missing price hides price; unbranded hides agent", () => {
 });
 
 // ---------------------------------------------------------------------------
+console.log("Flyer options");
+ok("flyer settings: sanitized, unknown layouts and non-ids dropped, capped at 8 photos", () => {
+  const o = sanitizeOverrides({ social: { flyer: { layout: "nope", photoIds: ["x", ids[1], ids[1], ...ids], showQr: false, showAgent: "yes" } } }, "biz/marketing/p/");
+  assert.equal(o.social?.flyer?.layout, "grid");
+  assert.deepEqual(o.social?.flyer?.photoIds, [ids[1], ids[0], ids[2], ids[3], ids[4], ids[5]]);
+  assert.equal(o.social?.flyer?.showQr, false);
+  assert.equal(o.social?.flyer?.showAgent, true);
+  const merged = mergeContent(defaults, {});
+  assert.deepEqual(merged.social.flyer, DEFAULT_FLYER);
+});
+ok("flyer photos: layout capacity, cover never repeated, custom picks honored", () => {
+  const c = mergeContent(defaults, {});
+  const cover = socialFeaturedId("flyer", c, media, null);
+  const auto = resolveFlyerPhotoIds(c, media, null);
+  assert.equal(auto.includes(cover!), false);
+  assert.equal(auto.includes(ids[5]!), false, "floor plan is not a flyer photo");
+  const custom = mergeContent(defaults, { social: { flyer: { ...DEFAULT_FLYER, layout: "showcase", photoIds: [cover!, ids[3]!, "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", ids[2]!] } } });
+  assert.deepEqual(resolveFlyerPhotoIds(custom, media, null), [ids[3], ids[2]]);
+});
+ok("QR code renders as an SVG data URI", () => {
+  const q = qrSvgDataUri("https://listings.example.com/123-main-st");
+  assert.ok(q?.startsWith("data:image/svg+xml;base64,"));
+  assert.equal(qrSvgDataUri(""), null);
+});
+
+// ---------------------------------------------------------------------------
+async function flyerRenders() {
+  console.log("Flyer layouts (every style × layout, full and sparse details)");
+  const many = Array.from({ length: 12 }, (_, i) => `cccccccc-cccc-cccc-cccc-0000000000${String(i).padStart(2, "0")}`);
+  const manyMedia: MediaIndexItem[] = many.map((id, i) => ({ ...media[0]!, id, name: i === 0 ? "front-exterior.jpg" : `photo-${i}.jpg`, category: i === 0 ? "exterior" : null }));
+  const uri = (id: string | null) => (id ? dataUris[(many.indexOf(id) + 5) % 5]! : null);
+  const mUrls: UrlResolver = { image: (ref) => (ref.kind === "media" ? uri(ref.id) : null), video: () => null, poster: () => null };
+  const variants = {
+    full: {},
+    sparse: { property: { price: null, highlights: [], description: "", beds: null, baths: null, sqft: null, yearBuilt: null }, branding: { unbranded: true } },
+  } as const;
+  for (const style of ["modern", "luxury", "coastal"] as const) {
+    for (const layout of FLYER_LAYOUTS) {
+      for (const [variant, extra] of Object.entries(variants)) {
+        const base = mergeContent(content, extra as never);
+        const c = { ...base, property: { ...base.property, description: variant === "full" ? "Light-filled modern home with sweeping Hill Country views, an open kitchen made for gathering, and a resort-style backyard with pool and outdoor kitchen. The primary suite has a spa bath and private patio. Walk to parks, trails and the best local coffee." : "" }, social: { ...base.social, style, flyer: { ...DEFAULT_FLYER, layout: layout.key } } };
+        const v = buildListingView({ content: c, media: manyMedia, tours: [], coverId: null, businessName: "Lens & Light Media", urls: mUrls });
+        const items = buildSocialItems({ content: c, media: manyMedia, coverId: null, view: v, photoUrl: uri, websiteUrl: "https://listings.example.com/123-main-st" });
+        const flyer = items.find((i) => i.id === "flyer")!;
+        assert.equal(flyer.input.supporting.length, layout.photos, `${layout.key} photo count`);
+        assert.ok(flyer.input.qr, "QR present while the website is published");
+        const png = await renderPng(flyer);
+        const meta = await sharp(png).metadata();
+        assert.deepEqual([meta.width, meta.height], [2550, 3300]);
+        writeFileSync(join(out, `flyer-${style}-${layout.key}-${variant}.png`), await sharp(png).resize(850).png().toBuffer());
+        const pdf = await PDFDocument.load(await renderFlyerPdf(flyer, "Verify"));
+        assert.equal(pdf.getPageCount(), 1);
+        process.stdout.write(`    ${style} ${layout.key} ${variant}\n`);
+      }
+    }
+  }
+  passed++;
+  console.log("  ✓ 18 flyer variants render at Letter size, one page each");
+}
+
+// ---------------------------------------------------------------------------
 async function renders() {
   console.log("Exports (same renderer as production)");
   const styles = ["modern", "luxury", "coastal"] as const;
@@ -239,6 +302,7 @@ async function renders() {
 }
 
 renders()
+  .then(flyerRenders)
   .then(() => {
     console.log(`\nAll ${passed} checks passed. Renders in ${out}`);
   })
