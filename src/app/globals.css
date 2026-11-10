@@ -263,8 +263,8 @@ html[data-keyboard="open"] .admin-mobile-pwa-nav {
 
      --sat / --sal / --sar   top / left / right insets, non-zero only in the installed app
      body                     padded by them, so normal-flow content starts in the safe area
-     body::before             solid strip behind a translucent status bar, so content scrolling
-                              up never sits under the status text
+     body::before             strip behind a translucent status bar, in the header color
+                              (--color-card), so content never scrolls under the status text
      .app-sticky-top          sticky headers stick just below the status bar
      --app-height             viewport height left for full-screen layouts
 
@@ -306,14 +306,31 @@ body::before {
   position: fixed;
   inset: 0 0 auto 0;
   height: var(--sat);
-  /* Only ever non-zero under a translucent (white-text) status bar, so it is dark. */
-  background: #0b0f17;
+  /* Same solid surface as the app header, so status bar + header read as one bar. */
+  background: var(--color-card);
   z-index: 2147483000;
   pointer-events: none;
 }
 
 .app-sticky-top {
   top: var(--sat);
+}
+
+/* Installed app: the header is one solid surface continuous with the status bar. No
+   translucency or blur (iOS would show content and its own tint through it as a gray band). */
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  header.app-sticky-top {
+    background-color: var(--color-card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+}
+html[data-standalone] header.app-sticky-top {
+  background-color: var(--color-card);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
 /* Side insets for elements in normal flow: the browser's notch inset, minus what the installed

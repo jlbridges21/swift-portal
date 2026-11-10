@@ -19,6 +19,11 @@ import {
 } from "@/lib/landing-content";
 import { onboardingWebsitePayload } from "@/lib/website/onboarding";
 
+import { tenantAppViewport } from "@/lib/pwa/viewport";
+
+/** Installed app: status bar matches the header surface. */
+export const generateViewport = tenantAppViewport;
+
 export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {

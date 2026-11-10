@@ -4,6 +4,11 @@ import { getTenantContext } from "@/lib/tenant";
 import { Button } from "@/components/ui/button";
 import { staffHasAnyArea, staffHomePath } from "@/lib/staff-access";
 
+import { tenantAppViewport } from "@/lib/pwa/viewport";
+
+/** Installed app: status bar matches the header surface. */
+export const generateViewport = tenantAppViewport;
+
 /**
  * Staff home — redirect to first permitted area, or explanatory empty state
  * when the member has zero area permissions.

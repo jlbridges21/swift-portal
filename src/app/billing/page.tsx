@@ -43,6 +43,11 @@ import { subscriptionIdForMode } from "@/lib/stripe-billing";
 import { adminHomePath } from "@/lib/onboarding";
 import { assertActivePlanKey, resolvePlanTrialDays } from "@/lib/entitlements";
 
+import { tenantAppViewport } from "@/lib/pwa/viewport";
+
+/** Installed app: status bar matches the header surface. */
+export const generateViewport = tenantAppViewport;
+
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {

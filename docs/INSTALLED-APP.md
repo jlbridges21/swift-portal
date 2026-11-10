@@ -41,8 +41,8 @@ The fix is one shared system in `globals.css` that works for both kinds of insta
   (`display-mode: standalone`, plus `html[data-standalone]` as a fallback). In a browser or on
   desktop they are 0, so nothing changes there.
 - `body` is padded by them, so normal-flow content always starts in the safe area.
-- `body::before` is a dark strip exactly the status-bar height (0 on new installs), so content
-  scrolling up never sits under the white status-bar text.
+- `body::before` is a strip exactly the status-bar height (0 on new installs) in the header color
+  (`--color-card`), so content scrolling up never sits under the status text.
 - `.app-sticky-top` — sticky headers stick just below the status bar.
   `.app-sticky-below-header` — secondary sticky bars stick below the app header.
 - `--app-height` — `100dvh` minus the reserved top, for full-screen layouts (Marketing Kit,
@@ -51,6 +51,21 @@ The fix is one shared system in `globals.css` that works for both kinds of insta
 - Fixed overlays (photo editor, social preview, modals, lightboxes) pad with `env()` directly.
 
 All of it is CSS `env()`, so rotating the phone updates it without a reload.
+
+### One solid header surface
+
+The status-bar area and the app header are one solid surface: white (`--color-card`) for light
+themes, the dark card color for dark themes.
+
+- `theme-color` on app screens (admin, client dashboard, sign-in, `/app`, onboarding, billing,
+  staff) is the business's header color (`appChromeThemeColor` / `tenantAppViewport` in
+  `src/lib/pwa/`), not the gray page background. On `default`-style installs iOS paints its
+  opaque status bar with this color.
+- In the installed app the header (`header.app-sticky-top`) is solid: no 90% opacity, no backdrop
+  blur, no shadow, just the 1px bottom border. Browsers and desktop keep the frosted header.
+- Older installs made with `black-translucent` keep white status-bar text that iOS chose at
+  install time; on a white header the clock is hard to read. Remove and re-add the app to get the
+  native opaque bar with dark text.
 
 ## Icons
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { deriveBrandTheme, parseSurfaceMode } from "@/lib/brand-color";
 
 /** Business-branded Home Screen icon (see src/app/pwa/icon/route.ts). Host-aware: each portal gets its own. */
 export const PWA_ICON_PATH = "/pwa/icon";
@@ -30,4 +31,18 @@ export function pwaAppleMetadata(name: string): Pick<Metadata, "appleWebApp"> {
 
 export function pwaAppleIcon(version?: string) {
   return [{ url: pwaIconUrl(180, { version }), sizes: "180x180", type: "image/png" }];
+}
+
+/**
+ * The installed app's status-bar color: exactly the app header's surface (`--color-card` for this
+ * business's theme), so the status bar and header read as one solid surface — never the gray page
+ * background behind it.
+ */
+export function appChromeThemeColor(business: { brandPrimaryColor: string; brandAccentColor: string; surfaceMode?: string }): {
+  themeColor: string;
+  colorScheme: "light" | "dark";
+} {
+  const mode = parseSurfaceMode(business.surfaceMode);
+  const card = deriveBrandTheme(business.brandPrimaryColor, business.brandAccentColor, mode).card;
+  return { themeColor: card, colorScheme: mode === "dark" ? "dark" : "light" };
 }

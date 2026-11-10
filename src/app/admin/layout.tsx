@@ -21,6 +21,7 @@ import { assertActivePlanKey, resolvePlanTrialDays } from "@/lib/entitlements";
 import { offerDisplayForBusiness } from "@/lib/intro-offer-server";
 import { introOfferSavingsLabel, requestNowMs, type OfferDisplay } from "@/lib/intro-offer";
 import type { Metadata, Viewport } from "next";
+import { appChromeThemeColor } from "@/lib/pwa/metadata";
 
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await getTenantContext();
@@ -33,11 +34,8 @@ export async function generateViewport(): Promise<Viewport> {
   const tenant = await getTenantContext();
   if (!tenant) return {};
   const settings = await getAppSettings(tenant.businessId);
-  const dark = parseSurfaceMode(settings.business.surfaceMode) === "dark";
-  return {
-    themeColor: dark ? "#14181F" : "#F8FAFC",
-    colorScheme: dark ? "dark" : "light",
-  };
+  // Status bar = app header surface (one continuous solid top), not the gray page background.
+  return appChromeThemeColor(settings.business);
 }
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
