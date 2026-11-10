@@ -153,10 +153,33 @@ function detailLine(input: SocialRenderInput): string {
   return view.priceText ?? "";
 }
 
-function Logo({ url, size }: { url: string | null; size: number }) {
+/** Transparent margin (× logo height) the export adds around logos so shadows aren't clipped. */
+export const LOGO_PAD = 0.3;
+
+/**
+ * Soft shadow that follows the logo's visible (non-transparent) edges, scaled to its size:
+ * a tight contact shadow for definition plus a softer ambient one. It reaches about 0.23 × the
+ * logo height, inside the LOGO_PAD margin.
+ */
+function logoShadow(size: number): string {
+  const px = (f: number) => `${Math.max(0.5, Math.round(f * size * 10) / 10)}px`;
+  return `drop-shadow(0px ${px(0.02)} ${px(0.04)} rgba(0,0,0,0.35)) drop-shadow(0px ${px(0.05)} ${px(0.12)} rgba(0,0,0,0.22))`;
+}
+
+/**
+ * A logo exactly as uploaded — transparent areas stay transparent, no box behind it — with a
+ * shape-following drop shadow. Browsers draw the shadow beyond the image; the export renderer
+ * clips filters to the image box, so exports use a padded copy and cancel the padding with a
+ * negative margin: same size and position in both.
+ */
+function Logo({ url, size, view }: { url: string | null; size: number; view: ListingView }) {
   if (!url) return null;
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={url} alt="" height={size} style={{ height: size, maxWidth: size * 4, objectFit: "contain" }} />;
+  const pad = view.paddedLogos?.includes(url) ? LOGO_PAD * size : 0;
+  const h = size + pad * 2;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={url} alt="" height={h} style={{ height: h, maxWidth: size * 4 + pad * 2, objectFit: "contain", margin: -pad, filter: logoShadow(size) }} />
+  );
 }
 
 function AgentRow({ view, t, u, dark }: { view: ListingView; t: Theme; u: number; dark: boolean }) {
@@ -226,8 +249,8 @@ function ModernFeature(input: SocialRenderInput, t: Theme, u: number) {
     <div style={flex({ position: "relative", width, height, background: t.bg })}>
       <Photo src={input.photo} width={width} height={height} style={{ position: "absolute", left: 0, top: 0 }} />
       {view.branding.logoUrl ? (
-        <div style={flex({ position: "absolute", left: 48 * u, top: (tall ? 140 : 48) * u, padding: `${18 * u}px ${24 * u}px`, background: "rgba(255,255,255,0.94)", borderRadius: 18 * u })}>
-          <Logo url={view.branding.logoUrl} size={54 * u} />
+        <div style={flex({ position: "absolute", left: 56 * u, top: (tall ? 150 : 56) * u })}>
+          <Logo url={view.branding.logoUrl} size={64 * u} view={view} />
         </div>
       ) : null}
       <div
@@ -299,7 +322,7 @@ function LuxuryFeature(input: SocialRenderInput, t: Theme, u: number) {
       <div style={flex({ position: "absolute", left: 36 * u, top: 36 * u, width: width - 72 * u, height: height - 72 * u, border: `${2 * u}px solid rgba(255,255,255,0.35)` })} />
       {view.branding.logoUrl ? (
         <div style={flex({ position: "absolute", left: 0, top: (tall ? 150 : 76) * u, width, justifyContent: "center" })}>
-          <Logo url={view.branding.logoUrl} size={64 * u} />
+          <Logo url={view.branding.logoUrl} size={64 * u} view={view} />
         </div>
       ) : null}
       <div style={col({ position: "absolute", left: 90 * u, right: 90 * u, bottom: (tall ? 260 : 96) * u, alignItems: "center", gap: 18 * u })}>
@@ -376,11 +399,11 @@ function CoastalFeature(input: SocialRenderInput, t: Theme, u: number) {
             </div>
           ) : null}
         </div>
-        {!tall && view.branding.logoUrl ? <Logo url={view.branding.logoUrl} size={84 * u} /> : null}
+        {!tall && view.branding.logoUrl ? <Logo url={view.branding.logoUrl} size={84 * u} view={view} /> : null}
       </div>
       {tall && view.branding.logoUrl ? (
         <div style={flex({ position: "absolute", top: 40 * u, left: 0, width, justifyContent: "center" })}>
-          <Logo url={view.branding.logoUrl} size={60 * u} />
+          <Logo url={view.branding.logoUrl} size={60 * u} view={view} />
         </div>
       ) : null}
     </div>
@@ -522,7 +545,7 @@ function AgentSlide(input: SocialRenderInput, t: Theme, u: number) {
       </div>
       {view.agent.brokerageLogoUrl || view.branding.logoUrl ? (
         <div style={flex({ marginTop: 34 * u })}>
-          <Logo url={view.agent.brokerageLogoUrl ?? view.branding.logoUrl} size={80 * u} />
+          <Logo url={view.agent.brokerageLogoUrl ?? view.branding.logoUrl} size={80 * u} view={view} />
         </div>
       ) : null}
       {input.slide ? <SlideCounter index={input.slide.index} total={input.slide.total} t={t} u={u} dark={style !== "coastal"} /> : null}
@@ -637,8 +660,8 @@ function FlyerHero({ input, k, height, overlay }: { input: SocialRenderInput; k:
         </div>
       )}
       {view.branding.logoUrl ? (
-        <div style={flex({ position: "absolute", right: pad, top: 80 * u, padding: `${26 * u}px ${34 * u}px`, background: "rgba(255,255,255,0.95)", borderRadius: 18 * u })}>
-          <Logo url={view.branding.logoUrl} size={100 * u} />
+        <div style={flex({ position: "absolute", right: pad, top: 100 * u })}>
+          <Logo url={view.branding.logoUrl} size={120 * u} view={view} />
         </div>
       ) : null}
     </div>
@@ -804,7 +827,7 @@ function FlyerFooter({ input, k, height }: { input: SocialRenderInput; k: FlyerK
       <div style={flex({ alignItems: "center", gap: 50 * u })}>
         {agent && (view.agent.brokerageLogoUrl || credit) ? (
           <div style={col({ alignItems: "flex-end", justifyContent: "center", gap: 18 * u })}>
-            {view.agent.brokerageLogoUrl ? <Logo url={view.agent.brokerageLogoUrl} size={120 * u} /> : null}
+            {view.agent.brokerageLogoUrl ? <Logo url={view.agent.brokerageLogoUrl} size={120 * u} view={view} /> : null}
             {credit ? <Text style={{ fontFamily: t.body, fontSize: 28 * u, color: muted, lineHeight: 1.2 }}>{credit}</Text> : null}
           </div>
         ) : !agent && credit && input.qr ? (

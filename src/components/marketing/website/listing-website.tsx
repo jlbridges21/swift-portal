@@ -484,7 +484,7 @@ function Agent({ view, skin, style, preview }: { view: ListingView; skin: Skin; 
         </div>
         {a.brokerageLogoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={a.brokerageLogoUrl} alt={a.brokerage || "Brokerage"} className="max-h-16 max-w-[180px] object-contain" />
+          <img src={a.brokerageLogoUrl} alt={a.brokerage || "Brokerage"} className="max-h-16 max-w-[180px] object-contain [filter:drop-shadow(0_1px_2px_rgba(0,0,0,0.25))_drop-shadow(0_3px_8px_rgba(0,0,0,0.12))]" />
         ) : null}
       </div>
     </section>
@@ -572,10 +572,12 @@ export function ListingWebsite({ view, preview, previewRibbon }: ListingWebsiteP
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 @3xl:px-10 @3xl:py-6">
           <div className="flex min-w-0 items-center gap-3">
             {view.branding.logoUrl ? (
-              <span className={`${style === "coastal" ? "" : "rounded-lg bg-white/95 px-3 py-2"}`}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={view.branding.logoUrl} alt="" className="h-8 max-w-[160px] object-contain @3xl:h-10" />
-              </span>
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={view.branding.logoUrl}
+                alt=""
+                className="h-10 max-w-[180px] object-contain [filter:drop-shadow(0_1px_2px_rgba(0,0,0,0.35))_drop-shadow(0_3px_6px_rgba(0,0,0,0.22))] @3xl:h-12 @3xl:max-w-[220px]"
+              />
             ) : (
               <span className="truncate text-sm font-semibold uppercase tracking-[0.2em]" style={{ fontFamily: skin.font.body }}>
                 {view.agent.brokerage || view.businessName}

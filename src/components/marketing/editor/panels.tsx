@@ -541,7 +541,12 @@ function ImageSlot({ kit, label, value, onChange, kind, allowBusinessLogo }: { k
     <div className="space-y-1.5">
       <Label className="text-xs font-medium">{label}</Label>
       <div className="flex items-center gap-3">
-        <div className={cn("flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden border border-border bg-slate-50", kind === "headshot" ? "rounded-full" : "rounded-lg")}>
+        <div
+          className={cn("flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden border border-border bg-slate-50", kind === "headshot" ? "rounded-full" : "rounded-lg")}
+          // Checkerboard behind logos so transparent areas read as transparent.
+          style={kind === "logo" && url ? { backgroundImage: "repeating-conic-gradient(#E2E8F0 0% 25%, #FFFFFF 0% 50%)", backgroundSize: "10px 10px" } : undefined}
+          title={kind === "logo" && url ? "Checkered areas are transparent" : undefined}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           {url ? <img src={url} alt="" className={kind === "headshot" ? "h-full w-full object-cover" : "max-h-12 max-w-12 object-contain"} /> : <ImageIcon className="h-5 w-5 text-muted" />}
         </div>

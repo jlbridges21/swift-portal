@@ -72,6 +72,11 @@ export interface ListingView {
   sections: WebsiteSection[];
   businessName: string;
   photographerCredit: boolean;
+  /**
+   * Export only: logo image URLs the server re-encoded with a transparent margin of
+   * LOGO_PAD × height on every side, so the logo's drop shadow has room to render.
+   */
+  paddedLogos?: string[];
 }
 
 function image(m: MediaIndexItem, urls: UrlResolver, size: ImageSize): ViewImage | null {

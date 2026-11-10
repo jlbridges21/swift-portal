@@ -40,6 +40,15 @@ Assets that need missing details (Open House without a date) show what's missing
 Every block has a computed height and text is trimmed to its box, so the page never overflows; missing
 facts, highlights or agent details remove their block and the photos take the space.
 
+### Logos
+
+Uploaded logos are stored as PNG with their transparency (`/api/marketing/{project}/upload`; JPGs stay
+opaque — backgrounds are never removed). Templates draw the logo itself, with no box behind it, plus a
+soft `drop-shadow()` that follows its visible edges (`Logo` in `social/templates.tsx`). The export
+renderer clips filters to the image's box, so exports first add a transparent margin
+(`lib/marketing/logo-pad.ts`) and the template cancels it with a negative margin. The size and
+position match the preview, and the uploaded file is unchanged.
+
 ## Data model (migration `supabase/migration-v118-marketing-kit.sql`, additive)
 
 | Table / columns | Purpose |

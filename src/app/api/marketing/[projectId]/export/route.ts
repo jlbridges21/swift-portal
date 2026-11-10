@@ -4,6 +4,7 @@ import { buildListingView, type UrlResolver } from "@/lib/marketing/view-model";
 import { buildSocialItems, socialFileBase, type SocialItem } from "@/lib/marketing/social-inputs";
 import { signMediaImage, signUpload } from "@/lib/marketing/media";
 import { renderItem, renderZip } from "@/lib/marketing/render";
+import { padLogo } from "@/lib/marketing/logo-pad";
 import type { AssetRef } from "@/lib/marketing/model";
 import type { KitContext } from "@/lib/marketing/server";
 
@@ -21,12 +22,12 @@ async function exportItems(ctx: KitContext): Promise<SocialItem[]> {
     video: () => null,
     poster: () => null,
   };
-  const build = (urls: UrlResolver, photoUrl: (id: string | null) => string | null) =>
+  const build = (urls: UrlResolver, photoUrl: (id: string | null) => string | null, paddedLogos?: string[]) =>
     buildSocialItems({
       content: ctx.content,
       media: ctx.media,
       coverId: ctx.project.cover_image_id,
-      view: buildListingView({ content: ctx.content, media: ctx.media, tours: [], coverId: ctx.project.cover_image_id, businessName: ctx.businessName, urls }),
+      view: { ...buildListingView({ content: ctx.content, media: ctx.media, tours: [], coverId: ctx.project.cover_image_id, businessName: ctx.businessName, urls }), paddedLogos },
       photoUrl,
       websiteUrl: ctx.kit.website_status === "published" ? ctx.urls.live : null,
     });
@@ -50,13 +51,28 @@ async function exportItems(ctx: KitContext): Promise<SocialItem[]> {
       }
     })
   );
+  // Logos get a transparent margin so their drop shadow renders unclipped (see padLogo).
+  const v = draft[0]?.input.view;
+  const logoTokens = new Set([v?.branding.logoUrl, v?.agent.brokerageLogoUrl].filter((t): t is string => Boolean(t)));
+  const resolveToken = (t: string) => (t.startsWith("media:") || t.startsWith("upload:") ? signed.get(t) ?? null : t);
+  const padded = new Map<string, string>();
+  await Promise.all(
+    Array.from(logoTokens).map(async (t) => {
+      const url = resolveToken(t);
+      const data = url ? await padLogo(url) : null;
+      if (data) padded.set(t, data);
+    })
+  );
+  const tokenFor = (ref: AssetRef) => (ref.kind === "media" ? `media:${ref.id}` : ref.kind === "upload" ? `upload:${ref.path}` : ctx.businessLogoUrl);
   const real: UrlResolver = {
-    image: (ref: AssetRef) =>
-      ref.kind === "media" ? signed.get(`media:${ref.id}`) ?? null : ref.kind === "upload" ? signed.get(`upload:${ref.path}`) ?? null : ctx.businessLogoUrl,
+    image: (ref: AssetRef) => {
+      const t = tokenFor(ref);
+      return t ? padded.get(t) ?? resolveToken(t) : null;
+    },
     video: () => null,
     poster: () => null,
   };
-  return build(real, (id) => (id ? signed.get(`media:${id}`) ?? null : null));
+  return build(real, (id) => (id ? signed.get(`media:${id}`) ?? null : null), Array.from(padded.values()));
 }
 
 function attachment(body: Buffer, contentType: string, fileName: string) {

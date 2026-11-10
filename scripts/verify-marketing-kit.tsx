@@ -19,6 +19,8 @@ import { mergeContent, sanitizeOverrides, FORMAT_SIZE, type MediaIndexItem, type
 import { mergeMarketingKitSettings, purchasePriceCents, resolveAccess, resolveOffer, sanitizeOfferOverrides, type PurchaseRow } from "@/lib/marketing/offers";
 import { buildListingView, resolveFlyerPhotoIds, socialFeaturedId, type UrlResolver } from "@/lib/marketing/view-model";
 import { qrSvgDataUri } from "@/lib/marketing/qr";
+import { padLogo } from "@/lib/marketing/logo-pad";
+import { LOGO_PAD } from "@/components/marketing/social/templates";
 import { DEFAULT_FLYER, FLYER_LAYOUTS } from "@/lib/marketing/model";
 import { buildSocialItems } from "@/lib/marketing/social-inputs";
 import { renderFlyerPdf, renderItem, renderPng } from "@/lib/marketing/render";
@@ -301,8 +303,77 @@ async function renders() {
   }
 }
 
+// ---------------------------------------------------------------------------
+async function logoRenders() {
+  console.log("Logos (transparent, shape-following shadow, no background box)");
+  const svgPng = async (svg: string) => sharp(Buffer.from(svg)).png().toBuffer();
+  const logos = {
+    circle: await svgPng(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><circle cx="200" cy="200" r="196" fill="#1E3A5F"/><text x="200" y="232" font-size="96" text-anchor="middle" fill="#fff" font-family="Arial" font-weight="bold">HCR</text></svg>`),
+    wordmark: await svgPng(`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="220"><text x="10" y="170" font-size="170" fill="#FFFFFF" font-family="Georgia" font-weight="bold">Realty Co</text></svg>`),
+    emblem: await svgPng(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="420"><path d="M150 10 L290 70 L270 300 L150 410 L30 300 L10 70 Z" fill="#0F172A"/><text x="150" y="250" font-size="110" text-anchor="middle" fill="#C8A96B" font-family="Georgia">B</text></svg>`),
+  };
+  const uri = (b: Buffer) => `data:image/png;base64,${b.toString("base64")}`;
+  const bg = async (color: string) => `data:image/jpeg;base64,${(await sharp({ create: { width: 1600, height: 1067, channels: 3, background: color } }).jpeg().toBuffer()).toString("base64")}`;
+  const photos = { light: await bg("#E9E4DA"), dark: await bg("#2B2B2E"), red: await bg("#D02020") };
+
+  // Padding keeps every pixel and only adds transparent margin.
+  const padded = await padLogo(uri(logos.circle));
+  assert.ok(padded);
+  const pb = Buffer.from(padded!.split(",")[1]!, "base64");
+  const pm = await sharp(pb).metadata();
+  assert.deepEqual([pm.width, pm.height], [400 + 2 * Math.round(400 * LOGO_PAD), 400 + 2 * Math.round(400 * LOGO_PAD)]);
+  const corner = await sharp(pb).extract({ left: 0, top: 0, width: 1, height: 1 }).raw().toBuffer();
+  assert.equal(corner[3], 0, "padding is transparent");
+  passed++;
+  console.log("  ✓ export padding is transparent and keeps the logo pixels");
+
+  const shots: Buffer[] = [];
+  for (const style of ["modern", "luxury", "coastal"] as const) {
+    for (const [tone, logoKey] of [["light", "circle"], ["dark", "wordmark"], ["light", "emblem"]] as const) {
+      const logoUri = (await padLogo(uri(logos[logoKey])))!;
+      const brokerUri = (await padLogo(uri(logos.emblem)))!;
+      const lUrls: UrlResolver = {
+        image: (ref) => (ref.kind === "upload" ? (ref.path.endsWith("logo.png") ? logoUri : brokerUri) : ref.kind === "media" ? photos[tone] : null),
+        video: () => null,
+        poster: () => null,
+      };
+      const c0 = mergeContent(content, { branding: { logo: { kind: "upload", path: "b/marketing/p/logo.png" } }, agent: { brokerageLogo: { kind: "upload", path: "b/marketing/p/broker.png" } } } as never);
+      const c = { ...c0, social: { ...c0.social, style } };
+      const v = { ...buildListingView({ content: c, media, tours: [], coverId: null, businessName: "Lens & Light Media", urls: lUrls }), paddedLogos: [logoUri, brokerUri] };
+      const items = buildSocialItems({ content: c, media, coverId: null, view: v, photoUrl: () => photos[tone] });
+      for (const id of ["sq_just_listed", "st_just_listed", "carousel-" + items.filter((i) => i.group === "carousel").length, "flyer"]) {
+        const it = items.find((i) => i.id === id)!;
+        const png = await renderPng(it);
+        shots.push(await sharp(png).resize({ height: 420 }).png().toBuffer());
+      }
+    }
+  }
+  // Contact sheet: rows = style × logo, columns = square, story, agent slide, flyer.
+  let x = 0;
+  const tiles: { input: Buffer; left: number; top: number }[] = [];
+  const widths = await Promise.all(shots.map(async (b) => (await sharp(b).metadata()).width!));
+  const rowW = widths.slice(0, 4).reduce((a, b) => a + b + 10, 0);
+  shots.forEach((b, i) => {
+    if (i % 4 === 0) x = 0;
+    tiles.push({ input: b, left: x, top: Math.floor(i / 4) * 430 });
+    x += widths[i]! + 10;
+  });
+  await sharp({ create: { width: rowW, height: Math.ceil(shots.length / 4) * 430, channels: 3, background: "#777" } }).composite(tiles).jpeg({ quality: 80 }).toFile(join(out, "logos-sheet.jpg"));
+
+  // No box: the transparent corner of a round logo shows the photo underneath (Modern square).
+  const redUrls: UrlResolver = { image: (ref) => (ref.kind === "upload" ? padded! : ref.kind === "media" ? photos.red : null), video: () => null, poster: () => null };
+  const cr = mergeContent(content, { branding: { logo: { kind: "upload", path: "b/marketing/p/logo.png" } } } as never);
+  const vr = { ...buildListingView({ content: cr, media, tours: [], coverId: null, businessName: "", urls: redUrls }), paddedLogos: [padded!] };
+  const sq = buildSocialItems({ content: cr, media, coverId: null, view: vr, photoUrl: () => photos.red }).find((i) => i.id === "sq_just_listed")!;
+  const px = await sharp(await renderPng(sq)).extract({ left: 58, top: 58, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
+  assert.ok(px[0]! > 150 && px[1]! < 90 && px[2]! < 90, `logo corner shows the photo, got rgb(${px[0]},${px[1]},${px[2]})`);
+  passed++;
+  console.log("  ✓ no box behind logos; 27 logo renders in logos-sheet.jpg");
+}
+
 renders()
   .then(flyerRenders)
+  .then(logoRenders)
   .then(() => {
     console.log(`\nAll ${passed} checks passed. Renders in ${out}`);
   })
