@@ -22,6 +22,8 @@ import { StaffPermissionsSettings } from "@/components/admin/staff-permissions-s
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { w9CountryDecision } from "@/lib/w9-country";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { siteServicesFromRows } from "@/lib/website/server";
+import { WebsiteDomainSetupRequiredError } from "@/lib/custom-domain";
 
 /** Only same-site project editor paths may be used as the "back to your website" link. */
 function safeReturnTo(raw: string | undefined): string | null {
@@ -61,6 +63,17 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
     if (e instanceof ListingDomainSetupRequiredError) listingSetupRequired = true;
     else throw e;
   }
+  let websiteSetupRequired = false;
+  let websiteDomainState = emptyPublicDomainState(`${tenant.business.slug}.${getPlatformRootDomain()}`);
+  try {
+    const websiteRow = await loadBusinessDomainState(tenant.businessId, "website");
+    if (websiteRow) websiteDomainState = toPublicDomainState(websiteRow);
+  } catch (e) {
+    if (e instanceof WebsiteDomainSetupRequiredError) websiteSetupRequired = true;
+    else throw e;
+  }
+  const websiteConnected = Boolean(websiteDomainState.domain) && websiteDomainState.status === "connected";
+  const websiteSiteUrl = websiteConnected ? `https://${websiteDomainState.domain}` : portalPreviewUrl;
   const suggestedListing = suggestListingDomain(customDomainState.domain);
   const suggestedListingRoot = suggestedListing ? suggestedListing.replace(/^listings\./, "") : null;
   const country = await w9CountryDecision(tenant.businessId);
@@ -106,6 +119,12 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
           }}
           portalPreviewUrl={portalPreviewUrl}
           serviceNames={serviceNames}
+          website={{
+            services: siteServicesFromRows(serviceRows),
+            siteUrl: websiteSiteUrl,
+            domain: { domain: websiteDomainState.domain, connected: websiteConnected, setupRequired: websiteSetupRequired },
+            domainState: websiteDomainState,
+          }}
           staff={<StaffPermissionsSettings />}
           payments={
             <Suspense fallback={null}>

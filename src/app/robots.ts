@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { getCanonicalSiteUrl } from "@/lib/site-metadata";
 import { getPublicHostContext } from "@/lib/host-resolution";
+import { resolveSeoHost } from "@/lib/website/metadata-routes";
 
 /**
  * On tenant hosts: disallow indexing (client portals should not rank as ShootPortal).
@@ -12,6 +13,20 @@ import { getPublicHostContext } from "@/lib/host-resolution";
 export default async function robots(): Promise<MetadataRoute.Robots> {
   const host = await getPublicHostContext();
   const canonical = getCanonicalSiteUrl();
+
+  // Business Website on its canonical host: the public pages are meant to be found.
+  const seo = await resolveSeoHost().catch(() => ({ kind: "platform" as const }));
+  if (seo.kind === "website") {
+    return {
+      rules: {
+        userAgent: "*",
+        allow: "/",
+        disallow: ["/admin", "/dashboard", "/api/", "/login", "/auth/", "/b/", "/photo/", "/folder/", "/view/", "/v/", "/embed/", "/w9", "/staff", "/billing", "/onboarding", "/request/thank-you", "/site/"],
+      },
+      sitemap: `${seo.origin}/sitemap.xml`,
+      host: seo.origin.replace(/^https?:\/\//, ""),
+    };
+  }
 
   if (host.kind === "tenant") {
     return {

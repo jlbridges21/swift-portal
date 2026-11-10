@@ -18,6 +18,35 @@ import {
 import { loadResolvedLandingPage } from "@/lib/resolve-landing-page";
 import { marketingPageMetadata } from "@/lib/marketing";
 import { SITE } from "@/lib/site-metadata";
+import { SiteHome } from "@/components/website/site-home";
+import { SiteNavProvider } from "@/components/website/site-ui";
+import { loadPublicSite, siteMetadata, type PublicSite } from "@/lib/website/server";
+
+/** The Business Website is live on this host (or this IS the Business Website domain). */
+async function liveWebsite(): Promise<PublicSite | null> {
+  const site = await loadPublicSite();
+  if (!site) return null;
+  return site.settings.website.launched || site.onWebsiteDomain ? site : null;
+}
+
+function websiteJsonLd(site: PublicSite): string {
+  const v = site.view;
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "ProfessionalService",
+    name: v.business.name,
+    url: `${site.canonicalOrigin}/`,
+    description: v.hero.intro,
+    logo: v.business.logoUrl && /^https:\/\//.test(v.business.logoUrl) ? v.business.logoUrl : undefined,
+    email: v.business.email || undefined,
+    telephone: v.business.phone || undefined,
+    sameAs: v.business.social.length ? v.business.social.map((s) => s.url) : undefined,
+    makesOffer: v.allServices.length
+      ? v.allServices.slice(0, 12).map((s) => ({ "@type": "Offer", itemOffered: { "@type": "Service", name: s.name } }))
+      : undefined,
+  };
+  return JSON.stringify(data).replace(/</g, "\\u003c");
+}
 
 /**
  * Host resolution (`getPublicHostContext`) reads request headers, so this shared `/`
@@ -29,6 +58,10 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const host = await getPublicHostContext();
+  if (isActivePublicTenant(host)) {
+    const site = await liveWebsite();
+    if (site) return siteMetadata(site, { path: "/" });
+  }
   if (isActivePublicTenant(host) || (host.kind === "tenant" && host.businessId)) {
     const { metadata } = await publicHostBrand();
     return metadata;
@@ -56,6 +89,20 @@ export default async function HomePage() {
   }
 
   if (isActivePublicTenant(host) && host.businessId) {
+    const site = await liveWebsite();
+    if (site) {
+      const brand = { ...getPortalBrandFromSettings(site.settings), name: site.view.business.name };
+      return (
+        <BrandProvider brand={brand}>
+          <AuthFragmentHandler />
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: websiteJsonLd(site) }} />
+          <SiteNavProvider preview={false}>
+            <SiteHome view={site.view} />
+          </SiteNavProvider>
+        </BrandProvider>
+      );
+    }
+    // Classic Client Landing Page — kept until the business publishes its new website.
     const settings = await getAppSettings(host.businessId);
     const { page, businessName } = await loadResolvedLandingPage(host.businessId, settings);
     const brand = {

@@ -12,7 +12,7 @@ import {
 } from "@/lib/custom-domain-input";
 import type { CustomDomainPublicState, DnsRecordInstruction } from "@/lib/custom-domain";
 
-const REGISTRAR_GUIDES = [
+export const REGISTRAR_GUIDES = [
   {
     name: "GoDaddy",
     href: "https://www.godaddy.com/help/add-a-cname-record-19236",
@@ -35,7 +35,7 @@ const REGISTRAR_GUIDES = [
   },
 ] as const;
 
-function CopyField({ label, value }: { label: string; value: string }) {
+export function CopyField({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="space-y-1">
@@ -118,7 +118,7 @@ function statusLabel(state: CustomDomainPublicState, kind: DomainCardKind = "por
   }
 }
 
-function DnsTable({ records }: { records: DnsRecordInstruction[] }) {
+export function DnsTable({ records }: { records: DnsRecordInstruction[] }) {
   if (records.length === 0) return null;
   return (
     <div className="space-y-3">
@@ -141,7 +141,7 @@ function DnsTable({ records }: { records: DnsRecordInstruction[] }) {
   );
 }
 
-async function readApiJson(res: Response): Promise<Record<string, unknown>> {
+export async function readApiJson(res: Response): Promise<Record<string, unknown>> {
   const text = await res.text();
   if (!text) return {};
   try {

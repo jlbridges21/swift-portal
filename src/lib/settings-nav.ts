@@ -41,9 +41,9 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   },
   {
     id: "landing",
-    label: "Client Landing Page",
-    description: "Hero copy, industries, how-it-works, and social for your public portal.",
-    hashes: ["settings-landing"],
+    label: "Business Website",
+    description: "Your public website: template, homepage, portfolio, contact and booking.",
+    hashes: ["settings-website", "settings-landing"],
   },
   {
     id: "contact",
@@ -61,8 +61,8 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: "custom_domain",
     label: "Use your own web address",
     description:
-      "Your client portal address (portal.yourstudio.com) and property website address (listings.yourstudio.com).",
-    hashes: ["settings-custom-domain", "settings-listing-domain"],
+      "Your business website (www.yourstudio.com), client portal (portal.yourstudio.com) and property website (listings.yourstudio.com) addresses.",
+    hashes: ["settings-custom-domain", "settings-website-domain", "settings-listing-domain"],
   },
   {
     id: "marketing_kit",

@@ -14,14 +14,28 @@ import { ServiceSelect } from "@/components/forms/service-select";
 import { AddressFields } from "@/components/forms/address-fields";
 import { CheckCircle2, Loader2, UserRound } from "lucide-react";
 
-export function PublicRequestForm({
+/**
+ * The project request form itself — fields, validation, submission to /api/request and the
+ * confirmation hand-off. Used by /request (inside the portal card) and embedded on the Business
+ * Website contact page and /request when the website is live. One form, one workflow.
+ */
+export function RequestFormBody({
   instantPreliminaryEstimate = true,
   signedInClient = null,
+  disabled = false,
+  portalOrigin = null,
+  onSubmittedInline,
 }: {
-  /** When false, inquiry mode: no service field, no estimate language. */
   instantPreliminaryEstimate?: boolean;
-  /** Signed-in client of this business: contact details come from their account. */
   signedInClient?: { name: string; email: string } | null;
+  /** Editor preview: show the form without allowing a submission. */
+  disabled?: boolean;
+  /**
+   * Set on a Business Website domain: the confirmation page (account activation) lives on the
+   * client portal address, so we navigate there instead of staying on the website host.
+   */
+  portalOrigin?: string | null;
+  onSubmittedInline?: (projectId: string) => void;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -31,7 +45,7 @@ export function PublicRequestForm({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (loading) return;
+    if (loading || disabled) return;
     setLoading(true);
     setError("");
 
@@ -55,12 +69,16 @@ export function PublicRequestForm({
       }
 
       if (body.thankYouUrl) {
-        router.push(body.thankYouUrl);
+        if (portalOrigin) {
+          window.location.assign(`${portalOrigin.replace(/\/$/, "")}${body.thankYouUrl}`);
+        } else {
+          router.push(body.thankYouUrl);
+        }
         return;
       }
       // Saved, but no confirmation link could be built — confirm inline.
       setSubmittedInline(body.projectId ?? "");
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      onSubmittedInline?.(body.projectId ?? "");
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -68,54 +86,23 @@ export function PublicRequestForm({
     }
   }
 
-  if (submittedInline !== null) {
+  if (submittedInline !== null && !onSubmittedInline) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <Header />
-        <main className="flex-1 px-4 py-12 sm:px-6 lg:px-8">
-          <Card className="mx-auto max-w-xl text-center shadow-sm">
-            <CardContent className="space-y-3 py-10">
-              <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
-              <h1 className="text-2xl font-bold text-heading">Request received</h1>
-              <p className="text-muted">
-                Thanks! Your request is in. You don&apos;t need to do anything else — check your email for a
-                confirmation.
-              </p>
-            </CardContent>
-          </Card>
-        </main>
-        <Footer />
+      <div className="space-y-3 py-6 text-center">
+        <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
+        <h3 className="text-xl font-semibold text-heading">Request received</h3>
+        <p className="text-muted">
+          Thanks! Your request is in. You don&apos;t need to do anything else — check your email for a confirmation.
+        </p>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <Header />
-      <main className="flex-1 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-        <div className="mx-auto max-w-2xl">
-          <div className="mb-6 text-center sm:mb-8">
-            <h1 className="text-2xl font-bold tracking-tight text-heading sm:text-3xl">
-              {inquiryMode ? "Send an Inquiry" : "Request a Shoot"}
-            </h1>
-            <p className="mt-2 text-muted">
-              {inquiryMode
-                ? "Tell us about your property. No account needed."
-                : "Tell us about your project. No account needed — it takes about a minute."}
-            </p>
-          </div>
+  const loginHref = portalOrigin ? `${portalOrigin.replace(/\/$/, "")}/login?redirect=/dashboard/request` : "/login?redirect=/dashboard/request";
 
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle>{inquiryMode ? "Project Inquiry" : "Project Request"}</CardTitle>
-              <CardDescription>
-                {inquiryMode
-                  ? "We'll review your inquiry and follow up by email."
-                  : "You'll see a preliminary estimate as soon as you submit."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+  return (
               <form onSubmit={handleSubmit} className="space-y-6">
+                <fieldset disabled={disabled} className="contents">
                 {signedInClient ? (
                   <section className="flex items-start gap-3 rounded-xl border border-border bg-slate-50 p-4 surface-dark:bg-subtle">
                     <UserRound className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
@@ -209,7 +196,7 @@ export function PublicRequestForm({
                   </div>
                 )}
 
-                <Button type="submit" variant="accent" size="lg" className="min-h-12 w-full" disabled={loading}>
+                <Button type="submit" variant="accent" size="lg" className="min-h-12 w-full" disabled={loading || disabled}>
                   {loading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -224,13 +211,84 @@ export function PublicRequestForm({
                 {!signedInClient && (
                   <p className="text-center text-xs text-muted">
                     Already have a portal account?{" "}
-                    <Link href="/login?redirect=/dashboard/request" className="font-medium text-accent hover:underline">
+                    <Link href={loginHref} className="font-medium text-accent hover:underline">
                       Log in
                     </Link>{" "}
                     to submit from your portal.
                   </p>
                 )}
+                </fieldset>
               </form>
+  );
+}
+
+export function PublicRequestForm({
+  instantPreliminaryEstimate = true,
+  signedInClient = null,
+}: {
+  /** When false, inquiry mode: no service field, no estimate language. */
+  instantPreliminaryEstimate?: boolean;
+  /** Signed-in client of this business: contact details come from their account. */
+  signedInClient?: { name: string; email: string } | null;
+}) {
+  const [submittedInline, setSubmittedInline] = useState<string | null>(null);
+  const inquiryMode = !instantPreliminaryEstimate;
+
+  if (submittedInline !== null) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Header />
+        <main className="flex-1 px-4 py-12 sm:px-6 lg:px-8">
+          <Card className="mx-auto max-w-xl text-center shadow-sm">
+            <CardContent className="space-y-3 py-10">
+              <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
+              <h1 className="text-2xl font-bold text-heading">Request received</h1>
+              <p className="text-muted">
+                Thanks! Your request is in. You don&apos;t need to do anything else — check your email for a
+                confirmation.
+              </p>
+            </CardContent>
+          </Card>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      <Header />
+      <main className="flex-1 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+        <div className="mx-auto max-w-2xl">
+          <div className="mb-6 text-center sm:mb-8">
+            <h1 className="text-2xl font-bold tracking-tight text-heading sm:text-3xl">
+              {inquiryMode ? "Send an Inquiry" : "Request a Shoot"}
+            </h1>
+            <p className="mt-2 text-muted">
+              {inquiryMode
+                ? "Tell us about your property. No account needed."
+                : "Tell us about your project. No account needed — it takes about a minute."}
+            </p>
+          </div>
+
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>{inquiryMode ? "Project Inquiry" : "Project Request"}</CardTitle>
+              <CardDescription>
+                {inquiryMode
+                  ? "We'll review your inquiry and follow up by email."
+                  : "You'll see a preliminary estimate as soon as you submit."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RequestFormBody
+                instantPreliminaryEstimate={instantPreliminaryEstimate}
+                signedInClient={signedInClient}
+                onSubmittedInline={(id) => {
+                  setSubmittedInline(id);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              />
             </CardContent>
           </Card>
         </div>

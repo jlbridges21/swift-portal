@@ -24,6 +24,9 @@ import { EmailTemplatesSettingsCard } from "@/components/admin/email-templates-s
 import { LandingPageSettingsCard } from "@/components/admin/landing-page-settings-card";
 import { CustomDomainSettingsCard } from "@/components/admin/custom-domain-settings-card";
 import { ListingDomainSection } from "@/components/admin/listing-domain-section";
+import { WebsiteDomainSection } from "@/components/admin/website-domain-section";
+import { BusinessWebsiteEditor } from "@/components/admin/business-website/business-website-editor";
+import type { SiteServiceInput } from "@/lib/website/view";
 import { MarketingKitSettingsCard } from "@/components/admin/marketing-kit-settings-card";
 import type { CustomDomainPublicState } from "@/lib/custom-domain";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
@@ -69,6 +72,13 @@ interface AdminSettingsClientProps {
   };
   portalPreviewUrl: string;
   serviceNames: string[];
+  /** Business Website: active services, live URL and the Business Website Address. */
+  website: {
+    services: SiteServiceInput[];
+    siteUrl: string;
+    domain: { domain: string | null; connected: boolean; setupRequired: boolean };
+    domainState: CustomDomainPublicState;
+  };
   showTax: boolean;
   w9Clients: W9ClientOption[];
 }
@@ -293,9 +303,11 @@ export function AdminSettingsClient({
   listingDomain,
   portalPreviewUrl,
   serviceNames,
+  website,
   showTax,
   w9Clients,
 }: AdminSettingsClientProps) {
+  const [classicLandingEditor, setClassicLandingEditor] = useState(false);
   const router = useRouter();
   const liveBrand = usePortalBrand();
   const skipNextPropSync = useRef(false);
@@ -473,6 +485,10 @@ export function AdminSettingsClient({
     setSettings((prev) => ({ ...prev, landing }));
   }, []);
 
+  const patchWebsite = useCallback((next: AppSettings["website"]) => {
+    setSettings((prev) => ({ ...prev, website: next }));
+  }, []);
+
   const patchTax = useCallback((patch: Partial<AppSettings["tax"]>) => {
     setSettings((prev) => ({ ...prev, tax: { ...prev.tax, ...patch } }));
   }, []);
@@ -511,6 +527,36 @@ export function AdminSettingsClient({
     </div>
   );
 
+  if (isLandingEditor && !classicLandingEditor) {
+    return (
+      <BusinessWebsiteEditor
+        settings={settings}
+        savedSettings={savedSettings}
+        services={website.services}
+        siteUrl={website.siteUrl}
+        websiteDomain={website.domain}
+        onWebsiteChange={patchWebsite}
+        onBusinessChange={patchBusiness}
+        onPublishNow={() => {
+          const next = { ...settings, website: { ...settings.website, launched: true } };
+          setSettings(next);
+          void saveSettings(next);
+        }}
+        onOpenClassicEditor={savedSettings.website.launched ? undefined : () => setClassicLandingEditor(true)}
+        saving={saving}
+        shellNav={
+          <SettingsTabNav
+            active={section}
+            onChange={selectSection}
+            accentColor={tabAccent}
+            sections={sections}
+          />
+        }
+        shellFooter={saveFooter}
+      />
+    );
+  }
+
   if (isLandingEditor) {
     return (
       <>
@@ -524,12 +570,20 @@ export function AdminSettingsClient({
           brand={liveBrand}
           onChange={patchLanding}
           shellNav={
-            <SettingsTabNav
-              active={section}
-              onChange={selectSection}
-              accentColor={tabAccent}
-              sections={sections}
-            />
+            <div className="space-y-3">
+              <div className="rounded-lg border border-border bg-subtle px-3 py-2 text-xs">
+                <p className="text-muted">Editing the classic landing page (currently live).</p>
+                <button type="button" className="mt-1 font-medium text-accent hover:underline" onClick={() => setClassicLandingEditor(false)}>
+                  ← Back to Business Website
+                </button>
+              </div>
+              <SettingsTabNav
+                active={section}
+                onChange={selectSection}
+                accentColor={tabAccent}
+                sections={sections}
+              />
+            </div>
           }
           shellFooter={saveFooter}
         />
@@ -746,7 +800,7 @@ export function AdminSettingsClient({
                     value={settings.business.portalLogoSizePx ?? PORTAL_LOGO_SIZE.default}
                     min={PORTAL_LOGO_SIZE.min}
                     max={PORTAL_LOGO_SIZE.max}
-                    help={`Height for the desktop nav logo (${PORTAL_LOGO_SIZE.min}–${PORTAL_LOGO_SIZE.max}px). Mobile uses 80% of this size; large breakpoint uses 115% (capped at ${PORTAL_LOGO_SIZE.max}px). Landing page logo size is set separately under Client Landing Page.`}
+                    help={`Height for the desktop nav logo (${PORTAL_LOGO_SIZE.min}–${PORTAL_LOGO_SIZE.max}px). Mobile uses 80% of this size; large breakpoint uses 115% (capped at ${PORTAL_LOGO_SIZE.max}px). The classic landing page logo size is set separately under Business Website → Advanced.`}
                     onChange={(portalLogoSizePx) => patchBusiness({ portalLogoSizePx })}
                   />
                 </div>
@@ -1030,15 +1084,25 @@ export function AdminSettingsClient({
         </SettingsPanel>
 
         <SettingsPanel id="custom_domain" active={section}>
-          <div id="settings-custom-domain" tabIndex={-1} className="scroll-mt-24 space-y-4">
+          <div className="space-y-4">
             <h2 className="text-lg font-semibold text-heading">Use your own web address</h2>
             <p className="mt-1 text-sm text-muted">
-              Give clients a branded link like{" "}
-              <span className="font-medium text-heading">portal.yourstudio.com</span> instead of a
-              ShootPortal subdomain — so your portal feels like your business.
+              Up to three addresses, each optional and set up separately: your public{" "}
+              <span className="font-medium text-heading">Business Website</span> (www.yourstudio.com), your{" "}
+              <span className="font-medium text-heading">Client Portal</span> (portal.yourstudio.com) and your{" "}
+              <span className="font-medium text-heading">Property Websites</span> (listings.yourstudio.com). Everything keeps working on
+              your ShootPortal address too.
             </p>
-            <h3 className="pt-2 text-base font-semibold text-heading">Client Portal Address</h3>
-            <p className="-mt-2 text-sm text-muted">Used for clients signing in to your ShootPortal portal.</p>
+            <WebsiteDomainSection
+              entitled={canUseCustomDomain}
+              initialState={website.domainState}
+              setupRequired={website.domain.setupRequired}
+              websiteLive={savedSettings.website.launched}
+            />
+          </div>
+          <div id="settings-custom-domain" tabIndex={-1} className="mt-8 scroll-mt-24 space-y-4 border-t border-border pt-6">
+            <h3 className="text-base font-semibold text-heading">Client Portal Address</h3>
+            <p className="-mt-2 text-sm text-muted">Used for clients signing in to your ShootPortal portal — projects, payments and media delivery.</p>
             <CustomDomainSettingsCard entitled={canUseCustomDomain} initialState={customDomainState} />
             <ListingDomainSection
               entitled={canUseCustomDomain}

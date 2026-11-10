@@ -72,6 +72,8 @@ export function composePortalDomainInput(input: {
   subdomain?: string;
   rootDomain?: string;
   apexDomain?: string;
+  /** Business Website Address: "www" IS the intended subdomain there. */
+  allowWww?: boolean;
 }): ComposePortalDomainResult {
   if (input.mode === "apex") {
     const stripped = stripPastedHost(input.apexDomain ?? "");
@@ -126,7 +128,7 @@ export function composePortalDomainInput(input: {
         "A subdomain is required here (we suggest “portal”). To point your root domain (example.com) at ShootPortal instead, open “Using an apex domain?” below.",
     };
   }
-  if (subRaw === "www") {
+  if (subRaw === "www" && !input.allowWww) {
     return {
       ok: false,
       field: "subdomain",
@@ -175,7 +177,11 @@ export function composePortalDomainInput(input: {
     const parts = rootRaw.split(".");
     const inferredRoot = parts.slice(-2).join(".");
     const inferredSub = parts.slice(0, -2).join(".");
-    if (inferredSub === "www") {
+    if (inferredSub === "www" && input.allowWww) {
+      split = { subdomain: "www", rootDomain: inferredRoot };
+      rootRaw = inferredRoot;
+      notice = `We split that into “www” and “${inferredRoot}”.`;
+    } else if (inferredSub === "www") {
       // https://www.example.com pasted as domain → use example.com, keep the Subdomain field
       rootRaw = inferredRoot;
       notice = hadUrl
@@ -189,7 +195,7 @@ export function composePortalDomainInput(input: {
   }
 
   const effectiveSub = split?.subdomain ?? subRaw;
-  if (effectiveSub === "www") {
+  if (effectiveSub === "www" && !input.allowWww) {
     return {
       ok: false,
       field: "subdomain",

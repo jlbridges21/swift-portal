@@ -1,12 +1,14 @@
 /**
  * Self-serve custom domain: validation, Vercel registration, status, cleanup.
  *
- * Two kinds of hostname share this one code path:
+ * Three kinds of hostname share this one code path:
  *   - "portal"  → businesses.custom_domain*   (client portal address, e.g. portal.yourstudio.com)
  *   - "listing" → businesses.listing_domain*  (property websites, e.g. listings.yourstudio.com)
- * Both use the same Vercel project, DNS instructions, verification and status model. The portal
- * path is unchanged; "listing" maps the same fields onto the listing_domain* columns (v118).
- * A hostname may be one kind or the other, for one business only.
+ *   - "website" → businesses.website_domain*  (Business Website, e.g. www.yourstudio.com — v119),
+ *                 optionally with the bare domain registered as a redirect (website_apex_redirect)
+ * All use the same Vercel project, DNS instructions, verification and status model. The portal
+ * path is unchanged; other kinds map the same fields onto their own columns.
+ * A hostname may be exactly one kind, for one business only.
  */
 
 import { createServiceClient } from "@/lib/supabase/server";
@@ -33,7 +35,7 @@ import {
   type VercelProjectDomain,
 } from "@/lib/vercel-domains";
 
-export type DomainKind = "portal" | "listing";
+export type DomainKind = "portal" | "listing" | "website";
 
 export type CustomDomainStatus =
   | "pending"
@@ -82,6 +84,19 @@ export type CustomDomainPublicState = {
   dnsTargetChanged: DnsTargetChange | null;
   recommendedCname: string | null;
   recommendedA: string | null;
+  /**
+   * Business Website only: the other spelling of the domain (yourstudio.com ↔ www.yourstudio.com)
+   * registered as a redirect to the main address. Null when not set up.
+   */
+  alternate: AlternateDomainState | null;
+};
+
+export type AlternateDomainState = {
+  domain: string;
+  redirectsTo: string;
+  status: "pending" | "connected";
+  dnsRecords: DnsRecordInstruction[];
+  error: string | null;
 };
 
 import {
@@ -105,13 +120,36 @@ export {
   validateCustomDomainCandidate,
 };
 
+type StoredAlternate = {
+  domain: string;
+  challenges?: VercelDomainVerification[];
+  recommendedCname?: string | null;
+  recommendedA?: string | null;
+  verified?: boolean;
+  misconfigured?: boolean | null;
+  error?: string | null;
+};
+
 type StoredDnsVerification = {
   challenges?: VercelDomainVerification[];
   mode?: string;
   recommendedCname?: string | null;
   recommendedA?: string | null;
   dnsTargetSource?: DnsTargetSource;
+  alternate?: StoredAlternate | null;
 };
+
+/**
+ * www.example.com ↔ example.com. Only offered when the main address is one of those two forms;
+ * other subdomains (site.example.com) have no alternate.
+ */
+export function alternateWebsiteDomain(domain: string): string | null {
+  const d = domain.trim().toLowerCase();
+  if (isApexDomain(d)) return `www.${d}`;
+  const parts = d.split(".");
+  if (parts.length === 3 && parts[0] === "www") return parts.slice(1).join(".");
+  return null;
+}
 
 function buildDnsRecords(
   domain: string,
@@ -171,6 +209,8 @@ export type BusinessDomainRow = {
   custom_domain_last_checked_at: string | null;
   custom_domain_error: string | null;
   custom_domain_verification: Record<string, unknown> | null;
+  /** Business Website only (v119). */
+  website_apex_redirect?: string | null;
 };
 
 const DOMAIN_SELECT =
@@ -179,15 +219,13 @@ const DOMAIN_SELECT =
 const LISTING_DOMAIN_SELECT =
   "id, slug, name, listing_domain, listing_domain_status, listing_domain_vercel_verified, listing_domain_misconfigured, listing_domain_last_checked_at, listing_domain_error, listing_domain_verification";
 
-/** Column names for a domain kind, keyed by the portal (custom_domain*) field names. */
-const LISTING_COLUMN_MAP: Record<string, string> = {
-  custom_domain: "listing_domain",
-  custom_domain_status: "listing_domain_status",
-  custom_domain_vercel_verified: "listing_domain_vercel_verified",
-  custom_domain_misconfigured: "listing_domain_misconfigured",
-  custom_domain_last_checked_at: "listing_domain_last_checked_at",
-  custom_domain_error: "listing_domain_error",
-  custom_domain_verification: "listing_domain_verification",
+const WEBSITE_DOMAIN_SELECT =
+  "id, slug, name, website_domain, website_domain_status, website_domain_vercel_verified, website_domain_misconfigured, website_domain_last_checked_at, website_domain_error, website_domain_verification, website_apex_redirect";
+
+const COLUMN_PREFIX: Record<DomainKind, string> = {
+  portal: "custom_domain",
+  listing: "listing_domain",
+  website: "website_domain",
 };
 
 /** Map a portal-shaped update onto the columns for `kind`. */
@@ -195,7 +233,7 @@ function domainColumns(kind: DomainKind, patch: Record<string, unknown>): Record
   if (kind === "portal") return patch;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(patch)) {
-    out[LISTING_COLUMN_MAP[key] ?? key] = value;
+    out[key.startsWith("custom_domain") ? key.replace(/^custom_domain/, COLUMN_PREFIX[kind]) : key] = value;
   }
   return out;
 }
@@ -205,10 +243,30 @@ export function isListingDomainSchemaMissing(error: { message?: string; code?: s
   return Boolean(error && (error.code === "42703" || /listing_domain/i.test(error.message ?? "")));
 }
 
-export class ListingDomainSetupRequiredError extends Error {
+/** True when a Supabase error means the v119 website_domain columns are not applied yet. */
+export function isWebsiteDomainSchemaMissing(error: { message?: string; code?: string } | null | undefined): boolean {
+  return Boolean(error && (error.code === "42703" || /website_(domain|apex)/i.test(error.message ?? "")));
+}
+
+/** The columns for a non-portal domain kind are not in the database yet. */
+export class DomainSetupRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DomainSetupRequiredError";
+  }
+}
+
+export class ListingDomainSetupRequiredError extends DomainSetupRequiredError {
   constructor() {
     super("Property website addresses need a quick database update (migration v118). Contact support.");
     this.name = "ListingDomainSetupRequiredError";
+  }
+}
+
+export class WebsiteDomainSetupRequiredError extends DomainSetupRequiredError {
+  constructor() {
+    super("Business Website addresses need a quick database update (migration v119). Contact support.");
+    this.name = "WebsiteDomainSetupRequiredError";
   }
 }
 
@@ -217,27 +275,30 @@ export async function loadBusinessDomainState(
   kind: DomainKind = "portal"
 ): Promise<BusinessDomainRow | null> {
   const supabase = await createServiceClient();
-  if (kind === "listing") {
+  if (kind === "listing" || kind === "website") {
+    const p = COLUMN_PREFIX[kind];
     const { data, error } = await supabase
       .from("businesses")
-      .select(LISTING_DOMAIN_SELECT)
+      .select(kind === "listing" ? LISTING_DOMAIN_SELECT : WEBSITE_DOMAIN_SELECT)
       .eq("id", businessId)
       .is("deleted_at", null)
       .maybeSingle();
-    if (isListingDomainSchemaMissing(error)) throw new ListingDomainSetupRequiredError();
+    if (kind === "listing" && isListingDomainSchemaMissing(error)) throw new ListingDomainSetupRequiredError();
+    if (kind === "website" && isWebsiteDomainSchemaMissing(error)) throw new WebsiteDomainSetupRequiredError();
     if (!data) return null;
-    const r = data as Record<string, unknown>;
+    const r = data as unknown as Record<string, unknown>;
     return {
       id: r.id as string,
       slug: r.slug as string,
       name: r.name as string,
-      custom_domain: (r.listing_domain as string | null) ?? null,
-      custom_domain_status: (r.listing_domain_status as CustomDomainStatus) ?? null,
-      custom_domain_vercel_verified: r.listing_domain_vercel_verified === true,
-      custom_domain_misconfigured: (r.listing_domain_misconfigured as boolean | null) ?? null,
-      custom_domain_last_checked_at: (r.listing_domain_last_checked_at as string | null) ?? null,
-      custom_domain_error: (r.listing_domain_error as string | null) ?? null,
-      custom_domain_verification: (r.listing_domain_verification as Record<string, unknown> | null) ?? null,
+      custom_domain: (r[p] as string | null) ?? null,
+      custom_domain_status: (r[`${p}_status`] as CustomDomainStatus) ?? null,
+      custom_domain_vercel_verified: r[`${p}_vercel_verified`] === true,
+      custom_domain_misconfigured: (r[`${p}_misconfigured`] as boolean | null) ?? null,
+      custom_domain_last_checked_at: (r[`${p}_last_checked_at`] as string | null) ?? null,
+      custom_domain_error: (r[`${p}_error`] as string | null) ?? null,
+      custom_domain_verification: (r[`${p}_verification`] as Record<string, unknown> | null) ?? null,
+      website_apex_redirect: kind === "website" ? ((r.website_apex_redirect as string | null) ?? null) : undefined,
     };
   }
   const { data } = await supabase
@@ -362,6 +423,28 @@ export function emptyPublicDomainState(fallbackSubdomain: string): CustomDomainP
     dnsTargetChanged: null,
     recommendedCname: null,
     recommendedA: null,
+    alternate: null,
+  };
+}
+
+function alternateState(primary: string, stored: StoredAlternate | null | undefined): AlternateDomainState | null {
+  if (!stored?.domain) return null;
+  const records: DnsRecordInstruction[] = [];
+  const host = dnsHostLabel(stored.domain);
+  if (isApexDomain(stored.domain)) {
+    if (stored.recommendedA) records.push({ type: "A", host: "@", value: stored.recommendedA, purpose: "routing" });
+  } else if (stored.recommendedCname) {
+    records.push({ type: "CNAME", host, value: stored.recommendedCname, purpose: "routing" });
+  }
+  for (const c of stored.challenges ?? []) {
+    if (c.type?.toUpperCase() === "TXT") records.push({ type: "TXT", host: c.domain || "_vercel", value: c.value, purpose: "ownership" });
+  }
+  return {
+    domain: stored.domain,
+    redirectsTo: primary,
+    status: stored.verified && stored.misconfigured === false ? "connected" : "pending",
+    dnsRecords: records,
+    error: stored.error ?? null,
   };
 }
 
@@ -420,46 +503,101 @@ export function toPublicDomainState(
     dnsTargetChanged: opts?.dnsTargetChanged ?? null,
     recommendedCname,
     recommendedA,
+    alternate: domain ? alternateState(domain, stored.alternate) : null,
   };
 }
 
+const KIND_LABEL: Record<DomainKind, string> = {
+  portal: "client portal",
+  listing: "property website",
+  website: "Business Website",
+};
+
+/**
+ * A hostname may be one kind for one business. Checks every domain column (tolerating columns
+ * from migrations that are not applied yet).
+ */
 async function assertDomainAvailable(domain: string, businessId: string, kind: DomainKind = "portal") {
   const supabase = await createServiceClient();
-  const { data } = await supabase
-    .from("businesses")
-    .select("id, name")
-    .eq("custom_domain", domain)
-    .neq("id", businessId)
-    .maybeSingle();
-  if (data) {
-    throw new Error("That domain is already connected to another business.");
-  }
-  // Hostnames are one kind for one business: a portal address can't also be a listing address.
-  const { data: listingOwner, error: listingError } = await supabase
-    .from("businesses")
-    .select("id")
-    .eq("listing_domain", domain)
-    .maybeSingle();
-  if (!listingError && listingOwner) {
+  const columns: { column: string; kind: DomainKind | "website_alt" }[] = [
+    { column: "custom_domain", kind: "portal" },
+    { column: "listing_domain", kind: "listing" },
+    { column: "website_domain", kind: "website" },
+    { column: "website_apex_redirect", kind: "website_alt" },
+  ];
+  for (const c of columns) {
+    const { data, error } = await supabase.from("businesses").select("id").eq(c.column, domain).limit(1).maybeSingle();
+    if (error || !data) continue;
+    if (data.id !== businessId) throw new Error("That domain is already connected to another business.");
+    const ownKind = c.kind === "website_alt" ? "website" : c.kind;
+    if (ownKind === kind) continue; // re-claiming the same address of the same kind
     throw new Error(
-      listingOwner.id === businessId
-        ? "That hostname is your property website address. Use a different one for your client portal."
-        : "That domain is already connected to another business."
+      `That hostname is already your ${KIND_LABEL[ownKind]} address. Use a different one for your ${KIND_LABEL[kind]}.`
     );
   }
-  if (kind === "listing") {
-    const { data: own } = await supabase
-      .from("businesses")
-      .select("id")
-      .eq("custom_domain", domain)
-      .eq("id", businessId)
-      .maybeSingle();
-    if (own) {
-      throw new Error(
-        "That hostname is your client portal address. Property websites need their own subdomain, like listings.yourstudio.com."
-      );
-    }
+}
+
+async function registerAlternate(primary: string, alternate: string): Promise<StoredAlternate> {
+  const out: StoredAlternate = { domain: alternate, challenges: [], verified: false, misconfigured: null, error: null };
+  if (!isVercelDomainApiConfigured()) {
+    out.error = "Automatic registration is unavailable. Contact support to finish the redirect.";
+    return out;
   }
+  const existing = await vercelGetProjectDomain(alternate);
+  if (existing.ok) {
+    out.challenges = existing.data.verification ?? [];
+    out.verified = existing.data.verified === true;
+  } else {
+    const added = await vercelAddProjectDomain(alternate, { redirect: primary, redirectStatusCode: 308 });
+    if (!added.ok) {
+      out.error = added.error.message || "Could not register the redirect domain.";
+      return out;
+    }
+    out.challenges = added.data.verification ?? [];
+    out.verified = added.data.verified === true;
+  }
+  const targets = await fetchVercelDnsTargets(alternate);
+  if (targets.ok) {
+    out.recommendedCname = targets.cname;
+    out.recommendedA = targets.a;
+    out.misconfigured = targets.misconfigured;
+  } else {
+    out.error = targets.error;
+    out.misconfigured = targets.misconfigured;
+  }
+  return out;
+}
+
+async function refreshAlternate(stored: StoredAlternate): Promise<StoredAlternate> {
+  if (!isVercelDomainApiConfigured()) return stored;
+  const next: StoredAlternate = { ...stored, error: null };
+  const got = await vercelGetProjectDomain(stored.domain);
+  if (got.ok) {
+    next.challenges = got.data.verification ?? next.challenges;
+    next.verified = got.data.verified === true;
+    if (!got.data.verified) {
+      const v = await vercelVerifyProjectDomain(stored.domain);
+      if (v.ok) {
+        next.verified = v.data.verified === true;
+        next.challenges = v.data.verification ?? next.challenges;
+      }
+    }
+  } else {
+    next.error = got.error.status === 404 ? "This redirect is not registered. Remove the domain and connect it again." : got.error.message;
+  }
+  const targets = await fetchVercelDnsTargets(stored.domain);
+  if (targets.ok) {
+    next.recommendedCname = targets.cname;
+    next.recommendedA = targets.a;
+    next.misconfigured = targets.misconfigured;
+  } else {
+    next.misconfigured = targets.misconfigured;
+    next.error = next.error || targets.error;
+  }
+  if (next.verified && next.misconfigured === true && !next.error) {
+    next.error = "Waiting for DNS on this address.";
+  }
+  return next;
 }
 
 export async function claimCustomDomain(options: {
@@ -469,6 +607,8 @@ export async function claimCustomDomain(options: {
   actorEmail: string | null;
   skipEntitlement?: boolean;
   kind?: DomainKind;
+  /** Business Website only: also register www ↔ apex as a redirect to the main address. */
+  redirectAlternate?: boolean;
 }): Promise<CustomDomainPublicState> {
   const kind: DomainKind = options.kind ?? "portal";
   if (!options.skipEntitlement) {
@@ -488,7 +628,9 @@ export async function claimCustomDomain(options: {
     throw new Error(
       kind === "listing"
         ? "Remove your current property website address before connecting a different one."
-        : "Remove your current custom domain before connecting a different one."
+        : kind === "website"
+          ? "Remove your current Business Website address before connecting a different one."
+          : "Remove your current custom domain before connecting a different one."
     );
   }
 
@@ -554,19 +696,27 @@ export async function claimCustomDomain(options: {
       "Automatic domain registration is not configured. Contact support for the exact DNS record — do not guess a CNAME value.";
   }
 
+  let alternate: StoredAlternate | null = null;
+  const alternateName = kind === "website" && options.redirectAlternate ? alternateWebsiteDomain(domain) : null;
+  if (alternateName) {
+    await assertDomainAvailable(alternateName, options.businessId, "website");
+    alternate = await registerAlternate(domain, alternateName);
+  }
+
   const verificationPayload: StoredDnsVerification = {
     challenges,
     mode,
     recommendedCname,
     recommendedA,
     dnsTargetSource,
+    alternate,
   };
 
   const supabase = await createServiceClient();
   const { error: updateError } = await supabase
     .from("businesses")
-    .update(
-      domainColumns(kind, {
+    .update({
+      ...domainColumns(kind, {
         custom_domain: domain,
         custom_domain_status: status,
         custom_domain_vercel_verified: vercelVerified,
@@ -575,8 +725,9 @@ export async function claimCustomDomain(options: {
         custom_domain_error: error,
         custom_domain_verification: verificationPayload,
         updated_at: new Date().toISOString(),
-      })
-    )
+      }),
+      ...(kind === "website" ? { website_apex_redirect: alternate?.domain ?? null } : {}),
+    })
     .eq("id", options.businessId);
 
   if (updateError) {
@@ -591,7 +742,7 @@ export async function claimCustomDomain(options: {
   await writePlatformAudit({
     actorUserId: options.actorUserId,
     actorEmail: options.actorEmail,
-    action: kind === "listing" ? "listing_domain.add" : "domain.add",
+    action: kind === "listing" ? "listing_domain.add" : kind === "website" ? "website_domain.add" : "domain.add",
     targetBusinessId: options.businessId,
     targetType: "business",
     targetId: options.businessId,
@@ -723,6 +874,9 @@ export async function checkCustomDomainStatus(options: {
     error = dnsTargetChanged.message;
   }
 
+  // Business Website: the www ↔ apex redirect is checked alongside (never blocks "connected").
+  const alternate = kind === "website" && previous.alternate?.domain ? await refreshAlternate(previous.alternate) : null;
+
   const supabase = await createServiceClient();
   await supabase
     .from("businesses")
@@ -739,6 +893,7 @@ export async function checkCustomDomainStatus(options: {
           recommendedA,
           dnsTargetSource,
           mode: isVercelDomainApiConfigured() ? "api" : "manual",
+          alternate,
         } satisfies StoredDnsVerification,
         updated_at: new Date().toISOString(),
       })
@@ -746,12 +901,12 @@ export async function checkCustomDomainStatus(options: {
     .eq("id", options.businessId);
 
   // Routing for listing hosts reads status; drop cached host rows so "connected" takes effect.
-  if (kind === "listing") invalidateHostLookupCache();
+  if (kind !== "portal") invalidateHostLookupCache();
 
   await writePlatformAudit({
     actorUserId: options.actorUserId,
     actorEmail: options.actorEmail,
-    action: kind === "listing" ? "listing_domain.verify" : "domain.verify",
+    action: kind === "listing" ? "listing_domain.verify" : kind === "website" ? "website_domain.verify" : "domain.verify",
     targetBusinessId: options.businessId,
     targetType: "business",
     targetId: options.businessId,
@@ -794,18 +949,22 @@ export async function removeCustomDomain(options: {
   if (!row) throw new Error("Business not found.");
   const domain = row.custom_domain;
 
-  if (domain && isVercelDomainApiConfigured()) {
-    const removed = await vercelRemoveProjectDomain(domain);
-    if (!removed.ok && removed.error.status !== 404) {
-      console.warn("[custom-domain] Vercel remove failed:", removed.error.message);
+  const alternate = kind === "website" ? row.website_apex_redirect ?? storedVerification(row).alternate?.domain ?? null : null;
+  if (isVercelDomainApiConfigured()) {
+    for (const name of [alternate, domain]) {
+      if (!name) continue;
+      const removed = await vercelRemoveProjectDomain(name);
+      if (!removed.ok && removed.error.status !== 404) {
+        console.warn("[custom-domain] Vercel remove failed:", removed.error.message);
+      }
     }
   }
 
   const supabase = await createServiceClient();
   await supabase
     .from("businesses")
-    .update(
-      domainColumns(kind, {
+    .update({
+      ...domainColumns(kind, {
         custom_domain: null,
         custom_domain_status: null,
         custom_domain_vercel_verified: false,
@@ -814,8 +973,9 @@ export async function removeCustomDomain(options: {
         custom_domain_error: null,
         custom_domain_verification: {},
         updated_at: new Date().toISOString(),
-      })
-    )
+      }),
+      ...(kind === "website" ? { website_apex_redirect: null } : {}),
+    })
     .eq("id", options.businessId);
 
   invalidateHostLookupCache();
@@ -823,7 +983,7 @@ export async function removeCustomDomain(options: {
   await writePlatformAudit({
     actorUserId: options.actorUserId,
     actorEmail: options.actorEmail,
-    action: kind === "listing" ? "listing_domain.remove" : "domain.remove",
+    action: kind === "listing" ? "listing_domain.remove" : kind === "website" ? "website_domain.remove" : "domain.remove",
     targetBusinessId: options.businessId,
     targetType: "business",
     targetId: options.businessId,

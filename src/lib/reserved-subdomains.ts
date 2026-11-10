@@ -49,6 +49,10 @@ export const RESERVED_APP_ROUTE_SLUGS = [
   "pricing",
   "privacy",
   "request",
+  // Business Website internal route (tenant /portfolio, /services, /contact rewrite here)
+  "site",
+  "portfolio",
+  "services",
   "signup",
   "staff",
   "finish-setup",

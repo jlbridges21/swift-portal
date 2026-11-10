@@ -18,6 +18,20 @@ export type SettingsSearchEntry = {
 /** Explicit synonym / field map layered on SETTINGS_SECTIONS. */
 const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
   {
+    id: "website_domain",
+    sectionId: "custom_domain",
+    label: "Business Website Address",
+    description: "Use www.yourstudio.com for the website ShootPortal builds for you.",
+    keywords: ["website domain", "www", "main website", "squarespace", "wix", "wordpress", "replace website", "apex", "root domain", "dns"],
+  },
+  {
+    id: "portfolio",
+    sectionId: "landing",
+    label: "Portfolio",
+    description: "Publish delivered projects to your public website portfolio.",
+    keywords: ["portfolio", "gallery", "showcase", "featured work", "delivered projects", "public projects"],
+  },
+  {
     id: "listing_domain",
     sectionId: "custom_domain",
     label: "Property Website Address",
@@ -118,9 +132,12 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
   {
     id: "landing",
     sectionId: "landing",
-    label: "Client Landing Page",
-    description: "Hero copy, industries, how-it-works, and social.",
+    label: "Business Website",
+    description: "Template, homepage, portfolio, contact and booking for your public website.",
     keywords: [
+      "website",
+      "business website",
+      "template",
       "landing",
       "landing page",
       "homepage",
@@ -319,8 +336,8 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
   {
     id: "hero-media",
     sectionId: "landing",
-    label: "Hero media and overlay",
-    description: "Landing hero showreel, image, and contrast overlay.",
+    label: "Website hero image or video",
+    description: "The large image or video at the top of your Business Website.",
     keywords: [
       "hero media",
       "hero",
@@ -443,6 +460,8 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
 const HASH_BY_ENTRY: Record<string, string> = {
   custom_domain: "settings-custom-domain",
   listing_domain: "settings-listing-domain",
+  website_domain: "settings-website-domain",
+  portfolio: "settings-website-portfolio",
   marketing_kit: "settings-marketing-kit",
   payments: "settings-payments",
   "download-gate": "settings-download-gate",
@@ -453,7 +472,7 @@ const HASH_BY_ENTRY: Record<string, string> = {
   "download-quality": "settings-download-gate",
   "instant-preliminary": "settings-instant-preliminary",
   "travel-fees": "settings-travel-fees",
-  "hero-media": "settings-hero-media",
+  "hero-media": "settings-website-appearance",
   "logo-size": "settings-logo-size",
   "landing-logo-size": "settings-landing-logo-size",
   "landing-colors": "settings-landing-colors",

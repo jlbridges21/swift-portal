@@ -17,6 +17,7 @@ import {
   DEFAULT_HERO_SUBHEADLINE,
   DEFAULT_HOW_IT_WORKS,
 } from "@/lib/landing-content";
+import { onboardingWebsitePayload } from "@/lib/website/onboarding";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,7 @@ export default async function OnboardingPage() {
     },
     serviceCount: snap.services.filter((s) => s.is_active !== false).length,
     steps: ONBOARDING_STEP_IDS,
+    website: await onboardingWebsitePayload(tenant.businessId, settings),
   };
 
   return (

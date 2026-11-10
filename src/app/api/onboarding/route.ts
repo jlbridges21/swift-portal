@@ -16,6 +16,7 @@ import {
   DEFAULT_HERO_SUBHEADLINE,
   DEFAULT_HOW_IT_WORKS,
 } from "@/lib/landing-content";
+import { onboardingWebsitePayload } from "@/lib/website/onboarding";
 
 export async function GET() {
   const auth = await requireAdminApi({ adminOnly: true });
@@ -70,6 +71,7 @@ export async function GET() {
         finish: finishGate,
       },
       serviceCount: snap.services.filter((s) => s.is_active !== false).length,
+      website: await onboardingWebsitePayload(tenant.businessId, snap.settings),
     });
   } catch (error) {
     return NextResponse.json(

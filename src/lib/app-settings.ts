@@ -17,6 +17,14 @@ import {
 import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
 import { mergeLandingSettings, type LandingSettings } from "@/lib/landing-content";
 import { sanitizeTaxInformation } from "@/lib/w9-settings";
+import {
+  DEFAULT_PORTFOLIO_SETTINGS,
+  DEFAULT_WEBSITE_SETTINGS,
+  mergePortfolioSettings,
+  mergeWebsiteSettings,
+  type PortfolioSettings,
+  type WebsiteSettings,
+} from "@/lib/website/settings";
 import { DEFAULT_TAX_INFORMATION, type TaxInformationSettings } from "@/lib/w9-fields";
 import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { brandingFieldsChanged, landingSettingsChanged, requireEntitlement } from "@/lib/entitlements";
@@ -188,6 +196,13 @@ export interface AppSettings {
   workflow: WorkflowSettings;
   integrations: IntegrationSettings;
   landing: LandingSettings;
+  /** Settings → Business Website (template, homepage copy, hero, contact). */
+  website: WebsiteSettings;
+  /**
+   * Approved public portfolio projects. Server-owned — only the portfolio API writes it;
+   * generic settings saves never overwrite it.
+   */
+  portfolio: PortfolioSettings;
   /**
    * W-9 identity fields. The taxpayer identification number is not part of this
    * object and is rejected if a client sends one.
@@ -327,6 +342,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     ghlLeadSource: "ShootPortal",
   },
   landing: mergeLandingSettings(null),
+  website: structuredClone(DEFAULT_WEBSITE_SETTINGS),
+  portfolio: structuredClone(DEFAULT_PORTFOLIO_SETTINGS),
   tax: { ...DEFAULT_TAX_INFORMATION },
   travel: defaultTravelSettings(),
   marketingKit: structuredClone(DEFAULT_MARKETING_KIT_SETTINGS),
@@ -421,6 +438,11 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
       ...(stored.integrations ?? {}),
     },
     landing: mergeLandingSettings(stored.landing as Partial<LandingSettings> | null | undefined),
+    website: mergeWebsiteSettings(
+      stored.website as Partial<WebsiteSettings> | null | undefined,
+      stored.landing as Partial<LandingSettings> | null | undefined
+    ),
+    portfolio: mergePortfolioSettings(stored.portfolio),
     tax: sanitizeTaxInformation(stored.tax, false),
     travel: mergeTravelSettings(stored.travel),
     marketingKit: mergeMarketingKitSettings(stored.marketingKit),
@@ -495,8 +517,15 @@ export async function saveAppSettings(
   patch: Partial<AppSettings>,
   updatedBy: string,
   businessId: string,
-  options?: { allowVerificationWrite?: boolean }
+  options?: { allowVerificationWrite?: boolean; allowPortfolioWrite?: boolean }
 ): Promise<AppSettings> {
+  // The portfolio is server-owned (portfolio API only): a settings form holding a stale copy must
+  // never publish or unpublish projects.
+  if (!options?.allowPortfolioWrite && patch.portfolio !== undefined) {
+    const { portfolio: _ignored, ...rest } = patch;
+    void _ignored;
+    patch = rest;
+  }
   if (patch.landing && Object.prototype.hasOwnProperty.call(patch.landing, "howItWorks")) {
     assertHowItWorksCount(patch.landing.howItWorks);
   }
@@ -515,6 +544,10 @@ export async function saveAppSettings(
   const merged = mergeAppSettings(
     deepMerge(current as unknown as Record<string, unknown>, patch as unknown as Record<string, unknown>) as unknown as AppSettings
   );
+
+  if (!options?.allowPortfolioWrite) {
+    merged.portfolio = current.portfolio;
+  }
 
   if (!options?.allowVerificationWrite) {
     merged.email.domainVerificationStatus = current.email.domainVerificationStatus;

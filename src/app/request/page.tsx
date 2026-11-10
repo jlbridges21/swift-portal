@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -8,8 +9,20 @@ import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolutio
 import { getAppSettings } from "@/lib/app-settings";
 import { getProfile } from "@/lib/auth";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { SiteRequest } from "@/components/website/site-pages";
+import { SiteRequestForm } from "@/components/website/site-request-form";
+import { SiteNavProvider } from "@/components/website/site-ui";
+import { optionalPublicSite } from "@/lib/website/page-guard";
+import { loadRequestFormProps } from "@/lib/website/request-form-props";
+import { siteMetadata } from "@/lib/website/server";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const site = await optionalPublicSite();
+  if (!site) return {};
+  return siteMetadata(site, { path: "/request", title: site.view.cta.label, description: site.view.cta.text });
+}
 
 export default async function RequestPage() {
   const host = await getPublicHostContext();
@@ -35,6 +48,20 @@ export default async function RequestPage() {
         </main>
         <Footer />
       </div>
+    );
+  }
+
+  // Business Website live: same form and workflow, inside the website's own header and footer.
+  const site = await optionalPublicSite();
+  if (site) {
+    const formProps = await loadRequestFormProps(site.businessId);
+    return (
+      <SiteNavProvider preview={false}>
+        <SiteRequest
+          view={site.view}
+          form={<SiteRequestForm template={site.view.template} {...formProps} portalOrigin={site.onWebsiteDomain ? site.portalOrigin : null} />}
+        />
+      </SiteNavProvider>
     );
   }
 

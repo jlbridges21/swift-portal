@@ -25,6 +25,8 @@ export type HostResolveSource =
   | "custom_domain"
   /** businesses.listing_domain — public property websites only (Marketing Kit, v118). */
   | "listing_domain"
+  /** businesses.website_domain — the public Business Website (v119). No portal on this host. */
+  | "website_domain"
   | "subdomain"
   | "path"
   | "apex"
@@ -64,6 +66,10 @@ export type HostResolution = {
   rewritePathname: string | null;
   setPathCookie: string | null;
   clearPathCookie: boolean;
+  /** source = website_domain: the business's main website host (www.yourstudio.com). */
+  websiteDomain?: string;
+  /** The request came in on the bare/www alternate that should redirect to websiteDomain. */
+  websiteAlternate?: boolean;
 };
 
 type CacheEntry = { expiresAt: number; business: HostBusinessRow | null };
@@ -111,6 +117,8 @@ function cacheSet(key: string, business: HostBusinessRow | null) {
 
 export function invalidateHostLookupCache() {
   hostLookupCache.clear();
+  websiteLookupCache.clear();
+  redirectCache.clear();
 }
 
 async function lookupByCustomDomain(host: string): Promise<HostBusinessRow | null> {
@@ -164,6 +172,131 @@ export function listingHostRewrite(pathname: string): string | null {
   const m = pathname.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/);
   if (m) return `/l/${m[1]}`;
   return "/l/__not-found";
+}
+
+/**
+ * Business Website host (businesses.website_domain, v119), or its bare/www alternate registered as
+ * a redirect (website_apex_redirect). Before v119 the columns don't exist; the query errors and
+ * this returns null (no behavior change).
+ */
+async function lookupByWebsiteDomain(
+  host: string
+): Promise<{ business: HostBusinessRow; websiteDomain: string; isAlternate: boolean } | null> {
+  // Hostname goes into a PostgREST filter: only plain DNS characters.
+  if (!/^[a-z0-9.-]+$/.test(host)) return null;
+  const key = `website:${host}`;
+  const hit = websiteLookupCache.get(key);
+  if (hit && Date.now() < hit.expiresAt) return hit.value;
+  const supabase = serviceClient();
+  const { data, error } = await supabase
+    .from("businesses")
+    .select(`${HOST_BUSINESS_SELECT}, website_domain, website_apex_redirect`)
+    .or(`website_domain.eq.${host},website_apex_redirect.eq.${host}`)
+    .is("deleted_at", null)
+    .limit(1)
+    .maybeSingle();
+  let value: { business: HostBusinessRow; websiteDomain: string; isAlternate: boolean } | null = null;
+  if (!error && data) {
+    const row = data as unknown as HostBusinessRow & { website_domain: string | null; website_apex_redirect: string | null };
+    if (row.website_domain) {
+      value = { business: row, websiteDomain: row.website_domain, isAlternate: row.website_domain !== host };
+    }
+  }
+  websiteLookupCache.set(key, { expiresAt: Date.now() + HOST_CACHE_TTL_MS, value });
+  return value;
+}
+
+const websiteLookupCache = new Map<
+  string,
+  { expiresAt: number; value: { business: HostBusinessRow; websiteDomain: string; isAlternate: boolean } | null }
+>();
+
+/**
+ * Public Business Website pages live under the internal /site route segment. On every tenant
+ * host (ShootPortal subdomain, portal domain, Business Website domain, /b/{slug}) the friendly
+ * paths map onto it:  /portfolio, /portfolio/{slug}, /services, /contact.
+ * "/" and "/request" are served by their existing routes.
+ */
+export function websitePagePath(pathname: string): string | null {
+  const p = pathname.length > 1 ? pathname.replace(/\/$/, "") : pathname;
+  if (p === "/portfolio" || p === "/services" || p === "/contact") return `/site${p}`;
+  const m = p.match(/^\/portfolio\/([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+  if (m) return `/site/portfolio/${m[1]}`;
+  return null;
+}
+
+/** Path segments that belong to the client portal / app — on a Business Website domain they move to the portal host. */
+const PORTAL_PATH_PREFIXES = [
+  "/login",
+  "/auth",
+  "/dashboard",
+  "/admin",
+  "/staff",
+  "/billing",
+  "/onboarding",
+  "/platform",
+  "/partner",
+  "/signup",
+  "/finish-setup",
+  "/photo",
+  "/folder",
+  "/v",
+  "/embed",
+  "/view",
+  "/w9",
+  "/l",
+  "/b",
+  "/request/thank-you",
+];
+
+/** APIs the public website needs on its own domain (request form + portfolio media). */
+const WEBSITE_DOMAIN_APIS = ["/api/request", "/api/catalog/services", "/api/public/portfolio/"];
+
+export type WebsiteDomainRoute =
+  | { kind: "page"; rewrite: string | null }
+  | { kind: "portal" }
+  | { kind: "api_blocked" }
+  | { kind: "unknown" };
+
+/** How a path on a Business Website domain is handled (edge-safe, pure). */
+export function classifyWebsiteDomainPath(pathname: string): WebsiteDomainRoute {
+  if (pathname.startsWith("/_next/") || /\.[a-z0-9]{2,5}$/i.test(pathname) || pathname === "/robots.txt" || pathname === "/sitemap.xml") {
+    return { kind: "page", rewrite: null };
+  }
+  if (pathname.startsWith("/api/")) {
+    if (pathname === "/api/request" || WEBSITE_DOMAIN_APIS.some((a) => a.endsWith("/") ? pathname.startsWith(a) : pathname === a)) {
+      return { kind: "page", rewrite: null };
+    }
+    return { kind: "api_blocked" };
+  }
+  if (pathname === "/" || pathname === "/request" || pathname === "/request/") return { kind: "page", rewrite: null };
+  const site = websitePagePath(pathname);
+  if (site) return { kind: "page", rewrite: site };
+  if (pathname.startsWith("/site/")) return { kind: "page", rewrite: null };
+  if (PORTAL_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return { kind: "portal" };
+  return { kind: "unknown" };
+}
+
+const redirectCache = new Map<string, { expiresAt: number; value: { from: string; to: string }[] }>();
+
+/** Business-defined old-website redirects (Settings → Business Website → Advanced). */
+export async function lookupWebsiteRedirects(businessId: string): Promise<{ from: string; to: string }[]> {
+  const hit = redirectCache.get(businessId);
+  if (hit && Date.now() < hit.expiresAt) return hit.value;
+  const supabase = serviceClient();
+  const { data } = await supabase
+    .from("business_settings")
+    .select("redirects:settings->website->redirects")
+    .eq("business_id", businessId)
+    .maybeSingle();
+  const raw = (data as { redirects?: unknown } | null)?.redirects;
+  const value = Array.isArray(raw)
+    ? raw
+        .filter((r): r is { from: string; to: string } => Boolean(r) && typeof (r as { from?: unknown }).from === "string" && typeof (r as { to?: unknown }).to === "string")
+        .slice(0, 50)
+    : [];
+  redirectCache.set(businessId, { expiresAt: Date.now() + HOST_CACHE_TTL_MS, value });
+  return value;
 }
 
 export function lookupBusinessById(id: string): Promise<HostBusinessRow | null> {
@@ -262,14 +395,25 @@ export async function resolveRequestHost(input: {
   const custom = host ? await lookupByCustomDomain(host) : null;
   if (custom) {
     return tenantResult(custom, "custom_domain", {
-      rewritePathname: pathSlug ? remainder : null,
+      rewritePathname: websitePagePath(pathSlug ? remainder : input.pathname) ?? (pathSlug ? remainder : null),
     });
   }
 
-  // Listing domains are never under the platform root and never localhost.
+  // Listing / website domains are never under the platform root and never localhost.
   const maybeListingHost =
     Boolean(host) && host !== root && !host.endsWith(`.${root}`) && host !== "localhost" && !/^\d+\.\d+\.\d+\.\d+$/.test(host) && !host.endsWith(".vercel.app");
   if (maybeListingHost) {
+    const website = await lookupByWebsiteDomain(host);
+    if (website) {
+      const route = classifyWebsiteDomainPath(input.pathname);
+      return {
+        ...tenantResult(website.business, "website_domain", {
+          rewritePathname: route.kind === "page" ? route.rewrite : null,
+        }),
+        websiteDomain: website.websiteDomain,
+        websiteAlternate: website.isAlternate,
+      };
+    }
     const listing = await lookupByListingDomain(host);
     if (listing) {
       return tenantResult(listing, "listing_domain", {
@@ -284,7 +428,7 @@ export async function resolveRequestHost(input: {
     const byLabel = await lookupBySlug(label);
     if (byLabel) {
       return tenantResult(byLabel, "subdomain", {
-        rewritePathname: pathSlug ? remainder : null,
+        rewritePathname: websitePagePath(pathSlug ? remainder : input.pathname) ?? (pathSlug ? remainder : null),
       });
     }
   }
@@ -305,7 +449,7 @@ export async function resolveRequestHost(input: {
     if (byPath) {
       return tenantResult(byPath, "path", {
         pathPrefix: `/b/${pathSlug}`,
-        rewritePathname: remainder,
+        rewritePathname: websitePagePath(remainder) ?? remainder,
         setPathCookie: pathSlug,
       });
     }

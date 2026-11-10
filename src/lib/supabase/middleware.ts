@@ -2,13 +2,17 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   applyHostHeaders,
+  classifyWebsiteDomainPath,
+  lookupWebsiteRedirects,
   lookupBusinessById,
   lookupBusinessByIdFresh,
   PATH_TENANT_COOKIE,
   resolveRequestHost,
   type HostResolution,
 } from "@/lib/host-resolution";
+import { resolveWebsiteRedirect } from "@/lib/website/settings";
 import {
+  getBusinessPortalOrigin,
   getLoginRedirectOrigin,
   getPlatformApexHostname,
   isBarePlatformApexHostname,
@@ -105,6 +109,42 @@ function redirectViaSessionContinue(request: NextRequest, destAbsolute: string):
   return NextResponse.redirect(bridge);
 }
 
+async function handleWebsiteDomain(request: NextRequest, resolution: HostResolution): Promise<NextResponse | null> {
+  const business = resolution.business!;
+  const path = request.nextUrl.pathname;
+  const isRead = request.method === "GET" || request.method === "HEAD";
+  // Bare/www alternate: Vercel normally redirects at the edge; this is the fallback.
+  if (resolution.websiteAlternate && resolution.websiteDomain) {
+    const url = new URL(request.nextUrl.pathname + request.nextUrl.search, `https://${resolution.websiteDomain}`);
+    return NextResponse.redirect(url, isRead ? 308 : 307);
+  }
+  const route = classifyWebsiteDomainPath(path);
+  if (route.kind === "page") return null;
+  if (route.kind === "api_blocked") {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+  if (route.kind === "portal") {
+    const origin = getBusinessPortalOrigin(business);
+    return NextResponse.redirect(`${origin}${path}${request.nextUrl.search}`, 307);
+  }
+  // Unknown path — an old-website URL? Business redirects first, then common aliases.
+  if (isRead) {
+    try {
+      const redirects = await lookupWebsiteRedirects(business.id);
+      const target = resolveWebsiteRedirect({ redirects }, path);
+      if (target && target !== path.toLowerCase()) {
+        const url = request.nextUrl.clone();
+        url.pathname = target;
+        url.search = "";
+        return NextResponse.redirect(url, 308);
+      }
+    } catch (err) {
+      console.error("[website-domain] redirect lookup failed", err instanceof Error ? err.message : err);
+    }
+  }
+  return null;
+}
+
 export async function updateSession(request: NextRequest) {
   const inbound = inboundHost(request);
   const inboundHostname = inbound.split(":")[0]?.toLowerCase() ?? "";
@@ -135,6 +175,15 @@ export async function updateSession(request: NextRequest) {
   // Property website domain (listings.yourstudio.com): public listing pages only. No portal
   // session, auth redirects or tenant UI ever run on this host.
   if (resolution.source === "listing_domain") {
+    return buildSessionResponse(request, requestHeaders, resolution);
+  }
+
+  // Business Website domain (www.yourstudio.com): the public website only. Portal paths
+  // (sign-in, dashboard, admin, share links…) move to the client portal address; no portal
+  // session or auth logic runs on this host. Old-website paths can redirect to new pages.
+  if (resolution.source === "website_domain" && resolution.business) {
+    const websiteResponse = await handleWebsiteDomain(request, resolution);
+    if (websiteResponse) return websiteResponse;
     return buildSessionResponse(request, requestHeaders, resolution);
   }
 

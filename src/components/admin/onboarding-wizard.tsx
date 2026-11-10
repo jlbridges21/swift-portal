@@ -12,9 +12,12 @@ import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { ServicesSettingsCard } from "@/components/admin/services-settings-card";
 import { TravelFeesOnboarding } from "@/components/admin/travel-fees-card";
 import { StripeConnectCard } from "@/components/admin/stripe-connect-card";
-import { LandingPage } from "@/components/landing/landing-page";
 import { LandingEditorPreviewFrame } from "@/components/landing/landing-editor-preview-frame";
-import { usePortalBrand } from "@/components/brand/brand-provider";
+import { SiteHome } from "@/components/website/site-home";
+import { SiteNavProvider } from "@/components/website/site-ui";
+import { buildSiteView } from "@/lib/website/view";
+import { WEBSITE_TEMPLATE_INFO, WEBSITE_TEMPLATES, type WebsiteTemplateId } from "@/lib/website/settings";
+import type { OnboardingWebsitePayload } from "@/lib/website/onboarding";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { toast } from "sonner";
 import {
@@ -24,21 +27,13 @@ import {
   ExternalLink,
   Loader2,
   LogOut,
-  RotateCcw,
 } from "lucide-react";
 import {
   ONBOARDING_STEP_IDS,
   type OnboardingStepId,
   type OnboardingState,
 } from "@/lib/onboarding";
-import {
-  LANDING_LIMITS,
-  DEFAULT_HOW_IT_WORKS,
-  HOW_IT_WORKS_STEP_COUNT,
-  mergeLandingSettings,
-  resolveLandingPage,
-  type LandingSettings,
-} from "@/lib/landing-content";
+
 import { cn } from "@/lib/utils";
 
 function BrandPreview({
@@ -96,6 +91,8 @@ type OnboardingPayload = {
     howItWorks: { label: string; description: string }[];
     howItWorksPlaceholders: { label: string; description: string }[];
   };
+  /** The automatically generated Business Website (Settings → Business Website). */
+  website: OnboardingWebsitePayload;
   gates: {
     identity: { ok: boolean; reason?: string };
     services: { ok: boolean; reason?: string };
@@ -110,7 +107,7 @@ const STEP_LABELS: Record<OnboardingStepId, string> = {
   branding: "Branding",
   services: "Services",
   payments: "Payments",
-  landing: "Landing",
+  landing: "Your Website",
   finish: "Finish",
 };
 
@@ -140,43 +137,39 @@ export function OnboardingWizard({
     brandPrimaryColor: initial.business.brandPrimaryColor,
     brandAccentColor: initial.business.brandAccentColor,
   });
-  const [landing, setLanding] = useState({
-    headline: initial.landing.headline,
-    subheadline: initial.landing.subheadline,
-    howItWorks: initial.landing.howItWorks.length
-      ? initial.landing.howItWorks
-      : DEFAULT_HOW_IT_WORKS.map((s) => ({ label: "", description: "" })),
+  const [site, setSite] = useState<{ template: WebsiteTemplateId; heroImageUrl: string }>({
+    template: initial.website.website.template,
+    heroImageUrl: initial.website.website.heroSource === "image" ? initial.website.website.heroImageUrl : "",
   });
 
   const step = data.state.currentStep;
   const stepIdx = ONBOARDING_STEP_IDS.indexOf(step);
-  const brand = usePortalBrand();
 
-  const draftLandingPage = useMemo(() => {
-    const name = identity.businessName.trim() || businessDisplayName;
-    const merged = mergeLandingSettings({
-      hero: {
-        headline: landing.headline,
-        subheadline: landing.subheadline,
-      },
-      howItWorks: landing.howItWorks.slice(0, HOW_IT_WORKS_STEP_COUNT),
-    } as Partial<LandingSettings>);
-    return resolveLandingPage({
-      landing: merged,
-      businessName: name,
-      portalName: brand.portalName || name,
-      serviceNames: [],
-      services: [],
-    });
-  }, [
-    landing.headline,
-    landing.subheadline,
-    landing.howItWorks,
-    identity.businessName,
-    businessDisplayName,
-    brand.portalName,
-  ]);
-  const previewLandingPage = useDebouncedValue(draftLandingPage, 200);
+  const draftSiteView = useMemo(
+    () =>
+      buildSiteView({
+        website: {
+          ...data.website.website,
+          template: site.template,
+          heroSource: site.heroImageUrl ? "image" : data.website.website.heroSource === "image" ? "auto" : data.website.website.heroSource,
+          heroImageUrl: site.heroImageUrl,
+        },
+        business: {
+          ...data.website.business,
+          name: identity.businessName.trim() || data.website.business.name || businessDisplayName,
+          logoUrl: branding.logoUrl,
+          primaryColor: branding.brandPrimaryColor,
+          accentColor: branding.brandAccentColor,
+          email: identity.primaryContactEmail,
+          phone: identity.phoneNumber,
+        },
+        services: data.website.services,
+        portfolio: [],
+        links: { clientLogin: "/login", request: "/request" },
+      }),
+    [data.website, site, identity, branding, businessDisplayName]
+  );
+  const previewSiteView = useDebouncedValue(draftSiteView, 150);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/onboarding", { credentials: "include" });
@@ -191,13 +184,6 @@ export function OnboardingWizard({
       logoUrl: next.business.logoUrl,
       brandPrimaryColor: next.business.brandPrimaryColor,
       brandAccentColor: next.business.brandAccentColor,
-    });
-    setLanding({
-      headline: next.landing.headline,
-      subheadline: next.landing.subheadline,
-      howItWorks: next.landing.howItWorks?.length
-        ? next.landing.howItWorks
-        : DEFAULT_HOW_IT_WORKS.map(() => ({ label: "", description: "" })),
     });
     return next;
   }, []);
@@ -277,23 +263,22 @@ export function OnboardingWizard({
     }
   }
 
-  async function completeLanding() {
+  async function completeWebsite() {
     setBusy(true);
     try {
-      if (data.canCustomizeBranding) {
+      const w = data.website.website;
+      const heroChanged = site.heroImageUrl !== (w.heroSource === "image" ? w.heroImageUrl : "");
+      if (site.template !== w.template || heroChanged) {
         await saveSettings({
-          landing: {
-            hero: {
-              headline: landing.headline,
-              subheadline: landing.subheadline,
-            },
-            howItWorks: landing.howItWorks.slice(0, HOW_IT_WORKS_STEP_COUNT),
+          website: {
+            template: site.template,
+            ...(heroChanged ? { heroSource: site.heroImageUrl ? "image" : "auto", heroImageUrl: site.heroImageUrl } : {}),
           },
         });
       }
       await runAction({ action: "complete", step: "landing" });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save landing copy");
+      toast.error(err instanceof Error ? err.message : "Could not save your website");
       setBusy(false);
     }
   }
@@ -404,7 +389,7 @@ export function OnboardingWizard({
                 <li>Logo and colors (optional — skip if you want)</li>
                 <li>Confirm your services and pricing (required)</li>
                 <li>Connect Stripe so you can get paid</li>
-                <li>A quick landing-page headline, then preview</li>
+                <li>A look at the business website we create for you automatically</li>
               </ul>
               <p>
                 Seeded starter services are already in place. You can refine them now or later in
@@ -588,148 +573,84 @@ export function OnboardingWizard({
           )}
 
           {step === "landing" && (
-            <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-            <div className="min-w-0 space-y-4">
-              {!data.canCustomizeBranding ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-                  Landing customization needs Custom branding on your plan. Your portal already
-                  shows derived defaults — you can skip.
-                </div>
-              ) : (
-                <>
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-start">
+              <div className="min-w-0 space-y-5">
+                <div className="space-y-2">
+                  <p className="text-base font-medium text-heading">ShootPortal already built a website for your business.</p>
                   <p className="text-sm text-muted">
-                    Leave blank to use smart defaults. Fine-tuning lives in Settings → Client Landing
-                    Page.
+                    It uses your name, logo, colors and services. As you deliver projects you can add them to your portfolio. Nothing to write now —
+                    everything can be changed later in Settings → Business Website.
                   </p>
-                  <div className="space-y-2">
-                    <Label htmlFor="ob-headline">Headline</Label>
-                    <Input
-                      id="ob-headline"
-                      maxLength={LANDING_LIMITS.headline}
-                      value={landing.headline}
-                      placeholder={data.landing.headlinePlaceholder}
-                      onChange={(e) => setLanding((p) => ({ ...p, headline: e.target.value }))}
-                    />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Style (optional)</Label>
+                  <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Website template">
+                    {WEBSITE_TEMPLATES.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        role="radio"
+                        aria-checked={site.template === t}
+                        onClick={() => setSite((p) => ({ ...p, template: t }))}
+                        className={cn(
+                          "rounded-lg border px-2 py-2 text-left text-xs",
+                          site.template === t ? "border-accent bg-accent/5 text-heading ring-2 ring-accent/20" : "border-border text-muted"
+                        )}
+                      >
+                        <span className="block font-semibold">{WEBSITE_TEMPLATE_INFO[t].name}</span>
+                      </button>
+                    ))}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="ob-sub">Subheadline</Label>
-                    <textarea
-                      id="ob-sub"
-                      maxLength={LANDING_LIMITS.subheadline}
-                      rows={3}
-                      value={landing.subheadline}
-                      placeholder={data.landing.subheadlinePlaceholder}
-                      onChange={(e) => setLanding((p) => ({ ...p, subheadline: e.target.value }))}
-                      className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-3 pt-2">
-                    <div>
-                      <p className="text-sm font-medium text-heading">How it works (optional)</p>
-                      <p className="text-xs text-muted">
-                        Four steps, fixed order. Leave blank to keep the defaults.
-                      </p>
-                    </div>
-                    {Array.from({ length: HOW_IT_WORKS_STEP_COUNT }, (_, i) => {
-                      const stepRow = landing.howItWorks[i] ?? { label: "", description: "" };
-                      const ph =
-                        data.landing.howItWorksPlaceholders?.[i] ?? DEFAULT_HOW_IT_WORKS[i];
-                      return (
-                        <div key={i} className="space-y-2 rounded-lg border border-border p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                              Step {String(i + 1).padStart(2, "0")}
-                            </p>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              onClick={() =>
-                                setLanding((p) => {
-                                  const howItWorks = [...p.howItWorks];
-                                  howItWorks[i] = { label: "", description: "" };
-                                  return { ...p, howItWorks };
-                                })
-                              }
-                            >
-                              <RotateCcw className="mr-1 h-3 w-3" />
-                              Reset to default
-                            </Button>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor={`ob-hiw-${i}-label`}>Label</Label>
-                            <Input
-                              id={`ob-hiw-${i}-label`}
-                              maxLength={LANDING_LIMITS.howItWorksLabel}
-                              value={stepRow.label}
-                              placeholder={ph?.label}
-                              onChange={(e) =>
-                                setLanding((p) => {
-                                  const howItWorks = [...p.howItWorks];
-                                  while (howItWorks.length < HOW_IT_WORKS_STEP_COUNT) {
-                                    howItWorks.push({ label: "", description: "" });
-                                  }
-                                  howItWorks[i] = { ...howItWorks[i], label: e.target.value };
-                                  return { ...p, howItWorks };
-                                })
-                              }
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor={`ob-hiw-${i}-desc`}>Description</Label>
-                            <textarea
-                              id={`ob-hiw-${i}-desc`}
-                              maxLength={LANDING_LIMITS.howItWorksDescription}
-                              rows={2}
-                              value={stepRow.description}
-                              placeholder={ph?.description}
-                              onChange={(e) =>
-                                setLanding((p) => {
-                                  const howItWorks = [...p.howItWorks];
-                                  while (howItWorks.length < HOW_IT_WORKS_STEP_COUNT) {
-                                    howItWorks.push({ label: "", description: "" });
-                                  }
-                                  howItWorks[i] = {
-                                    ...howItWorks[i],
-                                    description: e.target.value,
-                                  };
-                                  return { ...p, howItWorks };
-                                })
-                              }
-                              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-              <p className="text-sm text-muted">
-                Optional:{" "}
-                <Link href="/admin/settings#settings-custom-domain" className="font-medium text-accent underline">
-                  Use your own web address
-                </Link>{" "}
-                so clients visit portal.yourstudio.com instead of a ShootPortal subdomain.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" disabled={busy} onClick={() => void runAction({ action: "goto", step: "payments" })}>
-                  <ArrowLeft className="h-4 w-4" /> Back
-                </Button>
-                <Button type="button" variant="outline" disabled={busy} onClick={() => void runAction({ action: "skip", step: "landing" })}>
-                  Skip for now
-                </Button>
-                <Button type="button" variant="accent" disabled={busy} onClick={() => void completeLanding()}>
-                  Continue
-                </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <BrandAssetField
+                    kind="heroImage"
+                    value={site.heroImageUrl}
+                    inputId="ob-hero-image"
+                    onUrlChange={(heroImageUrl) => setSite((p) => ({ ...p, heroImageUrl }))}
+                  />
+                  <p className="text-xs text-muted">Optional. Without one, your website uses a designed background in your colors.</p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" disabled={busy} onClick={() => void runAction({ action: "goto", step: "payments" })}>
+                    <ArrowLeft className="h-4 w-4" /> Back
+                  </Button>
+                  <a
+                    href={data.portalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-heading"
+                  >
+                    Preview My Website <ExternalLink className="h-4 w-4" />
+                  </a>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" disabled={busy} onClick={() => void runAction({ action: "skip", step: "landing" })}>
+                    Customize Later
+                  </Button>
+                  <Button type="button" variant="accent" disabled={busy} onClick={() => void completeWebsite()}>
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Continue <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted">
+                  Have your own domain? Connect it anytime in{" "}
+                  <Link href="/admin/settings#settings-website-domain" className="font-medium text-accent underline">
+                    Settings → Use your own web address
+                  </Link>
+                  .
+                </p>
               </div>
-            </div>
-            <div className="min-w-0 lg:sticky lg:top-6 lg:h-[min(70dvh,40rem)]">
-              <LandingEditorPreviewFrame title="Landing preview">
-                <LandingPage brand={brand} page={previewLandingPage} />
-              </LandingEditorPreviewFrame>
-            </div>
+              <div className="min-w-0 lg:sticky lg:top-6 lg:h-[min(72dvh,44rem)]">
+                <LandingEditorPreviewFrame title="Your Business Website">
+                  <SiteNavProvider preview>
+                    <SiteHome view={previewSiteView} preview />
+                  </SiteNavProvider>
+                </LandingEditorPreviewFrame>
+              </div>
             </div>
           )}
 

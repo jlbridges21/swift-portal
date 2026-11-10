@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getCanonicalSiteUrl } from "@/lib/site-metadata";
+import { resolveSeoHost, websiteSitemapUrls } from "@/lib/website/metadata-routes";
 import { getAllArticles } from "@/lib/blog/registry";
 import { SOLUTION_PAGES } from "@/lib/solutions";
 import { TOOLS } from "@/lib/tools/registry";
@@ -28,7 +29,14 @@ const LEGAL_LAST_UPDATED = {
 
 type Entry = MetadataRoute.Sitemap[number];
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // Tenant hosts: the Business Website's own pages (canonical host only), never platform pages.
+  const seo = await resolveSeoHost().catch(() => ({ kind: "platform" as const }));
+  if (seo.kind === "website") {
+    return (await websiteSitemapUrls(seo.businessId, seo.origin)).map((u) => ({ ...u, changeFrequency: "weekly" as const }));
+  }
+  if (seo.kind === "tenant_private") return [];
+
   const base = getCanonicalSiteUrl();
   const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
 

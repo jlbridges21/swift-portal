@@ -157,12 +157,16 @@ async function vercelFetch<T>(
 }
 
 export async function vercelAddProjectDomain(
-  domain: string
+  domain: string,
+  /** Register `domain` as a redirect to another domain on this project (e.g. apex → www). */
+  opts?: { redirect?: string; redirectStatusCode?: 301 | 302 | 307 | 308 }
 ): Promise<{ ok: true; data: VercelProjectDomain } | { ok: false; error: VercelApiError }> {
   return vercelFetch<VercelProjectDomain>(
     "POST",
     `/v10/projects/${encodeURIComponent(projectId())}/domains${teamQuery()}`,
-    { name: domain }
+    opts?.redirect
+      ? { name: domain, redirect: opts.redirect, redirectStatusCode: opts.redirectStatusCode ?? 308 }
+      : { name: domain }
   );
 }
 
