@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "dev:clean": "rm -rf .next && next dev",
-    "build": "next build",
+    "dev": "node scripts/lightcraft/install.mjs && next dev",
+    "dev:clean": "rm -rf .next && node scripts/lightcraft/install.mjs && next dev",
+    "build": "node scripts/lightcraft/install.mjs && next build",
     "start": "next start",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
@@ -35,7 +35,8 @@
     "tenant-lint": "npx tsx scripts/tenant-lint.ts && npx tsx scripts/verify-marketing-css.ts",
     "db:seed-zips": "npx tsx --env-file=.env.local scripts/seed-zip-centroids.ts",
     "tenant-pentest": "npx tsx scripts/tenant-pentest.ts",
-    "backfill:photo-thumbs": "npx tsx scripts/backfill-photo-thumbnails.ts"
+    "backfill:photo-thumbs": "npx tsx scripts/backfill-photo-thumbnails.ts",
+    "lightcraft:install": "node scripts/lightcraft/install.mjs --force"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

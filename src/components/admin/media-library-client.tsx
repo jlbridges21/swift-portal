@@ -24,15 +24,16 @@ import type { LibraryAsset, LibraryAssetKind } from "@/lib/media-library";
 import {
   Search, Star, ImageIcon, Video, FileText, Globe, Download, ExternalLink, Box,
   X, Filter, ChevronDown, Trash2, Tag, Pencil, Loader2, CheckSquare, Square, Upload, Share2,
-  ListChecks, AlertTriangle,
+  ListChecks, AlertTriangle, SlidersHorizontal,
 } from "lucide-react";
+import { usePhotoEditor } from "@/components/photo-editor/use-photo-editor";
+import { isEditablePhotoAsset, photoEditorLabel } from "@/lib/photo-editor/shared";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { usePhotoShareDialog } from "@/components/photos/photo-share-dialog";
 import { UNFILED_FOLDER_LABEL, UNFILED_FOLDER_SCOPE } from "@/lib/project-zip-assets";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { MediaUploadModal } from "@/components/admin/media-upload-modal";
-import { PropertyLineToolButton } from "@/components/admin/property-line-tool-button";
 import { LibraryVideoPoster } from "@/components/ui/library-video-poster";
 import { VideoMediaPlaceholder } from "@/components/ui/video-media-placeholder";
 import { EXTERNAL_3D_PROVIDER_LABELS, isExternal3dProvider } from "@/lib/external-3d-models";
@@ -47,7 +48,6 @@ import { mediaDisplayName } from "@/lib/media-display-name";
 import {
   createThumbRequestQueue,
   fetchThumbUrls,
-  invalidateThumbUrl,
 } from "@/lib/media-thumb-client";
 
 interface FilterOptions {
@@ -231,6 +231,7 @@ export function MediaLibraryClient({
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
+  const photoEditor = usePhotoEditor();
   const [selectMode, setSelectMode] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [pendingBulk, setPendingBulk] = useState<PendingBulk | null>(null);
@@ -326,27 +327,6 @@ export function MediaLibraryClient({
     thumbQueueRef.current.request(asset.id);
   }
 
-  async function refreshThumbForAsset(assetId: string, force = true) {
-    invalidateThumbUrl(assetId);
-    if (force) {
-      setThumbUrls((prev) => {
-        const next = { ...prev };
-        delete next[assetId];
-        return next;
-      });
-    }
-    const urls = await fetchThumbUrls([assetId], { force: true });
-    const url = urls[assetId];
-    if (url) {
-      // Cache-bust only after an edit/replace so the browser picks up the new bytes.
-      const separator = url.includes("?") ? "&" : "?";
-      setThumbUrls((prev) => ({
-        ...prev,
-        [assetId]: force ? `${url}${separator}v=${Date.now()}` : url,
-      }));
-    }
-  }
-
   // ---- Selection -------------------------------------------------------------
 
   const isSelected = useCallback(
@@ -377,6 +357,7 @@ export function MediaLibraryClient({
   const selectedLinks = (selectedKindCounts.tour ?? 0) + (selectedKindCounts.model ?? 0);
   const selectedModels = selectedKindCounts.model ?? 0;
   const selectedTours = selectedKindCounts.tour ?? 0;
+  const selectedPhotoCount = selectedKindCounts.photo ?? 0;
   const allMatchingSelected = selection.mode === "all" && selection.excluded.size === 0;
   const bulkBusy = resolving || bulkProgress !== null;
 
@@ -442,6 +423,17 @@ export function MediaLibraryClient({
     } finally {
       setResolving(false);
     }
+  }
+
+  async function editSelectedPhotos() {
+    const items = await resolveSelection();
+    if (!items) return;
+    const ids = items.filter((i) => i.kind === "photo").map((i) => i.id);
+    if (!ids.length) {
+      toast.error("Select at least one photo to edit.");
+      return;
+    }
+    void photoEditor.open({ mediaIds: ids });
   }
 
   async function startBulk(action: BulkKind) {
@@ -746,6 +738,16 @@ export function MediaLibraryClient({
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> {bulkProgress ?? "Loading selection…"}
                   </span>
                 ) : null}
+                {selectedPhotoCount > 0 ? (
+                  <Button
+                    variant="accent"
+                    size="sm"
+                    disabled={bulkBusy || photoEditor.opening}
+                    onClick={() => void editSelectedPhotos()}
+                  >
+                    <SlidersHorizontal className="h-4 w-4" /> {photoEditorLabel(selectedPhotoCount)}
+                  </Button>
+                ) : null}
                 <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => void startBulk("favorite")}>
                   <Star className="h-4 w-4" /> Star
                 </Button>
@@ -870,29 +872,17 @@ export function MediaLibraryClient({
             setAssets((prev) => prev.filter((a) => a.id !== drawerAsset.id));
             setDrawerAsset(null);
           }}
-          onPropertyLineSaved={async (savedAsset) => {
-            const savedId =
-              savedAsset && typeof savedAsset.id === "string" ? savedAsset.id : drawerAsset.id;
-
-            const detailRes = await fetch(`/api/media/library/${drawerAsset.id}?kind=${drawerAsset.kind}`, {
-              credentials: "include",
-            });
-            if (detailRes.ok) {
-              const detailData = await detailRes.json();
-              if (detailData.asset) {
-                const updated = detailData.asset as LibraryAsset;
-                setAssets((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
-                setDrawerAsset(updated);
-              }
-            }
-
-            await refreshThumbForAsset(savedId);
-            if (savedId !== drawerAsset.id) {
-              await refreshThumbForAsset(drawerAsset.id);
-            }
-
-            void fetchPage(1, true);
-          }}
+          onEditPhoto={
+            isEditablePhotoAsset({ media_type: drawerAsset.kind, media_source: drawerAsset.media_source, mime_type: drawerAsset.mime_type })
+              ? () =>
+                  void photoEditor.open({
+                    projectId: drawerAsset.project_id,
+                    mediaIds: [drawerAsset.id],
+                    activeMediaId: drawerAsset.id,
+                  })
+              : undefined
+          }
+          editOpening={photoEditor.opening}
         />
       )}
 
@@ -1012,7 +1002,7 @@ function isVideoAsset(asset: LibraryAsset): boolean {
 }
 
 function AssetDrawer({
-  asset, projects, onClose, onUpdate, onFavorite, onShare, onDeleted, onPropertyLineSaved,
+  asset, projects, onClose, onUpdate, onFavorite, onShare, onDeleted, onEditPhoto, editOpening,
 }: {
   asset: LibraryAsset;
   projects: { id: string; project_name: string; property_address: string }[];
@@ -1022,7 +1012,9 @@ function AssetDrawer({
   /** Present when this user may share photos. */
   onShare?: () => void;
   onDeleted: () => void;
-  onPropertyLineSaved?: (asset: Record<string, unknown>) => void;
+  /** Present for editable photos — opens the Photo Editor. */
+  onEditPhoto?: () => void;
+  editOpening?: boolean;
 }) {
   const isSharablePhoto = asset.kind === "photo" && asset.media_source !== "youtube";
   const isModel = asset.kind === "model";
@@ -1220,6 +1212,12 @@ function AssetDrawer({
                 <Download className="h-4 w-4" /> Download
               </Button>
             )}
+            {onEditPhoto ? (
+              <Button variant="accent" size="sm" onClick={onEditPhoto} disabled={editOpening}>
+                {editOpening ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlidersHorizontal className="h-4 w-4" />}
+                Edit Photo
+              </Button>
+            ) : null}
             {isSharablePhoto && onShare ? (
               <Button variant="outline" size="sm" onClick={onShare}>
                 <Share2 className="h-4 w-4" /> Share
@@ -1290,17 +1288,6 @@ function AssetDrawer({
                 onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
                 placeholder={`Tags (comma-separated). Suggested: ${DAM_SUGGESTED_TAGS.slice(0, 4).join(", ")}`}
               />
-              {asset.kind === "photo" && asset.media_source !== "youtube" && (
-                <PropertyLineToolButton
-                  mediaId={asset.id}
-                  fileName={mediaDisplayName(asset)}
-                  title={asset.title}
-                  projectId={asset.project_id}
-                  onSaved={(savedAsset) => {
-                    onPropertyLineSaved?.(savedAsset);
-                  }}
-                />
-              )}
               <Button variant="accent" size="sm" disabled={saving} onClick={saveMetadata}>
                 {saving ? "Saving..." : "Save Metadata"}
               </Button>

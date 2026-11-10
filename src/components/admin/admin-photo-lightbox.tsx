@@ -4,27 +4,26 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SafeAreaCloseButton } from "@/components/ui/safe-area-close-button";
 import { MediaThumbnailSkeleton } from "@/components/ui/skeleton";
-import { PropertyLineToolButton } from "@/components/admin/property-line-tool-button";
 import { RemoteImage } from "@/components/ui/remote-image";
 import type { MediaAsset } from "@/lib/types";
-import { cn } from "@/lib/utils";
-import { Download, Pencil } from "lucide-react";
-import { toast } from "sonner";
+import { Download, Loader2, SlidersHorizontal } from "lucide-react";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import { downloadMediaAsset } from "@/lib/download";
+import { isEditablePhotoAsset } from "@/lib/photo-editor/shared";
 import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
 import type { DownloadQuality } from "@/lib/download-quality";
 
 interface AdminPhotoLightboxProps {
   photo: MediaAsset;
   onClose: () => void;
-  onSavedPropertyLine?: (asset: Record<string, unknown>) => void;
+  /** Opens this photo in the Photo Editor. Omitted when the user can't edit photos. */
+  onEdit?: () => void;
+  editOpening?: boolean;
 }
 
-export function AdminPhotoLightbox({ photo, onClose, onSavedPropertyLine }: AdminPhotoLightboxProps) {
+export function AdminPhotoLightbox({ photo, onClose, onEdit, editOpening }: AdminPhotoLightboxProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
 
   useEffect(() => {
@@ -76,18 +75,25 @@ export function AdminPhotoLightbox({ photo, onClose, onSavedPropertyLine }: Admi
         className="flex items-center justify-between gap-3 px-4 pb-2"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)" }}
       >
-        <span className="min-w-0 truncate text-sm text-white/80 pr-14">
-          {mediaDisplayName(photo)}
+        <span className="flex min-w-0 items-center gap-2 pr-14 text-sm text-white/80">
+          <span className="truncate">{mediaDisplayName(photo)}</span>
+          {photo.edit_status === "edited" ? (
+            <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/80">Edited</span>
+          ) : null}
         </span>
         <div className="flex shrink-0 gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="min-h-11 border-white/20 bg-white/10 text-white hover:bg-white/20"
-            onClick={() => setEditing((e) => !e)}
-          >
-            <Pencil className="h-4 w-4" /> Edit
-          </Button>
+          {onEdit && isEditablePhotoAsset(photo) ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-11 border-white/20 bg-white/10 text-white hover:bg-white/20"
+              onClick={onEdit}
+              disabled={editOpening}
+            >
+              {editOpening ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlidersHorizontal className="h-4 w-4" />}
+              Edit Photo
+            </Button>
+          ) : null}
           {url && (
             <Button
               variant="outline"
@@ -121,27 +127,6 @@ export function AdminPhotoLightbox({ photo, onClose, onSavedPropertyLine }: Admi
           </div>
         )}
       </div>
-
-      {editing && (
-        <div
-          className={cn(
-            "shrink-0 border-t border-white/10 bg-slate-900/95 px-4 py-4 space-y-3",
-            "pb-[max(1rem,env(safe-area-inset-bottom))]"
-          )}
-        >
-          <p className="text-sm font-medium text-white">Edit tools</p>
-          <PropertyLineToolButton
-            mediaId={photo.id}
-            fileName={photo.file_name}
-            title={mediaDisplayName(photo)}
-            projectId={photo.project_id}
-            onSaved={(asset) => {
-              toast.success("Property line image saved to project");
-              onSavedPropertyLine?.(asset);
-            }}
-          />
-        </div>
-      )}
 
       <DownloadQualityDialog
         open={qualityOpen}

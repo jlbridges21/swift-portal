@@ -35,6 +35,23 @@ const nextConfig = {
     ];
 
     return [
+      // Photo Editor engine (LightCraft, installed by scripts/lightcraft/install.mjs).
+      // File names don't change between versions → revalidate instead of immutable.
+      // Framable only by ShootPortal itself; never indexed.
+      {
+        source: "/lightcraft/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+          { key: "X-Robots-Tag", value: "noindex" },
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+        ],
+      },
+      {
+        source: "/lightcraft/:path*.wasm",
+        headers: [{ key: "Content-Type", value: "application/wasm" }],
+      },
       {
         source: "/icons/:path*",
         headers: staticAssetCache,

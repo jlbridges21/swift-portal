@@ -83,6 +83,9 @@ const BUSINESS_OWNED_TABLES = new Set([
   "video_reviews",
   "video_public_shares",
   "video_public_share_daily",
+  "media_asset_versions",
+  "media_edit_drafts",
+  "photo_edit_sessions",
   "w9_sends",
   "w9_send_files",
   "web_push_subscriptions",
@@ -272,6 +275,8 @@ const FROM_UNSCOPED_ALLOWLIST = new Set([
   "src/lib/project-zip-download.ts",
   "src/lib/video-review-media.ts",
   "src/lib/video-reviews.ts",
+  // Photo Editor: every helper takes a TenantServiceClient (`db`), whose from() is business-scoped.
+  "src/lib/photo-editor/server.ts",
   "src/lib/platform-audit.ts",
   "src/lib/platform-onboard.ts",
   "src/lib/custom-domain.ts",

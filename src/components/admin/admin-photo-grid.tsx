@@ -53,6 +53,7 @@ import {
   Pencil,
   RotateCw,
   Share2,
+  SlidersHorizontal,
   Star,
   Trash2,
   Upload,
@@ -75,6 +76,8 @@ import {
 } from "@/components/admin/photo-folder-tile";
 import { MoveToFolderDialog, NameDialog } from "@/components/admin/photo-grid-dialogs";
 import { mediaDisplayName } from "@/lib/media-display-name";
+import { isEditablePhotoAsset, photoEditorLabel } from "@/lib/photo-editor/shared";
+import { usePhotoEditor } from "@/components/photo-editor/use-photo-editor";
 import { downloadMediaAsset } from "@/lib/download";
 import { cn } from "@/lib/utils";
 import type { MediaAsset, MediaFolder } from "@/lib/types";
@@ -106,7 +109,6 @@ interface AdminPhotoGridProps {
   onFoldersChange: (folders: MediaFolder[]) => void;
   onToggleVisibility: (id: string, visible: boolean) => void;
   onUploadFiles: (files: File[], folderId: string | null) => void;
-  onPropertyLineSaved?: (asset: Record<string, unknown>) => void;
   onRefresh?: () => void;
   /** Active individual shares by asset id — drives the Shared badge and move/delete warnings. */
   shareSummary?: Record<string, PhotoShareSummary>;
@@ -452,6 +454,7 @@ function SortablePhotoCard({
 
   const name = mediaDisplayName(photo);
   const hidden = !isClientVisible(photo);
+  const edited = photo.edit_status === "edited";
 
   return (
     <div
@@ -540,7 +543,7 @@ function SortablePhotoCard({
           onRetry={onThumbRetry}
           scrollRoot={scrollRoot}
         />
-        {(isHeroPhoto || hidden || shared) && (
+        {(isHeroPhoto || hidden || shared || edited) && (
           <div className="pointer-events-none absolute bottom-2 left-2 flex flex-wrap gap-1">
             {isHeroPhoto && (
               <PhotoBadge tone="accent">
@@ -555,6 +558,11 @@ function SortablePhotoCard({
             {shared && (
               <PhotoBadge tone="neutral">
                 <Link2 className="h-2.5 w-2.5" /> Shared
+              </PhotoBadge>
+            )}
+            {edited && (
+              <PhotoBadge tone="neutral">
+                <SlidersHorizontal className="h-2.5 w-2.5" /> Edited
               </PhotoBadge>
             )}
           </div>
@@ -617,7 +625,6 @@ export function AdminPhotoGrid({
   onFoldersChange,
   onToggleVisibility,
   onUploadFiles,
-  onPropertyLineSaved,
   onRefresh,
   shareSummary,
   onShare,
@@ -629,6 +636,7 @@ export function AdminPhotoGrid({
   const coarsePointer = useCoarsePointer();
   const [view, setView] = useState<PhotoView>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const photoEditor = usePhotoEditor();
   const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
   const [lightboxPhoto, setLightboxPhoto] = useState<MediaAsset | null>(null);
   const [activeDragIds, setActiveDragIds] = useState<string[]>([]);
@@ -1407,6 +1415,20 @@ export function AdminPhotoGrid({
     return p ? isClientVisible(p) : true;
   });
 
+  /** Open photos in the Photo Editor, in gallery order (the order the user sees). */
+  function editPhotos(ids: string[], activeId?: string) {
+    const wanted = new Set(ids);
+    const ordered = sortByDisplayOrder(allProjectPhotos)
+      .filter((p) => wanted.has(p.id))
+      .map((p) => p.id);
+    void photoEditor.open({ projectId, mediaIds: ordered.length ? ordered : ids, activeMediaId: activeId ?? null });
+  }
+
+  /** Every photo in one folder (folders are flat — nothing nested is included). */
+  function editFolder(folderId: string) {
+    void photoEditor.open({ projectId, folderId });
+  }
+
   function openPhotoMenu(photo: MediaAsset, anchor: ActionMenuAnchor) {
     if (selectedIds.has(photo.id) && selectedIds.size > 1) {
       setMenu({ anchor, title: `${photoCountLabel(selectedIds.size)} selected`, items: selectionMenuItems() });
@@ -1423,6 +1445,13 @@ export function AdminPhotoGrid({
     const cover = isHero(photo.id);
     const items: ActionMenuItem[] = [
       { id: "open", label: "Open", icon: ZoomIn, onSelect: () => setLightboxPhoto(photo) },
+      {
+        id: "edit",
+        label: "Edit photo",
+        icon: SlidersHorizontal,
+        disabled: !isEditablePhotoAsset(photo),
+        onSelect: () => editPhotos([photo.id], photo.id),
+      },
       { id: "download", label: "Download", icon: Download, onSelect: () => setDownloadPhoto(photo) },
     ];
     if (onShare) {
@@ -1466,6 +1495,12 @@ export function AdminPhotoGrid({
     const ids = selectedList;
     return [
       { type: "label", id: "l", label: `${photoCountLabel(ids.length)} selected` },
+      {
+        id: "edit",
+        label: photoEditorLabel(ids.length),
+        icon: SlidersHorizontal,
+        onSelect: () => editPhotos(ids),
+      },
       { id: "move", label: "Move to folder…", icon: FolderInput, onSelect: () => requestMove(ids) },
       { id: "top", label: "Move to top", icon: ArrowUpToLine, onSelect: () => void moveIdsToInsertIndex(new Set(ids), 0) },
       {
@@ -1492,6 +1527,13 @@ export function AdminPhotoGrid({
     return [
       { id: "open", label: "Open", icon: FolderOpen, onSelect: () => navigate(folder.id) },
       { id: "upload", label: "Upload photos here…", icon: Upload, onSelect: () => startUpload(folder.id) },
+      {
+        id: "edit-all",
+        label: "Edit all photos",
+        icon: SlidersHorizontal,
+        disabled: count === 0,
+        onSelect: () => editFolder(folder.id),
+      },
       {
         id: "download",
         label: "Download folder",
@@ -1527,6 +1569,13 @@ export function AdminPhotoGrid({
       { id: "open", label: "Open", icon: FolderOpen, onSelect: () => navigate(UNFILED_FOLDER_SCOPE) },
       { id: "upload", label: "Upload photos here…", icon: Upload, onSelect: () => startUpload(null) },
       {
+        id: "edit-all",
+        label: "Edit all photos",
+        icon: SlidersHorizontal,
+        disabled: count === 0,
+        onSelect: () => editFolder(UNFILED_FOLDER_SCOPE),
+      },
+      {
         id: "download",
         label: `Download ${UNFILED_FOLDER_LABEL}`,
         icon: Download,
@@ -1557,6 +1606,16 @@ export function AdminPhotoGrid({
       <div className="flex flex-1 flex-wrap items-center gap-2">
         {selectionCount > 0 && (
           <>
+            <Button
+              type="button"
+              variant="accent"
+              size="sm"
+              className="h-9"
+              disabled={photoEditor.opening}
+              onClick={() => editPhotos(selectedList)}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" /> {photoEditorLabel(selectionCount)}
+            </Button>
             <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => requestMove(selectedList)}>
               <FolderInput className="h-3.5 w-3.5" /> Move to folder
             </Button>
@@ -1710,6 +1769,17 @@ export function AdminPhotoGrid({
           {headerSlot ? <div className="ml-1 hidden shrink-0 sm:block">{headerSlot}</div> : null}
         </nav>
         <div className="flex flex-wrap items-center gap-2">
+          {view !== "all" && viewCount > 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              disabled={photoEditor.opening}
+              onClick={() => editFolder(view)}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" /> Edit All Photos
+            </Button>
+          ) : null}
           {view !== "all" && viewCount > 0 ? (
             <Button
               variant="outline"
@@ -2123,7 +2193,8 @@ export function AdminPhotoGrid({
         <AdminPhotoLightbox
           photo={lightboxPhoto}
           onClose={() => setLightboxPhoto(null)}
-          onSavedPropertyLine={onPropertyLineSaved}
+          onEdit={() => editPhotos([lightboxPhoto.id], lightboxPhoto.id)}
+          editOpening={photoEditor.opening}
         />
       )}
     </div>

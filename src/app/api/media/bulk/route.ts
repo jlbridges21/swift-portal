@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { versionStoragePathsForDelete } from "@/lib/photo-editor/server";
 import { requireAdmin } from "@/lib/auth";
 import { canAccessMediaAsset, staffCan } from "@/lib/staff-access";
 import { downloadFileName } from "@/lib/media-display-name";
@@ -83,7 +84,9 @@ export async function PATCH(request: Request) {
           asset?.media_source !== "external";
         if (hasStorageObject && asset?.file_path) {
           const bucket = asset.media_type === "document" ? "project-documents" : "project-media";
-          await db.raw.storage.from(bucket).remove([asset.file_path]);
+          const versionPaths =
+            asset.media_type === "photo" ? await versionStoragePathsForDelete(db, asset.id, asset.file_path) : [];
+          await db.raw.storage.from(bucket).remove([asset.file_path, ...versionPaths]);
         }
         await logMediaEvent({
           businessId: tenant.businessId,

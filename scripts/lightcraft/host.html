@@ -1,0 +1,55 @@
+<!doctype html>
+<!--
+  ShootPortal Photo Editor — engine host page (copied to public/lightcraft/index.html by
+  scripts/lightcraft/install.mjs). Loaded only as a same-origin iframe by the editor workspace
+  with ?host=parent&store=memory: nothing is written to this browser's storage, so no photo from
+  one business can linger for another user of the same browser.
+
+  Engine: LightCraft (https://github.com/storytold/lightcraft), MIT OR Apache-2.0 — see NOTICE.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Photo Editor</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1c1c1c; }
+    html[data-theme="light"] { color-scheme: light; }
+    html[data-theme="light"], html[data-theme="light"] body { background: #e9eaec; }
+    canvas#lightcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+    #lightcraft_status { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; overflow: hidden; }
+  </style>
+  <script>
+    // Match the editor chrome before the first paint.
+    try {
+      var t = new URLSearchParams(location.search).get("theme");
+      if (t === "light") document.documentElement.setAttribute("data-theme", "light");
+    } catch (e) {}
+    // Only ever run framed by ShootPortal itself.
+    if (window.top === window.self) location.replace("/admin");
+  </script>
+</head>
+<body>
+  <canvas id="lightcraft_canvas"></canvas>
+  <div id="lightcraft_status" aria-live="polite"></div>
+  <script type="module">
+    import init, { start, command } from "./lightcraft_web.js";
+    (async () => {
+      const module = await WebAssembly.compileStreaming(fetch("./lightcraft_web_bg.wasm"));
+      globalThis.lightcraftModule = module;
+      await init({ module_or_path: module });
+      // Same-origin parent calls this directly: `await frame.contentWindow.lightcraft.command(id, json)`.
+      globalThis.lightcraft = { command };
+      start(new Uint8Array());
+    })().catch((e) => {
+      console.error(e);
+      try {
+        window.parent.postMessage({ type: "lightcraft:failed", error: String(e && e.message || e) }, location.origin);
+      } catch (_) {}
+    });
+  </script>
+</body>
+</html>

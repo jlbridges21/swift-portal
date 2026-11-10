@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { versionStoragePathsForDelete } from "@/lib/photo-editor/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { requireAdminApi } from "@/lib/api-auth";
 import { getYouTubeEmbedUrl } from "@/lib/youtube";
@@ -205,7 +206,10 @@ export async function DELETE(
 
   if (hasStorageObject) {
     const bucket = asset.media_type === "document" ? "project-documents" : "project-media";
-    await db.raw.storage.from(bucket).remove([asset.file_path]);
+    // Edited photos: also remove the preserved original and earlier edits (Photo Editor, v117).
+    const versionPaths =
+      asset.media_type === "photo" ? await versionStoragePathsForDelete(db, asset.id, asset.file_path) : [];
+    await db.raw.storage.from(bucket).remove([asset.file_path, ...versionPaths]);
   }
 
   await db.from("media_assets").delete().eq("id", id);

@@ -1260,18 +1260,6 @@ export function AdminProjectDetail({
                 return [...others, ...nextPhotos];
               });
             }}
-            onPropertyLineSaved={(asset) => {
-              const saved = asset as unknown as MediaAsset;
-              setMedia((prev) => {
-                const idx = prev.findIndex((m) => m.id === saved.id);
-                if (idx >= 0) {
-                  const next = [...prev];
-                  next[idx] = { ...next[idx], ...saved };
-                  return next;
-                }
-                return [...prev, saved];
-              });
-            }}
             onRefresh={() => router.refresh()}
           />
           {photoShare.dialog}

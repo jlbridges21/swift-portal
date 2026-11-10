@@ -252,8 +252,10 @@ export interface MediaAsset {
   download_count?: number;
   last_downloaded_at?: string | null;
   version?: number;
-  property_line_base_media_id?: string | null;
-  property_line_data?: Record<string, unknown> | null;
+  /** Photo Editor (v117): "edited" when the delivered file is an edited version (original kept privately). */
+  edit_status?: "unedited" | "edited" | null;
+  current_version_id?: string | null;
+  edited_at?: string | null;
   created_at: string;
   updated_at?: string;
 }
