@@ -12,6 +12,7 @@ import { canAccessProject, staffCan, isOwnerAdmin, visibleClientIdsFor } from "@
 import { getAppSettings } from "@/lib/app-settings";
 import { photoSharePermissions } from "@/lib/media-share-api";
 import { getProjectFolderShareSummary, getProjectPhotoShareSummary } from "@/lib/media-shares";
+import { getProjectPublicVideoIds } from "@/lib/video-public-shares";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -154,6 +155,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
       ])
     : [{}, {}];
 
+  const publicVideoIds = await getProjectPublicVideoIds(tenant.businessId, id);
   const appSettings = await getAppSettings(tenant.businessId);
   const appUrl = getBusinessPortalOrigin(tenant.business);
   const clientProjectUrl = `${appUrl}/dashboard/projects/${id}`;
@@ -188,6 +190,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
           photoSharing={photoSharing}
           photoShareSummary={photoShareSummary}
           folderShareSummary={folderShareSummary}
+          publicVideoIds={publicVideoIds}
           canViewMoney={canViewMoney}
           depositMode={appSettings.workflow.payments.depositMode}
           depositPercent={appSettings.workflow.payments.depositPercent}

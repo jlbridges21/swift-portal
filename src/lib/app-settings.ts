@@ -142,6 +142,16 @@ export interface PaymentsSettings {
   requireDeliveredForDownloads: boolean;
 }
 
+/** Settings → Client media: public video sharing & embedding (video_public_shares). */
+export interface VideoSharingSettings {
+  /**
+   * When true, a project's client may make a delivered video public (link + embed).
+   * Turning it off also stops videos clients already made public; videos the business
+   * shared itself are unaffected.
+   */
+  allowClientPublicSharing: boolean;
+}
+
 /**
  * Defaults applied only when creating a NEW project.
  * Changing these never rewrites existing projects.
@@ -167,6 +177,7 @@ export interface AppSettings {
   business: BusinessSettings;
   proposals: ProposalSettings;
   payments: PaymentsSettings;
+  videoSharing: VideoSharingSettings;
   /** Snapshot copied onto new projects only. */
   mediaSectionDefaults: MediaSectionDefaultsSettings;
   workflow: WorkflowSettings;
@@ -291,6 +302,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   payments: {
     requireDeliveredForDownloads: true,
   },
+  videoSharing: {
+    allowClientPublicSharing: true,
+  },
   mediaSectionDefaults: {
     photos: true,
     videos: true,
@@ -378,6 +392,9 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
       requireDeliveredForDownloads:
         stored.payments?.requireDeliveredForDownloads ??
         DEFAULT_APP_SETTINGS.payments.requireDeliveredForDownloads,
+    },
+    videoSharing: {
+      allowClientPublicSharing: stored.videoSharing?.allowClientPublicSharing !== false,
     },
     mediaSectionDefaults: {
       ...DEFAULT_APP_SETTINGS.mediaSectionDefaults,

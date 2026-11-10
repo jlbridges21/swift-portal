@@ -442,6 +442,10 @@ export function AdminSettingsClient({
     setSettings((prev) => ({ ...prev, payments: { ...prev.payments, ...patch } }));
   }, []);
 
+  const patchVideoSharing = useCallback((patch: Partial<AppSettings["videoSharing"]>) => {
+    setSettings((prev) => ({ ...prev, videoSharing: { ...prev.videoSharing, ...patch } }));
+  }, []);
+
   const patchMediaSectionDefaults = useCallback(
     (patch: Partial<AppSettings["mediaSectionDefaults"]>) => {
       setSettings((prev) => ({
@@ -1098,6 +1102,34 @@ export function AdminSettingsClient({
                       When off, anyone with project access can download photos, videos, and documents at
                       any status — including before they pay. Video review playback and previews are
                       always available either way.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="shadow-sm" id="settings-video-sharing">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Public video sharing</CardTitle>
+                <p className="text-sm text-muted">
+                  Any video can be shared publicly from its player with <strong>Share</strong> — a link anyone can
+                  watch and an embed code for websites. Only that one video becomes public; the project and its
+                  other media stay private.
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-hidden rounded-xl border border-border p-0">
+                <div className="divide-y divide-border">
+                  <div className="px-4 py-3">
+                    <RowToggle
+                      id="allowClientPublicVideoSharing"
+                      label="Let clients publicly share and embed their delivered videos"
+                      checked={settings.videoSharing.allowClientPublicSharing}
+                      onChange={(v) => patchVideoSharing({ allowClientPublicSharing: v })}
+                    />
+                    <p className="mt-2 px-4 text-xs text-muted">
+                      Great for agents who want listing videos on their own websites. Clients can share once the
+                      project&apos;s downloads are unlocked. Turning this off also stops videos your clients already
+                      made public; videos you shared yourself keep working. You can turn off any video&apos;s public
+                      link from its Share button at any time.
                     </p>
                   </div>
                 </div>

@@ -13,9 +13,11 @@ interface ModalProps {
   className?: string;
   /** Sticky footer for primary actions — stays visible above mobile PWA bottom nav */
   footer?: React.ReactNode;
+  /** Stacking override, e.g. "z-[260]" to open above the full-screen video player. */
+  overlayClassName?: string;
 }
 
-export function Modal({ open, onClose, title, children, className, footer }: ModalProps) {
+export function Modal({ open, onClose, title, children, className, footer, overlayClassName }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
@@ -34,7 +36,12 @@ export function Modal({ open, onClose, title, children, className, footer }: Mod
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 safe-area-x">
+    <div
+      className={cn(
+        "fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 safe-area-x",
+        overlayClassName
+      )}
+    >
       <button type="button" className="absolute inset-0 bg-black/40" onClick={onClose} aria-label="Close" />
       <div
         role="dialog"

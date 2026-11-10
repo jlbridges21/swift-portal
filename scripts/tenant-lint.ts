@@ -81,6 +81,8 @@ const BUSINESS_OWNED_TABLES = new Set([
   "video_review_notification_sends",
   "video_review_versions",
   "video_reviews",
+  "video_public_shares",
+  "video_public_share_daily",
   "w9_sends",
   "w9_send_files",
   "web_push_subscriptions",

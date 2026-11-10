@@ -215,10 +215,16 @@ export async function updateSession(request: NextRequest) {
   const path = resolution.rewritePathname ?? request.nextUrl.pathname;
   const isApi = path.startsWith("/api/");
   const method = request.method.toUpperCase();
-  // Photo and folder share links are authorized by their token alone. A signed-in
-  // session (any business, any state) must not redirect or sign out the viewer.
+  // Photo/folder share links and public videos (watch page + website embeds) are
+  // authorized by their token alone. A signed-in session (any business, any state)
+  // must not redirect or sign out the viewer.
   const isPhotoSharePath =
-    path.startsWith("/photo/") || path.startsWith("/folder/") || path.startsWith("/api/public/photo/");
+    path.startsWith("/photo/") ||
+    path.startsWith("/folder/") ||
+    path.startsWith("/api/public/photo/") ||
+    path.startsWith("/v/") ||
+    path.startsWith("/embed/") ||
+    path.startsWith("/api/public/video/");
 
   const protectedPaths = [
     "/dashboard",

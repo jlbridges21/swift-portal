@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireSuperAdminPage } from "@/lib/admin-access";
-import { loadEconomicsDataset, loadEconomicsHistory } from "@/lib/platform-economics";
+import { loadEconomicsDataset, loadEconomicsHistory, loadPublicVideoTraffic } from "@/lib/platform-economics";
 import { bytesToGb, formatBytes, formatPct, formatUsd } from "@/lib/economics/assumptions";
 import { egressSplitGb } from "@/lib/economics/cost-model";
 import { KpiCard, Notice, Panel } from "@/components/platform/analytics/ui";
@@ -29,7 +29,10 @@ const BUCKET_LABELS: Record<string, string> = {
 export default async function StoragePage() {
   await requireSuperAdminPage();
   const ds = await loadEconomicsDataset();
-  const history = await loadEconomicsHistory(ds.settings, 12);
+  const [history, publicVideo] = await Promise.all([
+    loadEconomicsHistory(ds.settings, 12),
+    loadPublicVideoTraffic(ds.egressWindow.windowDays, 10),
+  ]);
   const p = ds.platform;
   const a = ds.settings.assumptions;
   const live = ds.rows.filter((r) => r.status === "active" && !r.deleted);
@@ -71,11 +74,16 @@ export default async function StoragePage() {
       acc.proxied += r.egress.proxiedBytes;
       acc.zip += r.egress.zipBytes;
       acc.signed += r.egress.signedBytes;
+      acc.publicVideo += r.egress.publicVideoBytes;
       acc.backfill += r.egress.backfillBytes;
       return acc;
     },
-    { proxied: 0, zip: 0, signed: 0, backfill: 0 }
+    { proxied: 0, zip: 0, signed: 0, publicVideo: 0, backfill: 0 }
   );
+  const publicVideoGb = bytesToGb(channelTotals.publicVideo);
+  const publicVideoCachedGb = publicVideoGb * a.signedDeliveryCachedShare;
+  const publicVideoCostUsd =
+    publicVideoCachedGb * a.cachedEgressPerGb + (publicVideoGb - publicVideoCachedGb) * a.uncachedEgressPerGb;
 
   return (
     <div className="space-y-6">
@@ -261,6 +269,10 @@ export default async function StoragePage() {
           <StatLine label={<>App-streamed single files <SourceTag kind="measured" /></>} value={formatBytes(channelTotals.proxied)} />
           <StatLine label={<>ZIP downloads <SourceTag kind="measured" /></>} value={formatBytes(channelTotals.zip)} />
           <StatLine label={<>Signed full-size originals <SourceTag kind="estimated" /></>} value={formatBytes(channelTotals.signed)} />
+          <StatLine
+            label={<>Public video links &amp; website embeds <SourceTag kind="estimated" title="Player-reported buffered seconds × each file's average bitrate. CDN-direct from Supabase." /></>}
+            value={formatBytes(channelTotals.publicVideo)}
+          />
           <StatLine label={<>Before metering: download log × size <SourceTag kind="estimated" /></>} value={formatBytes(channelTotals.backfill)} />
           {history.available ? (
             <div className="mt-4">
@@ -278,6 +290,86 @@ export default async function StoragePage() {
           <p className="mt-3 text-xs text-muted">Stored vs. downloaded: {formatBytes(p.storageBytes)} stored, {formatBytes(p.egressBytes)} delivered in 30 days ({formatPct(p.downloadRatio)} of stored).</p>
         </Panel>
       </div>
+
+      <h2 className="pt-2 text-lg font-semibold text-heading">Public video streaming</h2>
+      {!publicVideo.available ? (
+        <Notice>
+          <strong>Not tracking yet.</strong> Apply migration v116 (public video sharing) to record views, plays and estimated
+          bandwidth for publicly shared and embedded videos.
+        </Notice>
+      ) : (
+        <>
+          <Notice>
+            Videos made public from the Share button play straight from the Supabase CDN on watch pages and on customers&apos;
+            websites. Bandwidth is <strong>estimated</strong> from what each player buffers × the file&apos;s average bitrate,
+            and is costed like signed deliveries. Kept separate from project downloads above.
+          </Notice>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <KpiCard label="Public videos" value={publicVideo.activePublicVideos.toLocaleString()} hint="sharing on right now" />
+            <KpiCard
+              label={`Views (${publicVideo.windowDays}d)`}
+              value={publicVideo.totals.views.toLocaleString()}
+              hint={`${publicVideo.totals.embedViews.toLocaleString()} from website embeds`}
+              definition="Watch-page loads plus embed loads (an embed load counts even if the visitor never presses play)."
+            />
+            <KpiCard label={`Plays (${publicVideo.windowDays}d)`} value={publicVideo.totals.plays.toLocaleString()} />
+            <KpiCard label="Est. streamed" value={formatBytes(publicVideo.totals.estBytes)} hint={`${publicVideoGb.toFixed(1)} GB metered in egress`} />
+            <KpiCard
+              label="Est. egress cost"
+              value={formatUsd(publicVideoCostUsd)}
+              hint={`assumes ${formatPct(a.signedDeliveryCachedShare)} CDN cache hits`}
+              definition="Estimated public-video GB split by the signed-delivery cache-hit assumption, at list cached/uncached egress rates."
+            />
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Panel title="Highest-traffic public videos" description={`Estimated bandwidth, last ${publicVideo.windowDays} days.`} actions={<SourceTag kind="estimated" />}>
+              <BarList
+                type="decimal"
+                metric="GB streamed"
+                empty="No public video traffic yet."
+                rows={publicVideo.top.map((v) => ({
+                  key: v.shareId,
+                  label: `${v.title} · ${v.businessName}${v.enabled ? "" : " (sharing off)"}`,
+                  value: +bytesToGb(v.estBytes).toFixed(2),
+                  sub: `${v.plays.toLocaleString()} plays`,
+                  color: "#10B981",
+                  details: [
+                    { label: "Views", value: v.views },
+                    { label: "Embed views", value: v.embedViews },
+                    { label: "Plays", value: v.plays },
+                    { label: "File size (GB)", value: +bytesToGb(v.fileBytes).toFixed(2), type: "decimal" },
+                  ],
+                }))}
+              />
+            </Panel>
+            <Panel title="Public video bandwidth by business" description="Which businesses' shared videos drive the most traffic.">
+              <BarList
+                type="decimal"
+                metric="GB streamed"
+                empty="No public video traffic yet."
+                rows={publicVideo.byBusiness.map((b) => ({
+                  key: b.businessId,
+                  label: b.businessName,
+                  value: +bytesToGb(b.estBytes).toFixed(2),
+                  sub: `${b.videos} ${b.videos === 1 ? "video" : "videos"} · ${b.plays.toLocaleString()} plays`,
+                  color: "#14B8A6",
+                }))}
+              />
+              {publicVideo.daily.length > 1 ? (
+                <div className="mt-4">
+                  <ColumnChart
+                    label="GB streamed"
+                    type="decimal"
+                    color="#10B981"
+                    points={publicVideo.daily.map((d) => ({ day: d.day, gb: +bytesToGb(d.estBytes).toFixed(3) }))}
+                    valueKey="gb"
+                  />
+                </div>
+              ) : null}
+            </Panel>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Clapperboard, Download, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Clapperboard, Download, Globe, Loader2, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SafeAreaCloseButton } from "@/components/ui/safe-area-close-button";
 import { VideoCard, VIDEO_GRID_CLASS, VIDEO_GRID_COLUMNS } from "@/components/ui/video-card";
 import { VideoPosterSurface } from "@/components/ui/video-poster-surface";
+import { VideoShareDialog } from "@/components/video-share/video-share-dialog";
 import { createThumbRequestQueue } from "@/lib/media-thumb-client";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import type { MediaAsset } from "@/lib/types";
@@ -49,6 +50,15 @@ export type VideoGridProps = {
   ) => ReactNode;
   /** @deprecated Prefer renderAdminCard for admin layouts. */
   renderBelowCard?: (entry: VideoGridEntry, index: number) => ReactNode;
+  /**
+   * Show Share (public link + website embed) in the player for uploaded videos. The
+   * server re-checks every action; for clients this reflects the business's
+   * client-sharing setting and delivery state.
+   */
+  canShareVideos?: boolean;
+  /** Videos that are currently public. Share stays available for these even when canShareVideos is false (copy the existing link). */
+  publicVideoIds?: string[];
+  onPublicVideoChange?: (mediaId: string, isPublic: boolean) => void;
 };
 
 export function VideoGrid({
@@ -66,8 +76,28 @@ export function VideoGrid({
   thumbnailsEndpoint,
   renderAdminCard,
   renderBelowCard,
+  canShareVideos = false,
+  publicVideoIds,
+  onPublicVideoChange,
 }: VideoGridProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [publicIds, setPublicIds] = useState<Set<string>>(() => new Set(publicVideoIds ?? []));
+  const publicKey = (publicVideoIds ?? []).join(",");
+  useEffect(() => {
+    setPublicIds(new Set(publicKey ? publicKey.split(",") : []));
+  }, [publicKey]);
+  const handlePublicChange = useCallback(
+    (mediaId: string, isPublic: boolean) => {
+      setPublicIds((prev) => {
+        const next = new Set(prev);
+        if (isPublic) next.add(mediaId);
+        else next.delete(mediaId);
+        return next;
+      });
+      onPublicVideoChange?.(mediaId, isPublic);
+    },
+    [onPublicVideoChange]
+  );
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   const onThumbUrls = useCallback((urls: Record<string, string>) => {
     setThumbUrls((prev) => ({ ...prev, ...urls }));
@@ -155,6 +185,9 @@ export function VideoGrid({
           isAdmin={isAdmin}
           signInHref={signInHref}
           canAccessVideoReviews={canAccessVideoReviews}
+          canShareVideos={canShareVideos}
+          publicIds={publicIds}
+          onPublicChange={handlePublicChange}
           onClose={() => setActiveIndex(null)}
           onNavigate={setActiveIndex}
           onLoadThumb={loadThumb}
@@ -294,6 +327,9 @@ function VideoPlayerLightbox({
   isAdmin,
   signInHref,
   canAccessVideoReviews = false,
+  canShareVideos = false,
+  publicIds,
+  onPublicChange,
   onClose,
   onNavigate,
   onLoadThumb,
@@ -310,6 +346,9 @@ function VideoPlayerLightbox({
   isAdmin?: boolean;
   signInHref?: string;
   canAccessVideoReviews?: boolean;
+  canShareVideos?: boolean;
+  publicIds: Set<string>;
+  onPublicChange: (mediaId: string, isPublic: boolean) => void;
   onClose: () => void;
   onNavigate: (index: number) => void;
   onLoadThumb: (video: MediaAsset) => void;
@@ -320,7 +359,10 @@ function VideoPlayerLightbox({
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [loadingStream, setLoadingStream] = useState(false);
   const [creatingReview, setCreatingReview] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const reviewItem = reviewByAssetId.get(video.id) ?? null;
+  const isPublic = publicIds.has(video.id);
+  const showShare = entry.kind === "uploaded" && (canShareVideos || isPublic);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -352,11 +394,12 @@ function VideoPlayerLightbox({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      // The Share modal handles its own Escape; don't close the player underneath it.
+      if (e.key === "Escape" && !shareOpen) onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, shareOpen]);
 
   async function startReview() {
     if (!isAdmin || reviewItem) return;
@@ -416,9 +459,16 @@ function VideoPlayerLightbox({
           className="flex shrink-0 items-center px-4 pb-2"
           style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)" }}
         >
-          <h2 className="min-w-0 truncate pr-14 text-sm font-medium text-white/90">
+          <h2 className="min-w-0 truncate text-sm font-medium text-white/90">
             {mediaDisplayName(video)}
           </h2>
+          {isPublic && entry.kind === "uploaded" ? (
+            <span className="ml-2 mr-14 inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300 ring-1 ring-emerald-400/30">
+              <Globe className="h-3 w-3" aria-hidden /> Public
+            </span>
+          ) : (
+            <span className="mr-14" />
+          )}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-4">
@@ -494,6 +544,19 @@ function VideoPlayerLightbox({
                 Download
               </Button>
             ) : null}
+
+            {showShare ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-10 border-white/20 bg-transparent text-white hover:bg-white/10"
+                onClick={() => setShareOpen(true)}
+              >
+                <Share2 className="mr-1.5 h-4 w-4" />
+                Share
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -548,6 +611,13 @@ function VideoPlayerLightbox({
           })}
         </ul>
       </aside>
+
+      <VideoShareDialog
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        target={{ id: video.id, title: mediaDisplayName(video), thumbUrl: thumbUrls[video.id] ?? null }}
+        onPublicChange={onPublicChange}
+      />
     </div>
   );
 }

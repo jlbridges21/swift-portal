@@ -92,6 +92,40 @@ export function recordPhotoShareMiss(ip: string): void {
   take(photoMissBuckets, ip || "unknown", Number.MAX_SAFE_INTEGER, PHOTO_MISS_WINDOW_MS);
 }
 
+// Public video watch/embed pages. Embeds on busy sites are spread across many viewer IPs,
+// so per-IP budgets stay generous; a single IP reloading an embed 300×/min is not a viewer.
+const videoRequestBuckets = new Map<string, Bucket>();
+const videoBeaconBuckets = new Map<string, Bucket>();
+const videoMissBuckets = new Map<string, Bucket>();
+const VIDEO_REQUEST_MAX = 300;
+const VIDEO_BEACON_MAX = 240;
+const VIDEO_MISS_MAX = 30;
+
+/** Watch page, embed page and playback-URL refreshes, per IP across all videos. */
+export function allowPublicVideoRequest(ip: string): { allowed: boolean; retryAfterSec: number } {
+  sweep(videoRequestBuckets);
+  return take(videoRequestBuckets, ip || "unknown", VIDEO_REQUEST_MAX, PHOTO_REQUEST_WINDOW_MS);
+}
+
+/** Player analytics beacons (play / buffered bytes), per IP. */
+export function allowPublicVideoBeacon(ip: string): { allowed: boolean; retryAfterSec: number } {
+  sweep(videoBeaconBuckets);
+  return take(videoBeaconBuckets, ip || "unknown", VIDEO_BEACON_MAX, PHOTO_REQUEST_WINDOW_MS);
+}
+
+/** True once an IP has guessed too many unknown public video ids recently. */
+export function isPublicVideoLookupBlocked(ip: string): { blocked: boolean; retryAfterSec: number } {
+  const cur = videoMissBuckets.get(ip || "unknown");
+  const now = Date.now();
+  if (!cur || now >= cur.resetAt || cur.count < VIDEO_MISS_MAX) return { blocked: false, retryAfterSec: 0 };
+  return { blocked: true, retryAfterSec: Math.ceil((cur.resetAt - now) / 1000) };
+}
+
+export function recordPublicVideoMiss(ip: string): void {
+  sweep(videoMissBuckets);
+  take(videoMissBuckets, ip || "unknown", Number.MAX_SAFE_INTEGER, PHOTO_MISS_WINDOW_MS);
+}
+
 /** Test helper */
 export function resetPublicLinkRateLimitsForTests() {
   pageBuckets.clear();
@@ -99,6 +133,9 @@ export function resetPublicLinkRateLimitsForTests() {
   photoRequestBuckets.clear();
   photoAssetBuckets.clear();
   photoMissBuckets.clear();
+  videoRequestBuckets.clear();
+  videoBeaconBuckets.clear();
+  videoMissBuckets.clear();
 }
 
 export const PUBLIC_LINK_RATE_LIMITS = {
@@ -107,4 +144,7 @@ export const PUBLIC_LINK_RATE_LIMITS = {
   photoRequestsPerMinute: PHOTO_REQUEST_MAX,
   photoAssetRequestsPerMinute: PHOTO_ASSET_MAX,
   photoMissesPer10Min: PHOTO_MISS_MAX,
+  videoRequestsPerMinute: VIDEO_REQUEST_MAX,
+  videoBeaconsPerMinute: VIDEO_BEACON_MAX,
+  videoMissesPer10Min: VIDEO_MISS_MAX,
 } as const;

@@ -75,6 +75,8 @@ interface ProjectPageClientProps {
   allowClientProposalChanges?: boolean;
   requireDeliveredForDownloads?: boolean;
   isSharedViewer?: boolean;
+  /** Public video sharing (Share button in the player). Server-computed; actions re-check. */
+  videoSharing?: { canShare: boolean; publicVideoIds: string[] };
   /** Assigned client + admin only — quotes, payments, estimates, proposals. */
   canViewFinancials?: boolean;
   /**
@@ -154,6 +156,7 @@ export function ProjectPageClient({
   allowClientProposalChanges = true,
   requireDeliveredForDownloads = true,
   isSharedViewer = false,
+  videoSharing,
   canViewFinancials = false,
   canViewProjectProgress,
   canAccessVideoReviews = false,
@@ -507,6 +510,8 @@ export function ProjectPageClient({
                   downloadsAllowed={downloadsUnlocked}
                   onDownload={handleDownload}
                   canAccessVideoReviews={canAccessVideoReviews}
+                  canShareVideos={videoSharing?.canShare}
+                  publicVideoIds={videoSharing?.publicVideoIds}
                   compactRows={2}
                 />
               </div>
@@ -696,6 +701,8 @@ export function ProjectPageClient({
                   onDownload={handleDownload}
                   isAdmin={!!isAdmin}
                   canAccessVideoReviews={canAccessVideoReviews || !!isAdmin}
+                  canShareVideos={videoSharing?.canShare}
+                  publicVideoIds={videoSharing?.publicVideoIds}
                   compactRows={2}
                 />
               </div>

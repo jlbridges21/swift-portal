@@ -7,6 +7,8 @@
  *   Egress    MEASURED   bytes streamed through ShootPortal routes (business_egress_daily)
  *             ESTIMATED  signed-URL deliveries (file size per issue), and — for days before
  *                        metering began — logged downloads × file size (media_downloads)
+ *             ESTIMATED  public video links & website embeds (channel public_video): bytes the
+ *                        player reports buffering × the file's average bitrate (migration V116)
  *             NOT SEEN   gallery thumbnails / inline video playback fetched straight from the
  *                        Supabase CDN; these only show up on the Supabase invoice
  *   Revenue   ACTUAL     platform_subscription_payments (paid Stripe invoices)
@@ -339,6 +341,9 @@ export type EgressTotals = {
   proxiedBytes: number;
   zipBytes: number;
   signedBytes: number;
+  /** Public video links + website embeds, streamed CDN-direct (estimated from player buffering). */
+  publicVideoBytes: number;
+  publicVideoPlays: number;
   requests: number;
   imageTransforms: number;
   /** Logged downloads × file size, for window days before metering began (estimate). */
@@ -347,7 +352,17 @@ export type EgressTotals = {
 };
 
 function emptyEgress(): EgressTotals {
-  return { proxiedBytes: 0, zipBytes: 0, signedBytes: 0, requests: 0, imageTransforms: 0, backfillBytes: 0, backfillDownloads: 0 };
+  return {
+    proxiedBytes: 0,
+    zipBytes: 0,
+    signedBytes: 0,
+    publicVideoBytes: 0,
+    publicVideoPlays: 0,
+    requests: 0,
+    imageTransforms: 0,
+    backfillBytes: 0,
+    backfillDownloads: 0,
+  };
 }
 
 export async function loadEgressWindow(trackingStartedAt: string | null, days = EGRESS_WINDOW_DAYS, db?: Db): Promise<EgressWindow> {
@@ -374,6 +389,12 @@ export async function loadEgressWindow(trackingStartedAt: string | null, days = 
     for (const r of data ?? []) {
       const e = get(r.business_id as string);
       const bytes = Number(r.bytes) || 0;
+      if (r.channel === "public_video") {
+        // Plays, not download requests — kept apart from the download request count.
+        e.publicVideoBytes += bytes;
+        e.publicVideoPlays += Number(r.requests) || 0;
+        continue;
+      }
       if (r.channel === "proxied_download") e.proxiedBytes += bytes;
       else if (r.channel === "zip_download") e.zipBytes += bytes;
       else e.signedBytes += bytes;
@@ -423,12 +444,15 @@ export async function loadEgressWindow(trackingStartedAt: string | null, days = 
   return { windowDays: days, from, meteredDays, byBusiness };
 }
 
-/** Egress for the window as cost-model usage (proxied = proxied + zip + backfill). */
+/**
+ * Egress for the window as cost-model usage (proxied = proxied + zip + backfill).
+ * Public video playback is CDN-direct like signed deliveries, so it is costed the same way.
+ */
 export function egressUsage(e: EgressTotals | undefined): Omit<UsageInput, "storageBytes"> {
   if (!e) return { proxiedBytes: 0, signedBytes: 0, imageTransforms: 0 };
   return {
     proxiedBytes: e.proxiedBytes + e.zipBytes + e.backfillBytes,
-    signedBytes: e.signedBytes,
+    signedBytes: e.signedBytes + e.publicVideoBytes,
     imageTransforms: e.imageTransforms,
   };
 }
@@ -977,5 +1001,150 @@ export async function loadBusinessEconomicsHistory(businessId: string): Promise<
       .map((r) => ({ month: `${String(r.month).slice(0, 7)}-01`, bytes: Number(r.bytes) || 0 }))
       .sort((x, y) => x.month.localeCompare(y.month))
       .slice(-12),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Public video sharing (migration V116): per-video traffic for links & website embeds
+// ---------------------------------------------------------------------------
+
+export type PublicVideoTrafficRow = {
+  shareId: string;
+  businessId: string;
+  businessName: string;
+  mediaAssetId: string;
+  title: string;
+  enabled: boolean;
+  views: number;
+  embedViews: number;
+  plays: number;
+  estBytes: number;
+  fileBytes: number;
+};
+
+export type PublicVideoTraffic = {
+  available: boolean;
+  windowDays: number;
+  /** Videos with public sharing on right now (all businesses). */
+  activePublicVideos: number;
+  totals: { views: number; embedViews: number; plays: number; estBytes: number };
+  top: PublicVideoTrafficRow[];
+  byBusiness: { businessId: string; businessName: string; videos: number; plays: number; estBytes: number }[];
+  daily: { day: string; estBytes: number; plays: number }[];
+};
+
+export async function loadPublicVideoTraffic(days = EGRESS_WINDOW_DAYS, limit = 10): Promise<PublicVideoTraffic> {
+  const raw = await createServiceClient();
+  const fromDay = utcDay(new Date(Date.now() - days * DAY_MS));
+  const empty: PublicVideoTraffic = {
+    available: false,
+    windowDays: days,
+    activePublicVideos: 0,
+    totals: { views: 0, embedViews: 0, plays: 0, estBytes: 0 },
+    top: [],
+    byBusiness: [],
+    daily: [],
+  };
+
+  const [daily, active] = await Promise.all([
+    raw
+      .from("video_public_share_daily")
+      .select("share_id, day, business_id, media_asset_id, views, embed_views, plays, est_bytes")
+      .gte("day", fromDay)
+      .limit(50_000),
+    raw.from("video_public_shares").select("id", { count: "exact", head: true }).eq("enabled", true),
+  ]);
+  if (daily.error) {
+    if (!isMissingRelation(daily.error.message)) console.error("[economics] public video load failed", daily.error.message);
+    return empty;
+  }
+
+  const byShare = new Map<string, Omit<PublicVideoTrafficRow, "businessName" | "title" | "enabled" | "fileBytes">>();
+  const byDay = new Map<string, { estBytes: number; plays: number }>();
+  const totals = { views: 0, embedViews: 0, plays: 0, estBytes: 0 };
+  for (const r of daily.data ?? []) {
+    const id = r.share_id as string;
+    const cur = byShare.get(id) ?? {
+      shareId: id,
+      businessId: r.business_id as string,
+      mediaAssetId: r.media_asset_id as string,
+      views: 0,
+      embedViews: 0,
+      plays: 0,
+      estBytes: 0,
+    };
+    const views = Number(r.views) || 0;
+    const embedViews = Number(r.embed_views) || 0;
+    const plays = Number(r.plays) || 0;
+    const bytes = Number(r.est_bytes) || 0;
+    cur.views += views;
+    cur.embedViews += embedViews;
+    cur.plays += plays;
+    cur.estBytes += bytes;
+    byShare.set(id, cur);
+    totals.views += views;
+    totals.embedViews += embedViews;
+    totals.plays += plays;
+    totals.estBytes += bytes;
+    const d = byDay.get(r.day as string) ?? { estBytes: 0, plays: 0 };
+    d.estBytes += bytes;
+    d.plays += plays;
+    byDay.set(r.day as string, d);
+  }
+
+  const ranked = [...byShare.values()].sort((a, b) => b.estBytes - a.estBytes || b.plays - a.plays);
+  const topRaw = ranked.slice(0, limit);
+  const businessIds = [...new Set(ranked.map((r) => r.businessId))];
+  const assetIds = topRaw.map((r) => r.mediaAssetId);
+  const shareIds = topRaw.map((r) => r.shareId);
+  const [biz, assets, shares] = await Promise.all([
+    businessIds.length ? raw.from("businesses").select("id, name").in("id", businessIds) : Promise.resolve({ data: [] }),
+    assetIds.length
+      ? raw.from("media_assets").select("id, title, file_name, file_size").in("id", assetIds)
+      : Promise.resolve({ data: [] }),
+    shareIds.length ? raw.from("video_public_shares").select("id, enabled").in("id", shareIds) : Promise.resolve({ data: [] }),
+  ]);
+  const bizName = new Map(((biz.data ?? []) as { id: string; name: string }[]).map((b) => [b.id, b.name]));
+  const assetInfo = new Map(
+    ((assets.data ?? []) as { id: string; title: string | null; file_name: string | null; file_size: number | null }[]).map(
+      (a) => [a.id, a]
+    )
+  );
+  const shareEnabled = new Map(((shares.data ?? []) as { id: string; enabled: boolean }[]).map((s) => [s.id, s.enabled]));
+
+  const byBusinessMap = new Map<string, { businessId: string; businessName: string; videos: number; plays: number; estBytes: number }>();
+  for (const r of ranked) {
+    const cur = byBusinessMap.get(r.businessId) ?? {
+      businessId: r.businessId,
+      businessName: bizName.get(r.businessId) ?? "Unknown business",
+      videos: 0,
+      plays: 0,
+      estBytes: 0,
+    };
+    cur.videos += 1;
+    cur.plays += r.plays;
+    cur.estBytes += r.estBytes;
+    byBusinessMap.set(r.businessId, cur);
+  }
+
+  return {
+    available: true,
+    windowDays: days,
+    activePublicVideos: active.count ?? 0,
+    totals,
+    top: topRaw.map((r) => {
+      const a = assetInfo.get(r.mediaAssetId);
+      return {
+        ...r,
+        businessName: bizName.get(r.businessId) ?? "Unknown business",
+        title: a?.title?.trim() || a?.file_name?.trim() || "Deleted video",
+        enabled: shareEnabled.get(r.shareId) ?? false,
+        fileBytes: Number(a?.file_size) || 0,
+      };
+    }),
+    byBusiness: [...byBusinessMap.values()].sort((a, b) => b.estBytes - a.estBytes).slice(0, limit),
+    daily: [...byDay.entries()]
+      .map(([day, v]) => ({ day, ...v }))
+      .sort((a, b) => a.day.localeCompare(b.day)),
   };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ChevronDown, ChevronUp, Eye, EyeOff, Pencil, Play, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, EyeOff, Globe, Pencil, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { VideoPosterSurface } from "@/components/ui/video-poster-surface";
@@ -71,6 +71,8 @@ export type AdminVideoGridCardProps = {
   projectId: string;
   reviewItem: VideoReviewListItem | null;
   onReviewsChange: () => void;
+  /** Publicly shared (link / website embed). */
+  isPublic?: boolean;
 };
 
 /** Admin project video tile — thumbnail overlays, wrapped controls, review block. */
@@ -98,6 +100,7 @@ export function AdminVideoGridCard({
   projectId,
   reviewItem,
   onReviewsChange,
+  isPublic = false,
 }: AdminVideoGridCardProps) {
   const title = mediaDisplayName(video);
   const duration = videoDurationBadge(video);
@@ -202,6 +205,14 @@ export function AdminVideoGridCard({
             <span className="shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
               {badge}
             </span>
+            {isPublic ? (
+              <span
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200 surface-dark:bg-emerald-500/15 surface-dark:text-emerald-300 surface-dark:ring-emerald-500/30"
+                title="Anyone with the link can watch this video. Open it and choose Share to manage."
+              >
+                <Globe className="h-3 w-3" aria-hidden /> Public
+              </span>
+            ) : null}
 
             <div className="flex min-w-0 flex-wrap items-center gap-1">
               <Button

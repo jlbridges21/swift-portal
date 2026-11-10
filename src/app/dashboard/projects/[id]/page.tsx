@@ -17,6 +17,9 @@ import {
 } from "@/lib/video-review-media";
 import { listProjectVideoReviews } from "@/lib/video-reviews";
 import { resolveProjectAccess } from "@/lib/project-access";
+import { resolveProjectDownloadAllowed } from "@/lib/deliverables";
+import { normalizeStatus } from "@/lib/constants";
+import { getProjectPublicVideoIds } from "@/lib/video-public-shares";
 import {
   canViewProjectFinancials,
   canViewProjectProgress,
@@ -185,6 +188,18 @@ async function ProjectContent({
   const visiblePayments = showPayments ? payments : [];
   const photos = visibleMedia.filter((m) => m.media_type === "photo");
   const videos = visibleMedia.filter((m) => m.media_type === "video");
+  // Public video sharing: the assigned client may share delivered videos when the business
+  // allows it; anyone with access can copy the link of a video that is already public.
+  const publicVideoIds = videos.length ? await getProjectPublicVideoIds(tenant.businessId, id) : [];
+  const canShareVideos =
+    isAdminViewer ||
+    (access.kind === "assigned_client" &&
+      appSettings.videoSharing.allowClientPublicSharing &&
+      resolveProjectDownloadAllowed({
+        projectStatus: normalizeStatus(projectRow.status ?? "new_request"),
+        isAdmin: false,
+        requireDeliveredForDownloads: appSettings.payments.requireDeliveredForDownloads,
+      }));
   const documents = visibleMedia.filter((m) => m.media_type === "document");
 
   return (
@@ -228,6 +243,7 @@ async function ProjectContent({
         isPreview={preview && profile.role === "admin"}
         isAdmin={profile.role === "admin"}
         isSharedViewer={isSharedViewer}
+        videoSharing={{ canShare: canShareVideos, publicVideoIds }}
         canViewFinancials={canViewFinancials}
         canViewProjectProgress={canViewProgress}
         canAccessVideoReviews={canAccessReviews}

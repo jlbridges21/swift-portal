@@ -130,6 +130,8 @@ interface AdminProjectDetailProps {
   photoSharing?: { email: boolean; link: boolean };
   photoShareSummary?: Record<string, PhotoShareSummary>;
   folderShareSummary?: Record<string, PhotoShareSummary>;
+  /** Videos currently shared publicly (link / embed). */
+  publicVideoIds?: string[];
   /** Hide estimates / payments / payment links when false (staff without money.view). */
   canViewMoney?: boolean;
   depositMode?: DepositMode;
@@ -167,6 +169,7 @@ export function AdminProjectDetail({
   linkAccessViewCount = 0,
   photoSharing = { email: false, link: false },
   photoShareSummary = {},
+  publicVideoIds: initialPublicVideoIds = [],
   folderShareSummary = {},
   canViewMoney = true,
   depositMode = "none",
@@ -342,6 +345,7 @@ export function AdminProjectDetail({
       .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
   );
   const canSharePhotos = photoSharing.email || photoSharing.link;
+  const [publicVideoIds, setPublicVideoIds] = useState<string[]>(initialPublicVideoIds);
   const shareSummary = useProjectPhotoShareSummary(
     initialProject.id,
     photoShareSummary,
@@ -1330,6 +1334,13 @@ export function AdminProjectDetail({
                 }}
                 reviewPathPrefix="/admin/projects"
                 isAdmin
+                canShareVideos={photoSharing.link}
+                publicVideoIds={publicVideoIds}
+                onPublicVideoChange={(mediaId, isPublic) =>
+                  setPublicVideoIds((prev) =>
+                    isPublic ? [...new Set([...prev, mediaId])] : prev.filter((id) => id !== mediaId)
+                  )
+                }
                 renderAdminCard={(entry, _index, openPlayer, thumbUrl) => {
                   const v = entry.video;
                   const i = videos.findIndex((row) => row.id === v.id);
@@ -1377,6 +1388,7 @@ export function AdminProjectDetail({
                         projectId={initialProject.id}
                         reviewItem={reviewByAssetId.get(v.id) ?? null}
                         onReviewsChange={() => void refreshVideoReviews()}
+                        isPublic={publicVideoIds.includes(v.id)}
                       />
                     </SortableVideoItem>
                   );
