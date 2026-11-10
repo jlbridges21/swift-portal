@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -49,6 +49,13 @@ export function AdminMobilePwaNav() {
   const { openSearch } = useAdminSearch();
   const { userRole, staffAreas, navCreate } = useAdminCapabilities();
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Full-screen editors bring their own bottom action bar; the tab bar would cover it.
+  const fullScreen = /^\/admin\/projects\/[^/]+\/marketing(\/|$)/.test(pathname) || pathname.startsWith("/admin/photo-editor/");
+  useEffect(() => {
+    if (fullScreen) document.body.setAttribute("data-admin-pwa-nav-off", "");
+    else document.body.removeAttribute("data-admin-pwa-nav-off");
+    return () => document.body.removeAttribute("data-admin-pwa-nav-off");
+  }, [fullScreen]);
   const isStaff = userRole === "staff";
   const areas = new Set(staffAreas ?? []);
 
@@ -117,6 +124,8 @@ export function AdminMobilePwaNav() {
   }
 
   const itemLabels = [...left.map((item) => item.label), "Create", ...right.map((item) => item.label)];
+
+  if (fullScreen) return null;
 
   return (
     <>

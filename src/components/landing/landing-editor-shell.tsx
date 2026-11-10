@@ -53,7 +53,7 @@ export function LandingEditorShell({
       className={cn(
         "flex min-w-0 flex-col gap-4",
         // Desktop shell: lock to the viewport below the header — no vw, no page scroll.
-        "lg:fixed lg:inset-x-0 lg:bottom-0 lg:top-16 lg:z-40 lg:flex-row lg:gap-0 lg:overflow-hidden lg:bg-background",
+        "lg:fixed lg:inset-x-0 lg:bottom-0 lg:top-[calc(4rem+var(--sat))] lg:z-40 lg:flex-row lg:gap-0 lg:overflow-hidden lg:bg-background",
         className
       )}
       data-landing-editor-shell=""

@@ -1024,7 +1024,7 @@ export function AdminProjectDetail({
   return (
     <div className="space-y-6 pb-6 md:pb-24">
       {/* Sticky project header */}
-      <div className="sticky top-0 z-40 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-white/95 surface-dark:bg-card/95 backdrop-blur-md border-b border-border shadow-sm">
+      <div className="app-sticky-below-header sticky z-40 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-white/95 surface-dark:bg-card/95 backdrop-blur-md border-b border-border shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-lg font-bold text-heading truncate">{displayName}</h1>

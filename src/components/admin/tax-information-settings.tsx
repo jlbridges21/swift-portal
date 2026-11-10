@@ -326,7 +326,7 @@ function TaxEditorShell({
 
   return (
     <div
-      className="flex min-w-0 flex-col lg:fixed lg:inset-x-0 lg:bottom-0 lg:top-16 lg:z-40 lg:flex-row lg:overflow-hidden lg:bg-background"
+      className="flex min-w-0 flex-col lg:fixed lg:inset-x-0 lg:bottom-0 lg:top-[calc(4rem+var(--sat))] lg:z-40 lg:flex-row lg:overflow-hidden lg:bg-background"
       data-w9-editor-shell=""
     >
       <aside className="min-w-0 shrink-0 lg:flex lg:w-56 lg:flex-col lg:overflow-y-scroll lg:border-r lg:border-border lg:bg-card lg:px-3 lg:py-4">

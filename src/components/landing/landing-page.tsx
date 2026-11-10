@@ -209,7 +209,7 @@ export function LandingPage({
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#334155]">
       <header
-        className="sticky top-0 z-50 border-b backdrop-blur-xl safe-area-top safe-area-x"
+        className="app-sticky-top app-safe-x sticky top-0 z-50 border-b backdrop-blur-xl"
         style={{
           backgroundColor: overlayRgba(headerBg, 0.9),
           borderColor: headerOnDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)",

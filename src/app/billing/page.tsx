@@ -293,7 +293,7 @@ export default async function BillingPage({
         />
       )}
       <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-card/90 backdrop-blur-lg">
+        <header className="app-sticky-top sticky top-0 z-50 w-full border-b border-border/80 bg-card/90 backdrop-blur-lg">
           <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4 sm:h-16 sm:px-6">
             <Logo href={sub.requiresPayment ? "/billing" : "/admin"} compact />
             <form action="/api/auth/signout" method="POST">

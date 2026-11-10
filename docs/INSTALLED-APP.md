@@ -26,13 +26,31 @@ passwords are never saved. Each installed app has its own cookie jar (iOS keeps 
 separate from Safari), so signing in once inside the app keeps it signed in until sign-out,
 expiry or revocation.
 
-## Status bar / top overlay
+## Status bar, safe areas and the top overlay
 
-The root layout used `apple-mobile-web-app-status-bar-style: black-translucent` with
-`viewport-fit=cover`, so every page rendered underneath the status bar and Dynamic Island and
-iOS painted its dark legibility gradient over headers, the website hamburger and Marketing Kit
-controls. It is now `default` (opaque status bar; the page starts below it). This meta is read
-when the app launches, so existing installs pick it up on next launch.
+Root cause: the app originally asked iOS for `black-translucent`, so pages draw underneath the
+status bar / Dynamic Island, where iOS paints a dark legibility gradient, and in landscape under
+the notch. iOS keeps the status-bar style an app had **when it was installed**, so switching the
+meta to `default` only helps new installs; existing installs keep drawing under the status bar
+(which is why portrait hid the top of full-screen screens like the Marketing Kit while landscape,
+which hides the status bar, showed it).
+
+The fix is one shared system in `globals.css` that works for both kinds of install:
+
+- `--sat` / `--sal` / `--sar` — top/left/right safe-area insets, non-zero only in the installed app
+  (`display-mode: standalone`, plus `html[data-standalone]` as a fallback). In a browser or on
+  desktop they are 0, so nothing changes there.
+- `body` is padded by them, so normal-flow content always starts in the safe area.
+- `body::before` is a dark strip exactly the status-bar height (0 on new installs), so content
+  scrolling up never sits under the white status-bar text.
+- `.app-sticky-top` — sticky headers stick just below the status bar.
+  `.app-sticky-below-header` — secondary sticky bars stick below the app header.
+- `--app-height` — `100dvh` minus the reserved top, for full-screen layouts (Marketing Kit,
+  messages, calendar, setup notices).
+- `.app-safe-x` — notch padding for normal-flow elements in a browser, never doubled in the app.
+- Fixed overlays (photo editor, social preview, modals, lightboxes) pad with `env()` directly.
+
+All of it is CSS `env()`, so rotating the phone updates it without a reload.
 
 ## Icons
 

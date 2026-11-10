@@ -471,19 +471,27 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
   ];
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-slate-50 surface-dark:bg-background">
+    <div className="flex h-[var(--app-height)] flex-col bg-slate-50 surface-dark:bg-background">
       <MarketingFontFaces />
       {/* Top bar */}
       <header className="shrink-0 border-b border-border bg-white surface-dark:bg-card">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-          <Link href={backHref} className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-heading">
-            <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Back to project</span>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-2 py-2 sm:px-4 sm:py-3">
+          <Link
+            href={backHref}
+            aria-label="Back to project"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full text-sm text-muted hover:text-heading active:bg-slate-100 sm:min-h-0 sm:min-w-0 sm:justify-start sm:rounded-none sm:active:bg-transparent surface-dark:active:bg-subtle"
+          >
+            <ArrowLeft className="h-5 w-5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Back to project</span>
           </Link>
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-2 text-sm font-semibold text-heading">
               <Sparkles className="h-4 w-4 text-accent" /> Marketing Kit
             </p>
-            <p className="truncate text-xs text-muted">{kit.content.property.address || s.projectName}</p>
+            <p className="truncate text-xs text-muted">
+              {kit.content.property.address || s.projectName}
+              {/* Phones: the save status lives here (the desktop shows it beside the actions). */}
+              <span className={cn("md:hidden", kit.saveState === "error" && "text-red-600")}> · {s.permissions.canEdit ? saveText : "View only"}</span>
+            </p>
           </div>
           <p className={cn("hidden text-xs md:block", kit.saveState === "error" ? "text-red-600" : "text-muted")} aria-live="polite">
             {s.permissions.canEdit ? saveText : "View only"}
@@ -496,7 +504,7 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={cn("flex items-center gap-2 border-b-2 px-3 pb-2.5 pt-1 text-sm font-medium", tab === t.id ? "border-accent text-heading" : "border-transparent text-muted hover:text-heading")}
+              className={cn("flex min-h-11 items-center gap-2 border-b-2 px-3 pb-2.5 pt-1 text-sm font-medium md:min-h-0", tab === t.id ? "border-accent text-heading" : "border-transparent text-muted hover:text-heading")}
               aria-current={tab === t.id ? "page" : undefined}
             >
               {t.id === "website" ? <Globe className="h-4 w-4" /> : <Palette className="h-4 w-4" />}
@@ -599,7 +607,7 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
       {drawer && tab === "social" ? (
         <div className="fixed inset-0 z-50 hidden md:block xl:hidden" role="dialog" aria-modal="true" aria-label="Kit settings">
           <button type="button" aria-label="Close" className="absolute inset-0 bg-black/30" onClick={() => setDrawer(false)} />
-          <div className="absolute inset-y-0 left-0 flex w-[360px] max-w-[90vw] flex-col bg-white shadow-2xl surface-dark:bg-card">
+          <div className="absolute inset-y-0 left-0 flex w-[360px] max-w-[90vw] flex-col bg-white pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] shadow-2xl surface-dark:bg-card">
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <div>
                 <p className="text-sm font-semibold text-heading">Kit settings</p>

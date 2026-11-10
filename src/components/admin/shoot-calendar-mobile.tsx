@@ -345,7 +345,7 @@ export function MobileShootCalendar({
   return (
     <div
       className="relative flex min-h-[22rem] min-w-0 flex-col"
-      style={{ height: "calc(100dvh - 9.25rem - var(--admin-pwa-nav-height))" }}
+      style={{ height: "calc(var(--app-height) - 9.25rem - var(--admin-pwa-nav-height))" }}
       data-mobile-calendar={view}
     >
       <div className="mb-2 min-w-0 overflow-x-hidden">

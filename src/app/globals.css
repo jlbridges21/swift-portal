@@ -174,6 +174,10 @@ body {
   .admin-pwa-content-pad {
     padding-bottom: calc(var(--admin-pwa-nav-height) + env(safe-area-inset-bottom, 0px));
   }
+  /* Full-screen editors (Marketing Kit, photo editor) hide the tab bar — no reserved gap. */
+  body[data-admin-pwa-nav-off] .admin-pwa-content-pad {
+    padding-bottom: 0;
+  }
 }
 
 /* Modal scroll regions — clear admin PWA bottom nav on iPhone */
@@ -197,15 +201,15 @@ body {
 }
 
 @media (max-width: 767px) {
-  body[data-admin-pwa-nav] .modal-scroll-body-pad {
+  body[data-admin-pwa-nav]:not([data-admin-pwa-nav-off]) .modal-scroll-body-pad {
     padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   }
 
-  body[data-admin-pwa-nav] .modal-footer-pad {
+  body[data-admin-pwa-nav]:not([data-admin-pwa-nav-off]) .modal-footer-pad {
     padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   }
 
-  body[data-admin-pwa-nav] .admin-pwa-fixed-bottom-pad {
+  body[data-admin-pwa-nav]:not([data-admin-pwa-nav-off]) .admin-pwa-fixed-bottom-pad {
     padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   }
 }
@@ -247,18 +251,86 @@ html[data-keyboard="open"] .admin-mobile-pwa-nav {
   }
 }
 
-/* Gentle page entrance in the installed app; respects reduced motion. */
-@media (prefers-reduced-motion: no-preference) {
-  html[data-standalone] main {
-    animation: sp-app-page-in 180ms ease-out both;
+
+/* ---------------------------------------------------------------------------
+   Installed-app safe areas — ONE shared system.
+
+   iOS fixes a Home Screen app's status-bar style when it is installed. Installs made while the
+   app asked for "black-translucent" draw every page underneath the status bar / Dynamic Island
+   (and the notch in landscape), where iOS adds its dark legibility gradient. Newer installs use
+   the opaque "default" style, where these insets are 0. Rather than padding individual pages,
+   the app reserves the unsafe area once:
+
+     --sat / --sal / --sar   top / left / right insets, non-zero only in the installed app
+     body                     padded by them, so normal-flow content starts in the safe area
+     body::before             solid strip behind a translucent status bar, so content scrolling
+                              up never sits under the status text
+     .app-sticky-top          sticky headers stick just below the status bar
+     --app-height             viewport height left for full-screen layouts
+
+   Everything is CSS env(), so rotating the phone updates it with no reload. Browsers and
+   desktop never match standalone display mode, so they are unchanged.
+   --------------------------------------------------------------------------- */
+:root {
+  --sat: 0px;
+  --sal: 0px;
+  --sar: 0px;
+  --app-height: 100dvh;
+}
+
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  :root {
+    --sat: env(safe-area-inset-top, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    --app-height: calc(100dvh - env(safe-area-inset-top, 0px));
   }
 }
 
-@keyframes sp-app-page-in {
-  from {
-    opacity: 0.6;
-  }
-  to {
-    opacity: 1;
+/* iOS versions that don't report display-mode: StandaloneAppBoot marks <html data-standalone>. */
+html[data-standalone] {
+  --sat: env(safe-area-inset-top, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --app-height: calc(100dvh - env(safe-area-inset-top, 0px));
+}
+
+body {
+  padding-top: var(--sat);
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: var(--sat);
+  /* Only ever non-zero under a translucent (white-text) status bar, so it is dark. */
+  background: #0b0f17;
+  z-index: 2147483000;
+  pointer-events: none;
+}
+
+.app-sticky-top {
+  top: var(--sat);
+}
+
+/* Side insets for elements in normal flow: the browser's notch inset, minus what the installed
+   app's body already reserves (so landscape never pads twice). */
+.app-safe-x {
+  padding-left: calc(env(safe-area-inset-left, 0px) - var(--sal));
+  padding-right: calc(env(safe-area-inset-right, 0px) - var(--sar));
+}
+
+/* Secondary sticky bars (e.g. the project detail header) stick just below the sticky app header
+   (h-14 / sm:h-16 + 1px border) instead of sliding underneath it. */
+.app-sticky-below-header {
+  top: calc(var(--sat) + 3.5rem + 1px);
+}
+
+@media (min-width: 640px) {
+  .app-sticky-below-header {
+    top: calc(var(--sat) + 4rem + 1px);
   }
 }

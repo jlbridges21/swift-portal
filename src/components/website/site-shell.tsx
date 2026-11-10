@@ -69,7 +69,7 @@ function SiteHeader({ view, theme, page, overlay }: { view: SiteView; theme: Sit
     <header
       className={cn(
         "z-40 w-full",
-        overlay ? "absolute inset-x-0 top-0" : preview ? "relative" : "sticky top-0",
+        overlay ? "absolute inset-x-0 top-0" : preview ? "relative" : "app-sticky-top sticky top-0",
         !overlay && (theme.dark ? "bg-[#0E0D0C]/90 backdrop-blur-md" : "bg-white/90 backdrop-blur-md"),
         !overlay && "border-b",
         !overlay && theme.hairline,

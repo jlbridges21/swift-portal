@@ -216,7 +216,7 @@ function Fullscreen({ item, onClose, onStep, position, actions }: { item: Social
     };
   }, [onClose, onStep]);
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950/95 text-white" role="dialog" aria-modal="true" aria-label={`${item.label} preview`}>
+    <div className="fixed-overlay-safe fixed inset-0 z-50 flex flex-col bg-slate-950/95 text-white" role="dialog" aria-modal="true" aria-label={`${item.label} preview`}>
       <div className="flex shrink-0 items-center gap-3 px-4 py-3">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{item.label}</p>

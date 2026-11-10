@@ -195,7 +195,7 @@ export function AdminMessagesInbox() {
   const showThreadOnMobile = !!selectedId;
 
   return (
-    <div className="flex h-[calc(100dvh-8rem)] min-h-[480px] overflow-hidden rounded-2xl border border-border bg-white surface-dark:bg-card shadow-sm lg:h-[calc(100dvh-7rem)]">
+    <div className="flex h-[calc(var(--app-height)-8rem)] min-h-[480px] overflow-hidden rounded-2xl border border-border bg-white surface-dark:bg-card shadow-sm lg:h-[calc(var(--app-height)-7rem)]">
       {/* Conversation list */}
       <aside
         className={cn(

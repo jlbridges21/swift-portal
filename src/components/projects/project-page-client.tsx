@@ -363,7 +363,7 @@ export function ProjectPageClient({
     <div className="min-h-screen bg-[#F8FAFC] surface-dark:bg-background">
       <HashScrollHandler />
       {isPreview ? (
-        <div className="sticky top-0 z-50 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900">
+        <div className="app-sticky-top sticky top-0 z-50 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900">
           <Eye className="inline h-4 w-4 mr-1" />
           Admin preview — this is what the client sees
           <Link href={`/admin/projects/${project.id}`} className="ml-3 font-medium text-accent hover:underline">

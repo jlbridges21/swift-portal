@@ -113,7 +113,7 @@ export function ImpersonationBanner({
   }
 
   return (
-    <div className="sticky top-0 z-[60] border-b border-amber-400 bg-amber-400 px-4 py-2.5 text-slate-950">
+    <div className="app-sticky-top sticky top-0 z-[60] border-b border-amber-400 bg-amber-400 px-4 py-2.5 text-slate-950">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
         <div className="text-sm">
           <p className="font-semibold">

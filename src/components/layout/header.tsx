@@ -188,7 +188,7 @@ export function Header({
   const backHref = standaloneMobile && variant === "dashboard" && pathname ? appParentPath(pathname) : null;
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-card/90 backdrop-blur-lg safe-area-top safe-area-x relative">
+    <header className="app-sticky-top app-safe-x sticky top-0 z-50 w-full border-b border-border/80 bg-card/90 backdrop-blur-lg">
       <div className="relative mx-auto flex h-14 w-full max-w-7xl items-center gap-2 px-4 sm:h-16 sm:gap-3 sm:px-6 lg:px-8">
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           {backHref ? (

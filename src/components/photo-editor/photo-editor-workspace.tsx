@@ -1139,7 +1139,7 @@ export function PhotoEditorWorkspace({ sessionId, canEdit }: { sessionId: string
 
 function EditorShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-[150] flex flex-col bg-[#1c1c1c] text-white" data-photo-editor>
+    <div className="fixed-overlay-safe fixed inset-0 z-[150] flex flex-col bg-[#1c1c1c] text-white" data-photo-editor>
       {children}
     </div>
   );

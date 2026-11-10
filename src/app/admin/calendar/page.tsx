@@ -161,7 +161,7 @@ export default async function AdminCalendarPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole={profile.role === "staff" ? "staff" : "admin"} />
-      <main className="mx-auto flex min-h-0 min-w-0 max-w-none flex-col px-3 py-4 sm:px-4 lg:h-[calc(100dvh-4rem)] lg:overflow-hidden lg:px-6">
+      <main className="mx-auto flex min-h-0 min-w-0 max-w-none flex-col px-3 py-4 sm:px-4 lg:h-[calc(var(--app-height)-4rem)] lg:overflow-hidden lg:px-6">
         <PageHeader title="Shoot Calendar" className="mb-3">
           {owner && gcalStatus !== "active" ? (
             <Link href="/admin/settings#settings-integrations">
