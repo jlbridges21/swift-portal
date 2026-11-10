@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { BrandAssetField } from "@/components/admin/brand-asset-field";
+import { UploadImageButton } from "@/components/admin/business-website/upload-image-button";
 import { WEBSITE_LIMITS, type WebsiteAbout } from "@/lib/website/settings";
 import { defaultAboutCopy } from "@/lib/website/view";
 
@@ -50,7 +50,6 @@ export function AboutPanel({
     if (value.enabled || patch.enabled) onPreview();
   };
   const hasPhoto = Boolean(value.imageMedia || value.imageUrl);
-  const [showUpload, setShowUpload] = useState(false);
   const open = value.enabled || configure;
 
   return (
@@ -126,26 +125,15 @@ export function AboutPanel({
             )}
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" size="sm" onClick={onPickPhoto}>
-                <ImageIcon className="h-4 w-4" /> {hasPhoto ? "Change photo" : "Select from your media"}
+                <ImageIcon className="h-4 w-4" /> Select from your media
               </Button>
+              <UploadImageButton onUploaded={(imageUrl) => set({ imageUrl, imageMedia: null })} />
               {hasPhoto ? (
                 <Button type="button" variant="ghost" size="sm" onClick={() => set({ imageMedia: null, imageUrl: "" })}>
                   Remove
                 </Button>
               ) : null}
             </div>
-            {showUpload ? (
-              <BrandAssetField
-                kind="heroImage"
-                value={value.imageMedia ? "" : value.imageUrl}
-                inputId="about-photo"
-                onUrlChange={(imageUrl) => set({ imageUrl, imageMedia: null })}
-              />
-            ) : (
-              <button type="button" onClick={() => setShowUpload(true)} className="text-xs font-medium text-accent hover:underline">
-                Or upload a photo
-              </button>
-            )}
           </div>
 
           {!value.enabled ? (

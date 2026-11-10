@@ -33,6 +33,8 @@ export interface MarketingKitSettings {
   allowAddToInvoice: boolean;
   defaultTemplate: DesignStyle;
   photographerCredit: boolean;
+  /** Default for new property websites: "Powered by ShootPortal" footer credit. */
+  poweredBy: boolean;
 }
 
 export const DEFAULT_MARKETING_KIT_SETTINGS: MarketingKitSettings = {
@@ -46,6 +48,7 @@ export const DEFAULT_MARKETING_KIT_SETTINGS: MarketingKitSettings = {
   allowAddToInvoice: true,
   defaultTemplate: "modern",
   photographerCredit: true,
+  poweredBy: true,
 };
 
 const MAX_PRICE_CENTS = 1_000_000;
@@ -81,6 +84,7 @@ export function mergeMarketingKitSettings(raw: unknown): MarketingKitSettings {
     allowAddToInvoice: typeof r.allowAddToInvoice === "boolean" ? r.allowAddToInvoice : d.allowAddToInvoice,
     defaultTemplate: DESIGN_STYLES.includes(r.defaultTemplate as DesignStyle) ? (r.defaultTemplate as DesignStyle) : d.defaultTemplate,
     photographerCredit: typeof r.photographerCredit === "boolean" ? r.photographerCredit : d.photographerCredit,
+    poweredBy: typeof r.poweredBy === "boolean" ? r.poweredBy : d.poweredBy,
   };
 }
 

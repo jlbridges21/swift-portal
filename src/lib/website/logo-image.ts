@@ -79,6 +79,36 @@ export async function transparentLogo(buf: Buffer): Promise<Buffer> {
 }
 
 
+/**
+ * Same as loadTransparentLogo for a URL that changes per request (a signed storage URL):
+ * cached under a stable key instead of the URL.
+ */
+export async function loadTransparentLogoByKey(cacheKey: string, url: string): Promise<Buffer | null> {
+  const hit = cache.get(cacheKey);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.png;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > MAX_BYTES) return null;
+    const png = await transparentLogo(buf);
+    if (cache.size > 200) cache.clear();
+    cache.set(cacheKey, { at: Date.now(), png });
+    return png;
+  } catch {
+    return null;
+  }
+}
+
+export function logoPngResponse(png: Buffer, cache: "public" | "private"): Response {
+  return new Response(new Uint8Array(png), {
+    headers: {
+      "Content-Type": "image/png",
+      "Cache-Control": cache === "public" ? "public, max-age=3600, s-maxage=86400" : "private, max-age=600",
+    },
+  });
+}
+
 /** Fetch (cached) and return the logo as a transparent PNG, or null. */
 export async function loadTransparentLogo(businessId: string, raw: string, baseUrl: string): Promise<Buffer | null> {
   const key = `${businessId}:${raw}`;

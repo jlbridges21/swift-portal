@@ -155,6 +155,8 @@ export type SiteView = {
   featured: SitePortfolioProject[];
   cta: { label: string; heading: string; text: string };
   contactIntro: string;
+  /** Footer platform credit. */
+  poweredBy: boolean;
   /** Present only when the About Us page is enabled. */
   about: SiteAbout | null;
   /** Visible testimonials when the section is enabled; empty otherwise (never placeholders). */
@@ -186,8 +188,8 @@ export function defaultAboutCopy(businessName: string, serviceNames: string[], t
     intro: tagline.trim() || `A little about ${businessName.trim() || "us"} and how we work.`,
     paragraphs: [
       offer,
-      "Every project starts with a conversation about what you need — the property, the event or the brand you want to show — so the shoot is planned around your goals.",
-      "Finished photos and video are delivered online, ready to share, download and use wherever you need them.",
+      "Every shoot starts with a quick conversation about what you need, so we can plan around the property, event or brand you want to show.",
+      "When the work is done, your photos and video are delivered online, ready to download, share and use wherever you need them.",
       "Have a project in mind? We’d love to hear about it.",
     ].filter(Boolean),
   };
@@ -413,13 +415,14 @@ export function buildSiteView(input: {
     cta: {
       label: website.ctaLabel || DEFAULT_WEBSITE_CTA_LABEL,
       heading: website.ctaHeading || defaultCtaHeading(serviceNames, business.tagline),
-      text: website.ctaText || "Tell us a little about your project — it only takes a minute.",
+      text: website.ctaText || "Tell us a little about your project. It only takes a minute.",
     },
     contactIntro:
       website.contactIntro ||
       `Have a project in mind? Send us the details below and ${name} will get back to you shortly.`,
     links: { ...input.links, showClientLogin: website.showClientLogin },
     nav,
+    poweredBy: website.showPoweredBy,
     about: website.about.enabled ? buildAbout() : null,
     testimonials: website.testimonials.enabled
       ? website.testimonials.items

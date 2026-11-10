@@ -42,6 +42,14 @@ export function editorUrls(state: KitClientState): UrlResolver {
           ? `${base}/img/u?p=${encodeURIComponent(ref.path)}&s=${size}`
           : state.businessLogoUrl,
     video: (id) => `${base}/video/${id}`,
+    logo: (ref: AssetRef) =>
+      ref.kind === "upload"
+        ? `${base}/logo?p=${encodeURIComponent(ref.path)}`
+        : ref.kind === "business_logo"
+          ? state.businessLogoUrl
+            ? `${base}/logo?ref=business`
+            : null
+          : `${base}/img/${ref.id}?s=thumb`,
     poster: (id) => {
       const m = posters.get(id);
       if (!m) return null;

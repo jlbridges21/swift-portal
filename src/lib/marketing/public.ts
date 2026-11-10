@@ -165,6 +165,14 @@ export function publicUrlResolver(listing: PublicListing): UrlResolver {
           ? `${base}/img/u?p=${encodeURIComponent(ref.path)}&s=${size}`
           : listing.businessLogoUrl,
     video: (id) => `${base}/video/${id}`,
+    logo: (ref: AssetRef) =>
+      ref.kind === "upload"
+        ? `${base}/logo?p=${encodeURIComponent(ref.path)}`
+        : ref.kind === "business_logo"
+          ? listing.businessLogoUrl
+            ? `${base}/logo?ref=business`
+            : null
+          : `${base}/img/${ref.id}?s=thumb`,
     poster: (id) => {
       const r = rows.get(id);
       if (!r) return null;

@@ -32,7 +32,7 @@ export type DefaultsInput = {
   client: { name?: string | null; full_name?: string | null; email?: string | null; phone?: string | null; company?: string | null } | null;
   business: { name: string; primaryColor: string; accentColor: string; hasLogo: boolean };
   brandProfile: BrandProfile | null;
-  settings: { defaultTemplate: DesignStyle; photographerCredit: boolean };
+  settings: { defaultTemplate: DesignStyle; photographerCredit: boolean; poweredBy?: boolean };
   media: MediaIndexItem[];
 };
 
@@ -152,6 +152,7 @@ export function buildDefaults(input: DefaultsInput): MarketingContent {
     website: {
       template: bp?.websiteTemplate ?? input.settings.defaultTemplate,
       sections: DEFAULT_SECTION_ORDER.map((key) => ({ key, visible: true })),
+      poweredBy: input.settings.poweredBy !== false,
     },
     social: {
       style: bp?.socialStyle ?? bp?.websiteTemplate ?? input.settings.defaultTemplate,

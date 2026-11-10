@@ -149,6 +149,8 @@ export type WebsiteSection = { key: WebsiteSectionKey; visible: boolean };
 export interface WebsiteConfig {
   template: DesignStyle;
   sections: WebsiteSection[];
+  /** Small "Powered by ShootPortal" credit in the footer. Missing (older kits) = on. */
+  poweredBy: boolean;
 }
 
 export type SquareKey = "sq_just_listed" | "sq_open_house" | "sq_just_sold" | "sq_highlights" | "sq_coming_soon";
@@ -316,7 +318,7 @@ export function normalizeWebsite(w: WebsiteConfig): WebsiteConfig {
   for (const key of DEFAULT_SECTION_ORDER) {
     if (!seen.has(key)) sections.push({ key, visible: true });
   }
-  return { template: DESIGN_STYLES.includes(w.template) ? w.template : "modern", sections };
+  return { template: DESIGN_STYLES.includes(w.template) ? w.template : "modern", sections, poweredBy: w.poweredBy !== false };
 }
 
 // ---------------------------------------------------------------------------
@@ -473,11 +475,13 @@ export function sanitizeOverrides(raw: unknown, uploadPrefix: string): Marketing
     if (Array.isArray(w.sections)) {
       o.sections = normalizeWebsite({
         template: "modern",
+        poweredBy: true,
         sections: w.sections
           .filter((s): s is Record<string, unknown> => Boolean(s && typeof s === "object"))
           .map((s) => ({ key: s.key as WebsiteSectionKey, visible: s.visible !== false })),
       }).sections;
     }
+    if (typeof w.poweredBy === "boolean") o.poweredBy = w.poweredBy;
     out.website = o;
   }
 

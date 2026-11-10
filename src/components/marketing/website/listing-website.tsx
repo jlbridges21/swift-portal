@@ -9,6 +9,7 @@
  * underlying facts or media are missing — nothing is invented to fill a layout.
  */
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { PoweredByShootPortal } from "@/components/website/powered-by";
 import { Bath, BedDouble, CalendarDays, Check, ChevronLeft, ChevronRight, Globe, Mail, Maximize2, Phone, Ruler, X } from "lucide-react";
 import { LISTING_STATUS_LABEL, type DesignStyle, type WebsiteSectionKey } from "@/lib/marketing/model";
 import type { ListingView, ViewImage } from "@/lib/marketing/view-model";
@@ -630,6 +631,7 @@ export function ListingWebsite({ view, preview, previewRibbon }: ListingWebsiteP
         </p>
         {view.photographerCredit && view.businessName ? <p className="mt-2">Photography by {view.businessName}</p> : null}
         <p className="mt-2 opacity-70">Information deemed reliable but not guaranteed.</p>
+        {view.poweredBy ? <PoweredByShootPortal className="mt-5 opacity-80" /> : null}
       </footer>
       {open != null && !preview ? <Lightbox images={view.gallery} index={open} onClose={() => setOpen(null)} onMove={move} /> : null}
     </div>

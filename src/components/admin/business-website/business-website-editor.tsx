@@ -30,6 +30,7 @@ import { buildSiteView, defaultCtaHeading, defaultWebsiteHeadline, defaultWebsit
 import { PortfolioManager, type PortfolioState } from "@/components/admin/business-website/portfolio-manager";
 import { WebsitePreview, type PreviewPage } from "@/components/admin/business-website/website-preview";
 import { MediaPickerModal } from "@/components/admin/business-website/media-picker";
+import { UploadImageButton } from "@/components/admin/business-website/upload-image-button";
 import { AboutPanel } from "@/components/admin/business-website/about-panel";
 import { TestimonialsPanel } from "@/components/admin/business-website/testimonials-panel";
 
@@ -190,8 +191,8 @@ export function BusinessWebsiteEditor({
   const contactKeys: (keyof BusinessSettings)[] = ["primaryContactEmail", "phoneNumber", "websiteUrl"];
   const dirtyContact = contactKeys.some((k) => business[k] !== savedSettings.business[k]);
   const dirtyAppearance = !same(
-    [website.template, website.accentColor, website.heroSource, website.heroImageUrl, website.heroVideoUrl, website.heroImageMedia, website.heroVideoMedia, business.logoUrl],
-    [saved.template, saved.accentColor, saved.heroSource, saved.heroImageUrl, saved.heroVideoUrl, saved.heroImageMedia, saved.heroVideoMedia, savedSettings.business.logoUrl]
+    [website.template, website.accentColor, website.heroSource, website.heroImageUrl, website.heroVideoUrl, website.heroImageMedia, website.heroVideoMedia, website.showPoweredBy, business.logoUrl],
+    [saved.template, saved.accentColor, saved.heroSource, saved.heroImageUrl, saved.heroVideoUrl, saved.heroImageMedia, saved.heroVideoMedia, saved.showPoweredBy, savedSettings.business.logoUrl]
   );
   const dirtyHome = !same(
     [website.headline, website.intro, website.featuredServiceIds, website.ctaLabel],
@@ -219,7 +220,6 @@ export function BusinessWebsiteEditor({
 
   const [newRedirect, setNewRedirect] = useState({ from: "", to: "/" });
   const [picker, setPicker] = useState<"photo" | "video" | "about" | null>(null);
-  const [showHeroUpload, setShowHeroUpload] = useState(false);
   const redirectFrom = normalizeRedirectPath(newRedirect.from);
   const redirectError =
     newRedirect.from.trim() && (!redirectFrom || redirectFrom === "/") ? "Enter the part after your domain, like /weddings or /about-us." : null;
@@ -360,28 +360,16 @@ export function BusinessWebsiteEditor({
                   </div>
                 ) : null}
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" onClick={() => setPicker("photo")}>
-                    <ImageIcon className="h-4 w-4" /> {website.heroImageMedia || website.heroImageUrl ? "Change hero image" : "Select hero image"}
+                  <Button type="button" variant="outline" size="sm" onClick={() => setPicker("photo")}>
+                    <ImageIcon className="h-4 w-4" /> Select from your media
                   </Button>
+                  <UploadImageButton onUploaded={(heroImageUrl) => set({ heroImageUrl, heroImageMedia: null })} />
                   {website.heroImageMedia || website.heroImageUrl ? (
-                    <Button type="button" variant="ghost" onClick={() => set({ heroImageMedia: null, heroImageUrl: "" })}>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => set({ heroImageMedia: null, heroImageUrl: "" })}>
                       Remove
                     </Button>
                   ) : null}
                 </div>
-                <p className="text-xs text-muted">Choose any photo already in your ShootPortal media.</p>
-                {showHeroUpload ? (
-                  <BrandAssetField
-                    kind="heroImage"
-                    value={website.heroImageMedia ? "" : website.heroImageUrl}
-                    inputId="website-hero-image"
-                    onUrlChange={(heroImageUrl) => set({ heroImageUrl, heroImageMedia: null })}
-                  />
-                ) : (
-                  <button type="button" onClick={() => setShowHeroUpload(true)} className="text-xs font-medium text-accent hover:underline">
-                    Or upload a new image instead
-                  </button>
-                )}
               </div>
             ) : null}
             {website.heroSource === "video" ? (
@@ -418,6 +406,14 @@ export function BusinessWebsiteEditor({
               </div>
             ) : null}
           </div>
+
+          <label className="flex items-center justify-between gap-3 border-t border-border pt-5 text-sm">
+            <span>
+              Show “Powered by ShootPortal” in footer
+              <span className="block text-xs text-muted">A small credit at the very bottom of your website.</span>
+            </span>
+            <Switch checked={website.showPoweredBy} onCheckedChange={(showPoweredBy) => set({ showPoweredBy })} />
+          </label>
         </div>
       </SettingsCollapsible>
 
@@ -582,7 +578,7 @@ export function BusinessWebsiteEditor({
               id="website-cta-text"
               value={website.ctaText}
               maxLength={WEBSITE_LIMITS.ctaText}
-              placeholder="Tell us a little about your project — it only takes a minute."
+              placeholder="Tell us a little about your project. It only takes a minute."
               onChange={(e) => set({ ctaText: e.target.value })}
             />
           </div>
@@ -767,6 +763,7 @@ export function BusinessWebsiteEditor({
     {picker ? (
       <MediaPickerModal
         kind={picker === "video" ? "video" : "photo"}
+        title={picker === "about" ? "Choose a photo for your About page" : picker === "video" ? "Choose a hero video" : "Choose a hero image"}
         selectedId={(picker === "photo" ? website.heroImageMedia?.id : picker === "about" ? website.about.imageMedia?.id : website.heroVideoMedia?.id) ?? null}
         onClose={() => setPicker(null)}
         onSelect={(m) => {

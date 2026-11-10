@@ -524,6 +524,15 @@ export function SectionsPanel({ kit }: { kit: KitApi }) {
         </li>
       ))}
       <li className="pt-1 text-[11px] text-muted">Sections without content (for example no floor plans) hide themselves.</li>
+      <li className="pt-3">
+        <label className="flex items-start justify-between gap-3 border-t border-border pt-3">
+          <span>
+            <span className="block text-sm font-medium text-heading">Show “Powered by ShootPortal” in footer</span>
+            <span className="block text-[11px] text-muted">A small credit at the very bottom of the page.</span>
+          </span>
+          <Switch checked={kit.content.website.poweredBy !== false} disabled={ro} onCheckedChange={(v) => set("website", { poweredBy: v })} />
+        </label>
+      </li>
     </ul>
   );
 }

@@ -36,6 +36,11 @@ export interface UrlResolver {
   video(id: string): string | null;
   /** Poster image for a video. */
   poster(id: string): string | null;
+  /**
+   * Logo (business / realtor / brokerage) with a transparent background — same treatment as the
+   * Business Website header. Optional: exports and tools without it fall back to image().
+   */
+  logo?(ref: AssetRef): string | null;
 }
 
 export type ViewImage = { id: string; url: string; thumbUrl: string; alt: string; width: number | null; height: number | null };
@@ -72,6 +77,8 @@ export interface ListingView {
   sections: WebsiteSection[];
   businessName: string;
   photographerCredit: boolean;
+  /** "Powered by ShootPortal" footer credit (published snapshots from before this setting: on). */
+  poweredBy: boolean;
   /**
    * Export only: logo image URLs the server re-encoded with a transparent margin of
    * LOGO_PAD × height on every side, so the logo's drop shadow has room to render.
@@ -175,7 +182,7 @@ export function buildListingView(args: {
     agent: {
       ...content.agent,
       headshotUrl: content.agent.headshot ? urls.image(content.agent.headshot, "medium") : null,
-      brokerageLogoUrl: content.agent.brokerageLogo ? urls.image(content.agent.brokerageLogo, "thumb") : null,
+      brokerageLogoUrl: content.agent.brokerageLogo ? (urls.logo ? urls.logo(content.agent.brokerageLogo) : urls.image(content.agent.brokerageLogo, "thumb")) : null,
     },
     showAgent: !b.unbranded && Boolean(content.agent.name || content.agent.phone || content.agent.email),
     branding: {
@@ -183,7 +190,7 @@ export function buildListingView(args: {
       accent: b.accentColor,
       onPrimary: onColor(b.primaryColor),
       onAccent: onColor(b.accentColor),
-      logoUrl: !b.unbranded && b.logo ? urls.image(b.logo, "thumb") : null,
+      logoUrl: !b.unbranded && b.logo ? (urls.logo ? urls.logo(b.logo) : urls.image(b.logo, "thumb")) : null,
       source: b.source,
     },
     hero,
@@ -194,6 +201,7 @@ export function buildListingView(args: {
     sections: content.website.sections,
     businessName: args.businessName,
     photographerCredit: b.photographerCredit,
+    poweredBy: content.website.poweredBy !== false,
   };
 }
 

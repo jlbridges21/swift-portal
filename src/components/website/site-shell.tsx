@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import type { SitePageKey, SiteView } from "@/lib/website/view";
 import { cn } from "@/lib/utils";
+import { PoweredByShootPortal } from "@/components/website/powered-by";
 import { SITE_THEMES, SiteImg, SiteLink, SocialIcon, WebsiteStyles, siteVars, useSiteNav, type SiteTheme } from "@/components/website/site-ui";
 
 function Brand({ view, theme, onImage, size = "md" }: { view: SiteView; theme: SiteTheme; onImage: boolean; size?: "md" | "lg" }) {
@@ -188,6 +189,7 @@ function SiteFooter({ view, theme }: { view: SiteView; theme: SiteTheme }) {
           </span>
           {b.privacyUrl ? <SiteLink href={b.privacyUrl}>Privacy</SiteLink> : null}
           {b.termsUrl ? <SiteLink href={b.termsUrl}>Terms</SiteLink> : null}
+          {view.poweredBy ? <PoweredByShootPortal className="w-full @3xl:ml-auto @3xl:w-auto [&_a]:hover:text-[#171717]" /> : null}
         </div>
       </footer>
     );
@@ -284,6 +286,7 @@ function SiteFooter({ view, theme }: { view: SiteView; theme: SiteTheme }) {
                 Terms
               </SiteLink>
             ) : null}
+            {view.poweredBy ? <PoweredByShootPortal className="text-white/40 [&_a]:text-white/55 [&_a]:hover:text-white/80" /> : null}
           </span>
         </div>
       </div>

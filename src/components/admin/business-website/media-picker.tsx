@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ImageIcon, Loader2, Play, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,11 +29,14 @@ const PAGE = 48;
  */
 export function MediaPickerModal({
   kind,
+  title,
   selectedId,
   onSelect,
   onClose,
 }: {
   kind: "photo" | "video";
+  /** Heading for this use (hero image, About photo…). */
+  title?: string;
   selectedId: string | null;
   onSelect: (media: WebsiteHeroMedia) => void;
   onClose: () => void;
@@ -106,44 +110,48 @@ export function MediaPickerModal({
   // Videos must be playable: an uploaded file or a YouTube video.
   const usable = (a: LibraryItem) => kind === "photo" || a.has_file || a.media_source === "youtube";
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  // Portaled to <body>: page containers (the settings editor shell, sticky header) can't stack
+  // over it or clip its top edge.
+  return createPortal(
     <Modal
       open
       onClose={onClose}
-      title={kind === "photo" ? "Select hero image" : "Select hero video"}
-      className="max-w-4xl"
+      title={title ?? (kind === "photo" ? "Choose a photo" : "Choose a video")}
+      className="max-w-5xl sm:rounded-2xl"
       footer={
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-muted">Only the item you choose is shown on your website.</p>
+          <p className="text-xs text-muted">Only the {kind === "photo" ? "photo" : "video"} you choose appears on your website.</p>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
             <Button type="button" variant="accent" disabled={!picked || !items.some((i) => i.id === picked)} onClick={choose}>
-              <Check className="h-4 w-4" /> Use this {kind === "photo" ? "image" : "video"}
+              <Check className="h-4 w-4" /> Use this {kind === "photo" ? "photo" : "video"}
             </Button>
           </div>
         </div>
       }
     >
-      <div className="space-y-4 pb-2">
+      <div className="space-y-5 pb-2">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={kind === "photo" ? "Search your photos by project, client or title" : "Search your videos"}
-            className="pl-9"
+            placeholder={kind === "photo" ? "Search by project, client or file name" : "Search your videos"}
+            className="h-11 rounded-full bg-subtle pl-10 surface-dark:bg-subtle"
             aria-label="Search media"
           />
         </div>
         {error ? <p className="text-sm text-red-700">{error}</p> : null}
         {!loading && !items.length && !error ? (
-          <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted">
+          <div className="rounded-2xl border border-dashed border-border px-6 py-12 text-center text-sm text-muted">
             {query ? "Nothing matches that search." : kind === "photo" ? "No photos in ShootPortal yet. Upload project photos in Media first." : "No videos in ShootPortal yet."}
           </div>
         ) : null}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {items.map((a) => {
             const thumb = thumbFor(a);
             const ok = usable(a);
@@ -154,35 +162,42 @@ export function MediaPickerModal({
                 type="button"
                 disabled={!ok}
                 onClick={() => setPicked(a.id)}
+                onDoubleClick={() => {
+                  setPicked(a.id);
+                  const youtubeId = a.media_source === "youtube" ? extractYouTubeId(a.youtube_url || a.embed_url || "") ?? "" : "";
+                  if (ok) onSelect({ id: a.id, source: youtubeId ? "youtube" : "upload", youtubeId });
+                }}
                 aria-pressed={on}
-                className={cn(
-                  "group overflow-hidden rounded-lg border text-left transition",
-                  on ? "border-accent ring-2 ring-accent/40" : "border-border hover:border-heading/30",
-                  !ok && "cursor-not-allowed opacity-40"
-                )}
+                title={a.title || undefined}
+                className={cn("group text-left outline-none", !ok && "cursor-not-allowed opacity-40")}
               >
-                <div className="relative aspect-[4/3] bg-slate-100 surface-dark:bg-subtle">
+                <div
+                  className={cn(
+                    "relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100 ring-offset-2 transition surface-dark:bg-subtle",
+                    on ? "ring-2 ring-accent" : "ring-1 ring-black/5 group-hover:ring-black/15 group-focus-visible:ring-2 group-focus-visible:ring-accent/60"
+                  )}
+                >
                   {thumb ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={thumb} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+                    <img src={thumb} alt="" className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" loading="lazy" />
                   ) : (
                     <ImageIcon className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 text-muted" />
                   )}
                   {kind === "video" ? (
-                    <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                    <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur">
                       <Play className="h-2.5 w-2.5 fill-current" /> {a.media_source === "youtube" ? "YouTube" : "Video"}
                     </span>
                   ) : null}
-                  {on ? (
-                    <span className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white">
-                      <Check className="h-3.5 w-3.5" />
-                    </span>
-                  ) : null}
+                  <span
+                    className={cn(
+                      "absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full border-2 transition",
+                      on ? "border-accent bg-accent text-white" : "border-white/90 bg-black/20 text-transparent opacity-0 group-hover:opacity-100"
+                    )}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </span>
                 </div>
-                <div className="px-2 py-1.5">
-                  <p className="truncate text-xs font-medium text-heading">{a.title || "Untitled"}</p>
-                  <p className="truncate text-[11px] text-muted">{a.project_name}</p>
-                </div>
+                <p className="mt-1.5 truncate px-0.5 text-xs text-muted">{a.project_name || a.title || "Untitled"}</p>
               </button>
             );
           })}
@@ -193,12 +208,13 @@ export function MediaPickerModal({
           </p>
         ) : hasMore ? (
           <div className="flex justify-center">
-            <Button type="button" variant="outline" size="sm" onClick={() => void load(page + 1, false)}>
+            <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => void load(page + 1, false)}>
               Load more
             </Button>
           </div>
         ) : null}
       </div>
-    </Modal>
+    </Modal>,
+    document.body
   );
 }

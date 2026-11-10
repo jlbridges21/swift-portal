@@ -18,6 +18,8 @@ import {
 import { buildSiteView } from "../src/lib/website/view";
 import { composePortalDomainInput } from "../src/lib/custom-domain-input";
 import { appParentPath } from "../src/lib/pwa/app-nav";
+import { normalizeWebsite, sanitizeOverrides } from "../src/lib/marketing/model";
+import { mergeMarketingKitSettings } from "../src/lib/marketing/offers";
 import { pwaIconUrl, pwaIconVersion } from "../src/lib/pwa/metadata";
 
 let n = 0;
@@ -237,6 +239,20 @@ t("Testimonials: off by default, only real visible reviews, never placeholders",
   assert.equal(buildSiteView({ ...base, website: mergeWebsiteSettings({ testimonials: { enabled: false, items } } as never) }).testimonials.length, 0);
   assert.equal(mergeWebsiteSettings(null).testimonials.enabled, false);
   assert.equal(buildSiteView({ ...base, website: mergeWebsiteSettings({ testimonials: { enabled: true, items: [] } } as never) }).testimonials.length, 0);
+});
+
+t("Powered by ShootPortal: on by default, can be turned off", () => {
+  const base = { business: { name: "X", tagline: "", logoUrl: "", primaryColor: "#111", accentColor: "#4F46E5", email: "", phone: "", websiteUrl: "", addressLine1: "", addressLine2: "", city: "", state: "", postalCode: "", legalName: "", termsUrl: "", privacyUrl: "" }, services: [], portfolio: [], links: { clientLogin: "/login", request: "/request" } };
+  assert.equal(mergeWebsiteSettings(null).showPoweredBy, true);
+  assert.equal(mergeWebsiteSettings({ showPoweredBy: false } as never).showPoweredBy, false);
+  assert.equal(buildSiteView({ ...base, website: mergeWebsiteSettings(null) }).poweredBy, true);
+  assert.equal(buildSiteView({ ...base, website: mergeWebsiteSettings({ showPoweredBy: false } as never) }).poweredBy, false);
+  // Property websites: business default → per-website override; old published snapshots default on.
+  assert.equal(normalizeWebsite({ template: "modern", sections: [] } as never).poweredBy, true);
+  assert.equal(normalizeWebsite({ template: "modern", sections: [], poweredBy: false }).poweredBy, false);
+  assert.equal(sanitizeOverrides({ website: { poweredBy: false } }).website?.poweredBy, false);
+  assert.equal(mergeMarketingKitSettings({}).poweredBy, true);
+  assert.equal(mergeMarketingKitSettings({ poweredBy: false }).poweredBy, false);
 });
 
 console.log(`\n${n} checks passed`);

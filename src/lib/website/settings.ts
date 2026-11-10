@@ -154,6 +154,8 @@ export interface WebsiteSettings {
   redirects: WebsiteRedirect[];
   about: WebsiteAbout;
   testimonials: WebsiteTestimonials;
+  /** Small "Powered by ShootPortal" footer credit. On by default. */
+  showPoweredBy: boolean;
 }
 
 export interface PortfolioEntry {
@@ -215,6 +217,7 @@ export const DEFAULT_WEBSITE_SETTINGS: WebsiteSettings = {
   redirects: [],
   about: { enabled: false, headline: "", intro: "", body: "", imageUrl: "", imageMedia: null },
   testimonials: { enabled: false, items: [] },
+  showPoweredBy: true,
 };
 
 export const DEFAULT_PORTFOLIO_SETTINGS: PortfolioSettings = { entries: [], dismissedProjectIds: [] };
@@ -453,6 +456,7 @@ export function mergeWebsiteSettings(
     redirects: normalizeRedirects(base.redirects),
     about: normalizeAbout(base.about, landing),
     testimonials: normalizeTestimonials(base.testimonials),
+    showPoweredBy: base.showPoweredBy !== false,
   };
 }
 

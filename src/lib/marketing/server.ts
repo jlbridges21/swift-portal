@@ -412,7 +412,7 @@ export async function loadKitContext(businessId: string, projectId: string): Pro
       hasLogo: Boolean(businessLogoUrl),
     },
     brandProfile,
-    settings: { defaultTemplate: settings.defaultTemplate, photographerCredit: settings.photographerCredit },
+    settings: { defaultTemplate: settings.defaultTemplate, photographerCredit: settings.photographerCredit, poweredBy: settings.poweredBy },
     media,
   });
 

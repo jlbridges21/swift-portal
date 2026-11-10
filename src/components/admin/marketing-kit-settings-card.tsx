@@ -150,6 +150,13 @@ export function MarketingKitSettingsCard({ value, onChange }: { value: Marketing
             </span>
             <Switch checked={value.photographerCredit} onCheckedChange={(v) => patch({ photographerCredit: v })} aria-label="Photography credit" />
           </label>
+          <label className="flex items-start justify-between gap-4">
+            <span>
+              <span className="block text-sm font-medium text-heading">“Powered by ShootPortal” credit</span>
+              <span className="block text-xs text-muted">A small credit at the bottom of new property websites. You can still turn it off on any single website.</span>
+            </span>
+            <Switch checked={value.poweredBy} onCheckedChange={(v) => patch({ poweredBy: v })} aria-label="Powered by ShootPortal credit" />
+          </label>
         </CardContent>
       </Card>
     </div>
