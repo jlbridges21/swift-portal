@@ -11,6 +11,7 @@ import {
   CreditCard,
   Download,
   ExternalLink,
+  Eye,
   Globe,
   Loader2,
   Lock,
@@ -250,6 +251,7 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
   const router = useRouter();
   const s = kit.state;
   const [tab, setTab] = useState<Tab>(initialTab);
+  const [previewing, setPreviewing] = useState(false);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   useEffect(() => {
     if (window.matchMedia("(max-width: 767px)").matches) setDevice("mobile");
@@ -347,6 +349,30 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
     if (next) setDrawer(false);
   }
 
+  /** Full-page draft preview in a new tab (business only). Saves pending edits first. */
+  async function openPreview() {
+    const url = `/property-preview/${s.projectId}`;
+    if (kit.saveState === "saved") {
+      window.open(url, "_blank", "noopener");
+      return;
+    }
+    // Open the tab inside the click so popup blockers allow it, then point it at the preview
+    // once the latest edits are saved.
+    const win = window.open("", "_blank");
+    if (win) {
+      win.opener = null;
+      win.document.title = "Preparing preview…";
+      win.document.body.style.cssText = "font:14px system-ui,sans-serif;color:#64748b;display:grid;place-items:center;height:100vh;margin:0";
+      win.document.body.textContent = "Preparing preview…";
+    }
+    setPreviewing(true);
+    const saved = await kit.saveNow();
+    setPreviewing(false);
+    if (!saved) toast.error("Your latest changes couldn't be saved, so the preview shows the last saved version.");
+    if (win) win.location.href = url;
+    else window.open(url, "_blank", "noopener");
+  }
+
   async function download(item: SocialItem | "all") {
     const id = item === "all" ? "all" : item.id;
     setDownloading(id);
@@ -389,6 +415,11 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
             {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />} Copy link
           </Button>
         </>
+      ) : null}
+      {s.permissions.isBusiness && (s.website.status !== "published" || s.website.hasUnpublishedChanges) ? (
+        <Button size="sm" variant="outline" disabled={previewing} onClick={() => void openPreview()} title="Open the full website in a new tab (private to your business)">
+          {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />} Preview<span className="hidden sm:inline"> website</span>
+        </Button>
       ) : null}
       {(s.permissions.isBusiness ? canBusinessPublish : s.permissions.canPublish) ? (
         s.website.status !== "published" || s.website.hasUnpublishedChanges ? (

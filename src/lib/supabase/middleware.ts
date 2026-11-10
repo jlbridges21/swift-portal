@@ -295,6 +295,7 @@ export async function updateSession(request: NextRequest) {
     "/onboarding",
     "/partner",
     "/finish-setup",
+    "/property-preview",
   ];
   // Segment-boundary match: bare startsWith would make the public /partners
   // marketing page match the protected /partner dashboard prefix.

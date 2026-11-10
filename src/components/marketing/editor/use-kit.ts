@@ -5,6 +5,9 @@ import { toast } from "sonner";
 import { mergeContent, type AssetRef, type MarketingContent, type MarketingOverrides } from "@/lib/marketing/model";
 import type { KitClientState } from "@/lib/marketing/server";
 import type { UrlResolver } from "@/lib/marketing/view-model";
+import { editorUrls } from "@/lib/marketing/editor-urls";
+
+export { editorUrls };
 
 export type SaveState = "saved" | "dirty" | "saving" | "error";
 
@@ -29,33 +32,6 @@ function prune(overrides: MarketingOverrides, defaults: MarketingContent): Marke
     if (Object.keys(kept).length) (out as Record<string, unknown>)[group] = kept;
   }
   return out;
-}
-
-export function editorUrls(state: KitClientState): UrlResolver {
-  const base = `/api/marketing/${state.projectId}`;
-  const posters = new Map(state.media.map((m) => [m.id, m]));
-  return {
-    image: (ref: AssetRef, size) =>
-      ref.kind === "media"
-        ? `${base}/img/${ref.id}?s=${size}`
-        : ref.kind === "upload"
-          ? `${base}/img/u?p=${encodeURIComponent(ref.path)}&s=${size}`
-          : state.businessLogoUrl,
-    video: (id) => `${base}/video/${id}`,
-    logo: (ref: AssetRef) =>
-      ref.kind === "upload"
-        ? `${base}/logo?p=${encodeURIComponent(ref.path)}`
-        : ref.kind === "business_logo"
-          ? state.businessLogoUrl
-            ? `${base}/logo?ref=business`
-            : null
-          : `${base}/img/${ref.id}?s=thumb`,
-    poster: (id) => {
-      const m = posters.get(id);
-      if (!m) return null;
-      return m.source === "youtube" ? m.posterUrl : `${base}/img/${id}?s=medium`;
-    },
-  };
 }
 
 export function useKit(initial: KitClientState, urlFactory: (state: KitClientState) => UrlResolver = editorUrls) {
@@ -176,6 +152,25 @@ export function useKit(initial: KitClientState, urlFactory: (state: KitClientSta
     [flush, initial.projectId]
   );
 
+  /** Save pending edits now (skipping the debounce). Resolves true once everything is saved. */
+  const saveNow = useCallback(async (): Promise<boolean> => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    for (let i = 0; i < 150; i++) {
+      if (inflight.current) {
+        await new Promise((r) => setTimeout(r, 100));
+        continue;
+      }
+      if (!pending.current) return true;
+      const before = failures.current;
+      await flush();
+      if (failures.current > before) return false;
+    }
+    return false;
+  }, [flush]);
+
   const refresh = useCallback(async () => {
     try {
       const data = await api<{ state: KitClientState }>(`/api/marketing/${initial.projectId}`);
@@ -207,7 +202,7 @@ export function useKit(initial: KitClientState, urlFactory: (state: KitClientSta
     [initial.projectId]
   );
 
-  return { state, setState, overrides, content, urls, update, saveState, busy, action, refresh, upload, api };
+  return { state, setState, overrides, content, urls, update, saveState, busy, action, refresh, upload, api, saveNow };
 }
 
 export type KitApi = ReturnType<typeof useKit>;
