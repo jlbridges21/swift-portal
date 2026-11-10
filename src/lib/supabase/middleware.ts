@@ -132,6 +132,12 @@ export async function updateSession(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   applyHostHeaders(requestHeaders, resolution);
 
+  // Property website domain (listings.yourstudio.com): public listing pages only. No portal
+  // session, auth redirects or tenant UI ever run on this host.
+  if (resolution.source === "listing_domain") {
+    return buildSessionResponse(request, requestHeaders, resolution);
+  }
+
   // Partner referral (?ref=) — platform apex only. Never on tenant / custom domain.
   // Last-touch: a newer valid code replaces an older cookie. Strip ?ref from the URL.
   if (resolution.kind === "platform" && request.nextUrl.searchParams.has("ref")) {
@@ -214,6 +220,10 @@ export async function updateSession(request: NextRequest) {
 
   const path = resolution.rewritePathname ?? request.nextUrl.pathname;
   const isApi = path.startsWith("/api/");
+  // Public property websites (Marketing Kit) on the ShootPortal fallback URL: like share links,
+  // a signed-in session (any business) must not redirect the visitor. Unlike share links they
+  // are meant to be indexed, so they are excluded from the noindex header below.
+  const isPublicListingPath = path === "/l" || path.startsWith("/l/") || path.startsWith("/api/public/listing/");
   const method = request.method.toUpperCase();
   // Photo/folder share links and public videos (watch page + website embeds) are
   // authorized by their token alone. A signed-in session (any business, any state)
@@ -224,7 +234,8 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/api/public/photo/") ||
     path.startsWith("/v/") ||
     path.startsWith("/embed/") ||
-    path.startsWith("/api/public/video/");
+    path.startsWith("/api/public/video/") ||
+    isPublicListingPath;
 
   const protectedPaths = [
     "/dashboard",
@@ -882,7 +893,7 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  if (path.startsWith("/view/") || path.startsWith("/w9/") || isPhotoSharePath) {
+  if (path.startsWith("/view/") || path.startsWith("/w9/") || (isPhotoSharePath && !isPublicListingPath)) {
     supabaseResponse.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
     supabaseResponse.headers.set("Cache-Control", "private, no-store");
   }

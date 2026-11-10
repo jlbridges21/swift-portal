@@ -1,0 +1,4 @@
+Inter, Cormorant Garamond, DM Serif Display, and Nunito Sans are licensed under the
+SIL Open Font License, Version 1.1 (https://openfontlicense.org). Files obtained from
+Fontsource (latin subset, static weights). Used by the Marketing Kit live previews
+(@font-face) and server-side exports (next/og) so downloads match previews.

@@ -1,3 +1,4 @@
+import { grantPurchasesForPayment, isMarketingAddonPayment } from "@/lib/marketing/purchases";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { logProjectActivity } from "@/lib/activity";
@@ -95,6 +96,10 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
   const { payments: payWorkflow } = appSettings.workflow;
 
   if (isPaymentComplete(payment.status)) {
+    // Marketing Kit add-on: re-run the (idempotent) grant in case an earlier attempt failed.
+    if (await isMarketingAddonPayment(businessId, payment.id)) {
+      await grantPurchasesForPayment(businessId, payment.id);
+    }
     const receiptPatch: { stripe_receipt_url?: string; card_last4?: string } = {};
     if (receiptUrl && !payment.stripe_receipt_url) receiptPatch.stripe_receipt_url = receiptUrl;
     if (cardLast4 && !payment.card_last4) receiptPatch.card_last4 = cardLast4;
@@ -159,7 +164,19 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     }
   }
 
-  if (wasProcessing) {
+  // Marketing Kit add-on (Property Website / Social Media Kit): grant access and skip project
+  // status automation. An add-on payment must never move the project to Delivered or unlock
+  // downloads that the main invoice controls.
+  const isMarketingAddon = await isMarketingAddonPayment(businessId, payment.id);
+  if (isMarketingAddon) {
+    await grantPurchasesForPayment(businessId, payment.id);
+    await logProjectActivity("payment_received", activityDescription, {
+      businessId,
+      projectId: payment.project_id,
+      idempotencyKey: `payment:${payment.id}:received`,
+      metadata: { paymentId: payment.id, source, marketing: true },
+    });
+  } else if (wasProcessing) {
     await logProjectActivity("payment_received", activityDescription, {
       businessId,
       projectId: payment.project_id,
@@ -193,7 +210,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     );
   }
 
-  if (payWorkflow.autoUnlockDownloads && !wasProcessing) {
+  if (payWorkflow.autoUnlockDownloads && !wasProcessing && !isMarketingAddon) {
     await logWorkflowAudit(payment.project_id, "Downloads automatically unlocked after payment.", {
       idempotencyKey: `workflow:downloads-unlocked:${payment.id}`,
     });
@@ -250,8 +267,14 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
       type: "payment_confirmed",
       eventKey: "project_delivered",
       title: wasProcessing ? "Bank payment cleared" : "Payment receipt",
-      body: wasProcessing ? `Your ${amountStr} bank payment has cleared. Thank you!` : completedBody,
-      link: `/dashboard/projects/${payment.project_id}#payments`,
+      body: isMarketingAddon
+        ? `Your ${amountStr} payment for ${payment.description} is confirmed. It's ready in your Marketing Kit.`
+        : wasProcessing
+          ? `Your ${amountStr} bank payment has cleared. Thank you!`
+          : completedBody,
+      link: isMarketingAddon
+        ? `/dashboard/projects/${payment.project_id}/marketing`
+        : `/dashboard/projects/${payment.project_id}#payments`,
       projectId: payment.project_id,
       paymentId: payment.id,
       sendEmail: false,
@@ -354,8 +377,11 @@ export async function handlePaymentProcessing(options: PaymentProcessingOptions)
   const payWorkflow = appSettings.workflow.payments;
   const amountStr = `$${(payment.amount / 100).toFixed(2)}`;
   const activityDescription = `Bank payment started: ${amountStr} (processing, usually clears in a few business days)`;
+  // Marketing Kit add-on: access is granted when the bank payment clears (handlePaymentSuccess),
+  // and an add-on never changes project status.
+  const isMarketingAddon = await isMarketingAddonPayment(businessId, payment.id);
 
-  if (payWorkflow.autoMoveOnStripePaid) {
+  if (payWorkflow.autoMoveOnStripePaid && !isMarketingAddon) {
     await setProjectStatus({
       projectId: payment.project_id,
       status: "delivered",
@@ -398,7 +424,9 @@ export async function handlePaymentProcessing(options: PaymentProcessingOptions)
       type: "payment_confirmed",
       eventKey: "project_delivered",
       title: "Payment processing",
-      body: payWorkflow.autoMoveOnStripePaid
+      body: isMarketingAddon
+        ? `Your ${amountStr} bank payment is processing and usually clears in a few business days. Your Marketing Kit unlocks as soon as it does.`
+        : payWorkflow.autoMoveOnStripePaid
         ? `Your ${amountStr} bank payment is processing and usually clears in a few business days. Your files are ready to download now.`
         : `Your ${amountStr} bank payment is processing and usually clears in a few business days.`,
       link: `/dashboard/projects/${payment.project_id}#payments`,

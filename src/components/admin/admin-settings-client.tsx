@@ -23,6 +23,8 @@ import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card"
 import { EmailTemplatesSettingsCard } from "@/components/admin/email-templates-settings-card";
 import { LandingPageSettingsCard } from "@/components/admin/landing-page-settings-card";
 import { CustomDomainSettingsCard } from "@/components/admin/custom-domain-settings-card";
+import { ListingDomainSection } from "@/components/admin/listing-domain-section";
+import { MarketingKitSettingsCard } from "@/components/admin/marketing-kit-settings-card";
 import type { CustomDomainPublicState } from "@/lib/custom-domain";
 import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
@@ -59,6 +61,12 @@ interface AdminSettingsClientProps {
   canCustomizeLanding: boolean;
   canUseCustomDomain: boolean;
   customDomainState: CustomDomainPublicState;
+  listingDomain: {
+    state: CustomDomainPublicState;
+    setupRequired: boolean;
+    suggestedRootDomain: string | null;
+    returnTo: string | null;
+  };
   portalPreviewUrl: string;
   serviceNames: string[];
   showTax: boolean;
@@ -282,6 +290,7 @@ export function AdminSettingsClient({
   canCustomizeLanding,
   canUseCustomDomain,
   customDomainState,
+  listingDomain,
   portalPreviewUrl,
   serviceNames,
   showTax,
@@ -1028,7 +1037,30 @@ export function AdminSettingsClient({
               <span className="font-medium text-heading">portal.yourstudio.com</span> instead of a
               ShootPortal subdomain — so your portal feels like your business.
             </p>
+            <h3 className="pt-2 text-base font-semibold text-heading">Client Portal Address</h3>
+            <p className="-mt-2 text-sm text-muted">Used for clients signing in to your ShootPortal portal.</p>
             <CustomDomainSettingsCard entitled={canUseCustomDomain} initialState={customDomainState} />
+            <ListingDomainSection
+              entitled={canUseCustomDomain}
+              state={listingDomain.state}
+              setupRequired={listingDomain.setupRequired}
+              suggestedRootDomain={listingDomain.suggestedRootDomain}
+              returnTo={listingDomain.returnTo}
+            />
+          </div>
+        </SettingsPanel>
+
+        <SettingsPanel id="marketing_kit" active={section}>
+          <div id="settings-marketing-kit" tabIndex={-1} className="scroll-mt-24 space-y-4">
+            <h2 className="text-lg font-semibold text-heading">Marketing Kit</h2>
+            <p className="mt-1 text-sm text-muted">
+              Property websites and social media kits built automatically from each project. Include them free or sell them as
+              add-ons — clients pay through your connected Stripe account. Override any project from its Marketing Kit card.
+            </p>
+            <MarketingKitSettingsCard
+              value={settings.marketingKit}
+              onChange={(marketingKit) => setSettings((prev) => ({ ...prev, marketingKit }))}
+            />
           </div>
         </SettingsPanel>
 

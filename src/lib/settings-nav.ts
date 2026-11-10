@@ -5,6 +5,7 @@ export const SETTINGS_SECTION_IDS = [
   "contact",
   "email",
   "custom_domain",
+  "marketing_kit",
   "automated_emails",
   "new_project_setup",
   "payments",
@@ -60,8 +61,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: "custom_domain",
     label: "Use your own web address",
     description:
-      "Let clients open your portal at portal.yourstudio.com instead of a ShootPortal subdomain.",
-    hashes: ["settings-custom-domain"],
+      "Your client portal address (portal.yourstudio.com) and property website address (listings.yourstudio.com).",
+    hashes: ["settings-custom-domain", "settings-listing-domain"],
+  },
+  {
+    id: "marketing_kit",
+    label: "Marketing Kit",
+    description: "Property websites and social media kits: included or paid, prices, client permissions.",
+    hashes: ["settings-marketing-kit"],
   },
   {
     id: "automated_emails",

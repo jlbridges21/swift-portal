@@ -81,6 +81,8 @@ export const RESERVED_APP_ROUTE_SLUGS = [
   "_next",
   // Other reserved path prefixes used by the app
   "b",
+  // Property websites (Marketing Kit): /l/{site_slug}
+  "l",
 ] as const;
 
 export type ReservedPlatformSubdomain = (typeof RESERVED_PLATFORM_SUBDOMAINS)[number];

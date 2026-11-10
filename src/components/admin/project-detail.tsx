@@ -36,6 +36,7 @@ import {
 import {
   Upload, CreditCard, Globe, Box, Trash2, ChevronUp, ChevronDown,
   ExternalLink, Check, Video, ImageIcon, Eye, EyeOff, Link2, Pencil, Users, Plus, MapPin, Share2,
+  Sparkles,
 } from "lucide-react";
 import { CreateClientModal } from "@/components/admin/create-client-modal";
 import { useUploadManager } from "@/components/admin/upload-manager";
@@ -46,6 +47,8 @@ import { toast } from "sonner";
 import { useVideoReviewDeleteHandler } from "@/components/admin/video-review-admin-actions";
 import { AdminVideoGridCard } from "@/components/admin/admin-video-grid-card";
 import { SortableVideoItem, SortableVideoList } from "@/components/admin/sortable-video-grid";
+import { MarketingKitCard } from "@/components/marketing/marketing-kit-card";
+import type { KitSummary } from "@/lib/marketing/server";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import type { ProjectShareRow } from "@/lib/project-shares";
 import { ProjectShareModal } from "@/components/admin/project-share-modal";
@@ -138,6 +141,9 @@ interface AdminProjectDetailProps {
   depositPercent?: number;
   depositAmountCents?: number;
   travel?: import("@/lib/travel-fee").TravelSettings | null;
+  marketingKit?: KitSummary | null;
+  canEditMarketing?: boolean;
+  canManageMarketingOffers?: boolean;
 }
 
 async function readServerError(res: Response, fallback: string): Promise<string> {
@@ -176,6 +182,9 @@ export function AdminProjectDetail({
   depositPercent = 50,
   depositAmountCents = 0,
   travel = null,
+  marketingKit = null,
+  canEditMarketing = false,
+  canManageMarketingOffers = false,
 }: AdminProjectDetailProps) {
   const router = useRouter();
   const { enqueueUploads } = useUploadManager();
@@ -1041,6 +1050,12 @@ export function AdminProjectDetail({
             <Button variant="accent" size="sm" onClick={saveProject} disabled={saving} className="hidden md:inline-flex">
               {saving ? "Saving…" : "Save"}
             </Button>
+            <Link
+              href={`/admin/projects/${initialProject.id}/marketing`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Sparkles className="h-4 w-4" /> Marketing Kit
+            </Link>
             <a
               href={portalUrl}
               target="_blank"
@@ -1614,6 +1629,15 @@ export function AdminProjectDetail({
           </CardContent>
         </Card>
       )}
+
+      {marketingKit ? (
+        <MarketingKitCard
+          projectId={initialProject.id}
+          summary={marketingKit}
+          canEdit={canEditMarketing}
+          canManageOffers={canManageMarketingOffers}
+        />
+      ) : null}
 
       {/* Payments — hidden when staff lacks money.view */}
       {canViewMoney && (

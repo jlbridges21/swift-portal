@@ -13,6 +13,7 @@ import { getAppSettings } from "@/lib/app-settings";
 import { photoSharePermissions } from "@/lib/media-share-api";
 import { getProjectFolderShareSummary, getProjectPhotoShareSummary } from "@/lib/media-shares";
 import { getProjectPublicVideoIds } from "@/lib/video-public-shares";
+import { loadKitSummary } from "@/lib/marketing/server";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -156,6 +157,12 @@ export default async function AdminProjectPage({ params }: PageProps) {
     : [{}, {}];
 
   const publicVideoIds = await getProjectPublicVideoIds(tenant.businessId, id);
+  const marketingKit = await loadKitSummary(tenant.businessId, id).catch((e) => {
+    console.warn("[marketing] summary failed", e instanceof Error ? e.message : e);
+    return null;
+  });
+  const canEditMarketing = isOwnerAdmin(profile) || staffCan(profile, "projects.edit");
+  const canManageMarketingOffers = isOwnerAdmin(profile) || staffCan(profile, "money.send_payment_links");
   const appSettings = await getAppSettings(tenant.businessId);
   const appUrl = getBusinessPortalOrigin(tenant.business);
   const clientProjectUrl = `${appUrl}/dashboard/projects/${id}`;
@@ -196,6 +203,9 @@ export default async function AdminProjectPage({ params }: PageProps) {
           depositPercent={appSettings.workflow.payments.depositPercent}
           depositAmountCents={appSettings.workflow.payments.depositAmountCents}
           travel={appSettings.travel}
+          marketingKit={marketingKit}
+          canEditMarketing={canEditMarketing}
+          canManageMarketingOffers={canManageMarketingOffers}
         />
       </main>
     </div>

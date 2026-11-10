@@ -15,14 +15,23 @@ import {
   loadBusinessDomainState,
   toPublicDomainState,
   emptyPublicDomainState,
+  ListingDomainSetupRequiredError,
 } from "@/lib/custom-domain";
+import { suggestListingDomain } from "@/lib/marketing/listing-url";
 import { StaffPermissionsSettings } from "@/components/admin/staff-permissions-settings";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { w9CountryDecision } from "@/lib/w9-country";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 
-export default async function AdminSettingsPage() {
+/** Only same-site project editor paths may be used as the "back to your website" link. */
+function safeReturnTo(raw: string | undefined): string | null {
+  if (!raw || !raw.startsWith("/admin/projects/") || raw.includes("//") || raw.includes("\\")) return null;
+  return /^\/admin\/projects\/[0-9a-f-]{36}\/marketing(\?[a-z=&]*)?$/i.test(raw) ? raw : null;
+}
+
+export default async function AdminSettingsPage({ searchParams }: { searchParams: Promise<{ return?: string }> }) {
   const { tenant } = await requireAdminPage({ adminOnly: true });
+  const { return: returnRaw } = await searchParams;
   const settings = await getAppSettings(tenant.businessId);
   const [
     canCustomizeLanding,
@@ -43,6 +52,17 @@ export default async function AdminSettingsPage() {
   const customDomainState = domainRow
     ? toPublicDomainState(domainRow)
     : emptyPublicDomainState(`${tenant.business.slug}.${getPlatformRootDomain()}`);
+  let listingSetupRequired = false;
+  let listingDomainState = emptyPublicDomainState(`${tenant.business.slug}.${getPlatformRootDomain()}`);
+  try {
+    const listingRow = await loadBusinessDomainState(tenant.businessId, "listing");
+    if (listingRow) listingDomainState = toPublicDomainState(listingRow);
+  } catch (e) {
+    if (e instanceof ListingDomainSetupRequiredError) listingSetupRequired = true;
+    else throw e;
+  }
+  const suggestedListing = suggestListingDomain(customDomainState.domain);
+  const suggestedListingRoot = suggestedListing ? suggestedListing.replace(/^listings\./, "") : null;
   const country = await w9CountryDecision(tenant.businessId);
   let w9Clients: { id: string; name: string; email: string }[] = [];
   if (country.us) {
@@ -78,6 +98,12 @@ export default async function AdminSettingsPage() {
           canCustomizeLanding={canCustomizeLanding}
           canUseCustomDomain={canUseCustomDomain}
           customDomainState={customDomainState}
+          listingDomain={{
+            state: listingDomainState,
+            setupRequired: listingSetupRequired,
+            suggestedRootDomain: suggestedListingRoot,
+            returnTo: safeReturnTo(returnRaw),
+          }}
           portalPreviewUrl={portalPreviewUrl}
           serviceNames={serviceNames}
           staff={<StaffPermissionsSettings />}

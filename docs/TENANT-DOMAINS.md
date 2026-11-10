@@ -114,3 +114,11 @@ Used for notification email CTAs, OneSignal URLs, GHL portal links, Stripe Check
 - Pass data with request headers via `NextResponse.next({ request: { headers } })`, not `NextResponse.next({ headers })` (that would expose them to the client).
 - `headers()` in Server Components is async.
 - `React.cache` is request-scoped; do not use `'use cache'` for host identity.
+
+## Property Website Address (listing domain)
+
+Separate from the portal address. Stored in `businesses.listing_domain*` (migration v118) and managed by
+the same `lib/custom-domain.ts` code (`kind = "listing"`), Vercel API and DNS instructions. Host resolution
+checks `custom_domain` first, then a **connected** `listing_domain` (source `listing_domain`), which only
+serves public property websites (`/` and `/{slug}`) — no session or portal routes. Websites always remain
+reachable at `{portal}/l/{slug}`. See docs/MARKETING-KIT.md.

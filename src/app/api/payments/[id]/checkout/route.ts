@@ -60,7 +60,8 @@ async function createCheckoutSession(
   payment: Payment,
   businessId: string,
   business: { slug: string; custom_domain?: string | null },
-  method: CheckoutMethod = "card"
+  method: CheckoutMethod = "card",
+  returnTo: "payments" | "marketing" = "payments"
 ) {
   const appUrl = portalCheckoutBaseUrl(business);
   if (!appUrl) {
@@ -100,6 +101,7 @@ async function createCheckoutSession(
     feeCents,
     metadata: sessionMetadata,
     appUrl,
+    returnTo,
   });
 
   const session = requestOptions
@@ -454,10 +456,12 @@ export async function POST(
 
     let choice: string | undefined;
     let methodRaw: string | undefined;
+    let returnTo: "payments" | "marketing" = "payments";
     try {
       const body = await request.json();
       if (body && typeof body.choice === "string") choice = body.choice;
       if (body && typeof body.method === "string") methodRaw = body.method;
+      if (body && body.returnTo === "marketing") returnTo = "marketing";
     } catch {
       choice = undefined;
     }
@@ -487,7 +491,7 @@ export async function POST(
       return NextResponse.json({ error: block.message ?? ALREADY_PAID_MESSAGE }, { status: 409 });
     }
 
-    const result = await createCheckoutSession(paymentToCharge, tenant.businessId, tenant.business, method);
+    const result = await createCheckoutSession(paymentToCharge, tenant.businessId, tenant.business, method, returnTo);
     if (!result.ok) return result.response;
 
     return NextResponse.json({ url: result.session.url, sessionId: result.session.id });

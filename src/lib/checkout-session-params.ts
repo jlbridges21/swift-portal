@@ -17,8 +17,14 @@ export function buildPaymentCheckoutParams(args: {
   feeCents: number;
   metadata: Stripe.MetadataParam;
   appUrl: string;
+  /** "marketing" returns the client to the project's Marketing Kit instead of Payments. */
+  returnTo?: "payments" | "marketing";
 }): Stripe.Checkout.SessionCreateParams {
   const { payment, method, feeCents, metadata, appUrl } = args;
+  const back =
+    args.returnTo === "marketing"
+      ? { path: `/dashboard/projects/${payment.project_id}/marketing`, hash: "" }
+      : { path: `/dashboard/projects/${payment.project_id}`, hash: "#payments" };
   const fee = method === "card" ? Math.max(0, Math.round(feeCents)) : 0;
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
@@ -64,7 +70,7 @@ export function buildPaymentCheckoutParams(args: {
     metadata,
     payment_intent_data: { metadata },
     client_reference_id: payment.id,
-    success_url: `${appUrl}/dashboard/projects/${payment.project_id}?payment=${method === "bank" ? "bank_started" : "success"}#payments`,
-    cancel_url: `${appUrl}/dashboard/projects/${payment.project_id}?payment=cancelled#payments`,
+    success_url: `${appUrl}${back.path}?payment=${method === "bank" ? "bank_started" : "success"}${back.hash}`,
+    cancel_url: `${appUrl}${back.path}?payment=cancelled${back.hash}`,
   };
 }

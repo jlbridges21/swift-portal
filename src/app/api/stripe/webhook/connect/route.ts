@@ -4,6 +4,7 @@ import { getStripe } from "@/lib/stripe";
 import {
   applyStripeAccountSnapshot,
   connectEventAccountId,
+  getStripeForStoredAccount,
   loadIntegrationByStripeAccount,
   markStripeAccountDisabled,
 } from "@/lib/stripe-connect";
@@ -16,9 +17,11 @@ import {
   handlePaymentFailed,
   handlePaymentProcessing,
   handlePaymentSuccess,
+  resolvePaymentFromCharge,
   resolvePaymentFromCheckoutSession,
   resolvePaymentFromPaymentIntent,
 } from "@/lib/stripe-payments";
+import { revokePurchasesForPayment } from "@/lib/marketing/purchases";
 import { parseClientFeeFromMetadata, sanitizeMetadataForLog } from "@/lib/stripe-metadata";
 import { sessionIsProcessingBankPayment } from "@/lib/stripe-async-payments";
 import { isStripeEventProcessed, markStripeEventProcessed } from "@/lib/stripe-webhook-events";
@@ -30,6 +33,19 @@ export const runtime = "nodejs";
 
 function logConnect(message: string, data: Record<string, unknown>) {
   console.info(`[stripe-connect-webhook] ${message}`, JSON.stringify(data));
+}
+
+async function loadDisputedCharge(dispute: Stripe.Dispute, stripeAccountId: string): Promise<Stripe.Charge | null> {
+  if (typeof dispute.charge !== "string") return dispute.charge ?? null;
+  try {
+    const { stripe, requestOptions } = getStripeForStoredAccount(stripeAccountId);
+    return requestOptions
+      ? await stripe.charges.retrieve(dispute.charge, {}, requestOptions)
+      : await stripe.charges.retrieve(dispute.charge);
+  } catch (err) {
+    console.error("[stripe-connect-webhook] could not load disputed charge", err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 /** The payment exists and belongs to the business that owns this connected account. */
@@ -302,6 +318,29 @@ export async function POST(request: Request) {
       }
 
       case "charge.succeeded": {
+        recordEvent = true;
+        break;
+      }
+
+      // Marketing Kit add-ons only: a full refund or a dispute removes the add-on access the
+      // payment granted (and takes the property website offline). Other payments keep the
+      // existing policy — refunds are managed in Stripe and the payment row is unchanged.
+      case "charge.refunded":
+      case "charge.dispute.created": {
+        const charge =
+          event.type === "charge.refunded"
+            ? (event.data.object as Stripe.Charge)
+            : await loadDisputedCharge(event.data.object as Stripe.Dispute, connectedAccountId);
+        if (charge && (event.type === "charge.dispute.created" || charge.refunded === true)) {
+          const payment = await resolvePaymentFromCharge(charge, connectedAccountId);
+          if (connectPaymentMatches(event.type, connectBusinessId, payment, { metadata: charge.metadata })) {
+            await revokePurchasesForPayment(
+              connectBusinessId,
+              payment.id,
+              event.type === "charge.refunded" ? "refunded" : "disputed"
+            );
+          }
+        }
         recordEvent = true;
         break;
       }

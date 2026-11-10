@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Marketing Kit exports render with the same font files the live preview loads
+  // (public/marketing-fonts). Make sure they ship with the export function.
+  outputFileTracingIncludes: {
+    "/api/marketing/[projectId]/export": ["./public/marketing-fonts/**/*"],
+  },
   images: {
     // 75 is the default; 90 keeps UI text sharp in marketing product screenshots (ShowcaseImage).
     qualities: [75, 90],

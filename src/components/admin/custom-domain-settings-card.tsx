@@ -63,11 +63,16 @@ function CopyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-function statusLabel(state: CustomDomainPublicState): { title: string; detail: string; tone: string } {
+export type DomainCardKind = "portal" | "listing";
+
+function statusLabel(state: CustomDomainPublicState, kind: DomainCardKind = "portal"): { title: string; detail: string; tone: string } {
   if (!state.domain) {
     return {
       title: "Not connected",
-      detail: `Clients use ${state.fallbackSubdomain} until you connect your own domain.`,
+      detail:
+        kind === "listing"
+          ? `Property websites use your ShootPortal address (${state.fallbackSubdomain}/l/…) until you connect one.`
+          : `Clients use ${state.fallbackSubdomain} until you connect your own domain.`,
       tone: "text-muted",
     };
   }
@@ -75,7 +80,10 @@ function statusLabel(state: CustomDomainPublicState): { title: string; detail: s
     case "connected":
       return {
         title: "Connected",
-        detail: `Your portal is live at ${state.domain}.`,
+        detail:
+          kind === "listing"
+            ? `Property websites now use ${state.domain}/your-listing. HTTPS is active.`
+            : `Your portal is live at ${state.domain}.`,
         tone: "text-emerald-700",
       };
     case "manual":
@@ -160,16 +168,26 @@ export function CustomDomainSettingsCard({
   entitled,
   initialState,
   apiBase = "/api/admin/custom-domain",
+  kind = "portal",
+  suggestedRootDomain = null,
 }: {
   entitled: boolean;
   initialState: CustomDomainPublicState;
   apiBase?: string;
+  /** "listing" = Property Website Address (listings.yourstudio.com); same flow, different copy. */
+  kind?: DomainCardKind;
+  /** Prefill for the root domain (e.g. from the connected portal domain). Never auto-claimed. */
+  suggestedRootDomain?: string | null;
 }) {
+  const isListing = kind === "listing";
+  const defaultSub = isListing ? "listings" : "portal";
   const [state, setState] = useState(initialState);
   const initialParts = splitExistingDomain(initialState.domain);
-  const [subdomainInput, setSubdomainInput] = useState(initialParts.subdomain || "portal");
+  const [subdomainInput, setSubdomainInput] = useState(
+    initialState.domain ? initialParts.subdomain || defaultSub : defaultSub
+  );
   const [rootDomainInput, setRootDomainInput] = useState(
-    initialState.isApex ? initialState.domain ?? "" : initialParts.root
+    initialState.isApex ? initialState.domain ?? "" : initialState.domain ? initialParts.root : suggestedRootDomain ?? ""
   );
   const [apexDomainInput, setApexDomainInput] = useState(
     initialState.isApex ? initialState.domain ?? "" : ""
@@ -250,8 +268,12 @@ export function CustomDomainSettingsCard({
         toast.message("Status updated");
       }
       if (action === "remove") {
-        toast.success("Custom domain removed — clients use your ShootPortal address again");
-        setSubdomainInput("portal");
+        toast.success(
+          isListing
+            ? "Removed — property websites use your ShootPortal address again (their links keep working there)"
+            : "Custom domain removed — clients use your ShootPortal address again"
+        );
+        setSubdomainInput(defaultSub);
         setRootDomainInput("");
         setApexDomainInput("");
         setMode("subdomain");
@@ -296,7 +318,7 @@ export function CustomDomainSettingsCard({
     void run("claim", composed.domain);
   }
 
-  const status = statusLabel(state);
+  const status = statusLabel(state, kind);
   const routingRecords = state.dnsRecords.filter((r) => r.purpose === "routing");
   const ownershipRecords = state.dnsRecords.filter((r) => r.purpose === "ownership");
 
@@ -304,16 +326,16 @@ export function CustomDomainSettingsCard({
     return (
       <Card className="shadow-sm">
         <CardContent className="space-y-3 pt-6">
-          <h3 className="font-semibold text-heading">Use your own web address</h3>
+          <h3 className="font-semibold text-heading">{isListing ? "Property Website Address" : "Use your own web address"}</h3>
           <p className="text-sm text-muted">
-            Clients can open your portal at something like{" "}
-            <span className="font-medium text-heading">portal.yourstudio.com</span> — a subdomain on
+            {isListing ? "Property websites can use an address like " : "Clients can open your portal at something like "}
+            <span className="font-medium text-heading">{isListing ? "listings.yourstudio.com/123-main-st" : "portal.yourstudio.com"}</span> — a subdomain on
             a domain you already own — instead of{" "}
             <span className="font-medium text-heading">{state.fallbackSubdomain}</span>.
           </p>
           <p className="text-sm text-muted">
             This is included on plans with the custom domain entitlement (for example Studio). Upgrade
-            to unlock the step-by-step DNS setup here. Until then, your portal stays on the ShootPortal
+            to unlock the step-by-step DNS setup here. Until then, {isListing ? "property websites stay" : "your portal stays"} on the ShootPortal
             address above.
           </p>
         </CardContent>
@@ -326,11 +348,18 @@ export function CustomDomainSettingsCard({
       <Card className="shadow-sm">
         <CardContent className="space-y-4 pt-6">
           <div>
-            <h3 className="font-semibold text-heading">Use your own web address</h3>
+            <h3 className="font-semibold text-heading">{isListing ? "Property Website Address" : "Use your own web address"}</h3>
             <p className="mt-1 text-sm text-muted">
+              {isListing ? (
+                <>
+                  Used for public property websites, separate from your client portal. Set it up once —
+                  every listing gets its own page, like{" "}
+                  <code className="text-xs">listings.yourstudio.com/123-main-st</code>.{" "}
+                </>
+              ) : null}
               A <strong className="font-medium text-heading">subdomain</strong> is a short name in
-              front of your domain — the <code className="text-xs">portal</code> in{" "}
-              <code className="text-xs">portal.yourstudio.com</code>. You will{" "}
+              front of your domain — the <code className="text-xs">{defaultSub}</code> in{" "}
+              <code className="text-xs">{defaultSub}.yourstudio.com</code>. You will{" "}
               <strong className="font-medium text-heading">create a NEW DNS record</strong> at the
               company where you renew your domain. You are not editing your website&apos;s existing
               records, and your main website stays unchanged.
@@ -339,8 +368,8 @@ export function CustomDomainSettingsCard({
             <p className="mt-1 text-sm text-muted">{status.detail}</p>
             <p className="mt-2 text-xs text-muted">
               Your ShootPortal address{" "}
-              <span className="font-medium text-heading">{state.fallbackSubdomain}</span> always
-              works for sign-in, even while a custom domain is pending or broken.
+              <span className="font-medium text-heading">{isListing ? `${state.fallbackSubdomain}/l/…` : state.fallbackSubdomain}</span> always
+              {isListing ? " works for every property website, even while this address is pending, changed or removed." : " works for sign-in, even while a custom domain is pending or broken."}
             </p>
           </div>
 
@@ -351,7 +380,7 @@ export function CustomDomainSettingsCard({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-sm font-medium text-accent underline underline-offset-2"
             >
-              Open live portal <ExternalLink className="h-3.5 w-3.5" />
+              {isListing ? "Open listings page" : "Open live portal"} <ExternalLink className="h-3.5 w-3.5" />
             </a>
           ) : null}
 
@@ -369,7 +398,7 @@ export function CustomDomainSettingsCard({
                   <p className="text-sm text-muted">
                     Enter a short subdomain label and the domain you already own. We create a{" "}
                     <strong className="font-medium text-heading">new</strong> address for your
-                    portal — your homepage (including www) is not moved.
+                    {isListing ? " property websites" : " portal"} — your homepage (including www) is not moved.
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
@@ -381,12 +410,27 @@ export function CustomDomainSettingsCard({
                           setSubdomainInput(e.target.value);
                           setFieldError(null);
                         }}
-                        placeholder="portal"
+                        placeholder={defaultSub}
                         disabled={busy}
                         autoComplete="off"
                         spellCheck={false}
                       />
-                      <p className="text-xs text-muted">Usually “portal”. Do not use “www”.</p>
+                      {isListing ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {["listings", "homes", "properties", "tours"].map((label) => (
+                            <button
+                              key={label}
+                              type="button"
+                              onClick={() => setSubdomainInput(label)}
+                              className={`rounded-full border px-2.5 py-0.5 text-xs ${subdomainInput === label ? "border-accent bg-accent/10 text-heading" : "border-border text-muted"}`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted">Usually “portal”. Do not use “www”.</p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="custom-domain-root">Your domain</Label>
@@ -413,9 +457,11 @@ export function CustomDomainSettingsCard({
                       Live preview
                     </p>
                     <p className="mt-1 text-base font-semibold text-heading break-all sm:text-lg">
-                      {livePreview
-                        ? `Your portal will be at ${livePreview}`
-                        : "Your portal will be at portal.yourstudio.com"}
+                      {isListing
+                        ? `Listings will look like ${livePreview ?? "listings.yourstudio.com"}/123-main-st`
+                        : livePreview
+                          ? `Your portal will be at ${livePreview}`
+                          : "Your portal will be at portal.yourstudio.com"}
                     </p>
                   </div>
                 </>
@@ -469,6 +515,7 @@ export function CustomDomainSettingsCard({
                 </p>
               ) : null}
 
+              {isListing ? null : (
               <button
                 type="button"
                 className="text-xs text-accent underline"
@@ -482,6 +529,7 @@ export function CustomDomainSettingsCard({
                   ? "Back to subdomain setup (recommended)"
                   : "Using an apex domain (example.com)?"}
               </button>
+              )}
 
               <Button
                 type="button"
@@ -582,7 +630,9 @@ export function CustomDomainSettingsCard({
                   onClick={() => {
                     if (
                       window.confirm(
-                        `Remove ${state.domain}? Clients will use ${state.fallbackSubdomain} again.`
+                        isListing
+                          ? `Remove ${state.domain}? Property websites keep working at your ShootPortal address; links using ${state.domain} stop working.`
+                          : `Remove ${state.domain}? Clients will use ${state.fallbackSubdomain} again.`
                       )
                     ) {
                       void run("remove");
@@ -600,8 +650,9 @@ export function CustomDomainSettingsCard({
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
                   <p className="font-medium">Connected</p>
                   <p className="mt-1">
-                    Portal links in email and payments now use this domain. Sign-in, invites, password
-                    reset, and Google work as soon as DNS is live.
+                    {isListing
+                      ? "Every published property website is now available at this address. Existing ShootPortal links keep working too."
+                      : "Portal links in email and payments now use this domain. Sign-in, invites, password reset, and Google work as soon as DNS is live."}
                   </p>
                 </div>
               ) : null}

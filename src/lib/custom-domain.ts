@@ -1,6 +1,12 @@
 /**
  * Self-serve custom domain: validation, Vercel registration, status, cleanup.
- * Host resolution still uses businesses.custom_domain only — do not change that path.
+ *
+ * Two kinds of hostname share this one code path:
+ *   - "portal"  → businesses.custom_domain*   (client portal address, e.g. portal.yourstudio.com)
+ *   - "listing" → businesses.listing_domain*  (property websites, e.g. listings.yourstudio.com)
+ * Both use the same Vercel project, DNS instructions, verification and status model. The portal
+ * path is unchanged; "listing" maps the same fields onto the listing_domain* columns (v118).
+ * A hostname may be one kind or the other, for one business only.
  */
 
 import { createServiceClient } from "@/lib/supabase/server";
@@ -26,6 +32,8 @@ import {
   type VercelDomainVerification,
   type VercelProjectDomain,
 } from "@/lib/vercel-domains";
+
+export type DomainKind = "portal" | "listing";
 
 export type CustomDomainStatus =
   | "pending"
@@ -168,10 +176,70 @@ export type BusinessDomainRow = {
 const DOMAIN_SELECT =
   "id, slug, name, custom_domain, custom_domain_status, custom_domain_vercel_verified, custom_domain_misconfigured, custom_domain_last_checked_at, custom_domain_error, custom_domain_verification";
 
+const LISTING_DOMAIN_SELECT =
+  "id, slug, name, listing_domain, listing_domain_status, listing_domain_vercel_verified, listing_domain_misconfigured, listing_domain_last_checked_at, listing_domain_error, listing_domain_verification";
+
+/** Column names for a domain kind, keyed by the portal (custom_domain*) field names. */
+const LISTING_COLUMN_MAP: Record<string, string> = {
+  custom_domain: "listing_domain",
+  custom_domain_status: "listing_domain_status",
+  custom_domain_vercel_verified: "listing_domain_vercel_verified",
+  custom_domain_misconfigured: "listing_domain_misconfigured",
+  custom_domain_last_checked_at: "listing_domain_last_checked_at",
+  custom_domain_error: "listing_domain_error",
+  custom_domain_verification: "listing_domain_verification",
+};
+
+/** Map a portal-shaped update onto the columns for `kind`. */
+function domainColumns(kind: DomainKind, patch: Record<string, unknown>): Record<string, unknown> {
+  if (kind === "portal") return patch;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    out[LISTING_COLUMN_MAP[key] ?? key] = value;
+  }
+  return out;
+}
+
+/** True when a Supabase error means the v118 listing_domain columns are not applied yet. */
+export function isListingDomainSchemaMissing(error: { message?: string; code?: string } | null | undefined): boolean {
+  return Boolean(error && (error.code === "42703" || /listing_domain/i.test(error.message ?? "")));
+}
+
+export class ListingDomainSetupRequiredError extends Error {
+  constructor() {
+    super("Property website addresses need a quick database update (migration v118). Contact support.");
+    this.name = "ListingDomainSetupRequiredError";
+  }
+}
+
 export async function loadBusinessDomainState(
-  businessId: string
+  businessId: string,
+  kind: DomainKind = "portal"
 ): Promise<BusinessDomainRow | null> {
   const supabase = await createServiceClient();
+  if (kind === "listing") {
+    const { data, error } = await supabase
+      .from("businesses")
+      .select(LISTING_DOMAIN_SELECT)
+      .eq("id", businessId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (isListingDomainSchemaMissing(error)) throw new ListingDomainSetupRequiredError();
+    if (!data) return null;
+    const r = data as Record<string, unknown>;
+    return {
+      id: r.id as string,
+      slug: r.slug as string,
+      name: r.name as string,
+      custom_domain: (r.listing_domain as string | null) ?? null,
+      custom_domain_status: (r.listing_domain_status as CustomDomainStatus) ?? null,
+      custom_domain_vercel_verified: r.listing_domain_vercel_verified === true,
+      custom_domain_misconfigured: (r.listing_domain_misconfigured as boolean | null) ?? null,
+      custom_domain_last_checked_at: (r.listing_domain_last_checked_at as string | null) ?? null,
+      custom_domain_error: (r.listing_domain_error as string | null) ?? null,
+      custom_domain_verification: (r.listing_domain_verification as Record<string, unknown> | null) ?? null,
+    };
+  }
   const { data } = await supabase
     .from("businesses")
     .select(DOMAIN_SELECT)
@@ -355,7 +423,7 @@ export function toPublicDomainState(
   };
 }
 
-async function assertDomainAvailable(domain: string, businessId: string) {
+async function assertDomainAvailable(domain: string, businessId: string, kind: DomainKind = "portal") {
   const supabase = await createServiceClient();
   const { data } = await supabase
     .from("businesses")
@@ -366,6 +434,32 @@ async function assertDomainAvailable(domain: string, businessId: string) {
   if (data) {
     throw new Error("That domain is already connected to another business.");
   }
+  // Hostnames are one kind for one business: a portal address can't also be a listing address.
+  const { data: listingOwner, error: listingError } = await supabase
+    .from("businesses")
+    .select("id")
+    .eq("listing_domain", domain)
+    .maybeSingle();
+  if (!listingError && listingOwner) {
+    throw new Error(
+      listingOwner.id === businessId
+        ? "That hostname is your property website address. Use a different one for your client portal."
+        : "That domain is already connected to another business."
+    );
+  }
+  if (kind === "listing") {
+    const { data: own } = await supabase
+      .from("businesses")
+      .select("id")
+      .eq("custom_domain", domain)
+      .eq("id", businessId)
+      .maybeSingle();
+    if (own) {
+      throw new Error(
+        "That hostname is your client portal address. Property websites need their own subdomain, like listings.yourstudio.com."
+      );
+    }
+  }
 }
 
 export async function claimCustomDomain(options: {
@@ -374,7 +468,9 @@ export async function claimCustomDomain(options: {
   actorUserId: string;
   actorEmail: string | null;
   skipEntitlement?: boolean;
+  kind?: DomainKind;
 }): Promise<CustomDomainPublicState> {
+  const kind: DomainKind = options.kind ?? "portal";
   if (!options.skipEntitlement) {
     await requireEntitlement(options.businessId, "custom_domain");
   }
@@ -383,14 +479,16 @@ export async function claimCustomDomain(options: {
   if (!validated.ok) throw new Error(validated.error);
 
   const { domain } = validated;
-  await assertDomainAvailable(domain, options.businessId);
+  await assertDomainAvailable(domain, options.businessId, kind);
 
-  const row = await loadBusinessDomainState(options.businessId);
+  const row = await loadBusinessDomainState(options.businessId, kind);
   if (!row) throw new Error("Business not found.");
 
   if (row.custom_domain && row.custom_domain !== domain) {
     throw new Error(
-      "Remove your current custom domain before connecting a different one."
+      kind === "listing"
+        ? "Remove your current property website address before connecting a different one."
+        : "Remove your current custom domain before connecting a different one."
     );
   }
 
@@ -467,16 +565,18 @@ export async function claimCustomDomain(options: {
   const supabase = await createServiceClient();
   const { error: updateError } = await supabase
     .from("businesses")
-    .update({
-      custom_domain: domain,
-      custom_domain_status: status,
-      custom_domain_vercel_verified: vercelVerified,
-      custom_domain_misconfigured: misconfigured,
-      custom_domain_last_checked_at: new Date().toISOString(),
-      custom_domain_error: error,
-      custom_domain_verification: verificationPayload,
-      updated_at: new Date().toISOString(),
-    })
+    .update(
+      domainColumns(kind, {
+        custom_domain: domain,
+        custom_domain_status: status,
+        custom_domain_vercel_verified: vercelVerified,
+        custom_domain_misconfigured: misconfigured,
+        custom_domain_last_checked_at: new Date().toISOString(),
+        custom_domain_error: error,
+        custom_domain_verification: verificationPayload,
+        updated_at: new Date().toISOString(),
+      })
+    )
     .eq("id", options.businessId);
 
   if (updateError) {
@@ -491,14 +591,14 @@ export async function claimCustomDomain(options: {
   await writePlatformAudit({
     actorUserId: options.actorUserId,
     actorEmail: options.actorEmail,
-    action: "domain.add",
+    action: kind === "listing" ? "listing_domain.add" : "domain.add",
     targetBusinessId: options.businessId,
     targetType: "business",
     targetId: options.businessId,
-    metadata: { domain, status, mode, dnsTargetSource, recommendedCname, recommendedA },
+    metadata: { domain, status, mode, dnsTargetSource, recommendedCname, recommendedA, kind },
   });
 
-  const next = await loadBusinessDomainState(options.businessId);
+  const next = await loadBusinessDomainState(options.businessId, kind);
   if (!next) throw new Error("Failed to reload domain state.");
   return toPublicDomainState(next, {
     recommendedCname,
@@ -512,12 +612,14 @@ export async function checkCustomDomainStatus(options: {
   actorUserId: string;
   actorEmail: string | null;
   skipEntitlement?: boolean;
+  kind?: DomainKind;
 }): Promise<CustomDomainPublicState> {
+  const kind: DomainKind = options.kind ?? "portal";
   if (!options.skipEntitlement) {
     await requireEntitlement(options.businessId, "custom_domain");
   }
 
-  const row = await loadBusinessDomainState(options.businessId);
+  const row = await loadBusinessDomainState(options.businessId, kind);
   if (!row?.custom_domain) {
     throw new Error("No custom domain is set up yet.");
   }
@@ -624,31 +726,37 @@ export async function checkCustomDomainStatus(options: {
   const supabase = await createServiceClient();
   await supabase
     .from("businesses")
-    .update({
-      custom_domain_status: status,
-      custom_domain_vercel_verified: vercelVerified,
-      custom_domain_misconfigured: misconfigured,
-      custom_domain_last_checked_at: new Date().toISOString(),
-      custom_domain_error: error,
-      custom_domain_verification: {
-        challenges,
-        recommendedCname,
-        recommendedA,
-        dnsTargetSource,
-        mode: isVercelDomainApiConfigured() ? "api" : "manual",
-      } satisfies StoredDnsVerification,
-      updated_at: new Date().toISOString(),
-    })
+    .update(
+      domainColumns(kind, {
+        custom_domain_status: status,
+        custom_domain_vercel_verified: vercelVerified,
+        custom_domain_misconfigured: misconfigured,
+        custom_domain_last_checked_at: new Date().toISOString(),
+        custom_domain_error: error,
+        custom_domain_verification: {
+          challenges,
+          recommendedCname,
+          recommendedA,
+          dnsTargetSource,
+          mode: isVercelDomainApiConfigured() ? "api" : "manual",
+        } satisfies StoredDnsVerification,
+        updated_at: new Date().toISOString(),
+      })
+    )
     .eq("id", options.businessId);
+
+  // Routing for listing hosts reads status; drop cached host rows so "connected" takes effect.
+  if (kind === "listing") invalidateHostLookupCache();
 
   await writePlatformAudit({
     actorUserId: options.actorUserId,
     actorEmail: options.actorEmail,
-    action: "domain.verify",
+    action: kind === "listing" ? "listing_domain.verify" : "domain.verify",
     targetBusinessId: options.businessId,
     targetType: "business",
     targetId: options.businessId,
     metadata: {
+      kind,
       domain,
       status,
       vercelVerified,
@@ -660,7 +768,7 @@ export async function checkCustomDomainStatus(options: {
     },
   });
 
-  const next = await loadBusinessDomainState(options.businessId);
+  const next = await loadBusinessDomainState(options.businessId, kind);
   if (!next) throw new Error("Failed to reload domain state.");
   return toPublicDomainState(next, {
     recommendedCname,
@@ -675,12 +783,14 @@ export async function removeCustomDomain(options: {
   actorUserId: string;
   actorEmail: string | null;
   skipEntitlement?: boolean;
+  kind?: DomainKind;
 }): Promise<CustomDomainPublicState> {
+  const kind: DomainKind = options.kind ?? "portal";
   if (!options.skipEntitlement) {
     await requireEntitlement(options.businessId, "custom_domain");
   }
 
-  const row = await loadBusinessDomainState(options.businessId);
+  const row = await loadBusinessDomainState(options.businessId, kind);
   if (!row) throw new Error("Business not found.");
   const domain = row.custom_domain;
 
@@ -694,16 +804,18 @@ export async function removeCustomDomain(options: {
   const supabase = await createServiceClient();
   await supabase
     .from("businesses")
-    .update({
-      custom_domain: null,
-      custom_domain_status: null,
-      custom_domain_vercel_verified: false,
-      custom_domain_misconfigured: null,
-      custom_domain_last_checked_at: new Date().toISOString(),
-      custom_domain_error: null,
-      custom_domain_verification: {},
-      updated_at: new Date().toISOString(),
-    })
+    .update(
+      domainColumns(kind, {
+        custom_domain: null,
+        custom_domain_status: null,
+        custom_domain_vercel_verified: false,
+        custom_domain_misconfigured: null,
+        custom_domain_last_checked_at: new Date().toISOString(),
+        custom_domain_error: null,
+        custom_domain_verification: {},
+        updated_at: new Date().toISOString(),
+      })
+    )
     .eq("id", options.businessId);
 
   invalidateHostLookupCache();
@@ -711,14 +823,14 @@ export async function removeCustomDomain(options: {
   await writePlatformAudit({
     actorUserId: options.actorUserId,
     actorEmail: options.actorEmail,
-    action: "domain.remove",
+    action: kind === "listing" ? "listing_domain.remove" : "domain.remove",
     targetBusinessId: options.businessId,
     targetType: "business",
     targetId: options.businessId,
-    metadata: { domain },
+    metadata: { domain, kind },
   });
 
-  const next = await loadBusinessDomainState(options.businessId);
+  const next = await loadBusinessDomainState(options.businessId, kind);
   if (!next) throw new Error("Failed to reload domain state.");
   return toPublicDomainState(next);
 }

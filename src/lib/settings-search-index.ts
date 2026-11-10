@@ -18,6 +18,20 @@ export type SettingsSearchEntry = {
 /** Explicit synonym / field map layered on SETTINGS_SECTIONS. */
 const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
   {
+    id: "listing_domain",
+    sectionId: "custom_domain",
+    label: "Property Website Address",
+    description: "Connect listings.yourstudio.com for public property websites.",
+    keywords: ["listing domain", "listings", "property website", "listing website", "homes", "subdomain", "dns", "cname"],
+  },
+  {
+    id: "marketing_kit",
+    sectionId: "marketing_kit",
+    label: "Marketing Kit",
+    description: "Property websites and social media kits — included or paid add-ons, prices, client permissions.",
+    keywords: ["marketing", "property website", "social media", "flyer", "instagram", "upsell", "add-on", "price", "listing"],
+  },
+  {
     id: "custom_domain",
     sectionId: "custom_domain",
     label: "Use your own web address",
@@ -428,6 +442,8 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
 
 const HASH_BY_ENTRY: Record<string, string> = {
   custom_domain: "settings-custom-domain",
+  listing_domain: "settings-listing-domain",
+  marketing_kit: "settings-marketing-kit",
   payments: "settings-payments",
   "download-gate": "settings-download-gate",
   new_project_setup: "settings-new-project-setup",

@@ -28,6 +28,11 @@ import {
   type WorkflowSettings,
 } from "@/lib/workflow-settings";
 import {
+  DEFAULT_MARKETING_KIT_SETTINGS,
+  mergeMarketingKitSettings,
+  type MarketingKitSettings,
+} from "@/lib/marketing/offers";
+import {
   assertTravelSettings,
   defaultTravelSettings,
   mergeTravelSettings,
@@ -190,6 +195,8 @@ export interface AppSettings {
   tax: TaxInformationSettings;
   /** Travel fees for distant jobs. Off until a business turns it on. */
   travel: TravelSettings;
+  /** Property Website + Social Media Kit offers, prices and client permissions. */
+  marketingKit: MarketingKitSettings;
   /**
    * Explicit “use ShootPortal default” acknowledgements for optional setup items.
    * Persisted in business_settings so the checklist banner can clear across devices.
@@ -322,6 +329,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   landing: mergeLandingSettings(null),
   tax: { ...DEFAULT_TAX_INFORMATION },
   travel: defaultTravelSettings(),
+  marketingKit: structuredClone(DEFAULT_MARKETING_KIT_SETTINGS),
   setupAcceptedDefaults: {
     logo: false,
     colors: false,
@@ -415,6 +423,7 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
     landing: mergeLandingSettings(stored.landing as Partial<LandingSettings> | null | undefined),
     tax: sanitizeTaxInformation(stored.tax, false),
     travel: mergeTravelSettings(stored.travel),
+    marketingKit: mergeMarketingKitSettings(stored.marketingKit),
     setupAcceptedDefaults: {
       ...DEFAULT_APP_SETTINGS.setupAcceptedDefaults,
       ...(stored.setupAcceptedDefaults ?? {}),

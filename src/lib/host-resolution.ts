@@ -23,6 +23,8 @@ const UUID_RE =
 export type HostKind = "tenant" | "platform" | "unmatched";
 export type HostResolveSource =
   | "custom_domain"
+  /** businesses.listing_domain — public property websites only (Marketing Kit, v118). */
+  | "listing_domain"
   | "subdomain"
   | "path"
   | "apex"
@@ -125,6 +127,45 @@ async function lookupByCustomDomain(host: string): Promise<HostBusinessRow | nul
   return (data as HostBusinessRow | null) ?? null;
 }
 
+/**
+ * Property website host (businesses.listing_domain). Only CONNECTED listing domains route:
+ * pending/misconfigured ones keep using the ShootPortal fallback URL. Before migration v118
+ * the column doesn't exist; the query errors and this returns null (no behavior change).
+ */
+async function lookupByListingDomain(host: string): Promise<HostBusinessRow | null> {
+  const key = `listing:${host}`;
+  const cached = cacheGet(key);
+  if (cached !== undefined) return cached;
+  const supabase = serviceClient();
+  const { data, error } = await supabase
+    .from("businesses")
+    .select(HOST_BUSINESS_SELECT)
+    .eq("listing_domain", host)
+    .eq("listing_domain_status", "connected")
+    .is("deleted_at", null)
+    .maybeSingle();
+  const row = error ? null : ((data as HostBusinessRow | null) ?? null);
+  cacheSet(key, row);
+  return row;
+}
+
+/**
+ * On a listing domain every page path maps onto the property-website routes:
+ *   /            → /l           (index of published listings)
+ *   /{slug}      → /l/{slug}
+ * Public listing APIs, Next assets and static files pass through unchanged; anything else
+ * becomes a 404 page. The portal (login, dashboard, admin, APIs) never runs on this host.
+ */
+export function listingHostRewrite(pathname: string): string | null {
+  if (pathname.startsWith("/api/public/listing/") || pathname.startsWith("/_next/") || /\.[a-z0-9]{2,5}$/i.test(pathname)) {
+    return null;
+  }
+  if (pathname === "/" || pathname === "") return "/l";
+  const m = pathname.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/);
+  if (m) return `/l/${m[1]}`;
+  return "/l/__not-found";
+}
+
 export function lookupBusinessById(id: string): Promise<HostBusinessRow | null> {
   return lookupBusinessByIdCached(id, false);
 }
@@ -223,6 +264,18 @@ export async function resolveRequestHost(input: {
     return tenantResult(custom, "custom_domain", {
       rewritePathname: pathSlug ? remainder : null,
     });
+  }
+
+  // Listing domains are never under the platform root and never localhost.
+  const maybeListingHost =
+    Boolean(host) && host !== root && !host.endsWith(`.${root}`) && host !== "localhost" && !/^\d+\.\d+\.\d+\.\d+$/.test(host) && !host.endsWith(".vercel.app");
+  if (maybeListingHost) {
+    const listing = await lookupByListingDomain(host);
+    if (listing) {
+      return tenantResult(listing, "listing_domain", {
+        rewritePathname: listingHostRewrite(input.pathname),
+      });
+    }
   }
 
   const label = host ? subdomainLabel(host, root) : null;

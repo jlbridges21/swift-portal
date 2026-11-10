@@ -37,6 +37,8 @@ import {
 } from "lucide-react";
 import type { HeroMedia } from "@/lib/cover";
 import { ProjectHero } from "@/components/projects/project-hero";
+import { ClientMarketingUpsell } from "@/components/marketing/client-marketing-upsell";
+import type { KitSummary } from "@/lib/marketing/server";
 import { paidCentsForQuote, quoteOutstandingBalanceCents } from "@/lib/payment-quote";
 import type { PaymentAutomationSettings } from "@/lib/workflow-settings";
 import { ViewOnlyAccessChip } from "@/components/ui/view-only-access-chip";
@@ -91,6 +93,8 @@ interface ProjectPageClientProps {
   depositAmountCents?: number;
   allowClientPayInFull?: boolean;
   paymentOptions?: ClientPaymentOptions;
+  /** Marketing Kit offer (assigned client / admin preview only). */
+  marketingKit?: KitSummary | null;
 }
 
 const REVISION_STATUS_LABEL: Record<string, string> = {
@@ -165,6 +169,7 @@ export function ProjectPageClient({
   depositAmountCents = 0,
   allowClientPayInFull = false,
   paymentOptions = { bankAvailable: false, passCardFee: false },
+  marketingKit = null,
 }: ProjectPageClientProps) {
   const router = useRouter();
   const brand = usePortalBrand();
@@ -407,6 +412,15 @@ export function ProjectPageClient({
           </CardContent>
         </Card>
         )}
+
+        {marketingKit?.visibleToClient &&
+        (isClientView || isPreview) &&
+        (status === "delivered" ||
+          marketingKit.websiteStatus === "published" ||
+          marketingKit.access.website.state === "purchased" ||
+          marketingKit.access.social.state === "purchased") ? (
+          <ClientMarketingUpsell projectId={project.id} summary={marketingKit} />
+        ) : null}
 
         {(isClientView || isPreview) && canViewFinancials && (showEstimates || (showPayments && payments.length > 0)) && (
           <ClientPricingCta

@@ -20,6 +20,7 @@ import { resolveProjectAccess } from "@/lib/project-access";
 import { resolveProjectDownloadAllowed } from "@/lib/deliverables";
 import { normalizeStatus } from "@/lib/constants";
 import { getProjectPublicVideoIds } from "@/lib/video-public-shares";
+import { loadKitSummary } from "@/lib/marketing/server";
 import {
   canViewProjectFinancials,
   canViewProjectProgress,
@@ -201,6 +202,11 @@ async function ProjectContent({
         requireDeliveredForDownloads: appSettings.payments.requireDeliveredForDownloads,
       }));
   const documents = visibleMedia.filter((m) => m.media_type === "document");
+  // Marketing Kit offer: assigned client (and admin preview). Shared viewers never see it.
+  const marketingKit =
+    access.kind === "assigned_client" || (isAdminViewer && preview)
+      ? await loadKitSummary(tenant.businessId, id).catch(() => null)
+      : null;
 
   return (
     <>
@@ -247,6 +253,7 @@ async function ProjectContent({
         canViewFinancials={canViewFinancials}
         canViewProjectProgress={canViewProgress}
         canAccessVideoReviews={canAccessReviews}
+        marketingKit={marketingKit}
       />
     </>
   );
