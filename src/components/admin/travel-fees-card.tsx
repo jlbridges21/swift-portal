@@ -62,6 +62,8 @@ export function TravelFeesEditor({
   postalCode,
   onChange,
   postalHref = "#settings-contact",
+  onAddPostal,
+  postalLinkLabel = "Contact information",
   heading = "Travel fees",
   description = "Add a fee when a property is outside your service area.",
   showTierDiagram = false,
@@ -70,6 +72,9 @@ export function TravelFeesEditor({
   postalCode: string;
   onChange: (next: TravelSettings) => void;
   postalHref?: string;
+  /** In-flow alternative to postalHref (onboarding returns to its own Identity step). */
+  onAddPostal?: () => void;
+  postalLinkLabel?: string;
   heading?: string;
   description?: string;
   showTierDiagram?: boolean;
@@ -149,9 +154,15 @@ export function TravelFeesEditor({
       {!hasPostal && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
           Travel fees start from your business postal code. Add one in{" "}
-          <Link href={postalHref} className="font-medium underline">
-            Contact information
-          </Link>{" "}
+          {onAddPostal ? (
+            <button type="button" onClick={onAddPostal} className="font-medium underline">
+              {postalLinkLabel}
+            </button>
+          ) : (
+            <Link href={postalHref} className="font-medium underline">
+              {postalLinkLabel}
+            </Link>
+          )}{" "}
           before turning this on.
         </p>
       )}
@@ -348,7 +359,7 @@ export function TravelFeesEditor({
   );
 }
 
-export function TravelFeesOnboarding() {
+export function TravelFeesOnboarding({ onAddAddress }: { onAddAddress?: () => void } = {}) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -402,6 +413,8 @@ export function TravelFeesOnboarding() {
         travel={settings.travel}
         postalCode={settings.business.postalCode}
         postalHref="/admin/settings#settings-contact"
+        onAddPostal={onAddAddress}
+        postalLinkLabel={onAddAddress ? "your business address (step 2, Identity)" : "Contact information"}
         heading="Do you charge for travel to distant jobs?"
         description="Optional. You can skip this and turn it on later in Settings → Services."
         onChange={(next) => void save(next)}

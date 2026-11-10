@@ -193,10 +193,14 @@ function Gallery({ photos, theme, onOpen }: { photos: SiteImage[]; theme: SiteTh
   );
 }
 
+/** Photos shown before "See all photos" — keeps project pages short. */
+const GALLERY_PREVIEW = 5;
+
 export function SiteProject({ view, project, preview = false, device = "desktop" }: { view: SiteView; project: SitePortfolioProject; preview?: boolean; device?: Device }) {
   const theme = SITE_THEMES[view.template];
   const nav = useSiteNav();
   const [open, setOpen] = useState<number | null>(null);
+  const [showAll, setShowAll] = useState(false);
   // The cover is shown large at the top; the gallery below holds the rest. The lightbox pages
   // through every photo (cover included).
   const all = project.photos;
@@ -212,7 +216,7 @@ export function SiteProject({ view, project, preview = false, device = "desktop"
 
   const meta = [
     project.photos.length ? `${project.photos.length} photo${project.photos.length === 1 ? "" : "s"}` : null,
-    project.videos.length ? `${project.videos.length} film${project.videos.length === 1 ? "" : "s"}` : null,
+    project.videos.length ? `${project.videos.length} video${project.videos.length === 1 ? "" : "s"}` : null,
     project.tours.length ? "Virtual tour" : null,
   ].filter(Boolean);
 
@@ -259,11 +263,22 @@ export function SiteProject({ view, project, preview = false, device = "desktop"
           {meta.length ? <p className={cn(theme.eyebrow, theme.muted)}>{meta.join("  ·  ")}</p> : null}
         </div>
 
-        {photos.length ? <Gallery photos={photos} theme={theme} onOpen={(i) => openPhoto(photos[i]!.id)} /> : null}
+        {photos.length ? (
+          <>
+            <Gallery photos={showAll ? photos : photos.slice(0, GALLERY_PREVIEW)} theme={theme} onOpen={(i) => openPhoto(photos[i]!.id)} />
+            {photos.length > GALLERY_PREVIEW && !showAll ? (
+              <div className="mt-10 flex justify-center">
+                <button type="button" onClick={() => setShowAll(true)} className={theme.id === "minimal" ? theme.btnPrimary : theme.btnGhost}>
+                  See all photos ({all.length})
+                </button>
+              </div>
+            ) : null}
+          </>
+        ) : null}
 
         {project.videos.length ? (
           <section className="mt-20">
-            <h2 className={cn(theme.eyebrow, theme.muted, "mb-6")}>Film</h2>
+            <h2 className={cn(theme.eyebrow, theme.muted, "mb-6")}>Video</h2>
             <div className="grid gap-6">
               {project.videos.map((v) => (
                 <div key={v.id} className={cn("site-reveal aspect-video overflow-hidden bg-black", theme.imgRadius)}>

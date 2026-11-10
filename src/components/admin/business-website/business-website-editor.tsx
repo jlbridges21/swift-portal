@@ -29,6 +29,21 @@ import {
 import { buildSiteView, defaultCtaHeading, defaultWebsiteHeadline, defaultWebsiteIntro, type SiteServiceInput } from "@/lib/website/view";
 import { PortfolioManager, type PortfolioState } from "@/components/admin/business-website/portfolio-manager";
 import { WebsitePreview, type PreviewPage } from "@/components/admin/business-website/website-preview";
+import { MediaPickerModal } from "@/components/admin/business-website/media-picker";
+
+/** Editor preview serves the chosen (possibly unsaved) hero media through an admin-only route. */
+const ADMIN_MEDIA_URLS = {
+  image: (id: string) => `/api/admin/website/media/${id}?s=large`,
+  play: (id: string) => `/api/admin/website/media/${id}?play=1`,
+};
+
+const ALIAS_SUMMARY: [string, string][] = [
+  ["/about, /home", "Home"],
+  ["/gallery, /work, /projects", "Portfolio"],
+  ["/pricing, /packages", "Services"],
+  ["/contact-us", "Contact"],
+  ["/book, /booking, /schedule, /quote", "Book a shoot"],
+];
 
 function same(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -163,6 +178,7 @@ export function BusinessWebsiteEditor({
         services,
         portfolio: portfolio?.projects ?? [],
         links: { clientLogin: "/login", request: "/request" },
+        mediaUrls: ADMIN_MEDIA_URLS,
       }),
     [website, business, services, portfolio]
   );
@@ -172,8 +188,8 @@ export function BusinessWebsiteEditor({
   const contactKeys: (keyof BusinessSettings)[] = ["primaryContactEmail", "phoneNumber", "websiteUrl"];
   const dirtyContact = contactKeys.some((k) => business[k] !== savedSettings.business[k]);
   const dirtyAppearance = !same(
-    [website.template, website.accentColor, website.heroSource, website.heroImageUrl, website.heroVideoUrl, business.logoUrl],
-    [saved.template, saved.accentColor, saved.heroSource, saved.heroImageUrl, saved.heroVideoUrl, savedSettings.business.logoUrl]
+    [website.template, website.accentColor, website.heroSource, website.heroImageUrl, website.heroVideoUrl, website.heroImageMedia, website.heroVideoMedia, business.logoUrl],
+    [saved.template, saved.accentColor, saved.heroSource, saved.heroImageUrl, saved.heroVideoUrl, saved.heroImageMedia, saved.heroVideoMedia, savedSettings.business.logoUrl]
   );
   const dirtyHome = !same(
     [website.headline, website.intro, website.featuredServiceIds, website.ctaLabel],
@@ -200,6 +216,21 @@ export function BusinessWebsiteEditor({
   const suggestedCount = portfolio?.candidates.filter((c) => c.status === "suggested").length ?? 0;
 
   const [newRedirect, setNewRedirect] = useState({ from: "", to: "/" });
+  const [picker, setPicker] = useState<"photo" | "video" | null>(null);
+  const [showHeroUpload, setShowHeroUpload] = useState(false);
+  const redirectFrom = normalizeRedirectPath(newRedirect.from);
+  const redirectError =
+    newRedirect.from.trim() && (!redirectFrom || redirectFrom === "/") ? "Enter the part after your domain, like /weddings or /about-us." : null;
+  const pageLabel = (to: string) =>
+    ({ "/": "Home", "/portfolio": "Portfolio", "/services": "Services", "/contact": "Contact", "/request": "Book a shoot" })[to] ??
+    portfolio?.projects.find((p) => `/portfolio/${p.slug}` === to)?.title ??
+    to;
+  const siteHost = (websiteDomain.domain ?? siteUrl.replace(/^https?:\/\//, "")).replace(/\/$/, "");
+  const addRedirect = () => {
+    if (!redirectFrom || redirectFrom === "/") return;
+    set({ redirects: [...website.redirects.filter((x) => x.from !== redirectFrom), { from: redirectFrom, to: newRedirect.to }].slice(0, WEBSITE_LIMITS.redirectsMax) });
+    setNewRedirect({ from: "", to: "/" });
+  };
 
   const goToDomain = () => {
     window.location.hash = "settings-website-domain";
@@ -314,13 +345,74 @@ export function BusinessWebsiteEditor({
             ) : null}
             {website.heroSource === "design" ? <p className="text-xs text-muted">A typographic background in your colors — no stock photos.</p> : null}
             {website.heroSource === "image" ? (
-              <BrandAssetField kind="heroImage" value={website.heroImageUrl} inputId="website-hero-image" onUrlChange={(heroImageUrl) => set({ heroImageUrl })} />
+              <div className="space-y-3">
+                <Label>Hero image</Label>
+                {website.heroImageMedia || website.heroImageUrl ? (
+                  <div className="relative aspect-[16/9] overflow-hidden rounded-lg border border-border bg-slate-100 surface-dark:bg-subtle">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={website.heroImageMedia ? `/api/admin/website/media/${website.heroImageMedia.id}?s=medium` : website.heroImageUrl}
+                      alt="Selected hero"
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={() => setPicker("photo")}>
+                    <ImageIcon className="h-4 w-4" /> {website.heroImageMedia || website.heroImageUrl ? "Change hero image" : "Select hero image"}
+                  </Button>
+                  {website.heroImageMedia || website.heroImageUrl ? (
+                    <Button type="button" variant="ghost" onClick={() => set({ heroImageMedia: null, heroImageUrl: "" })}>
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted">Choose any photo already in your ShootPortal media.</p>
+                {showHeroUpload ? (
+                  <BrandAssetField
+                    kind="heroImage"
+                    value={website.heroImageMedia ? "" : website.heroImageUrl}
+                    inputId="website-hero-image"
+                    onUrlChange={(heroImageUrl) => set({ heroImageUrl, heroImageMedia: null })}
+                  />
+                ) : (
+                  <button type="button" onClick={() => setShowHeroUpload(true)} className="text-xs font-medium text-accent hover:underline">
+                    Or upload a new image instead
+                  </button>
+                )}
+              </div>
             ) : null}
             {website.heroSource === "video" ? (
-              <div className="space-y-2">
-                <Label htmlFor="website-hero-video">YouTube video link</Label>
-                <Input id="website-hero-video" value={website.heroVideoUrl} onChange={(e) => set({ heroVideoUrl: e.target.value })} placeholder="https://www.youtube.com/watch?v=…" />
-                <p className="text-xs text-muted">Plays muted in a loop behind your headline. Use your showreel or a favorite project film.</p>
+              <div className="space-y-3">
+                <Label>Hero video</Label>
+                {website.heroVideoMedia || website.heroVideoUrl ? (
+                  <div className="relative aspect-[16/9] overflow-hidden rounded-lg border border-border bg-slate-900">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={
+                        website.heroVideoMedia?.source === "youtube"
+                          ? `https://img.youtube.com/vi/${website.heroVideoMedia.youtubeId}/hqdefault.jpg`
+                          : website.heroVideoMedia
+                            ? `/api/admin/website/media/${website.heroVideoMedia.id}?s=medium`
+                            : `https://img.youtube.com/vi/${(website.heroVideoUrl.match(/[A-Za-z0-9_-]{11}(?=[^A-Za-z0-9_-]|$)/) ?? [""])[0]}/hqdefault.jpg`
+                      }
+                      alt="Selected hero video"
+                      className="absolute inset-0 h-full w-full object-cover opacity-90"
+                    />
+                    <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">Video</span>
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={() => setPicker("video")}>
+                    <Clapperboard className="h-4 w-4" /> {website.heroVideoMedia || website.heroVideoUrl ? "Change video" : "Select video"}
+                  </Button>
+                  {website.heroVideoMedia || website.heroVideoUrl ? (
+                    <Button type="button" variant="ghost" onClick={() => set({ heroVideoMedia: null, heroVideoUrl: "" })}>
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted">Choose a video from your ShootPortal media. It plays muted in a loop behind your headline.</p>
               </div>
             ) : null}
           </div>
@@ -519,61 +611,103 @@ export function BusinessWebsiteEditor({
             <Textarea id="website-seo-desc" rows={2} value={website.seoDescription} maxLength={WEBSITE_LIMITS.seoDescription} placeholder={autoIntro} onChange={(e) => set({ seoDescription: e.target.value })} />
           </div>
 
-          <div className="space-y-2">
-            <Label>Redirects from your old website</Label>
-            <p className="text-xs text-muted">
-              Moving your domain from another website builder? Send old page addresses to the right new page so links and search traffic keep working. Common
-              ones (/about, /gallery, /book, /contact-us…) are handled automatically.
-            </p>
+          <div className="space-y-3 border-t border-border pt-5">
+            <div>
+              <p className="text-sm font-medium text-heading">Redirects from your old website</p>
+              <p className="mt-1 text-xs text-muted">
+                Replacing a Squarespace, Wix or WordPress site? People and Google may still use links to your old pages. Tell us an old page and where
+                it should go now, so those links don’t break. Only needed once your own domain points to ShootPortal.
+              </p>
+            </div>
+
             {website.redirects.length ? (
-              <ul className="space-y-1.5">
+              <ul className="divide-y divide-border rounded-lg border border-border">
                 {website.redirects.map((r) => (
-                  <li key={r.from} className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5 text-xs">
-                    <code className="min-w-0 flex-1 truncate">{r.from}</code>
-                    <ArrowRight className="h-3 w-3 shrink-0 text-muted" />
-                    <code className="min-w-0 flex-1 truncate">{r.to}</code>
-                    <button type="button" aria-label={`Remove redirect ${r.from}`} onClick={() => set({ redirects: website.redirects.filter((x) => x.from !== r.from) })}>
-                      <Trash2 className="h-3.5 w-3.5 text-muted" />
-                    </button>
+                  <li key={r.from} className="flex items-center gap-3 px-3 py-2.5">
+                    <div className="min-w-0 flex-1 text-sm">
+                      <p className="truncate text-heading">
+                        <span className="text-muted">{siteHost}</span>
+                        {r.from}
+                      </p>
+                      <p className="flex items-center gap-1 text-xs text-muted">
+                        <ArrowRight className="h-3 w-3 shrink-0" /> goes to <span className="font-medium text-heading">{pageLabel(r.to)}</span>
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 text-muted"
+                      aria-label={`Remove redirect ${r.from}`}
+                      onClick={() => set({ redirects: website.redirects.filter((x) => x.from !== r.from) })}
+                    >
+                      <Trash2 className="h-4 w-4" /> Remove
+                    </Button>
                   </li>
                 ))}
               </ul>
             ) : null}
-            <div className="flex items-center gap-2">
-              <Input aria-label="Old path" value={newRedirect.from} placeholder="/old-page" onChange={(e) => setNewRedirect((r) => ({ ...r, from: e.target.value }))} />
-              <select
-                aria-label="New page"
-                className="h-11 rounded-lg border border-border bg-white px-2 text-sm surface-dark:bg-card"
-                value={newRedirect.to}
-                onChange={(e) => setNewRedirect((r) => ({ ...r, to: e.target.value }))}
-              >
-                <option value="/">Home</option>
-                <option value="/portfolio">Portfolio</option>
-                <option value="/services">Services</option>
-                <option value="/contact">Contact</option>
-                <option value="/request">Book a shoot</option>
-                {(portfolio?.projects ?? []).map((p) => (
-                  <option key={p.slug} value={`/portfolio/${p.slug}`}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="Add redirect"
-                disabled={!normalizeRedirectPath(newRedirect.from) || normalizeRedirectPath(newRedirect.from) === "/"}
-                onClick={() => {
-                  const from = normalizeRedirectPath(newRedirect.from);
-                  if (!from || from === "/") return;
-                  set({ redirects: [...website.redirects.filter((x) => x.from !== from), { from, to: newRedirect.to }].slice(0, WEBSITE_LIMITS.redirectsMax) });
-                  setNewRedirect({ from: "", to: "/" });
-                }}
-              >
-                <Plus className="h-4 w-4" />
+
+            <div className="space-y-3 rounded-lg border border-border bg-subtle/50 p-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="redirect-from">Old page address</Label>
+                <div className="flex min-w-0 items-center overflow-hidden rounded-lg border border-border bg-white focus-within:ring-2 focus-within:ring-accent surface-dark:bg-card">
+                  <span className="max-w-[45%] shrink-0 truncate border-r border-border bg-subtle px-2.5 py-2.5 text-xs text-muted">{siteHost}</span>
+                  <input
+                    id="redirect-from"
+                    value={newRedirect.from}
+                    placeholder="/old-page"
+                    onChange={(e) => setNewRedirect((r) => ({ ...r, from: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addRedirect();
+                      }
+                    }}
+                    className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-sm text-foreground outline-none"
+                  />
+                </div>
+                {redirectError ? (
+                  <p className="text-xs text-red-700">{redirectError}</p>
+                ) : (
+                  <p className="text-xs text-muted">Type the path (e.g. /weddings) or paste the full old link.</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="redirect-to">Send visitors to</Label>
+                <select
+                  id="redirect-to"
+                  className="h-11 w-full rounded-lg border border-border bg-white px-3 text-sm surface-dark:bg-card"
+                  value={newRedirect.to}
+                  onChange={(e) => setNewRedirect((r) => ({ ...r, to: e.target.value }))}
+                >
+                  <option value="/">Home</option>
+                  <option value="/portfolio">Portfolio</option>
+                  <option value="/services">Services</option>
+                  <option value="/contact">Contact</option>
+                  <option value="/request">Book a shoot</option>
+                  {(portfolio?.projects ?? []).map((p) => (
+                    <option key={p.slug} value={`/portfolio/${p.slug}`}>
+                      Portfolio: {p.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button type="button" variant="outline" className="w-full" disabled={!redirectFrom || redirectFrom === "/"} onClick={addRedirect}>
+                <Plus className="h-4 w-4" /> Add redirect
               </Button>
             </div>
+
+            <details className="text-xs text-muted">
+              <summary className="cursor-pointer font-medium text-heading">Already handled automatically</summary>
+              <ul className="mt-2 space-y-1">
+                {ALIAS_SUMMARY.map(([from, to]) => (
+                  <li key={from} className="flex items-center gap-1.5">
+                    <code>{from}</code> <ArrowRight className="h-3 w-3" /> {to}
+                  </li>
+                ))}
+              </ul>
+            </details>
           </div>
 
           <div className="space-y-2 border-t border-border pt-4">
@@ -597,6 +731,18 @@ export function BusinessWebsiteEditor({
   );
 
   return (
+    <>
+    {picker ? (
+      <MediaPickerModal
+        kind={picker}
+        selectedId={(picker === "photo" ? website.heroImageMedia?.id : website.heroVideoMedia?.id) ?? null}
+        onClose={() => setPicker(null)}
+        onSelect={(m) => {
+          set(picker === "photo" ? { heroImageMedia: m, heroImageUrl: "" } : { heroVideoMedia: m, heroVideoUrl: "" });
+          setPicker(null);
+        }}
+      />
+    ) : null}
     <LandingEditorShell
       nav={shellNav}
       form={form}
@@ -613,5 +759,6 @@ export function BusinessWebsiteEditor({
         />
       }
     />
+    </>
   );
 }

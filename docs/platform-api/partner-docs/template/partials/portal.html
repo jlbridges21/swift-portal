@@ -1,0 +1,16 @@
+<div class="browser">
+  <div class="chrome"><i></i><i></i><i></i><div class="url">{{icon "lock" 6}} {{partner.portalHost}}/a/lnk_…</div></div>
+  <div class="portal-head">
+    <div class="brand"><img src="{{asset.partner}}/{{partner.logo}}" alt=""><div><div class="t">{{partner.name}}</div><div class="s">Your deliverables</div></div></div>
+    <div class="avail">{{icon "clock" 7}} Available until {{partner.example.expires}}</div>
+  </div>
+  <div class="portal-hero">
+    <svg viewBox="0 0 400 58" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%"><defs><linearGradient id="hero" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38BDF8"/><stop offset="0.6" stop-color="#0EA5E9"/><stop offset="1" stop-color="#16A34A"/></linearGradient></defs><rect width="400" height="58" fill="url(#hero)"/><path d="M0 40 Q100 26 200 36 T400 30 V58 H0Z" fill="#15803D"/><polygon points="290,38 325,16 360,38" fill="#334155"/><rect x="298" y="38" width="54" height="14" fill="#F8FAFC"/><rect x="320" y="43" width="10" height="9" fill="#64748B"/><rect width="400" height="58" fill="url(#shade)" opacity="0.35"/><defs><linearGradient id="shade" x1="0" y1="0" x2="0" y2="1"><stop offset="0.4" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000"/></linearGradient></defs></svg>
+    <div class="cap"><div class="t">{{partner.example.address}}</div><div class="s">{{partner.example.city}} · 38 photos · 2 videos · 1 document</div></div>
+  </div>
+  <div class="portal-tabs"><span class="on">Photos 38</span><span>Videos 2</span><span>Documents 1</span></div>
+  <div class="gallery">{{> tiles}}</div>
+  <div class="portal-row">{{icon "circle-play" 10}}<span class="nm">aerial-tour-4k.mp4</span><span>3.1 GB</span><span class="btn-sm">{{icon "download" 7}} Download</span></div>
+  <div class="portal-row">{{icon "file-text" 10}}<span class="nm">property-report.pdf</span><span>2 MB</span><span class="btn-sm ghost">{{icon "download" 7}} Download</span></div>
+  <div class="portal-foot">Powered by <b>ShootPortal</b></div>
+</div>

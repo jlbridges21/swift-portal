@@ -16,6 +16,31 @@ function HeroBackdrop({ view, theme }: { view: SiteView; theme: SiteTheme }) {
   if (m.kind === "image") {
     return <SiteImg src={m.url} alt={m.alt} eager className="site-hero-zoom absolute inset-0 h-full w-full object-cover" />;
   }
+  if (m.kind === "file-video") {
+    if (preview) {
+      return (
+        <>
+          {m.posterUrl ? <SiteImg src={m.posterUrl} alt="" eager className="absolute inset-0 h-full w-full object-cover" /> : null}
+          <span className="absolute right-6 bottom-6 z-20 inline-flex items-center gap-2 rounded-full bg-black/50 px-3 py-1.5 text-xs text-white">
+            <Play className="h-3 w-3 fill-current" /> Background video
+          </span>
+        </>
+      );
+    }
+    return (
+      <video
+        src={m.src}
+        poster={m.posterUrl ?? undefined}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-hidden
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+    );
+  }
   if (m.kind === "video") {
     if (preview) {
       return (

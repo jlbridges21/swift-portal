@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=816">
+<title>SkyyTask × ShootPortal — Deliverables Integration Guide</title>
+<link rel="stylesheet" href="../../../template/assets/../styles.css">
+<style>
+  :root {
+    --p1: #22A6E0; --p2: #0170BB; --p3: #2E3192; --pp: #0170BB;
+  }
+</style>
+<script>
+  // ?page=N shows a single page (PNG previews). ?qa=1 flags pages whose content overflows.
+  window.addEventListener("load", () => {
+    const q = new URLSearchParams(location.search);
+    const pages = [...document.querySelectorAll(".page")];
+    pages.forEach((p, i) => { const n = p.querySelector(".pg"); if (n) n.textContent = `${i + 1} / ${pages.length}`; });
+    document.body.dataset.pages = pages.length;
+    if (q.get("page")) { document.body.classList.add("single"); pages[Number(q.get("page")) - 1]?.classList.add("show"); }
+    if (q.get("qa")) {
+      const bad = [];
+      pages.forEach((p, i) => {
+        const pr = p.getBoundingClientRect();
+        const foot = p.querySelector(".page-foot");
+        const limit = foot ? foot.getBoundingClientRect().top - 2 : pr.bottom;
+        p.querySelectorAll(".content *").forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.height && (r.bottom > limit + 0.5 || r.right > pr.right - 20)) bad.push(`p${i + 1}:${el.tagName.toLowerCase()}.${[...el.classList].join(".")}`);
+        });
+        if (p.scrollHeight > p.clientHeight + 1) bad.push(`p${i + 1}:page-scroll`);
+        p.querySelectorAll("pre").forEach((pre) => { if (pre.scrollWidth > pre.clientWidth + 1) bad.push(`p${i + 1}:pre-clipped:${pre.textContent.trim().slice(0, 30)}`); });
+      });
+      document.body.dataset.overflow = [...new Set(bad)].slice(0, 12).join(" ");
+    }
+  });
+</script>
+</head>
+
+<body>
+
+<!-- ============================================================ COVER -->
+<section class="page" style="padding:0">
+  <div class="cover-band">
+    <svg class="mesh" viewBox="0 0 816 437" preserveAspectRatio="none"><g fill="none" stroke="#fff" stroke-width="1">
+      <path d="M0 340 C200 260 420 400 816 250"/><path d="M0 300 C220 220 420 360 816 210"/><path d="M0 260 C240 180 420 320 816 170"/>
+      <path d="M0 220 C260 140 420 280 816 130"/><path d="M0 180 C280 100 420 240 816 90"/><path d="M0 140 C300 60 420 200 816 50"/></g></svg>
+  </div>
+  <div class="content" style="position:relative; padding: 0.55in 0.6in 0; display:flex; flex-direction:column; height:100%">
+    <div class="topbar">
+      <span class="pill" style="background: rgba(255,255,255,0.14); color:#fff"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg> Integration Guide</span>
+      <span class="pill amber"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg> Proposal · v0.1 · November 2026</span>
+    </div>
+    <div style="margin-top: 0.9in; color:#fff">
+      <div class="eyebrow" style="color:#C7D2FE">SkyyTask × ShootPortal</div>
+      <h1 style="color:#fff; font-size: 34pt; margin-top:6px">Deliverables<br>Integration Guide</h1>
+      <p class="lead" style="color:#E0E7FF; margin-top:10px; max-width: 5.6in">How SkyyTask pilots will deliver photos, video and inspection data to clients through ShootPortal: the full workflow, what each person sees, and what each team builds.</p>
+    </div>
+
+    <div class="cover-card" style="margin-top: 0.55in">
+      <div class="row" style="align-items:center; justify-content:space-between">
+        <div class="lockup lg">
+          <img class="partner-logo" src="../assets/logo.png" alt="SkyyTask">
+          <span class="x">×</span>
+          <img class="sp-logo" src="../../../template/assets/brand/shootportal-logo.png" alt="ShootPortal">
+        </div>
+        <div style="text-align:right">
+          <div class="small muted">Prepared for</div>
+          <div style="font-weight:700; color:var(--midnight); font-size:10pt">SkyyTask leadership &amp; development team</div>
+        </div>
+      </div>
+      <div style="height:1px; background: var(--line); margin: 16px 0 4px"></div>
+      <ol class="toc">
+        <li><span class="no">01</span>The idea<span class="d">Today vs. tomorrow, who's involved</span></li>
+        <li><span class="no">02</span>How it works, end to end<span class="d">Seven steps from job to download</span></li>
+        <li><span class="no">03</span>What each person sees<span class="d">Pilot, client, SkyyTask</span></li>
+        <li><span class="no">04</span>Who does what<span class="d">What each team builds, data exchanged, choices</span></li>
+        <li><span class="no">05</span>Included, security &amp; next steps<span class="d">Features, test vs. live, timeline, go-live</span></li>
+      </ol>
+    </div>
+
+    <div class="grid3 mt20" style="gap:12px">
+      <div class="card tint"><span class="icon-chip partner"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4.1 12 6"/><path d="m5.1 8-2.9-.8"/><path d="m6 12-1.9 2"/><path d="M7.2 2.2 8 5.1"/><path d="M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z"/></svg></span><h4 class="mt8">One button for pilots</h4><p>“Transfer deliverables” opens a branded upload screen, already linked to the job.</p></div>
+      <div class="card tint"><span class="icon-chip partner"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span><h4 class="mt8">One link for clients</h4><p>A private, branded portal. No codes, no accounts, no Google Drive.</p></div>
+      <div class="card tint"><span class="icon-chip partner"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/></svg></span><h4 class="mt8">Status for SkyyTask</h4><p>Submitted, published, viewed and downloaded, as they happen.</p></div>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="row" style="align-items:flex-end; justify-content:space-between; margin-bottom: 0.78in">
+      <div class="contact"><div class="av"><img src="../../../template/assets/brand/shootportal-icon.png" alt=""></div><div><div class="nm">Jackson Bridges · Founder, ShootPortal</div><div class="meta"><span><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg> jackson@shootportal.app</span><span><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></svg> (662) 687-1259</span><span><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg> shootportal.app</span></div></div></div>
+      <div class="notice" style="max-width: 3.1in"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>Proposed integration, in development and not yet available. Screens are illustrated mockups with fake demo data.</span></div>
+    </div>
+  </div>
+  <div class="page-foot"><span><b>Prepared for SkyyTask · Confidential</b> · Deliverables Integration Guide · Proposal v0.1 · November 2026</span><span>Proposed design — in development · <span class="pg"></span></span></div>
+
+</section>
+
+<!-- ============================================================ 01 THE IDEA -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">01 · The idea</div>
+    <h2 class="mt4">Replace the code-and-Drive handoff with a branded delivery</h2>
+    <p class="lead mt8" style="max-width:6.6in">Today a finished job ends with a one-time code and a Google Drive link. With ShootPortal, the pilot uploads inside the SkyyTask app, the client opens a private SkyyTask-branded portal, and SkyyTask is told about every step automatically.</p>
+
+    <div class="ba mt16">
+      <div class="before">
+        <div class="eyebrow" style="color: var(--muted)">Today</div>
+        <div class="chain"><span class="link">Complete Job</span><span class="arr"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span><span class="link">OTP code</span><span class="arr"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span><span class="link">Google Drive link</span><span class="arr"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span></div>
+        <ul class="ticks crosses"><li>Clients juggle a code and leave the app for Drive</li><li>Unbranded folders; no view or download tracking</li><li>Pilots manage folders and sharing by hand</li></ul>
+      </div>
+      <div class="after">
+        <div class="eyebrow" style="color:#C7D2FE">With ShootPortal</div>
+        <div class="chain"><span class="link">Transfer deliverables</span><span class="arr"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span><span class="link">Upload</span><span class="arr"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span><span class="link">Branded client portal</span></div>
+        <ul class="ticks">
+          <li>One tap in the SkyyTask app opens the upload screen, already linked to the job</li>
+          <li>Clients get a private link: no codes, no accounts, no passwords</li>
+          <li>SkyyTask sees submitted, viewed and downloaded as they happen</li>
+          <li>Everything carries SkyyTask's logo, colors and (optionally) domain</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title mt24"><span class="num">A</span><h3>Who's involved</h3><span class="rule"></span></div>
+    <div class="grid3" style="grid-template-columns: repeat(5, 1fr); gap:10px">
+      <div class="card"><span class="icon-chip partner"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg></span><h4 class="mt8">SkyyTask servers</h4><p>Create jobs in ShootPortal and receive status updates. Hold the secret key.</p></div>
+      <div class="card"><span class="icon-chip partner"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg></span><h4 class="mt8">SkyyTask app</h4><p>Shows the “Transfer deliverables” button and opens the upload screen.</p></div>
+      <div class="card"><span class="icon-chip partner"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg></span><h4 class="mt8">The pilot</h4><p>Uploads files from phone or computer. No ShootPortal account needed.</p></div>
+      <div class="card"><span class="icon-chip partner"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg></span><h4 class="mt8">The client</h4><p>Views and downloads through a private, branded link.</p></div>
+      <div class="card indigo"><span class="icon-chip dark"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span><h4 class="mt8">ShootPortal</h4><p>Stores, organizes and delivers the media, and reports back.</p></div>
+    </div>
+
+    <div class="section-title mt24"><span class="num">B</span><h3>Principles we're designing around</h3><span class="rule"></span></div>
+    <div class="grid2">
+      <div class="feature card"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg></span><div><h4>SkyyTask stays in control</h4><p>Jobs, chat, payments and the client relationship stay in SkyyTask. ShootPortal is the delivery layer only. No quotes, invoices or payment screens appear anywhere.</p></div></div>
+      <div class="feature card"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/></svg></span><div><h4>Branded end to end</h4><p>Upload screen, portal and emails use SkyyTask's name, logo and colors, with a small “Powered by ShootPortal” mark.</p></div></div>
+      <div class="feature card"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6-4-4-4 4"/><path d="M12 2v8"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 18h.01"/><path d="M10 18h.01"/></svg></span><div><h4>Built for big files and bad signal</h4><p>Uploads go in small chunks straight to secure storage. If the connection drops or the app closes, it resumes instead of starting over.</p></div></div>
+      <div class="feature card"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="16" r="1"/><rect x="3" y="10" width="18" height="12" rx="2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/></svg></span><div><h4>Private by default</h4><p>Every link is private and expires. Secret keys never touch a phone. Every status message is signed so SkyyTask can trust it.</p></div></div>
+    </div>
+
+    <div class="card tint mt16 row" style="align-items:center; gap:12px">
+      <span class="icon-chip dark"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></span>
+      <p style="font-size:7.8pt"><b>Works for marketplace and white-glove jobs alike.</b> The same delivery can be created automatically by SkyyTask's app, or by SkyyTask staff signing in to ShootPortal directly for hand-managed enterprise jobs.</p>
+    </div>
+
+    <div class="mt24" style="border-radius:14px; padding:20px 24px; color:#fff; background: radial-gradient(120% 160% at 100% 0%, #6D28D9 0%, var(--indigo) 40%, #1E1B4B 100%);">
+      <div class="eyebrow" style="color:#C7D2FE">In one sentence</div>
+      <div style="font-size:14pt; font-weight:700; line-height:1.3; margin-top:6px; letter-spacing:-0.01em">SkyyTask keeps the job, the chat and the client relationship. ShootPortal quietly handles the files: upload, storage, a beautiful branded handoff, and a signed receipt for every step.</div>
+    </div>
+  </div>
+  <div class="page-foot"><span><b>Prepared for SkyyTask · Confidential</b> · Deliverables Integration Guide · Proposal v0.1 · November 2026</span><span>Proposed design — in development · <span class="pg"></span></span></div>
+
+</section>
+
+<!-- ============================================================ 02 HOW IT WORKS -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">02 · How it works</div>
+    <h2 class="mt4">From finished job to downloaded files, in seven steps</h2>
+
+    <div class="flow mt16">
+      <div class="node partner"><span class="badge">1</span><div class="glyph"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/></svg></div><h4>SkyyTask job</h4><div class="who">SkyyTask</div></div>
+      <div class="arrow"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></div>
+      <div class="node partner"><span class="badge">2</span><div class="glyph"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4.1 12 6"/><path d="m5.1 8-2.9-.8"/><path d="m6 12-1.9 2"/><path d="M7.2 2.2 8 5.1"/><path d="M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z"/></svg></div><h4>“Transfer deliverables”</h4><div class="who">pilot</div></div>
+      <div class="arrow"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></div>
+      <div class="node sp"><span class="badge">3</span><div class="glyph"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 13v8"/><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="m8 17 4-4 4 4"/></svg></div><h4>Upload</h4><div class="who">pilot</div></div>
+      <div class="arrow"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></div>
+      <div class="node sp"><span class="badge">4</span><div class="glyph"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></div><h4>Submit</h4><div class="who">pilot</div></div>
+      <div class="arrow"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></div>
+      <div class="node sp"><span class="badge">5</span><div class="glyph"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h8"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><path d="m16 19 2 2 4-4"/></svg></div><h4>Portal live</h4><div class="who">ShootPortal</div></div>
+      <div class="arrow"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></div>
+      <div class="node sp"><span class="badge">6</span><div class="glyph"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg></div><h4>View &amp; download</h4><div class="who">client</div></div>
+      <div class="arrow"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></div>
+      <div class="node partner"><span class="badge">7</span><div class="glyph"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/></svg></div><h4>Status back</h4><div class="who">SkyyTask</div></div>
+    </div>
+
+    <table class="t mt16">
+      <tr><th style="width:4%">#</th><th style="width:30%">What happens</th><th style="width:33%">What people see</th><th style="width:33%">What SkyyTask receives</th></tr>
+      <tr><td><b>1</b></td><td><b>The job is set up.</b> SkyyTask's servers send ShootPortal the job number, address, client and pilot. Once per job.</td><td>Nothing yet. SkyyTask staff signed in to ShootPortal would see the job listed.</td><td>A ShootPortal ID for the job. SkyyTask can also always look it up by its own job number.</td></tr>
+      <tr><td><b>2</b></td><td><b>The pilot taps “Transfer deliverables.”</b> SkyyTask asks for a one-time upload link (valid up to 24 hours) and opens it inside the app.</td><td>The pilot sees a SkyyTask-branded upload screen for this job: 123 Demo Street.</td><td>The upload link.</td></tr>
+      <tr><td><b>3</b></td><td><b>The pilot uploads.</b> Photos, video, documents and inspection files go straight to secure storage in small chunks.</td><td>Progress for every file. If signal drops or the app is closed, it resumes where it left off.</td><td>Nothing yet (no noise per file).</td></tr>
+      <tr><td><b>4</b></td><td><b>The pilot submits.</b> “Are you finished with this job?” → Yes. ShootPortal measures the delivery's total size.</td><td>A “Delivered!” confirmation, then the screen returns to the SkyyTask app.</td><td><code>delivery.submitted</code> with file count, total size and the delivery's price.</td></tr>
+      <tr><td><b>5</b></td><td><b>The portal goes live.</b> Automatically by default, or after SkyyTask reviews and approves.</td><td>The client gets a branded “Your deliverables are ready” email, or SkyyTask sends the link in its own chat. SkyyTask chooses.</td><td><code>delivery.published</code>, plus a private portal link SkyyTask can share.</td></tr>
+      <tr><td><b>6</b></td><td><b>The client views and downloads.</b> No login, no code. The link is private and expires with the files.</td><td>A clean SkyyTask-branded gallery with download buttons and “Available until …”.</td><td><code>delivery.viewed</code> and <code>delivery.downloaded</code>, the first time each client does each.</td></tr>
+      <tr><td><b>7</b></td><td><b>After 90 days</b> the files expire, unless storage is extended for that job.</td><td>The portal shows the delivery has expired.</td><td>The expiry date is known from step 4 onward.</td></tr>
+    </table>
+
+
+    <div class="section-title mt20"><span class="num">A</span><h3>Behind the scenes: what the two systems say to each other</h3><span class="rule"></span></div>
+    <div class="card" style="padding:12px 14px">
+      <div class="row" style="justify-content:space-between; font-size:7pt; font-weight:700; color: var(--midnight); margin-bottom:6px">
+        <span style="display:flex; gap:6px; align-items:center"><img src="../assets/logo.png" style="width:16px;height:16px;border-radius:4px" alt=""> SkyyTask servers</span>
+        <span style="display:flex; gap:6px; align-items:center">ShootPortal <img src="../../../template/assets/brand/shootportal-icon.png" style="width:16px;height:16px;border-radius:4px" alt=""></span>
+      </div>
+      <div class="msgs">
+        <div class="msg r"><span class="lbl">“Here's job JOB-10482: address, client, pilot”</span></div>
+        <div class="msg l"><span class="lbl">“Got it. Here's its ID.”</span></div>
+        <div class="msg r"><span class="lbl">“Sam Pilot is ready. Give me an upload link.”</span></div>
+        <div class="msg l"><span class="lbl">“Here's a one-time link, valid 24 hours.”</span></div>
+        <div class="msg l ev"><span class="lbl"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/></svg> “Delivery submitted: 41 files, 3.4 GB” <i>signed</i></span></div>
+        <div class="msg r ok"><span class="lbl">“Received ✓”</span></div>
+        <div class="msg l ev"><span class="lbl"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/></svg> “Pat Agent viewed … downloaded” <i>signed</i></span></div>
+      </div>
+      <p class="small muted mt8"><b>Why it matters:</b> SkyyTask can mark jobs complete, show “client viewed ✓” or release a pilot payout the moment the right update arrives. If SkyyTask's servers are briefly unavailable, ShootPortal keeps retrying each update for up to three days, so nothing is lost.</p>
+    </div>
+
+  </div>
+  <div class="page-foot"><span><b>Prepared for SkyyTask · Confidential</b> · Deliverables Integration Guide · Proposal v0.1 · November 2026</span><span>Proposed design — in development · <span class="pg"></span></span></div>
+
+</section>
+
+<!-- ============================================================ 03 WHAT EACH PERSON SEES -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">03 · What each person sees</div>
+    <h2 class="mt4">Three screens, one brand</h2>
+    <p class="lead mt8" style="max-width:6.4in">Illustrated mockups with fake demo data. Final screens will be shown with real screenshots once the integration is built.</p>
+
+    <div class="row mt16" style="gap:22px; align-items:flex-start">
+      <div style="flex:none; display:flex; flex-direction:column; align-items:center; width: 1.95in">
+        <div class="phone">
+  <div class="screen">
+    <div class="island"></div>
+    <div class="status" style="background: var(--p1); color:#fff"><span>9:41</span><span><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/></svg> <svg class="ic" xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></svg> <svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 10v4"/><path d="M14 10v4"/><path d="M22 14v-4"/><path d="M6 10v4"/><rect x="2" y="6" width="16" height="12" rx="2"/></svg></span></div>
+    <div class="up-head" style="padding-top:2px">
+      <div class="brand"><img src="../assets/logo.png" alt=""><span>SkyyTask</span></div>
+      <div class="title">Upload deliverables</div>
+      <div class="sub">123 Demo Street · JOB-10482</div>
+    </div>
+    <div class="up-body">
+      <div class="up-sec">
+        <div class="hd"><span><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg> Photos</span><span class="cnt ok"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> 38 done</span></div>
+        <div class="bar"><i style="width:100%; background: var(--green)"></i></div>
+      </div>
+      <div class="up-sec">
+        <div class="hd"><span><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg> Videos</span><span class="cnt">1 of 2</span></div>
+        <div class="file"><span class="nm">aerial-tour-4k.mp4 · 3.1 GB</span><span>64%</span></div>
+        <div class="bar"><i style="width:64%"></i></div>
+        <div class="file"><span class="nm">neighborhood.mp4 · 820 MB</span><span class="ok" style="color:var(--green)"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span></div>
+      </div>
+      <div class="up-sec">
+        <div class="hd"><span><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg> Documents</span><span class="cnt ok"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg> 1</span></div>
+      </div>
+      <div class="up-sec">
+        <div class="hd"><span><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></svg> Other files</span><span class="cnt"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Add</span></div>
+      </div>
+      <div style="font-size:5.4pt; color: var(--muted); text-align:center"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg> Keep this screen open while uploading</div>
+      <div class="up-btn">Submit delivery</div>
+    </div>
+    <div class="up-foot">Powered by <b>ShootPortal</b></div>
+  </div>
+</div>
+
+        <div class="caption" style="margin-top:9px"><b><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg> The pilot</b>Opens from “Transfer deliverables”. Uploads resume automatically; a “Keep this screen open” reminder shows while files transfer.</div>
+      </div>
+      <div class="col">
+        <div class="browser">
+  <div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="6" height="6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> skyytask.shootportal.app/a/lnk_…</div></div>
+  <div class="portal-head">
+    <div class="brand"><img src="../assets/logo.png" alt=""><div><div class="t">SkyyTask</div><div class="s">Your deliverables</div></div></div>
+    <div class="avail"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Available until Mar 15, 2027</div>
+  </div>
+  <div class="portal-hero">
+    <svg viewBox="0 0 400 58" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%"><defs><linearGradient id="hero" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38BDF8"/><stop offset="0.6" stop-color="#0EA5E9"/><stop offset="1" stop-color="#16A34A"/></linearGradient></defs><rect width="400" height="58" fill="url(#hero)"/><path d="M0 40 Q100 26 200 36 T400 30 V58 H0Z" fill="#15803D"/><polygon points="290,38 325,16 360,38" fill="#334155"/><rect x="298" y="38" width="54" height="14" fill="#F8FAFC"/><rect x="320" y="43" width="10" height="9" fill="#64748B"/><rect width="400" height="58" fill="url(#shade)" opacity="0.35"/><defs><linearGradient id="shade" x1="0" y1="0" x2="0" y2="1"><stop offset="0.4" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000"/></linearGradient></defs></svg>
+    <div class="cap"><div class="t">123 Demo Street</div><div class="s">Sampletown, FL · 38 photos · 2 videos · 1 document</div></div>
+  </div>
+  <div class="portal-tabs"><span class="on">Photos 38</span><span>Videos 2</span><span>Documents 1</span></div>
+  <div class="gallery"><div class="tile"><svg class="scene" viewBox="0 0 40 30" preserveAspectRatio="none"><defs><linearGradient id="s1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7DD3FC"/><stop offset="1" stop-color="#E0F2FE"/></linearGradient></defs><rect width="40" height="30" fill="url(#s1)"/><rect y="19" width="40" height="11" fill="#86EFAC"/><polygon points="12,19 20,12 28,19" fill="#475569"/><rect x="14" y="19" width="12" height="7" fill="#F1F5F9"/><rect x="18.5" y="22" width="3" height="4" fill="#64748B"/></svg><span class="dl"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg></span></div>
+<div class="tile"><svg class="scene" viewBox="0 0 40 30" preserveAspectRatio="none"><rect width="40" height="30" fill="#4ADE80"/><rect x="6" y="5" width="16" height="12" fill="#CBD5E1"/><rect x="6" y="5" width="16" height="12" fill="none" stroke="#64748B" stroke-width="0.6"/><rect x="25" y="9" width="10" height="12" rx="1" fill="#38BDF8"/><path d="M0 24 H40" stroke="#E2E8F0" stroke-width="3"/></svg><span class="dl"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg></span></div>
+<div class="tile"><svg class="scene" viewBox="0 0 40 30" preserveAspectRatio="none"><defs><linearGradient id="s3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FDBA74"/><stop offset="1" stop-color="#FDE68A"/></linearGradient></defs><rect width="40" height="30" fill="url(#s3)"/><rect y="20" width="40" height="10" fill="#166534"/><polygon points="6,20 15,13 24,20" fill="#1E293B"/><rect x="8" y="20" width="14" height="6" fill="#334155"/><circle cx="31" cy="10" r="3" fill="#FEF3C7"/></svg><span class="dl"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg></span></div>
+<div class="tile"><svg class="scene" viewBox="0 0 40 30" preserveAspectRatio="none"><rect width="40" height="30" fill="#E2E8F0"/><rect x="4" y="4" width="32" height="22" fill="#F8FAFC"/><rect x="4" y="18" width="32" height="8" fill="#CBD5E1"/><rect x="8" y="8" width="7" height="6" fill="#BAE6FD"/><rect x="25" y="8" width="7" height="6" fill="#BAE6FD"/><rect x="17" y="12" width="6" height="9" fill="#A16207"/></svg><span class="dl"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg></span></div>
+<div class="tile"><svg class="scene" viewBox="0 0 40 30" preserveAspectRatio="none"><rect width="40" height="30" fill="#22C55E"/><path d="M0 15 Q20 8 40 15 V30 H0Z" fill="#15803D"/><rect x="13" y="9" width="14" height="10" fill="#F1F5F9"/><polygon points="11,9 20,3 29,9" fill="#7F1D1D"/><path d="M20 19 V30" stroke="#E2E8F0" stroke-width="2"/></svg><span class="dl"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg></span></div>
+<div class="tile"><svg class="scene" viewBox="0 0 40 30" preserveAspectRatio="none"><rect width="40" height="30" fill="#0EA5E9"/><rect y="17" width="40" height="13" fill="#FDE68A"/><rect x="5" y="10" width="11" height="8" fill="#F8FAFC"/><rect x="22" y="8" width="13" height="10" fill="#F8FAFC"/><polygon points="20,8 28.5,3 37,8" fill="#334155"/></svg><span class="dl"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg></span></div>
+<div class="tile"><svg class="scene" viewBox="0 0 40 30" preserveAspectRatio="none"><rect width="40" height="30" fill="#A3E635"/><rect x="0" y="12" width="40" height="5" fill="#94A3B8"/><rect x="4" y="2" width="10" height="8" fill="#F1F5F9"/><rect x="18" y="2" width="10" height="8" fill="#E2E8F0"/><rect x="4" y="19" width="10" height="8" fill="#F1F5F9"/><rect x="18" y="19" width="10" height="8" fill="#F8FAFC"/><circle cx="34" cy="24" r="3" fill="#15803D"/></svg><span class="dl"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg></span></div>
+<div class="tile"><svg class="scene" viewBox="0 0 40 30" preserveAspectRatio="none"><defs><linearGradient id="s8" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1E3A8A"/><stop offset="1" stop-color="#F472B6"/></linearGradient></defs><rect width="40" height="30" fill="url(#s8)"/><rect y="21" width="40" height="9" fill="#0F172A"/><rect x="10" y="15" width="16" height="7" fill="#1E293B"/><rect x="13" y="17" width="3" height="2" fill="#FDE047"/><rect x="20" y="17" width="3" height="2" fill="#FDE047"/></svg><span class="dl"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg></span></div>
+</div>
+  <div class="portal-row"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"/><circle cx="12" cy="12" r="10"/></svg><span class="nm">aerial-tour-4k.mp4</span><span>3.1 GB</span><span class="btn-sm"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg> Download</span></div>
+  <div class="portal-row"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg><span class="nm">property-report.pdf</span><span>2 MB</span><span class="btn-sm ghost"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg> Download</span></div>
+  <div class="portal-foot">Powered by <b>ShootPortal</b></div>
+</div>
+
+        <div class="caption" style="text-align:left; margin-top:9px"><b><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg> The client: private portal</b>No login. Only this job's media, organized by type, with download buttons and the expiry date. No pricing or payment screens, ever.</div>
+      </div>
+    </div>
+
+    <div class="row mt20" style="gap:22px; align-items:flex-start">
+      <div class="col">
+        <div class="email">
+  <div class="hd"><b>From:</b> SkyyTask &lt;notifications@shootportal.app&gt;<br><b>To:</b> pat.agent@example.com<br><b>Subject:</b> Your deliverables for 123 Demo Street are ready</div>
+  <div class="bd">
+    <img src="../assets/logo.png" alt="">
+    <div class="t">Your deliverables are ready</div>
+    <p>Hi Pat Agent, your photos and video for 123 Demo Street are ready to view and download.</p>
+    <span class="cta">View deliverables</span>
+    <p class="small muted" style="margin-top:6px">Private link · available until Mar 15, 2027</p>
+  </div>
+  <div class="ft">Sent on behalf of SkyyTask · Powered by <b>ShootPortal</b></div>
+</div>
+
+        <div class="caption" style="text-align:left; margin-top:9px"><b><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg> The client: notification</b>Sent by ShootPortal in SkyyTask's name, or skipped entirely if SkyyTask prefers to share the link in its own chat.</div>
+      </div>
+      <div class="col">
+        <div class="status-card">
+  <div class="hd"><img src="../assets/logo.png" alt=""><div><div class="t">JOB-10482 · Delivery status</div><div class="s">Updated automatically by ShootPortal webhooks</div></div></div>
+  <div class="ev"><span class="d"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><div class="nm">Delivery submitted</div><div class="meta">delivery.submitted · 41 files · 3.4 GB</div></div><span class="tm">4:40 PM</span></div>
+  <div class="ev"><span class="d"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><div class="nm">Client portal live</div><div class="meta">delivery.published</div></div><span class="tm">4:40 PM</span></div>
+  <div class="ev"><span class="d"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><div class="nm">Pat Agent viewed</div><div class="meta">delivery.viewed</div></div><span class="tm">5:12 PM</span></div>
+  <div class="ev"><span class="d"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><div class="nm">Pat Agent downloaded</div><div class="meta">delivery.downloaded</div></div><span class="tm">5:15 PM</span></div>
+</div>
+
+        <div class="caption" style="text-align:left; margin-top:9px"><b><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg> SkyyTask: live status</b>An example of what SkyyTask could show inside its own app, driven by ShootPortal's signed status updates.</div>
+      </div>
+    </div>
+  </div>
+  <div class="page-foot"><span><b>Prepared for SkyyTask · Confidential</b> · Deliverables Integration Guide · Proposal v0.1 · November 2026</span><span>Proposed design — in development · <span class="pg"></span></span></div>
+
+</section>
+
+<!-- ============================================================ 04 WHO DOES WHAT -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">04 · Who does what</div>
+    <h2 class="mt4">A small build for SkyyTask, the heavy lifting on ShootPortal</h2>
+
+    <div class="grid2 mt16" style="gap:14px">
+      <div class="card" style="border-color: color-mix(in srgb, var(--pp) 35%, white)">
+        <div class="row" style="align-items:center; gap:8px"><img src="../assets/logo.png" style="width:22px;height:22px;border-radius:5px" alt=""><h3>SkyyTask's team builds</h3></div>
+        <div class="steps mt12">
+          <div class="step partner"><span class="n">1</span><div><h4>Create the job in ShootPortal</h4><p>One server call when a job is accepted or completed (your choice).</p></div></div>
+          <div class="step partner"><span class="n">2</span><div><h4>The “Transfer deliverables” button</h4><p>Ask ShootPortal for an upload link and open it in the app's in-app browser.</p></div></div>
+          <div class="step partner"><span class="n">3</span><div><h4>A status receiver</h4><p>A small endpoint that checks each update's signature and moves the job forward.</p></div></div>
+          <div class="step partner"><span class="n">4</span><div><h4>Optional: share the link in chat</h4><p>If SkyyTask prefers to message the client itself.</p></div></div>
+        </div>
+      </div>
+      <div class="card indigo">
+        <div class="row" style="align-items:center; gap:8px"><img src="../../../template/assets/brand/shootportal-icon.png" style="width:22px;height:22px;border-radius:5px" alt=""><h3>ShootPortal provides</h3></div>
+        <ul class="ticks mt12" style="columns:1">
+          <li>The API, a full test sandbox and test keys</li>
+          <li>The branded, resumable upload screen (phone and desktop)</li>
+          <li>Secure storage for every file type, 90 days included</li>
+          <li>The private, branded client portal and emails</li>
+          <li>Signed, automatically retried status updates</li>
+          <li>Developer Guide, API reference and a Postman collection</li>
+          <li>A live demo partner to try the full flow before writing code</li>
+          <li>Direct founder support during integration</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title mt20"><span class="num">A</span><h3>Information exchanged</h3><span class="rule"></span></div>
+    <div class="grid2">
+      <table class="t"><tr><th>SkyyTask sends <svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></th></tr>
+        <tr><td><b>Job</b>: your job number, title, address</td></tr>
+        <tr><td><b>Clients</b>: name, email (phone optional), your client ID</td></tr>
+        <tr><td><b>Pilot</b>: name, email, your pilot ID</td></tr>
+        <tr><td>Nothing else. No prices, payments or private job details.</td></tr></table>
+      <table class="t"><tr><th><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg> ShootPortal sends back</th></tr>
+        <tr><td><b>Links</b>: the upload link and private portal links</td></tr>
+        <tr><td><b>Status</b>: submitted, published, viewed, downloaded, expired</td></tr>
+        <tr><td><b>Details</b>: file counts, total size, expiry date</td></tr>
+        <tr><td><b>Price</b> of each delivery, the moment it's submitted</td></tr></table>
+    </div>
+
+    <div class="row mt20" style="gap:14px">
+      <div style="flex:1">
+        <div class="section-title"><span class="num">B</span><h3>Choices SkyyTask makes</h3><span class="rule"></span></div>
+        <div class="stack">
+          <div class="feature"><span class="icon-chip partner"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg></span><div><h4>Who notifies the client</h4><p>ShootPortal email, SkyyTask's own chat, or both.</p></div></div>
+          <div class="feature"><span class="icon-chip partner"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg></span><div><h4>Publish automatically or review first</h4><p>Go live on submit, or approve each delivery.</p></div></div>
+          <div class="feature"><span class="icon-chip partner"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></span><div><h4>Web address</h4><p>skyytask.shootportal.app to start, or your own, e.g. deliver.skyytask.com.</p></div></div>
+          <div class="feature"><span class="icon-chip partner"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17V7"/><path d="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8"/><path d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"/></svg></span><div><h4>Pilot receipt email</h4><p>Optional “Delivery received” confirmation.</p></div></div>
+        </div>
+      </div>
+      <div style="flex:1">
+        <div class="section-title"><span class="num">C</span><h3>To decide together</h3><span class="rule"></span></div>
+        <ul class="dots">
+          <li>Create the ShootPortal job when it's <b>accepted</b>, or at <b>Complete Job</b>?</li>
+          <li>Which status should trigger pilot payouts: submitted, viewed or downloaded?</li>
+          <li>Is a one-time code still needed, or is a private link enough?</li>
+          <li>App technology, and in-app browser vs. web view for the upload screen</li>
+          <li>Typical monthly job volume and delivery sizes by job type</li>
+          <li>Enterprise file types to support first (thermal, GeoTIFF, LAS/LAZ, KMZ, reports)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="section-title mt20"><span class="num">D</span><h3>Works with any app technology</h3><span class="rule"></span></div>
+    <div class="grid4" style="gap:10px">
+      <div class="card tint"><span class="icon-chip dark"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg></span><h4 class="mt8">iOS</h4><p>Open the upload link in an in-app Safari view (SFSafariViewController).</p></div>
+      <div class="card tint"><span class="icon-chip dark"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="10" height="14" x="3" y="8" rx="2"/><path d="M5 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2h-2.4"/><path d="M8 18h.01"/></svg></span><h4 class="mt8">Android</h4><p>Open it in Chrome Custom Tabs.</p></div>
+      <div class="card tint"><span class="icon-chip dark"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></svg></span><h4 class="mt8">React Native / Flutter</h4><p>Use the framework's in-app browser plugin.</p></div>
+      <div class="card tint"><span class="icon-chip dark"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></span><h4 class="mt8">Web &amp; desktop</h4><p>Open it in a new tab or window; it returns when done.</p></div>
+    </div>
+
+  </div>
+  <div class="page-foot"><span><b>Prepared for SkyyTask · Confidential</b> · Deliverables Integration Guide · Proposal v0.1 · November 2026</span><span>Proposed design — in development · <span class="pg"></span></span></div>
+
+</section>
+
+<!-- ============================================================ 05 INCLUDED / SECURITY / NEXT -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">05 · Included, security &amp; next steps</div>
+    <h2 class="mt4">Everything in one delivery layer</h2>
+
+    <div class="grid4 mt16" style="gap:10px">
+      <div class="card"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/></svg></span><h4 class="mt8">Branding &amp; domain</h4><p>Logo, colors, sender name, your own web address.</p></div>
+      <div class="card"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></span><h4 class="mt8">Resumable uploads</h4><p>Multi-GB files from a phone, resumed after drops.</p></div>
+      <div class="card"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"/><path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z"/><path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1"/></svg></span><h4 class="mt8">Every file type</h4><p>Photo, video, PDF, thermal, GeoTIFF, LAS/LAZ, KMZ, RAW.</p></div>
+      <div class="card"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 14v2.2l1.6 1"/><path d="M16 2v4"/><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M3 10h5"/><path d="M8 2v4"/><circle cx="16" cy="16" r="6"/></svg></span><h4 class="mt8">90-day storage</h4><p>Included per delivery; extend for archives.</p></div>
+      <div class="card"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg></span><h4 class="mt8">Unlimited recipients</h4><p>Every stakeholder gets their own private link.</p></div>
+      <div class="card"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg></span><h4 class="mt8">View &amp; download tracking</h4><p>Know when each client opened and downloaded.</p></div>
+      <div class="card"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M4.929 4.929 19.07 19.071"/></svg></span><h4 class="mt8">No commercial screens</h4><p>No quotes, invoices or payments anywhere.</p></div>
+      <div class="card"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></svg></span><h4 class="mt8">Founder support</h4><p>Direct line during integration and launch.</p></div>
+    </div>
+
+    <div class="row mt20" style="gap:14px">
+      <div style="flex:1.1">
+        <div class="section-title"><span class="num">A</span><h3>Security &amp; privacy</h3><span class="rule"></span></div>
+        <ul class="ticks">
+          <li><b>Secret keys stay on SkyyTask's servers.</b> Phones only ever get a one-job, short-lived upload link.</li>
+          <li><b>Signed status updates.</b> Each message carries a tamper-proof signature SkyyTask verifies.</li>
+          <li><b>Private, expiring links</b> for every client; files are never public.</li>
+          <li><b>Isolated data.</b> SkyyTask's jobs live in their own walled-off space.</li>
+          <li><b>Minimal data.</b> Names and emails only. No prices, payments or job financials.</li>
+        </ul>
+      </div>
+      <div style="flex:1">
+        <div class="section-title"><span class="num">B</span><h3>Test mode vs. live mode</h3><span class="rule"></span></div>
+        <div class="grid2" style="gap:8px">
+          <div class="card tint"><div class="pill" style="background:#FEF3C7; color:#92400E"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg> Test</div><p class="mt8">A full copy for building and demos. Nothing is billed; emails go only to addresses you approve.</p></div>
+          <div class="card indigo"><div class="pill dark"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></svg> Live</div><p class="mt8">Real pilots and clients. Same code: just swap in a live key.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title mt20"><span class="num">C</span><h3>Timeline</h3><span class="rule"></span></div>
+    <div class="card tint" style="padding:12px 14px">
+      <div class="tline"><div class="t"><div class="dot"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/><path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1"/></svg></div><div class="when">Nov 11, 2026</div><div class="what">Walkthrough &amp; open questions</div></div><div class="t"><div class="dot"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></div><div class="when">Mid-December</div><div class="what">Sandbox &amp; test keys for your developers</div></div><div class="t"><div class="dot"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"/><path d="m2 22 3-3"/><path d="M7.5 13.5 10 11"/><path d="M10.5 16.5 13 14"/><path d="m18 3-4 4h6l-4 4"/></svg></div><div class="when">January 2027</div><div class="what">Uploads, client portal &amp; webhooks</div></div><div class="t"><div class="dot"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></svg></div><div class="when">February 2027</div><div class="what">Go-live review &amp; live keys</div></div></div>
+    </div>
+
+    <div class="row mt20" style="gap:14px; align-items:stretch">
+      <div style="flex:1.2">
+        <div class="section-title"><span class="num">D</span><h3>Go-live checklist</h3><span class="rule"></span></div>
+        <div class="grid2" style="gap:4px 12px">
+          <ul class="ticks"><li>Jobs created with your job number</li><li>Upload screen opens in-app</li><li>Large upload resumed on a real phone</li></ul>
+          <ul class="ticks"><li>Status signatures verified</li><li>All status events handled</li><li>Live key issued &amp; test data cleared</li></ul>
+        </div>
+      </div>
+      <div style="flex:0.9" class="card indigo">
+        <div class="eyebrow">Your contact</div>
+        <div class="contact mt8"><div class="av"><img src="../../../template/assets/brand/shootportal-icon.png" alt=""></div><div><div class="nm">Jackson Bridges</div><div class="small muted">Founder, ShootPortal</div></div></div>
+        <div class="small mt8" style="color:var(--slate); line-height:1.7"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg> jackson@shootportal.app<br><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></svg> (662) 687-1259<br><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg> shootportal.app</div>
+      </div>
+    </div>
+
+    <div class="mt12" style="border-radius:14px; padding:14px 20px; color:#fff; background: radial-gradient(120% 160% at 100% 0%, #6D28D9 0%, var(--indigo) 40%, #1E1B4B 100%);">
+      <div class="eyebrow" style="color:#C7D2FE">Next steps</div>
+      <div class="grid4 mt8" style="gap:14px">
+        <div><div style="font-size:16pt; font-weight:700; opacity:0.5">01</div><div style="font-weight:700; font-size:8pt">Review together</div><div style="font-size:7pt; color:#E0E7FF">Walk through this guide on our Nov 11 call.</div></div>
+        <div><div style="font-size:16pt; font-weight:700; opacity:0.5">02</div><div style="font-weight:700; font-size:8pt">Decide the open points</div><div style="font-size:7pt; color:#E0E7FF">The “to decide together” list on page 5.</div></div>
+        <div><div style="font-size:16pt; font-weight:700; opacity:0.5">03</div><div style="font-weight:700; font-size:8pt">Meet your developers</div><div style="font-size:7pt; color:#E0E7FF">A technical walkthrough with the Developer Guide.</div></div>
+        <div><div style="font-size:16pt; font-weight:700; opacity:0.5">04</div><div style="font-weight:700; font-size:8pt">Start in the sandbox</div><div style="font-size:7pt; color:#E0E7FF">Test keys and a demo partner to build against.</div></div>
+      </div>
+    </div>
+    <p class="small muted mt8">Pricing is provided separately in the SkyyTask × ShootPortal Pricing Sheet.</p>
+  </div>
+  <div class="page-foot"><span><b>Prepared for SkyyTask · Confidential</b> · Deliverables Integration Guide · Proposal v0.1 · November 2026</span><span>Proposed design — in development · <span class="pg"></span></span></div>
+
+</section>
+
+</body>
+</html>

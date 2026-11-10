@@ -37,7 +37,7 @@ function websiteJsonLd(site: PublicSite): string {
     name: v.business.name,
     url: `${site.canonicalOrigin}/`,
     description: v.hero.intro,
-    logo: v.business.logoUrl && /^https:\/\//.test(v.business.logoUrl) ? v.business.logoUrl : undefined,
+    logo: /^https:\/\//.test(site.settings.business.logoUrl) ? site.settings.business.logoUrl : undefined,
     email: v.business.email || undefined,
     telephone: v.business.phone || undefined,
     sameAs: v.business.social.length ? v.business.social.map((s) => s.url) : undefined,

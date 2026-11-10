@@ -37,5 +37,8 @@ next-env.d.ts
 # Source media for the Solutions pages (originals + raw frames). The site uses the copies in public/solutions.
 /Landing Page Assets/
 
+# Confidential partnership call notes (never commit)
+/Call Notes/
+
 # Photo Editor engine (installed by scripts/lightcraft/install.mjs)
 /public/lightcraft/

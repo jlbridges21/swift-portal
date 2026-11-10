@@ -1,0 +1,528 @@
+{{> head}}
+<body class="dev">
+
+<!-- ============================================================ COVER -->
+<section class="page" style="padding:0">
+  <div class="cover-band" style="background: linear-gradient(150deg, #0B1120 0%, #1E1B4B 45%, var(--indigo) 100%);">
+    <svg class="mesh" viewBox="0 0 816 437" preserveAspectRatio="xMidYMid slice" style="opacity:0.16"><g fill="#fff" font-family="ui-monospace, Menlo, monospace" font-size="10.5">
+      <text x="560" y="130">POST /v1/projects</text><text x="580" y="150">→ 201 proj_7f3c…</text>
+      <text x="560" y="180">POST /v1/upload_sessions</text><text x="580" y="200">→ 201 { "url": … }</text>
+      <text x="560" y="230">delivery.submitted ✓</text><text x="580" y="250">ShootPortal-Signature</text></g></svg>
+  </div>
+  <div class="content" style="position:relative; padding: 0.55in 0.6in 0; display:flex; flex-direction:column; height:100%">
+    <div class="topbar">
+      <span class="pill" style="background: rgba(255,255,255,0.14); color:#fff">{{icon "code-xml" 9}} Developer Guide</span>
+      <span class="pill amber">{{icon "pencil-ruler" 9}} Draft spec · {{edition.version}} · {{edition.date}}</span>
+    </div>
+    <div style="margin-top: 0.9in; color:#fff">
+      <div class="eyebrow" style="color:#C7D2FE">{{partner.name}} × ShootPortal</div>
+      <h1 style="color:#fff; font-size: 34pt; margin-top:6px">ShootPortal<br>Platform API</h1>
+      <p class="lead" style="color:#E0E7FF; margin-top:10px; max-width: 5.4in">For {{partner.name}}'s developers: authentication, every endpoint, the hosted upload screen, webhooks and signature checks, and going live.</p>
+    </div>
+    <div class="cover-card" style="margin-top: 0.55in">
+      <div class="row" style="align-items:center; justify-content:space-between">
+        <div class="lockup lg">
+          <img class="partner-logo" src="{{asset.partner}}/{{partner.logo}}" alt="{{partner.name}}">
+          <span class="x">×</span>
+          <img class="sp-logo" src="{{asset.template}}/brand/shootportal-logo.png" alt="ShootPortal">
+        </div>
+        <div style="text-align:right"><div class="small muted">Base URL</div><div style="font-family: var(--mono); font-weight:700; color:var(--midnight); font-size:9pt">https://api.shootportal.app/v1</div></div>
+      </div>
+      <div style="height:1px; background: var(--line); margin: 16px 0 4px"></div>
+      <ol class="toc">
+        <li><span class="no">01</span>Overview &amp; quickstart<span class="d">How the pieces fit, your first calls</span></li>
+        <li><span class="no">02</span>Authentication &amp; conventions<span class="d">Keys, IDs, idempotency, errors, limits</span></li>
+        <li><span class="no">03</span>Endpoint reference<span class="d">Every v1 endpoint and object</span></li>
+        <li><span class="no">04</span>Upload sessions &amp; embedding<span class="d">iOS, Android, cross-platform, web</span></li>
+        <li><span class="no">05</span>Deliveries, access links &amp; quotes<span class="d">Lifecycle, publishing, pricing</span></li>
+        <li><span class="no">06</span>Webhooks<span class="d">Events, payloads, signatures, retries</span></li>
+        <li><span class="no">07</span>Test vs. live &amp; go-live<span class="d">Sandbox, checklist, support</span></li>
+      </ol>
+    </div>
+    <div class="spacer"></div>
+    <div class="notice" style="margin-bottom: 0.8in">{{icon "triangle-alert" 11}}<span><b style="color:#92400E">{{edition.devNotice}}</b> We'll share the OpenAPI file and a Postman collection with the sandbox.</span></div>
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 01 OVERVIEW -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">01 · Overview &amp; quickstart</div>
+    <h2 class="mt4">Three things to build: create, open, listen</h2>
+    <p class="lead mt8" style="max-width:6.8in">Your server uses a secret key. Your app only opens a short-lived upload link. ShootPortal calls your server back with signed webhooks.</p>
+
+    <div class="card mt16" style="padding:14px">
+      <svg viewBox="0 0 700 172" width="100%" style="display:block" font-family="Inter, sans-serif">
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#64748B"/></marker>
+          <marker id="ahi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#4F46E5"/></marker>
+          <linearGradient id="pg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{{partner.colors.g1}}"/><stop offset="1" stop-color="{{partner.colors.g3}}"/></linearGradient>
+          <linearGradient id="sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4F46E5"/><stop offset="1" stop-color="#7C3AED"/></linearGradient></defs>
+        <rect x="6" y="14" width="170" height="56" rx="10" fill="url(#pg)"/><text x="91" y="38" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Your backend</text><text x="91" y="55" text-anchor="middle" fill="#E0F2FE" font-size="9">holds sp_live_… / sp_test_…</text>
+        <rect x="6" y="112" width="170" height="56" rx="10" fill="url(#pg)" opacity="0.85"/><text x="91" y="136" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Your app</text><text x="91" y="153" text-anchor="middle" fill="#E0F2FE" font-size="9">opens the upload URL</text>
+        <rect x="262" y="14" width="176" height="76" rx="12" fill="url(#sg)"/><text x="350" y="48" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">ShootPortal API</text><text x="350" y="66" text-anchor="middle" fill="#E0E7FF" font-size="9">api.shootportal.app/v1</text>
+        <rect x="524" y="14" width="170" height="56" rx="10" fill="#EEF2FF" stroke="#C7D2FE"/><text x="609" y="38" text-anchor="middle" fill="#0F172A" font-size="12" font-weight="700">Client portal</text><text x="609" y="55" text-anchor="middle" fill="#475569" font-size="9">private access link</text>
+        <rect x="524" y="112" width="170" height="56" rx="10" fill="#EEF2FF" stroke="#C7D2FE"/><text x="609" y="136" text-anchor="middle" fill="#0F172A" font-size="12" font-weight="700">Hosted upload screen</text><text x="609" y="153" text-anchor="middle" fill="#475569" font-size="9">{{partner.contributor}} uploads, resumable</text>
+        <path d="M176 32 H258" stroke="#64748B" stroke-width="1.5" marker-end="url(#ah)"/><text x="217" y="26" text-anchor="middle" fill="#475569" font-size="8.5">① API calls</text>
+        <path d="M262 56 H180" stroke="#4F46E5" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ahi)"/><text x="221" y="70" text-anchor="middle" fill="#4F46E5" font-size="8.5">③ signed webhooks</text>
+        <path d="M91 70 V108" stroke="#64748B" stroke-width="1.5" marker-end="url(#ah)"/><text x="98" y="94" fill="#475569" font-size="8.5">upload URL</text>
+        <path d="M176 140 H520" stroke="#64748B" stroke-width="1.5" marker-end="url(#ah)"/><text x="348" y="133" text-anchor="middle" fill="#475569" font-size="8.5">② open in an in-app browser</text>
+        <path d="M438 42 H520" stroke="#64748B" stroke-width="1.5" marker-end="url(#ah)"/>
+        <path d="M520 118 L 440 84" stroke="#64748B" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#ah)"/><text x="486" y="92" fill="#64748B" font-size="8">files &amp; status</text>
+      </svg>
+    </div>
+
+    <div class="row mt16" style="gap:14px">
+      <div style="flex:1">
+        <div class="section-title"><span class="num">A</span><h3>Environments</h3><span class="rule"></span></div>
+        <table class="t">
+          <tr><th>Mode</th><th>Key prefix</th><th>What happens</th></tr>
+          <tr><td><b>Test</b></td><td><code>sp_test_</code></td><td>Isolated sandbox. Nothing billed; emails only to allowlisted addresses.</td></tr>
+          <tr><td><b>Live</b></td><td><code>sp_live_</code></td><td>Real {{partner.contributors}} and {{partner.recipients}}. Same endpoints, same code.</td></tr>
+        </table>
+      </div>
+      <div style="flex:1.15">
+        <div class="section-title"><span class="num">B</span><h3>Quickstart</h3><span class="rule"></span></div>
+        <div class="steps">
+          <div class="step"><span class="n">1</span><div><h4>Check your key</h4><p><code>GET /v1/ping</code> → <code>{"account":"{{partner.name}}","mode":"test"}</code></p></div></div>
+          <div class="step"><span class="n">2</span><div><h4>Create a project</h4><p>With your job number as <code>external_id</code>.</p></div></div>
+          <div class="step"><span class="n">3</span><div><h4>Add a recipient and a contributor</h4><p>The {{partner.recipient}} and the {{partner.contributor}}.</p></div></div>
+          <div class="step"><span class="n">4</span><div><h4>Create an upload session</h4><p>Open the returned <code>url</code> on a phone and upload.</p></div></div>
+          <div class="step"><span class="n">5</span><div><h4>Receive webhooks</h4><p>Watch <code>delivery.submitted</code> arrive, then verify its signature.</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="codecap mt16">Your first call</div>
+<pre><span class="c"># Create a delivery project for job {{partner.example.job}} (test mode)</span>
+curl https://api.shootportal.app/v1/projects \
+  -H <span class="s">"Authorization: Bearer sp_test_…"</span> \
+  -H <span class="s">"Idempotency-Key: job-10482-create"</span> \
+  -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{
+    "external_id": "{{partner.example.job}}",
+    "title": "{{partner.example.address}} – Aerial photo + video",
+    "address": { "line1": "{{partner.example.address}}", "city": "Sampletown",
+                 "region": "FL", "postal_code": "00000", "country": "US" }
+  }'</span>
+
+<span class="c"># 201 Created</span>
+{ <span class="p">"id"</span>: <span class="s">"proj_7f3c…"</span>, <span class="p">"object"</span>: <span class="s">"project"</span>, <span class="p">"external_id"</span>: <span class="s">"{{partner.example.job}}"</span>,
+  <span class="p">"status"</span>: <span class="s">"scheduled"</span>, <span class="p">"livemode"</span>: <span class="k">false</span> }</pre>
+
+
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 02 AUTH & CONVENTIONS -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">02 · Authentication &amp; conventions</div>
+    <h2 class="mt4">How every request works</h2>
+
+    <div class="grid2 mt16" style="gap:14px">
+      <div>
+        <div class="section-title"><span class="num">A</span><h3>Authentication</h3><span class="rule"></span></div>
+<pre>Authorization: Bearer sp_live_4eC39HqLyjWDarjtT1zdp7dc</pre>
+        <ul class="ticks mt8">
+          <li><b>Server-side only.</b> Never put a secret key in an app, website or repository.</li>
+          <li><b>Shown once.</b> ShootPortal stores only a fingerprint (hash) of each key.</li>
+          <li><b>Rotate without downtime.</b> Several keys can be active at once: add the new one, deploy, then revoke the old.</li>
+          <li><b>Lost or leaked?</b> Tell us; we revoke it immediately and issue a new one.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="section-title"><span class="num">B</span><h3>Idempotency (safe retries)</h3><span class="rule"></span></div>
+<pre>Idempotency-Key: job-10482-create</pre>
+        <ul class="ticks mt8">
+          <li>Send a unique key on every <b>POST</b>. Retrying with the same key returns the original result, so a timeout never creates a duplicate project.</li>
+          <li>Keys are remembered for <b>24 hours</b>.</li>
+          <li>The same key with a <i>different</i> body returns <code>409 idempotency_conflict</code>.</li>
+          <li>Tip: build keys from your own IDs, e.g. <code>job-&lt;number&gt;-create</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="grid2 mt16" style="gap:14px">
+      <div>
+        <div class="section-title"><span class="num">C</span><h3>IDs, your IDs &amp; metadata</h3><span class="rule"></span></div>
+        <ul class="ticks">
+          <li>Object IDs are prefixed: <code>proj_</code> <code>rcp_</code> <code>ctb_</code> <code>ups_</code> <code>file_</code> <code>dlv_</code> <code>lnk_</code> <code>evt_</code>. Treat them as opaque strings.</li>
+          <li>Every create accepts your own <code>external_id</code> (unique per object type) and a <code>metadata</code> map of up to 20 string keys.</li>
+          <li>Look up by your ID: <code>GET /v1/projects?external_id={{partner.example.job}}</code>, so you never have to store ours.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="section-title"><span class="num">D</span><h3>Lists, limits &amp; request IDs</h3><span class="rule"></span></div>
+        <ul class="ticks">
+          <li><b>Pagination:</b> <code>?limit=</code> (max 100) and <code>starting_after=&lt;id&gt;</code>. Responses include <code>has_more</code>.</li>
+          <li><b>Rate limit:</b> 100 requests/minute per key. Above that you get <code>429</code> with <code>Retry-After</code>.</li>
+          <li><b>Request-Id</b> header on every response. Include it when contacting support.</li>
+          <li>JSON in and out; timestamps are ISO 8601 UTC; sizes are in bytes.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title mt16"><span class="num">E</span><h3>Errors</h3><span class="rule"></span></div>
+    <div class="row" style="gap:14px; align-items:flex-start">
+<pre style="flex:1">{
+  <span class="p">"error"</span>: {
+    <span class="p">"type"</span>: <span class="s">"invalid_request_error"</span>,
+    <span class="p">"code"</span>: <span class="s">"parameter_missing"</span>,
+    <span class="p">"message"</span>: <span class="s">"email is required"</span>,
+    <span class="p">"param"</span>: <span class="s">"email"</span>,
+    <span class="p">"request_id"</span>: <span class="s">"req_9a41…"</span>
+  }
+}</pre>
+      <table class="t" style="flex:1.3">
+        <tr><th>HTTP</th><th>type</th><th>Meaning</th></tr>
+        <tr><td><b>400 / 422</b></td><td><code>invalid_request_error</code></td><td>Missing or invalid field (see <code>param</code>)</td></tr>
+        <tr><td><b>401</b></td><td><code>authentication_error</code></td><td>Missing, wrong or revoked key</td></tr>
+        <tr><td><b>403</b></td><td><code>permission_error</code></td><td>API access paused for this account</td></tr>
+        <tr><td><b>404</b></td><td><code>not_found</code></td><td>No such object in this mode</td></tr>
+        <tr><td><b>409</b></td><td><code>idempotency_error</code> / conflict</td><td>Key reused with a new body; state conflict</td></tr>
+        <tr><td><b>429</b></td><td><code>rate_limit_error</code></td><td>Slow down; retry after the header's seconds</td></tr>
+        <tr><td><b>500</b></td><td><code>api_error</code></td><td>Our side. Safe to retry with the same idempotency key</td></tr>
+      </table>
+    </div>
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 03 ENDPOINTS -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">03 · Endpoint reference</div>
+    <h2 class="mt4">Every v1 endpoint</h2>
+
+    <table class="t mt16">
+      <tr><th style="width:42%">Endpoint</th><th style="width:30%">Purpose</th><th>Key fields</th></tr>
+      <tr><td><span class="method get">GET</span><code>/v1/ping</code></td><td>Check your key and mode</td><td>→ <code>account</code>, <code>mode</code></td></tr>
+      <tr><td><span class="method">POST</span><code>/v1/projects</code></td><td>Create a delivery project</td><td><code>external_id</code>, <code>title</code>, <code>address</code>, <code>metadata</code></td></tr>
+      <tr><td><span class="method get">GET</span><code>/v1/projects/{id}</code></td><td>Retrieve a project</td><td></td></tr>
+      <tr><td><span class="method get">GET</span><code>/v1/projects?external_id=</code></td><td>Find by your ID; list</td><td><code>limit</code>, <code>starting_after</code></td></tr>
+      <tr><td><span class="method patch">PATCH</span><code>/v1/projects/{id}</code></td><td>Update title, address, metadata</td><td></td></tr>
+      <tr><td><span class="method">POST</span><code>/v1/projects/{id}/recipients</code></td><td>Add an end client</td><td><code>email</code>, <code>name</code>, <code>phone?</code>, <code>external_id?</code></td></tr>
+      <tr><td><span class="method del">DELETE</span><code>/v1/projects/{id}/recipients/{rcp}</code></td><td>Remove access (revokes links)</td><td></td></tr>
+      <tr><td><span class="method">POST</span><code>/v1/projects/{id}/recipients/{rcp}/access_links</code></td><td>Mint a private portal link</td><td><code>expires_in?</code> (never past file expiry)</td></tr>
+      <tr><td><span class="method">POST</span><code>/v1/projects/{id}/contributors</code></td><td>Add a {{partner.contributor}} (no account needed)</td><td><code>email</code>, <code>name</code>, <code>external_id</code></td></tr>
+      <tr><td><span class="method">POST</span><code>/v1/upload_sessions</code></td><td>Get a hosted upload link</td><td><code>project</code>, <code>contributor</code>, <code>return_url?</code>, <code>expires_in?</code></td></tr>
+      <tr><td><span class="method get">GET</span><code>/v1/upload_sessions/{id}</code></td><td>Session status and files so far</td><td></td></tr>
+      <tr><td><span class="method get">GET</span><code>/v1/projects/{id}/files</code></td><td>List uploaded files</td><td>section, name, size, type</td></tr>
+      <tr><td><span class="method get">GET</span><code>/v1/projects/{id}/deliveries</code></td><td>List a project's deliveries</td><td></td></tr>
+      <tr><td><span class="method get">GET</span><code>/v1/deliveries/{id}</code></td><td>Status, price, timestamps, counts</td><td></td></tr>
+      <tr><td><span class="method">POST</span><code>/v1/deliveries/{id}/publish</code></td><td>Publish (when auto-publish is off)</td><td><code>notify?</code></td></tr>
+      <tr><td><span class="method">POST</span><code>/v1/deliveries/quote</code></td><td>Price a job before it runs</td><td><code>expected_bytes</code></td></tr>
+    </table>
+
+    <div class="grid3 mt16" style="gap:12px">
+      <div><div class="codecap">Project</div>
+<pre>{ <span class="p">"id"</span>: <span class="s">"proj_7f3c…"</span>,
+  <span class="p">"object"</span>: <span class="s">"project"</span>,
+  <span class="p">"external_id"</span>: <span class="s">"{{partner.example.job}}"</span>,
+  <span class="p">"title"</span>: <span class="s">"{{partner.example.address}} – …"</span>,
+  <span class="p">"status"</span>: <span class="s">"scheduled"</span>,
+  <span class="p">"delivery_mode"</span>: <span class="s">"delivery_only"</span>,
+  <span class="p">"metadata"</span>: {},
+  <span class="p">"livemode"</span>: <span class="k">false</span>,
+  <span class="p">"created"</span>: <span class="s">"2026-12-15T15:02:11Z"</span> }</pre></div>
+      <div><div class="codecap">Recipient</div>
+<pre>{ <span class="p">"id"</span>: <span class="s">"rcp_51b0…"</span>,
+  <span class="p">"object"</span>: <span class="s">"recipient"</span>,
+  <span class="p">"project"</span>: <span class="s">"proj_7f3c…"</span>,
+  <span class="p">"email"</span>: <span class="s">"{{partner.example.clientEmail}}"</span>,
+  <span class="p">"name"</span>: <span class="s">"{{partner.example.client}}"</span>,
+  <span class="p">"external_id"</span>: <span class="s">"{{partner.example.clientId}}"</span> }</pre>
+        <div class="codecap mt8">Contributor</div>
+<pre>{ <span class="p">"id"</span>: <span class="s">"ctb_2c9d…"</span>,
+  <span class="p">"object"</span>: <span class="s">"contributor"</span>,
+  <span class="p">"name"</span>: <span class="s">"{{partner.example.pilot}}"</span>,
+  <span class="p">"external_id"</span>: <span class="s">"{{partner.example.pilotId}}"</span> }</pre></div>
+      <div><div class="codecap">Project status values</div>
+        <table class="t">
+          <tr><td><code>scheduled</code></td><td>Created, nothing submitted yet</td></tr>
+          <tr><td><code>ready_for_review</code></td><td>A delivery was submitted</td></tr>
+          <tr><td><code>delivered</code></td><td>Published to recipients</td></tr>
+        </table>
+        <p class="small muted mt8">Recipients are matched by email, so the same {{partner.recipient}} across many jobs is one person with many private links.</p>
+      </div>
+    </div>
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 04 UPLOAD SESSIONS -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">04 · Upload sessions &amp; embedding</div>
+    <h2 class="mt4">Open ShootPortal's upload screen inside your app</h2>
+    <p class="lead mt8" style="max-width:6.6in">An upload session is a one-job, one-{{partner.contributor}}, short-lived link. Create it on your server, hand the <code>url</code> to your app, and open it. No key ever reaches the phone.</p>
+
+    <div class="row mt16" style="gap:14px; align-items:flex-start">
+      <div style="flex:1.1">
+        <div class="codecap">Create a session (server)</div>
+<pre>POST /v1/upload_sessions
+Idempotency-Key: job-10482-ups-1
+
+{ <span class="p">"project"</span>: <span class="s">"proj_7f3c…"</span>,
+  <span class="p">"contributor"</span>: <span class="s">"ctb_2c9d…"</span>,
+  <span class="p">"return_url"</span>: <span class="s">"{{partner.slug}}://jobs/{{partner.example.job}}/delivered"</span>,
+  <span class="p">"expires_in"</span>: <span class="n">86400</span> }
+
+<span class="c"># 201 Created</span>
+{ <span class="p">"id"</span>: <span class="s">"ups_2b8e…"</span>,
+  <span class="p">"url"</span>: <span class="s">"https://{{partner.portalHost}}/u/ups_2b8e…?t=…"</span>,
+  <span class="p">"status"</span>: <span class="s">"open"</span>,
+  <span class="p">"expires_at"</span>: <span class="s">"2026-12-16T15:05:00Z"</span> }</pre>
+      </div>
+      <div style="flex:1">
+        <div class="section-title"><span class="num">A</span><h3>Session lifecycle</h3><span class="rule"></span></div>
+        <div class="row" style="gap:6px; align-items:center; flex-wrap:wrap">
+          <span class="pill">open</span>{{icon "arrow-right" 10}}<span class="pill" style="background:#DCFCE7; color:#166534">submitted</span><span class="small muted">or</span><span class="pill" style="background:#F1F5F9; color:#475569">expired</span>
+        </div>
+        <ul class="ticks mt8">
+          <li>Valid for up to <b>24 hours</b>; create a fresh one any time.</li>
+          <li>Uploads go directly to storage in chunks and <b>resume</b> after drops, reloads or app restarts.</li>
+          <li>On submit, the {{partner.contributor}} confirms they're finished; you receive <code>delivery.submitted</code>.</li>
+          <li>Then the screen redirects to <code>return_url</code>; on the web it also posts a message.</li>
+          <li>Unused and expired: you get <code>upload_session.expired</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title mt16"><span class="num">B</span><h3>Open it in your app</h3><span class="rule"></span></div>
+    <div class="grid2" style="gap:12px">
+      <div><div class="codecap">iOS (Swift): in-app Safari view</div>
+<pre><span class="k">import</span> SafariServices
+<span class="k">let</span> url = URL(string: session.url)!
+<span class="k">let</span> vc = SFSafariViewController(url: url)
+present(vc, animated: <span class="k">true</span>)
+<span class="c">// return_url ({{partner.slug}}://…) reopens your app when done</span></pre></div>
+      <div><div class="codecap">Android (Kotlin): Chrome Custom Tabs</div>
+<pre>CustomTabsIntent.Builder().build()
+  .launchUrl(context, Uri.parse(session.url))
+<span class="c">// handle {{partner.slug}}://jobs/… with an intent filter</span></pre></div>
+      <div><div class="codecap">React Native / Flutter</div>
+<pre><span class="c">// React Native: react-native-inappbrowser-reborn</span>
+InAppBrowser.open(session.url)
+<span class="c">// Flutter: url_launcher, LaunchMode.inAppBrowserView</span></pre></div>
+      <div><div class="codecap">Web: new window + completion message</div>
+<pre><span class="k">const</span> origin = <span class="s">"https://{{partner.portalHost}}"</span>;
+window.open(session.url, <span class="s">"upload"</span>);
+addEventListener(<span class="s">"message"</span>, (e) =&gt; {
+  <span class="k">if</span> (e.origin !== origin) <span class="k">return</span>;
+  <span class="k">if</span> (e.data.type === <span class="s">"shootportal.upload.submitted"</span>)
+    refreshJob();
+});</pre></div>
+    </div>
+    <div class="notice mt12" style="background: var(--wash); border-color: var(--wash2); color: var(--indigo-d)">{{icon "lightbulb" 11}}<span><b style="color: var(--indigo-d)">Use an in-app browser, not a raw web view,</b> for the most reliable file pickers and uploads. Phones pause uploads when the app is backgrounded or the screen locks; they resume automatically on return, and the screen reminds {{partner.contributors}} to keep it open. Always treat the <b>webhook</b> as the source of truth, not the redirect.</span></div>
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 05 DELIVERIES -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">05 · Deliveries, access links &amp; quotes</div>
+    <h2 class="mt4">What happens after the {{partner.contributor}} taps Submit</h2>
+
+    <div class="flow mt16">
+      <div class="node sp"><span class="badge">1</span><div class="glyph">{{icon "send" 14}}</div><h4>submitted</h4><p>Size, tier &amp; price fixed</p></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node sp"><span class="badge">2</span><div class="glyph">{{icon "globe" 14}}</div><h4>published</h4><p>Auto, or via <code>/publish</code></p></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node sp"><span class="badge">3</span><div class="glyph">{{icon "eye" 14}}</div><h4>viewed / downloaded</h4><p>Per recipient, first time</p></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node"><span class="badge">4</span><div class="glyph" style="background:#F1F5F9; color:#64748B">{{icon "archive" 14}}</div><h4>expired</h4><p>After {{pricing.retentionDays}} days unless extended</p></div>
+    </div>
+
+    <div class="row mt16" style="gap:14px; align-items:flex-start">
+      <div style="flex:1">
+        <div class="codecap">Delivery object</div>
+<pre>{ <span class="p">"id"</span>: <span class="s">"dlv_8a2f…"</span>,
+  <span class="p">"object"</span>: <span class="s">"delivery"</span>,
+  <span class="p">"project"</span>: <span class="s">"proj_7f3c…"</span>,
+  <span class="p">"project_external_id"</span>: <span class="s">"{{partner.example.job}}"</span>,
+  <span class="p">"contributor_external_id"</span>: <span class="s">"{{partner.example.pilotId}}"</span>,
+  <span class="p">"status"</span>: <span class="s">"published"</span>,
+  <span class="p">"file_count"</span>: <span class="n">41</span>,
+  <span class="p">"total_bytes"</span>: <span class="n">3400000000</span>,
+  <span class="p">"tier"</span>: <span class="s">"standard"</span>,
+  <span class="p">"price"</span>: { <span class="p">"amount"</span>: <span class="n">300</span>, <span class="p">"currency"</span>: <span class="s">"usd"</span>,
+             <span class="p">"credit_applied"</span>: <span class="n">0</span>, <span class="p">"amount_due"</span>: <span class="n">300</span> },
+  <span class="p">"submitted_at"</span>: <span class="s">"2026-12-15T16:40:02Z"</span>,
+  <span class="p">"published_at"</span>: <span class="s">"2026-12-15T16:40:03Z"</span>,
+  <span class="p">"first_viewed_at"</span>: <span class="s">"2026-12-15T17:12:40Z"</span>,
+  <span class="p">"first_downloaded_at"</span>: <span class="k">null</span>,
+  <span class="p">"view_count"</span>: <span class="n">3</span>, <span class="p">"download_count"</span>: <span class="n">0</span>,
+  <span class="p">"expires_at"</span>: <span class="s">"2027-03-15T16:40:02Z"</span> }</pre>
+        <p class="small muted mt8">Prices are in cents. The price is fixed when the delivery is submitted; files added within 7 days join the same delivery and can move it up a tier, but it's never charged twice.</p>
+      </div>
+      <div style="flex:1">
+        <div class="codecap">Private portal link for a recipient</div>
+<pre>POST /v1/projects/proj_7f3c…/recipients/rcp_51b0…
+     /access_links
+
+<span class="c"># 201 Created</span>
+{ <span class="p">"object"</span>: <span class="s">"access_link"</span>,
+  <span class="p">"url"</span>: <span class="s">"https://{{partner.portalHost}}/a/lnk_…?t=…"</span>,
+  <span class="p">"expires_at"</span>: <span class="s">"2027-03-15T16:40:02Z"</span> }</pre>
+        <ul class="ticks mt8">
+          <li>View-only and limited to that project: no login, no code.</li>
+          <li>Valid up to {{pricing.retentionDays}} days, never past the files' expiry. Renew by minting again.</li>
+          <li>Removing the recipient revokes all their links.</li>
+        </ul>
+
+        <div class="codecap mt12">Quote a job before it runs</div>
+<pre>POST /v1/deliveries/quote
+{ <span class="p">"expected_bytes"</span>: <span class="n">18000000000</span> }
+
+{ <span class="p">"tier"</span>: <span class="s">"large"</span>,
+  <span class="p">"price"</span>: { <span class="p">"amount"</span>: <span class="n">1200</span>, <span class="p">"currency"</span>: <span class="s">"usd"</span> } }</pre>
+        <div class="card tint mt8"><h4>{{icon "mail" 11}} Who emails the {{partner.recipient}}?</h4><p class="mt4">An account setting: ShootPortal sends a branded email with the link, {{partner.name}} sends the link itself, or both. Publishing on submit can also be switched to manual (<code>POST /v1/deliveries/{id}/publish</code>).</p></div>
+      </div>
+    </div>
+    <div class="section-title mt20"><span class="num">{{icon "list-ordered" 10}}</span><h3>Recap: one job, call by call</h3><span class="rule"></span></div>
+    <table class="t">
+      <tr><th style="width:6%">#</th><th style="width:44%">Your backend sends</th><th>You get back</th></tr>
+      <tr><td><b>1</b></td><td><span class="method">POST</span><code>/v1/projects</code></td><td><code>proj_…</code>; or look it up later by <code>external_id</code></td></tr>
+      <tr><td><b>2</b></td><td><span class="method">POST</span><code>/v1/projects/{id}/recipients</code> &amp; <code>/contributors</code></td><td><code>rcp_…</code>, <code>ctb_…</code></td></tr>
+      <tr><td><b>3</b></td><td><span class="method">POST</span><code>/v1/upload_sessions</code> when the {{partner.contributor}} taps “{{partner.button}}”</td><td>A one-time <code>url</code>: open it in your app</td></tr>
+      <tr><td><b>4</b></td><td><i>Nothing; just listen</i></td><td>Webhooks: <code>delivery.submitted</code> → <code>published</code> → <code>viewed</code> → <code>downloaded</code></td></tr>
+    </table>
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 06 WEBHOOKS -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">06 · Webhooks</div>
+    <h2 class="mt4">Signed status updates, retried until you've got them</h2>
+
+    <div class="row mt16" style="gap:14px; align-items:flex-start">
+      <table class="t" style="flex:1.1">
+        <tr><th>Event</th><th>When</th></tr>
+        <tr><td><code>delivery.submitted</code></td><td>{{partner.Contributor}} confirms they're done (includes size &amp; price)</td></tr>
+        <tr><td><code>delivery.published</code></td><td>Portal is live for recipients</td></tr>
+        <tr><td><code>delivery.viewed</code></td><td>First view, per recipient</td></tr>
+        <tr><td><code>delivery.downloaded</code></td><td>First download, per recipient</td></tr>
+        <tr><td><code>upload_session.expired</code></td><td>Link expired with nothing submitted</td></tr>
+      </table>
+      <div style="flex:1">
+        <div class="codecap">Every event looks like this</div>
+<pre>{ <span class="p">"id"</span>: <span class="s">"evt_5c1d…"</span>,
+  <span class="p">"type"</span>: <span class="s">"delivery.submitted"</span>,
+  <span class="p">"created"</span>: <span class="s">"2026-12-15T16:40:02Z"</span>,
+  <span class="p">"livemode"</span>: <span class="k">false</span>,
+  <span class="p">"api_version"</span>: <span class="s">"v1"</span>,
+  <span class="p">"data"</span>: { <span class="p">"object"</span>: { <span class="c">/* the delivery */</span> } } }</pre>
+      </div>
+    </div>
+
+    <div class="section-title mt16"><span class="num">A</span><h3>Verify the signature (always)</h3><span class="rule"></span></div>
+<pre style="margin-bottom:6px">ShootPortal-Signature: t=1765816802,v1=5f8e0c3a…   <span class="c"># v1 = HMAC-SHA256(secret, t + "." + raw_body), hex</span></pre>
+    <div class="stack">
+      <div><div class="codecap">Node.js</div>
+<pre><span class="k">import</span> crypto <span class="k">from</span> <span class="s">"node:crypto"</span>;
+<span class="k">export function</span> verify(rawBody, header, secret) {
+  <span class="k">const</span> parts = Object.fromEntries(
+    header.split(<span class="s">","</span>).map((p) =&gt; p.split(<span class="s">"="</span>)));
+  <span class="k">if</span> (Math.abs(Date.now() / 1000 - Number(parts.t)) &gt; <span class="n">300</span>)
+    <span class="k">return false</span>; <span class="c">// older than 5 minutes</span>
+  <span class="k">const</span> expected = crypto.createHmac(<span class="s">"sha256"</span>, secret)
+    .update(parts.t + <span class="s">"."</span> + rawBody).digest(<span class="s">"hex"</span>);
+  <span class="k">return</span> expected.length === parts.v1.length &amp;&amp;
+    crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(parts.v1));
+}</pre></div>
+      <div><div class="codecap">Python</div>
+<pre><span class="k">import</span> hmac, hashlib, time
+
+<span class="k">def</span> verify(raw_body: bytes, header: str, secret: str) -&gt; bool:
+    parts = dict(p.split(<span class="s">"="</span>, 1) <span class="k">for</span> p <span class="k">in</span> header.split(<span class="s">","</span>))
+    <span class="k">if</span> abs(time.time() - int(parts[<span class="s">"t"</span>])) &gt; <span class="n">300</span>:
+        <span class="k">return False</span>  <span class="c"># older than 5 minutes</span>
+    signed = parts[<span class="s">"t"</span>].encode() + <span class="s">b"."</span> + raw_body
+    expected = hmac.new(secret.encode(), signed,
+                        hashlib.sha256).hexdigest()
+    <span class="k">return</span> hmac.compare_digest(expected, parts[<span class="s">"v1"</span>])</pre></div>
+    </div>
+
+    <div class="grid3 mt16" style="gap:12px">
+      <div class="card"><span class="icon-chip">{{icon "timer" 13}}</span><h4 class="mt8">Respond fast</h4><p>Return any <code>2xx</code> within 10 seconds, then do slow work in the background.</p></div>
+      <div class="card"><span class="icon-chip">{{icon "repeat" 13}}</span><h4 class="mt8">Retries for 3 days</h4><p>1 min, 5 min, 30 min, 2 h, 6 h, then every 12 h. After 3 days of failures the endpoint is paused and we email you.</p></div>
+      <div class="card"><span class="icon-chip">{{icon "copy-check" 13}}</span><h4 class="mt8">Ignore duplicates</h4><p>Delivery is at-least-once. Store each <code>evt_</code> ID and skip ones you've already handled.</p></div>
+    </div>
+    <p class="small muted mt12">Use the <b>raw</b> request body for verification (before JSON parsing). Your signing secret (<code>whsec_…</code>) is shared once when your endpoint is registered; ask us to send a test event at any time.</p>
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 07 TEST / GO LIVE -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">07 · Test vs. live &amp; go-live</div>
+    <h2 class="mt4">Build in the sandbox, launch with one key swap</h2>
+
+    <div class="grid2 mt16" style="gap:14px">
+      <div class="card tint">
+        <div class="pill amber">{{icon "flask-conical" 9}} Test mode · sp_test_</div>
+        <ul class="ticks mt8">
+          <li>A complete, isolated copy of your account: projects, uploads, portal and webhooks all work</li>
+          <li>Nothing is ever billed</li>
+          <li>Emails go only to addresses you ask us to allowlist; everything else is held in a log we can share</li>
+          <li>Try the whole flow with fake data, e.g. job {{partner.example.job}}, {{partner.example.pilot}}, {{partner.example.client}}</li>
+        </ul>
+      </div>
+      <div class="card indigo">
+        <div class="pill dark">{{icon "rocket" 9}} Live mode · sp_live_</div>
+        <ul class="ticks mt8">
+          <li>Real {{partner.contributors}}, real {{partner.recipients}}, real emails</li>
+          <li>Same endpoints, same payloads, same code</li>
+          <li>Test and live data never mix; IDs from one mode don't exist in the other</li>
+          <li>Separate webhook endpoint and signing secret per mode</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="row mt20" style="gap:14px; align-items:flex-start">
+      <div style="flex:1.2">
+        <div class="section-title"><span class="num">A</span><h3>Go-live checklist</h3><span class="rule"></span></div>
+        <table class="t">
+          <tr><td style="width:22px">☐</td><td><b>Keys</b>: secret keys only on your servers, in a secrets manager</td></tr>
+          <tr><td>☐</td><td><b>Idempotency</b>: an <code>Idempotency-Key</code> on every POST, built from your IDs</td></tr>
+          <tr><td>☐</td><td><b>External IDs</b>: your job, {{partner.recipient}} and {{partner.contributor}} IDs on every create</td></tr>
+          <tr><td>☐</td><td><b>Upload screen</b>: opens in an in-app browser; <code>return_url</code> handled</td></tr>
+          <tr><td>☐</td><td><b>Real-phone test</b>: a multi-GB upload interrupted and resumed</td></tr>
+          <tr><td>☐</td><td><b>Webhooks</b>: signatures verified on the raw body; duplicates ignored</td></tr>
+          <tr><td>☐</td><td><b>All five events handled</b>, including <code>upload_session.expired</code></td></tr>
+          <tr><td>☐</td><td><b>Errors</b>: <code>request_id</code> logged; 429 and 5xx retried with backoff</td></tr>
+          <tr><td>☐</td><td><b>Switch</b>: live key and live webhook secret deployed; test data left behind</td></tr>
+        </table>
+      </div>
+      <div style="flex:1">
+        <div class="section-title"><span class="num">B</span><h3>Versioning</h3><span class="rule"></span></div>
+        <p style="font-size:7.6pt">The version is in the URL (<code>/v1</code>). Within v1 we only make <b>additive</b> changes: new endpoints, new optional fields, new event types. Write your code to ignore fields and events it doesn't know. Breaking changes would ship as <code>/v2</code>, with advance notice and an overlap period.</p>
+
+        <div class="section-title mt16"><span class="num">C</span><h3>Support</h3><span class="rule"></span></div>
+        <div class="card indigo">
+          <div class="contact"><div class="av"><img src="{{asset.template}}/brand/shootportal-icon.png" alt=""></div><div><div class="nm">{{contact.name}}</div><div class="small muted">{{contact.title}}</div></div></div>
+          <div class="small mt8" style="color:var(--slate); line-height:1.7">{{icon "mail" 9}} {{contact.email}}<br>{{icon "phone" 9}} {{contact.phone}}</div>
+          <p class="small mt8">Include the <b>Request-Id</b> (or the <code>evt_</code> ID for webhooks) and we can see exactly what happened.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt20" style="border-radius:14px; padding:14px 20px; color:#fff; background: linear-gradient(120deg, #0B1120, #1E1B4B 50%, var(--indigo));">
+      <div class="row" style="align-items:center; gap:16px">
+        <span class="icon-chip" style="background: rgba(255,255,255,0.12); color:#fff; width:34px; height:34px">{{icon "package-open" 16}}</span>
+        <div style="flex:1"><div style="font-weight:700; font-size:9.5pt">Coming with the sandbox</div><div style="font-size:7.4pt; color:#C7D2FE">OpenAPI 3.1 file · Postman collection · test keys · a demo partner that runs the full flow end to end</div></div>
+      </div>
+    </div>
+  </div>
+  {{> foot}}
+</section>
+
+</body>
+</html>

@@ -45,10 +45,10 @@ t("website domain: public pages stay, portal paths move, private APIs blocked", 
   for (const p of ["/login", "/dashboard", "/dashboard/projects/x", "/admin", "/admin/settings", "/auth/confirm", "/photo/abc", "/v/abc", "/l/123-main", "/request/thank-you", "/billing", "/b/other-studio"]) {
     assert.equal(classifyWebsiteDomainPath(p).kind, "portal", p);
   }
-  for (const p of ["/api/request", "/api/catalog/services", "/api/public/portfolio/x/img/y"]) {
+  for (const p of ["/api/request", "/api/catalog/services", "/api/public/portfolio/x/img/y", "/api/public/website/logo", "/api/public/website/hero/x"]) {
     assert.equal(classifyWebsiteDomainPath(p).kind, "page", p);
   }
-  for (const p of ["/api/admin/settings", "/api/projects", "/api/public/listing/x/img/y", "/api/auth/session-continue", "/api/request/logged-in"]) {
+  for (const p of ["/api/admin/website/media/x", "/api/admin/settings", "/api/projects", "/api/public/listing/x/img/y", "/api/auth/session-continue", "/api/request/logged-in"]) {
     assert.equal(classifyWebsiteDomainPath(p).kind, "api_blocked", p);
   }
   assert.equal(classifyWebsiteDomainPath("/about-us").kind, "unknown");
@@ -139,6 +139,32 @@ t("view: drone services drive niche copy; pricing respects hide_pricing", () => 
   assert.equal(v.services[1]!.priceLabel, null);
   assert.deepEqual(v.business.addressLines, [], "address hidden by default");
   assert.equal(v.business.phoneHref, "tel:2515550100");
+});
+
+t("services: up to 9 featured cards (3×3)", () => {
+  const svc = Array.from({ length: 12 }, (_, i) => ({ id: `${String(i).padStart(8, "0")}-1111-4111-8111-111111111111`, name: `S${i}`, description: "", startingLabel: "", priceCents: null, hidePricing: false, includes: [] }));
+  const v = buildSiteView({
+    website: mergeWebsiteSettings(null),
+    business: { name: "X", tagline: "", logoUrl: "https://x.example/logo.png", primaryColor: "#111", accentColor: "#4F46E5", email: "", phone: "", websiteUrl: "", addressLine1: "", addressLine2: "", city: "", state: "", postalCode: "", legalName: "", termsUrl: "", privacyUrl: "" },
+    services: svc,
+    portfolio: [],
+    links: { clientLogin: "/login", request: "/request" },
+  });
+  assert.equal(v.services.length, 9);
+  assert.equal(v.allServices.length, 12);
+  assert.ok(v.business.logoUrl.startsWith("/api/public/website/logo?u="));
+});
+
+t("hero media picked from ShootPortal media", () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  const base = { business: { name: "X", tagline: "", logoUrl: "", primaryColor: "#111", accentColor: "#4F46E5", email: "", phone: "", websiteUrl: "", addressLine1: "", addressLine2: "", city: "", state: "", postalCode: "", legalName: "", termsUrl: "", privacyUrl: "" }, services: [], portfolio: [], links: { clientLogin: "/login", request: "/request" } };
+  const img = buildSiteView({ ...base, website: mergeWebsiteSettings({ heroSource: "image", heroImageMedia: { id, source: "upload", youtubeId: "" } }) });
+  assert.deepEqual(img.hero.media, { kind: "image", url: `/api/public/website/hero/${id}?s=large`, alt: "X photography" });
+  const vid = buildSiteView({ ...base, website: mergeWebsiteSettings({ heroSource: "video", heroVideoMedia: { id, source: "upload", youtubeId: "" } }) });
+  assert.equal(vid.hero.media.kind, "file-video");
+  const yt = buildSiteView({ ...base, website: mergeWebsiteSettings({ heroSource: "video", heroVideoMedia: { id, source: "youtube", youtubeId: "aqz-KE-bpKQ" } }) });
+  assert.equal(yt.hero.media.kind, "video");
+  assert.equal(mergeWebsiteSettings({ heroImageMedia: { id: "nope" } as never }).heroImageMedia, null);
 });
 
 t("Business Website domain input allows www; portal input still refuses it", () => {

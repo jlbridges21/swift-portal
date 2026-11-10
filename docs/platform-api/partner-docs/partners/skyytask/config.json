@@ -1,0 +1,197 @@
+{
+  "partner": {
+    "name": "SkyyTask",
+    "slug": "skyytask",
+    "website": "skyytask.com",
+    "logo": "logo.png",
+    "colors": {
+      "g1": "#22A6E0",
+      "g2": "#0170BB",
+      "g3": "#2E3192",
+      "primary": "#0170BB"
+    },
+    "app": "the SkyyTask app",
+    "button": "Transfer deliverables",
+    "contributor": "pilot",
+    "Contributor": "Pilot",
+    "contributors": "pilots",
+    "Contributors": "Pilots",
+    "recipient": "client",
+    "recipients": "clients",
+    "Recipients": "Clients",
+    "today": [
+      "Complete Job",
+      "OTP code",
+      "Google Drive link"
+    ],
+    "todayPains": [
+      "Clients juggle a code and leave the app for Drive",
+      "Unbranded folders; no view or download tracking"
+    ],
+    "portalHost": "skyytask.shootportal.app",
+    "customDomain": "deliver.skyytask.com",
+    "example": {
+      "job": "JOB-10482",
+      "address": "123 Demo Street",
+      "city": "Sampletown, FL",
+      "pilot": "Sam Pilot",
+      "pilotId": "P-4410",
+      "client": "Pat Agent",
+      "clientEmail": "pat.agent@example.com",
+      "clientId": "C-889",
+      "expires": "Mar 15, 2027"
+    }
+  },
+  "edition": {
+    "label": "Proposal",
+    "version": "v0.1",
+    "date": "November 2026",
+    "stamp": "Proposed design — in development",
+    "notice": "Proposed integration, in development and not yet available. Screens are illustrated mockups with fake demo data.",
+    "devNotice": "Draft specification v0.1. Endpoints, fields and events may change before the sandbox opens. Not yet available."
+  },
+  "pricing": {
+    "headline": "Initial pricing — subject to change",
+    "intro": "A flat price per delivery, set by its total size. Every delivery includes the branded upload screen, the branded client portal, unlimited recipients and downloads, and 90 days of storage.",
+    "tiers": [
+      {
+        "name": "Standard",
+        "hl": true,
+        "range": "Up to 5 GB",
+        "price": "$3",
+        "example": "Typical residential real estate shoot"
+      },
+      {
+        "name": "Large",
+        "range": "5 – 25 GB",
+        "price": "$12",
+        "example": "Commercial property, thermal inspection"
+      },
+      {
+        "name": "XL",
+        "range": "25 – 100 GB",
+        "price": "$40",
+        "example": "Mapping / orthomosaic site"
+      },
+      {
+        "name": "Over 100 GB",
+        "range": "Above 100 GB",
+        "price": "$40 + $0.40/GB",
+        "example": "Large enterprise mapping, point clouds",
+        "long": true
+      }
+    ],
+    "minimum": "$199",
+    "retentionDays": 90,
+    "extended": "$0.05 per GB per month",
+    "launchCreditGb": 50
+  },
+  "timeline": [
+    {
+      "when": "Nov 11, 2026",
+      "what": "Walkthrough & open questions",
+      "icon": "messages-square"
+    },
+    {
+      "when": "Mid-December",
+      "what": "Sandbox & test keys for your developers",
+      "icon": "flask-conical"
+    },
+    {
+      "when": "January 2027",
+      "what": "Uploads, client portal & webhooks",
+      "icon": "plug-zap"
+    },
+    {
+      "when": "February 2027",
+      "what": "Go-live review & live keys",
+      "icon": "rocket"
+    }
+  ],
+  "contact": {
+    "name": "Jackson Bridges",
+    "title": "Founder, ShootPortal",
+    "email": "jackson@shootportal.app",
+    "phone": "(662) 687-1259",
+    "web": "shootportal.app"
+  },
+  "footer": "Prepared for SkyyTask · Confidential",
+  "documents": [
+    {
+      "id": "onepager",
+      "template": "onepager",
+      "title": "First Draft of the Plan",
+      "output": "SkyyTask_x_ShootPortal_API_OnePager.pdf"
+    },
+    {
+      "id": "integration-guide",
+      "template": "integration-guide",
+      "title": "Deliverables Integration Guide",
+      "output": "SkyyTask_x_ShootPortal_Integration_Guide.pdf"
+    },
+    {
+      "id": "developer-guide",
+      "template": "developer-guide",
+      "title": "Developer Guide",
+      "output": "SkyyTask_x_ShootPortal_Developer_Guide.pdf"
+    },
+    {
+      "id": "pricing-sheet",
+      "template": "pricing-sheet",
+      "title": "Pricing Sheet",
+      "output": "SkyyTask_x_ShootPortal_Pricing_Sheet.pdf"
+    }
+  ],
+  "brief": {
+    "to": "Geno",
+    "subtitle": "A working document for our November 11 call",
+    "letter": [
+      "I've been thinking a lot about what we talked about on our call, and I wanted to get all of it down on paper before we meet again.",
+      "This is my first draft of what a SkyyTask × ShootPortal partnership could look like: the idea, how the two platforms would work together, what your pilots and clients would see, roughly what it would cost, and the steps to get there.",
+      "Nothing here is set in stone. Please mark it up. Tell me what you like, what you don't, and what I'm missing, so we can spend our time on the 11th on what matters most to you."
+    ],
+    "oneLiner": "SkyyTask keeps the job, the chat and the client. ShootPortal quietly takes over the files: a branded upload for the pilot, a beautiful delivery page for the client, and an automatic update back to SkyyTask at every step.",
+    "questions": [
+      "When should a job appear in ShootPortal: when it's accepted, or when the pilot taps Complete Job?",
+      "Should clients get a branded email from us, a link in your SkyyTask chat, or both?",
+      "Do you still want a one-time code, or is a private link enough?",
+      "What should release a pilot's pay: submitted, viewed, or downloaded?",
+      "Roughly how many jobs a month, and how big are typical deliveries?",
+      "Does the pricing feel fair and easy to plan around?",
+      "Which enterprise file types matter most (thermal, mapping, point clouds, reports)?",
+      "What's missing, or what would you do differently?"
+    ],
+    "roadmap": [
+      {
+        "when": "This week",
+        "what": "You read this and send me your thoughts",
+        "icon": "message-square-text"
+      },
+      {
+        "when": "Nov 11",
+        "what": "We walk through it together and settle the open questions",
+        "icon": "messages-square"
+      },
+      {
+        "when": "Late Nov",
+        "what": "We agree on the plan and pricing in a short written summary",
+        "icon": "file-signature"
+      },
+      {
+        "when": "Mid-Dec",
+        "what": "Your developers get a test sandbox and the Developer Guide",
+        "icon": "flask-conical"
+      },
+      {
+        "when": "Jan 2027",
+        "what": "We build and test the full flow together",
+        "icon": "plug-zap"
+      },
+      {
+        "when": "Feb 2027",
+        "what": "Go live with real pilots and clients",
+        "icon": "rocket"
+      }
+    ]
+  }
+}

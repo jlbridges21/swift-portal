@@ -79,6 +79,10 @@ type OnboardingPayload = {
     businessName: string;
     primaryContactEmail: string;
     phoneNumber: string;
+    addressLine1: string;
+    city: string;
+    state: string;
+    postalCode: string;
     logoUrl: string;
     brandPrimaryColor: string;
     brandAccentColor: string;
@@ -131,7 +135,13 @@ export function OnboardingWizard({
     businessName: initial.business.businessName,
     primaryContactEmail: initial.business.primaryContactEmail,
     phoneNumber: initial.business.phoneNumber,
+    addressLine1: initial.business.addressLine1 ?? "",
+    city: initial.business.city ?? "",
+    state: initial.business.state ?? "",
+    postalCode: initial.business.postalCode ?? "",
   });
+  /** Set when the Services step sends the user back here to add an address for travel fees. */
+  const [addressFocus, setAddressFocus] = useState(false);
   const [branding, setBranding] = useState({
     logoUrl: initial.business.logoUrl,
     brandPrimaryColor: initial.business.brandPrimaryColor,
@@ -179,6 +189,10 @@ export function OnboardingWizard({
       businessName: next.business.businessName,
       primaryContactEmail: next.business.primaryContactEmail,
       phoneNumber: next.business.phoneNumber,
+      addressLine1: next.business.addressLine1 ?? "",
+      city: next.business.city ?? "",
+      state: next.business.state ?? "",
+      postalCode: next.business.postalCode ?? "",
     });
     setBranding({
       logoUrl: next.business.logoUrl,
@@ -235,9 +249,15 @@ export function OnboardingWizard({
           primaryContactEmail: identity.primaryContactEmail.trim(),
           phoneNumber: identity.phoneNumber.trim(),
           supportEmail: identity.primaryContactEmail.trim(),
+          addressLine1: identity.addressLine1.trim(),
+          city: identity.city.trim(),
+          state: identity.state.trim(),
+          postalCode: identity.postalCode.trim(),
         },
       });
-      await runAction({ action: "complete", step: "identity" });
+      const returnToServices = addressFocus && identity.postalCode.trim();
+      setAddressFocus(false);
+      await runAction(returnToServices ? { action: "goto", step: "services" } : { action: "complete", step: "identity" });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save identity");
       setBusy(false);
@@ -442,13 +462,52 @@ export function OnboardingWizard({
                   onChange={(e) => setIdentity((p) => ({ ...p, phoneNumber: e.target.value }))}
                 />
               </div>
+              <fieldset
+                id="ob-address"
+                className={cn("space-y-3 rounded-lg border p-3 transition", addressFocus ? "border-accent ring-2 ring-accent/20" : "border-border")}
+              >
+                <legend className="px-1 text-sm font-medium text-heading">Business address (optional)</legend>
+                <p className="text-xs text-muted">
+                  {addressFocus
+                    ? "Add your ZIP / postal code so travel fees can be measured from your location, then continue back to Services."
+                    : "Used to measure travel fees from your location. You can add it later in Settings → Contact Information."}
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="ob-address1">Street address</Label>
+                  <Input
+                    id="ob-address1"
+                    autoComplete="street-address"
+                    value={identity.addressLine1}
+                    onChange={(e) => setIdentity((p) => ({ ...p, addressLine1: e.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,1fr)]">
+                  <div className="space-y-2">
+                    <Label htmlFor="ob-city">City</Label>
+                    <Input id="ob-city" autoComplete="address-level2" value={identity.city} onChange={(e) => setIdentity((p) => ({ ...p, city: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ob-state">State</Label>
+                    <Input id="ob-state" autoComplete="address-level1" value={identity.state} onChange={(e) => setIdentity((p) => ({ ...p, state: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ob-postal">ZIP / postal code</Label>
+                    <Input
+                      id="ob-postal"
+                      autoComplete="postal-code"
+                      value={identity.postalCode}
+                      onChange={(e) => setIdentity((p) => ({ ...p, postalCode: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </fieldset>
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" disabled={busy} onClick={() => void runAction({ action: "goto", step: "welcome" })}>
                   <ArrowLeft className="h-4 w-4" /> Back
                 </Button>
                 <Button type="button" variant="accent" disabled={busy} onClick={() => void completeIdentity()}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Continue
+                  {addressFocus && identity.postalCode.trim() ? "Save and return to Services" : "Continue"}
                 </Button>
               </div>
             </div>
@@ -523,7 +582,15 @@ export function OnboardingWizard({
                 </p>
               )}
               <ServicesSettingsCard />
-              <TravelFeesOnboarding />
+              <TravelFeesOnboarding
+                onAddAddress={() => {
+                  setAddressFocus(true);
+                  void runAction({ action: "goto", step: "identity" }).then(() => {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                    window.setTimeout(() => document.getElementById("ob-address1")?.focus({ preventScroll: true }), 350);
+                  });
+                }}
+              />
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" disabled={busy} onClick={() => void runAction({ action: "goto", step: "branding" })}>
                   <ArrowLeft className="h-4 w-4" /> Back

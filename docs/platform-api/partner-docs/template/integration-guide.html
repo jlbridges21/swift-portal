@@ -1,0 +1,353 @@
+{{> head}}
+<body>
+
+<!-- ============================================================ COVER -->
+<section class="page" style="padding:0">
+  <div class="cover-band">
+    <svg class="mesh" viewBox="0 0 816 437" preserveAspectRatio="none"><g fill="none" stroke="#fff" stroke-width="1">
+      <path d="M0 340 C200 260 420 400 816 250"/><path d="M0 300 C220 220 420 360 816 210"/><path d="M0 260 C240 180 420 320 816 170"/>
+      <path d="M0 220 C260 140 420 280 816 130"/><path d="M0 180 C280 100 420 240 816 90"/><path d="M0 140 C300 60 420 200 816 50"/></g></svg>
+  </div>
+  <div class="content" style="position:relative; padding: 0.55in 0.6in 0; display:flex; flex-direction:column; height:100%">
+    <div class="topbar">
+      <span class="pill" style="background: rgba(255,255,255,0.14); color:#fff">{{icon "book-open" 9}} Integration Guide</span>
+      <span class="pill amber">{{icon "pencil-ruler" 9}} {{edition.label}} · {{edition.version}} · {{edition.date}}</span>
+    </div>
+    <div style="margin-top: 0.9in; color:#fff">
+      <div class="eyebrow" style="color:#C7D2FE">{{partner.name}} × ShootPortal</div>
+      <h1 style="color:#fff; font-size: 34pt; margin-top:6px">Deliverables<br>Integration Guide</h1>
+      <p class="lead" style="color:#E0E7FF; margin-top:10px; max-width: 5.6in">How {{partner.name}} {{partner.contributors}} will deliver photos, video and inspection data to {{partner.recipients}} through ShootPortal: the full workflow, what each person sees, and what each team builds.</p>
+    </div>
+
+    <div class="cover-card" style="margin-top: 0.55in">
+      <div class="row" style="align-items:center; justify-content:space-between">
+        <div class="lockup lg">
+          <img class="partner-logo" src="{{asset.partner}}/{{partner.logo}}" alt="{{partner.name}}">
+          <span class="x">×</span>
+          <img class="sp-logo" src="{{asset.template}}/brand/shootportal-logo.png" alt="ShootPortal">
+        </div>
+        <div style="text-align:right">
+          <div class="small muted">Prepared for</div>
+          <div style="font-weight:700; color:var(--midnight); font-size:10pt">{{partner.name}} leadership &amp; development team</div>
+        </div>
+      </div>
+      <div style="height:1px; background: var(--line); margin: 16px 0 4px"></div>
+      <ol class="toc">
+        <li><span class="no">01</span>The idea<span class="d">Today vs. tomorrow, who's involved</span></li>
+        <li><span class="no">02</span>How it works, end to end<span class="d">Seven steps from job to download</span></li>
+        <li><span class="no">03</span>What each person sees<span class="d">{{partner.Contributor}}, {{partner.recipient}}, {{partner.name}}</span></li>
+        <li><span class="no">04</span>Who does what<span class="d">What each team builds, data exchanged, choices</span></li>
+        <li><span class="no">05</span>Included, security &amp; next steps<span class="d">Features, test vs. live, timeline, go-live</span></li>
+      </ol>
+    </div>
+
+    <div class="grid3 mt20" style="gap:12px">
+      <div class="card tint"><span class="icon-chip partner">{{icon "mouse-pointer-click" 13}}</span><h4 class="mt8">One button for {{partner.contributors}}</h4><p>“{{partner.button}}” opens a branded upload screen, already linked to the job.</p></div>
+      <div class="card tint"><span class="icon-chip partner">{{icon "link" 13}}</span><h4 class="mt8">One link for {{partner.recipients}}</h4><p>A private, branded portal. No codes, no accounts, no Google Drive.</p></div>
+      <div class="card tint"><span class="icon-chip partner">{{icon "bell-ring" 13}}</span><h4 class="mt8">Status for {{partner.name}}</h4><p>Submitted, published, viewed and downloaded, as they happen.</p></div>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="row" style="align-items:flex-end; justify-content:space-between; margin-bottom: 0.78in">
+      <div class="contact"><div class="av"><img src="{{asset.template}}/brand/shootportal-icon.png" alt=""></div><div><div class="nm">{{contact.name}} · {{contact.title}}</div><div class="meta"><span>{{icon "mail" 9}} {{contact.email}}</span><span>{{icon "phone" 9}} {{contact.phone}}</span><span>{{icon "globe" 9}} {{contact.web}}</span></div></div></div>
+      <div class="notice" style="max-width: 3.1in">{{icon "info" 11}}<span>{{edition.notice}}</span></div>
+    </div>
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 01 THE IDEA -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">01 · The idea</div>
+    <h2 class="mt4">Replace the code-and-Drive handoff with a branded delivery</h2>
+    <p class="lead mt8" style="max-width:6.6in">Today a finished job ends with a one-time code and a Google Drive link. With ShootPortal, the {{partner.contributor}} uploads inside {{partner.app}}, the {{partner.recipient}} opens a private {{partner.name}}-branded portal, and {{partner.name}} is told about every step automatically.</p>
+
+    <div class="ba mt16">
+      <div class="before">
+        <div class="eyebrow" style="color: var(--muted)">Today</div>
+        <div class="chain">{{#each partner.today}}<span class="link">{{this}}</span><span class="arr">{{icon "chevron-right" 10}}</span>{{/each}}</div>
+        <ul class="ticks crosses">{{#each partner.todayPains}}<li>{{this}}</li>{{/each}}<li>{{partner.Contributors}} manage folders and sharing by hand</li></ul>
+      </div>
+      <div class="after">
+        <div class="eyebrow" style="color:#C7D2FE">With ShootPortal</div>
+        <div class="chain"><span class="link">{{partner.button}}</span><span class="arr">{{icon "chevron-right" 10}}</span><span class="link">Upload</span><span class="arr">{{icon "chevron-right" 10}}</span><span class="link">Branded client portal</span></div>
+        <ul class="ticks">
+          <li>One tap in {{partner.app}} opens the upload screen, already linked to the job</li>
+          <li>{{partner.Recipients}} get a private link: no codes, no accounts, no passwords</li>
+          <li>{{partner.name}} sees submitted, viewed and downloaded as they happen</li>
+          <li>Everything carries {{partner.name}}'s logo, colors and (optionally) domain</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title mt24"><span class="num">A</span><h3>Who's involved</h3><span class="rule"></span></div>
+    <div class="grid3" style="grid-template-columns: repeat(5, 1fr); gap:10px">
+      <div class="card"><span class="icon-chip partner">{{icon "server" 13}}</span><h4 class="mt8">{{partner.name}} servers</h4><p>Create jobs in ShootPortal and receive status updates. Hold the secret key.</p></div>
+      <div class="card"><span class="icon-chip partner">{{icon "smartphone" 13}}</span><h4 class="mt8">{{partner.name}} app</h4><p>Shows the “{{partner.button}}” button and opens the upload screen.</p></div>
+      <div class="card"><span class="icon-chip partner">{{icon "plane" 13}}</span><h4 class="mt8">The {{partner.contributor}}</h4><p>Uploads files from phone or computer. No ShootPortal account needed.</p></div>
+      <div class="card"><span class="icon-chip partner">{{icon "user-round" 13}}</span><h4 class="mt8">The {{partner.recipient}}</h4><p>Views and downloads through a private, branded link.</p></div>
+      <div class="card indigo"><span class="icon-chip dark">{{icon "shield-check" 13}}</span><h4 class="mt8">ShootPortal</h4><p>Stores, organizes and delivers the media, and reports back.</p></div>
+    </div>
+
+    <div class="section-title mt24"><span class="num">B</span><h3>Principles we're designing around</h3><span class="rule"></span></div>
+    <div class="grid2">
+      <div class="feature card"><span class="icon-chip">{{icon "hand" 13}}</span><div><h4>{{partner.name}} stays in control</h4><p>Jobs, chat, payments and the client relationship stay in {{partner.name}}. ShootPortal is the delivery layer only. No quotes, invoices or payment screens appear anywhere.</p></div></div>
+      <div class="feature card"><span class="icon-chip">{{icon "palette" 13}}</span><div><h4>Branded end to end</h4><p>Upload screen, portal and emails use {{partner.name}}'s name, logo and colors, with a small “Powered by ShootPortal” mark.</p></div></div>
+      <div class="feature card"><span class="icon-chip">{{icon "hard-drive-upload" 13}}</span><div><h4>Built for big files and bad signal</h4><p>Uploads go in small chunks straight to secure storage. If the connection drops or the app closes, it resumes instead of starting over.</p></div></div>
+      <div class="feature card"><span class="icon-chip">{{icon "lock-keyhole" 13}}</span><div><h4>Private by default</h4><p>Every link is private and expires. Secret keys never touch a phone. Every status message is signed so {{partner.name}} can trust it.</p></div></div>
+    </div>
+
+    <div class="card tint mt16 row" style="align-items:center; gap:12px">
+      <span class="icon-chip dark">{{icon "repeat" 13}}</span>
+      <p style="font-size:7.8pt"><b>Works for marketplace and white-glove jobs alike.</b> The same delivery can be created automatically by {{partner.name}}'s app, or by {{partner.name}} staff signing in to ShootPortal directly for hand-managed enterprise jobs.</p>
+    </div>
+
+    <div class="mt24" style="border-radius:14px; padding:20px 24px; color:#fff; background: radial-gradient(120% 160% at 100% 0%, #6D28D9 0%, var(--indigo) 40%, #1E1B4B 100%);">
+      <div class="eyebrow" style="color:#C7D2FE">In one sentence</div>
+      <div style="font-size:14pt; font-weight:700; line-height:1.3; margin-top:6px; letter-spacing:-0.01em">{{partner.name}} keeps the job, the chat and the client relationship. ShootPortal quietly handles the files: upload, storage, a beautiful branded handoff, and a signed receipt for every step.</div>
+    </div>
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 02 HOW IT WORKS -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">02 · How it works</div>
+    <h2 class="mt4">From finished job to downloaded files, in seven steps</h2>
+
+    <div class="flow mt16">
+      <div class="node partner"><span class="badge">1</span><div class="glyph">{{icon "briefcase" 14}}</div><h4>{{partner.name}} job</h4><div class="who">{{partner.name}}</div></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node partner"><span class="badge">2</span><div class="glyph">{{icon "mouse-pointer-click" 14}}</div><h4>“{{partner.button}}”</h4><div class="who">{{partner.contributor}}</div></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node sp"><span class="badge">3</span><div class="glyph">{{icon "cloud-upload" 14}}</div><h4>Upload</h4><div class="who">{{partner.contributor}}</div></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node sp"><span class="badge">4</span><div class="glyph">{{icon "send" 14}}</div><h4>Submit</h4><div class="who">{{partner.contributor}}</div></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node sp"><span class="badge">5</span><div class="glyph">{{icon "mail-check" 14}}</div><h4>Portal live</h4><div class="who">ShootPortal</div></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node sp"><span class="badge">6</span><div class="glyph">{{icon "download" 14}}</div><h4>View &amp; download</h4><div class="who">{{partner.recipient}}</div></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node partner"><span class="badge">7</span><div class="glyph">{{icon "bell-ring" 14}}</div><h4>Status back</h4><div class="who">{{partner.name}}</div></div>
+    </div>
+
+    <table class="t mt16">
+      <tr><th style="width:4%">#</th><th style="width:30%">What happens</th><th style="width:33%">What people see</th><th style="width:33%">What {{partner.name}} receives</th></tr>
+      <tr><td><b>1</b></td><td><b>The job is set up.</b> {{partner.name}}'s servers send ShootPortal the job number, address, {{partner.recipient}} and {{partner.contributor}}. Once per job.</td><td>Nothing yet. {{partner.name}} staff signed in to ShootPortal would see the job listed.</td><td>A ShootPortal ID for the job. {{partner.name}} can also always look it up by its own job number.</td></tr>
+      <tr><td><b>2</b></td><td><b>The {{partner.contributor}} taps “{{partner.button}}.”</b> {{partner.name}} asks for a one-time upload link (valid up to 24 hours) and opens it inside the app.</td><td>The {{partner.contributor}} sees a {{partner.name}}-branded upload screen for this job: {{partner.example.address}}.</td><td>The upload link.</td></tr>
+      <tr><td><b>3</b></td><td><b>The {{partner.contributor}} uploads.</b> Photos, video, documents and inspection files go straight to secure storage in small chunks.</td><td>Progress for every file. If signal drops or the app is closed, it resumes where it left off.</td><td>Nothing yet (no noise per file).</td></tr>
+      <tr><td><b>4</b></td><td><b>The {{partner.contributor}} submits.</b> “Are you finished with this job?” → Yes. ShootPortal measures the delivery's total size.</td><td>A “Delivered!” confirmation, then the screen returns to {{partner.app}}.</td><td><code>delivery.submitted</code> with file count, total size and the delivery's price.</td></tr>
+      <tr><td><b>5</b></td><td><b>The portal goes live.</b> Automatically by default, or after {{partner.name}} reviews and approves.</td><td>The {{partner.recipient}} gets a branded “Your deliverables are ready” email, or {{partner.name}} sends the link in its own chat. {{partner.name}} chooses.</td><td><code>delivery.published</code>, plus a private portal link {{partner.name}} can share.</td></tr>
+      <tr><td><b>6</b></td><td><b>The {{partner.recipient}} views and downloads.</b> No login, no code. The link is private and expires with the files.</td><td>A clean {{partner.name}}-branded gallery with download buttons and “Available until …”.</td><td><code>delivery.viewed</code> and <code>delivery.downloaded</code>, the first time each {{partner.recipient}} does each.</td></tr>
+      <tr><td><b>7</b></td><td><b>After {{pricing.retentionDays}} days</b> the files expire, unless storage is extended for that job.</td><td>The portal shows the delivery has expired.</td><td>The expiry date is known from step 4 onward.</td></tr>
+    </table>
+
+
+    <div class="section-title mt20"><span class="num">A</span><h3>Behind the scenes: what the two systems say to each other</h3><span class="rule"></span></div>
+    <div class="card" style="padding:12px 14px">
+      <div class="row" style="justify-content:space-between; font-size:7pt; font-weight:700; color: var(--midnight); margin-bottom:6px">
+        <span style="display:flex; gap:6px; align-items:center"><img src="{{asset.partner}}/{{partner.logo}}" style="width:16px;height:16px;border-radius:4px" alt=""> {{partner.name}} servers</span>
+        <span style="display:flex; gap:6px; align-items:center">ShootPortal <img src="{{asset.template}}/brand/shootportal-icon.png" style="width:16px;height:16px;border-radius:4px" alt=""></span>
+      </div>
+      <div class="msgs">
+        <div class="msg r"><span class="lbl">“Here's job {{partner.example.job}}: address, {{partner.recipient}}, {{partner.contributor}}”</span></div>
+        <div class="msg l"><span class="lbl">“Got it. Here's its ID.”</span></div>
+        <div class="msg r"><span class="lbl">“{{partner.example.pilot}} is ready. Give me an upload link.”</span></div>
+        <div class="msg l"><span class="lbl">“Here's a one-time link, valid 24 hours.”</span></div>
+        <div class="msg l ev"><span class="lbl">{{icon "bell-ring" 9}} “Delivery submitted: 41 files, 3.4 GB” <i>signed</i></span></div>
+        <div class="msg r ok"><span class="lbl">“Received ✓”</span></div>
+        <div class="msg l ev"><span class="lbl">{{icon "bell-ring" 9}} “{{partner.example.client}} viewed … downloaded” <i>signed</i></span></div>
+      </div>
+      <p class="small muted mt8"><b>Why it matters:</b> {{partner.name}} can mark jobs complete, show “client viewed ✓” or release a {{partner.contributor}} payout the moment the right update arrives. If {{partner.name}}'s servers are briefly unavailable, ShootPortal keeps retrying each update for up to three days, so nothing is lost.</p>
+    </div>
+
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 03 WHAT EACH PERSON SEES -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">03 · What each person sees</div>
+    <h2 class="mt4">Three screens, one brand</h2>
+    <p class="lead mt8" style="max-width:6.4in">Illustrated mockups with fake demo data. Final screens will be shown with real screenshots once the integration is built.</p>
+
+    <div class="row mt16" style="gap:22px; align-items:flex-start">
+      <div style="flex:none; display:flex; flex-direction:column; align-items:center; width: 1.95in">
+        {{> phone-upload}}
+        <div class="caption" style="margin-top:9px"><b>{{icon "plane" 10}} The {{partner.contributor}}</b>Opens from “{{partner.button}}”. Uploads resume automatically; a “Keep this screen open” reminder shows while files transfer.</div>
+      </div>
+      <div class="col">
+        {{> portal}}
+        <div class="caption" style="text-align:left; margin-top:9px"><b>{{icon "user-round" 10}} The {{partner.recipient}}: private portal</b>No login. Only this job's media, organized by type, with download buttons and the expiry date. No pricing or payment screens, ever.</div>
+      </div>
+    </div>
+
+    <div class="row mt20" style="gap:22px; align-items:flex-start">
+      <div class="col">
+        {{> email}}
+        <div class="caption" style="text-align:left; margin-top:9px"><b>{{icon "mail" 10}} The {{partner.recipient}}: notification</b>Sent by ShootPortal in {{partner.name}}'s name, or skipped entirely if {{partner.name}} prefers to share the link in its own chat.</div>
+      </div>
+      <div class="col">
+        {{> status}}
+        <div class="caption" style="text-align:left; margin-top:9px"><b>{{icon "layout-dashboard" 10}} {{partner.name}}: live status</b>An example of what {{partner.name}} could show inside its own app, driven by ShootPortal's signed status updates.</div>
+      </div>
+    </div>
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 04 WHO DOES WHAT -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">04 · Who does what</div>
+    <h2 class="mt4">A small build for {{partner.name}}, the heavy lifting on ShootPortal</h2>
+
+    <div class="grid2 mt16" style="gap:14px">
+      <div class="card" style="border-color: color-mix(in srgb, var(--pp) 35%, white)">
+        <div class="row" style="align-items:center; gap:8px"><img src="{{asset.partner}}/{{partner.logo}}" style="width:22px;height:22px;border-radius:5px" alt=""><h3>{{partner.name}}'s team builds</h3></div>
+        <div class="steps mt12">
+          <div class="step partner"><span class="n">1</span><div><h4>Create the job in ShootPortal</h4><p>One server call when a job is accepted or completed (your choice).</p></div></div>
+          <div class="step partner"><span class="n">2</span><div><h4>The “{{partner.button}}” button</h4><p>Ask ShootPortal for an upload link and open it in the app's in-app browser.</p></div></div>
+          <div class="step partner"><span class="n">3</span><div><h4>A status receiver</h4><p>A small endpoint that checks each update's signature and moves the job forward.</p></div></div>
+          <div class="step partner"><span class="n">4</span><div><h4>Optional: share the link in chat</h4><p>If {{partner.name}} prefers to message the {{partner.recipient}} itself.</p></div></div>
+        </div>
+      </div>
+      <div class="card indigo">
+        <div class="row" style="align-items:center; gap:8px"><img src="{{asset.template}}/brand/shootportal-icon.png" style="width:22px;height:22px;border-radius:5px" alt=""><h3>ShootPortal provides</h3></div>
+        <ul class="ticks mt12" style="columns:1">
+          <li>The API, a full test sandbox and test keys</li>
+          <li>The branded, resumable upload screen (phone and desktop)</li>
+          <li>Secure storage for every file type, {{pricing.retentionDays}} days included</li>
+          <li>The private, branded {{partner.recipient}} portal and emails</li>
+          <li>Signed, automatically retried status updates</li>
+          <li>Developer Guide, API reference and a Postman collection</li>
+          <li>A live demo partner to try the full flow before writing code</li>
+          <li>Direct founder support during integration</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title mt20"><span class="num">A</span><h3>Information exchanged</h3><span class="rule"></span></div>
+    <div class="grid2">
+      <table class="t"><tr><th>{{partner.name}} sends {{icon "arrow-right" 9}}</th></tr>
+        <tr><td><b>Job</b>: your job number, title, address</td></tr>
+        <tr><td><b>{{partner.Recipients}}</b>: name, email (phone optional), your client ID</td></tr>
+        <tr><td><b>{{partner.Contributor}}</b>: name, email, your {{partner.contributor}} ID</td></tr>
+        <tr><td>Nothing else. No prices, payments or private job details.</td></tr></table>
+      <table class="t"><tr><th>{{icon "arrow-left" 9}} ShootPortal sends back</th></tr>
+        <tr><td><b>Links</b>: the upload link and private portal links</td></tr>
+        <tr><td><b>Status</b>: submitted, published, viewed, downloaded, expired</td></tr>
+        <tr><td><b>Details</b>: file counts, total size, expiry date</td></tr>
+        <tr><td><b>Price</b> of each delivery, the moment it's submitted</td></tr></table>
+    </div>
+
+    <div class="row mt20" style="gap:14px">
+      <div style="flex:1">
+        <div class="section-title"><span class="num">B</span><h3>Choices {{partner.name}} makes</h3><span class="rule"></span></div>
+        <div class="stack">
+          <div class="feature"><span class="icon-chip partner">{{icon "mail" 12}}</span><div><h4>Who notifies the {{partner.recipient}}</h4><p>ShootPortal email, {{partner.name}}'s own chat, or both.</p></div></div>
+          <div class="feature"><span class="icon-chip partner">{{icon "badge-check" 12}}</span><div><h4>Publish automatically or review first</h4><p>Go live on submit, or approve each delivery.</p></div></div>
+          <div class="feature"><span class="icon-chip partner">{{icon "globe" 12}}</span><div><h4>Web address</h4><p>{{partner.portalHost}} to start, or your own, e.g. {{partner.customDomain}}.</p></div></div>
+          <div class="feature"><span class="icon-chip partner">{{icon "receipt" 12}}</span><div><h4>{{partner.Contributor}} receipt email</h4><p>Optional “Delivery received” confirmation.</p></div></div>
+        </div>
+      </div>
+      <div style="flex:1">
+        <div class="section-title"><span class="num">C</span><h3>To decide together</h3><span class="rule"></span></div>
+        <ul class="dots">
+          <li>Create the ShootPortal job when it's <b>accepted</b>, or at <b>Complete Job</b>?</li>
+          <li>Which status should trigger {{partner.contributor}} payouts: submitted, viewed or downloaded?</li>
+          <li>Is a one-time code still needed, or is a private link enough?</li>
+          <li>App technology, and in-app browser vs. web view for the upload screen</li>
+          <li>Typical monthly job volume and delivery sizes by job type</li>
+          <li>Enterprise file types to support first (thermal, GeoTIFF, LAS/LAZ, KMZ, reports)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="section-title mt20"><span class="num">D</span><h3>Works with any app technology</h3><span class="rule"></span></div>
+    <div class="grid4" style="gap:10px">
+      <div class="card tint"><span class="icon-chip dark">{{icon "smartphone" 13}}</span><h4 class="mt8">iOS</h4><p>Open the upload link in an in-app Safari view (SFSafariViewController).</p></div>
+      <div class="card tint"><span class="icon-chip dark">{{icon "tablet-smartphone" 13}}</span><h4 class="mt8">Android</h4><p>Open it in Chrome Custom Tabs.</p></div>
+      <div class="card tint"><span class="icon-chip dark">{{icon "layers" 13}}</span><h4 class="mt8">React Native / Flutter</h4><p>Use the framework's in-app browser plugin.</p></div>
+      <div class="card tint"><span class="icon-chip dark">{{icon "monitor" 13}}</span><h4 class="mt8">Web &amp; desktop</h4><p>Open it in a new tab or window; it returns when done.</p></div>
+    </div>
+
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 05 INCLUDED / SECURITY / NEXT -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">05 · Included, security &amp; next steps</div>
+    <h2 class="mt4">Everything in one delivery layer</h2>
+
+    <div class="grid4 mt16" style="gap:10px">
+      <div class="card"><span class="icon-chip">{{icon "palette" 13}}</span><h4 class="mt8">Branding &amp; domain</h4><p>Logo, colors, sender name, your own web address.</p></div>
+      <div class="card"><span class="icon-chip">{{icon "refresh-cw" 13}}</span><h4 class="mt8">Resumable uploads</h4><p>Multi-GB files from a phone, resumed after drops.</p></div>
+      <div class="card"><span class="icon-chip">{{icon "files" 13}}</span><h4 class="mt8">Every file type</h4><p>Photo, video, PDF, thermal, GeoTIFF, LAS/LAZ, KMZ, RAW.</p></div>
+      <div class="card"><span class="icon-chip">{{icon "calendar-clock" 13}}</span><h4 class="mt8">{{pricing.retentionDays}}-day storage</h4><p>Included per delivery; extend for archives.</p></div>
+      <div class="card"><span class="icon-chip">{{icon "users" 13}}</span><h4 class="mt8">Unlimited recipients</h4><p>Every stakeholder gets their own private link.</p></div>
+      <div class="card"><span class="icon-chip">{{icon "activity" 13}}</span><h4 class="mt8">View &amp; download tracking</h4><p>Know when each {{partner.recipient}} opened and downloaded.</p></div>
+      <div class="card"><span class="icon-chip">{{icon "ban" 13}}</span><h4 class="mt8">No commercial screens</h4><p>No quotes, invoices or payments anywhere.</p></div>
+      <div class="card"><span class="icon-chip">{{icon "life-buoy" 13}}</span><h4 class="mt8">Founder support</h4><p>Direct line during integration and launch.</p></div>
+    </div>
+
+    <div class="row mt20" style="gap:14px">
+      <div style="flex:1.1">
+        <div class="section-title"><span class="num">A</span><h3>Security &amp; privacy</h3><span class="rule"></span></div>
+        <ul class="ticks">
+          <li><b>Secret keys stay on {{partner.name}}'s servers.</b> Phones only ever get a one-job, short-lived upload link.</li>
+          <li><b>Signed status updates.</b> Each message carries a tamper-proof signature {{partner.name}} verifies.</li>
+          <li><b>Private, expiring links</b> for every {{partner.recipient}}; files are never public.</li>
+          <li><b>Isolated data.</b> {{partner.name}}'s jobs live in their own walled-off space.</li>
+          <li><b>Minimal data.</b> Names and emails only. No prices, payments or job financials.</li>
+        </ul>
+      </div>
+      <div style="flex:1">
+        <div class="section-title"><span class="num">B</span><h3>Test mode vs. live mode</h3><span class="rule"></span></div>
+        <div class="grid2" style="gap:8px">
+          <div class="card tint"><div class="pill" style="background:#FEF3C7; color:#92400E">{{icon "flask-conical" 9}} Test</div><p class="mt8">A full copy for building and demos. Nothing is billed; emails go only to addresses you approve.</p></div>
+          <div class="card indigo"><div class="pill dark">{{icon "rocket" 9}} Live</div><p class="mt8">Real {{partner.contributors}} and {{partner.recipients}}. Same code: just swap in a live key.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title mt20"><span class="num">C</span><h3>Timeline</h3><span class="rule"></span></div>
+    <div class="card tint" style="padding:12px 14px">
+      <div class="tline">{{#each timeline}}<div class="t"><div class="dot">{{icon this.icon 12}}</div><div class="when">{{this.when}}</div><div class="what">{{this.what}}</div></div>{{/each}}</div>
+    </div>
+
+    <div class="row mt20" style="gap:14px; align-items:stretch">
+      <div style="flex:1.2">
+        <div class="section-title"><span class="num">D</span><h3>Go-live checklist</h3><span class="rule"></span></div>
+        <div class="grid2" style="gap:4px 12px">
+          <ul class="ticks"><li>Jobs created with your job number</li><li>Upload screen opens in-app</li><li>Large upload resumed on a real phone</li></ul>
+          <ul class="ticks"><li>Status signatures verified</li><li>All status events handled</li><li>Live key issued &amp; test data cleared</li></ul>
+        </div>
+      </div>
+      <div style="flex:0.9" class="card indigo">
+        <div class="eyebrow">Your contact</div>
+        <div class="contact mt8"><div class="av"><img src="{{asset.template}}/brand/shootportal-icon.png" alt=""></div><div><div class="nm">{{contact.name}}</div><div class="small muted">{{contact.title}}</div></div></div>
+        <div class="small mt8" style="color:var(--slate); line-height:1.7">{{icon "mail" 9}} {{contact.email}}<br>{{icon "phone" 9}} {{contact.phone}}<br>{{icon "globe" 9}} {{contact.web}}</div>
+      </div>
+    </div>
+
+    <div class="mt12" style="border-radius:14px; padding:14px 20px; color:#fff; background: radial-gradient(120% 160% at 100% 0%, #6D28D9 0%, var(--indigo) 40%, #1E1B4B 100%);">
+      <div class="eyebrow" style="color:#C7D2FE">Next steps</div>
+      <div class="grid4 mt8" style="gap:14px">
+        <div><div style="font-size:16pt; font-weight:700; opacity:0.5">01</div><div style="font-weight:700; font-size:8pt">Review together</div><div style="font-size:7pt; color:#E0E7FF">Walk through this guide on our Nov 11 call.</div></div>
+        <div><div style="font-size:16pt; font-weight:700; opacity:0.5">02</div><div style="font-weight:700; font-size:8pt">Decide the open points</div><div style="font-size:7pt; color:#E0E7FF">The “to decide together” list on page 5.</div></div>
+        <div><div style="font-size:16pt; font-weight:700; opacity:0.5">03</div><div style="font-weight:700; font-size:8pt">Meet your developers</div><div style="font-size:7pt; color:#E0E7FF">A technical walkthrough with the Developer Guide.</div></div>
+        <div><div style="font-size:16pt; font-weight:700; opacity:0.5">04</div><div style="font-weight:700; font-size:8pt">Start in the sandbox</div><div style="font-size:7pt; color:#E0E7FF">Test keys and a demo partner to build against.</div></div>
+      </div>
+    </div>
+    <p class="small muted mt8">Pricing is provided separately in the {{partner.name}} × ShootPortal Pricing Sheet.</p>
+  </div>
+  {{> foot}}
+</section>
+
+</body>
+</html>

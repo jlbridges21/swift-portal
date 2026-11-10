@@ -49,7 +49,7 @@ export const WEBSITE_LIMITS = {
   portfolioCategory: 40,
   portfolioDescription: 300,
   portfolioMediaMax: 60,
-  featuredServicesMax: 8,
+  featuredServicesMax: 9,
 } as const;
 
 export type WebsiteSocialKey = "instagram" | "facebook" | "youtube" | "linkedin" | "tiktok" | "vimeo";
@@ -73,6 +73,14 @@ const SOCIAL_HOSTS: Record<WebsiteSocialKey, string[]> = {
 
 export type WebsiteRedirect = { from: string; to: string };
 
+/** A photo or video chosen from the business's ShootPortal media for the homepage hero. */
+export type WebsiteHeroMedia = {
+  id: string;
+  /** "youtube" videos play as a muted background embed; "upload" videos stream the file. */
+  source: "upload" | "youtube";
+  youtubeId: string;
+};
+
 export interface WebsiteSettings {
   /**
    * true  → the public homepage is the Business Website.
@@ -86,9 +94,14 @@ export interface WebsiteSettings {
   headline: string;
   intro: string;
   heroSource: WebsiteHeroSource;
+  /** Uploaded/pasted image URL (onboarding upload, classic landing page carry-over). */
   heroImageUrl: string;
-  /** YouTube URL (played muted as a background loop). */
+  /** Legacy YouTube URL (classic landing showreel carry-over). */
   heroVideoUrl: string;
+  /** Photo picked from ShootPortal media — preferred over heroImageUrl. */
+  heroImageMedia: WebsiteHeroMedia | null;
+  /** Video picked from ShootPortal media — preferred over heroVideoUrl. */
+  heroVideoMedia: WebsiteHeroMedia | null;
   /** null → every active service (in catalog order). Otherwise the chosen service ids, in order. */
   featuredServiceIds: string[] | null;
   showServicePricing: boolean;
@@ -149,6 +162,8 @@ export const DEFAULT_WEBSITE_SETTINGS: WebsiteSettings = {
   heroSource: "auto",
   heroImageUrl: "",
   heroVideoUrl: "",
+  heroImageMedia: null,
+  heroVideoMedia: null,
   featuredServiceIds: null,
   showServicePricing: true,
   ctaLabel: "",
@@ -235,6 +250,16 @@ function normalizeRedirects(raw: unknown): WebsiteRedirect[] {
     if (out.length >= WEBSITE_LIMITS.redirectsMax) break;
   }
   return out;
+}
+
+function normalizeHeroMedia(raw: unknown): WebsiteHeroMedia | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (!isUuidLike(r.id)) return null;
+  const source = r.source === "youtube" ? "youtube" : "upload";
+  const youtubeId = typeof r.youtubeId === "string" && /^[A-Za-z0-9_-]{11}$/.test(r.youtubeId) ? r.youtubeId : "";
+  if (source === "youtube" && !youtubeId) return null;
+  return { id: r.id, source, youtubeId };
 }
 
 function isTemplate(v: unknown): v is WebsiteTemplateId {
@@ -331,6 +356,8 @@ export function mergeWebsiteSettings(
     heroSource: isHeroSource(base.heroSource) ? base.heroSource : "auto",
     heroImageUrl: safeAssetUrl(base.heroImageUrl),
     heroVideoUrl: safeVideoUrl(base.heroVideoUrl),
+    heroImageMedia: normalizeHeroMedia(base.heroImageMedia),
+    heroVideoMedia: normalizeHeroMedia(base.heroVideoMedia),
     featuredServiceIds,
     showServicePricing: base.showServicePricing !== false,
     ctaLabel: sanitizePlainText(base.ctaLabel, WEBSITE_LIMITS.ctaLabel),

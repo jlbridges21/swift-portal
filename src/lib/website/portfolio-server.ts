@@ -71,7 +71,7 @@ function toImage(mode: PortfolioUrlMode, projectId: string, row: EligibleMediaRo
 }
 
 function toVideo(mode: PortfolioUrlMode, projectId: string, row: EligibleMediaRow, index: number, title: string): SiteVideo | null {
-  const label = index === 0 ? `${title} — film` : `${title} — film ${index + 1}`;
+  const label = index === 0 ? `${title} — video` : `${title} — video ${index + 1}`;
   if (row.media_source === "youtube") {
     const embed = getYouTubeEmbedUrl(row.youtube_url || row.embed_url || "");
     if (!embed) return null;

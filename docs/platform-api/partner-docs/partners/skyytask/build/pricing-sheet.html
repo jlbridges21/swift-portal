@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=816">
+<title>SkyyTask × ShootPortal — Pricing Sheet</title>
+<link rel="stylesheet" href="../../../template/assets/../styles.css">
+<style>
+  :root {
+    --p1: #22A6E0; --p2: #0170BB; --p3: #2E3192; --pp: #0170BB;
+  }
+</style>
+<script>
+  // ?page=N shows a single page (PNG previews). ?qa=1 flags pages whose content overflows.
+  window.addEventListener("load", () => {
+    const q = new URLSearchParams(location.search);
+    const pages = [...document.querySelectorAll(".page")];
+    pages.forEach((p, i) => { const n = p.querySelector(".pg"); if (n) n.textContent = `${i + 1} / ${pages.length}`; });
+    document.body.dataset.pages = pages.length;
+    if (q.get("page")) { document.body.classList.add("single"); pages[Number(q.get("page")) - 1]?.classList.add("show"); }
+    if (q.get("qa")) {
+      const bad = [];
+      pages.forEach((p, i) => {
+        const pr = p.getBoundingClientRect();
+        const foot = p.querySelector(".page-foot");
+        const limit = foot ? foot.getBoundingClientRect().top - 2 : pr.bottom;
+        p.querySelectorAll(".content *").forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.height && (r.bottom > limit + 0.5 || r.right > pr.right - 20)) bad.push(`p${i + 1}:${el.tagName.toLowerCase()}.${[...el.classList].join(".")}`);
+        });
+        if (p.scrollHeight > p.clientHeight + 1) bad.push(`p${i + 1}:page-scroll`);
+        p.querySelectorAll("pre").forEach((pre) => { if (pre.scrollWidth > pre.clientWidth + 1) bad.push(`p${i + 1}:pre-clipped:${pre.textContent.trim().slice(0, 30)}`); });
+      });
+      document.body.dataset.overflow = [...new Set(bad)].slice(0, 12).join(" ");
+    }
+  });
+</script>
+</head>
+
+<body>
+<section class="page">
+  <div class="content" style="display:flex; flex-direction:column; height:100%">
+    <div class="topbar">
+      <div class="lockup">
+        <img class="partner-logo" src="../assets/logo.png" alt="SkyyTask">
+        <span class="x">×</span>
+        <img class="sp-logo" src="../../../template/assets/brand/shootportal-logo.png" alt="ShootPortal">
+      </div>
+      <span class="pill amber"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg> Initial pricing — subject to change</span>
+    </div>
+
+    <div class="mt24">
+      <div class="eyebrow">SkyyTask × ShootPortal · Pricing</div>
+      <h1 class="mt4">Simple, predictable pricing per delivery</h1>
+      <p class="lead mt8" style="max-width:6.6in">A flat price per delivery, set by its total size. Every delivery includes the branded upload screen, the branded client portal, unlimited recipients and downloads, and 90 days of storage.</p>
+    </div>
+
+    <div class="grid4 mt24" style="gap:12px">
+      <div class="price-card hl">
+        <div class="tier">Standard</div>
+        <div class="amt">$3</div>
+        <div class="per">per delivery</div>
+        <div class="range">Up to 5 GB</div>
+        <div class="ex">Typical residential real estate shoot</div>
+      </div><div class="price-card">
+        <div class="tier">Large</div>
+        <div class="amt">$12</div>
+        <div class="per">per delivery</div>
+        <div class="range">5 – 25 GB</div>
+        <div class="ex">Commercial property, thermal inspection</div>
+      </div><div class="price-card">
+        <div class="tier">XL</div>
+        <div class="amt">$40</div>
+        <div class="per">per delivery</div>
+        <div class="range">25 – 100 GB</div>
+        <div class="ex">Mapping / orthomosaic site</div>
+      </div><div class="price-card">
+        <div class="tier">Over 100 GB</div>
+        <div class="amt">$40 + $0.40/GB</div>
+        <div class="per">per delivery</div>
+        <div class="range">Above 100 GB</div>
+        <div class="ex">Large enterprise mapping, point clouds</div>
+      </div>
+    </div>
+    <p class="small muted mt8">A delivery's size is the total of all files the pilot uploads for one job (1 GB = 1,000,000,000 bytes). Links such as 360° tours count as zero. The price is fixed the moment the delivery is submitted and appears in the API and status updates immediately.</p>
+
+    <div class="row mt24" style="gap:14px; align-items:stretch">
+      <div class="card indigo" style="flex:1">
+        <span class="icon-chip dark"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M17 14h-6"/><path d="M13 18H7"/><path d="M7 14h.01"/><path d="M17 18h.01"/></svg></span>
+        <h3 class="mt8">$199 monthly minimum</h3>
+        <p class="mt4">Each month is the total of that month's deliveries. If it's under $199, the invoice is $199. Once deliveries pass $199, you pay only the total, never total + minimum.</p>
+        <table class="t mt8">
+          <tr><th>Example month</th><th>Deliveries total</th><th>Invoice</th></tr>
+          <tr><td>Slow</td><td>$132</td><td><b>$199</b></td></tr>
+          <tr><td>Typical</td><td>$456</td><td><b>$456</b></td></tr>
+          <tr><td>Busy</td><td>$900</td><td><b>$900</b></td></tr>
+        </table>
+      </div>
+      <div style="flex:1; display:flex; flex-direction:column; gap:12px">
+        <div class="card" style="flex:1">
+          <span class="icon-chip partner"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"/><path d="M7.5 7a1 1 0 0 1 0-5A4.8 8 0 0 1 12 7a4.8 8 0 0 1 4.5-5 1 1 0 0 1 0 5"/><rect x="3" y="7" width="18" height="4" rx="1"/></svg></span>
+          <h3 class="mt8">Launch credit</h3>
+          <p class="mt4">The first <b>50 GB</b> of deliveries are on us, and the monthly minimum is waived during the launch period. Statements still show each delivery's normal price, marked “covered by launch credit,” so you can see what it would cost.</p>
+        </div>
+        <div class="card" style="flex:1">
+          <span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></span>
+          <h3 class="mt8">90 days included · extended storage</h3>
+          <p class="mt4">Every delivery stays available for 90 days. Need an archive (e.g. enterprise inspections)? Keep a delivery longer for <b>$0.05 per GB per month</b>, opted in per delivery.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title mt24"><span class="num"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><h3>Included with every delivery</h3><span class="rule"></span></div>
+    <div class="grid4" style="gap:10px">
+      <div class="feature"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 13v8"/><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="m8 17 4-4 4 4"/></svg></span><div><h4>Branded upload</h4><p>Resumable, phone &amp; desktop</p></div></div>
+      <div class="feature"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"/><path d="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"/><circle cx="13" cy="7" r="1" fill="currentColor"/><rect x="8" y="2" width="14" height="14" rx="2"/></svg></span><div><h4>Branded portal</h4><p>Private links, no logins</p></div></div>
+      <div class="feature"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg></span><div><h4>Unlimited recipients</h4><p>And unlimited downloads</p></div></div>
+      <div class="feature"><span class="icon-chip"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/></svg></span><div><h4>Signed status updates</h4><p>Every step, retried</p></div></div>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="card tint row" style="align-items:center; gap:12px">
+      <span class="icon-chip dark"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg></span>
+      <p style="flex:1; font-size:7.8pt"><b>Know a job's cost before it runs.</b> Add up the expected file sizes and look up the tier, or ask the API: <code>POST /v1/deliveries/quote</code> returns the tier and price for any expected size.</p>
+    </div>
+    <div class="notice mt12"><svg class="ic" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span><b style="color:#92400E">Initial pricing — subject to change.</b> This is an initial proposal for discussion, not a final offer. Final terms will be agreed in writing.</span></div>
+  </div>
+  <div class="page-foot"><span><b>Prepared for SkyyTask · Confidential</b> · Pricing Sheet · Proposal v0.1 · November 2026</span><span>Proposed design — in development · <span class="pg"></span></span></div>
+
+</section>
+</body>
+</html>

@@ -250,7 +250,7 @@ const PORTAL_PATH_PREFIXES = [
 ];
 
 /** APIs the public website needs on its own domain (request form + portfolio media). */
-const WEBSITE_DOMAIN_APIS = ["/api/request", "/api/catalog/services", "/api/public/portfolio/"];
+const WEBSITE_DOMAIN_APIS = ["/api/request", "/api/catalog/services", "/api/public/portfolio/", "/api/public/website/"];
 
 export type WebsiteDomainRoute =
   | { kind: "page"; rewrite: string | null }

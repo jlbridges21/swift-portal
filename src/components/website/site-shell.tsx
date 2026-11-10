@@ -16,7 +16,12 @@ function Brand({ view, theme, onImage, size = "md" }: { view: SiteView; theme: S
           src={logo}
           alt={view.business.name}
           eager
-          className={cn(h, "w-auto max-w-[200px] object-contain", onImage && "drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]")}
+          className={cn(
+            h,
+            "w-auto max-w-[200px] object-contain",
+            // drop-shadow follows the logo's shape (transparent pixels cast no shadow) — never a box.
+            onImage ? "drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)]" : "drop-shadow-[0_1px_4px_rgba(0,0,0,0.22)]"
+          )}
         />
       ) : (
         <span

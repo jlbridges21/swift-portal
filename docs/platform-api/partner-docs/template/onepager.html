@@ -1,0 +1,205 @@
+{{> head}}
+<body class="brief">
+
+<!-- ============================================================ 1 · LETTER -->
+<section class="page" style="padding:0">
+  <div class="cover-band" style="height: 3.35in">
+    <svg class="mesh" viewBox="0 0 816 322" preserveAspectRatio="none"><g fill="none" stroke="#fff" stroke-width="1">
+      <path d="M0 260 C200 190 420 300 816 180"/><path d="M0 220 C220 150 420 260 816 140"/><path d="M0 180 C240 110 420 220 816 100"/><path d="M0 140 C260 70 420 180 816 60"/></g></svg>
+  </div>
+  <div class="content" style="position:relative; padding: 0.5in 0.6in 0; display:flex; flex-direction:column; height:100%">
+    <div class="topbar">
+      <span class="pill" style="background: rgba(255,255,255,0.14); color:#fff">{{icon "pen-line" 9}} First draft · for discussion</span>
+      <span class="pill amber">{{icon "pencil-ruler" 9}} {{edition.label}} · {{edition.version}} · {{edition.date}}</span>
+    </div>
+    <div style="margin-top: 0.42in; color:#fff">
+      <div class="eyebrow" style="color:#C7D2FE">{{partner.name}} × ShootPortal</div>
+      <h1 style="color:#fff; font-size: 30pt; margin-top:6px">A first draft of the plan</h1>
+      <p class="lead" style="color:#E0E7FF; margin-top:6px">{{brief.subtitle}}</p>
+    </div>
+
+    <div class="cover-card" style="margin-top: 0.3in; padding: 18px 22px 16px">
+      <div class="row" style="align-items:center; justify-content:space-between">
+        <div class="lockup">
+          <img class="partner-logo" src="{{asset.partner}}/{{partner.logo}}" alt="{{partner.name}}">
+          <span class="x">×</span>
+          <img class="sp-logo" src="{{asset.template}}/brand/shootportal-logo.png" alt="ShootPortal">
+        </div>
+        <span class="small muted">{{edition.date}}</span>
+      </div>
+      <div style="height:1px; background: var(--line); margin: 14px 0 12px"></div>
+      <div class="letter">
+        <p class="hi">Hey {{brief.to}},</p>
+        {{#each brief.letter}}<p>{{this}}</p>{{/each}}
+        <div class="sig"><div class="av"><img src="{{asset.template}}/brand/shootportal-icon.png" alt=""></div><div><div class="nm">{{contact.name}}</div><div class="small muted">{{contact.title}}</div></div></div>
+      </div>
+    </div>
+
+    <div class="oneliner mt16">
+      <span class="q">{{icon "quote" 18}}</span>
+      <div><div class="eyebrow">The idea in one sentence</div><p>{{brief.oneLiner}}</p></div>
+    </div>
+
+    <div class="grid3 mt16" style="gap:12px">
+      <div class="card"><span class="icon-chip partner">{{icon "plane" 13}}</span><h4 class="mt8">For {{partner.contributors}}</h4><p>One button in {{partner.app}}. Upload photos and video right there, even big files on a spotty connection. No more Drive folders.</p></div>
+      <div class="card"><span class="icon-chip partner">{{icon "user-round" 13}}</span><h4 class="mt8">For {{partner.recipients}}</h4><p>A private, {{partner.name}}-branded page to view and download everything. No codes, no accounts, no Google Drive.</p></div>
+      <div class="card"><span class="icon-chip partner">{{icon "bell-ring" 13}}</span><h4 class="mt8">For {{partner.name}}</h4><p>Automatic updates when the pilot delivers and when the client opens and downloads. You stay in control of everything else.</p></div>
+    </div>
+
+    <div class="section-title mt16"><span class="num">{{icon "circle-help" 10}}</span><h3>As you read, I'd love your take on…</h3><span class="rule"></span></div>
+    <div class="qgrid">{{#each brief.questions}}<div class="qitem"><span class="qn">{{@n}}</span><span>{{this}}</span></div>{{/each}}</div>
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 2 · HOW IT WORKS -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">01 · How it would work</div>
+    <h2 class="mt4">Same SkyyTask job, a much better handoff</h2>
+    <p class="lead mt8">Everything up to “job done” stays exactly as it is in {{partner.name}}. ShootPortal steps in only for the last mile: getting the files from the {{partner.contributor}} to the {{partner.recipient}}, beautifully and trackably.</p>
+
+    <div class="ba mt16">
+      <div class="before">
+        <div class="eyebrow" style="color: var(--muted)">Today</div>
+        <div class="chain">{{#each partner.today}}<span class="link">{{this}}</span><span class="arr">{{icon "chevron-right" 10}}</span>{{/each}}</div>
+        <ul class="ticks crosses">{{#each partner.todayPains}}<li>{{this}}</li>{{/each}}<li>{{partner.Contributors}} set up folders and sharing by hand</li></ul>
+      </div>
+      <div class="after">
+        <div class="eyebrow" style="color:#C7D2FE">With ShootPortal</div>
+        <div class="chain"><span class="link">{{partner.button}}</span><span class="arr">{{icon "chevron-right" 10}}</span><span class="link">Upload</span><span class="arr">{{icon "chevron-right" 10}}</span><span class="link">Branded client page</span></div>
+        <ul class="ticks">
+          <li>The upload screen opens inside {{partner.app}}, already tied to the job</li>
+          <li>The {{partner.recipient}} gets one private link: no code, no login</li>
+          <li>{{partner.name}} hears back automatically at every step</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title mt20"><span class="num">A</span><h3>The workflow, step by step</h3><span class="rule"></span></div>
+    <div class="vsteps">
+      <div class="vs partner"><span class="n">1</span><div><h4>A job is set up in {{partner.name}}, like today</h4><p>{{partner.name}} quietly tells ShootPortal the job's address, the {{partner.recipient}} and the {{partner.contributor}}. Nobody has to type anything twice.</p></div></div>
+      <div class="vs partner"><span class="n">2</span><div><h4>The {{partner.contributor}} taps “{{partner.button}}”</h4><p>A {{partner.name}}-branded upload screen opens right inside the app.</p></div></div>
+      <div class="vs sp"><span class="n">3</span><div><h4>The {{partner.contributor}} uploads and taps “Submit delivery”</h4><p>Photos, video, documents or inspection files, from phone or computer. If the signal drops, it picks up where it left off.</p></div></div>
+      <div class="vs sp"><span class="n">4</span><div><h4>The {{partner.recipient}} gets their private delivery page</h4><p>By a branded email from us, a link in your {{partner.name}} chat, or both, whichever you prefer.</p></div></div>
+      <div class="vs sp"><span class="n">5</span><div><h4>The {{partner.recipient}} views and downloads</h4><p>Everything organized by type, available for {{pricing.retentionDays}} days.</p></div></div>
+      <div class="vs partner"><span class="n">6</span><div><h4>{{partner.name}} is told what happened, automatically</h4><p>“Delivered,” “client viewed,” “client downloaded,” so you can close the job or release the {{partner.contributor}}'s pay without checking by hand.</p></div></div>
+    </div>
+
+    <div class="grid2 mt20" style="gap:14px">
+      <div class="card" style="border-color: color-mix(in srgb, var(--pp) 35%, white)">
+        <div class="row" style="align-items:center; gap:8px"><img src="{{asset.partner}}/{{partner.logo}}" style="width:20px;height:20px;border-radius:5px" alt=""><h3>What {{partner.name}} keeps</h3></div>
+        <ul class="ticks mt8"><li>The job, bidding and pricing</li><li>The client relationship and your chat</li><li>Payments and pilot payouts</li><li>Your brand, front and center</li></ul>
+      </div>
+      <div class="card indigo">
+        <div class="row" style="align-items:center; gap:8px"><img src="{{asset.template}}/brand/shootportal-icon.png" style="width:20px;height:20px;border-radius:5px" alt=""><h3>What ShootPortal handles</h3></div>
+        <ul class="ticks mt8"><li>The branded upload screen for pilots</li><li>Safe storage for every file type</li><li>The branded delivery page and emails for clients</li><li>Automatic updates back to {{partner.name}}</li></ul>
+      </div>
+    </div>
+    <div class="section-title mt20"><span class="num">B</span><h3>The big picture</h3><span class="rule"></span></div>
+    <div class="flow">
+      <div class="node partner"><span class="badge">1</span><div class="glyph">{{icon "briefcase" 14}}</div><h4>{{partner.name}} job</h4><p>Set up like today</p><div class="who">{{partner.name}}</div></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node partner"><span class="badge">2</span><div class="glyph">{{icon "mouse-pointer-click" 14}}</div><h4>“{{partner.button}}”</h4><p>One tap in the app</p><div class="who">{{partner.contributor}}</div></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node sp"><span class="badge">3</span><div class="glyph">{{icon "cloud-upload" 14}}</div><h4>Branded upload</h4><p>Big files, resumable</p><div class="who">{{partner.contributor}}</div></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node sp"><span class="badge">4</span><div class="glyph">{{icon "shield-check" 14}}</div><h4>ShootPortal</h4><p>Stores &amp; organizes</p><div class="who">ShootPortal</div></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node sp"><span class="badge">5</span><div class="glyph">{{icon "images" 14}}</div><h4>Delivery page</h4><p>Private &amp; branded</p><div class="who">{{partner.recipient}}</div></div>
+      <div class="arrow">{{icon "chevron-right" 12}}</div>
+      <div class="node partner"><span class="badge">6</span><div class="glyph">{{icon "bell-ring" 14}}</div><h4>Status back</h4><p>Automatic updates</p><div class="who">{{partner.name}}</div></div>
+    </div>
+
+    <div class="oneliner mt16" style="background: var(--cloud); border-color: var(--line)">
+      <span class="q" style="color: var(--pp)">{{icon "truck" 18}}</span>
+      <div><div class="eyebrow" style="color: var(--pp)">A simple way to picture it</div><p style="font-weight:400; font-size:9pt; color: var(--slate)">Think of {{partner.name}} as the store and ShootPortal as the delivery service, with <b>{{partner.name}}'s logo on the truck</b>. {{partner.name}} takes the order and talks to the customer. ShootPortal picks up the package from the {{partner.contributor}}, delivers it to the {{partner.recipient}}'s door, and texts {{partner.name}} a photo of it on the porch.</p></div>
+    </div>
+
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 3 · WHAT EVERYONE SEES -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">02 · What everyone would see</div>
+    <h2 class="mt4">Three screens, all wearing {{partner.name}}'s brand</h2>
+    <p class="lead mt8">Illustrated mockups with made-up demo data, to show the idea. Final screens will come from the real product once it's built.</p>
+
+    <div class="row mt16" style="gap:22px; align-items:flex-start">
+      <div style="flex:none; display:flex; flex-direction:column; align-items:center; width: 1.95in">
+        {{> phone-upload}}
+        <div class="caption" style="margin-top:9px"><b>{{icon "plane" 10}} The {{partner.contributor}}</b>Tap “{{partner.button}}”, add files, tap Submit. Progress is saved if the connection drops.</div>
+      </div>
+      <div class="col">
+        {{> portal}}
+        <div class="caption" style="text-align:left; margin-top:9px"><b>{{icon "user-round" 10}} The {{partner.recipient}}'s delivery page</b>Opens from one private link. Just this job's media, with download buttons. No prices or payment screens, ever.</div>
+      </div>
+    </div>
+
+    <div class="row mt20" style="gap:22px; align-items:flex-start">
+      <div class="col">
+        {{> email}}
+        <div class="caption" style="text-align:left; margin-top:9px"><b>{{icon "mail" 10}} The {{partner.recipient}}'s notification</b>Sent in {{partner.name}}'s name, or skipped if you'd rather share the link in your own chat.</div>
+      </div>
+      <div class="col">
+        {{> status}}
+        <div class="caption" style="text-align:left; margin-top:9px"><b>{{icon "layout-dashboard" 10}} What {{partner.name}} gets back</b>An example of the live status {{partner.name}} could show in its own app or dashboard.</div>
+      </div>
+    </div>
+  </div>
+  {{> foot}}
+</section>
+
+<!-- ============================================================ 4 · PRICING, DOCS, ROADMAP -->
+<section class="page">
+  <div class="content">
+    <div class="eyebrow">03 · Pricing, what's next &amp; what you'll get from me</div>
+    <h2 class="mt4">A simple price per delivery, and a clear path to launch</h2>
+
+    <div class="section-title mt16"><span class="num">A</span><h3>The pricing I'm proposing</h3><span class="rule"></span><span class="pill amber" style="flex:none">{{pricing.headline}}</span></div>
+    <p style="font-size:8.2pt">One flat price per delivery, based only on how big it is. You'd know what every job costs the moment it's delivered, and can work it out before the job even starts.</p>
+    <div class="grid4 mt8" style="gap:10px">
+      {{#each pricing.tiers}}<div class="price-card{{#if this.hl}} hl{{/if}}" style="padding:10px 11px">
+        <div class="tier">{{this.name}}</div>
+        <div class="amt{{#if this.long}} long{{/if}}">{{this.price}}</div>
+        <div class="range" style="margin-top:4px">{{this.range}}</div>
+        <div class="ex">{{this.example}}</div>
+      </div>{{/each}}
+    </div>
+    <div class="grid3 mt8" style="gap:10px">
+      <div class="feature card tint"><span class="icon-chip dark">{{icon "calendar-range" 12}}</span><div><h4>{{pricing.minimum}}/month minimum</h4><p>Only applies if a month's deliveries add up to less. Past {{pricing.minimum}}, you pay just the total.</p></div></div>
+      <div class="feature card tint"><span class="icon-chip partner">{{icon "gift" 12}}</span><div><h4>Launch credit</h4><p>The first {{pricing.launchCreditGb}} GB of deliveries are free, and the minimum is waived while we launch.</p></div></div>
+      <div class="feature card tint"><span class="icon-chip">{{icon "archive" 12}}</span><div><h4>{{pricing.retentionDays}} days included</h4><p>Every delivery stays up {{pricing.retentionDays}} days. Need longer? {{pricing.extended}}.</p></div></div>
+    </div>
+
+    <div class="section-title mt20"><span class="num">B</span><h3>The roadmap</h3><span class="rule"></span></div>
+    <div class="card tint" style="padding:12px 10px">
+      <div class="tline six">{{#each brief.roadmap}}<div class="t"><div class="dot">{{icon this.icon 12}}</div><div class="when">{{this.when}}</div><div class="what">{{this.what}}</div></div>{{/each}}</div>
+    </div>
+
+    <div class="section-title mt20"><span class="num">C</span><h3>What you'll get from me</h3><span class="rule"></span></div>
+    <div class="grid3" style="gap:12px">
+      <div class="card doc"><div class="row" style="justify-content:space-between; align-items:center"><span class="icon-chip">{{icon "book-open" 13}}</span><span class="pill" style="background:#DCFCE7; color:#166534">Draft ready</span></div><h4 class="mt8">Integration Guide</h4><p>For you and your team: the full workflow, every screen, and who builds what. About 6 pages.</p></div>
+      <div class="card doc"><div class="row" style="justify-content:space-between; align-items:center"><span class="icon-chip">{{icon "code-xml" 13}}</span><span class="pill" style="background:#DCFCE7; color:#166534">Draft ready</span></div><h4 class="mt8">Developer Guide</h4><p>For your developers: the technical how-to, with examples. Finalized with the test sandbox.</p></div>
+      <div class="card doc"><div class="row" style="justify-content:space-between; align-items:center"><span class="icon-chip">{{icon "receipt" 13}}</span><span class="pill" style="background:#DCFCE7; color:#166534">Draft ready</span></div><h4 class="mt8">Pricing Sheet</h4><p>The numbers above on one page, finalized once we agree on them together.</p></div>
+    </div>
+
+    <div class="closing mt20">
+      <div style="flex:1">
+        <div style="font-weight:700; font-size:11pt">Tell me what you think.</div>
+        <div style="font-size:8pt; color:#E0E7FF; margin-top:3px">Reply with notes, mark this up, or just bring your thoughts on November 11. I'd rather hear what's wrong now than after we've built it.</div>
+      </div>
+      <div class="cinfo">
+        <div style="font-weight:700">{{contact.name}}</div>
+        <div>{{icon "mail" 9}} {{contact.email}}</div>
+        <div>{{icon "phone" 9}} {{contact.phone}}</div>
+      </div>
+    </div>
+    <div class="notice mt8" style="padding:5px 10px">{{icon "info" 11}}<span>{{edition.notice}} Pricing is an initial proposal, not a final offer.</span></div>
+  </div>
+  {{> foot}}
+</section>
+</body>
+</html>

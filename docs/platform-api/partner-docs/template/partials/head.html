@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=816">
+<title>{{partner.name}} × ShootPortal — {{doc.title}}</title>
+<link rel="stylesheet" href="{{asset.template}}/../styles.css">
+<style>
+  :root {
+    --p1: {{partner.colors.g1}}; --p2: {{partner.colors.g2}}; --p3: {{partner.colors.g3}}; --pp: {{partner.colors.primary}};
+  }
+</style>
+<script>
+  // ?page=N shows a single page (PNG previews). ?qa=1 flags pages whose content overflows.
+  window.addEventListener("load", () => {
+    const q = new URLSearchParams(location.search);
+    const pages = [...document.querySelectorAll(".page")];
+    pages.forEach((p, i) => { const n = p.querySelector(".pg"); if (n) n.textContent = `${i + 1} / ${pages.length}`; });
+    document.body.dataset.pages = pages.length;
+    if (q.get("page")) { document.body.classList.add("single"); pages[Number(q.get("page")) - 1]?.classList.add("show"); }
+    if (q.get("qa")) {
+      const bad = [];
+      pages.forEach((p, i) => {
+        const pr = p.getBoundingClientRect();
+        const foot = p.querySelector(".page-foot");
+        const limit = foot ? foot.getBoundingClientRect().top - 2 : pr.bottom;
+        p.querySelectorAll(".content *").forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.height && (r.bottom > limit + 0.5 || r.right > pr.right - 20)) bad.push(`p${i + 1}:${el.tagName.toLowerCase()}.${[...el.classList].join(".")}`);
+        });
+        if (p.scrollHeight > p.clientHeight + 1) bad.push(`p${i + 1}:page-scroll`);
+        p.querySelectorAll("pre").forEach((pre) => { if (pre.scrollWidth > pre.clientWidth + 1) bad.push(`p${i + 1}:pre-clipped:${pre.textContent.trim().slice(0, 30)}`); });
+      });
+      document.body.dataset.overflow = [...new Set(bad)].slice(0, 12).join(" ");
+    }
+  });
+</script>
+</head>

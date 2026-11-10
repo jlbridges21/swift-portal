@@ -1,0 +1,75 @@
+{{> head}}
+<body>
+<section class="page">
+  <div class="content" style="display:flex; flex-direction:column; height:100%">
+    <div class="topbar">
+      <div class="lockup">
+        <img class="partner-logo" src="{{asset.partner}}/{{partner.logo}}" alt="{{partner.name}}">
+        <span class="x">×</span>
+        <img class="sp-logo" src="{{asset.template}}/brand/shootportal-logo.png" alt="ShootPortal">
+      </div>
+      <span class="pill amber">{{icon "pencil-ruler" 9}} {{pricing.headline}}</span>
+    </div>
+
+    <div class="mt24">
+      <div class="eyebrow">{{partner.name}} × ShootPortal · Pricing</div>
+      <h1 class="mt4">Simple, predictable pricing per delivery</h1>
+      <p class="lead mt8" style="max-width:6.6in">{{pricing.intro}}</p>
+    </div>
+
+    <div class="grid4 mt24" style="gap:12px">
+      {{#each pricing.tiers}}<div class="price-card{{#if this.hl}} hl{{/if}}">
+        <div class="tier">{{this.name}}</div>
+        <div class="amt">{{this.price}}</div>
+        <div class="per">per delivery</div>
+        <div class="range">{{this.range}}</div>
+        <div class="ex">{{this.example}}</div>
+      </div>{{/each}}
+    </div>
+    <p class="small muted mt8">A delivery's size is the total of all files the {{partner.contributor}} uploads for one job (1 GB = 1,000,000,000 bytes). Links such as 360° tours count as zero. The price is fixed the moment the delivery is submitted and appears in the API and status updates immediately.</p>
+
+    <div class="row mt24" style="gap:14px; align-items:stretch">
+      <div class="card indigo" style="flex:1">
+        <span class="icon-chip dark">{{icon "calendar-range" 13}}</span>
+        <h3 class="mt8">{{pricing.minimum}} monthly minimum</h3>
+        <p class="mt4">Each month is the total of that month's deliveries. If it's under {{pricing.minimum}}, the invoice is {{pricing.minimum}}. Once deliveries pass {{pricing.minimum}}, you pay only the total, never total + minimum.</p>
+        <table class="t mt8">
+          <tr><th>Example month</th><th>Deliveries total</th><th>Invoice</th></tr>
+          <tr><td>Slow</td><td>$132</td><td><b>{{pricing.minimum}}</b></td></tr>
+          <tr><td>Typical</td><td>$456</td><td><b>$456</b></td></tr>
+          <tr><td>Busy</td><td>$900</td><td><b>$900</b></td></tr>
+        </table>
+      </div>
+      <div style="flex:1; display:flex; flex-direction:column; gap:12px">
+        <div class="card" style="flex:1">
+          <span class="icon-chip partner">{{icon "gift" 13}}</span>
+          <h3 class="mt8">Launch credit</h3>
+          <p class="mt4">The first <b>{{pricing.launchCreditGb}} GB</b> of deliveries are on us, and the monthly minimum is waived during the launch period. Statements still show each delivery's normal price, marked “covered by launch credit,” so you can see what it would cost.</p>
+        </div>
+        <div class="card" style="flex:1">
+          <span class="icon-chip">{{icon "archive" 13}}</span>
+          <h3 class="mt8">{{pricing.retentionDays}} days included · extended storage</h3>
+          <p class="mt4">Every delivery stays available for {{pricing.retentionDays}} days. Need an archive (e.g. enterprise inspections)? Keep a delivery longer for <b>{{pricing.extended}}</b>, opted in per delivery.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title mt24"><span class="num">{{icon "check" 10}}</span><h3>Included with every delivery</h3><span class="rule"></span></div>
+    <div class="grid4" style="gap:10px">
+      <div class="feature"><span class="icon-chip">{{icon "cloud-upload" 12}}</span><div><h4>Branded upload</h4><p>Resumable, phone &amp; desktop</p></div></div>
+      <div class="feature"><span class="icon-chip">{{icon "images" 12}}</span><div><h4>Branded portal</h4><p>Private links, no logins</p></div></div>
+      <div class="feature"><span class="icon-chip">{{icon "users" 12}}</span><div><h4>Unlimited recipients</h4><p>And unlimited downloads</p></div></div>
+      <div class="feature"><span class="icon-chip">{{icon "bell-ring" 12}}</span><div><h4>Signed status updates</h4><p>Every step, retried</p></div></div>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="card tint row" style="align-items:center; gap:12px">
+      <span class="icon-chip dark">{{icon "calculator" 13}}</span>
+      <p style="flex:1; font-size:7.8pt"><b>Know a job's cost before it runs.</b> Add up the expected file sizes and look up the tier, or ask the API: <code>POST /v1/deliveries/quote</code> returns the tier and price for any expected size.</p>
+    </div>
+    <div class="notice mt12">{{icon "info" 11}}<span><b style="color:#92400E">{{pricing.headline}}.</b> This is an initial proposal for discussion, not a final offer. Final terms will be agreed in writing.</span></div>
+  </div>
+  {{> foot}}
+</section>
+</body>
+</html>

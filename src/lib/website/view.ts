@@ -104,7 +104,31 @@ export type SiteLinks = {
 export type SiteHeroMedia =
   | { kind: "image"; url: string; alt: string }
   | { kind: "video"; youtubeId: string; posterUrl: string }
+  | { kind: "file-video"; src: string; posterUrl: string | null }
   | { kind: "design" };
+
+/** Where hero media picked from ShootPortal media is served from (public site vs. editor preview). */
+export type SiteMediaUrls = {
+  image: (mediaId: string) => string;
+  play: (mediaId: string) => string;
+};
+
+export const PUBLIC_SITE_MEDIA_URLS: SiteMediaUrls = {
+  image: (id) => `/api/public/website/hero/${id}?s=large`,
+  play: (id) => `/api/public/website/hero/${id}?play=1`,
+};
+
+/**
+ * Logos go through /api/public/website/logo, which keeps real transparency and turns a flat white
+ * background (common in exported logo files) transparent, so templates can use a shape-following
+ * shadow instead of showing a white box.
+ */
+export function websiteLogoSrc(url: string): string {
+  const u = url.trim();
+  if (!u) return "";
+  if (u.startsWith("data:") || u.endsWith(".svg") || /\.svg(\?|$)/i.test(u)) return u;
+  return `/api/public/website/logo?u=${encodeURIComponent(u)}`;
+}
 
 export type SiteView = {
   template: WebsiteTemplateId;
@@ -248,7 +272,9 @@ export function buildSiteView(input: {
   services: SiteServiceInput[];
   portfolio: SitePortfolioProject[];
   links: SiteLinks;
+  mediaUrls?: SiteMediaUrls;
 }): SiteView {
+  const mediaUrls = input.mediaUrls ?? PUBLIC_SITE_MEDIA_URLS;
   const { website, business } = input;
   const name = business.name.trim() || "Studio";
   const serviceNames = input.services.map((s) => s.name);
@@ -271,8 +297,16 @@ export function buildSiteView(input: {
   let media: SiteHeroMedia = { kind: "design" };
   const autoCover = featured.find((p) => p.cover)?.cover ?? null;
   const videoId = website.heroVideoUrl ? extractYouTubeId(website.heroVideoUrl) : null;
-  if (website.heroSource === "image" && website.heroImageUrl) {
+  const pickedImage = website.heroImageMedia;
+  const pickedVideo = website.heroVideoMedia;
+  if (website.heroSource === "image" && pickedImage) {
+    media = { kind: "image", url: mediaUrls.image(pickedImage.id), alt: `${name} photography` };
+  } else if (website.heroSource === "image" && website.heroImageUrl) {
     media = { kind: "image", url: website.heroImageUrl, alt: `${name} photography` };
+  } else if (website.heroSource === "video" && pickedVideo?.source === "youtube" && pickedVideo.youtubeId) {
+    media = { kind: "video", youtubeId: pickedVideo.youtubeId, posterUrl: `https://img.youtube.com/vi/${pickedVideo.youtubeId}/maxresdefault.jpg` };
+  } else if (website.heroSource === "video" && pickedVideo) {
+    media = { kind: "file-video", src: mediaUrls.play(pickedVideo.id), posterUrl: mediaUrls.image(pickedVideo.id) };
   } else if (website.heroSource === "video" && videoId) {
     media = { kind: "video", youtubeId: videoId, posterUrl: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` };
   } else if ((website.heroSource === "auto" || website.heroSource === "image") && autoCover) {
@@ -308,7 +342,7 @@ export function buildSiteView(input: {
     business: {
       name,
       tagline: business.tagline.trim(),
-      logoUrl: business.logoUrl.trim(),
+      logoUrl: websiteLogoSrc(business.logoUrl),
       email: business.email.trim(),
       phone: business.phone.trim(),
       phoneHref: phoneHref(business.phone),
