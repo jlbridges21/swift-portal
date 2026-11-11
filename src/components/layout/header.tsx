@@ -284,6 +284,19 @@ export function Header({
               <div className="shrink-0">
                 <NotificationBell />
               </div>
+              {/* Interface rollout: always-available switch (the banner can be dismissed). Icon-only
+                  so the business name keeps its room; the phone menu has the labelled version. */}
+              {showSwitch ? (
+                <button
+                  type="button"
+                  onClick={() => switchInterface(switchTarget)}
+                  title={switchLabel}
+                  aria-label={switchLabel}
+                  className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-subtle text-accent ring-1 ring-accent/20 transition-colors hover:bg-accent hover:text-accent-foreground md:inline-flex"
+                >
+                  <Sparkles className="h-[18px] w-[18px]" aria-hidden />
+                </button>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"
