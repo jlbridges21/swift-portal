@@ -44,6 +44,7 @@ import { cn, defaultProjectName } from "@/lib/utils";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { ALLOWED_VIDEO_MIME_TYPES } from "@/lib/upload/constants";
 import { toast } from "sonner";
+import { DeleteProjectModal } from "@/components/admin/permanent-delete-modals";
 import { useVideoReviewDeleteHandler } from "@/components/admin/video-review-admin-actions";
 import { AdminVideoGridCard } from "@/components/admin/admin-video-grid-card";
 import { SortableVideoItem, SortableVideoList } from "@/components/admin/sortable-video-grid";
@@ -214,6 +215,7 @@ export function AdminProjectDetail({
   const [markingShootComplete, setMarkingShootComplete] = useState(false);
   const [creatingPayment, setCreatingPayment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPermanentDelete, setShowPermanentDelete] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [folders, setFolders] = useState(initialFolders);
   const [tourPendingDelete, setTourPendingDelete] = useState<Tour | null>(null);
@@ -1013,7 +1015,9 @@ export function AdminProjectDetail({
   const assignedClientForShare = useMemo(() => {
     const primary =
       projectClients.find((pc) => pc.is_primary)?.clients ??
-      (initialProject.clients as Client);
+      (initialProject.clients as Client | null | undefined);
+    // Orphaned project (its client was deleted): nobody holds assigned-client access.
+    if (!primary) return null;
     return {
       name: primary.name || primary.full_name || primary.email,
       email: primary.email,
@@ -1073,6 +1077,9 @@ export function AdminProjectDetail({
                 <Trash2 className="h-4 w-4" /> Hide
               </Button>
             )}
+            <Button variant="outline" size="sm" className="text-red-600" onClick={() => setShowPermanentDelete(true)}>
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
           </div>
         </div>
       </div>
@@ -1159,7 +1166,7 @@ export function AdminProjectDetail({
       <ProjectStaffCard projectId={initialProject.id} />
 
       <ProjectClientsCard
-        primaryClient={initialProject.clients as Client}
+        primaryClient={(initialProject.clients as Client | null | undefined) ?? null}
         primaryClientId={initialProject.client_id}
         projectClients={projectClients}
         allClients={allClients}
@@ -1186,7 +1193,7 @@ export function AdminProjectDetail({
           projectId={initialProject.id}
           quotes={quotes}
           isAdmin
-          clientId={initialProject.client_id}
+          clientId={initialProject.client_id ?? undefined}
           clientName={
             initialProject.clients?.full_name || initialProject.clients?.name || "Client"
           }
@@ -1788,6 +1795,22 @@ export function AdminProjectDetail({
         </p>
       </Modal>
 
+      <DeleteProjectModal
+        open={showPermanentDelete}
+        onClose={() => setShowPermanentDelete(false)}
+        projectId={initialProject.id}
+        projectName={displayName}
+        counts={{ media: media.length, tours: tours.length, models: models.length }}
+        paidInvoiceCount={paymentList.filter((p) => p.status === "paid" || p.status === "processing").length}
+        onHide={initialProject.deleted_at ? undefined : () => hideProject()}
+        hiding={hidingProject}
+        onDeleted={() => {
+          setShowPermanentDelete(false);
+          router.push("/admin/projects");
+          router.refresh();
+        }}
+      />
+
       <Modal
         open={!!tourPendingDelete}
         onClose={() => !deletingTour && setTourPendingDelete(null)}
@@ -1860,8 +1883,8 @@ function ProjectClientsCard({
   onCreateClient,
   projectId,
 }: {
-  primaryClient: Client;
-  primaryClientId: string;
+  primaryClient: Client | null;
+  primaryClientId: string | null;
   projectClients: {
     id: string;
     client_id: string;
@@ -1879,7 +1902,7 @@ function ProjectClientsCard({
 }) {
   const associated = useMemo(() => {
     const rows = [...projectClients];
-    if (!rows.some((pc) => pc.client_id === primaryClientId)) {
+    if (primaryClientId && primaryClient && !rows.some((pc) => pc.client_id === primaryClientId)) {
       rows.unshift({
         id: "primary-fallback",
         client_id: primaryClientId,

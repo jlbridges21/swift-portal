@@ -211,7 +211,7 @@ type ProjectRow = {
   status: string;
   property_address: string;
   cover_image_id: string | null;
-  client_id: string;
+  client_id: string | null;
   property_id: string | null;
   clients: { id: string; name: string; full_name: string | null; company: string | null } | { id: string; name: string; full_name: string | null; company: string | null }[] | null;
   properties: { property_type: string | null } | { property_type: string | null }[] | null;
@@ -266,6 +266,39 @@ async function attachFolderNames(
   return assets.map((a) =>
     a.folder_id ? { ...a, folder_name: names.get(a.folder_id) ?? null } : a
   );
+}
+
+/** Unassigned rows (no project) carry client_id directly — fill in the client's display name. */
+async function attachUnassignedClientNames(
+  db: TenantServiceClient,
+  assets: LibraryAsset[]
+): Promise<LibraryAsset[]> {
+  const ids = [
+    ...new Set(
+      assets
+        .filter((a) => !a.project_id && a.client_id && a.client_name === "—")
+        .map((a) => a.client_id as string)
+    ),
+  ];
+  if (!ids.length) return assets;
+  const names = new Map<string, { name: string; company: string | null }>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data } = await db
+      .from("clients")
+      .select("id, name, full_name, company")
+      .in("id", ids.slice(i, i + 100));
+    (data ?? []).forEach((c) =>
+      names.set(c.id as string, {
+        name: (c.full_name as string | null) || (c.name as string) || "—",
+        company: (c.company as string | null) ?? null,
+      })
+    );
+  }
+  return assets.map((a) => {
+    if (a.project_id || !a.client_id) return a;
+    const hit = names.get(a.client_id);
+    return hit ? { ...a, client_name: hit.name, client_company: hit.company } : a;
+  });
 }
 
 function mediaRowHasFile(row: MediaAsset): boolean {
@@ -374,9 +407,9 @@ function mapMediaRowWithProject(
   };
 }
 
-function mapTourRowWithProject(row: Tour, project: ProjectRow): LibraryAsset {
-  const client = unwrapRelation(project.clients);
-  const property = unwrapRelation(project.properties);
+function mapTourRowWithProject(row: Tour, project: ProjectRow | null): LibraryAsset {
+  const client = project ? unwrapRelation(project.clients) : null;
+  const property = project ? unwrapRelation(project.properties) : null;
   return {
     id: row.id,
     kind: "tour",
@@ -384,17 +417,17 @@ function mapTourRowWithProject(row: Tour, project: ProjectRow): LibraryAsset {
     file_name: null,
     thumbnail_url: row.thumbnail_url,
     project_id: row.project_id,
-    project_name: project.project_name,
+    project_name: project?.project_name ?? "Unassigned",
     folder_id: null,
     folder_name: null,
-    project_status: project.status,
-    service_type: project.service_type,
-    property_address: project.property_address,
+    project_status: project?.status ?? "—",
+    service_type: project?.service_type ?? "—",
+    property_address: project?.property_address ?? "—",
     property_type: property?.property_type ?? null,
-    client_id: project.client_id,
+    client_id: project ? project.client_id : row.client_id ?? null,
     client_name: client?.full_name || client?.name || "—",
     client_company: client?.company ?? null,
-    property_id: project.property_id,
+    property_id: project?.property_id ?? null,
     media_source: "kuula",
     file_size: null,
     width: null,
@@ -422,9 +455,9 @@ function mapTourRowWithProject(row: Tour, project: ProjectRow): LibraryAsset {
   };
 }
 
-function mapModelRowWithProject(row: Project3dModel, project: ProjectRow): LibraryAsset {
-  const client = unwrapRelation(project.clients);
-  const property = unwrapRelation(project.properties);
+function mapModelRowWithProject(row: Project3dModel, project: ProjectRow | null): LibraryAsset {
+  const client = project ? unwrapRelation(project.clients) : null;
+  const property = project ? unwrapRelation(project.properties) : null;
   return {
     id: row.id,
     kind: "model",
@@ -432,17 +465,17 @@ function mapModelRowWithProject(row: Project3dModel, project: ProjectRow): Libra
     file_name: null,
     thumbnail_url: null,
     project_id: row.project_id,
-    project_name: project.project_name,
+    project_name: project?.project_name ?? "Unassigned",
     folder_id: null,
     folder_name: null,
-    project_status: project.status,
-    service_type: project.service_type,
-    property_address: project.property_address,
+    project_status: project?.status ?? "—",
+    service_type: project?.service_type ?? "—",
+    property_address: project?.property_address ?? "—",
     property_type: property?.property_type ?? null,
-    client_id: project.client_id,
+    client_id: project ? project.client_id : row.client_id ?? null,
     client_name: client?.full_name || client?.name || "—",
     client_company: client?.company ?? null,
-    property_id: project.property_id,
+    property_id: project?.property_id ?? null,
     media_source: row.provider,
     file_size: null,
     width: null,
@@ -602,6 +635,34 @@ async function fetchMediaAssets(
   return attachFolderNames(db, mapped);
 }
 
+/**
+ * Tours / 3D models whose project was deleted with "keep media" (project_id NULL, v120).
+ * The main query already returns them when it is not narrowed by project; when a client
+ * filter narrows it to that client's projects, fetch the client's detached rows too.
+ * Staff scopes are project lists, so staff never see detached rows (same as media).
+ * Before v120 the client_id column does not exist — the query errors and is skipped.
+ */
+async function fetchDetachedRows<T extends { id: string }>(
+  db: TenantServiceClient,
+  table: "tours" | "project_3d_models",
+  rf: ResolvedFilters,
+  favoritesOnly: boolean
+): Promise<T[]> {
+  if (rf.scope !== "all" || !rf.narrowedProjectIds || !rf.clientIds.size || rf.propertyIds.size) return [];
+  let query = db
+    .from(table)
+    .select("*")
+    .is("project_id", null)
+    .in("client_id", [...rf.clientIds])
+    .order("created_at", { ascending: false });
+  if (rf.from) query = query.gte("created_at", rf.from);
+  if (rf.to) query = query.lte("created_at", rf.to);
+  if (favoritesOnly && table === "tours") query = query.eq("is_favorite", true);
+  const { data, error } = await query.limit(500);
+  if (error) return [];
+  return (data ?? []) as unknown as T[];
+}
+
 async function fetchTourAssets(
   db: TenantServiceClient,
   rf: ResolvedFilters,
@@ -624,10 +685,16 @@ async function fetchTourAssets(
   }
 
   const rows = (data ?? []) as Tour[];
-  const projectMap = await loadProjectMap(db, rows.map((r) => r.project_id));
+  rows.push(...(await fetchDetachedRows<Tour>(db, "tours", rf, favoritesOnly)));
+  const projectMap = await loadProjectMap(
+    db,
+    rows.map((r) => r.project_id).filter((id): id is string => !!id)
+  );
 
   return rows
     .map((row) => {
+      // Detached (project deleted, media kept): listed as Unassigned under its client.
+      if (!row.project_id) return mapTourRowWithProject(row, null);
       const project = projectMap.get(row.project_id);
       if (!project) return null;
       return mapTourRowWithProject(row, project);
@@ -661,10 +728,16 @@ async function fetchModelAssets(
   }
 
   const rows = (data ?? []) as Project3dModel[];
-  const projectMap = await loadProjectMap(db, rows.map((r) => r.project_id));
+  rows.push(...(await fetchDetachedRows<Project3dModel>(db, "project_3d_models", rf, favoritesOnly)));
+  const projectMap = await loadProjectMap(
+    db,
+    rows.map((r) => r.project_id).filter((id): id is string => !!id)
+  );
 
   return rows
     .map((row) => {
+      // Detached (project deleted, media kept): listed as Unassigned under its client.
+      if (!row.project_id) return mapModelRowWithProject(row, null);
       const project = projectMap.get(row.project_id);
       if (!project) return null;
       return mapModelRowWithProject(row, project);
@@ -697,6 +770,7 @@ export async function queryMediaLibraryAll(
   });
 
   combined = await attachTagsToAssets(db, combined);
+  combined = await attachUnassignedClientNames(db, combined);
 
   // All filters combine with AND; values within one filter combine with OR.
   if (rf.kinds.size) combined = combined.filter((a) => rf.kinds.has(a.kind));
@@ -801,6 +875,10 @@ export async function getMediaAssetDetail(
   if (kind === "model") {
     const { data } = await db.from("project_3d_models").select("*").eq("id", assetId).maybeSingle();
     if (!data) return null;
+    if (!data.project_id) {
+      const [named] = await attachUnassignedClientNames(db, [mapModelRowWithProject(data as Project3dModel, null)]);
+      return named;
+    }
     const projectMap = await loadProjectMap(db, [data.project_id]);
     const project = projectMap.get(data.project_id);
     if (!project) return null;
@@ -810,6 +888,10 @@ export async function getMediaAssetDetail(
   if (kind === "tour") {
     const { data } = await db.from("tours").select("*").eq("id", assetId).maybeSingle();
     if (!data) return null;
+    if (!data.project_id) {
+      const [named] = await attachUnassignedClientNames(db, [mapTourRowWithProject(data as Tour, null)]);
+      return named;
+    }
     const projectMap = await loadProjectMap(db, [data.project_id]);
     const project = projectMap.get(data.project_id);
     if (!project) return null;

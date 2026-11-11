@@ -53,8 +53,9 @@ export async function PATCH(request: Request) {
           .select("id, project_id")
           .eq("id", id)
           .maybeSingle();
-        if (!tour?.project_id) continue;
-        if (!(await canAccessProject(profile, tour.project_id))) continue;
+        if (!tour) continue;
+        // Detached tours (project deleted, media kept) follow the unassigned-media rule.
+        if (tour.project_id ? !(await canAccessProject(profile, tour.project_id)) : !(await canAccessMediaAsset(tenant.businessId, profile, null))) continue;
         scopedIds.push(id);
       } else {
         const { data: asset } = await db

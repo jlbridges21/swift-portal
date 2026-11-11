@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
 import { ClientW9Panel } from "@/components/admin/client-w9-panel";
 import { ClientPortalRecoveryCard } from "@/components/admin/client-portal-recovery-card";
+import { DeleteClientModal } from "@/components/admin/permanent-delete-modals";
 import { ProjectCoverImage } from "@/components/projects/project-cover-image";
 import type { Payment } from "@/lib/types";
 
@@ -339,6 +340,7 @@ export function ClientCrmProfile({
   const [notes, setNotes] = useState<ClientNote[]>(initialData.notes);
   const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPermanentDelete, setShowPermanentDelete] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [editingNote, setEditingNote] = useState<ClientNote | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -523,6 +525,9 @@ export function ClientCrmProfile({
               <Trash2 className="h-4 w-4" />Hide
             </Button>
           )}
+          <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={() => setShowPermanentDelete(true)}>
+            <Trash2 className="h-4 w-4" />Delete
+          </Button>
         </div>
       </div>
 
@@ -795,6 +800,20 @@ export function ClientCrmProfile({
           Nothing is permanently erased — payment history, media, and notes remain in the database and can be restored later from Hidden Clients.
         </p>
       </Modal>
+
+      <DeleteClientModal
+        open={showPermanentDelete}
+        onClose={() => setShowPermanentDelete(false)}
+        clientId={client.id}
+        clientName={displayName}
+        projectCount={projects.length}
+        onDeleted={() => {
+          setShowPermanentDelete(false);
+          if (embedded) embedded.onHidden();
+          else router.push("/admin/clients");
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

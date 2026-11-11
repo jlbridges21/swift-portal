@@ -864,7 +864,7 @@ export function ProjectPageClient({
         )}
 
         {canViewFinancials && (
-          <ClientMessagesChat projectId={project.id} clientId={project.client_id} compact />
+          <ClientMessagesChat projectId={project.id} clientId={project.client_id ?? undefined} compact />
         )}
 
         {canViewFinancials && status !== "ready_for_review" && status !== "awaiting_payment" && (

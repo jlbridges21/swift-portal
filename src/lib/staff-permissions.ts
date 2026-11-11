@@ -45,6 +45,7 @@ export const STAFF_PERMISSION_KEYS = [
   "clients.create",
   "clients.edit",
   "clients.add_to_projects",
+  "clients.delete",
   // Media
   "media.upload",
   "media.delete",
@@ -155,7 +156,7 @@ export const STAFF_PERMISSION_META: StaffPermissionMeta[] = [
   {
     key: "projects.delete",
     label: "Delete / archive projects",
-    description: "Hide or permanently remove projects.",
+    description: "Hide or permanently remove projects. Deleting a project's media too also needs Delete media.",
     group: "projects",
     default: false,
   },
@@ -184,6 +185,13 @@ export const STAFF_PERMISSION_META: StaffPermissionMeta[] = [
     key: "clients.add_to_projects",
     label: "Add clients to projects",
     description: "Attach clients to projects.",
+    group: "clients",
+    default: false,
+  },
+  {
+    key: "clients.delete",
+    label: "Delete clients",
+    description: "Permanently delete client records (their projects and media are kept).",
     group: "clients",
     default: false,
   },

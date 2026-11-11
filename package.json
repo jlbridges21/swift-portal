@@ -25,6 +25,7 @@
     "test:plan-stripe-prices": "npx tsx scripts/verify-plan-stripe-price-consistency.ts",
     "test:analytics": "npx tsx scripts/verify-analytics.ts",
     "test:client-view": "npx tsx scripts/verify-client-view.ts",
+    "test:permanent-delete": "npx tsx scripts/verify-permanent-delete.ts",
     "test:push-platform": "npx tsx scripts/verify-push-platform.ts",
     "test:seo-growth": "npx tsx scripts/verify-seo-growth.ts",
     "test:dashboard-analytics": "npx tsx scripts/verify-dashboard-analytics.ts",

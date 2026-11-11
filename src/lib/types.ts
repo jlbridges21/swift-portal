@@ -177,7 +177,7 @@ export interface Lead {
 export interface Project {
   id: string;
   business_id?: string | null;
-  client_id: string;
+  client_id: string | null;
   property_id?: string | null;
   property_address: string;
   project_name: string;
@@ -213,7 +213,7 @@ export interface Project {
   client_section_payments?: boolean;
   created_at: string;
   updated_at: string;
-  clients?: Client;
+  clients?: Client | null;
   properties?: Property;
 }
 
@@ -275,7 +275,9 @@ export interface MediaFolder {
 export interface Tour {
   id: string;
   business_id?: string | null;
-  project_id: string;
+  /** NULL once its project was deleted with "keep media" (v120). */
+  project_id: string | null;
+  client_id?: string | null;
   tour_name: string;
   thumbnail_url: string | null;
   kuula_url: string;
@@ -294,7 +296,9 @@ export interface Tour {
 export interface Project3dModel {
   id: string;
   business_id: string;
-  project_id: string;
+  /** NULL once its project was deleted with "keep media" (v120). */
+  project_id: string | null;
+  client_id?: string | null;
   title: string;
   embed_url: string;
   provider: string;
@@ -309,7 +313,7 @@ export interface Payment {
   id: string;
   business_id?: string | null;
   project_id: string;
-  client_id: string;
+  client_id: string | null;
   quote_id?: string | null;
   amount: number;
   description: string;
@@ -364,7 +368,7 @@ export interface Revision {
   id: string;
   business_id?: string | null;
   project_id: string;
-  client_id: string;
+  client_id: string | null;
   description: string;
   status: RevisionStatus;
   admin_notes: string | null;

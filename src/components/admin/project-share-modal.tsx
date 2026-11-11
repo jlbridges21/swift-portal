@@ -72,7 +72,8 @@ export function ProjectShareModal({
   open: boolean;
   onClose: () => void;
   projectId: string;
-  assignedClient: AssignedClient;
+  /** Null when the project has no client (client was deleted). */
+  assignedClient: AssignedClient | null;
   clientProjectUrl: string;
   initialShares: ProjectShareRow[];
   initialLinkMode: ProjectLinkAccessMode;
@@ -100,7 +101,7 @@ export function ProjectShareModal({
   const [refreshing, setRefreshing] = useState(false);
   const [showReEnableReminder, setShowReEnableReminder] = useState(false);
 
-  const assignedEmail = normalizeShareEmail(assignedClient.email);
+  const assignedEmail = assignedClient ? normalizeShareEmail(assignedClient.email) : null;
 
   const parsedCandidates = useMemo(() => parseShareEmailInput(emailInput), [emailInput]);
   const invalidEmails = useMemo(
@@ -528,6 +529,7 @@ export function ProjectShareModal({
             {refreshing && <Loader2 className="h-4 w-4 animate-spin text-muted" />}
           </div>
           <ul className="divide-y divide-border rounded-lg border border-border overflow-hidden">
+            {assignedClient ? (
             <li className="flex items-start gap-3 px-3 py-3 bg-muted/20">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
                 <User className="h-4 w-4" />
@@ -541,6 +543,11 @@ export function ProjectShareModal({
                 </p>
               </div>
             </li>
+            ) : (
+            <li className="px-3 py-3 bg-muted/20 text-xs text-muted">
+              No client is assigned to this project.
+            </li>
+            )}
             {shares.map((share) => {
               const accessWindow = validateShareAccessWindow(share);
               const expired = !accessWindow.ok && !share.revoked_at;

@@ -72,7 +72,7 @@ async function createCheckoutSession(
     paymentId: payment.id,
     businessId: payment.business_id || businessId,
     projectId: payment.project_id,
-    clientId: payment.client_id,
+    clientId: payment.client_id ?? undefined,
   });
 
   let stripeContext;

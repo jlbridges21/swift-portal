@@ -72,6 +72,10 @@ function approvalNotice(input: CreatePaymentLinkInput, payUrl: string): { title:
  * rows for the given business.
  */
 export async function createPaymentLink(input: CreatePaymentLinkInput): Promise<CreatePaymentLinkResult> {
+  if (input.projectId && !input.clientId) {
+    // Orphaned project (its client was deleted) — nobody to bill until a client is added.
+    throw new PaymentLinkError("Add a client to this project before sending a payment link.", 400);
+  }
   if (!input.projectId || !input.clientId || !input.amount || !input.description) {
     throw new PaymentLinkError("Missing required fields", 400);
   }

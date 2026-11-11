@@ -105,11 +105,16 @@ export async function PATCH(request: Request) {
     .select("id, project_id")
     .eq("id", id)
     .maybeSingle();
-  if (!existing?.project_id) {
+  if (!existing) {
     return NextResponse.json({ error: "Model not found" }, { status: 404 });
   }
+  // Detached (project deleted, media kept): business-scoped, owner/admin only — like unassigned media.
+  if (!existing.project_id) {
+    const { isOwnerAdmin } = await import("@/lib/staff-access");
+    if (!isOwnerAdmin(auth.profile)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const { canAccessProject } = await import("@/lib/project-access");
-  if (!(await canAccessProject(auth.profile, existing.project_id))) {
+  if (existing.project_id && !(await canAccessProject(auth.profile, existing.project_id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
