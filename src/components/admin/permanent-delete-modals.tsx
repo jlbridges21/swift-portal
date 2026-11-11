@@ -29,6 +29,7 @@ export function DeleteProjectModal({
   paidInvoiceCount = 0,
   onHide,
   hiding = false,
+  alreadyHidden = false,
   onDeleted,
 }: {
   open: boolean;
@@ -45,6 +46,8 @@ export function DeleteProjectModal({
   /** Hide the project (same action as the Hide button). Omit to not offer it. */
   onHide?: () => void;
   hiding?: boolean;
+  /** The project is already hidden — wording changes; Hide isn't offered. */
+  alreadyHidden?: boolean;
   onDeleted: () => void;
 }) {
   const [pending, setPending] = useState<ProjectDeleteMode | null>(null);
@@ -111,10 +114,17 @@ export function DeleteProjectModal({
             {plural(paidCount, "paid invoice")}. Paid invoices are kept for your records, so this project
             can only be hidden.
           </p>
-          <p>
-            Hiding takes it off your project lists and dashboard. Nothing is erased: the invoices, media and
-            history stay, and you can restore the project anytime.
-          </p>
+          {alreadyHidden ? (
+            <p>
+              It&rsquo;s already hidden, so it stays off your project lists and dashboard. Nothing else is
+              needed.
+            </p>
+          ) : (
+            <p>
+              Hiding takes it off your project lists and dashboard. Nothing is erased: the invoices, media and
+              history stay, and you can restore the project anytime.
+            </p>
+          )}
         </div>
       </Modal>
     );
@@ -172,7 +182,9 @@ export function DeleteProjectModal({
           {assetParts.length ? ` ${assetParts.join(", ")}` : " every attached photo, video, file, tour and 3D model"}{" "}
           and removes the files from storage, which frees up space.
         </p>
-        <p className="text-xs">Just want it out of the way? Use Hide instead — it can be restored later.</p>
+        {!alreadyHidden && (
+          <p className="text-xs">Just want it out of the way? Use Hide instead — it can be restored later.</p>
+        )}
       </div>
     </Modal>
   );

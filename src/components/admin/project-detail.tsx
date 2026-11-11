@@ -1804,6 +1804,7 @@ export function AdminProjectDetail({
         paidInvoiceCount={paymentList.filter((p) => p.status === "paid" || p.status === "processing").length}
         onHide={initialProject.deleted_at ? undefined : () => hideProject()}
         hiding={hidingProject}
+        alreadyHidden={Boolean(initialProject.deleted_at)}
         onDeleted={() => {
           setShowPermanentDelete(false);
           router.push("/admin/projects");

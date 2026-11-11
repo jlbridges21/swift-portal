@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { canAccessProject } from "@/lib/project-access";
+import { resolveProjectAccess } from "@/lib/project-access";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import {
   DeleteMigrationMissingError,
@@ -22,7 +22,7 @@ interface RouteParams {
  * keep_media needs projects.delete; delete_media also needs media.delete.
  * Refused with 409 { code: "has_paid_invoices" } when the project has paid / processing
  * payments — those projects can only be hidden.
- * The project's client is never modified.
+ * Works for visible and hidden projects. The project's client is never modified.
  */
 export async function POST(request: Request, { params }: RouteParams) {
   try {
@@ -40,7 +40,14 @@ export async function POST(request: Request, { params }: RouteParams) {
     const { id } = await params;
     const tenant = await getTenantContext();
     if (!tenant) return missingTenantResponse(profile.role);
-    if (!(await canAccessProject(profile, id))) {
+    // Hidden (soft-deleted) projects can be deleted too. includeDeleted only lets an
+    // owner/admin of this business through for hidden rows (same rule as Unhide);
+    // visible projects keep the normal staff assignment check.
+    const access = await resolveProjectAccess(profile, id, {
+      includeDeleted: true,
+      tenantBusinessId: tenant.businessId,
+    });
+    if (!access.allowed || access.kind !== "admin") {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
