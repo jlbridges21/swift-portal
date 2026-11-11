@@ -615,7 +615,7 @@ export async function claimCustomDomain(options: {
     await requireEntitlement(options.businessId, "custom_domain");
   }
 
-  const validated = validateCustomDomainCandidate(options.domainRaw);
+  const validated = validateCustomDomainCandidate(options.domainRaw, { allowWww: kind === "website" });
   if (!validated.ok) throw new Error(validated.error);
 
   const { domain } = validated;

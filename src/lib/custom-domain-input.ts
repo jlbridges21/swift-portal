@@ -242,7 +242,16 @@ export function composePortalDomainInput(input: {
   };
 }
 
-export function validateCustomDomainCandidate(raw: unknown): DomainValidationResult {
+export function validateCustomDomainCandidate(
+  raw: unknown,
+  opts: {
+    /**
+     * Business Website: www.example.com is the recommended main address, and the admin has
+     * acknowledged it replaces their current site. Portal / property-website domains keep the guard.
+     */
+    allowWww?: boolean;
+  } = {}
+): DomainValidationResult {
   const domain = normalizeCustomDomain(raw);
   if (!domain) {
     return {
@@ -260,7 +269,7 @@ export function validateCustomDomainCandidate(raw: unknown): DomainValidationRes
   }
 
   const first = domain.split(".")[0];
-  if (first === "www" && !isApexDomain(domain)) {
+  if (first === "www" && !isApexDomain(domain) && !opts.allowWww) {
     return {
       ok: false,
       error:

@@ -99,4 +99,17 @@ function expect(label: string, ok: boolean, detail?: string) {
   if (!r.ok) console.log("   →", r.error);
 }
 
+// Business Website: www is the recommended main address — allowed there only
+{
+  const r = validateCustomDomainCandidate("www.swiftaerialmedia.com", { allowWww: true });
+  expect("website www main address accepted", r.ok && r.domain === "www.swiftaerialmedia.com" && !r.isApex);
+  const apex = validateCustomDomainCandidate("swiftaerialmedia.com", { allowWww: true });
+  expect("website apex main address accepted", apex.ok && apex.isApex);
+  const reserved = validateCustomDomainCandidate("www.shootportal.app", { allowWww: true });
+  expect("website www under platform root still refused", !reserved.ok);
+  const composed = composePortalDomainInput({ mode: "subdomain", subdomain: "www", rootDomain: "swiftaerialmedia.com", allowWww: true });
+  const server = composed.ok ? validateCustomDomainCandidate(composed.domain, { allowWww: true }) : null;
+  expect("website www: UI compose and server validation agree", !!server && server.ok);
+}
+
 console.log("\nAll custom-domain input cases passed.");
