@@ -1069,12 +1069,12 @@ export function AdminProjectDetail({
               <Eye className="h-4 w-4" /> Client Page
             </a>
             {initialProject.deleted_at ? (
-              <Button variant="outline" size="sm" disabled={restoringProject} onClick={() => restoreProject()}>
-                Restore
+              <Button variant="outline" size="sm" disabled={restoringProject} onClick={() => restoreProject()} title="This project is hidden — show it again in your lists">
+                <Eye className="h-4 w-4" /> {restoringProject ? "Unhiding…" : "Unhide"}
               </Button>
             ) : (
-              <Button variant="outline" size="sm" className="text-red-600" onClick={() => setShowDeleteConfirm(true)}>
-                <Trash2 className="h-4 w-4" /> Hide
+              <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(true)} title="Hide from your lists and dashboard">
+                <EyeOff className="h-4 w-4" /> Hide
               </Button>
             )}
             <Button variant="outline" size="sm" className="text-red-600" onClick={() => setShowPermanentDelete(true)}>

@@ -19,7 +19,7 @@ import type { ClientCrmProfile, ClientNote } from "@/lib/clients-crm";
 import { useAsyncAction } from "@/lib/use-async-action";
 import {
   Users, Search, ExternalLink, Mail, Phone, Building, Plus, MapPin,
-  DollarSign, FolderKanban, Pencil, Trash2, Copy, MessageSquare, Clock,
+  DollarSign, FolderKanban, Pencil, Trash2, Copy, MessageSquare, Clock, Eye, EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminPaymentActions } from "@/components/admin/admin-payment-actions";
@@ -517,12 +517,12 @@ export function ClientCrmProfile({
           <Button variant="outline" size="sm" onClick={copyPortalLink}><Copy className="h-4 w-4" />Portal Link</Button>
           <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}><Pencil className="h-4 w-4" />Edit</Button>
           {client.deleted_at ? (
-            <Button variant="outline" size="sm" disabled={restoringClient} onClick={() => restoreClient()}>
-              Restore Client
+            <Button variant="outline" size="sm" disabled={restoringClient} onClick={() => restoreClient()} title="This client is hidden — show them again in your lists">
+              <Eye className="h-4 w-4" />{restoringClient ? "Unhiding…" : "Unhide"}
             </Button>
           ) : (
-            <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={() => setShowDeleteConfirm(true)}>
-              <Trash2 className="h-4 w-4" />Hide
+            <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(true)} title="Hide from your lists and dashboard">
+              <EyeOff className="h-4 w-4" />Hide
             </Button>
           )}
           <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={() => setShowPermanentDelete(true)}>
