@@ -1085,70 +1085,30 @@ export async function hardDeleteBusiness(
     );
   }
 
-  // Storage wipe (tenant paths). Legacy non-prefixed objects may remain — reported.
-  const storageOrphans = await wipeBusinessStorage(raw, businessId);
+  const { data: profiles } = await raw.from("profiles").select("id").eq("business_id", businessId);
+  const profileIds = (profiles ?? []).map((p) => p.id as string);
+
+  // Storage wipe first: every tenant upload lives under `{businessId}/` (media, documents,
+  // logos, marketing, photo-editor versions) and avatars under `{profileId}/`. Done before the
+  // DB delete so a failed run can simply be retried — once the business row is gone there is
+  // no handle left to find these objects, and they would be billed forever.
+  const storageOrphans = await wipeBusinessStorage(raw, businessId, profileIds);
   orphans.push(...storageOrphans);
 
   // Stripe Billing customer for the active mode (test or live key in this deploy).
   const stripeOrphans = await wipeBusinessStripeCustomer(existing);
   orphans.push(...stripeOrphans);
 
-  const tables = [
-    "platform_email_sends",
-    "partner_referrals",
-    "media_asset_events",
-    "media_asset_tags",
-    "media_downloads",
-    "media_assets",
-    "media_folders",
-    "project_message_reads",
-    "project_messages",
-    "client_message_reads",
-    "client_messages",
-    "notifications",
-    "email_events",
-    "communications",
-    "activity_logs",
-    "client_notes",
-    "asset_reviews",
-    "video_review_notification_sends",
-    "video_review_notification_batches",
-    "video_review_comments",
-    "video_review_versions",
-    "video_reviews",
-    "revisions",
-    "shoot_proposals",
-    "payments",
-    "project_quotes",
-    "project_clients",
-    "tours",
-    "project_3d_models",
-    "projects",
-    "properties",
-    "leads",
-    "clients",
-    "business_services",
-    "business_settings",
-    "business_integrations",
-  ];
-
-  const { data: profiles } = await raw.from("profiles").select("id").eq("business_id", businessId);
-  for (const table of tables) {
-    const { error } = await raw.from(table).delete().eq("business_id", businessId);
-    if (error && !error.message.toLowerCase().includes("does not exist")) {
-      throw new Error(`${table}: ${error.message}`);
-    }
-  }
+  await deleteBusinessRows(raw, businessId);
 
   await raw.from("profiles").update({ business_id: null, client_id: null }).eq("business_id", businessId);
 
-  const { error: bizErr } = await raw.from("businesses").delete().eq("id", businessId);
-  if (bizErr) throw new Error(bizErr.message);
+  await deleteWithDependents(raw, "businesses", "id", businessId, businessId, new Set());
 
   const authFailures: string[] = [];
-  for (const profile of profiles ?? []) {
-    const { error } = await raw.auth.admin.deleteUser(profile.id);
-    if (error) authFailures.push(`${profile.id}: ${error.message}`);
+  for (const profileId of profileIds) {
+    const { error } = await raw.auth.admin.deleteUser(profileId);
+    if (error) authFailures.push(`${profileId}: ${error.message}`);
   }
   if (authFailures.length) {
     orphans.push(`auth_users_failed:${authFailures.join("; ")}`);
@@ -1167,50 +1127,196 @@ export async function hardDeleteBusiness(
   return { name, orphans };
 }
 
-const STORAGE_BUCKETS = ["project-media", "project-documents", "avatars"] as const;
+type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
+
+/**
+ * Tables holding a business's rows, children before parents. Platform-level history
+ * (subscription payments, partner commissions/attribution, audit log, lifecycle/billing
+ * analytics) is deliberately absent: those FKs are ON DELETE SET NULL / CASCADE and the
+ * ledger must survive. Anything missing here that still blocks the delete is found from
+ * the FK error and cleared by `deleteWithDependents`.
+ */
+const BUSINESS_TABLE_DELETE_ORDER = [
+  "platform_email_sends",
+  "partner_referrals",
+  "video_review_notification_sends",
+  "video_review_notification_batches",
+  "video_review_comments",
+  "video_reviews",
+  // video_review_versions.media_asset_id → media_assets is ON DELETE RESTRICT.
+  "video_review_versions",
+  "video_public_share_daily",
+  "video_public_shares",
+  "media_shares",
+  "media_asset_events",
+  "media_asset_tags",
+  "media_downloads",
+  "media_asset_versions",
+  "media_edit_drafts",
+  "photo_edit_sessions",
+  "media_assets",
+  "media_folders",
+  "project_shares",
+  "project_staff",
+  "marketing_kit_purchases",
+  "marketing_kits",
+  "marketing_brand_profiles",
+  "project_message_reads",
+  "project_messages",
+  "client_message_reads",
+  "client_messages",
+  "client_notification_claims",
+  "notifications",
+  "email_events",
+  "communications",
+  "activity_logs",
+  "client_notes",
+  "asset_reviews",
+  "revisions",
+  "shoot_proposals",
+  "w9_send_files",
+  "w9_sends",
+  "payments",
+  "project_quotes",
+  "project_clients",
+  "tours",
+  "project_3d_models",
+  "projects",
+  "properties",
+  "leads",
+  "clients",
+  "default_project_documents",
+  "business_services",
+  "business_settings",
+  "business_integrations",
+  "google_calendar_connections",
+  "google_calendar_connections_v2",
+  "web_push_subscriptions",
+];
+
+type DbError = { code?: string; message: string };
+
+function isMissingTableError(error: DbError): boolean {
+  const msg = error.message.toLowerCase();
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    msg.includes("does not exist") ||
+    msg.includes("schema cache")
+  );
+}
+
+/** `update or delete on table "a" violates foreign key constraint "…" on table "b"` → "b". */
+export function fkBlockingTable(error: DbError): string | null {
+  if (error.code && error.code !== "23503") return null;
+  const match = error.message.match(/violates foreign key constraint "[^"]+" on table "([^"]+)"/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Delete `table` rows matching `column = value`. When a foreign key from another table blocks
+ * it, delete that table's rows for this business first and retry — so a table added later (or
+ * a RESTRICT FK) can't strand a hard-delete halfway.
+ */
+async function deleteWithDependents(
+  raw: ServiceClient,
+  table: string,
+  column: string,
+  value: string,
+  businessId: string,
+  visiting: Set<string>
+): Promise<void> {
+  visiting.add(table);
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { error } = await raw.from(table).delete().eq(column, value);
+    if (!error) return;
+    if (isMissingTableError(error)) return;
+    const blocker = fkBlockingTable(error);
+    if (!blocker || blocker === table || visiting.has(blocker)) {
+      throw new Error(`${table}: ${error.message}`);
+    }
+    await deleteWithDependents(raw, blocker, "business_id", businessId, businessId, visiting);
+  }
+  throw new Error(`${table}: could not clear dependent rows`);
+}
+
+async function deleteBusinessRows(raw: ServiceClient, businessId: string): Promise<void> {
+  for (const table of BUSINESS_TABLE_DELETE_ORDER) {
+    await deleteWithDependents(raw, table, "business_id", businessId, businessId, new Set());
+  }
+}
+
+const TENANT_STORAGE_BUCKETS = [
+  "project-media",
+  "project-documents",
+  "business-logos",
+] as const;
+const AVATAR_BUCKET = "avatars";
+const STORAGE_LIST_PAGE = 1000;
 
 async function listStoragePathsRecursive(
-  raw: Awaited<ReturnType<typeof createServiceClient>>,
+  raw: ServiceClient,
   bucket: string,
   folder: string,
   depth = 0
 ): Promise<string[]> {
   if (depth > 12) return [];
-  const { data, error } = await raw.storage.from(bucket).list(folder, { limit: 1000 });
-  if (error || !data?.length) return [];
   const paths: string[] = [];
-  for (const item of data) {
-    const full = folder ? `${folder}/${item.name}` : item.name;
-    // Files have an id; folders typically do not.
-    if (item.id) {
-      paths.push(full);
-    } else {
-      paths.push(...(await listStoragePathsRecursive(raw, bucket, full, depth + 1)));
+  // Page through: a single project folder can hold well over 1000 photos.
+  for (let offset = 0; ; offset += STORAGE_LIST_PAGE) {
+    const { data, error } = await raw.storage
+      .from(bucket)
+      .list(folder, { limit: STORAGE_LIST_PAGE, offset });
+    if (error) throw new Error(`list ${folder}: ${error.message}`);
+    if (!data?.length) break;
+    for (const item of data) {
+      const full = folder ? `${folder}/${item.name}` : item.name;
+      // Files have an id; folders do not.
+      if (item.id) {
+        paths.push(full);
+      } else {
+        paths.push(...(await listStoragePathsRecursive(raw, bucket, full, depth + 1)));
+      }
     }
+    if (data.length < STORAGE_LIST_PAGE) break;
   }
   return paths;
 }
 
+async function removeStoragePrefix(
+  raw: ServiceClient,
+  bucket: string,
+  prefix: string,
+  notes: string[]
+): Promise<void> {
+  try {
+    const paths = await listStoragePathsRecursive(raw, bucket, prefix);
+    for (let i = 0; i < paths.length; i += 100) {
+      const chunk = paths.slice(i, i + 100);
+      const { error } = await raw.storage.from(bucket).remove(chunk);
+      if (error) notes.push(`${bucket}:remove:${error.message}`);
+    }
+    // Verify: anything still listed is an orphan we must report.
+    const left = await listStoragePathsRecursive(raw, bucket, prefix);
+    if (left.length) notes.push(`${bucket}/${prefix}: ${left.length} object(s) could not be removed`);
+  } catch (err) {
+    notes.push(`${bucket}/${prefix}:${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 async function wipeBusinessStorage(
-  raw: Awaited<ReturnType<typeof createServiceClient>>,
-  businessId: string
+  raw: ServiceClient,
+  businessId: string,
+  profileIds: string[]
 ): Promise<string[]> {
   const notes: string[] = [];
-  for (const bucket of STORAGE_BUCKETS) {
-    try {
-      const paths = await listStoragePathsRecursive(raw, bucket, businessId);
-      for (let i = 0; i < paths.length; i += 100) {
-        const chunk = paths.slice(i, i + 100);
-        const { error } = await raw.storage.from(bucket).remove(chunk);
-        if (error) notes.push(`${bucket}:remove:${error.message}`);
-      }
-    } catch (err) {
-      notes.push(`${bucket}:${err instanceof Error ? err.message : String(err)}`);
-    }
+  for (const bucket of TENANT_STORAGE_BUCKETS) {
+    await removeStoragePrefix(raw, bucket, businessId, notes);
   }
-  notes.push(
-    "storage:legacy_unprefixed_objects_not_scanned — only {businessId}/… prefixes removed"
-  );
+  // Avatars are keyed by user id; these users are deleted along with the business.
+  for (const profileId of profileIds) {
+    await removeStoragePrefix(raw, AVATAR_BUCKET, profileId, notes);
+  }
   return notes;
 }
 
