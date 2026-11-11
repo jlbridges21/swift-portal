@@ -17,6 +17,7 @@ import { getProjectPublicVideoIds } from "@/lib/video-public-shares";
 import { loadKitSummary } from "@/lib/marketing/server";
 import { getProjectHeroBannerUrl } from "@/lib/cover";
 import { listBusinessServices } from "@/lib/business-services";
+import { listProjectClientFavorites } from "@/lib/client-favorites";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -172,9 +173,10 @@ export default async function AdminProjectPage({ params }: PageProps) {
   const portalUrl = `${clientProjectUrl}?preview=1`;
   const isStaff = profile.role === "staff";
   // New interface hero + Project Type picker. Both degrade quietly (no banner / free-text type).
-  const [heroBannerUrl, serviceRows] = await Promise.all([
+  const [heroBannerUrl, serviceRows, clientFavorites] = await Promise.all([
     getProjectHeroBannerUrl(project, tenant.businessId).catch(() => null),
     listBusinessServices(tenant.businessId, { activeOnly: true }).catch(() => []),
+    listProjectClientFavorites(tenant.businessId, id).catch(() => ({ available: false, rows: [] })),
   ]);
   const serviceOptions = serviceRows.map((s) => s.name).filter(Boolean);
 
@@ -218,6 +220,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
           canManageMarketingOffers={canManageMarketingOffers}
           heroBannerUrl={heroBannerUrl}
           serviceOptions={serviceOptions}
+          clientFavorites={clientFavorites}
         />
       </main>
     </div>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { ChevronLeft, ChevronRight, Download, ZoomIn } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Heart, ZoomIn } from "lucide-react";
+import type { ClientFavoritesController } from "@/components/projects/use-client-favorites";
 import { Button } from "@/components/ui/button";
 import { SafeAreaCloseButton } from "@/components/ui/safe-area-close-button";
 import { MediaThumbnailSkeleton } from "@/components/ui/skeleton";
@@ -35,6 +36,10 @@ interface PhotoGalleryProps {
    * `/api/public/link/{token}/media/thumbnails`.
    */
   thumbnailsEndpoint?: string;
+  /** Signed-in client's hearts. Omitted = no heart controls (business preview, share links). */
+  favorites?: ClientFavoritesController;
+  /** Shown instead of the default empty state (e.g. the Favorites view). */
+  emptyState?: React.ReactNode;
 }
 
 export function PhotoGallery({
@@ -44,6 +49,8 @@ export function PhotoGallery({
   compactInitialCount,
   downloadApiBase,
   thumbnailsEndpoint,
+  favorites,
+  emptyState,
 }: PhotoGalleryProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
@@ -96,7 +103,12 @@ export function PhotoGallery({
     return null;
   }
 
+  // The Favorites view shrinks as hearts are removed — keep the viewer on a real photo.
+  const safeLightboxIndex =
+    lightboxIndex === null || photos.length === 0 ? null : Math.min(lightboxIndex, photos.length - 1);
+
   if (photos.length === 0) {
+    if (emptyState) return <>{emptyState}</>;
     return (
       <EmptyState
         icon={Images}
@@ -106,7 +118,31 @@ export function PhotoGallery({
     );
   }
 
-  const renderThumbnail = (photo: MediaAsset, index: number, className?: string) => (
+  const renderThumbnail = (photo: MediaAsset, index: number, className?: string) =>
+    favorites ? (
+      // The heart sits beside (not inside) the thumbnail button, so liking never opens the viewer.
+      <div key={`gallery-${photo.project_id}-${photo.id}-${index}`} className={cn("relative", className)}>
+        <PhotoThumbnail
+          photo={photo}
+          thumbUrl={thumbUrls[photo.id]}
+          failed={loadErrors[photo.id]}
+          loading={loadingIds.has(photo.id) && !thumbUrls[photo.id]}
+          onLoadThumb={() => loadThumb(photo)}
+          onClick={async () => {
+            const url = await loadFull(photo);
+            if (url) setLightboxIndex(index);
+          }}
+          downloadsAllowed={downloadsAllowed}
+          className="w-full"
+        />
+        <FavoriteHeart
+          liked={favorites.isFavorite(photo.id)}
+          onToggle={() => favorites.toggle(photo.id)}
+          label={mediaDisplayName(photo)}
+          className="absolute right-2 top-2"
+        />
+      </div>
+    ) : (
     <PhotoThumbnail
       key={`gallery-${photo.project_id}-${photo.id}-${index}`}
       photo={photo}
@@ -141,10 +177,10 @@ export function PhotoGallery({
         </div>
       )}
 
-      {lightboxIndex !== null && (
+      {safeLightboxIndex !== null && (
         <PhotoLightbox
           photos={photos}
-          currentIndex={lightboxIndex}
+          currentIndex={safeLightboxIndex}
           thumbUrls={thumbUrls}
           fullUrls={fullUrls}
           loadFull={loadFull}
@@ -153,9 +189,56 @@ export function PhotoGallery({
           onNavigate={setLightboxIndex}
           downloadsAllowed={downloadsAllowed}
           downloadApiBase={downloadApiBase}
+          favorites={favorites}
         />
       )}
     </>
+  );
+}
+
+/** Outline heart → filled heart. Saves immediately; a short pop confirms the change. */
+export function FavoriteHeart({
+  liked,
+  onToggle,
+  label,
+  className,
+  size = "sm",
+}: {
+  liked: boolean;
+  onToggle: () => void;
+  label: string;
+  className?: string;
+  size?: "sm" | "lg";
+}) {
+  const [pop, setPop] = useState(0);
+  return (
+    <button
+      type="button"
+      aria-pressed={liked}
+      aria-label={liked ? `Remove ${label} from favorites` : `Add ${label} to favorites`}
+      title={liked ? "Remove from favorites" : "Add to favorites"}
+      onPointerDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setPop((n) => n + 1);
+        onToggle();
+      }}
+      className={cn(
+        "z-10 flex items-center justify-center rounded-full shadow-sm backdrop-blur transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-accent",
+        size === "lg" ? "h-11 w-11" : "h-9 w-9",
+        liked ? "bg-accent text-white hover:bg-accent-hover" : "bg-black/35 text-white hover:bg-black/55",
+        className
+      )}
+    >
+      <Heart
+        key={pop}
+        className={cn(size === "lg" ? "h-5 w-5" : "h-4 w-4", liked && "fill-current", pop > 0 && "sp-heart-pop")}
+        aria-hidden
+      />
+    </button>
   );
 }
 
@@ -249,7 +332,9 @@ function PhotoLightbox({
   onNavigate,
   downloadsAllowed = true,
   downloadApiBase,
+  favorites,
 }: {
+  favorites?: ClientFavoritesController;
   photos: MediaAsset[];
   currentIndex: number;
   thumbUrls: Record<string, string>;
@@ -446,6 +531,17 @@ function PhotoLightbox({
         <span className="text-sm text-white/70">
           {currentIndex + 1} / {photos.length}
         </span>
+        {favorites ? (
+          <span className="flex items-center gap-2 text-sm text-white/80">
+            <FavoriteHeart
+              size="lg"
+              liked={favorites.isFavorite(photo.id)}
+              onToggle={() => favorites.toggle(photo.id)}
+              label={mediaDisplayName(photo)}
+            />
+            {favorites.isFavorite(photo.id) ? "Favorited" : "Favorite"}
+          </span>
+        ) : null}
         {!downloadsAllowed && <span className="text-xs text-white/50">Preview only</span>}
         {downloadsAllowed && url && (
           <Button

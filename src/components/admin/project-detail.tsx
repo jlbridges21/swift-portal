@@ -16,7 +16,7 @@ import { AdminPhotoGrid, type PhotoGridController } from "@/components/admin/adm
 import { VideoGrid, videosToGridEntries } from "@/components/projects/video-grid";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import { RevisionDrawer } from "@/components/admin/revision-drawer";
-import { PROJECT_STATUSES, getStatusLabel, getStatusOrder } from "@/lib/constants";
+import { DOCUMENT_ACCEPT, PROJECT_STATUSES, getStatusLabel, getStatusOrder } from "@/lib/constants";
 import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
 import { QuoteSection } from "@/components/projects/quote-section";
 import { BankPaymentsNotice } from "@/components/admin/bank-payments-notice";
@@ -26,6 +26,7 @@ import type { DepositMode } from "@/lib/workflow-settings";
 import { normalizeStatus } from "@/lib/constants";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
 import { ProjectStaffCard } from "@/components/admin/project-staff-card";
+import { ProjectClientsDetailsCard } from "@/components/admin/project-workspace/project-clients-details-card";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
 import { NextStepBanner } from "@/components/projects/next-step-banner";
 import { getAdminNextStep } from "@/lib/journey";
@@ -38,6 +39,7 @@ import {
   ExternalLink, Check, Video, ImageIcon, Eye, EyeOff, Link2, Pencil, Users, Plus, MapPin, Share2,
   Sparkles,
   AlertTriangle,
+  Loader2,
   CalendarClock,
   ChevronRight,
   CheckCircle2,
@@ -75,7 +77,8 @@ import {
   type WorkspaceTab,
 } from "@/components/admin/project-workspace/workspace-parts";
 import { MarketingAddOns } from "@/components/admin/project-workspace/marketing-addons";
-import { downloadMediaAsset } from "@/lib/download";
+import type { ProjectClientFavorites } from "@/lib/client-favorites";
+import { documentKindLabel, downloadMediaFileChecked, isPdf, viewMediaAsset } from "@/lib/download";
 import { formatCurrency } from "@/lib/utils";
 import { CreateClientModal } from "@/components/admin/create-client-modal";
 import { useUploadManager } from "@/components/admin/upload-manager";
@@ -188,6 +191,8 @@ interface AdminProjectDetailProps {
   heroBannerUrl?: string | null;
   /** New interface: the business's service names for the Project Type picker. */
   serviceOptions?: string[];
+  /** Client photo likes (read-only here; only clients change them). */
+  clientFavorites?: ProjectClientFavorites;
 }
 
 type WorkspaceTabKey = "media" | "estimates" | "marketing" | "payments" | "details";
@@ -265,6 +270,7 @@ export function AdminProjectDetail({
   canManageMarketingOffers = false,
   heroBannerUrl = null,
   serviceOptions = [],
+  clientFavorites: initialClientFavorites,
 }: AdminProjectDetailProps) {
   const router = useRouter();
   const inAppShell = useInAdminAppShell();
@@ -280,6 +286,45 @@ export function AdminProjectDetail({
   const photoGridController = useRef<PhotoGridController | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+
+  async function downloadDocument(asset: MediaAsset) {
+    if (downloadingDocId) return;
+    setDownloadingDocId(asset.id);
+    try {
+      await downloadMediaFileChecked(asset);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The download failed. Please try again.");
+    } finally {
+      setDownloadingDocId(null);
+    }
+  }
+  const [clientFavorites, setClientFavorites] = useState<ProjectClientFavorites>(
+    () => initialClientFavorites ?? { available: false, rows: [] }
+  );
+  useEffect(() => {
+    if (initialClientFavorites) setClientFavorites(initialClientFavorites);
+  }, [initialClientFavorites]);
+  // Clients like photos from their portal while this page is open: refresh likes when the
+  // business comes back to the tab, so the count and badges stay current.
+  useEffect(() => {
+    if (!clientFavorites.available) return;
+    let cancelled = false;
+    async function refresh() {
+      if (document.visibilityState !== "visible") return;
+      const res = await fetch(`/api/projects/${initialProject.id}/favorites`, { credentials: "include" }).catch(() => null);
+      if (!res?.ok || cancelled) return;
+      const data = (await res.json().catch(() => null)) as { available?: boolean; favorites?: ProjectClientFavorites["rows"] } | null;
+      if (data?.favorites && !cancelled) setClientFavorites({ available: data.available !== false, rows: data.favorites });
+    }
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [clientFavorites.available, initialProject.id]);
 
   /** Tab lives in ?tab= so reloads and shared links land on the same section. */
   const setActiveTab = useCallback((tab: WorkspaceTabKey) => {
@@ -339,6 +384,16 @@ export function AdminProjectDetail({
     mediaSectionsFromProject(initialProject)
   );
   const [sectionSaving, setSectionSaving] = useState<ProjectSectionKey | null>(null);
+  // Marketing Kit per-project visibility (v123). Shows the explicit setting when set,
+  // otherwise today's automatic result.
+  const marketingVisibleFromServer = marketingKit
+    ? (marketingKit.clientVisibility ?? marketingKit.visibleToClient)
+    : false;
+  const [marketingVisible, setMarketingVisibleState] = useState(marketingVisibleFromServer);
+  const [marketingVisSaving, setMarketingVisSaving] = useState(false);
+  useEffect(() => {
+    setMarketingVisibleState(marketingVisibleFromServer);
+  }, [marketingVisibleFromServer]);
 
   const reviewByAssetId = useMemo(() => {
     const map = new Map<string, VideoReviewListItem>();
@@ -400,6 +455,11 @@ export function AdminProjectDetail({
   useEffect(() => {
     setRevisions(initialRevisions);
   }, [initialRevisions]);
+
+  // Keep linked clients in step with the server after add / primary changes (router.refresh).
+  useEffect(() => {
+    setProjectClients(initialProjectClients);
+  }, [initialProjectClients]);
 
   useEffect(() => {
     setMedia(initialMedia);
@@ -592,6 +652,36 @@ export function AdminProjectDetail({
       toast.error("Failed to update client section visibility");
     } finally {
       setSectionSaving(null);
+    }
+  }
+
+  async function setMarketingVisible(visible: boolean) {
+    const prev = marketingVisible;
+    setMarketingVisibleState(visible);
+    setMarketingVisSaving(true);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id: initialProject.id, marketing_visible: visible }),
+      });
+      if (!res.ok) {
+        setMarketingVisibleState(prev);
+        toast.error(await readServerError(res, "Failed to update Marketing Kit visibility"));
+        return;
+      }
+      if (visible && marketingKit && !marketingKit.anyOffered) {
+        toast.warning("Marketing Kit set to visible — the client will see it once an add-on is offered");
+      } else {
+        toast.success(visible ? "Marketing Kit visible to clients" : "Marketing Kit hidden from clients");
+      }
+      router.refresh();
+    } catch {
+      setMarketingVisibleState(prev);
+      toast.error("Failed to update Marketing Kit visibility");
+    } finally {
+      setMarketingVisSaving(false);
     }
   }
 
@@ -948,15 +1038,19 @@ export function AdminProjectDetail({
     }
   }
 
-  async function addProjectClient() {
-    if (!addClientId) return;
+  async function addProjectClient(clientId: string = addClientId): Promise<boolean> {
+    if (!clientId) return false;
+    if (projectClients.some((pc) => pc.client_id === clientId)) {
+      toast.info("That client is already on this project");
+      return false;
+    }
     const res = await fetch("/api/project-clients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({
         project_id: initialProject.id,
-        client_id: addClientId,
+        client_id: clientId,
         is_primary: projectClients.length === 0,
       }),
     });
@@ -971,9 +1065,16 @@ export function AdminProjectDetail({
         );
       }
       setAddClientId("");
+      if (data?.id) {
+        setProjectClients((prev) =>
+          prev.some((pc) => pc.client_id === clientId) ? prev : [...prev, data]
+        );
+      }
       router.refresh();
+      return true;
     } else {
       toast.error((data as { error?: string }).error || "Failed to add client");
+      return false;
     }
   }
 
@@ -1185,6 +1286,24 @@ export function AdminProjectDetail({
 
   const displayName = form.project_name.trim() || defaultProjectName(form.property_address, form.service_type);
 
+  /** Photo id → ids of the clients who liked it (only photos still on the project). */
+  const favoriteClientIdsByPhoto = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    for (const row of clientFavorites.rows) (out[row.media_asset_id] ??= []).push(row.client_id);
+    return out;
+  }, [clientFavorites.rows]);
+  const favoriteClients = useMemo(() => {
+    const names = new Map<string, string>();
+    const add = (c: Partial<Client> | null | undefined) => {
+      if (c?.id) names.set(c.id, c.full_name || c.name || c.email || "Client");
+    };
+    add(initialProject.clients as Client | null | undefined);
+    for (const pc of projectClients) add(pc.clients);
+    for (const c of allClients) if (!names.has(c.id)) add(c as Partial<Client>);
+    const ids = Array.from(new Set(clientFavorites.rows.map((r) => r.client_id)));
+    return ids.map((id) => ({ id, name: names.get(id) ?? "Former client" }));
+  }, [clientFavorites.rows, initialProject.clients, projectClients, allClients]);
+
   const assignedClientForShare = useMemo(() => {
     const primary =
       projectClients.find((pc) => pc.is_primary)?.clients ??
@@ -1249,6 +1368,8 @@ export function AdminProjectDetail({
             }}
             onRefresh={() => router.refresh()}
             workspace={inAppShell}
+            clientFavorites={clientFavorites.available ? favoriteClientIdsByPhoto : undefined}
+            favoriteClients={favoriteClients}
             controllerRef={photoGridController}
             onMediaRoot={() => setMediaCategory("all")}
           />
@@ -1798,7 +1919,7 @@ export function AdminProjectDetail({
         id: "files",
         label: "Documents & files",
         icon: FileText,
-        hint: "PDF or ZIP",
+        hint: "PDF, Word, Excel, CSV or ZIP",
         onSelect: () => documentInputRef.current?.click(),
       },
     ];
@@ -1916,10 +2037,9 @@ export function AdminProjectDetail({
               key: "marketing",
               label: "Marketing Kit",
               icon: Megaphone,
-              checked: marketingKit.visibleToClient,
-              readOnlyNote:
-                "Follows the add-on offers in the Marketing Kit tab (and Settings → Marketing Kit). Open the tab to change them.",
-              onReadOnlyClick: () => setActiveTab("marketing"),
+              checked: marketingVisible,
+              saving: marketingVisSaving,
+              onChange: (v: boolean) => void setMarketingVisible(v),
             } satisfies VisibilityRow,
           ]
         : []),
@@ -1968,7 +2088,7 @@ export function AdminProjectDetail({
             rel="noopener noreferrer"
             className={cn(buttonVariants({ variant: "outline" }), "h-9")}
           >
-            <ExternalLink className="h-4 w-4" /> Client Portal
+            <ExternalLink className="h-4 w-4" /> Client Preview
           </a>
           <Button
             variant="outline"
@@ -2064,7 +2184,7 @@ export function AdminProjectDetail({
                 ref={documentInputRef}
                 type="file"
                 multiple
-                accept="application/pdf,application/zip"
+                accept={DOCUMENT_ACCEPT}
                 className="hidden"
                 onChange={(e) => handleUpload(e, "document")}
               />
@@ -2223,12 +2343,12 @@ export function AdminProjectDetail({
                   }
                 />
                 {documents.length === 0 ? (
-                  <EmptyMediaState icon={FileText} text="No documents yet — PDF and ZIP files are supported" />
+                  <EmptyMediaState icon={FileText} text="No documents yet — PDF, Word, Excel, CSV and ZIP files are supported" />
                 ) : (
                   <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
                     {documents.map((d, i) => {
                       const name = mediaDisplayName(d);
-                      const kind = d.mime_type?.includes("pdf") ? "PDF" : d.mime_type?.includes("zip") ? "ZIP" : (d.mime_type?.split("/")[1] ?? "File").toUpperCase();
+                      const kind = documentKindLabel(d);
                       return (
                         <li key={d.id} className="flex items-center gap-3 bg-card px-3 py-2.5">
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
@@ -2245,8 +2365,20 @@ export function AdminProjectDetail({
                               {!isClientVisibleMedia(d) ? " · Hidden from client" : ""}
                             </p>
                           </div>
-                          <IconAction label={`Download ${name}`} onClick={() => void downloadMediaAsset(d)}>
-                            <Download className="h-4 w-4" />
+                          {isPdf(d) ? (
+                            <IconAction label={`Preview ${name}`} onClick={() => viewMediaAsset(d)}>
+                              <Eye className="h-4 w-4" />
+                            </IconAction>
+                          ) : null}
+                          <IconAction
+                            label={downloadingDocId === d.id ? `Downloading ${name}` : `Download ${name}`}
+                            onClick={() => void downloadDocument(d)}
+                          >
+                            {downloadingDocId === d.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
                           </IconAction>
                           <RowOverflow
                             label={`${name} actions`}
@@ -2339,6 +2471,9 @@ export function AdminProjectDetail({
                   canEdit={canEditMarketing}
                   canManageOffers={canManageMarketingOffers}
                   previewImageUrl={heroImage}
+                  clientVisible={marketingVisible}
+                  visibilitySaving={marketingVisSaving}
+                  onClientVisibleChange={(v) => void setMarketingVisible(v)}
                 />
               </div>
             ) : null}
@@ -2420,6 +2555,16 @@ export function AdminProjectDetail({
               </div>
               <div className="min-w-0 space-y-4">
                 <ProjectStaffCard projectId={initialProject.id} />
+                <ProjectClientsDetailsCard
+                  primaryClient={(initialProject.clients as Client | null | undefined) ?? null}
+                  primaryClientId={initialProject.client_id}
+                  projectClients={projectClients}
+                  allClients={allClients}
+                  onAddClient={addProjectClient}
+                  onSetPrimary={setPrimaryClient}
+                  onRemove={removeProjectClient}
+                  onCreateClient={() => setShowCreateClient(true)}
+                />
                 {revisions.length > 0 && (
                   <Card>
                     <CardHeader>
@@ -2482,7 +2627,7 @@ export function AdminProjectDetail({
               allClients={allClients}
               addClientId={addClientId}
               onAddClientIdChange={setAddClientId}
-              onAddClient={addProjectClient}
+              onAddClient={() => void addProjectClient()}
               onSetPrimary={setPrimaryClient}
               onRemove={removeProjectClient}
               onCreateClient={() => setShowCreateClient(true)}
@@ -2609,7 +2754,7 @@ export function AdminProjectDetail({
         allClients={allClients}
         addClientId={addClientId}
         onAddClientIdChange={setAddClientId}
-        onAddClient={addProjectClient}
+        onAddClient={() => void addProjectClient()}
         onSetPrimary={setPrimaryClient}
         onRemove={removeProjectClient}
         onCreateClient={() => setShowCreateClient(true)}
@@ -2857,7 +3002,7 @@ export function AdminProjectDetail({
             <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white surface-dark:bg-card px-3 text-xs font-medium hover:bg-slate-50 surface-dark:hover:bg-subtle">
               <Upload className="h-4 w-4" /> Upload
             </span>
-            <input type="file" multiple accept="application/pdf,application/zip" className="hidden" onChange={(e) => handleUpload(e, "document")} />
+            <input type="file" multiple accept={DOCUMENT_ACCEPT} className="hidden" onChange={(e) => handleUpload(e, "document")} />
           </label>
         </CardHeader>
         <CardContent>
@@ -2865,6 +3010,18 @@ export function AdminProjectDetail({
             <AssetRow key={d.id} name={mediaDisplayName(d)}
               onUp={() => moveItem("media", d.id, "up", documents)} onDown={() => moveItem("media", d.id, "down", documents)}
               canUp={i > 0} canDown={i < documents.length - 1}
+              extra={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  title={`Download ${mediaDisplayName(d)}`}
+                  aria-label={`Download ${mediaDisplayName(d)}`}
+                  disabled={downloadingDocId === d.id}
+                  onClick={() => void downloadDocument(d)}
+                >
+                  {downloadingDocId === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                </Button>
+              }
               onDelete={() => deleteMedia(d.id)} />
           ))}
         </CardContent>
@@ -2895,6 +3052,9 @@ export function AdminProjectDetail({
           summary={marketingKit}
           canEdit={canEditMarketing}
           canManageOffers={canManageMarketingOffers}
+          clientVisible={marketingVisible}
+          visibilitySaving={marketingVisSaving}
+          onClientVisibleChange={(v) => void setMarketingVisible(v)}
         />
       ) : null}
 

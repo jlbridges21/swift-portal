@@ -15,6 +15,7 @@ import {
   Calendar,
   Check,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   ExternalLink,
   Eye,
@@ -375,7 +376,7 @@ export function WorkspaceTabs<K extends string>({
               aria-controls={`project-panel-${key}`}
               onClick={() => onChange(key)}
               className={cn(
-                "relative -mb-px inline-flex h-11 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:px-4",
+                "relative -mb-px inline-flex h-11 scroll-mt-24 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:px-4",
                 selected ? "border-accent text-accent" : "border-transparent text-muted hover:text-heading"
               )}
             >
@@ -580,11 +581,11 @@ export function VisibilityPanel({ rows }: { rows: VisibilityRow[] }) {
       description="Choose which sections are visible to your client."
     >
       <ul className="space-y-1">
-        {rows.map(({ key, label, icon: Icon, checked, saving, onChange, readOnlyNote, onReadOnlyClick }) => (
-          <li key={key} className="flex min-h-8 items-center gap-2.5 text-sm">
-            <Icon className="h-4 w-4 shrink-0 text-muted" />
-            <span className="min-w-0 flex-1 truncate text-foreground">{label}</span>
-            {onChange ? (
+        {rows.map(({ key, label, icon: Icon, checked, saving, onChange, readOnlyNote, onReadOnlyClick }) =>
+          onChange ? (
+            <li key={key} className="flex min-h-8 items-center gap-2.5 text-sm">
+              <Icon className="h-4 w-4 shrink-0 text-muted" />
+              <span className="min-w-0 flex-1 truncate text-foreground">{label}</span>
               <Switch
                 checked={checked}
                 disabled={saving}
@@ -592,21 +593,34 @@ export function VisibilityPanel({ rows }: { rows: VisibilityRow[] }) {
                 aria-label={`${label} ${checked ? "visible to client" : "hidden from client"}`}
                 className={cn(saving && "opacity-60")}
               />
-            ) : (
+            </li>
+          ) : (
+            // Not a switch: this section follows its own settings. The whole row navigates there.
+            <li key={key} className="-mx-2">
               <button
                 type="button"
                 onClick={onReadOnlyClick}
                 title={readOnlyNote}
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[11px] font-medium",
-                  checked ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600 surface-dark:bg-subtle surface-dark:text-muted"
-                )}
+                aria-label={`${label}: ${checked ? "visible" : "hidden"} to client. Open ${label} settings`}
+                className="group flex min-h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm transition-colors hover:bg-accent-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
-                {checked ? "Visible" : "Hidden"}
+                <Icon className="h-4 w-4 shrink-0 text-muted group-hover:text-accent" />
+                <span className="min-w-0 flex-1 truncate text-foreground group-hover:text-accent">{label}</span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                    checked
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-slate-100 text-slate-600 surface-dark:bg-subtle surface-dark:text-muted"
+                  )}
+                >
+                  {checked ? "Visible" : "Hidden"}
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-accent" aria-hidden />
               </button>
-            )}
-          </li>
-        ))}
+            </li>
+          )
+        )}
       </ul>
     </SidebarCard>
   );

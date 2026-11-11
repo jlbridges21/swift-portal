@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusTimeline } from "@/components/projects/status-timeline";
 import { ClientPhotoFolders } from "@/components/projects/client-photo-folders";
+import { useClientFavorites } from "@/components/projects/use-client-favorites";
 import { VideoGrid, videosToGridEntries } from "@/components/projects/video-grid";
 import { ExpandableMediaList } from "@/components/projects/expandable-media-list";
 import { TourCard } from "@/components/projects/tour-card";
@@ -45,7 +46,8 @@ import { ViewOnlyAccessChip } from "@/components/ui/view-only-access-chip";
 import { ProjectQuickActions } from "@/components/projects/project-quick-actions";
 import { ClientPricingCta } from "@/components/projects/client-pricing-cta";
 import { HashScrollHandler } from "@/components/ui/hash-scroll-handler";
-import { downloadMediaAsset, viewMediaAsset, isPdf } from "@/lib/download";
+import { documentKindLabel, downloadMediaAsset, downloadMediaFileChecked, viewMediaAsset, isPdf } from "@/lib/download";
+import { formatFileSize } from "@/lib/brand";
 import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
 import type { DownloadQuality } from "@/lib/download-quality";
 import { toast } from "sonner";
@@ -95,6 +97,8 @@ interface ProjectPageClientProps {
   paymentOptions?: ClientPaymentOptions;
   /** Marketing Kit offer (assigned client / admin preview only). */
   marketingKit?: KitSummary | null;
+  /** The signed-in client's liked photo ids; null hides the heart controls. */
+  clientFavoriteIds?: string[] | null;
 }
 
 const REVISION_STATUS_LABEL: Record<string, string> = {
@@ -170,8 +174,11 @@ export function ProjectPageClient({
   allowClientPayInFull = false,
   paymentOptions = { bankAvailable: false, passCardFee: false },
   marketingKit = null,
+  clientFavoriteIds = null,
 }: ProjectPageClientProps) {
   const router = useRouter();
+  const favoritesController = useClientFavorites(project.id, clientFavoriteIds ?? []);
+  const photoFavorites = clientFavoriteIds && !isPreview ? favoritesController : undefined;
   const brand = usePortalBrand();
   const reviewByAssetId = useMemo(() => {
     const map = new Map<string, VideoReviewListItem>();
@@ -317,6 +324,16 @@ export function ProjectPageClient({
     }
     if (asset.media_type === "photo") {
       setPendingPhotoDownload(asset);
+      return;
+    }
+    if (asset.media_type === "document") {
+      const pending = toast.loading(`Downloading ${mediaDisplayName(asset)}…`);
+      try {
+        await downloadMediaFileChecked(asset);
+        toast.success("Download started", { id: pending });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "The download failed. Please try again.", { id: pending });
+      }
       return;
     }
     await downloadMediaAsset(asset);
@@ -486,6 +503,7 @@ export function ProjectPageClient({
                   downloadsAllowed={downloadsUnlocked}
                   compactInitialCount={12}
                   isAdmin={!!isAdmin}
+                  favorites={photoFavorites}
                 />
               ) : (
                 <EmptyState
@@ -607,7 +625,14 @@ export function ProjectPageClient({
                     className="flex flex-col gap-3 rounded-xl bg-white surface-dark:bg-card p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-heading">{mediaDisplayName(doc)}</p>
+                      <p className="truncate font-medium text-heading" title={mediaDisplayName(doc)}>
+                        {mediaDisplayName(doc)}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted">
+                        {[documentKindLabel(doc), doc.file_size ? formatFileSize(doc.file_size) : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
                       {!downloadsUnlocked && !isPreview && downloadLockMessage && (
                         <p className="text-xs text-muted mt-1 flex items-center gap-1">
                           <Lock className="h-3 w-3" /> {downloadLockMessage}
@@ -622,8 +647,14 @@ export function ProjectPageClient({
                           </Button>
                         )}
                         {downloadsUnlocked && (
-                          <Button variant="accent" size="sm" className="min-h-11 flex-1 sm:flex-none" onClick={() => handleDownload(doc)}>
-                            <Download className="h-4 w-4" />
+                          <Button
+                            variant="accent"
+                            size="sm"
+                            className="min-h-11 flex-1 sm:flex-none"
+                            aria-label={`Download ${mediaDisplayName(doc)}`}
+                            onClick={() => handleDownload(doc)}
+                          >
+                            <Download className="h-4 w-4" /> Download
                           </Button>
                         )}
                       </div>
@@ -675,6 +706,7 @@ export function ProjectPageClient({
                   downloadsAllowed={downloadsUnlocked}
                   compactInitialCount={12}
                   isAdmin={!!isAdmin}
+                  favorites={photoFavorites}
                 />
               ) : (
                 <EmptyState
@@ -805,7 +837,14 @@ export function ProjectPageClient({
                     className="flex flex-col gap-3 rounded-xl bg-white surface-dark:bg-card p-5 shadow-md shadow-slate-200/30 ring-1 ring-black/5 transition-shadow hover:shadow-lg sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-heading">{mediaDisplayName(doc)}</p>
+                      <p className="truncate font-medium text-heading" title={mediaDisplayName(doc)}>
+                        {mediaDisplayName(doc)}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted">
+                        {[documentKindLabel(doc), doc.file_size ? formatFileSize(doc.file_size) : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
                       {!downloadsUnlocked && !isPreview && downloadLockMessage && (
                         <p className="text-xs text-muted mt-1 flex items-center gap-1">
                           <Lock className="h-3 w-3" /> {downloadLockMessage}
@@ -820,8 +859,14 @@ export function ProjectPageClient({
                           </Button>
                         )}
                         {downloadsUnlocked && (
-                          <Button variant="accent" size="sm" className="min-h-11 flex-1 sm:flex-none" onClick={() => handleDownload(doc)}>
-                            <Download className="h-4 w-4" />
+                          <Button
+                            variant="accent"
+                            size="sm"
+                            className="min-h-11 flex-1 sm:flex-none"
+                            aria-label={`Download ${mediaDisplayName(doc)}`}
+                            onClick={() => handleDownload(doc)}
+                          >
+                            <Download className="h-4 w-4" /> Download
                           </Button>
                         )}
                       </div>

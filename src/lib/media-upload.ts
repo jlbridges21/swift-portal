@@ -14,6 +14,11 @@ const EXTENSION_MIME: Record<string, string> = {
   mp4: "video/mp4",
   pdf: "application/pdf",
   zip: "application/zip",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  csv: "text/csv",
 };
 
 /** Resolve MIME when the browser leaves file.type empty (common on some OS builds). */

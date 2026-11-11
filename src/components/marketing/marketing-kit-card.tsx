@@ -12,12 +12,16 @@ import { cn } from "@/lib/utils";
 import { PRODUCT_LABEL, type MarketingProduct } from "@/lib/marketing/model";
 import { formatCents, type OfferMode, type ProductAccess } from "@/lib/marketing/offers";
 import type { KitSummary } from "@/lib/marketing/server";
+import { MarketingVisibilityToggle } from "@/components/admin/project-workspace/marketing-addons";
 
 type Props = {
   projectId: string;
   summary: KitSummary;
   canManageOffers: boolean;
   canEdit: boolean;
+  clientVisible?: boolean;
+  visibilitySaving?: boolean;
+  onClientVisibleChange?: (visible: boolean) => void;
 };
 
 function stateText(a: ProductAccess): { label: string; tone: string } {
@@ -98,7 +102,15 @@ function OfferControl({ projectId, product, summary, disabled }: { projectId: st
   );
 }
 
-export function MarketingKitCard({ projectId, summary, canManageOffers, canEdit }: Props) {
+export function MarketingKitCard({
+  projectId,
+  summary,
+  canManageOffers,
+  canEdit,
+  clientVisible,
+  visibilitySaving,
+  onClientVisibleChange,
+}: Props) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -157,7 +169,14 @@ export function MarketingKitCard({ projectId, summary, canManageOffers, canEdit 
             {ready ? `Ready to preview — built from ${summary.photoCount} approved photo${summary.photoCount === 1 ? "" : "s"}.` : "Builds itself once client-visible photos are on this project."}
           </p>
         </div>
-        {!summary.visibleToClient ? (
+        {onClientVisibleChange ? (
+          <MarketingVisibilityToggle
+            visible={clientVisible ?? summary.visibleToClient}
+            saving={visibilitySaving}
+            nothingOffered={!summary.anyOffered}
+            onChange={onClientVisibleChange}
+          />
+        ) : !summary.visibleToClient ? (
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
             Hidden from client ·{" "}
             <Link href="/admin/settings#settings-marketing-kit" className="text-accent hover:underline">

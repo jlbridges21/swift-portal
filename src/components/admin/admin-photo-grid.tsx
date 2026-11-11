@@ -44,6 +44,7 @@ import {
   FolderOpen,
   FolderPlus,
   GripVertical,
+  Heart,
   Home,
   LayoutGrid,
   List as ListIcon,
@@ -132,6 +133,13 @@ interface AdminPhotoGridProps {
   controllerRef?: React.MutableRefObject<PhotoGridController | null>;
   /** Workspace: the "Media" breadcrumb (back to All Media). */
   onMediaRoot?: () => void;
+  /**
+   * Client likes, photo id → client ids. Read-only for the business: drives the
+   * "Client liked" badges and the Client Favorites filter. Omitted = feature unavailable.
+   */
+  clientFavorites?: Record<string, string[]>;
+  /** Clients who have liked photos here (for the per-client filter and badge tooltips). */
+  favoriteClients?: { id: string; name: string }[];
 }
 
 export type PhotoGridController = {
@@ -369,7 +377,10 @@ function SortablePhotoCard({
   onPaintSelectMove,
   onPaintSelectEnd,
   layout = "classic",
+  likedBy = null,
 }: {
+  /** Names of clients who liked this photo (null/empty = no badge). */
+  likedBy?: string[] | null;
   /** classic = original card; tile / row = New interface workspace layouts. */
   layout?: "classic" | PhotoLayout;
   photo: MediaAsset;
@@ -589,9 +600,17 @@ function SortablePhotoCard({
       )}
 
       {(() => {
+        const liked = Boolean(likedBy?.length);
         const badges =
-          isHeroPhoto || hidden || shared || edited ? (
+          isHeroPhoto || hidden || shared || edited || liked ? (
             <>
+              {liked && (
+                <span title={`Liked by ${likedBy!.join(", ")}`}>
+                  <PhotoBadge tone="accent">
+                    <Heart className="h-2.5 w-2.5 fill-current" /> Client liked
+                  </PhotoBadge>
+                </span>
+              )}
               {isHeroPhoto && (
                 <PhotoBadge tone="accent">
                   <Star className="h-2.5 w-2.5" /> Cover
@@ -761,6 +780,8 @@ export function AdminPhotoGrid({
   workspace = false,
   controllerRef,
   onMediaRoot,
+  clientFavorites,
+  favoriteClients = [],
 }: AdminPhotoGridProps) {
   const coarsePointer = useCoarsePointer();
   const [view, setView] = useState<PhotoView>("all");
@@ -787,6 +808,25 @@ export function AdminPhotoGrid({
     setLayoutState(next);
     savePrefs({ sort: sortMode, layout: next });
   };
+  /** "off", "any" (every client's likes) or one client id. */
+  const [favoritesFilter, setFavoritesFilter] = useState<"off" | "any" | string>("off");
+  const favoritesEnabled = Boolean(clientFavorites);
+  const clientNameById = useMemo(() => new Map(favoriteClients.map((c) => [c.id, c.name])), [favoriteClients]);
+  const likedByFor = useCallback(
+    (photoId: string) => {
+      const ids = clientFavorites?.[photoId];
+      return ids?.length ? ids.map((id) => clientNameById.get(id) ?? "Client") : null;
+    },
+    [clientFavorites, clientNameById]
+  );
+  const isLikedInFilter = useCallback(
+    (photoId: string) => {
+      const ids = clientFavorites?.[photoId];
+      if (!ids?.length) return false;
+      return favoritesFilter === "any" || ids.includes(favoritesFilter);
+    },
+    [clientFavorites, favoritesFilter]
+  );
   /** Sorted views never write display order (the client-facing order). */
   const reorderLocked = workspace && sortMode !== "custom";
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -912,9 +952,10 @@ export function AdminPhotoGrid({
         : view === UNFILED_FOLDER_SCOPE
           ? allProjectPhotos.filter((p) => !p.folder_id)
           : allProjectPhotos.filter((p) => p.folder_id === view);
-    if (!workspace || sortMode === "custom") return scoped;
+    const filtered = favoritesFilter === "off" ? scoped : scoped.filter((p) => isLikedInFilter(p.id));
+    if (!workspace || sortMode === "custom") return filtered;
     const time = (p: MediaAsset) => new Date(p.created_at).getTime();
-    const sorted = [...scoped];
+    const sorted = [...filtered];
     if (sortMode === "newest") sorted.sort((a, b) => time(b) - time(a));
     else if (sortMode === "oldest") sorted.sort((a, b) => time(a) - time(b));
     else
@@ -922,7 +963,7 @@ export function AdminPhotoGrid({
         mediaDisplayName(a).localeCompare(mediaDisplayName(b), undefined, { numeric: true, sensitivity: "base" })
       );
     return sorted;
-  }, [allProjectPhotos, view, workspace, sortMode]);
+  }, [allProjectPhotos, view, workspace, sortMode, favoritesFilter, isLikedInFilter]);
 
   const visibleIds = useMemo(() => visiblePhotos.map((p) => p.id), [visiblePhotos]);
 
@@ -1867,6 +1908,54 @@ export function AdminPhotoGrid({
 
   const totalPhotos = allProjectPhotos.length;
   const viewCount = visiblePhotos.length;
+  const likedPhotoCount = favoritesEnabled ? allProjectPhotos.filter((p) => clientFavorites?.[p.id]?.length).length : 0;
+  const likedCountForClient = (clientId: string) =>
+    allProjectPhotos.filter((p) => clientFavorites?.[p.id]?.includes(clientId)).length;
+  const likedInFolder = (scope: string) =>
+    favoritesEnabled
+      ? allProjectPhotos.filter(
+          (p) =>
+            (scope === UNFILED_FOLDER_SCOPE ? !p.folder_id : p.folder_id === scope) && clientFavorites?.[p.id]?.length
+        ).length
+      : 0;
+  const favoritesControl =
+    favoritesEnabled ? (
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          aria-pressed={favoritesFilter !== "off"}
+          onClick={() => setFavoritesFilter((f) => (f === "off" ? "any" : "off"))}
+          title="Photos your client hearted in their portal. Only clients can change their likes."
+          className={cn(
+            "inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+            favoritesFilter !== "off"
+              ? "border-accent bg-accent text-accent-foreground"
+              : "border-border bg-card text-heading hover:border-accent/40"
+          )}
+        >
+          <Heart className={cn("h-4 w-4", favoritesFilter !== "off" ? "fill-current" : "text-accent")} />
+          Client Favorites ({likedPhotoCount})
+        </button>
+        {favoritesFilter !== "off" && favoriteClients.length > 1 ? (
+          <label className="relative inline-flex h-9 items-center">
+            <span className="sr-only">Show favorites from</span>
+            <select
+              value={favoritesFilter}
+              onChange={(e) => setFavoritesFilter(e.target.value)}
+              className="h-9 appearance-none rounded-lg border border-border bg-card pl-3 pr-8 text-sm font-medium text-heading focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <option value="any">All clients</option>
+              {favoriteClients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({likedCountForClient(c.id)})
+                </option>
+              ))}
+            </select>
+            <ChevronRight className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 rotate-90 text-muted" aria-hidden />
+          </label>
+        ) : null}
+      </div>
+    ) : null;
 
   return (
     <div
@@ -2004,6 +2093,7 @@ export function AdminPhotoGrid({
                 {selectMode ? "Selecting…" : "Select"}
               </Button>
             ) : null}
+            {favoritesControl}
             <div role="group" aria-label="Layout" className="flex h-9 items-center rounded-lg border border-border bg-card p-0.5">
               {(
                 [
@@ -2206,6 +2296,7 @@ export function AdminPhotoGrid({
                   return id ? thumbUrls[id] ?? null : null;
                 })()}
                 general
+                likedCount={likedInFolder(UNFILED_FOLDER_SCOPE)}
                 onOpen={() => navigate(UNFILED_FOLDER_SCOPE)}
                 onMenu={(anchor) =>
                   setMenu({ anchor, title: UNFILED_FOLDER_LABEL, items: generalMenuItems() })
@@ -2221,6 +2312,7 @@ export function AdminPhotoGrid({
                     count={stats?.count ?? 0}
                     coverUrl={stats?.coverId ? thumbUrls[stats.coverId] ?? null : null}
                     shared={Boolean(folderShareSummary?.[folder.id])}
+                    likedCount={likedInFolder(folder.id)}
                     onOpen={() => navigate(folder.id)}
                     onMenu={(anchor) => setMenu({ anchor, title: folder.name, items: folderMenuItems(folder) })}
                   />
@@ -2248,6 +2340,16 @@ export function AdminPhotoGrid({
                 <FolderPlus className="h-4 w-4" /> New folder
               </Button>
             </div>
+          </EmptyState>
+        ) : viewCount === 0 && favoritesFilter !== "off" ? (
+          <EmptyState
+            icon={Heart}
+            title={view === "all" ? "No client favorites yet" : "No client favorites in this folder"}
+            description="When your client hearts photos in their portal, they show up here with a Client liked badge."
+          >
+            <Button variant="outline" onClick={() => setFavoritesFilter("off")}>
+              Show all photos
+            </Button>
           </EmptyState>
         ) : viewCount === 0 ? (
           <EmptyState
@@ -2347,6 +2449,7 @@ export function AdminPhotoGrid({
                         onPaintSelectMove={onPaintSelectMove}
                         onPaintSelectEnd={onPaintSelectEnd}
                         layout={workspace ? layout : "classic"}
+                        likedBy={favoritesEnabled ? likedByFor(p.id) : null}
                       />
                       {placementMode && (
                         <InsertionGap

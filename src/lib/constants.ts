@@ -105,7 +105,17 @@ export const ALLOWED_DOCUMENT_TYPES = [
   "application/pdf",
   "application/zip",
   "application/x-zip-compressed",
+  // Word (bucket allows since v114) and Excel / CSV (bucket allows since v122).
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/csv",
 ];
+
+/** `accept` for project document pickers. */
+export const DOCUMENT_ACCEPT =
+  ".pdf,.zip,.doc,.docx,.xls,.xlsx,.csv," + ALLOWED_DOCUMENT_TYPES.join(",");
 
 export function getStatusLabel(status: string, audience: "admin" | "client" = "admin"): string {
   const normalized = normalizeStatus(status);

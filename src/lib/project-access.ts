@@ -38,12 +38,16 @@ function adminAccessForDeletedProject(
   return { allowed: false, kind: "denied" };
 }
 
-async function assignedClientHasProject(
+/**
+ * The client row (clients.id) through which this profile is assigned to the project — the
+ * project's primary client or a project_clients link — or null. Same rule as portal access.
+ */
+async function assignedClientIdFor(
   raw: Awaited<ReturnType<typeof createServiceClient>>,
   profile: Profile,
   projectId: string,
   projectClientId: string | null
-): Promise<boolean> {
+): Promise<string | null> {
   let clientId = profile.client_id;
   if (!clientId) {
     const { data: byUser } = await raw
@@ -56,15 +60,40 @@ async function assignedClientHasProject(
       clientId = byUser![0].id;
     }
   }
-  if (!clientId) return false;
-  if (projectClientId === clientId) return true;
+  if (!clientId) return null;
+  if (projectClientId === clientId) return clientId;
   const { data: junction } = await raw
     .from("project_clients")
     .select("id")
     .eq("project_id", projectId)
     .eq("client_id", clientId)
     .maybeSingle();
-  return Boolean(junction);
+  return junction ? clientId : null;
+}
+
+async function assignedClientHasProject(
+  raw: Awaited<ReturnType<typeof createServiceClient>>,
+  profile: Profile,
+  projectId: string,
+  projectClientId: string | null
+): Promise<boolean> {
+  return Boolean(await assignedClientIdFor(raw, profile, projectId, projectClientId));
+}
+
+/**
+ * clients.id of the signed-in client for this project, when they are an assigned client of it
+ * (not a share viewer, not business staff). Used to attribute per-client actions like favorites.
+ */
+export async function resolveAssignedClientId(profile: Profile, projectId: string): Promise<string | null> {
+  if (profile.role !== "client") return null;
+  const raw = await createServiceClient();
+  const { data: project } = await raw
+    .from("projects")
+    .select("id, client_id, deleted_at")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (!project || project.deleted_at) return null;
+  return assignedClientIdFor(raw, profile, projectId, project.client_id ?? null);
 }
 
 /**

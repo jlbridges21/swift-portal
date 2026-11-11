@@ -16,7 +16,8 @@ import {
   loadVideoReviewVersionMap,
 } from "@/lib/video-review-media";
 import { listProjectVideoReviews } from "@/lib/video-reviews";
-import { resolveProjectAccess } from "@/lib/project-access";
+import { resolveAssignedClientId, resolveProjectAccess } from "@/lib/project-access";
+import { listClientFavoriteIds } from "@/lib/client-favorites";
 import { resolveProjectDownloadAllowed } from "@/lib/deliverables";
 import { normalizeStatus } from "@/lib/constants";
 import { getProjectPublicVideoIds } from "@/lib/video-public-shares";
@@ -208,6 +209,18 @@ async function ProjectContent({
       ? await loadKitSummary(tenant.businessId, id).catch(() => null)
       : null;
 
+  // Photo hearts: only the project's own client (not share viewers, not the business preview),
+  // and only once migration v122 exists.
+  let clientFavoriteIds: string[] | null = null;
+  if (access.kind === "assigned_client" && photos.length > 0) {
+    const favoriteClientId = await resolveAssignedClientId(profile, id);
+    if (favoriteClientId) {
+      const fav = await listClientFavoriteIds(tenant.businessId, id, favoriteClientId);
+      const visiblePhotoIds = new Set(photos.map((p) => p.id));
+      clientFavoriteIds = fav.available ? fav.ids.filter((pid) => visiblePhotoIds.has(pid)) : null;
+    }
+  }
+
   return (
     <>
       <Suspense>
@@ -254,6 +267,7 @@ async function ProjectContent({
         canViewProjectProgress={canViewProgress}
         canAccessVideoReviews={canAccessReviews}
         marketingKit={marketingKit}
+        clientFavoriteIds={clientFavoriteIds}
       />
     </>
   );

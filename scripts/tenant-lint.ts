@@ -89,6 +89,7 @@ const BUSINESS_OWNED_TABLES = new Set([
   "marketing_kits",
   "marketing_kit_purchases",
   "marketing_brand_profiles",
+  "client_photo_favorites",
   "w9_sends",
   "w9_send_files",
   "web_push_subscriptions",

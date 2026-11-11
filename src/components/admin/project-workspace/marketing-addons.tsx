@@ -40,6 +40,10 @@ type Props = {
   canManageOffers: boolean;
   canEdit: boolean;
   previewImageUrl: string | null;
+  /** Per-project client visibility (switch shown when a handler is passed). */
+  clientVisible?: boolean;
+  visibilitySaving?: boolean;
+  onClientVisibleChange?: (visible: boolean) => void;
 };
 
 type Status = { label: string; tone: string; price: string };
@@ -113,6 +117,9 @@ export function MarketingAddOns({
   canManageOffers,
   canEdit,
   previewImageUrl,
+  clientVisible,
+  visibilitySaving,
+  onClientVisibleChange,
 }: Props) {
   const editor = `/admin/projects/${projectId}/marketing`;
 
@@ -137,13 +144,20 @@ export function MarketingAddOns({
   return (
     <div className="@container space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1 basis-64">
           <h2 className="text-xl font-semibold tracking-tight text-heading">Marketing Kit Add-Ons</h2>
           <p className="text-sm text-muted">
             Offer these add-ons to the client, set the price, or unlock them for free for this project.
           </p>
         </div>
-        {summary.visibleToClient ? (
+        {onClientVisibleChange ? (
+          <MarketingVisibilityToggle
+            visible={clientVisible ?? summary.visibleToClient}
+            saving={visibilitySaving}
+            nothingOffered={!summary.anyOffered}
+            onChange={onClientVisibleChange}
+          />
+        ) : summary.visibleToClient ? (
           <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
             Visible to client
           </span>
@@ -158,24 +172,39 @@ export function MarketingAddOns({
       </div>
 
       {/* Overview + how it works */}
-      <div className="grid gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm @2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] @2xl:divide-x @2xl:divide-border">
-        <ul className="divide-y divide-border">
+      <div className="grid gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm @2xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] @2xl:gap-0 @2xl:divide-x @2xl:divide-border @2xl:p-5">
+        {/* One shared grid so the badge and price columns line up across rows. */}
+        <ul className="grid grid-cols-[minmax(0,1fr)_auto] gap-y-2 @md:grid-cols-[minmax(0,1fr)_auto_auto] @2xl:pr-6">
           {products.map((p) => {
             const st = accessStatus(summary.access[p], listPrice(p));
             const Icon = p === "website" ? Monitor : Share2;
             return (
-              <li key={p} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 md:first:pt-1">
-                <Icon className="h-4 w-4 shrink-0 text-muted" />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-heading">{PRODUCT_LABEL[p]}</span>
-                <span className={cn("shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset", st.tone)}>
+              <li
+                key={p}
+                className="col-span-full grid min-h-12 grid-cols-subgrid items-center gap-x-3 rounded-xl bg-subtle/50 px-3 py-2 surface-dark:bg-subtle/40"
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-card text-muted ring-1 ring-inset ring-border">
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="truncate text-sm font-medium text-heading">{PRODUCT_LABEL[p]}</span>
+                </span>
+                <span
+                  className={cn(
+                    "justify-self-end whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset @md:justify-self-start",
+                    st.tone
+                  )}
+                >
                   {st.label}
                 </span>
-                <span className="w-20 shrink-0 text-right text-sm text-foreground">{st.price}</span>
+                <span className="col-span-full whitespace-nowrap text-right text-sm font-semibold tabular-nums text-heading @md:col-span-1 @md:min-w-[4.5rem]">
+                  {st.price}
+                </span>
               </li>
             );
           })}
         </ul>
-        <div className="border-t border-border pt-3 @2xl:border-t-0 @2xl:pl-5 @2xl:pt-0">
+        <div className="border-t border-border pt-3 @2xl:border-t-0 @2xl:pl-6 @2xl:pt-0">
           <p className="flex items-center gap-2 text-sm font-semibold text-heading">
             <Info className="h-4 w-4 text-muted" /> How It Works
           </p>
@@ -593,3 +622,36 @@ function AddOnPreview({
   );
 }
 
+
+/** "Visible to client" switch for the Marketing Kit, matching the portal visibility toggles. */
+export function MarketingVisibilityToggle({
+  visible,
+  saving,
+  nothingOffered,
+  onChange,
+}: {
+  visible: boolean;
+  saving?: boolean;
+  nothingOffered?: boolean;
+  onChange: (visible: boolean) => void;
+}) {
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <label className="flex cursor-pointer items-center gap-2.5 rounded-full border border-border bg-card py-1 pl-3 pr-1.5 text-xs font-medium text-foreground shadow-sm">
+        <span className={visible ? "text-emerald-700" : "text-muted"}>
+          {visible ? "Visible to client" : "Hidden from client"}
+        </span>
+        <Switch
+          checked={visible}
+          disabled={saving}
+          onCheckedChange={onChange}
+          aria-label={`Marketing Kit ${visible ? "visible to client" : "hidden from client"}`}
+          className={cn(saving && "opacity-60")}
+        />
+      </label>
+      {visible && nothingOffered ? (
+        <p className="max-w-[15rem] text-right text-[11px] leading-snug text-amber-700">No add-on offered yet — the client sees it once one is.</p>
+      ) : null}
+    </div>
+  );
+}

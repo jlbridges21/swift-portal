@@ -178,7 +178,7 @@ export async function PATCH(request: Request) {
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
     const body = await request.json();
-    const { id, media_sections, ...rest } = body;
+    const { id, media_sections, marketing_visible, ...rest } = body;
     const updates: Record<string, unknown> = { ...rest };
     // Section visibility only via media_sections — refuse raw column mass-assignment.
     delete updates.media_sections;
@@ -189,6 +189,15 @@ export async function PATCH(request: Request) {
     delete updates.client_section_documents;
     delete updates.client_section_estimates;
     delete updates.client_section_payments;
+    delete updates.client_section_marketing;
+
+    // Marketing Kit visibility (v123): true / false, or null to go back to automatic.
+    if (marketing_visible !== undefined) {
+      if (marketing_visible !== null && typeof marketing_visible !== "boolean") {
+        return NextResponse.json({ error: "Invalid marketing_visible" }, { status: 400 });
+      }
+      updates.client_section_marketing = marketing_visible;
+    }
 
     if (media_sections !== undefined) {
       const parsed = parseMediaSectionsPatch(media_sections);
@@ -223,6 +232,13 @@ export async function PATCH(request: Request) {
       .eq("business_id", businessId)
       .select()
       .single();
+
+    if (error && "client_section_marketing" in updates && (error.message ?? "").includes("client_section_marketing")) {
+      return NextResponse.json(
+        { error: "Showing or hiding the Marketing Kit per project needs database migration v123." },
+        { status: 409 }
+      );
+    }
 
     if (error && isMissingFinancialSectionColumnError(error)) {
       // Pre-v113 database: estimates/payments columns don't exist yet. Media toggles

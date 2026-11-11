@@ -23,6 +23,8 @@ import {
   loadVideoReviewVersionMap,
 } from "@/lib/video-review-media";
 import { DOWNLOAD_QUALITY_PARAM, parseDownloadQuality } from "@/lib/download-quality";
+import { resolveAssignedClientId } from "@/lib/project-access";
+import { listClientFavoriteIds } from "@/lib/client-favorites";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +37,8 @@ export async function GET(
   const { id: projectId } = await params;
   const url = new URL(request.url);
   const folderParam = url.searchParams.get("folderId");
+  // favorites=1: only the signed-in client's hearted photos (after every normal filter below).
+  const favoritesOnly = url.searchParams.get("favorites") === "1";
   const quality = parseDownloadQuality(url.searchParams.get(DOWNLOAD_QUALITY_PARAM));
   const logCtx = { projectId, folderId: folderParam ?? undefined };
 
@@ -140,6 +144,16 @@ export async function GET(
     if (folderScope.folderScope) {
       downloadable = filterDownloadableAssetsByFolder(downloadable, folderScope.folderScope);
     }
+    if (favoritesOnly) {
+      const clientId = await resolveAssignedClientId(profile, projectId);
+      const favoriteIds = clientId
+        ? new Set((await listClientFavoriteIds(tenant.businessId, projectId, clientId)).ids)
+        : new Set<string>();
+      downloadable = downloadable.filter((a) => a.media_type === "photo" && favoriteIds.has(a.id));
+      if (!downloadable.length) {
+        return zipErrorResponse("ZIP_DOWNLOAD_FAILED", "You haven't favorited any downloadable photos yet.", "favorites scope empty", 404);
+      }
+    }
     zipLog("media_filter", ctx, {
       downloadableCount: downloadable.length,
       folderScope: folderScope.folderScope,
@@ -163,7 +177,9 @@ export async function GET(
       );
     }
 
-    const filename = folderScope.folderName
+    const filename = favoritesOnly
+      ? buildFolderZipFilename(project.project_name, project.property_address, "Favorites", quality)
+      : folderScope.folderName
       ? buildFolderZipFilename(
           project.project_name,
           project.property_address,

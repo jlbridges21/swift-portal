@@ -151,6 +151,8 @@ type ProjectRow = {
   client_section_photos?: boolean;
   client_section_videos?: boolean;
   client_section_tours?: boolean;
+  /** Migration v123: null/absent = automatic, true = shown, false = hidden from the client. */
+  client_section_marketing?: boolean | null;
   properties?: { address?: string | null; city?: string | null; state?: string | null; zip?: string | null; property_type?: string | null } | null;
   clients?: { id: string; name?: string | null; full_name?: string | null; email?: string | null; phone?: string | null; company?: string | null } | null;
 };
@@ -176,14 +178,24 @@ export type EligibleMediaRow = {
 const MEDIA_COLUMNS =
   "id, media_type, media_source, file_name, file_path, file_size, thumbnail_url, title, alt_text, width, height, youtube_url, embed_url, visibility, mime_type, display_order";
 
+const PROJECT_ROW_COLUMNS =
+  "id, business_id, client_id, property_address, project_name, status, cover_image_id, deleted_at, client_section_photos, client_section_videos, client_section_tours, properties(address, city, state, zip, property_type), clients(id, name, full_name, email, phone, company)";
+
+/** True when a query failed only because migration v123 (client_section_marketing) isn't applied. */
+export function isMissingMarketingVisibilityColumn(error: { message?: string | null } | null | undefined): boolean {
+  return Boolean(error?.message?.includes("client_section_marketing"));
+}
+
 export async function loadProjectRow(db: TenantServiceClient, projectId: string): Promise<ProjectRow | null> {
-  const { data } = await db
+  let { data, error } = await db
     .from("projects")
-    .select(
-      "id, business_id, client_id, property_address, project_name, status, cover_image_id, deleted_at, client_section_photos, client_section_videos, client_section_tours, properties(address, city, state, zip, property_type), clients(id, name, full_name, email, phone, company)"
-    )
+    .select(`${PROJECT_ROW_COLUMNS}, client_section_marketing`)
     .eq("id", projectId)
     .maybeSingle();
+  if (error && isMissingMarketingVisibilityColumn(error)) {
+    // Pre-v123 database: no per-project override, visibility stays automatic.
+    ({ data, error } = await db.from("projects").select(PROJECT_ROW_COLUMNS).eq("id", projectId).maybeSingle());
+  }
   if (!data || (data as unknown as ProjectRow).deleted_at) return null;
   return data as unknown as ProjectRow;
 }
@@ -723,13 +735,31 @@ export function permissionsFor(ctx: KitContext, actor: MarketingActor): Marketin
   };
 }
 
+/**
+ * Single rule for client visibility. Nothing to show → hidden. Otherwise the per-project
+ * toggle (v123) wins when set; unset falls back to the automatic rule.
+ */
+export function resolveMarketingVisibility(input: {
+  anyOffered: boolean;
+  projectSetting: boolean | null | undefined;
+  automatic: boolean;
+}): boolean {
+  if (!input.anyOffered) return false;
+  if (input.projectSetting === false) return false;
+  if (input.projectSetting === true) return true;
+  return input.automatic;
+}
+
 /** Is the Marketing Kit visible to the client at all on this project? */
 export function visibleToClient(ctx: KitContext): boolean {
   const anyOffered = MARKETING_PRODUCTS.some((p) => ctx.access[p].state !== "unavailable");
-  if (!anyOffered) return false;
   const hasProjectOverride = Object.keys(ctx.offerOverrides).length > 0;
   const hasPurchase = ctx.purchases.some((p) => p.status !== "cancelled");
-  return ctx.settings.showToClients || hasProjectOverride || hasPurchase || ctx.kit.website_status === "published";
+  return resolveMarketingVisibility({
+    anyOffered,
+    projectSetting: ctx.project.client_section_marketing,
+    automatic: ctx.settings.showToClients || hasProjectOverride || hasPurchase || ctx.kit.website_status === "published",
+  });
 }
 
 export type KitClientState = {
@@ -843,6 +873,10 @@ export type KitSummary = {
   photoCount: number;
   showToClients: boolean;
   visibleToClient: boolean;
+  /** Per-project toggle (v123): null = automatic. */
+  clientVisibility: boolean | null;
+  /** At least one add-on is offered on this project (nothing to show otherwise). */
+  anyOffered: boolean;
   allowAddToInvoice: boolean;
   listingDomainConnected: boolean;
 };
@@ -871,6 +905,8 @@ export async function loadKitSummary(businessId: string, projectId: string): Pro
       photoCount: 0,
       showToClients: settings.showToClients,
       visibleToClient: false,
+      clientVisibility: project.client_section_marketing ?? null,
+      anyOffered: false,
       allowAddToInvoice: settings.allowAddToInvoice,
       listingDomainConnected: false,
     };
@@ -893,9 +929,12 @@ export async function loadKitSummary(businessId: string, projectId: string): Pro
         : await buildPublicTenantUrlForBusiness(businessId, (biz ?? { slug: "", custom_domain: null }) as { slug: string; custom_domain: string | null }, fallbackListingPath(kit.site_slug));
   }
   const anyOffered = MARKETING_PRODUCTS.some((p) => access[p].state !== "unavailable");
-  const visible =
-    anyOffered &&
-    (settings.showToClients || Object.keys(offerOverrides).length > 0 || purchases.some((p) => p.status !== "cancelled") || kit?.website_status === "published");
+  const visible = resolveMarketingVisibility({
+    anyOffered,
+    projectSetting: project.client_section_marketing,
+    automatic:
+      settings.showToClients || Object.keys(offerOverrides).length > 0 || purchases.some((p) => p.status !== "cancelled") || kit?.website_status === "published",
+  });
   return {
     setupRequired: false,
     websiteStatus: kit?.website_status ?? "none",
@@ -907,6 +946,8 @@ export async function loadKitSummary(businessId: string, projectId: string): Pro
     photoCount: media.filter((m) => m.media_type === "photo").length,
     showToClients: settings.showToClients,
     visibleToClient: visible,
+    clientVisibility: project.client_section_marketing ?? null,
+    anyOffered,
     allowAddToInvoice: settings.allowAddToInvoice,
     listingDomainConnected: listingDomain.connected,
   };

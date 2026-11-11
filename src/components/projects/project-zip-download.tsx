@@ -26,6 +26,8 @@ interface ProjectZipDownloadProps {
   folderId?: string;
   /** Display label for folder downloads (filename uses server-side folder name). */
   folderLabel?: string;
+  /** Only the signed-in client's favorited photos. */
+  favoritesOnly?: boolean;
   className?: string;
   buttonClassName?: string;
   variant?: "hero" | "default";
@@ -38,6 +40,7 @@ interface UseProjectZipDownloadOptions {
   expectedFileCount?: number;
   folderId?: string;
   folderLabel?: string;
+  favoritesOnly?: boolean;
   /** Hero styling for the progress panel (dark overlay backgrounds). */
   hero?: boolean;
 }
@@ -52,6 +55,7 @@ export function useProjectZipDownload({
   expectedFileCount,
   folderId,
   folderLabel,
+  favoritesOnly = false,
   hero = false,
 }: UseProjectZipDownloadOptions) {
   const [mounted, setMounted] = useState(false);
@@ -126,6 +130,7 @@ export function useProjectZipDownload({
       const params = new URLSearchParams();
       params.set(DOWNLOAD_QUALITY_PARAM, quality);
       if (folderId) params.set("folderId", folderId);
+      if (favoritesOnly) params.set("favorites", "1");
       const zipUrl = `${base}?${params.toString()}`;
 
       const res = await fetch(zipUrl, {
@@ -317,6 +322,7 @@ export function ProjectZipDownload({
   expectedFileCount,
   folderId,
   folderLabel,
+  favoritesOnly = false,
   className,
   buttonClassName,
   variant = "hero",
@@ -329,6 +335,7 @@ export function ProjectZipDownload({
     expectedFileCount,
     folderId,
     folderLabel,
+    favoritesOnly,
     hero: isHero,
   });
   const buttonLabel = folderLabel

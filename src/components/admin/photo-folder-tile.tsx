@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { Folder, FolderPlus, Images, Link2, MoreHorizontal } from "lucide-react";
+import { Folder, FolderPlus, Heart, Images, Link2, MoreHorizontal } from "lucide-react";
 import type { ActionMenuAnchor } from "@/components/ui/action-menu";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +20,8 @@ interface PhotoFolderTileProps {
   general?: boolean;
   /** Folder has an active share — uploads here are visible to its recipients. */
   shared?: boolean;
+  /** Photos in this folder the client hearted (business view). */
+  likedCount?: number;
   onOpen: () => void;
   onMenu: (anchor: ActionMenuAnchor) => void;
 }
@@ -31,6 +33,7 @@ export function PhotoFolderTile({
   coverUrl,
   general = false,
   shared = false,
+  likedCount = 0,
   onOpen,
   onMenu,
 }: PhotoFolderTileProps) {
@@ -57,7 +60,7 @@ export function PhotoFolderTile({
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`Open ${name}, ${photoCountLabel(count)}${shared ? ", shared" : ""}`}
+        aria-label={`Open ${name}, ${photoCountLabel(count)}${shared ? ", shared" : ""}${likedCount ? `, ${likedCount} client liked` : ""}`}
         className="block w-full rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <div className="relative aspect-[4/3] overflow-hidden rounded-t-xl bg-subtle">
@@ -72,6 +75,14 @@ export function PhotoFolderTile({
           {shared ? (
             <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-medium text-white">
               <Link2 className="h-3 w-3" aria-hidden /> Shared
+            </span>
+          ) : null}
+          {likedCount > 0 ? (
+            <span
+              className="pointer-events-none absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground shadow-sm"
+              title={`${likedCount} client-liked photo${likedCount === 1 ? "" : "s"}`}
+            >
+              <Heart className="h-3 w-3 fill-current" aria-hidden /> {likedCount}
             </span>
           ) : null}
           {isOver ? (

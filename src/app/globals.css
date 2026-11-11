@@ -404,3 +404,16 @@ html[data-standalone] header.app-sticky-top {
     top: calc(var(--sat) + 4rem + 1px);
   }
 }
+
+/* Client photo favorites: a short pop when a heart is toggled. */
+@keyframes sp-heart-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+.sp-heart-pop {
+  animation: sp-heart-pop 280ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-heart-pop { animation: none; }
+}

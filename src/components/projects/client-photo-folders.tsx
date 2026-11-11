@@ -7,14 +7,17 @@ import { Button } from "@/components/ui/button";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import {
   countFolderDownloadableAssets,
+  isStorageBackedDeliverable,
   UNFILED_FOLDER_LABEL,
   UNFILED_FOLDER_SCOPE,
 } from "@/lib/project-zip-assets";
 import { cn } from "@/lib/utils";
 import type { MediaAsset, MediaFolder } from "@/lib/types";
-import { ArrowLeft, Folder, Images } from "lucide-react";
+import { ArrowLeft, Folder, Heart, Images } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+import type { ClientFavoritesController } from "@/components/projects/use-client-favorites";
 
-type View = "browse" | "all" | "folder" | "unfiled";
+type View = "browse" | "all" | "folder" | "unfiled" | "favorites";
 
 interface ClientPhotoFoldersProps {
   projectId: string;
@@ -28,6 +31,8 @@ interface ClientPhotoFoldersProps {
   downloadsAllowed?: boolean;
   compactInitialCount?: number;
   isAdmin?: boolean;
+  /** Signed-in client's hearts: adds heart buttons and a Favorites view. */
+  favorites?: ClientFavoritesController;
 }
 
 function sortInFolder(list: MediaAsset[]) {
@@ -49,6 +54,7 @@ export function ClientPhotoFolders({
   downloadsAllowed = true,
   compactInitialCount,
   isAdmin = false,
+  favorites,
 }: ClientPhotoFoldersProps) {
   const [view, setView] = useState<View>(folders.length ? "browse" : "all");
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
@@ -95,16 +101,87 @@ export function ClientPhotoFolders({
     };
   }, [view, sortedFolders, photosByFolder, getDownloadUrl]);
 
-  if (!folders.length) {
+  const favoritePhotos = favorites ? allSorted.filter((p) => favorites.isFavorite(p.id)) : [];
+
+  function favoritesButton(active: boolean, onClick: () => void) {
+    if (!favorites) return null;
     return (
+      <Button
+        variant={active ? "accent" : "outline"}
+        size="sm"
+        className="min-h-10"
+        aria-pressed={active}
+        onClick={onClick}
+      >
+        <Heart className={cn("h-4 w-4", (active || favorites.count > 0) && "fill-current")} /> Favorites (
+        {favorites.count})
+      </Button>
+    );
+  }
+
+  const favoritesView = favorites ? (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="min-h-10"
+          onClick={() => setView(folders.length ? "browse" : "all")}
+        >
+          <ArrowLeft className="h-4 w-4" /> {folders.length ? "Folders" : "All photos"}
+        </Button>
+        <p className="flex items-center gap-1.5 text-sm font-medium text-heading">
+          <Heart className="h-4 w-4 fill-current text-accent" /> Your favorites
+          <span className="font-normal text-muted">({favoritePhotos.length})</span>
+        </p>
+        {downloadsAllowed && favoritePhotos.length > 0 ? (
+          <ProjectZipDownload
+            projectId={projectId}
+            zipApiBase={zipApiBase}
+            favoritesOnly
+            folderLabel="Favorites"
+            expectedFileCount={favoritePhotos.filter(isStorageBackedDeliverable).length}
+            variant="default"
+            className="sm:ml-auto"
+          />
+        ) : null}
+      </div>
       <PhotoGallery
-        photos={sortInFolder(photos)}
+        photos={favoritePhotos}
         getDownloadUrl={getDownloadUrl}
         downloadsAllowed={downloadsAllowed}
-        compactInitialCount={compactInitialCount}
         downloadApiBase={downloadApiBase}
         thumbnailsEndpoint={thumbnailsEndpoint}
+        favorites={favorites}
+        emptyState={
+          <EmptyState
+            icon={Heart}
+            title="No favorites yet"
+            description="Tap the heart on any photo to save it here. Your favorites are shared with your photographer."
+          />
+        }
       />
+    </div>
+  ) : null;
+
+  if (view === "favorites" && favoritesView) return favoritesView;
+
+  if (!folders.length) {
+    return (
+      <div className="space-y-4">
+        {favorites ? (
+          <div className="flex flex-wrap gap-2">{favoritesButton(false, () => setView("favorites"))}</div>
+        ) : null}
+        <PhotoGallery
+          photos={sortInFolder(photos)}
+          getDownloadUrl={getDownloadUrl}
+          downloadsAllowed={downloadsAllowed}
+          compactInitialCount={compactInitialCount}
+          downloadApiBase={downloadApiBase}
+          thumbnailsEndpoint={thumbnailsEndpoint}
+          favorites={favorites}
+        />
+      </div>
     );
   }
 
@@ -130,6 +207,7 @@ export function ClientPhotoFolders({
           <Button variant="outline" size="sm" className="min-h-10" onClick={() => setView("all")}>
             <Images className="h-4 w-4" /> All photos ({photos.length})
           </Button>
+          {favoritesButton(false, () => setView("favorites"))}
           {unfiled.length > 0 &&
             countFolderDownloadableAssets(photos, UNFILED_FOLDER_SCOPE, isAdmin) > 0 && (
             <Button variant="outline" size="sm" className="min-h-10" onClick={() => setView("unfiled")}>
@@ -245,6 +323,7 @@ export function ClientPhotoFolders({
             All photos
           </Button>
         )}
+        {favoritesButton(false, () => setView("favorites"))}
         {activeFolderScope && activeDownloadLabel && (
           folderDownload(activeFolderScope, activeDownloadLabel, activeDownloadCount)
         )}
@@ -256,6 +335,7 @@ export function ClientPhotoFolders({
         compactInitialCount={view === "all" ? compactInitialCount : undefined}
         downloadApiBase={downloadApiBase}
         thumbnailsEndpoint={thumbnailsEndpoint}
+        favorites={favorites}
       />
       {view === "folder" && list[0] && (
         <p className="sr-only">Folder starts with {mediaDisplayName(list[0])}</p>
