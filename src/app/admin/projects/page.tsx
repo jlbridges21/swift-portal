@@ -16,6 +16,7 @@ import { isOwnerAdmin, staffCan, visibleProjectIdsFor } from "@/lib/staff-access
 import { parseProjectsViewCookie, PROJECTS_VIEW_COOKIE } from "@/lib/client-view";
 import { loadClientViewData, loadProjectHeroPosters } from "@/lib/client-view-data";
 import { loadProjectStorageBytes } from "@/lib/project-storage";
+import { getUiExperience } from "@/lib/ui-rollout-server";
 
 interface PageProps {
   searchParams: Promise<{ view?: string; stage?: string; status?: string }>;
@@ -95,10 +96,35 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
   const isStaff = profile.role === "staff";
   const canCreate = !isStaff || staffCan(profile, "projects.create");
 
+  const inNewShell = (await getUiExperience(profile)).mode === "new";
+  const projectActions = (
+    <div className="flex flex-wrap gap-2">
+      {!isStaff && (
+        <Link href={showDeleted ? "/admin/projects" : "/admin/projects?view=deleted"}>
+          <Button variant="outline" size="sm">
+            {showDeleted
+              ? `Active projects (${activeCount})`
+              : `Hidden projects (${hiddenCount})`}
+          </Button>
+        </Link>
+      )}
+      {!showDeleted && canCreate && (
+        <Link href="/admin/projects/new">
+          <Button variant="accent" size="sm">
+            <Plus className="h-4 w-4" />
+            New Project
+          </Button>
+        </Link>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole={isStaff ? "staff" : "admin"} />
       <main className="app-page app-page-wide mx-auto max-w-[100vw] px-4 py-8 sm:px-6 lg:px-8">
+        {/* New interface: Hidden / New Project join the staff-filter toolbar (one row under the
+            top bar). Classic keeps them in the page heading, as before. */}
         <PageHeader
           title={showDeleted ? "Hidden Projects" : "Project Pipeline"}
           description={
@@ -107,25 +133,7 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
               : `${activeCount} active project${activeCount === 1 ? "" : "s"}`
           }
         >
-          <div className="flex flex-wrap gap-2">
-            {!isStaff && (
-              <Link href={showDeleted ? "/admin/projects" : "/admin/projects?view=deleted"}>
-                <Button variant="outline" size="sm">
-                  {showDeleted
-                    ? `Active projects (${activeCount})`
-                    : `Hidden projects (${hiddenCount})`}
-                </Button>
-              </Link>
-            )}
-            {!showDeleted && canCreate && (
-              <Link href="/admin/projects/new">
-                <Button variant="accent" size="sm">
-                  <Plus className="h-4 w-4" />
-                  New Project
-                </Button>
-              </Link>
-            )}
-          </div>
+          {inNewShell ? null : projectActions}
         </PageHeader>
 
         <AdminProjectsWithStaffFilter
@@ -142,6 +150,7 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
           clientView={clientView}
           heroUrls={heroUrls}
           storageBytes={storageBytes}
+          toolbarEnd={inNewShell ? projectActions : undefined}
           clientViewPermissions={
             showDeleted
               ? undefined

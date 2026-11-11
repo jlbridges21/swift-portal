@@ -40,6 +40,7 @@ import {
 import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
 import { appParentPath } from "@/lib/pwa/app-nav";
 import { cn } from "@/lib/utils";
+import { SitesTabs, isSitesPath } from "@/components/admin/sites/sites-tab-nav";
 import { UiRolloutBanner, useSwitchInterface, useUiRollout } from "@/components/admin/ui-rollout/ui-rollout";
 import type { StaffArea } from "@/lib/staff-access";
 
@@ -437,6 +438,7 @@ function TopBar({
   // Installed app on a phone: deeper screens get a native-style back button to their parent.
   const standaloneMobile = useIsStandalonePwaMobile();
   const backHref = standaloneMobile ? appParentPath(pathname) : null;
+  const centerTabs = isSitesPath(pathname);
 
   function handleRefresh() {
     if (refreshing) return;
@@ -474,12 +476,19 @@ function TopBar({
           <TopBarTitle page={pageTitle} homeHref={homeHref} />
         </div>
 
+        {/* Center slot (wide screens): Sites tabs. Narrower screens keep them in a row under the bar. */}
+        {centerTabs ? <SitesTabs className="hidden shrink-0 xl:block" /> : null}
+
+        <div className={cn("flex shrink-0 items-center gap-1.5 sm:gap-3", centerTabs && "xl:flex-1 xl:justify-end")}>
         {/* Search: full field from md, icon on phones. Opens the existing ⌘K palette. */}
         <button
           type="button"
           onClick={openSearch}
           aria-label="Search projects, clients, or media (Command K)"
-          className="hidden h-10 w-56 shrink items-center gap-2 rounded-full border border-border bg-subtle px-4 text-left text-sm text-muted transition hover:border-accent/40 hover:bg-card md:flex lg:w-72 xl:w-96"
+          className={cn(
+            "hidden h-10 w-56 min-w-0 shrink items-center gap-2 rounded-full border border-border bg-subtle px-4 text-left text-sm text-muted transition hover:border-accent/40 hover:bg-card md:flex lg:w-72",
+            centerTabs ? "xl:w-64 2xl:w-80" : "xl:w-96"
+          )}
         >
           <Search className="h-4 w-4 shrink-0" aria-hidden />
           <span className="min-w-0 flex-1 truncate">Search projects, clients, or media...</span>
@@ -522,6 +531,7 @@ function TopBar({
           trigger="avatar"
           placement="bottom"
         />
+        </div>
       </div>
     </header>
   );

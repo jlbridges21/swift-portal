@@ -39,6 +39,7 @@ export function AdminProjectsStaffFilter({
   onFilterChange,
   defaultSelected,
   trailing,
+  end,
 }: {
   staff: StaffOption[];
   /** project_id → user_id[] */
@@ -48,6 +49,8 @@ export function AdminProjectsStaffFilter({
   defaultSelected?: string[];
   /** Rendered right after the "Filter by staff" button (e.g. the Client View toggle). */
   trailing?: React.ReactNode;
+  /** Right-aligned on the same row (e.g. Hidden projects / New Project). Wraps below on narrow screens. */
+  end?: React.ReactNode;
 }) {
   const [selected, setSelected] = useState<string[]>(defaultSelected ?? []);
   const [open, setOpen] = useState(false);
@@ -118,6 +121,7 @@ export function AdminProjectsStaffFilter({
             </Button>
           </>
         ) : null}
+        {end ? <div className="ml-auto flex flex-wrap items-center gap-2">{end}</div> : null}
       </div>
 
       {open ? (

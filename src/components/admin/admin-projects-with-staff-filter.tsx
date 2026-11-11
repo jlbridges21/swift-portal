@@ -44,6 +44,7 @@ export function AdminProjectsWithStaffFilter({
   clientViewPermissions,
   heroUrls,
   storageBytes,
+  toolbarEnd,
 }: {
   projects: PipelineProjectRow[];
   stage?: PipelineStageParam | null;
@@ -65,6 +66,8 @@ export function AdminProjectsWithStaffFilter({
   heroUrls?: Promise<Record<string, string | null>>;
   /** Per-project media storage, streamed from the server. */
   storageBytes?: Promise<ProjectStorageMap | null>;
+  /** Page actions placed at the right end of the filter toolbar (New interface). */
+  toolbarEnd?: React.ReactNode;
 }) {
   const router = useRouter();
   const [view, setView] = useState<ProjectsViewMode>(initialView);
@@ -108,6 +111,7 @@ export function AdminProjectsWithStaffFilter({
             <ClientViewToggle on={clientViewOn} onToggle={toggleView} loading={refreshing} />
           ) : null
         }
+        end={toolbarEnd}
       />
       {clientViewOn && clientViewPermissions ? (
         <ClientView
