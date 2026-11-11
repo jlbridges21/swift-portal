@@ -5,6 +5,12 @@ import { AdminMobilePwaNav } from "@/components/admin/admin-mobile-pwa-nav";
 import { AdminCommandPalette } from "@/components/admin/admin-command-palette";
 import { AdminSearchContext } from "@/components/admin/admin-search-context";
 import { UploadManagerProvider } from "@/components/admin/upload-manager";
+import { AdminAppShell } from "@/components/admin/app-shell/admin-app-shell";
+import type { AdminShellUser } from "@/components/admin/app-shell/admin-app-shell-context";
+import { UiRolloutProvider } from "@/components/admin/ui-rollout/ui-rollout";
+import type { UiExperience } from "@/lib/ui-rollout";
+
+const CLASSIC_EXPERIENCE: UiExperience = { mode: "classic", phase: "classic_only", canSwitch: false, banner: null };
 
 /**
  * Shell chrome that Header (and related controls) depend on.
@@ -14,8 +20,21 @@ import { UploadManagerProvider } from "@/components/admin/upload-manager";
  */
 export function AdminChromeProviders({
   children,
+  shellUser,
+  banner,
+  experience = CLASSIC_EXPERIENCE,
 }: {
   children: React.ReactNode;
+  /**
+   * Classic or New interface for this user (resolved on the server, src/lib/ui-rollout.ts).
+   * Classic: pages render their own top Header, exactly as before the redesign.
+   * New: the sidebar + top bar shell, and page Headers step aside.
+   */
+  experience?: UiExperience;
+  /** Name / avatar / business shown in the sidebar footer and top-bar profile badge. */
+  shellUser?: AdminShellUser | null;
+  /** Account banners (trial, impersonation, setup) rendered at the top of the main column. */
+  banner?: React.ReactNode;
   showPartner?: boolean;
   partnerNavLabel?: string;
   partnerNavHref?: string;
@@ -57,7 +76,20 @@ export function AdminChromeProviders({
   return (
     <AdminSearchContext.Provider value={value}>
       <UploadManagerProvider>
-        <div className="admin-pwa-content-pad">{children}</div>
+        <UiRolloutProvider value={experience}>
+          {experience.mode === "new" ? (
+            <div className="admin-pwa-content-pad">
+              <AdminAppShell user={shellUser} banner={banner}>
+                {children}
+              </AdminAppShell>
+            </div>
+          ) : (
+            <>
+              {banner}
+              <div className="admin-pwa-content-pad">{children}</div>
+            </>
+          )}
+        </UiRolloutProvider>
         <AdminMobilePwaNav />
         <AdminCommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       </UploadManagerProvider>

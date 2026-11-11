@@ -2,6 +2,8 @@
 
 import { AdminChromeProviders } from "@/components/admin/admin-chrome-providers";
 import type { StaffArea } from "@/lib/staff-access";
+import type { AdminShellUser } from "@/components/admin/app-shell/admin-app-shell-context";
+import type { UiExperience } from "@/lib/ui-rollout";
 
 export function AdminShell({
   children,
@@ -10,6 +12,9 @@ export function AdminShell({
   partnerNavHref = "/partner",
   staffAreas,
   userRole,
+  shellUser,
+  banner,
+  experience,
 }: {
   children: React.ReactNode;
   showPartner?: boolean;
@@ -17,6 +22,9 @@ export function AdminShell({
   partnerNavHref?: string;
   staffAreas?: StaffArea[];
   userRole?: "admin" | "staff";
+  shellUser?: AdminShellUser | null;
+  banner?: React.ReactNode;
+  experience?: UiExperience;
 }) {
   return (
     <AdminChromeProviders
@@ -25,6 +33,9 @@ export function AdminShell({
       partnerNavHref={partnerNavHref}
       staffAreas={staffAreas}
       userRole={userRole}
+      shellUser={shellUser}
+      banner={banner}
+      experience={experience}
     >
       {children}
     </AdminChromeProviders>

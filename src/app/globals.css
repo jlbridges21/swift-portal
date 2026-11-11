@@ -223,6 +223,33 @@ body {
   }
 }
 
+/* Business app shell (/admin, /partner for business owners): left sidebar width per breakpoint —
+   hidden on phones, icon rail on tablets, full on desktop. Full-screen page panels that pin
+   themselves with lg:fixed lg:inset-x-0 (website editor, tax settings, video review) or
+   md:fixed md:left-0 (sticky save bars) start beside the sidebar instead of under it. */
+[data-admin-app-shell] {
+  --admin-sidebar-w: 0px;
+}
+.admin-app-sidebar {
+  width: var(--admin-sidebar-w);
+}
+@media (min-width: 768px) {
+  [data-admin-app-shell] {
+    --admin-sidebar-w: 72px;
+  }
+  [data-admin-app-shell] .md\:fixed.md\:left-0 {
+    left: var(--admin-sidebar-w);
+  }
+}
+@media (min-width: 1024px) {
+  [data-admin-app-shell] {
+    --admin-sidebar-w: 240px;
+  }
+  [data-admin-app-shell] .lg\:fixed.lg\:inset-x-0 {
+    left: var(--admin-sidebar-w);
+  }
+}
+
 /* ---------------------------------------------------------------------------
    Installed app only (StandaloneAppBoot sets these attributes). The normal
    browser and desktop never match them.

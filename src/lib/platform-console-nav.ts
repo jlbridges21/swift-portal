@@ -24,6 +24,7 @@ export type ConsoleIcon =
   | "partners"
   | "lifecycle"
   | "w9"
+  | "rollout"
   | "audit";
 
 export type ConsoleSection = {
@@ -74,6 +75,7 @@ export const CONSOLE_GROUPS: ConsoleGroup[] = [
     label: "Administration",
     sections: [
       { id: "w9", label: "W-9 form", href: "/platform/w9", icon: "w9", match: under("/platform/w9") },
+      { id: "ui-rollout", label: "Interface rollout", href: "/platform/ui-rollout", icon: "rollout", match: under("/platform/ui-rollout") },
       { id: "audit", label: "Audit log", href: "/platform/audit", icon: "audit", match: under("/platform/audit") },
     ],
   },

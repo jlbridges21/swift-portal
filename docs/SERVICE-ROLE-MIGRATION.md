@@ -212,6 +212,7 @@ Service-role users added for first-party marketing analytics (design: `docs/ANAL
 ## SEO Growth Engine
 
 - `src/lib/seo-growth/store.ts` — super-admin only (callers pass `requireSuperAdminPage` / `requireSuperAdminApi`). Reads and appends `platform_audit_log` rows with `seo.*` actions (opportunity review state, Google index snapshots). Touches no tenant tables; no new tables or policies.
+- `src/lib/ui-rollout-server.ts` — classic/new interface rollout (v121). Reads and writes the singleton `platform_ui_rollout` row (writes only from `requireSuperAdminApi` routes), the signed-in user's own `user_ui_preferences` row (keyed by the session user id, never a client-supplied id), and, for super-admin adoption analytics, counts business `profiles`. Touches no tenant business data.
 
 ## Signup paths & trial conversion (v107)
 

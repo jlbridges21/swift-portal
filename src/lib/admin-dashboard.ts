@@ -40,7 +40,13 @@ export interface AdminPaymentRow extends Omit<Payment, "projects"> {
 export interface AdminDashboardData {
   newRequests: AdminDashboardProjectRow[];
   quoteAttention: AdminQuoteAttentionRow[];
-  upcomingShoots: (AdminDashboardProjectRow & { shootAt: string })[];
+  upcomingShoots: (AdminDashboardProjectRow & {
+    shootAt: string;
+    /** Service name and cover fields for the Command Center's Upcoming Shoots card. */
+    service_type: string | null;
+    cover_image_id: string | null;
+    cover_image_url: string | null;
+  })[];
   editingQueue: AdminDashboardProjectRow[];
   readyForDelivery: AdminDashboardProjectRow[];
   outstandingPayments: AdminPaymentRow[];
@@ -173,6 +179,9 @@ export async function fetchAdminDashboardData(businessId: string): Promise<Admin
   )
     .map((p) => ({
       ...toDashboardRow(p),
+      service_type: p.service_type ?? null,
+      cover_image_id: p.cover_image_id ?? null,
+      cover_image_url: p.cover_image_url ?? null,
       shootAt:
         p.confirmedShootAt ??
         (p.shoot_date ? `${p.shoot_date}T09:00:00.000Z` : p.created_at),

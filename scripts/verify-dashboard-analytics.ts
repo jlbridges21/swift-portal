@@ -323,8 +323,11 @@ function main() {
   for (const t of ["New Requests", "Quotes", "Upcoming Shoots", "Editing", "In Review", "Awaiting Payment"]) {
     assert(ops.includes(`label: "${t}"`), `summary card kept: ${t}`);
   }
-  const order = ["<AdminOpsDashboard", "<BusinessAnalytics", "Recent Projects", "Recent Activity"].map((t) => page.indexOf(t));
-  assert(order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1]!)), "page order: ops → analytics → recent projects → recent activity");
+  // The original layout is the Classic interface's dashboard (interface rollout, src/lib/ui-rollout.ts).
+  const classic = src("src/components/admin/classic/classic-dashboard.tsx");
+  const order = ["<AdminOpsDashboard", "<BusinessAnalytics", "Recent Projects", "Recent Activity"].map((t) => classic.indexOf(t));
+  assert(order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1]!)), "classic page order: ops → analytics → recent projects → recent activity");
+  assert(/<ClassicDashboard/.test(page) && /<CommandCenter/.test(page), "/admin renders Classic or New dashboard by interface");
 
   console.log(`\n${passes} passed, ${failures} failed`);
   if (failures) process.exit(1);

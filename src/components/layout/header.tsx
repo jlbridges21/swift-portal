@@ -8,12 +8,14 @@ import { Logo } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, Menu, Plus, Settings, X, RefreshCw, Loader2 } from "lucide-react";
+import { ChevronLeft, Menu, Plus, Settings, Sparkles, X, RefreshCw, Loader2 } from "lucide-react";
 import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
 import { appParentPath } from "@/lib/pwa/app-nav";
 import { AdminSearchTrigger } from "@/components/admin/admin-command-palette";
 import { useAdminSearch } from "@/components/admin/admin-search-context";
 import { useAdminCapabilities } from "@/components/admin/admin-capabilities-context";
+import { useInAdminAppShell } from "@/components/admin/app-shell/admin-app-shell-context";
+import { UiRolloutBanner, useSwitchInterface, useUiRollout } from "@/components/admin/ui-rollout/ui-rollout";
 import type { StaffArea } from "@/lib/staff-access";
 
 interface HeaderProps {
@@ -101,6 +103,9 @@ export function Header({
   const [refreshing, setRefreshing] = useState(false);
   const [messagesUnread, setMessagesUnread] = useState(0);
   const caps = useAdminCapabilities();
+  const inAppShell = useInAdminAppShell();
+  const rollout = useUiRollout();
+  const switchInterface = useSwitchInterface();
   // Layout context wins for staff so page-level userRole="admin" props don't leak chrome.
   const userRole =
     caps.userRole === "staff"
@@ -158,7 +163,7 @@ export function Header({
   ];
 
   useEffect(() => {
-    if (variant !== "dashboard" || !isAdminChrome) return;
+    if (variant !== "dashboard" || !isAdminChrome || inAppShell) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -173,7 +178,7 @@ export function Header({
     return () => {
       cancelled = true;
     };
-  }, [variant, isAdminChrome]);
+  }, [variant, isAdminChrome, inAppShell]);
 
   async function handleRefresh() {
     if (refreshing) return;
@@ -187,7 +192,16 @@ export function Header({
   const standaloneMobile = useIsStandalonePwaMobile();
   const backHref = standaloneMobile && variant === "dashboard" && pathname ? appParentPath(pathname) : null;
 
+  // Business app pages: the shell (sidebar + top bar) owns global navigation.
+  if (inAppShell && variant === "dashboard" && isAdminChrome) return null;
+
+  // Interface rollout: Classic header offers the New experience (and the reverse for previews).
+  const showSwitch = variant === "dashboard" && isAdminChrome && rollout.canSwitch;
+  const switchTarget = rollout.mode === "classic" ? "new" : "classic";
+  const switchLabel = switchTarget === "new" ? "Switch to New Experience" : "Switch to Classic Experience";
+
   return (
+    <>
     <header className="app-sticky-top app-safe-x sticky top-0 z-50 w-full border-b border-border/80 bg-card/90 backdrop-blur-lg">
       <div className="relative mx-auto flex h-14 w-full max-w-7xl items-center gap-2 px-4 sm:h-16 sm:gap-3 sm:px-6 lg:px-8">
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
@@ -286,6 +300,18 @@ export function Header({
                   <RefreshCw className="h-5 w-5" />
                 )}
               </Button>
+              {showSwitch ? (
+                <button
+                  type="button"
+                  onClick={() => switchInterface(switchTarget)}
+                  title={switchLabel}
+                  className="hidden min-h-11 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-accent transition-colors hover:bg-accent-subtle md:inline-flex"
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                  <span className="hidden 2xl:inline">{switchTarget === "new" ? "New Experience" : "Classic Experience"}</span>
+                  <span className="sr-only 2xl:hidden">{switchLabel}</span>
+                </button>
+              ) : null}
               {!isStaff ? (
                 <Link
                   href="/admin/settings"
@@ -384,6 +410,19 @@ export function Header({
                 {link.label}
               </Link>
             ))}
+            {showSwitch ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  switchInterface(switchTarget);
+                }}
+                className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-sm font-medium text-accent hover:bg-accent-subtle"
+              >
+                <Sparkles className="h-4 w-4" aria-hidden />
+                {switchLabel}
+              </button>
+            ) : null}
             <form action="/api/auth/signout" method="POST" className="border-t border-border pt-2">
               <Button variant="ghost" type="submit" className="w-full min-h-11 justify-start px-3">
                 Sign Out
@@ -393,6 +432,8 @@ export function Header({
         </div>
       )}
     </header>
+    {variant === "dashboard" && isAdminChrome ? <UiRolloutBanner /> : null}
+    </>
   );
 }
 

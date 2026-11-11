@@ -22,6 +22,7 @@ import { offerDisplayForBusiness } from "@/lib/intro-offer-server";
 import { introOfferSavingsLabel, requestNowMs, type OfferDisplay } from "@/lib/intro-offer";
 import type { Metadata, Viewport } from "next";
 import { appChromeThemeColor } from "@/lib/pwa/metadata";
+import { getUiExperience } from "@/lib/ui-rollout-server";
 
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await getTenantContext();
@@ -40,7 +41,7 @@ export async function generateViewport(): Promise<Viewport> {
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const { profile, tenant } = await requireAdminPage();
-  const settings = await getAppSettings(tenant.businessId);
+  const [settings, experience] = await Promise.all([getAppSettings(tenant.businessId), getUiExperience(profile)]);
   const brand = getPortalBrandFromSettings(settings);
   const caps = await getCapabilities();
   const isStaff = profile.role === "staff";
@@ -151,37 +152,47 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         navCreate={navCreate}
         showTax={showTax}
       >
-        {tenant.impersonating && (
-          <ImpersonationBanner
-            businessName={tenant.business.name}
-            businessId={tenant.businessId}
-            allowWrites={tenant.allowWrites}
-            subscriptionStatus={tenant.business.subscription_status}
-            trialEndsAt={tenant.business.trial_ends_at}
-            compedUntil={tenant.business.comped_until}
-            compedReason={tenant.business.comped_reason}
-          />
-        )}
-        {!isStaff && (
-          <SubscriptionBanner
-            subscriptionStatus={tenant.business.subscription_status}
-            trialEndsAt={tenant.business.trial_ends_at}
-            compedUntil={tenant.business.comped_until}
-            subscriptionCurrentPeriodEnd={tenant.business.subscription_current_period_end}
-            subscriptionCancelAtPeriodEnd={tenant.business.subscription_cancel_at_period_end}
-            scheduled={scheduledPlan}
-            introOffer={introOffer}
-            offer={offer}
-          />
-        )}
-        {trialModal}
-        {finishBanner ? <FinishSetupBanner /> : null}
         <AdminShell
           showPartner={showPartner}
           partnerNavLabel={navPartnerLabel}
           partnerNavHref={navPartnerHref}
           staffAreas={staffAreas ?? undefined}
           userRole={headerRole}
+          experience={experience}
+          shellUser={{
+            name: profile.full_name ?? null,
+            avatarUrl: profile.avatar_url ?? null,
+            businessName: tenant.business.name ?? null,
+          }}
+          banner={
+            <>
+              {tenant.impersonating && (
+                <ImpersonationBanner
+                  businessName={tenant.business.name}
+                  businessId={tenant.businessId}
+                  allowWrites={tenant.allowWrites}
+                  subscriptionStatus={tenant.business.subscription_status}
+                  trialEndsAt={tenant.business.trial_ends_at}
+                  compedUntil={tenant.business.comped_until}
+                  compedReason={tenant.business.comped_reason}
+                />
+              )}
+              {!isStaff && (
+                <SubscriptionBanner
+                  subscriptionStatus={tenant.business.subscription_status}
+                  trialEndsAt={tenant.business.trial_ends_at}
+                  compedUntil={tenant.business.comped_until}
+                  subscriptionCurrentPeriodEnd={tenant.business.subscription_current_period_end}
+                  subscriptionCancelAtPeriodEnd={tenant.business.subscription_cancel_at_period_end}
+                  scheduled={scheduledPlan}
+                  introOffer={introOffer}
+                  offer={offer}
+                />
+              )}
+              {trialModal}
+              {finishBanner ? <FinishSetupBanner /> : null}
+            </>
+          }
         >
           {children}
         </AdminShell>

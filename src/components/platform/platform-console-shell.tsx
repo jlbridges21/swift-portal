@@ -17,6 +17,7 @@ import {
   PanelLeftOpen,
   Receipt,
   ScrollText,
+  Sparkles,
   Tags,
   X,
   type LucideIcon,
@@ -43,6 +44,7 @@ const ICONS: Record<ConsoleIcon, LucideIcon> = {
   partners: Handshake,
   lifecycle: MailCheck,
   w9: FileText,
+  rollout: Sparkles,
   audit: ScrollText,
 };
 

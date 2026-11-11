@@ -40,6 +40,7 @@ import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import { TravelFeesSettingsCard } from "@/components/admin/travel-fees-card";
 import { DefaultDocumentsSettingsCard } from "@/components/admin/default-documents-settings-card";
 import { usePortalBrand } from "@/components/brand/brand-provider";
+import { useInAdminAppShell } from "@/components/admin/app-shell/admin-app-shell-context";
 import type {
   AppSettings,
   NotificationChannelSettings,
@@ -500,6 +501,17 @@ export function AdminSettingsClient({
     if (hash) window.history.replaceState(null, "", `#${hash}`);
   }
 
+  // New interface: the Business Website editor lives at Sites → Business Website. Settings
+  // links/hashes to it hand off there so there is only ever one place it is edited.
+  const inAppShell = useInAdminAppShell();
+  const redirectToSites = inAppShell && section === "landing";
+  useEffect(() => {
+    if (!redirectToSites) return;
+    // Keep deep links into the editor (e.g. #settings-website-portfolio from settings search).
+    const hash = /^#settings-website-[a-z-]+$/.test(window.location.hash) ? window.location.hash : "";
+    router.replace(`/admin/sites/business${hash}`);
+  }, [redirectToSites, router]);
+
   const isLandingEditor = section === "landing";
   const isTaxEditor = section === "tax" && showTax;
 
@@ -526,6 +538,14 @@ export function AdminSettingsClient({
       </Button>
     </div>
   );
+
+  if (redirectToSites) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center gap-2 text-sm text-muted">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Opening Sites → Business Website…
+      </div>
+    );
+  }
 
   if (isLandingEditor && !classicLandingEditor) {
     return (

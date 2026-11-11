@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { createContext, useContext, useEffect } from "react";
 import { cn } from "@/lib/utils";
+
+/**
+ * Lets a host page place the shell without threading props through every editor:
+ * Sites → Business Website pins it below the Sites header (instead of directly under the
+ * top bar). `null` = default placement.
+ */
+export const LandingEditorShellPlacementContext = createContext<{ className?: string } | null>(null);
 
 /**
  * Viewport-locked three-pane landing editor (Webflow/Framer style).
@@ -28,6 +35,7 @@ export function LandingEditorShell({
   className?: string;
   hideNavBelowLg?: boolean;
 }) {
+  const placement = useContext(LandingEditorShellPlacementContext);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
     const sync = () => {
@@ -54,12 +62,13 @@ export function LandingEditorShell({
         "flex min-w-0 flex-col gap-4",
         // Desktop shell: lock to the viewport below the header — no vw, no page scroll.
         "lg:fixed lg:inset-x-0 lg:bottom-0 lg:top-[calc(4rem+var(--sat))] lg:z-40 lg:flex-row lg:gap-0 lg:overflow-hidden lg:bg-background",
+        placement?.className,
         className
       )}
       data-landing-editor-shell=""
     >
       {/* Nav: desktop left rail; mobile uses SettingsTabNav’s built-in select when provided */}
-      <aside
+      {nav ? <aside
         className={cn(
           "min-w-0 shrink-0",
           hideNavBelowLg && "hidden",
@@ -67,7 +76,7 @@ export function LandingEditorShell({
         )}
       >
         <div className="min-w-0">{nav}</div>
-      </aside>
+      </aside> : null}
 
       <div
         className={cn(

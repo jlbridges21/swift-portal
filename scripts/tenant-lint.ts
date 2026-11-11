@@ -110,6 +110,9 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
   "src/app/api/billing/start-trial/route.ts",
   // SEO Growth Engine: super-admin-only reads/writes of platform_audit_log (seo.* actions).
   "src/lib/seo-growth/store.ts",
+  // Interface rollout (v121): platform-wide platform_ui_rollout row, per-user user_ui_preferences
+  // keyed by the signed-in user id, and super-admin adoption counts over business profiles.
+  "src/lib/ui-rollout-server.ts",
   "src/lib/supabase/server.ts",
   "src/lib/supabase/tenant-service.ts",
   "src/lib/tenant.ts",
@@ -236,6 +239,8 @@ const SERVICE_ROLE_ALLOWLIST = new Set([
  * tenant-wrapper files that use db.from (auto-filtered).
  */
 const FROM_UNSCOPED_ALLOWLIST = new Set([
+  // Interface rollout (v121): platform/user-scoped tables + super-admin adoption counts.
+  "src/lib/ui-rollout-server.ts",
   // Super-admin analytics: cross-tenant first-project dates (business_id, created_at only).
   "src/lib/analytics/report-data.ts",
   "src/lib/supabase/tenant-service.ts",

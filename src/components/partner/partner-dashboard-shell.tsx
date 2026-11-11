@@ -9,6 +9,7 @@ import { Header } from "@/components/layout/header";
 import { PartnerTabNav } from "@/components/partner/partner-tab-nav";
 import { DEFAULT_APP_SETTINGS } from "@/lib/app-settings";
 import { Button } from "@/components/ui/button";
+import { getUiExperience } from "@/lib/ui-rollout-server";
 
 type Props = {
   children: React.ReactNode;
@@ -39,6 +40,7 @@ export async function PartnerShell({
   const navPartnerLabel = partnerNavLabel(caps);
   const navPartnerHref = partnerNavHref(caps);
 
+  const experience = hasBusiness && profile ? await getUiExperience(profile) : undefined;
   const shootPortalBrand = getPortalBrandFromSettings(DEFAULT_APP_SETTINGS);
   let tenantBrand = shootPortalBrand;
   if (hasBusiness && caps.business.businessId) {
@@ -118,9 +120,16 @@ export async function PartnerShell({
         partnerSuspended={caps.partner.suspended}
         partnerNavLabel={navPartnerLabel}
         partnerNavHref={navPartnerHref}
+        userRole={hasBusiness ? "admin" : null}
       >
         {hasBusiness ? (
           <AdminChromeProviders
+            experience={experience}
+            shellUser={{
+              name: profile?.full_name ?? null,
+              avatarUrl: profile?.avatar_url ?? null,
+              businessName: tenantBrand.name ?? null,
+            }}
             showPartner={showPartner}
             partnerNavLabel={navPartnerLabel}
             partnerNavHref={navPartnerHref}

@@ -18,6 +18,7 @@ import {
   Monitor,
   Palette,
   SlidersHorizontal,
+  PanelsTopLeft,
   Smartphone,
   Sparkles,
   X,
@@ -49,6 +50,8 @@ type Tab = "website" | "social";
 export type MarketingKitEditorProps = {
   initialState: KitClientState;
   backHref: string;
+  /** Opened from Sites → Property Websites: extra link back to that library. */
+  sitesHref?: string | null;
   initialTab?: Tab;
   paymentReturn?: string | null;
   /** Image URL strategy (defaults to the authorized /api/marketing routes). */
@@ -246,7 +249,7 @@ function DomainNotice({ state, projectId }: { state: KitClientState; projectId: 
 // Editor
 // ---------------------------------------------------------------------------
 
-export function MarketingKitEditor({ initialState, backHref, initialTab = "website", paymentReturn, urlFactory }: MarketingKitEditorProps) {
+export function MarketingKitEditor({ initialState, backHref, sitesHref = null, initialTab = "website", paymentReturn, urlFactory }: MarketingKitEditorProps) {
   const kit = useKit(initialState, urlFactory);
   const router = useRouter();
   const s = kit.state;
@@ -514,6 +517,15 @@ export function MarketingKitEditor({ initialState, backHref, initialTab = "websi
           >
             <ArrowLeft className="h-5 w-5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Back to project</span>
           </Link>
+          {sitesHref ? (
+            <Link
+              href={sitesHref}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border bg-white px-3 text-xs font-medium text-muted hover:border-accent/40 hover:text-accent surface-dark:bg-card"
+            >
+              <PanelsTopLeft className="h-3.5 w-3.5" aria-hidden /> <span className="hidden sm:inline">Property Websites</span>
+              <span className="sm:hidden">Sites</span>
+            </Link>
+          ) : null}
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-2 text-sm font-semibold text-heading">
               <Sparkles className="h-4 w-4 text-accent" /> Marketing Kit
