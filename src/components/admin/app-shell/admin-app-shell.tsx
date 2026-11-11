@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Calendar,
   ChevronLeft,
+  ChevronRight,
   ChevronsUpDown,
   CreditCard,
   FolderKanban,
@@ -31,7 +32,10 @@ import { useAdminSearch } from "@/components/admin/admin-search-context";
 import { useAdminCapabilities } from "@/components/admin/admin-capabilities-context";
 import {
   AdminAppShellContext,
+  AdminPageTitleContext,
+  type AdminPageTitleStore,
   type AdminShellUser,
+  type ShellPageTitle,
 } from "@/components/admin/app-shell/admin-app-shell-context";
 import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
 import { appParentPath } from "@/lib/pwa/app-nav";
@@ -64,6 +68,32 @@ function isFullScreenRoute(pathname: string): boolean {
 }
 
 /**
+ * Top-bar title before (or without) a page publishing its own. Rendered on the server, so the
+ * header never flashes empty; pages add live counts via PageHeader / useShellPageTitle.
+ */
+function routePageTitle(pathname: string, isStaff: boolean): ShellPageTitle {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  const projects = { label: "Projects", href: "/admin/projects" };
+  const clients = { label: "Clients", href: "/admin/clients" };
+  if (p === "/admin") return { title: "Command Center" };
+  if (p === "/admin/projects/new") return { title: "New Project", crumbs: [projects] };
+  if (p.startsWith("/admin/projects/")) return { title: "Project", crumbs: [projects] };
+  if (p.startsWith("/admin/projects")) return { title: "Project Pipeline" };
+  if (p.startsWith("/admin/media")) return { title: "Media Library" };
+  if (p.startsWith("/admin/messages")) return { title: "Messages", description: "Conversations with your clients" };
+  if (p.startsWith("/admin/calendar")) return { title: "Shoot Calendar" };
+  if (p === "/admin/clients/new") return { title: "New Client", crumbs: [clients] };
+  if (p.startsWith("/admin/clients/")) return { title: "Client", crumbs: [clients] };
+  if (p.startsWith("/admin/clients")) return { title: "Clients" };
+  if (p.startsWith("/admin/sites")) return { title: "Sites", description: "Manage your business and property websites." };
+  if (p.startsWith("/admin/settings")) return { title: "Settings", description: "Business settings" };
+  if (p.startsWith("/admin/leads")) return { title: "Leads" };
+  if (p.startsWith("/partner")) return { title: "Partner", description: "ShootPortal Partner Program" };
+  if (p.startsWith("/staff/settings")) return { title: "Preferences" };
+  return { title: isStaff ? "ShootPortal" : "Command Center" };
+}
+
+/**
  * Business app frame: persistent left sidebar (primary navigation, Settings and the profile
  * pinned to the bottom) and a slim top bar (search, notifications, profile). Page content
  * renders unchanged in the main column and scrolls with the document, so existing sticky
@@ -87,6 +117,13 @@ export function AdminAppShell({
   const pathname = usePathname() ?? "/admin";
   const caps = useAdminCapabilities();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [registeredTitle, setRegisteredTitle] = useState<AdminPageTitleStore["registered"]>(null);
+  const setTitle = useCallback((reg: NonNullable<AdminPageTitleStore["registered"]>) => setRegisteredTitle(reg), []);
+  const clearTitle = useCallback((id: number) => setRegisteredTitle((cur) => (cur?.id === id ? null : cur)), []);
+  const titleStore = useMemo<AdminPageTitleStore>(
+    () => ({ registered: registeredTitle, set: setTitle, clear: clearTitle }),
+    [registeredTitle, setTitle, clearTitle]
+  );
   const [messagesUnread, setMessagesUnread] = useState(0);
 
   const isStaff = caps.userRole === "staff";
@@ -186,6 +223,7 @@ export function AdminAppShell({
 
   return (
     <AdminAppShellContext.Provider value={true}>
+      <AdminPageTitleContext.Provider value={titleStore}>
       <div data-admin-app-shell="" className="flex min-h-[var(--app-height)] w-full bg-background">
         {/* Sidebar: icon rail on tablets, full on desktop. */}
         <aside
@@ -223,11 +261,17 @@ export function AdminAppShell({
             isStaff={isStaff}
             drawerOpen={drawerOpen}
             onOpenDrawer={() => setDrawerOpen(true)}
+            pageTitle={
+              registeredTitle && registeredTitle.path === pathname ? registeredTitle : routePageTitle(pathname, isStaff)
+            }
           />
           <UiRolloutBanner />
-          <div className="min-w-0 flex-1">{children}</div>
+          <div data-admin-shell-content="" className="min-w-0 flex-1">
+            {children}
+          </div>
         </div>
       </div>
+      </AdminPageTitleContext.Provider>
     </AdminAppShellContext.Provider>
   );
 }
@@ -375,7 +419,9 @@ function TopBar({
   isStaff,
   drawerOpen,
   onOpenDrawer,
+  pageTitle,
 }: {
+  pageTitle: ShellPageTitle;
   homeHref: string;
   user: AdminShellUser | null;
   settingsHref: string;
@@ -402,8 +448,9 @@ function TopBar({
   return (
     <header className="app-sticky-top app-safe-x sticky top-0 z-50 w-full border-b border-border bg-card">
       <div className="flex h-14 w-full items-center gap-1.5 px-3 sm:h-16 sm:gap-3 sm:px-6">
-        {/* Mobile: back (installed app), menu, compact logo */}
-        <div className="flex min-w-0 flex-1 items-center gap-1 md:hidden">
+        {/* Left: menu / back on phones, then the current page's title and subtitle. */}
+        <div className="flex min-w-0 flex-1 items-center gap-1 md:gap-0">
+          <div className="flex shrink-0 items-center md:hidden">
           {backHref ? (
             <Link
               href={backHref}
@@ -423,16 +470,16 @@ function TopBar({
               <Menu className="h-5 w-5" aria-hidden />
             </button>
           )}
-          <Logo href={homeHref} compact showText={false} />
+          </div>
+          <TopBarTitle page={pageTitle} homeHref={homeHref} />
         </div>
-        <div className="hidden flex-1 md:block" />
 
         {/* Search: full field from md, icon on phones. Opens the existing ⌘K palette. */}
         <button
           type="button"
           onClick={openSearch}
           aria-label="Search projects, clients, or media (Command K)"
-          className="hidden h-10 w-full max-w-sm items-center gap-2 rounded-full border border-border bg-subtle px-4 text-left text-sm text-muted transition hover:border-accent/40 hover:bg-card md:flex lg:max-w-md"
+          className="hidden h-10 w-56 shrink items-center gap-2 rounded-full border border-border bg-subtle px-4 text-left text-sm text-muted transition hover:border-accent/40 hover:bg-card md:flex lg:w-72 xl:w-96"
         >
           <Search className="h-4 w-4 shrink-0" aria-hidden />
           <span className="min-w-0 flex-1 truncate">Search projects, clients, or media...</span>
@@ -449,6 +496,8 @@ function TopBar({
           <Search className="h-5 w-5" aria-hidden />
         </button>
 
+        {/* Pull-to-refresh is missing in the installed app, so it gets a refresh button; browsers have their own. */}
+        {standaloneMobile ? (
         <button
           type="button"
           onClick={handleRefresh}
@@ -459,6 +508,7 @@ function TopBar({
         >
           {refreshing ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
         </button>
+        ) : null}
 
         <div className="shrink-0">
           <NotificationBell />
@@ -474,6 +524,33 @@ function TopBar({
         />
       </div>
     </header>
+  );
+}
+
+/** Page title (h1) with a muted subtitle or breadcrumb trail; the subtitle hides on phones. */
+function TopBarTitle({ page, homeHref }: { page: ShellPageTitle; homeHref: string }) {
+  const crumbs = page.crumbs ?? [];
+  return (
+    <div className="min-w-0 flex-1 md:pr-4" data-shell-page-title="">
+      {crumbs.length ? (
+        <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1 text-xs text-muted sm:flex">
+          {crumbs.map((c) => (
+            <span key={c.href} className="flex min-w-0 items-center gap-1">
+              <Link href={c.href} className="truncate hover:text-accent hover:underline">
+                {c.label}
+              </Link>
+              <ChevronRight className="h-3 w-3 shrink-0" aria-hidden />
+            </span>
+          ))}
+        </nav>
+      ) : null}
+      <h1 className="truncate text-base font-semibold leading-tight tracking-tight text-heading sm:text-lg">
+        {page.title || <Link href={homeHref}>ShootPortal</Link>}
+      </h1>
+      {!crumbs.length && page.description ? (
+        <p className="hidden truncate text-xs leading-snug text-muted sm:block sm:text-[13px]">{page.description}</p>
+      ) : null}
+    </div>
   );
 }
 

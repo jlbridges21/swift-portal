@@ -96,7 +96,7 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole="admin" />
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 pb-12">
+      <main className="app-page mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 pb-12">
         <PageHeader
           title="Admin Settings"
           description={`Manage global notification, email, business, and proposal settings for ${settings.business.portalName}.`}

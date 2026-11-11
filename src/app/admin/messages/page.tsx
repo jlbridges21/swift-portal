@@ -9,7 +9,7 @@ export default async function AdminMessagesPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole="admin" />
-      <main className="mx-auto max-w-7xl px-3 py-4 sm:px-6 lg:px-8">
+      <main className="app-page app-page-table mx-auto max-w-7xl px-3 py-4 sm:px-6 lg:px-8">
         <Suspense fallback={<div className="p-8 text-sm text-muted">Loading messages…</div>}>
           <AdminMessagesInbox />
         </Suspense>

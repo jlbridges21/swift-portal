@@ -22,6 +22,7 @@ import {
   Loader2,
   Search,
   Settings,
+  Sparkles,
   UserPlus,
   Users,
   X,
@@ -29,6 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAdminSearch } from "@/components/admin/admin-search-context";
 import { useAdminCapabilities } from "@/components/admin/admin-capabilities-context";
+import { useSwitchInterface, useUiRollout } from "@/components/admin/ui-rollout/ui-rollout";
 import {
   searchSettingsIndex,
   type SettingsSearchEntry,
@@ -83,6 +85,8 @@ export function AdminCommandPalette({
   const abortRef = useRef<AbortController | null>(null);
   const mobile = useIsMobileViewport();
   const caps = useAdminCapabilities();
+  const rollout = useUiRollout();
+  const switchInterface = useSwitchInterface();
   const partnerMode = resolvePartnerSearchMode({
     showPartner: caps.showPartner,
     partnerActive: caps.partnerActive,
@@ -377,6 +381,19 @@ export function AdminCommandPalette({
               <p className="text-xs">
                 Message threads are not searched. Type at least {ADMIN_SEARCH_MIN_CHARS} characters.
               </p>
+              {rollout.canSwitch ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenChange(false);
+                    switchInterface(rollout.mode === "classic" ? "new" : "classic");
+                  }}
+                  className="mt-1 inline-flex min-h-10 items-center gap-2 rounded-lg border border-accent/30 bg-accent-subtle px-3 text-sm font-semibold text-accent transition hover:bg-accent hover:text-accent-foreground"
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                  {rollout.mode === "classic" ? "Switch to New Experience" : "Switch to Classic Experience"}
+                </button>
+              ) : null}
             </div>
           ) : null}
 

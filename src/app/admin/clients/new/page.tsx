@@ -67,7 +67,7 @@ export default function NewClientPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole="admin" />
-      <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
+      <main className="app-page mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
         <Card>
           <CardHeader>
             <CardTitle>Create Client</CardTitle>

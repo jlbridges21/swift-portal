@@ -41,6 +41,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
+import { PageHeader } from "@/components/layout/header";
 import { ActivityFeed } from "@/components/admin/activity-feed";
 import { ComposeMessageModal } from "@/components/admin/compose-message-modal";
 import { ProjectCoverImage } from "@/components/projects/project-cover-image";
@@ -249,25 +250,20 @@ export function CommandCenter({
   };
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] min-w-0 px-4 py-6 sm:px-6 lg:px-8">
-      {/* Heading */}
-      <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-heading sm:text-[28px]">Command Center</h1>
-          <p className="mt-0.5 text-sm text-muted">What needs your attention today, {firstName}?</p>
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {analytics ? (
-            <DateRangePicker from={range.from} to={range.to} today={today} loading={loading} onChange={setRange} />
-          ) : null}
-          <Link
-            href="/admin/projects/new"
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground shadow-sm transition hover:bg-accent-hover"
-          >
-            <Plus className="h-4 w-4" aria-hidden /> New Project
-          </Link>
-        </div>
-      </div>
+    <main className="app-page mx-auto w-full max-w-[1400px] min-w-0 px-4 py-6 sm:px-6 lg:px-8">
+      {/* Title + subtitle go to the shared top bar; the range and New Project stay as one compact row. */}
+      <PageHeader title="Command Center" description={`What needs your attention today, ${firstName}?`}>
+        {analytics ? (
+          <DateRangePicker from={range.from} to={range.to} today={today} loading={loading} onChange={setRange} />
+        ) : null}
+        <Link
+          href="/admin/projects/new"
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-3 text-sm font-semibold text-accent-foreground shadow-sm transition hover:bg-accent-hover sm:px-4"
+        >
+          <Plus className="h-4 w-4" aria-hidden />
+          <span className="sr-only sm:not-sr-only">New Project</span>
+        </Link>
+      </PageHeader>
 
       {error ? (
         <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">

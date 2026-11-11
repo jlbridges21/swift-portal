@@ -13,7 +13,7 @@ export default async function AdminSitesLayout({ children }: { children: React.R
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole="admin" />
-      <main className="mx-auto w-full max-w-6xl min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-7">
+      <main className="app-page app-page-wide mx-auto w-full max-w-6xl min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-7">
         <SitesHeader />
         <div className="min-w-0">{children}</div>
       </main>

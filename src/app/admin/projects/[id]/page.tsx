@@ -1,3 +1,4 @@
+import { ShellPageTitle } from "@/components/admin/app-shell/shell-page-title";
 import { Header } from "@/components/layout/header";
 import { requireAdminPage } from "@/lib/admin-access";
 import { createClient } from "@/lib/supabase/server";
@@ -172,7 +173,8 @@ export default async function AdminProjectPage({ params }: PageProps) {
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole={isStaff ? "staff" : "admin"} />
-      <main className="mx-auto w-full max-w-7xl min-w-0 overflow-x-clip px-4 py-4 pb-6 sm:px-6 sm:pb-8 lg:px-8 md:pb-8">
+      <ShellPageTitle title={project.project_name} crumbs={[{ label: "Projects", href: "/admin/projects" }]} />
+      <main className="app-page mx-auto w-full max-w-7xl min-w-0 overflow-x-clip px-4 py-4 pb-6 sm:px-6 sm:pb-8 lg:px-8 md:pb-8">
         <AdminProjectDetail
           project={project}
           media={media ?? []}

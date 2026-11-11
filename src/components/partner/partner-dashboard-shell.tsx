@@ -80,7 +80,7 @@ export async function PartnerShell({
         </header>
       )}
 
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="app-page mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-start">
           {showPartnerSectionNav ? (
             <aside className="w-full shrink-0 md:sticky md:top-20 md:w-56">

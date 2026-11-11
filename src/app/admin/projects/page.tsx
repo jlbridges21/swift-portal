@@ -98,7 +98,7 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole={isStaff ? "staff" : "admin"} />
-      <main className="mx-auto max-w-[100vw] px-4 py-8 sm:px-6 lg:px-8">
+      <main className="app-page app-page-wide mx-auto max-w-[100vw] px-4 py-8 sm:px-6 lg:px-8">
         <PageHeader
           title={showDeleted ? "Hidden Projects" : "Project Pipeline"}
           description={

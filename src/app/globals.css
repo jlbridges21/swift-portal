@@ -241,6 +241,32 @@ body {
     left: var(--admin-sidebar-w);
   }
 }
+/* New interface page frame. The page title lives in the top bar, so pages start right under it.
+   Pages opt in with class markers (Classic ignores them — the rules only apply inside the shell):
+     .app-page        compact top padding
+     .app-page-wide   workspace pages (pipeline, media, clients, calendar, sites) use the full width
+     .app-page-table  wide but capped for readable table rows */
+[data-admin-app-shell] [data-admin-shell-content] > .min-h-screen {
+  min-height: 0;
+}
+[data-admin-app-shell] .app-page {
+  padding-top: 0.875rem;
+}
+[data-admin-app-shell] .app-classic-only {
+  display: none;
+}
+[data-admin-app-shell] .app-page-wide {
+  max-width: none;
+}
+[data-admin-app-shell] .app-page-table {
+  max-width: 1600px;
+}
+@media (min-width: 1024px) {
+  [data-admin-app-shell] .app-page {
+    padding-top: 1.125rem;
+  }
+}
+
 @media (min-width: 1024px) {
   [data-admin-app-shell] {
     --admin-sidebar-w: 240px;

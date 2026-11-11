@@ -74,9 +74,9 @@ export function AdminChromeProviders({
   }, []);
 
   return (
+    <UiRolloutProvider value={experience}>
     <AdminSearchContext.Provider value={value}>
       <UploadManagerProvider>
-        <UiRolloutProvider value={experience}>
           {experience.mode === "new" ? (
             <div className="admin-pwa-content-pad">
               <AdminAppShell user={shellUser} banner={banner}>
@@ -89,10 +89,10 @@ export function AdminChromeProviders({
               <div className="admin-pwa-content-pad">{children}</div>
             </>
           )}
-        </UiRolloutProvider>
         <AdminMobilePwaNav />
         <AdminCommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       </UploadManagerProvider>
     </AdminSearchContext.Provider>
+    </UiRolloutProvider>
   );
 }

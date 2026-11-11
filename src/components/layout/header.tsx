@@ -14,7 +14,7 @@ import { appParentPath } from "@/lib/pwa/app-nav";
 import { AdminSearchTrigger } from "@/components/admin/admin-command-palette";
 import { useAdminSearch } from "@/components/admin/admin-search-context";
 import { useAdminCapabilities } from "@/components/admin/admin-capabilities-context";
-import { useInAdminAppShell } from "@/components/admin/app-shell/admin-app-shell-context";
+import { useInAdminAppShell, useShellPageTitle, type ShellCrumb } from "@/components/admin/app-shell/admin-app-shell-context";
 import { UiRolloutBanner, useSwitchInterface, useUiRollout } from "@/components/admin/ui-rollout/ui-rollout";
 import type { StaffArea } from "@/lib/staff-access";
 
@@ -300,18 +300,6 @@ export function Header({
                   <RefreshCw className="h-5 w-5" />
                 )}
               </Button>
-              {showSwitch ? (
-                <button
-                  type="button"
-                  onClick={() => switchInterface(switchTarget)}
-                  title={switchLabel}
-                  className="hidden min-h-11 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-accent transition-colors hover:bg-accent-subtle md:inline-flex"
-                >
-                  <Sparkles className="h-4 w-4" aria-hidden />
-                  <span className="hidden 2xl:inline">{switchTarget === "new" ? "New Experience" : "Classic Experience"}</span>
-                  <span className="sr-only 2xl:hidden">{switchLabel}</span>
-                </button>
-              ) : null}
               {!isStaff ? (
                 <Link
                   href="/admin/settings"
@@ -458,12 +446,27 @@ export function PageHeader({
   description,
   children,
   className,
+  crumbs,
 }: {
   title: string;
   description?: string;
   children?: React.ReactNode;
   className?: string;
+  /** Parent pages for the New interface top bar (e.g. Projects › on a project page). */
+  crumbs?: ShellCrumb[];
 }) {
+  const inAppShell = useInAdminAppShell();
+  const pathname = usePathname() ?? "";
+  // New interface: the title and subtitle live in the shared top bar; only the page's own
+  // actions stay here, in one compact row. Classic keeps the original heading block.
+  useShellPageTitle(inAppShell ? { title, description, crumbs } : null, pathname);
+  if (inAppShell) {
+    return children ? (
+      <div className="mb-3 flex min-w-0 flex-wrap items-center justify-end gap-2">
+        {children}
+      </div>
+    ) : null;
+  }
   return (
     <div
       className={cn(
