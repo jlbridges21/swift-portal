@@ -250,3 +250,53 @@ export async function getProjectHeroPosterUrlMap(
 
   return result;
 }
+
+/** Long edge for the New interface project hero banner (wide, so the 400px card thumb is too soft). */
+const BANNER_TRANSFORM_WIDTH = 1600;
+
+/**
+ * Banner-sized cover for the business project page. Same precedence as the card posters —
+ * chosen cover (cover_image_id), then cover_image_url, then the first gallery photo — but
+ * photos are signed at banner width. Falls back to the card poster for videos / YouTube.
+ * Business-side only: callers must already be authorized for the project.
+ */
+export async function getProjectHeroBannerUrl(
+  project: Pick<Project, "id" | "cover_image_id" | "cover_image_url">,
+  businessId: string
+): Promise<string | null> {
+  const db = await createTenantServiceClient(businessId);
+  let asset: PosterAsset | null = null;
+  if (project.cover_image_id) {
+    const { data } = await db
+      .from("media_assets")
+      .select(POSTER_ASSET_COLUMNS)
+      .eq("id", project.cover_image_id)
+      .maybeSingle();
+    asset = (data as PosterAsset | null) ?? null;
+  }
+  if (!asset && project.cover_image_url) return project.cover_image_url;
+  if (!asset) {
+    const { data } = await db
+      .from("media_assets")
+      .select(POSTER_ASSET_COLUMNS)
+      .eq("project_id", project.id)
+      .eq("media_type", "photo")
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    asset = (data as PosterAsset | null) ?? null;
+  }
+  if (!asset) return null;
+  if (asset.media_type === "photo" && asset.media_source !== "youtube" && asset.file_path) {
+    const size = asset.file_size ?? 0;
+    const canTransform = size > 0 && size <= 25 * 1024 * 1024;
+    const { data, error } = await db.raw.storage.from("project-media").createSignedUrl(
+      asset.file_path,
+      3600,
+      canTransform ? { transform: { width: BANNER_TRANSFORM_WIDTH, quality: 75 } } : undefined
+    );
+    if (!error && data?.signedUrl) return data.signedUrl;
+  }
+  return posterUrlForAsset(db.raw, asset);
+}

@@ -44,6 +44,9 @@ import {
   FolderOpen,
   FolderPlus,
   GripVertical,
+  Home,
+  LayoutGrid,
+  List as ListIcon,
   ImageOff,
   ImagePlus,
   Images,
@@ -80,6 +83,7 @@ import { isEditablePhotoAsset, photoEditorLabel } from "@/lib/photo-editor/share
 import { usePhotoEditor } from "@/components/photo-editor/use-photo-editor";
 import { downloadMediaAsset } from "@/lib/download";
 import { cn } from "@/lib/utils";
+import { formatFileSize } from "@/lib/brand";
 import type { MediaAsset, MediaFolder } from "@/lib/types";
 import type { PhotoShareSummary } from "@/lib/media-share-types";
 import { createThumbRequestQueue, getCachedThumbUrl, invalidateThumbUrl } from "@/lib/media-thumb-client";
@@ -119,6 +123,45 @@ interface AdminPhotoGridProps {
   /** Rendered beside the breadcrumb (e.g. client visibility toggle). */
   headerSlot?: React.ReactNode;
   maxFileSizeLabel?: string;
+  /**
+   * New interface media workspace: Media › Photos › Folder breadcrumbs, tile / list layouts,
+   * a sort menu, and no in-grid Upload button (the workspace's Upload Media drives it).
+   */
+  workspace?: boolean;
+  /** Workspace: lets the page's Upload Media button upload into the open folder. */
+  controllerRef?: React.MutableRefObject<PhotoGridController | null>;
+  /** Workspace: the "Media" breadcrumb (back to All Media). */
+  onMediaRoot?: () => void;
+}
+
+export type PhotoGridController = {
+  /** Open the file picker for the folder currently open (General Photos from All photos). */
+  upload: () => void;
+};
+
+/** Workspace sort. "custom" is the client-facing order (drag to reorder); others are view-only. */
+export type PhotoSortMode = "custom" | "newest" | "oldest" | "name";
+const SORT_LABELS: Record<PhotoSortMode, string> = {
+  custom: "Custom order",
+  newest: "Newest",
+  oldest: "Oldest",
+  name: "Name A–Z",
+};
+type PhotoLayout = "tile" | "row";
+const WORKSPACE_PREFS_KEY = "sp:project-photos-view";
+
+function readWorkspacePrefs(): { sort: PhotoSortMode; layout: PhotoLayout } {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(WORKSPACE_PREFS_KEY) || "{}") as {
+      sort?: string;
+      layout?: string;
+    };
+    const sort = (raw.sort && raw.sort in SORT_LABELS ? raw.sort : "custom") as PhotoSortMode;
+    const layout: PhotoLayout = raw.layout === "row" ? "row" : "tile";
+    return { sort, layout };
+  } catch {
+    return { sort: "custom", layout: "tile" };
+  }
 }
 
 function isClientVisible(asset: MediaAsset) {
@@ -200,7 +243,9 @@ function PhotoThumb({
   onImageError,
   onRetry,
   scrollRoot,
+  aspectClassName = "aspect-square",
 }: {
+  aspectClassName?: string;
   assetId: string;
   selected: boolean;
   url: string | null;
@@ -231,7 +276,7 @@ function PhotoThumb({
   return (
     <div
       ref={ref}
-      className="relative aspect-square w-full bg-subtle"
+      className={cn("relative w-full bg-subtle", aspectClassName)}
       onMouseEnter={() => {
         if (!url && !failed) onVisible(assetId);
       }}
@@ -323,7 +368,10 @@ function SortablePhotoCard({
   onPaintSelectEnter,
   onPaintSelectMove,
   onPaintSelectEnd,
+  layout = "classic",
 }: {
+  /** classic = original card; tile / row = New interface workspace layouts. */
+  layout?: "classic" | PhotoLayout;
   photo: MediaAsset;
   index: number;
   selected: boolean;
@@ -497,9 +545,14 @@ function SortablePhotoCard({
       onTouchEnd={onTouchEndTile}
       onTouchCancel={onTouchEndTile}
       className={cn(
-        "group relative overflow-hidden rounded-lg border bg-card transition-shadow select-none",
+        "group relative overflow-hidden border bg-card transition-shadow select-none",
+        layout === "classic" ? "rounded-lg" : layout === "tile" ? "rounded-xl" : "flex items-center gap-3 rounded-lg",
         !coarsePointer && !placementMode && "cursor-grab active:cursor-grabbing",
-        selected ? "border-accent ring-2 ring-accent shadow-md" : "border-border hover:border-accent/40",
+        selected
+          ? "border-accent ring-2 ring-accent shadow-md"
+          : layout === "tile"
+            ? "border-transparent hover:shadow-md"
+            : "border-border hover:border-accent/40",
         isDragging && "opacity-40",
         placementMode && selected && "scale-[0.97] opacity-30",
         placementMode && !selected && "opacity-80"
@@ -522,7 +575,10 @@ function SortablePhotoCard({
           type="button"
           data-drag-handle
           aria-label="Drag to reorder"
-          className="absolute right-1 top-1 z-10 flex h-11 w-11 items-center justify-center rounded-lg bg-black/45 text-white"
+          className={cn(
+            "absolute z-10 flex items-center justify-center rounded-lg bg-black/45 text-white",
+            layout === "row" ? "right-11 top-1/2 h-9 w-9 -translate-y-1/2" : "right-1 top-1 h-11 w-11"
+          )}
           style={{ touchAction: "none" }}
           {...touchListeners}
           onClick={(e) => e.stopPropagation()}
@@ -532,57 +588,43 @@ function SortablePhotoCard({
         </button>
       )}
 
-      <div className="relative">
-        <PhotoThumb
-          assetId={photo.id}
-          selected={selected}
-          url={thumbUrl}
-          failed={thumbFailed}
-          onVisible={onThumbVisible}
-          onImageError={onThumbError}
-          onRetry={onThumbRetry}
-          scrollRoot={scrollRoot}
-        />
-        {(isHeroPhoto || hidden || shared || edited) && (
-          <div className="pointer-events-none absolute bottom-2 left-2 flex flex-wrap gap-1">
-            {isHeroPhoto && (
-              <PhotoBadge tone="accent">
-                <Star className="h-2.5 w-2.5" /> Cover
-              </PhotoBadge>
-            )}
-            {hidden && (
-              <PhotoBadge tone="amber">
-                <EyeOff className="h-2.5 w-2.5" /> Hidden
-              </PhotoBadge>
-            )}
-            {shared && (
-              <PhotoBadge tone="neutral">
-                <Link2 className="h-2.5 w-2.5" /> Shared
-              </PhotoBadge>
-            )}
-            {edited && (
-              <PhotoBadge tone="neutral">
-                <SlidersHorizontal className="h-2.5 w-2.5" /> Edited
-              </PhotoBadge>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-1 py-1.5 pl-2.5 pr-1">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-medium text-foreground" title={name}>
-            {name}
-          </p>
-          {folderName ? <p className="truncate text-[11px] text-muted">{folderName}</p> : null}
-        </div>
-        {!placementMode && !(coarsePointer && selectMode) && (
+      {(() => {
+        const badges =
+          isHeroPhoto || hidden || shared || edited ? (
+            <>
+              {isHeroPhoto && (
+                <PhotoBadge tone="accent">
+                  <Star className="h-2.5 w-2.5" /> Cover
+                </PhotoBadge>
+              )}
+              {hidden && (
+                <PhotoBadge tone="amber">
+                  <EyeOff className="h-2.5 w-2.5" /> Hidden
+                </PhotoBadge>
+              )}
+              {shared && (
+                <PhotoBadge tone="neutral">
+                  <Link2 className="h-2.5 w-2.5" /> Shared
+                </PhotoBadge>
+              )}
+              {edited && (
+                <PhotoBadge tone="neutral">
+                  <SlidersHorizontal className="h-2.5 w-2.5" /> Edited
+                </PhotoBadge>
+              )}
+            </>
+          ) : null;
+        const showMenu = !placementMode && !(coarsePointer && selectMode);
+        const menuButton = (extraClass?: string) => (
           <button
             type="button"
             data-photo-menu
             aria-label={`Actions for ${name}`}
             aria-haspopup="menu"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted hover:bg-accent-subtle hover:text-heading focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted hover:bg-accent-subtle hover:text-heading focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+              extraClass
+            )}
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
@@ -593,8 +635,92 @@ function SortablePhotoCard({
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
-        )}
-      </div>
+        );
+        const thumb = (aspect: string) => (
+          <PhotoThumb
+            assetId={photo.id}
+            selected={selected}
+            url={thumbUrl}
+            failed={thumbFailed}
+            onVisible={onThumbVisible}
+            onImageError={onThumbError}
+            onRetry={onThumbRetry}
+            scrollRoot={scrollRoot}
+            aspectClassName={aspect}
+          />
+        );
+
+        if (layout === "tile") {
+          return (
+            <div className="relative">
+              {thumb("aspect-[4/3]")}
+              {badges ? (
+                <div className="pointer-events-none absolute left-2 top-2 flex max-w-[calc(100%-3.5rem)] flex-wrap gap-1">
+                  {badges}
+                </div>
+              ) : null}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-2.5 pb-2 pt-6 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                <p className="truncate text-xs font-medium text-white" title={name}>
+                  {name}
+                </p>
+                {folderName ? <p className="truncate text-[11px] text-white/75">{folderName}</p> : null}
+              </div>
+              {showMenu
+                ? menuButton(
+                    cn(
+                      "absolute bg-black/45 text-white backdrop-blur hover:bg-black/60 hover:text-white",
+                      // Touch: the drag grip owns the top-right corner, so the menu sits bottom-right.
+                      coarsePointer
+                        ? "bottom-1.5 right-1.5"
+                        : "right-1.5 top-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                    )
+                  )
+                : null}
+            </div>
+          );
+        }
+
+        if (layout === "row") {
+          const meta = [
+            folderName,
+            photo.file_size ? formatFileSize(photo.file_size) : null,
+            new Date(photo.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+          ].filter(Boolean);
+          return (
+            <>
+              <div className="w-20 shrink-0 overflow-hidden rounded-l-lg sm:w-24">{thumb("aspect-[4/3]")}</div>
+              <div className="min-w-0 flex-1 py-1.5">
+                <p className="truncate text-sm font-medium text-heading" title={name}>
+                  {name}
+                </p>
+                <p className="truncate text-xs text-muted">{meta.join(" · ")}</p>
+                {badges ? <div className="mt-1 flex flex-wrap gap-1">{badges}</div> : null}
+              </div>
+              {showMenu ? menuButton("mr-1") : null}
+            </>
+          );
+        }
+
+        return (
+          <>
+            <div className="relative">
+              {thumb("aspect-square")}
+              {badges ? (
+                <div className="pointer-events-none absolute bottom-2 left-2 flex flex-wrap gap-1">{badges}</div>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-1 py-1.5 pl-2.5 pr-1">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-foreground" title={name}>
+                  {name}
+                </p>
+                {folderName ? <p className="truncate text-[11px] text-muted">{folderName}</p> : null}
+              </div>
+              {showMenu ? menuButton() : null}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
@@ -632,9 +758,37 @@ export function AdminPhotoGrid({
   onShareFolder,
   headerSlot,
   maxFileSizeLabel,
+  workspace = false,
+  controllerRef,
+  onMediaRoot,
 }: AdminPhotoGridProps) {
   const coarsePointer = useCoarsePointer();
   const [view, setView] = useState<PhotoView>("all");
+  const [sortMode, setSortModeState] = useState<PhotoSortMode>("custom");
+  const [layout, setLayoutState] = useState<PhotoLayout>("tile");
+  useEffect(() => {
+    if (!workspace) return;
+    const prefs = readWorkspacePrefs();
+    setSortModeState(prefs.sort);
+    setLayoutState(prefs.layout);
+  }, [workspace]);
+  const savePrefs = useCallback((next: { sort: PhotoSortMode; layout: PhotoLayout }) => {
+    try {
+      window.localStorage.setItem(WORKSPACE_PREFS_KEY, JSON.stringify(next));
+    } catch {
+      /* private mode — the choice just isn't remembered */
+    }
+  }, []);
+  const setSortMode = (sort: PhotoSortMode) => {
+    setSortModeState(sort);
+    savePrefs({ sort, layout });
+  };
+  const setLayout = (next: PhotoLayout) => {
+    setLayoutState(next);
+    savePrefs({ sort: sortMode, layout: next });
+  };
+  /** Sorted views never write display order (the client-facing order). */
+  const reorderLocked = workspace && sortMode !== "custom";
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const photoEditor = usePhotoEditor();
   const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
@@ -752,10 +906,23 @@ export function AdminPhotoGrid({
   }, []);
 
   const visiblePhotos = useMemo(() => {
-    if (view === "all") return allProjectPhotos;
-    if (view === UNFILED_FOLDER_SCOPE) return allProjectPhotos.filter((p) => !p.folder_id);
-    return allProjectPhotos.filter((p) => p.folder_id === view);
-  }, [allProjectPhotos, view]);
+    const scoped =
+      view === "all"
+        ? allProjectPhotos
+        : view === UNFILED_FOLDER_SCOPE
+          ? allProjectPhotos.filter((p) => !p.folder_id)
+          : allProjectPhotos.filter((p) => p.folder_id === view);
+    if (!workspace || sortMode === "custom") return scoped;
+    const time = (p: MediaAsset) => new Date(p.created_at).getTime();
+    const sorted = [...scoped];
+    if (sortMode === "newest") sorted.sort((a, b) => time(b) - time(a));
+    else if (sortMode === "oldest") sorted.sort((a, b) => time(a) - time(b));
+    else
+      sorted.sort((a, b) =>
+        mediaDisplayName(a).localeCompare(mediaDisplayName(b), undefined, { numeric: true, sensitivity: "base" })
+      );
+    return sorted;
+  }, [allProjectPhotos, view, workspace, sortMode]);
 
   const visibleIds = useMemo(() => visiblePhotos.map((p) => p.id), [visiblePhotos]);
 
@@ -878,6 +1045,10 @@ export function AdminPhotoGrid({
   }
 
   const viewUploadFolder = view === "all" || view === UNFILED_FOLDER_SCOPE ? null : view;
+  useEffect(() => {
+    if (!controllerRef) return;
+    controllerRef.current = { upload: () => startUpload(viewUploadFolder) };
+  });
   const currentFolderShare = currentFolder ? folderShareSummary?.[currentFolder.id] ?? null : null;
   const viewLabel =
     view === "all" ? "All photos" : view === UNFILED_FOLDER_SCOPE ? UNFILED_FOLDER_LABEL : currentFolder?.name ?? "Folder";
@@ -932,6 +1103,10 @@ export function AdminPhotoGrid({
 
   async function moveIdsToInsertIndex(ids: Set<string>, insertIndex: number) {
     if (!ids.size) return;
+    if (reorderLocked) {
+      toast.info("Switch the sort to Custom order to rearrange photos");
+      return;
+    }
     const previousVisible = [...visiblePhotos];
     const selectedOrdered = previousVisible.filter((p) => ids.has(p.id));
     const remaining = previousVisible.filter((p) => !ids.has(p.id));
@@ -1162,6 +1337,10 @@ export function AdminPhotoGrid({
     }
 
     if (String(active.id) === overId && dragging.length === 1) return;
+    if (reorderLocked) {
+      toast.info("Switch the sort to Custom order to rearrange photos");
+      return;
+    }
 
     const previousVisible = [...visiblePhotos];
     let nextVisible = [...previousVisible];
@@ -1619,27 +1798,31 @@ export function AdminPhotoGrid({
             <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => requestMove(selectedList)}>
               <FolderInput className="h-3.5 w-3.5" /> Move to folder
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9"
-              onClick={() => void moveIdsToInsertIndex(selectedIds, 0)}
-            >
-              <ArrowUpToLine className="h-3.5 w-3.5" /> Top
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9"
-              onClick={() => void moveIdsToInsertIndex(selectedIds, remainingCount)}
-            >
-              <ArrowDownToLine className="h-3.5 w-3.5" /> Bottom
-            </Button>
-            <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setPlacementMode(true)}>
-              <Move className="h-3.5 w-3.5" /> Place…
-            </Button>
+            {reorderLocked ? null : (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  onClick={() => void moveIdsToInsertIndex(selectedIds, 0)}
+                >
+                  <ArrowUpToLine className="h-3.5 w-3.5" /> Top
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  onClick={() => void moveIdsToInsertIndex(selectedIds, remainingCount)}
+                >
+                  <ArrowDownToLine className="h-3.5 w-3.5" /> Bottom
+                </Button>
+                <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setPlacementMode(true)}>
+                  <Move className="h-3.5 w-3.5" /> Place…
+                </Button>
+              </>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -1726,6 +1909,143 @@ export function AdminPhotoGrid({
         }}
       />
 
+      {workspace ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <nav aria-label="Media location" className="flex min-w-[min(100%,15rem)] flex-1 items-center gap-0.5 text-sm">
+            <button
+              type="button"
+              onClick={onMediaRoot}
+              aria-label="All media"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-accent-subtle hover:text-heading"
+            >
+              <Home className="h-4 w-4" />
+            </button>
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
+            <button
+              type="button"
+              onClick={onMediaRoot}
+              className="shrink-0 rounded-md px-1.5 py-1 font-medium text-accent hover:bg-accent-subtle"
+            >
+              Media
+            </button>
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
+            {view === "all" ? (
+              <h3 className="flex shrink-0 items-center gap-1.5 px-1.5 font-semibold text-heading" aria-current="page">
+                Photos <span className="font-normal text-muted">{totalPhotos}</span>
+              </h3>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate("all")}
+                  className="shrink-0 rounded-md px-1.5 py-1 font-medium text-accent hover:bg-accent-subtle"
+                >
+                  Photos
+                </button>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden />
+                <h3 className="flex min-w-0 items-center gap-1.5 px-1.5 font-semibold text-heading" aria-current="page">
+                  <span className="truncate">{viewLabel}</span>
+                  <span className="shrink-0 font-normal text-muted">{viewCount}</span>
+                </h3>
+                {currentFolder ? (
+                  <button
+                    type="button"
+                    aria-label={`${currentFolder.name} actions`}
+                    aria-haspopup="menu"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-accent-subtle hover:text-heading"
+                    onClick={(e) =>
+                      setMenu({
+                        anchor: { kind: "element", element: e.currentTarget },
+                        title: currentFolder.name,
+                        items: folderMenuItems(currentFolder),
+                      })
+                    }
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </>
+            )}
+            {headerSlot ? <div className="ml-1 hidden shrink-0 sm:block">{headerSlot}</div> : null}
+          </nav>
+          <div className="flex flex-wrap items-center gap-2">
+            {view !== "all" && viewCount > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9"
+                disabled={photoEditor.opening}
+                onClick={() => editFolder(view)}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" /> Edit All
+              </Button>
+            ) : null}
+            {view !== "all" && viewCount > 0 ? (
+              <Button variant="outline" size="sm" className="h-9" disabled={zip.active} onClick={() => downloadFolder(view)}>
+                <Download className="h-3.5 w-3.5" /> Download
+              </Button>
+            ) : null}
+            {view === "all" && !showFolderTiles ? (
+              <Button variant="outline" size="sm" className="h-9" onClick={() => setFolderDialog({ mode: "create" })}>
+                <FolderPlus className="h-3.5 w-3.5" /> New folder
+              </Button>
+            ) : null}
+            {coarsePointer && viewCount > 0 && !placementMode ? (
+              <Button
+                type="button"
+                variant={selectMode ? "accent" : "outline"}
+                size="sm"
+                className="h-9"
+                onClick={() => {
+                  if (selectMode) clearSelection();
+                  else setSelectMode(true);
+                }}
+              >
+                {selectMode ? "Selecting…" : "Select"}
+              </Button>
+            ) : null}
+            <div role="group" aria-label="Layout" className="flex h-9 items-center rounded-lg border border-border bg-card p-0.5">
+              {(
+                [
+                  { key: "tile", icon: LayoutGrid, label: "Grid view" },
+                  { key: "row", icon: ListIcon, label: "List view" },
+                ] as const
+              ).map(({ key, icon: Icon, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-label={label}
+                  aria-pressed={layout === key}
+                  title={label}
+                  onClick={() => setLayout(key)}
+                  className={cn(
+                    "flex h-7 w-8 items-center justify-center rounded-md transition-colors",
+                    layout === key ? "bg-accent/10 text-accent" : "text-muted hover:text-heading"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                </button>
+              ))}
+            </div>
+            <label className="relative inline-flex h-9 items-center">
+              <span className="sr-only">Sort photos</span>
+              <select
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as PhotoSortMode)}
+                className="h-9 appearance-none rounded-lg border border-border bg-card pl-3 pr-8 text-sm font-medium text-heading focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                {(Object.keys(SORT_LABELS) as PhotoSortMode[]).map((key) => (
+                  <option key={key} value={key}>
+                    {key === "custom" ? SORT_LABELS[key] : `Sort: ${SORT_LABELS[key]}`}
+                  </option>
+                ))}
+              </select>
+              <ChevronRight className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 rotate-90 text-muted" aria-hidden />
+            </label>
+          </div>
+        </div>
+      ) : (
+        <>
       {/* Toolbar: location on the left, actions for this location on the right */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <nav aria-label="Photo folders" className="flex min-w-[12rem] flex-1 items-center gap-1 text-sm">
@@ -1816,6 +2136,8 @@ export function AdminPhotoGrid({
           </Button>
         </div>
       </div>
+        </>
+      )}
       {headerSlot ? <div className="sm:hidden">{headerSlot}</div> : null}
 
       {currentFolderShare ? (
@@ -1861,8 +2183,20 @@ export function AdminPhotoGrid({
       >
         {showFolderTiles && (
           <section aria-label="Folders" className="space-y-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Folders</h4>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {workspace ? (
+              <h4 className="flex items-center gap-2 text-sm font-semibold text-heading">
+                <FolderOpen className="h-4 w-4 text-muted" aria-hidden /> Folders{" "}
+                <span className="font-normal text-muted">({folders.length})</span>
+              </h4>
+            ) : (
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Folders</h4>
+            )}
+            <div
+              className={cn(
+                "grid grid-cols-2 gap-3 sm:grid-cols-3",
+                workspace ? "lg:grid-cols-4 2xl:grid-cols-6" : "lg:grid-cols-4 xl:grid-cols-5"
+              )}
+            >
               <PhotoFolderTile
                 dropId={UNFILED_FOLDER_SCOPE}
                 name={UNFILED_FOLDER_LABEL}
@@ -1936,13 +2270,15 @@ export function AdminPhotoGrid({
           </EmptyState>
         ) : (
           <section aria-label={viewLabel} className="space-y-2">
-            {showFolderTiles ? (
+            {showFolderTiles && !workspace ? (
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">All photos</h4>
             ) : null}
             <p className="text-xs text-muted">
               {coarsePointer
                 ? "Tap a photo to open it. Tap Select (or long-press) to choose several. Hold the grip to drag."
-                : "Click photos to select or deselect them, double-click to open, right-click for actions. Shift-click selects a range; drag to reorder or drag a box to select several."}
+                : reorderLocked
+                  ? `Sorted by ${SORT_LABELS[sortMode].toLowerCase()} — clients still see your custom order. Click to select, double-click to open, right-click for actions; drag onto a folder to move.`
+                  : "Click photos to select or deselect them, double-click to open, right-click for actions. Shift-click selects a range; drag to reorder or drag a box to select several."}
             </p>
 
             {placementMode && (
@@ -1968,7 +2304,15 @@ export function AdminPhotoGrid({
               onMouseDown={onGridMouseDown}
             >
               <SortableContext items={visibleIds} strategy={rectSortingStrategy}>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                <div
+                  className={cn(
+                    !workspace
+                      ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+                      : layout === "row"
+                        ? "flex flex-col gap-1.5"
+                        : "grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5"
+                  )}
+                >
                   {placementMode && (
                     <InsertionGap onInsert={() => void moveIdsToInsertIndex(selectedIds, 0)} label="Move here (start)" />
                   )}
@@ -2002,6 +2346,7 @@ export function AdminPhotoGrid({
                         onPaintSelectEnter={onPaintSelectEnter}
                         onPaintSelectMove={onPaintSelectMove}
                         onPaintSelectEnd={onPaintSelectEnd}
+                        layout={workspace ? layout : "classic"}
                       />
                       {placementMode && (
                         <InsertionGap

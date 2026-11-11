@@ -15,6 +15,8 @@ import { photoSharePermissions } from "@/lib/media-share-api";
 import { getProjectFolderShareSummary, getProjectPhotoShareSummary } from "@/lib/media-shares";
 import { getProjectPublicVideoIds } from "@/lib/video-public-shares";
 import { loadKitSummary } from "@/lib/marketing/server";
+import { getProjectHeroBannerUrl } from "@/lib/cover";
+import { listBusinessServices } from "@/lib/business-services";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -169,12 +171,18 @@ export default async function AdminProjectPage({ params }: PageProps) {
   const clientProjectUrl = `${appUrl}/dashboard/projects/${id}`;
   const portalUrl = `${clientProjectUrl}?preview=1`;
   const isStaff = profile.role === "staff";
+  // New interface hero + Project Type picker. Both degrade quietly (no banner / free-text type).
+  const [heroBannerUrl, serviceRows] = await Promise.all([
+    getProjectHeroBannerUrl(project, tenant.businessId).catch(() => null),
+    listBusinessServices(tenant.businessId, { activeOnly: true }).catch(() => []),
+  ]);
+  const serviceOptions = serviceRows.map((s) => s.name).filter(Boolean);
 
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole={isStaff ? "staff" : "admin"} />
       <ShellPageTitle title={project.project_name} crumbs={[{ label: "Projects", href: "/admin/projects" }]} />
-      <main className="app-page mx-auto w-full max-w-7xl min-w-0 overflow-x-clip px-4 py-4 pb-6 sm:px-6 sm:pb-8 lg:px-8 md:pb-8">
+      <main className="app-page app-page-table mx-auto w-full max-w-7xl min-w-0 overflow-x-clip px-4 py-4 pb-6 sm:px-6 sm:pb-8 lg:px-8 md:pb-8">
         <AdminProjectDetail
           project={project}
           media={media ?? []}
@@ -208,6 +216,8 @@ export default async function AdminProjectPage({ params }: PageProps) {
           marketingKit={marketingKit}
           canEditMarketing={canEditMarketing}
           canManageMarketingOffers={canManageMarketingOffers}
+          heroBannerUrl={heroBannerUrl}
+          serviceOptions={serviceOptions}
         />
       </main>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense, useMemo, useCallback } from "react";
+import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -12,11 +12,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StickySaveBar } from "@/components/ui/sticky-save-bar";
 import { Modal } from "@/components/ui/modal";
 import { StatusBadge } from "@/components/ui/badge";
-import { AdminPhotoGrid } from "@/components/admin/admin-photo-grid";
+import { AdminPhotoGrid, type PhotoGridController } from "@/components/admin/admin-photo-grid";
 import { VideoGrid, videosToGridEntries } from "@/components/projects/video-grid";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import { RevisionDrawer } from "@/components/admin/revision-drawer";
-import { PROJECT_STATUSES } from "@/lib/constants";
+import { PROJECT_STATUSES, getStatusLabel, getStatusOrder } from "@/lib/constants";
 import { FILE_SIZE_LIMITS, formatFileSize } from "@/lib/brand";
 import { QuoteSection } from "@/components/projects/quote-section";
 import { BankPaymentsNotice } from "@/components/admin/bank-payments-notice";
@@ -37,7 +37,46 @@ import {
   Upload, CreditCard, Globe, Box, Trash2, ChevronUp, ChevronDown,
   ExternalLink, Check, Video, ImageIcon, Eye, EyeOff, Link2, Pencil, Users, Plus, MapPin, Share2,
   Sparkles,
+  AlertTriangle,
+  CalendarClock,
+  ChevronRight,
+  CheckCircle2,
+  ClipboardList,
+  Download,
+  FileText,
+  Home,
+  Info,
+  LayoutGrid,
+  Megaphone,
+  MoreHorizontal,
+  Rotate3d,
+  Trash,
+  History,
+  Copy,
 } from "lucide-react";
+import { useInAdminAppShell } from "@/components/admin/app-shell/admin-app-shell-context";
+import { ActionMenu, type ActionMenuAnchor, type ActionMenuItem } from "@/components/ui/action-menu";
+import {
+  ActivityPreview,
+  CategoryChips,
+  ChangeCoverDialog,
+  ClientContactCard,
+  IconAction,
+  LinkedMediaCard,
+  MediaSectionHeader,
+  ProjectHero,
+  RowOverflow,
+  StatTile,
+  StatusPill,
+  StatusSummary,
+  VisibilityPanel,
+  WorkspaceTabs,
+  type VisibilityRow,
+  type WorkspaceTab,
+} from "@/components/admin/project-workspace/workspace-parts";
+import { MarketingAddOns } from "@/components/admin/project-workspace/marketing-addons";
+import { downloadMediaAsset } from "@/lib/download";
+import { formatCurrency } from "@/lib/utils";
 import { CreateClientModal } from "@/components/admin/create-client-modal";
 import { useUploadManager } from "@/components/admin/upload-manager";
 import { cn, defaultProjectName } from "@/lib/utils";
@@ -145,6 +184,44 @@ interface AdminProjectDetailProps {
   marketingKit?: KitSummary | null;
   canEditMarketing?: boolean;
   canManageMarketingOffers?: boolean;
+  /** New interface: banner-sized cover for the project hero. */
+  heroBannerUrl?: string | null;
+  /** New interface: the business's service names for the Project Type picker. */
+  serviceOptions?: string[];
+}
+
+type WorkspaceTabKey = "media" | "estimates" | "marketing" | "payments" | "details";
+type MediaCategory = "all" | "photos" | "videos" | "tours" | "models" | "files";
+const WORKSPACE_TAB_KEYS: WorkspaceTabKey[] = ["media", "estimates", "marketing", "payments", "details"];
+/** Classic in-page anchors (notifications, next-step links) → the New interface tab that holds them. */
+const HASH_TO_TAB: Record<string, WorkspaceTabKey> = {
+  quote: "estimates",
+  payments: "payments",
+  "marketing-kit": "marketing",
+  scheduling: "details",
+  activity: "details",
+  photos: "media",
+};
+
+function shortLocation(address: string | null | undefined): string | null {
+  const parts = (address ?? "")
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return parts[0];
+  const rest = parts
+    .slice(1)
+    .map((p) => p.replace(/\s+\d{5}(-\d{4})?$/, ""))
+    .filter((p) => p && !/^\d{5}(-\d{4})?$/.test(p) && !/^(usa|us|united states)$/i.test(p));
+  return rest.length ? rest.join(", ") : parts[0];
+}
+
+function formatHeroDate(value: string | null | undefined, dateOnly = false): string | null {
+  if (!value) return null;
+  const d = dateOnly ? new Date(`${value.slice(0, 10)}T12:00:00`) : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 }
 
 async function readServerError(res: Response, fallback: string): Promise<string> {
@@ -186,8 +263,43 @@ export function AdminProjectDetail({
   marketingKit = null,
   canEditMarketing = false,
   canManageMarketingOffers = false,
+  heroBannerUrl = null,
+  serviceOptions = [],
 }: AdminProjectDetailProps) {
   const router = useRouter();
+  const inAppShell = useInAdminAppShell();
+  const [activeTab, setActiveTabState] = useState<WorkspaceTabKey>("media");
+  const [mediaCategory, setMediaCategory] = useState<MediaCategory>("all");
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [typeSaving, setTypeSaving] = useState(false);
+  const [showCoverDialog, setShowCoverDialog] = useState(false);
+  const [showClientsModal, setShowClientsModal] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [projectMenuAnchor, setProjectMenuAnchor] = useState<ActionMenuAnchor | null>(null);
+  const [uploadMenuAnchor, setUploadMenuAnchor] = useState<ActionMenuAnchor | null>(null);
+  const photoGridController = useRef<PhotoGridController | null>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+
+  /** Tab lives in ?tab= so reloads and shared links land on the same section. */
+  const setActiveTab = useCallback((tab: WorkspaceTabKey) => {
+    setActiveTabState(tab);
+    const url = new URL(window.location.href);
+    if (tab === "media") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", tab);
+    url.hash = "";
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, []);
+
+  useEffect(() => {
+    if (!inAppShell) return;
+    const url = new URL(window.location.href);
+    const fromQuery = url.searchParams.get("tab") as WorkspaceTabKey | null;
+    const fromHash = HASH_TO_TAB[url.hash.replace(/^#/, "")];
+    const next = fromQuery && WORKSPACE_TAB_KEYS.includes(fromQuery) ? fromQuery : fromHash;
+    if (next) setActiveTabState(next);
+    // Mount only: later changes come from the tabs.
+  }, [inAppShell]);
   const { enqueueUploads } = useUploadManager();
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -335,6 +447,57 @@ export function AdminProjectDetail({
     delivery_date: initialProject.delivery_date || "",
     notes: initialProject.notes || "",
   });
+
+  const statusRef = useRef<string>(form.status);
+  statusRef.current = form.status;
+
+  async function changeStatus(next: string) {
+    const previous = form.status;
+    if (next === previous) return;
+    setForm((f) => ({ ...f, status: next as typeof f.status }));
+    setStatusSaving(true);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id: initialProject.id, status: next }),
+      });
+      if (!res.ok) {
+        setForm((f) => ({ ...f, status: previous }));
+        toast.error(await readServerError(res, "Failed to update status"));
+        return;
+      }
+      toast.success(`Status: ${getStatusLabel(next)}`);
+      router.refresh();
+    } finally {
+      setStatusSaving(false);
+    }
+  }
+
+  async function changeServiceType(next: string) {
+    const previous = form.service_type;
+    if (next === previous) return;
+    setForm((f) => ({ ...f, service_type: next }));
+    setTypeSaving(true);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id: initialProject.id, service_type: next }),
+      });
+      if (!res.ok) {
+        setForm((f) => ({ ...f, service_type: previous }));
+        toast.error(await readServerError(res, "Failed to update project type"));
+        return;
+      }
+      toast.success("Project type updated");
+      router.refresh();
+    } finally {
+      setTypeSaving(false);
+    }
+  }
 
   const [media, setMedia] = useState(initialMedia);
   const [tours, setTours] = useState(initialTours);
@@ -487,6 +650,16 @@ export function AdminProjectDetail({
         }
         if (uploaded.length) {
           toast.success(`${uploaded.length} file${uploaded.length === 1 ? "" : "s"} uploaded`);
+          // New interface has no page-wide Save (Classic asks on Save): ask right after photos land
+          // while the shoot is still before "Shoot Complete".
+          if (
+            inAppShell &&
+            mediaType === "photo" &&
+            getStatusOrder(statusRef.current) < getStatusOrder("shoot_complete_editing")
+          ) {
+            setShowShootCompleteModal(true);
+            return;
+          }
           router.refresh();
         }
         if (errors.length) {
@@ -1025,221 +1198,13 @@ export function AdminProjectDetail({
     };
   }, [projectClients, initialProject.clients]);
 
-  return (
-    <div className="space-y-6 pb-6 md:pb-24">
-      {/* Sticky project header */}
-      <div className="app-sticky-below-header sticky z-40 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-white/95 surface-dark:bg-card/95 backdrop-blur-md border-b border-border shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold text-heading truncate">{displayName}</h1>
-            <p className="text-sm text-muted truncate">{form.property_address}</p>
-            {initialProject.properties && (
-              <p className="text-xs text-accent truncate flex items-center gap-1">
-                <MapPin className="h-3 w-3 shrink-0" />
-                Property: {(initialProject.properties as { nickname?: string; address: string }).nickname || (initialProject.properties as { address: string }).address}
-              </p>
-            )}
-            <p className="text-xs text-muted">{form.service_type || "Service TBD"}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <StatusBadge status={form.status} />
-            <Button
-              variant="accent"
-              size="sm"
-              className="min-h-10"
-              onClick={() => setShowShareModal(true)}
-            >
-              <Share2 className="h-4 w-4" /> Share
-            </Button>
-            <Button variant="accent" size="sm" onClick={saveProject} disabled={saving} className="hidden md:inline-flex">
-              {saving ? "Saving…" : "Save"}
-            </Button>
-            <Link
-              href={`/admin/projects/${initialProject.id}/marketing`}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <Sparkles className="h-4 w-4" /> Marketing Kit
-            </Link>
-            <a
-              href={portalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <Eye className="h-4 w-4" /> Client Page
-            </a>
-            {initialProject.deleted_at ? (
-              <Button variant="outline" size="sm" disabled={restoringProject} onClick={() => restoreProject()} title="This project is hidden — show it again in your lists">
-                <Eye className="h-4 w-4" /> {restoringProject ? "Unhiding…" : "Unhide"}
-              </Button>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(true)} title="Hide from your lists and dashboard">
-                <EyeOff className="h-4 w-4" /> Hide
-              </Button>
-            )}
-            <Button variant="outline" size="sm" className="text-red-600" onClick={() => setShowPermanentDelete(true)}>
-              <Trash2 className="h-4 w-4" /> Delete
-            </Button>
-          </div>
-        </div>
-      </div>
 
-      <ProjectShareModal
-        open={showShareModal}
-        onClose={() => setShowShareModal(false)}
-        projectId={initialProject.id}
-        assignedClient={assignedClientForShare}
-        clientProjectUrl={clientProjectUrl}
-        initialShares={projectShares}
-        initialLinkMode={linkAccessMode}
-        initialPublicUrl={linkAccessPublicUrl}
-        initialViewCount={linkAccessViewCount}
-      />
+  // ---------------------------------------------------------------------------
+  // Section blocks shared by the Classic page and the New interface workspace.
+  // Each block is the same element (same handlers, same state) in both layouts.
+  // ---------------------------------------------------------------------------
 
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={copyPortalLink}>
-          {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Link2 className="h-4 w-4" />}
-          Copy Portal Link
-        </Button>
-      </div>
-
-      <NextStepBanner
-        step={
-          !canViewMoney &&
-          (adminStep.actionHref === "#quote" ||
-            adminStep.actionHref === "#payments" ||
-            /quote|payment|invoice/i.test(adminStep.title + adminStep.description))
-            ? {
-                ...adminStep,
-                title: "Continue this project",
-                description: "Review deliverables and scheduling below.",
-                actionHref: undefined,
-                actionLabel: undefined,
-              }
-            : adminStep
-        }
-      />
-
-      {/* Project details */}
-      <Card>
-        <CardHeader><CardTitle>Project Details</CardTitle></CardHeader>
-        <CardContent className="max-w-4xl space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Project Name</Label>
-              <Input
-                value={form.project_name}
-                onChange={(e) => setForm({ ...form, project_name: e.target.value })}
-                placeholder={defaultProjectName(form.property_address, form.service_type) || "Property Address — Service Type"}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <Select
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value as typeof form.status })}
-                options={PROJECT_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Property Address</Label>
-            <Input value={form.property_address} onChange={(e) => setForm({ ...form, property_address: e.target.value })} />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Service Type</Label>
-              <Input value={form.service_type} onChange={(e) => setForm({ ...form, service_type: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Delivery Date</Label>
-              <Input type="date" value={form.delivery_date} onChange={(e) => setForm({ ...form, delivery_date: e.target.value })} />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Notes</Label>
-            <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
-          </div>
-        </CardContent>
-      </Card>
-
-      <ProjectStaffCard projectId={initialProject.id} />
-
-      <ProjectClientsCard
-        primaryClient={(initialProject.clients as Client | null | undefined) ?? null}
-        primaryClientId={initialProject.client_id}
-        projectClients={projectClients}
-        allClients={allClients}
-        addClientId={addClientId}
-        onAddClientIdChange={setAddClientId}
-        onAddClient={addProjectClient}
-        onSetPrimary={setPrimaryClient}
-        onRemove={removeProjectClient}
-        onCreateClient={() => setShowCreateClient(true)}
-        projectId={initialProject.id}
-      />
-
-      <Suspense fallback={null}>
-        <ShootScheduling
-          projectId={initialProject.id}
-          proposals={shootProposals}
-          isAdmin
-          onUpdate={() => router.refresh()}
-        />
-      </Suspense>
-
-      {canViewMoney && (
-        <QuoteSection
-          projectId={initialProject.id}
-          quotes={quotes}
-          isAdmin
-          clientId={initialProject.client_id ?? undefined}
-          clientName={
-            initialProject.clients?.full_name || initialProject.clients?.name || "Client"
-          }
-          projectName={initialProject.project_name}
-          propertyAddress={initialProject.property_address}
-          serviceType={initialProject.service_type}
-          titleAccessory={
-            <ClientSectionVisibilityToggle
-              sectionKey="estimates"
-              visible={mediaSections.estimates}
-              saving={sectionSaving === "estimates"}
-              onChange={(v) => void setClientSectionVisible("estimates", v)}
-            />
-          }
-          payments={paymentList}
-          depositMode={depositMode}
-          depositPercent={depositPercent}
-          depositAmountCents={depositAmountCents}
-          travel={travel}
-          onPaymentCreated={(payment) => setPaymentList((prev) => [payment, ...prev])}
-          onStatusChange={(status) =>
-            setForm((f) => ({ ...f, status: status as Project["status"] }))
-          }
-        />
-      )}
-
-      {normalizeStatus(form.status) === "shoot_complete_editing" && (
-        <div id="deliverables-admin" className="flex justify-end">
-          <Button variant="accent" onClick={sendForReview} disabled={sendingForReview}>
-            {sendingForReview ? "Sending..." : "Send Deliverables for Review"}
-          </Button>
-        </div>
-      )}
-
-      {/* Photos */}
-      <Card id="photos" className="scroll-mt-20">
-        <CardHeader className="flex flex-row flex-wrap items-center gap-3">
-          <CardTitle className="flex items-center gap-2"><ImageIcon className="h-5 w-5" /> Photos</CardTitle>
-          <ClientSectionVisibilityToggle
-            sectionKey="photos"
-            visible={mediaSections.photos}
-            saving={sectionSaving === "photos"}
-            onChange={(v) => void setClientSectionVisible("photos", v)}
-          />
-        </CardHeader>
-        <CardContent>
+  const photoGrid = (
           <AdminPhotoGrid
             projectId={initialProject.id}
             photos={photos}
@@ -1283,48 +1248,13 @@ export function AdminProjectDetail({
               });
             }}
             onRefresh={() => router.refresh()}
+            workspace={inAppShell}
+            controllerRef={photoGridController}
+            onMediaRoot={() => setMediaCategory("all")}
           />
-          {photoShare.dialog}
-        </CardContent>
-      </Card>
+  );
 
-      {/* Videos */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <CardTitle className="flex items-center gap-2">Videos</CardTitle>
-            <ClientSectionVisibilityToggle
-              sectionKey="videos"
-              visible={mediaSections.videos}
-              saving={sectionSaving === "videos"}
-              onChange={(v) => void setClientSectionVisible("videos", v)}
-            />
-          </div>
-          <div className="flex gap-2 shrink-0">
-            <Button variant="outline" size="sm" onClick={() => setShowYoutubeForm(!showYoutubeForm)}>
-              <Video className="h-4 w-4" /> YouTube Link
-            </Button>
-            <label className="cursor-pointer">
-              <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white surface-dark:bg-card px-3 text-xs font-medium hover:bg-slate-50 surface-dark:hover:bg-subtle">
-                <Upload className="h-4 w-4" /> Upload Video
-              </span>
-              <input type="file" multiple accept={ALLOWED_VIDEO_MIME_TYPES.join(",")} className="hidden" onChange={(e) => handleUpload(e, "video")} />
-            </label>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-4 text-xs text-muted">Upload up to {formatFileSize(FILE_SIZE_LIMITS.video)} or paste a YouTube link</p>
-          {showYoutubeForm && (
-            <form onSubmit={handleYoutube} className="mb-4 max-w-2xl space-y-3 rounded-lg border border-border p-4">
-              <Input name="title" placeholder="Video title" />
-              <Input name="youtube_url" required placeholder="https://youtube.com/watch?v=..." />
-              <Button type="submit" variant="accent" size="sm">Add YouTube Video</Button>
-            </form>
-          )}
-          {videos.length === 0 && !showYoutubeForm ? (
-            <p className="text-sm text-muted py-4 text-center">No videos yet</p>
-          ) : null}
-          {videoEntries.length > 0 ? (
+  const videoGrid = videoEntries.length > 0 ? (
             <SortableVideoList
               id={`admin-video-grid-${initialProject.id}`}
               ids={videos.map((v) => v.id)}
@@ -1405,26 +1335,17 @@ export function AdminProjectDetail({
                 }}
               />
             </SortableVideoList>
-          ) : null}
-        </CardContent>
-      </Card>
+          ) : null;
 
-      {/* 360 Tours */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" /> 360 Tours</CardTitle>
-            <ClientSectionVisibilityToggle
-              sectionKey="tours"
-              visible={mediaSections.tours}
-              saving={sectionSaving === "tours"}
-              onChange={(v) => void setClientSectionVisible("tours", v)}
-            />
-          </div>
-          <Button variant="outline" size="sm" className="shrink-0" onClick={() => setShowTourForm(!showTourForm)}>Add Tour</Button>
-        </CardHeader>
-        <CardContent>
-          {showTourForm && (
+  const youtubeForm = (
+            <form onSubmit={handleYoutube} className="mb-4 max-w-2xl space-y-3 rounded-lg border border-border p-4">
+              <Input name="title" placeholder="Video title" />
+              <Input name="youtube_url" required placeholder="https://youtube.com/watch?v=..." />
+              <Button type="submit" variant="accent" size="sm">Add YouTube Video</Button>
+            </form>
+  );
+
+  const tourCreateForm = (
             <form onSubmit={handleCreateTour} className="mb-4 max-w-2xl space-y-3 rounded-lg border border-border p-4">
               <Input name="tour_name" required placeholder="Tour name" />
               <Input name="kuula_url" required placeholder="Kuula URL" />
@@ -1433,10 +1354,9 @@ export function AdminProjectDetail({
               <Textarea name="notes" placeholder="Notes for client (optional)" rows={2} />
               <Button type="submit" variant="accent" size="sm">Save Tour</Button>
             </form>
-          )}
-          {tours.sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)).map((t, i) => (
-            <div key={t.id} className="mb-2">
-              {editingTour === t.id ? (
+  );
+
+  const renderTourEdit = (t: Tour) => (
                 <div className="space-y-2 rounded-lg border border-border p-3">
                   <Input value={editTourForm.tour_name} onChange={(e) => setEditTourForm({ ...editTourForm, tour_name: e.target.value })} />
                   <Input value={editTourForm.kuula_url} onChange={(e) => setEditTourForm({ ...editTourForm, kuula_url: e.target.value })} />
@@ -1446,56 +1366,9 @@ export function AdminProjectDetail({
                     <Button size="sm" variant="outline" onClick={() => setEditingTour(null)}>Cancel</Button>
                   </div>
                 </div>
-              ) : (
-                <AssetRow name={t.tour_name} badge={t.client_visible === false ? "Hidden" : undefined}
-                  onUp={() => moveItem("tour", t.id, "up", tours)} onDown={() => moveItem("tour", t.id, "down", tours)}
-                  canUp={i > 0} canDown={i < tours.length - 1}
-                  extra={
-                    <>
-                      <Button variant="ghost" size="sm" title={t.client_visible !== false ? "Hide from client" : "Show to client"} onClick={() => toggleTourVisibility(t.id, t.client_visible === false)}>
-                        {t.client_visible !== false ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => {
-                        setEditingTour(t.id);
-                        setEditTourForm({ tour_name: t.tour_name, kuula_url: t.kuula_url, notes: t.notes || "" });
-                      }}><Pencil className="h-4 w-4" /></Button>
-                      <a href={t.kuula_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4 text-accent" /></a>
-                    </>
-                  }
-                  onDelete={() => setTourPendingDelete(t)}
-                />
-              )}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+  );
 
-      {/* 3D Models */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <CardTitle className="flex items-center gap-2"><Box className="h-5 w-5" /> 3D Models</CardTitle>
-            <ClientSectionVisibilityToggle
-              sectionKey="models"
-              visible={mediaSections.models}
-              saving={sectionSaving === "models"}
-              onChange={(v) => void setClientSectionVisible("models", v)}
-            />
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            onClick={() => {
-              setShowModelForm(!showModelForm);
-              if (showModelForm) setModelFormEmbedUrl("");
-            }}
-          >
-            Add Model
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {showModelForm && (
+  const modelCreateForm = (
             <form onSubmit={handleCreateModel} className="mb-4 max-w-2xl space-y-3 rounded-lg border border-border p-4">
               <Input name="title" required placeholder="Model title" />
               <Input
@@ -1519,10 +1392,9 @@ export function AdminProjectDetail({
               <Textarea name="description" placeholder="Description (optional)" rows={2} />
               <Button type="submit" variant="accent" size="sm">Save Model</Button>
             </form>
-          )}
-          {models.sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)).map((m, i) => (
-            <div key={m.id} className="mb-2">
-              {editingModel === m.id ? (
+  );
+
+  const renderModelEdit = (m: Project3dModel) => (
                 <div className="space-y-2 rounded-lg border border-border p-3">
                   <Input value={editModelForm.title} onChange={(e) => setEditModelForm({ ...editModelForm, title: e.target.value })} />
                   <Input
@@ -1544,133 +1416,9 @@ export function AdminProjectDetail({
                     <Button size="sm" variant="outline" onClick={() => setEditingModel(null)}>Cancel</Button>
                   </div>
                 </div>
-              ) : (
-                <AssetRow
-                  name={m.title}
-                  badge={m.client_visible === false ? "Hidden" : undefined}
-                  onUp={() => moveItem("model", m.id, "up", models)}
-                  onDown={() => moveItem("model", m.id, "down", models)}
-                  canUp={i > 0}
-                  canDown={i < models.length - 1}
-                  extra={
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        title={m.client_visible !== false ? "Hide from client" : "Show to client"}
-                        onClick={() => toggleModelVisibility(m.id, m.client_visible === false)}
-                      >
-                        {m.client_visible !== false ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditingModel(m.id);
-                          setEditModelForm({
-                            title: m.title,
-                            embed_url: m.embed_url,
-                            description: m.description || "",
-                          });
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <a href={m.embed_url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-4 w-4 text-accent" />
-                      </a>
-                    </>
-                  }
-                  onDelete={() => setModelPendingDelete(m)}
-                />
-              )}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+  );
 
-      {/* Documents */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <CardTitle>Documents</CardTitle>
-            <ClientSectionVisibilityToggle
-              sectionKey="documents"
-              visible={mediaSections.documents}
-              saving={sectionSaving === "documents"}
-              onChange={(v) => void setClientSectionVisible("documents", v)}
-            />
-          </div>
-          <label className="cursor-pointer shrink-0">
-            <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white surface-dark:bg-card px-3 text-xs font-medium hover:bg-slate-50 surface-dark:hover:bg-subtle">
-              <Upload className="h-4 w-4" /> Upload
-            </span>
-            <input type="file" multiple accept="application/pdf,application/zip" className="hidden" onChange={(e) => handleUpload(e, "document")} />
-          </label>
-        </CardHeader>
-        <CardContent>
-          {documents.map((d, i) => (
-            <AssetRow key={d.id} name={mediaDisplayName(d)}
-              onUp={() => moveItem("media", d.id, "up", documents)} onDown={() => moveItem("media", d.id, "down", documents)}
-              canUp={i > 0} canDown={i < documents.length - 1}
-              onDelete={() => deleteMedia(d.id)} />
-          ))}
-        </CardContent>
-      </Card>
-
-      {revisions.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle>Revision Requests</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            {revisions.map((rev) => (
-              <button
-                key={`rev-${rev.id}`}
-                type="button"
-                onClick={() => setSelectedRevision(rev)}
-                className="w-full rounded-lg border border-border p-4 text-left text-sm hover:bg-slate-50 surface-dark:hover:bg-subtle"
-              >
-                <p className="text-muted line-clamp-2">{rev.description}</p>
-                <p className="text-xs text-muted mt-2">{rev.status.replace("_", " ")} · {new Date(rev.created_at).toLocaleDateString()}</p>
-              </button>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {marketingKit ? (
-        <MarketingKitCard
-          projectId={initialProject.id}
-          summary={marketingKit}
-          canEdit={canEditMarketing}
-          canManageOffers={canManageMarketingOffers}
-        />
-      ) : null}
-
-      {/* Payments — hidden when staff lacks money.view */}
-      {canViewMoney && (
-        <Card id="payments">
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-3">
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" /> Payments
-              </CardTitle>
-              <ClientSectionVisibilityToggle
-                sectionKey="payments"
-                visible={mediaSections.payments}
-                saving={sectionSaving === "payments"}
-                onChange={(v) => void setClientSectionVisible("payments", v)}
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowPaymentForm(!showPaymentForm)}
-            >
-              Create Payment
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {showPaymentForm && (
+  const paymentForm = (
               <form
                 onSubmit={handleCreatePayment}
                 className="mb-4 max-w-2xl space-y-3 rounded-lg border border-border p-4"
@@ -1689,8 +1437,10 @@ export function AdminProjectDetail({
                   {creatingPayment ? "Creating…" : "Create Payment Link"}
                 </Button>
               </form>
-            )}
-            <BankPaymentsNotice className="mb-4" />
+  );
+
+  const paymentListView = (
+    <>
             {paymentList.map((p) => (
               <div key={`payment-${p.id}`} className="border-b border-border py-4 last:border-0">
                 <AdminPaymentActions
@@ -1709,24 +1459,62 @@ export function AdminProjectDetail({
             {paymentList.length === 0 && (
               <p className="text-sm text-muted text-center py-4">No payment links yet</p>
             )}
-          </CardContent>
-        </Card>
-      )}
+    </>
+  );
 
-      <div className="rounded-xl border border-border bg-slate-50/80 surface-dark:bg-subtle/80 px-4 py-3 text-sm text-muted">
-        Client messaging lives in the{" "}
-        <Link href="/admin/messages" className="font-medium text-accent hover:underline">
-          Messages
-        </Link>{" "}
-        inbox (organized by client). Open a client conversation there to reply.
-      </div>
+  const detailFields = (
+    <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Project Name</Label>
+              <Input
+                value={form.project_name}
+                onChange={(e) => setForm({ ...form, project_name: e.target.value })}
+                placeholder={defaultProjectName(form.property_address, form.service_type) || "Property Address — Service Type"}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value as typeof form.status })}
+                options={PROJECT_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Property Address</Label>
+            <Input value={form.property_address} onChange={(e) => setForm({ ...form, property_address: e.target.value })} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Service Type</Label>
+              <Input value={form.service_type} onChange={(e) => setForm({ ...form, service_type: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Delivery Date</Label>
+              <Input type="date" value={form.delivery_date} onChange={(e) => setForm({ ...form, delivery_date: e.target.value })} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Notes</Label>
+            <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
+          </div>
+    </>
+  );
 
-      <ProjectActivityTimeline
-        activities={activities}
-        onRevisionClick={(revisionId) => {
-          const rev = revisions.find((r) => r.id === revisionId);
-          if (rev) setSelectedRevision(rev);
-        }}
+  const sharedDialogs = (
+    <>
+      <ProjectShareModal
+        open={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        projectId={initialProject.id}
+        assignedClient={assignedClientForShare}
+        clientProjectUrl={clientProjectUrl}
+        initialShares={projectShares}
+        initialLinkMode={linkAccessMode}
+        initialPublicUrl={linkAccessPublicUrl}
+        initialViewCount={linkAccessViewCount}
       />
 
       <RevisionDrawer
@@ -1861,6 +1649,1305 @@ export function AdminProjectDetail({
         onClose={() => setShowCreateClient(false)}
         onCreated={handleClientCreated}
       />
+    </>
+  );
+
+  const visibleStep =
+    !canViewMoney &&
+    (adminStep.actionHref === "#quote" ||
+      adminStep.actionHref === "#payments" ||
+      /quote|payment|invoice/i.test(adminStep.title + adminStep.description))
+      ? {
+          ...adminStep,
+          title: "Continue this project",
+          description: "Review deliverables and scheduling below.",
+          actionHref: undefined,
+          actionLabel: undefined,
+        }
+      : adminStep;
+
+  // ---------------------------------------------------------------------------
+  // New interface: project workspace (hero, tabs, client sidebar). It arranges the
+  // same blocks and handlers as Classic below; nothing here talks to the API directly
+  // except through the functions above.
+  // ---------------------------------------------------------------------------
+  if (inAppShell) {
+    const primaryClient =
+      projectClients.find((pc) => pc.is_primary)?.clients ??
+      (initialProject.clients as Client | null | undefined) ??
+      null;
+    const linkedClientCount =
+      projectClients.length +
+      (initialProject.client_id && !projectClients.some((pc) => pc.client_id === initialProject.client_id) ? 1 : 0);
+    const confirmedShoot = [...shootProposals]
+      .filter((sp) => sp.status === "confirmed")
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+    const heroDate =
+      formatHeroDate(confirmedShoot?.proposed_at) ??
+      formatHeroDate(initialProject.shoot_date, true) ??
+      (form.delivery_date ? `Delivery ${formatHeroDate(form.delivery_date, true)}` : null);
+    const coverCandidates = [...photos, ...videos];
+    const heroImage =
+      heroBannerUrl ?? (coverImageId ? getCachedThumbUrl(coverImageId) : null) ?? (photos[0] ? getCachedThumbUrl(photos[0].id) : null);
+    const SummaryIcon =
+      visibleStep.variant === "success"
+        ? CheckCircle2
+        : visibleStep.variant === "warning"
+          ? AlertTriangle
+          : visibleStep.variant === "accent"
+            ? Sparkles
+            : Info;
+
+    function runStepAction() {
+      const href = visibleStep.actionHref;
+      if (!href) return;
+      if (href.startsWith("#")) {
+        const tab = HASH_TO_TAB[href.slice(1)];
+        if (tab) {
+          setActiveTab(tab);
+          if (href === "#scheduling") {
+            window.setTimeout(() => document.getElementById("scheduling")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+          }
+        }
+        return;
+      }
+      router.push(href);
+    }
+    const stepHasAction = Boolean(
+      visibleStep.actionLabel &&
+        visibleStep.actionHref &&
+        (!visibleStep.actionHref.startsWith("#") || HASH_TO_TAB[visibleStep.actionHref.slice(1)])
+    );
+
+    const typeChoices = Array.from(new Set([...serviceOptions, form.service_type].filter(Boolean)));
+
+    const counts = {
+      photos: photos.length,
+      videos: videos.length,
+      tours: tours.length,
+      models: models.length,
+      files: documents.length,
+    };
+    const totalMedia = counts.photos + counts.videos + counts.tours + counts.models + counts.files;
+    const categoryItems: WorkspaceTab<MediaCategory>[] = [
+      { key: "all", label: "All Media", icon: LayoutGrid, count: totalMedia },
+      { key: "photos", label: "Photos", icon: ImageIcon, count: counts.photos },
+      { key: "videos", label: "Videos", icon: Video, count: counts.videos },
+      { key: "tours", label: "360 Tours", icon: Rotate3d, count: counts.tours },
+      { key: "models", label: "3D Models", icon: Box, count: counts.models },
+      { key: "files", label: "Files", icon: FileText, count: counts.files },
+    ];
+    const showSection = (key: Exclude<MediaCategory, "all">) =>
+      mediaCategory === key || (mediaCategory === "all" && (key === "photos" || counts[key] > 0));
+
+    const tabs: WorkspaceTab<WorkspaceTabKey>[] = [
+      { key: "media", label: "Media", icon: ImageIcon },
+      ...(canViewMoney ? [{ key: "estimates" as const, label: "Estimates & Proposals", icon: ClipboardList }] : []),
+      ...(marketingKit ? [{ key: "marketing" as const, label: "Marketing Kit", icon: Megaphone }] : []),
+      ...(canViewMoney ? [{ key: "payments" as const, label: "Payments", icon: CreditCard }] : []),
+      { key: "details", label: "Details", icon: CalendarClock },
+    ];
+    const currentTab = tabs.some((t) => t.key === activeTab) ? activeTab : "media";
+
+    const uploadItems: ActionMenuItem[] = [
+      {
+        id: "photos",
+        label: "Photos",
+        icon: ImageIcon,
+        hint: "JPEG, PNG or WebP — into the open folder",
+        onSelect: () => {
+          setMediaCategory((c) => (c === "all" || c === "photos" ? c : "photos"));
+          photoGridController.current?.upload();
+        },
+      },
+      {
+        id: "videos",
+        label: "Video files",
+        icon: Upload,
+        hint: `Up to ${formatFileSize(FILE_SIZE_LIMITS.video)}`,
+        onSelect: () => videoInputRef.current?.click(),
+      },
+      {
+        id: "youtube",
+        label: "YouTube link",
+        icon: Video,
+        onSelect: () => {
+          setMediaCategory("videos");
+          setShowYoutubeForm(true);
+        },
+      },
+      {
+        id: "tour",
+        label: "360 tour link",
+        icon: Rotate3d,
+        onSelect: () => {
+          setMediaCategory("tours");
+          setShowTourForm(true);
+        },
+      },
+      {
+        id: "model",
+        label: "3D model link",
+        icon: Box,
+        onSelect: () => {
+          setMediaCategory("models");
+          setShowModelForm(true);
+        },
+      },
+      {
+        id: "files",
+        label: "Documents & files",
+        icon: FileText,
+        hint: "PDF or ZIP",
+        onSelect: () => documentInputRef.current?.click(),
+      },
+    ];
+
+    function onUploadMedia(anchor: HTMLElement) {
+      switch (mediaCategory) {
+        case "photos":
+          photoGridController.current?.upload();
+          return;
+        case "tours":
+          setShowTourForm(true);
+          return;
+        case "models":
+          setShowModelForm(true);
+          return;
+        case "files":
+          documentInputRef.current?.click();
+          return;
+        case "videos":
+          setUploadMenuAnchor({ kind: "element", element: anchor });
+          return;
+        default:
+          setUploadMenuAnchor({ kind: "element", element: anchor });
+      }
+    }
+
+    const projectMenuItems: ActionMenuItem[] = [
+      { id: "edit", label: "Edit project details", icon: Pencil, onSelect: () => setActiveTab("details") },
+      { id: "copy", label: copied ? "Portal link copied" : "Copy portal link", icon: Copy, onSelect: () => void copyPortalLink() },
+      {
+        id: "marketing",
+        label: "Open Marketing Kit editor",
+        icon: Sparkles,
+        onSelect: () => router.push(`/admin/projects/${initialProject.id}/marketing`),
+      },
+      { id: "clients", label: "Manage clients", icon: Users, onSelect: () => setShowClientsModal(true) },
+      { id: "activity", label: "View all activity", icon: History, onSelect: () => setShowActivityModal(true) },
+      { type: "separator", id: "sep" },
+      initialProject.deleted_at
+        ? {
+            id: "unhide",
+            label: restoringProject ? "Unhiding…" : "Unhide project",
+            icon: Eye,
+            disabled: restoringProject,
+            onSelect: () => void restoreProject(),
+          }
+        : {
+            id: "hide",
+            label: "Hide project",
+            icon: EyeOff,
+            hint: "Hide from your lists and dashboard",
+            onSelect: () => setShowDeleteConfirm(true),
+          },
+      { id: "delete", label: "Delete project", icon: Trash2, destructive: true, onSelect: () => setShowPermanentDelete(true) },
+    ];
+
+    const quoteTotals = (() => {
+      const latest = quotes[0] ?? null;
+      const approved = quotes.find((q) => q.status === "approved") ?? null;
+      const focus = approved ?? latest;
+      const response = !focus
+        ? null
+        : focus.status === "approved"
+          ? { label: "Accepted", hint: focus.approved_at ? new Date(focus.approved_at).toLocaleDateString() : null, tone: "success" as const }
+          : focus.status === "changes_requested"
+            ? { label: "Changes requested", hint: "Revise and resend", tone: "warning" as const }
+            : focus.status === "sent"
+              ? { label: "Awaiting response", hint: focus.sent_at ? `Sent ${new Date(focus.sent_at).toLocaleDateString()}` : null, tone: "accent" as const }
+              : { label: "Not sent yet", hint: "Send it when it's ready", tone: "default" as const };
+      return { focus, response };
+    })();
+
+    const billable = paymentList.filter((p) => !["cancelled", "expired", "failed"].includes(p.status));
+    const billedCents = billable.reduce((sum, p) => sum + (p.amount ?? 0), 0);
+    const paidCents = billable.filter((p) => p.status === "paid").reduce((sum, p) => sum + (p.amount ?? 0), 0);
+    const processingCents = billable
+      .filter((p) => p.status === "processing")
+      .reduce((sum, p) => sum + (p.amount ?? 0), 0);
+    const outstandingCents = Math.max(0, billedCents - paidCents - processingCents);
+    const approvedQuote = quotes.find((q) => q.status === "approved") ?? null;
+    const paymentStatusLabel =
+      billable.length === 0
+        ? "No invoices yet"
+        : outstandingCents === 0 && processingCents === 0
+          ? "Paid in full"
+          : paidCents > 0 || processingCents > 0
+            ? "Partially paid"
+            : "Unpaid";
+
+    const sortedTours = [...tours].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+    const sortedModels = [...models].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+
+    const sectionRow = (
+      key: ProjectSectionKey,
+      label: string,
+      icon: VisibilityRow["icon"]
+    ): VisibilityRow => ({
+      key,
+      label,
+      icon,
+      checked: mediaSections[key],
+      saving: sectionSaving === key,
+      onChange: (v: boolean) => void setClientSectionVisible(key, v),
+    });
+    const visibilityRows: VisibilityRow[] = [
+      ...(canViewMoney ? [sectionRow("estimates", "Estimates & Proposals", ClipboardList)] : []),
+      sectionRow("photos", "Photos", ImageIcon),
+      sectionRow("videos", "Videos", Video),
+      sectionRow("documents", "Documents", FileText),
+      sectionRow("tours", "360 Tours", Rotate3d),
+      sectionRow("models", "3D Models", Box),
+      ...(marketingKit && !marketingKit.setupRequired
+        ? [
+            {
+              key: "marketing",
+              label: "Marketing Kit",
+              icon: Megaphone,
+              checked: marketingKit.visibleToClient,
+              readOnlyNote:
+                "Follows the add-on offers in the Marketing Kit tab (and Settings → Marketing Kit). Open the tab to change them.",
+              onReadOnlyClick: () => setActiveTab("marketing"),
+            } satisfies VisibilityRow,
+          ]
+        : []),
+      ...(canViewMoney ? [sectionRow("payments", "Payments", CreditCard)] : []),
+    ];
+
+    const sidebar = (
+      <>
+        <ClientContactCard
+          client={
+            primaryClient
+              ? {
+                  id: primaryClient.id,
+                  name: primaryClient.full_name || primaryClient.name || primaryClient.email || "Client",
+                  email: primaryClient.email ?? null,
+                  phone: primaryClient.phone ?? null,
+                }
+              : null
+          }
+          extraClients={Math.max(0, linkedClientCount - 1)}
+          onManage={() => setShowClientsModal(true)}
+        />
+        <VisibilityPanel rows={visibilityRows} />
+        <ActivityPreview
+          activities={activities}
+          onViewAll={() => setShowActivityModal(true)}
+          onRevisionClick={(revisionId) => {
+            const rev = revisions.find((r) => r.id === revisionId);
+            if (rev) setSelectedRevision(rev);
+          }}
+        />
+      </>
+    );
+
+    return (
+      <div className="space-y-4 pb-6">
+        {/* Project action bar */}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <StatusPill status={form.status} saving={statusSaving} onChange={(next) => void changeStatus(next)} />
+          <Button variant="accent" className="h-9" onClick={() => setShowShareModal(true)}>
+            <Share2 className="h-4 w-4" /> Share
+          </Button>
+          <a
+            href={portalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(buttonVariants({ variant: "outline" }), "h-9")}
+          >
+            <ExternalLink className="h-4 w-4" /> Client Portal
+          </a>
+          <Button
+            variant="outline"
+            className="h-9 w-9 px-0"
+            aria-label="More project actions"
+            aria-haspopup="menu"
+            onClick={(e) => setProjectMenuAnchor({ kind: "element", element: e.currentTarget })}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_17rem] 2xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="min-w-0 space-y-4">
+            <ProjectHero
+              imageUrl={heroImage}
+              name={displayName}
+              typeLabel={form.service_type || null}
+              dateLabel={heroDate}
+              location={shortLocation(form.property_address)}
+              hidden={Boolean(initialProject.deleted_at)}
+              onChangeCover={coverCandidates.length > 0 ? () => setShowCoverDialog(true) : undefined}
+            />
+
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
+              <label className="flex shrink-0 items-center gap-3">
+                <span className="text-sm font-medium text-heading">Project Type</span>
+                <span className="relative inline-flex min-w-0 flex-1 items-center lg:w-64 lg:flex-none">
+                  <Home className="pointer-events-none absolute left-3 h-4 w-4 text-muted" aria-hidden />
+                  <select
+                    value={form.service_type}
+                    disabled={typeSaving}
+                    onChange={(e) => void changeServiceType(e.target.value)}
+                    className="h-10 w-full min-w-0 appearance-none truncate rounded-lg border border-border bg-card pl-9 pr-9 text-sm font-medium text-heading shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+                  >
+                    {!form.service_type ? <option value="">Choose a type…</option> : null}
+                    {typeChoices.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-muted" aria-hidden />
+                </span>
+              </label>
+              <div aria-hidden className="hidden w-px self-stretch bg-border lg:block" />
+              <div className="min-w-0 flex-1">
+                <StatusSummary
+                  step={visibleStep}
+                  icon={SummaryIcon}
+                  onAction={stepHasAction ? runStepAction : undefined}
+                  extraAction={
+                    normalizeStatus(form.status) === "shoot_complete_editing" ? (
+                      <Button variant="accent" size="sm" onClick={sendForReview} disabled={sendingForReview}>
+                        {sendingForReview ? "Sending..." : "Send Deliverables for Review"}
+                      </Button>
+                    ) : null
+                  }
+                />
+              </div>
+            </div>
+
+            <WorkspaceTabs tabs={tabs} active={currentTab} onChange={setActiveTab} />
+
+            {/* Panels stay mounted so folder location, selections, forms and upload state survive tab switches. */}
+            <div
+              role="tabpanel"
+              id="project-panel-media"
+              aria-labelledby="project-tab-media"
+              hidden={currentTab !== "media"}
+              className="space-y-4 rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4"
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <CategoryChips items={categoryItems} active={mediaCategory} onChange={setMediaCategory} />
+                <Button
+                  variant="accent"
+                  className="h-9 shrink-0"
+                  aria-haspopup={mediaCategory === "all" || mediaCategory === "videos" ? "menu" : undefined}
+                  onClick={(e) => onUploadMedia(e.currentTarget)}
+                >
+                  <Upload className="h-4 w-4" /> Upload Media
+                </Button>
+              </div>
+              <input
+                ref={videoInputRef}
+                type="file"
+                multiple
+                accept={ALLOWED_VIDEO_MIME_TYPES.join(",")}
+                className="hidden"
+                onChange={(e) => handleUpload(e, "video")}
+              />
+              <input
+                ref={documentInputRef}
+                type="file"
+                multiple
+                accept="application/pdf,application/zip"
+                className="hidden"
+                onChange={(e) => handleUpload(e, "document")}
+              />
+
+              <section id="photos" hidden={!showSection("photos")} className="scroll-mt-20">
+                {photoGrid}
+                {photoShare.dialog}
+              </section>
+
+              <section hidden={!showSection("videos")} className={cn(mediaCategory === "all" && "border-t border-border pt-4")}>
+                {mediaCategory === "videos" ? (
+                  <WorkspaceBreadcrumb label="Videos" onRoot={() => setMediaCategory("all")} />
+                ) : null}
+                <MediaSectionHeader
+                  icon={Video}
+                  title="Videos"
+                  count={counts.videos}
+                  onOpen={mediaCategory === "all" ? () => setMediaCategory("videos") : undefined}
+                  actions={
+                    <>
+                      <Button variant="outline" size="sm" className="h-8" onClick={() => setShowYoutubeForm(!showYoutubeForm)}>
+                        <Video className="h-4 w-4" /> YouTube Link
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-8" onClick={() => videoInputRef.current?.click()}>
+                        <Upload className="h-4 w-4" /> Upload Video
+                      </Button>
+                    </>
+                  }
+                />
+                <p className="mb-3 text-xs text-muted">
+                  Upload up to {formatFileSize(FILE_SIZE_LIMITS.video)} or paste a YouTube link. Drag cards to reorder.
+                </p>
+                {showYoutubeForm && youtubeForm}
+                {videos.length === 0 && !showYoutubeForm ? (
+                  <EmptyMediaState icon={Video} text="No videos yet" />
+                ) : null}
+                {videoGrid}
+              </section>
+
+              <section hidden={!showSection("tours")} className={cn(mediaCategory === "all" && "border-t border-border pt-4")}>
+                {mediaCategory === "tours" ? (
+                  <WorkspaceBreadcrumb label="360 Tours" onRoot={() => setMediaCategory("all")} />
+                ) : null}
+                <MediaSectionHeader
+                  icon={Rotate3d}
+                  title="360 Tours"
+                  count={counts.tours}
+                  onOpen={mediaCategory === "all" ? () => setMediaCategory("tours") : undefined}
+                  actions={
+                    <Button variant="outline" size="sm" className="h-8" onClick={() => setShowTourForm(!showTourForm)}>
+                      <Plus className="h-4 w-4" /> Add Tour
+                    </Button>
+                  }
+                />
+                {showTourForm && tourCreateForm}
+                {sortedTours.length === 0 && !showTourForm ? <EmptyMediaState icon={Globe} text="No 360 tours yet" /> : null}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  {sortedTours.map((t, i) =>
+                    editingTour === t.id ? (
+                      <div key={t.id} className="sm:col-span-2">
+                        {renderTourEdit(t)}
+                      </div>
+                    ) : (
+                      <LinkedMediaCard
+                        key={t.id}
+                        title={t.tour_name}
+                        subtitle={t.notes}
+                        href={t.kuula_url}
+                        thumbnailUrl={t.thumbnail_url}
+                        placeholderIcon={Rotate3d}
+                        hidden={t.client_visible === false}
+                        onToggleVisibility={() => void toggleTourVisibility(t.id, t.client_visible === false)}
+                        onEdit={() => {
+                          setEditingTour(t.id);
+                          setEditTourForm({ tour_name: t.tour_name, kuula_url: t.kuula_url, notes: t.notes || "" });
+                        }}
+                        onDelete={() => setTourPendingDelete(t)}
+                        onUp={() => void moveItem("tour", t.id, "up", sortedTours)}
+                        onDown={() => void moveItem("tour", t.id, "down", sortedTours)}
+                        canUp={i > 0}
+                        canDown={i < sortedTours.length - 1}
+                      />
+                    )
+                  )}
+                </div>
+              </section>
+
+              <section hidden={!showSection("models")} className={cn(mediaCategory === "all" && "border-t border-border pt-4")}>
+                {mediaCategory === "models" ? (
+                  <WorkspaceBreadcrumb label="3D Models" onRoot={() => setMediaCategory("all")} />
+                ) : null}
+                <MediaSectionHeader
+                  icon={Box}
+                  title="3D Models"
+                  count={counts.models}
+                  onOpen={mediaCategory === "all" ? () => setMediaCategory("models") : undefined}
+                  actions={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => {
+                        setShowModelForm(!showModelForm);
+                        if (showModelForm) setModelFormEmbedUrl("");
+                      }}
+                    >
+                      <Plus className="h-4 w-4" /> Add Model
+                    </Button>
+                  }
+                />
+                {showModelForm && modelCreateForm}
+                {sortedModels.length === 0 && !showModelForm ? <EmptyMediaState icon={Box} text="No 3D models yet" /> : null}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  {sortedModels.map((m, i) =>
+                    editingModel === m.id ? (
+                      <div key={m.id} className="sm:col-span-2">
+                        {renderModelEdit(m)}
+                      </div>
+                    ) : (
+                      <LinkedMediaCard
+                        key={m.id}
+                        title={m.title}
+                        subtitle={m.description}
+                        href={m.embed_url}
+                        placeholderIcon={Box}
+                        hidden={m.client_visible === false}
+                        onToggleVisibility={() => void toggleModelVisibility(m.id, m.client_visible === false)}
+                        onEdit={() => {
+                          setEditingModel(m.id);
+                          setEditModelForm({ title: m.title, embed_url: m.embed_url, description: m.description || "" });
+                        }}
+                        onDelete={() => setModelPendingDelete(m)}
+                        onUp={() => void moveItem("model", m.id, "up", sortedModels)}
+                        onDown={() => void moveItem("model", m.id, "down", sortedModels)}
+                        canUp={i > 0}
+                        canDown={i < sortedModels.length - 1}
+                      />
+                    )
+                  )}
+                </div>
+              </section>
+
+              <section hidden={!showSection("files")} className={cn(mediaCategory === "all" && "border-t border-border pt-4")}>
+                {mediaCategory === "files" ? (
+                  <WorkspaceBreadcrumb label="Files" onRoot={() => setMediaCategory("all")} />
+                ) : null}
+                <MediaSectionHeader
+                  icon={FileText}
+                  title="Files"
+                  count={counts.files}
+                  onOpen={mediaCategory === "all" ? () => setMediaCategory("files") : undefined}
+                  actions={
+                    <Button variant="outline" size="sm" className="h-8" onClick={() => documentInputRef.current?.click()}>
+                      <Upload className="h-4 w-4" /> Upload
+                    </Button>
+                  }
+                />
+                {documents.length === 0 ? (
+                  <EmptyMediaState icon={FileText} text="No documents yet — PDF and ZIP files are supported" />
+                ) : (
+                  <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+                    {documents.map((d, i) => {
+                      const name = mediaDisplayName(d);
+                      const kind = d.mime_type?.includes("pdf") ? "PDF" : d.mime_type?.includes("zip") ? "ZIP" : (d.mime_type?.split("/")[1] ?? "File").toUpperCase();
+                      return (
+                        <li key={d.id} className="flex items-center gap-3 bg-card px-3 py-2.5">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                            <FileText className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-heading" title={name}>
+                              {name}
+                            </p>
+                            <p className="truncate text-xs text-muted">
+                              {[kind, d.file_size ? formatFileSize(d.file_size) : null, new Date(d.created_at).toLocaleDateString()]
+                                .filter(Boolean)
+                                .join(" · ")}
+                              {!isClientVisibleMedia(d) ? " · Hidden from client" : ""}
+                            </p>
+                          </div>
+                          <IconAction label={`Download ${name}`} onClick={() => void downloadMediaAsset(d)}>
+                            <Download className="h-4 w-4" />
+                          </IconAction>
+                          <RowOverflow
+                            label={`${name} actions`}
+                            items={[
+                              {
+                                label: "Move up",
+                                icon: ChevronUp,
+                                disabled: i === 0,
+                                onSelect: () => void moveItem("media", d.id, "up", documents),
+                              },
+                              {
+                                label: "Move down",
+                                icon: ChevronDown,
+                                disabled: i === documents.length - 1,
+                                onSelect: () => void moveItem("media", d.id, "down", documents),
+                              },
+                              { label: "Delete", icon: Trash, destructive: true, onSelect: () => void deleteMedia(d.id) },
+                            ]}
+                          />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            </div>
+
+            {canViewMoney ? (
+              <div
+                role="tabpanel"
+                id="project-panel-estimates"
+                aria-labelledby="project-tab-estimates"
+                hidden={currentTab !== "estimates"}
+                className="space-y-4"
+              >
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <StatTile label="Proposals" value={String(quotes.length)} hint={quotes.length === 0 ? "None yet" : null} />
+                  <StatTile
+                    label={quoteTotals.focus?.status === "approved" ? "Accepted total" : "Latest total"}
+                    value={quoteTotals.focus ? formatCurrency(quoteTotals.focus.total_cents) : "—"}
+                    hint={quoteTotals.focus?.title ?? null}
+                  />
+                  <StatTile
+                    label="Client response"
+                    value={quoteTotals.response?.label ?? "—"}
+                    hint={quoteTotals.response?.hint ?? null}
+                    tone={quoteTotals.response?.tone ?? "default"}
+                  />
+                  <StatTile
+                    label="Client portal"
+                    value={mediaSections.estimates ? "Visible" : "Hidden"}
+                    hint={mediaSections.estimates ? "Client can review proposals" : "Turn on in Client Portal Visibility"}
+                    tone={mediaSections.estimates ? "success" : "warning"}
+                  />
+                </div>
+                <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+                  <QuoteSection
+                    projectId={initialProject.id}
+                    quotes={quotes}
+                    isAdmin
+                    clientId={initialProject.client_id ?? undefined}
+                    clientName={initialProject.clients?.full_name || initialProject.clients?.name || "Client"}
+                    projectName={initialProject.project_name}
+                    propertyAddress={initialProject.property_address}
+                    serviceType={initialProject.service_type}
+                    payments={paymentList}
+                    depositMode={depositMode}
+                    depositPercent={depositPercent}
+                    depositAmountCents={depositAmountCents}
+                    travel={travel}
+                    onPaymentCreated={(payment) => setPaymentList((prev) => [payment, ...prev])}
+                    onStatusChange={(status) => setForm((f) => ({ ...f, status: status as Project["status"] }))}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {marketingKit ? (
+              <div
+                role="tabpanel"
+                id="project-panel-marketing"
+                aria-labelledby="project-tab-marketing"
+                hidden={currentTab !== "marketing"}
+              >
+                <MarketingAddOns
+                  projectId={initialProject.id}
+                  projectName={displayName}
+                  location={shortLocation(form.property_address)}
+                  summary={marketingKit}
+                  canEdit={canEditMarketing}
+                  canManageOffers={canManageMarketingOffers}
+                  previewImageUrl={heroImage}
+                />
+              </div>
+            ) : null}
+
+            {canViewMoney ? (
+              <div
+                role="tabpanel"
+                id="project-panel-payments"
+                aria-labelledby="project-tab-payments"
+                hidden={currentTab !== "payments"}
+                className="space-y-4"
+              >
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <StatTile
+                    label="Total billed"
+                    value={formatCurrency(billedCents)}
+                    hint={approvedQuote ? `Accepted proposal ${formatCurrency(approvedQuote.total_cents)}` : `${billable.length} invoice${billable.length === 1 ? "" : "s"}`}
+                  />
+                  <StatTile label="Paid" value={formatCurrency(paidCents)} tone="success" hint={processingCents > 0 ? `${formatCurrency(processingCents)} processing (bank)` : null} />
+                  <StatTile label="Outstanding" value={formatCurrency(outstandingCents)} tone={outstandingCents > 0 ? "warning" : "default"} />
+                  <StatTile
+                    label="Payment status"
+                    value={paymentStatusLabel}
+                    tone={paymentStatusLabel === "Paid in full" ? "success" : paymentStatusLabel === "No invoices yet" ? "default" : "warning"}
+                    hint={mediaSections.payments ? "Visible in client portal" : "Hidden from client portal"}
+                  />
+                </div>
+                <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="flex items-center gap-2 text-base font-semibold text-heading">
+                      <CreditCard className="h-5 w-5 text-accent" /> Invoices & payment links
+                    </h2>
+                    <Button variant="outline" size="sm" className="h-9" onClick={() => setShowPaymentForm(!showPaymentForm)}>
+                      <Plus className="h-4 w-4" /> Create Payment
+                    </Button>
+                  </div>
+                  {showPaymentForm && paymentForm}
+                  <BankPaymentsNotice className="mb-4" />
+                  {paymentListView}
+                </div>
+              </div>
+            ) : null}
+
+            <div
+              role="tabpanel"
+              id="project-panel-details"
+              aria-labelledby="project-tab-details"
+              hidden={currentTab !== "details"}
+              className="grid gap-4 2xl:grid-cols-2"
+            >
+              <div className="min-w-0 space-y-4">
+                <Suspense fallback={null}>
+                  <ShootScheduling
+                    projectId={initialProject.id}
+                    proposals={shootProposals}
+                    isAdmin
+                    onUpdate={() => router.refresh()}
+                  />
+                </Suspense>
+                <Card>
+                  <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+                    <CardTitle>Project Details</CardTitle>
+                    <Button variant="accent" size="sm" className="h-9" onClick={saveProject} disabled={saving}>
+                      {saving ? "Saving…" : "Save details"}
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {detailFields}
+                    {initialProject.properties ? (
+                      <p className="flex items-center gap-1 text-xs text-accent">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        Property:{" "}
+                        {(initialProject.properties as { nickname?: string; address: string }).nickname ||
+                          (initialProject.properties as { address: string }).address}
+                      </p>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              </div>
+              <div className="min-w-0 space-y-4">
+                <ProjectStaffCard projectId={initialProject.id} />
+                {revisions.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Revision Requests</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {revisions.map((rev) => (
+                        <button
+                          key={`rev-${rev.id}`}
+                          type="button"
+                          onClick={() => setSelectedRevision(rev)}
+                          className="w-full rounded-lg border border-border p-4 text-left text-sm hover:bg-slate-50 surface-dark:hover:bg-subtle"
+                        >
+                          <p className="line-clamp-2 text-muted">{rev.description}</p>
+                          <p className="mt-2 text-xs text-muted">
+                            {rev.status.replace("_", " ")} · {new Date(rev.created_at).toLocaleDateString()}
+                          </p>
+                        </button>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <aside
+            aria-label="Client and activity"
+            className="grid min-w-0 content-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-1"
+          >
+            {sidebar}
+          </aside>
+        </div>
+
+        <ActionMenu
+          anchor={projectMenuAnchor}
+          onClose={() => setProjectMenuAnchor(null)}
+          items={projectMenuItems}
+          title="Project actions"
+        />
+        <ActionMenu
+          anchor={uploadMenuAnchor}
+          onClose={() => setUploadMenuAnchor(null)}
+          items={mediaCategory === "videos" ? uploadItems.filter((i) => i.id === "videos" || i.id === "youtube") : uploadItems}
+          title="Upload media"
+        />
+        <ChangeCoverDialog
+          open={showCoverDialog}
+          onClose={() => setShowCoverDialog(false)}
+          candidates={coverCandidates}
+          currentId={coverImageId}
+          onPick={(id) => setHeroMedia(id)}
+        />
+        <Modal open={showClientsModal} onClose={() => setShowClientsModal(false)} title="Project clients" className="sm:max-w-2xl">
+          <div className="pb-4 [&>div]:border-0 [&>div]:shadow-none">
+            <ProjectClientsCard
+              primaryClient={(initialProject.clients as Client | null | undefined) ?? null}
+              primaryClientId={initialProject.client_id}
+              projectClients={projectClients}
+              allClients={allClients}
+              addClientId={addClientId}
+              onAddClientIdChange={setAddClientId}
+              onAddClient={addProjectClient}
+              onSetPrimary={setPrimaryClient}
+              onRemove={removeProjectClient}
+              onCreateClient={() => setShowCreateClient(true)}
+              projectId={initialProject.id}
+            />
+          </div>
+        </Modal>
+        <Modal open={showActivityModal} onClose={() => setShowActivityModal(false)} title="Project activity" className="sm:max-w-2xl">
+          <div className="pb-4 [&>div]:border-0 [&>div]:shadow-none">
+            <ProjectActivityTimeline
+              activities={activities}
+              onRevisionClick={(revisionId) => {
+                const rev = revisions.find((r) => r.id === revisionId);
+                if (rev) {
+                  setShowActivityModal(false);
+                  setSelectedRevision(rev);
+                }
+              }}
+            />
+          </div>
+        </Modal>
+        {sharedDialogs}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 pb-6 md:pb-24">
+      {/* Sticky project header */}
+      <div className="app-sticky-below-header sticky z-40 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-white/95 surface-dark:bg-card/95 backdrop-blur-md border-b border-border shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold text-heading truncate">{displayName}</h1>
+            <p className="text-sm text-muted truncate">{form.property_address}</p>
+            {initialProject.properties && (
+              <p className="text-xs text-accent truncate flex items-center gap-1">
+                <MapPin className="h-3 w-3 shrink-0" />
+                Property: {(initialProject.properties as { nickname?: string; address: string }).nickname || (initialProject.properties as { address: string }).address}
+              </p>
+            )}
+            <p className="text-xs text-muted">{form.service_type || "Service TBD"}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <StatusBadge status={form.status} />
+            <Button
+              variant="accent"
+              size="sm"
+              className="min-h-10"
+              onClick={() => setShowShareModal(true)}
+            >
+              <Share2 className="h-4 w-4" /> Share
+            </Button>
+            <Button variant="accent" size="sm" onClick={saveProject} disabled={saving} className="hidden md:inline-flex">
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            <Link
+              href={`/admin/projects/${initialProject.id}/marketing`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Sparkles className="h-4 w-4" /> Marketing Kit
+            </Link>
+            <a
+              href={portalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Eye className="h-4 w-4" /> Client Page
+            </a>
+            {initialProject.deleted_at ? (
+              <Button variant="outline" size="sm" disabled={restoringProject} onClick={() => restoreProject()} title="This project is hidden — show it again in your lists">
+                <Eye className="h-4 w-4" /> {restoringProject ? "Unhiding…" : "Unhide"}
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(true)} title="Hide from your lists and dashboard">
+                <EyeOff className="h-4 w-4" /> Hide
+              </Button>
+            )}
+            <Button variant="outline" size="sm" className="text-red-600" onClick={() => setShowPermanentDelete(true)}>
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={copyPortalLink}>
+          {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Link2 className="h-4 w-4" />}
+          Copy Portal Link
+        </Button>
+      </div>
+
+      <NextStepBanner
+        step={
+          !canViewMoney &&
+          (adminStep.actionHref === "#quote" ||
+            adminStep.actionHref === "#payments" ||
+            /quote|payment|invoice/i.test(adminStep.title + adminStep.description))
+            ? {
+                ...adminStep,
+                title: "Continue this project",
+                description: "Review deliverables and scheduling below.",
+                actionHref: undefined,
+                actionLabel: undefined,
+              }
+            : adminStep
+        }
+      />
+
+      {/* Project details */}
+      <Card>
+        <CardHeader><CardTitle>Project Details</CardTitle></CardHeader>
+        <CardContent className="max-w-4xl space-y-4">
+          {detailFields}
+        </CardContent>
+      </Card>
+
+      <ProjectStaffCard projectId={initialProject.id} />
+
+      <ProjectClientsCard
+        primaryClient={(initialProject.clients as Client | null | undefined) ?? null}
+        primaryClientId={initialProject.client_id}
+        projectClients={projectClients}
+        allClients={allClients}
+        addClientId={addClientId}
+        onAddClientIdChange={setAddClientId}
+        onAddClient={addProjectClient}
+        onSetPrimary={setPrimaryClient}
+        onRemove={removeProjectClient}
+        onCreateClient={() => setShowCreateClient(true)}
+        projectId={initialProject.id}
+      />
+
+      <Suspense fallback={null}>
+        <ShootScheduling
+          projectId={initialProject.id}
+          proposals={shootProposals}
+          isAdmin
+          onUpdate={() => router.refresh()}
+        />
+      </Suspense>
+
+      {canViewMoney && (
+        <QuoteSection
+          projectId={initialProject.id}
+          quotes={quotes}
+          isAdmin
+          clientId={initialProject.client_id ?? undefined}
+          clientName={
+            initialProject.clients?.full_name || initialProject.clients?.name || "Client"
+          }
+          projectName={initialProject.project_name}
+          propertyAddress={initialProject.property_address}
+          serviceType={initialProject.service_type}
+          titleAccessory={
+            <ClientSectionVisibilityToggle
+              sectionKey="estimates"
+              visible={mediaSections.estimates}
+              saving={sectionSaving === "estimates"}
+              onChange={(v) => void setClientSectionVisible("estimates", v)}
+            />
+          }
+          payments={paymentList}
+          depositMode={depositMode}
+          depositPercent={depositPercent}
+          depositAmountCents={depositAmountCents}
+          travel={travel}
+          onPaymentCreated={(payment) => setPaymentList((prev) => [payment, ...prev])}
+          onStatusChange={(status) =>
+            setForm((f) => ({ ...f, status: status as Project["status"] }))
+          }
+        />
+      )}
+
+      {normalizeStatus(form.status) === "shoot_complete_editing" && (
+        <div id="deliverables-admin" className="flex justify-end">
+          <Button variant="accent" onClick={sendForReview} disabled={sendingForReview}>
+            {sendingForReview ? "Sending..." : "Send Deliverables for Review"}
+          </Button>
+        </div>
+      )}
+
+      {/* Photos */}
+      <Card id="photos" className="scroll-mt-20">
+        <CardHeader className="flex flex-row flex-wrap items-center gap-3">
+          <CardTitle className="flex items-center gap-2"><ImageIcon className="h-5 w-5" /> Photos</CardTitle>
+          <ClientSectionVisibilityToggle
+            sectionKey="photos"
+            visible={mediaSections.photos}
+            saving={sectionSaving === "photos"}
+            onChange={(v) => void setClientSectionVisible("photos", v)}
+          />
+        </CardHeader>
+        <CardContent>
+          {photoGrid}
+          {photoShare.dialog}
+        </CardContent>
+      </Card>
+
+      {/* Videos */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <CardTitle className="flex items-center gap-2">Videos</CardTitle>
+            <ClientSectionVisibilityToggle
+              sectionKey="videos"
+              visible={mediaSections.videos}
+              saving={sectionSaving === "videos"}
+              onChange={(v) => void setClientSectionVisible("videos", v)}
+            />
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" size="sm" onClick={() => setShowYoutubeForm(!showYoutubeForm)}>
+              <Video className="h-4 w-4" /> YouTube Link
+            </Button>
+            <label className="cursor-pointer">
+              <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white surface-dark:bg-card px-3 text-xs font-medium hover:bg-slate-50 surface-dark:hover:bg-subtle">
+                <Upload className="h-4 w-4" /> Upload Video
+              </span>
+              <input type="file" multiple accept={ALLOWED_VIDEO_MIME_TYPES.join(",")} className="hidden" onChange={(e) => handleUpload(e, "video")} />
+            </label>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-xs text-muted">Upload up to {formatFileSize(FILE_SIZE_LIMITS.video)} or paste a YouTube link</p>
+          {showYoutubeForm && (
+            youtubeForm
+          )}
+          {videos.length === 0 && !showYoutubeForm ? (
+            <p className="text-sm text-muted py-4 text-center">No videos yet</p>
+          ) : null}
+          {videoGrid}
+        </CardContent>
+      </Card>
+
+      {/* 360 Tours */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" /> 360 Tours</CardTitle>
+            <ClientSectionVisibilityToggle
+              sectionKey="tours"
+              visible={mediaSections.tours}
+              saving={sectionSaving === "tours"}
+              onChange={(v) => void setClientSectionVisible("tours", v)}
+            />
+          </div>
+          <Button variant="outline" size="sm" className="shrink-0" onClick={() => setShowTourForm(!showTourForm)}>Add Tour</Button>
+        </CardHeader>
+        <CardContent>
+          {showTourForm && (
+            tourCreateForm
+          )}
+          {tours.sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)).map((t, i) => (
+            <div key={t.id} className="mb-2">
+              {editingTour === t.id ? (
+                renderTourEdit(t)
+              ) : (
+                <AssetRow name={t.tour_name} badge={t.client_visible === false ? "Hidden" : undefined}
+                  onUp={() => moveItem("tour", t.id, "up", tours)} onDown={() => moveItem("tour", t.id, "down", tours)}
+                  canUp={i > 0} canDown={i < tours.length - 1}
+                  extra={
+                    <>
+                      <Button variant="ghost" size="sm" title={t.client_visible !== false ? "Hide from client" : "Show to client"} onClick={() => toggleTourVisibility(t.id, t.client_visible === false)}>
+                        {t.client_visible !== false ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => {
+                        setEditingTour(t.id);
+                        setEditTourForm({ tour_name: t.tour_name, kuula_url: t.kuula_url, notes: t.notes || "" });
+                      }}><Pencil className="h-4 w-4" /></Button>
+                      <a href={t.kuula_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4 text-accent" /></a>
+                    </>
+                  }
+                  onDelete={() => setTourPendingDelete(t)}
+                />
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* 3D Models */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <CardTitle className="flex items-center gap-2"><Box className="h-5 w-5" /> 3D Models</CardTitle>
+            <ClientSectionVisibilityToggle
+              sectionKey="models"
+              visible={mediaSections.models}
+              saving={sectionSaving === "models"}
+              onChange={(v) => void setClientSectionVisible("models", v)}
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              setShowModelForm(!showModelForm);
+              if (showModelForm) setModelFormEmbedUrl("");
+            }}
+          >
+            Add Model
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {showModelForm && (
+            modelCreateForm
+          )}
+          {models.sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)).map((m, i) => (
+            <div key={m.id} className="mb-2">
+              {editingModel === m.id ? (
+                renderModelEdit(m)
+              ) : (
+                <AssetRow
+                  name={m.title}
+                  badge={m.client_visible === false ? "Hidden" : undefined}
+                  onUp={() => moveItem("model", m.id, "up", models)}
+                  onDown={() => moveItem("model", m.id, "down", models)}
+                  canUp={i > 0}
+                  canDown={i < models.length - 1}
+                  extra={
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title={m.client_visible !== false ? "Hide from client" : "Show to client"}
+                        onClick={() => toggleModelVisibility(m.id, m.client_visible === false)}
+                      >
+                        {m.client_visible !== false ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditingModel(m.id);
+                          setEditModelForm({
+                            title: m.title,
+                            embed_url: m.embed_url,
+                            description: m.description || "",
+                          });
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <a href={m.embed_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4 text-accent" />
+                      </a>
+                    </>
+                  }
+                  onDelete={() => setModelPendingDelete(m)}
+                />
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Documents */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <CardTitle>Documents</CardTitle>
+            <ClientSectionVisibilityToggle
+              sectionKey="documents"
+              visible={mediaSections.documents}
+              saving={sectionSaving === "documents"}
+              onChange={(v) => void setClientSectionVisible("documents", v)}
+            />
+          </div>
+          <label className="cursor-pointer shrink-0">
+            <span className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-white surface-dark:bg-card px-3 text-xs font-medium hover:bg-slate-50 surface-dark:hover:bg-subtle">
+              <Upload className="h-4 w-4" /> Upload
+            </span>
+            <input type="file" multiple accept="application/pdf,application/zip" className="hidden" onChange={(e) => handleUpload(e, "document")} />
+          </label>
+        </CardHeader>
+        <CardContent>
+          {documents.map((d, i) => (
+            <AssetRow key={d.id} name={mediaDisplayName(d)}
+              onUp={() => moveItem("media", d.id, "up", documents)} onDown={() => moveItem("media", d.id, "down", documents)}
+              canUp={i > 0} canDown={i < documents.length - 1}
+              onDelete={() => deleteMedia(d.id)} />
+          ))}
+        </CardContent>
+      </Card>
+
+      {revisions.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>Revision Requests</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {revisions.map((rev) => (
+              <button
+                key={`rev-${rev.id}`}
+                type="button"
+                onClick={() => setSelectedRevision(rev)}
+                className="w-full rounded-lg border border-border p-4 text-left text-sm hover:bg-slate-50 surface-dark:hover:bg-subtle"
+              >
+                <p className="text-muted line-clamp-2">{rev.description}</p>
+                <p className="text-xs text-muted mt-2">{rev.status.replace("_", " ")} · {new Date(rev.created_at).toLocaleDateString()}</p>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {marketingKit ? (
+        <MarketingKitCard
+          projectId={initialProject.id}
+          summary={marketingKit}
+          canEdit={canEditMarketing}
+          canManageOffers={canManageMarketingOffers}
+        />
+      ) : null}
+
+      {/* Payments — hidden when staff lacks money.view */}
+      {canViewMoney && (
+        <Card id="payments">
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" /> Payments
+              </CardTitle>
+              <ClientSectionVisibilityToggle
+                sectionKey="payments"
+                visible={mediaSections.payments}
+                saving={sectionSaving === "payments"}
+                onChange={(v) => void setClientSectionVisible("payments", v)}
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPaymentForm(!showPaymentForm)}
+            >
+              Create Payment
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {showPaymentForm && (
+              paymentForm
+            )}
+            <BankPaymentsNotice className="mb-4" />
+            {paymentListView}
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="rounded-xl border border-border bg-slate-50/80 surface-dark:bg-subtle/80 px-4 py-3 text-sm text-muted">
+        Client messaging lives in the{" "}
+        <Link href="/admin/messages" className="font-medium text-accent hover:underline">
+          Messages
+        </Link>{" "}
+        inbox (organized by client). Open a client conversation there to reply.
+      </div>
+
+      <ProjectActivityTimeline
+        activities={activities}
+        onRevisionClick={(revisionId) => {
+          const rev = revisions.find((r) => r.id === revisionId);
+          if (rev) setSelectedRevision(rev);
+        }}
+      />
+
+      {sharedDialogs}
 
       <StickySaveBar
         onSave={saveProject}
@@ -2032,6 +3119,37 @@ function AssetRow({
           <Trash2 className="h-4 w-4" />
         </button>
       )}
+    </div>
+  );
+}
+
+function WorkspaceBreadcrumb({ label, onRoot }: { label: string; onRoot: () => void }) {
+  return (
+    <nav aria-label="Media location" className="mb-3 flex items-center gap-0.5 text-sm">
+      <button
+        type="button"
+        onClick={onRoot}
+        aria-label="All media"
+        className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-accent-subtle hover:text-heading"
+      >
+        <Home className="h-4 w-4" />
+      </button>
+      <ChevronRight className="h-3.5 w-3.5 text-muted" aria-hidden />
+      <button type="button" onClick={onRoot} className="rounded-md px-1.5 py-1 font-medium text-accent hover:bg-accent-subtle">
+        Media
+      </button>
+      <ChevronRight className="h-3.5 w-3.5 text-muted" aria-hidden />
+      <span className="px-1.5 font-semibold text-heading" aria-current="page">
+        {label}
+      </span>
+    </nav>
+  );
+}
+
+function EmptyMediaState({ icon: Icon, text }: { icon: React.ComponentType<{ className?: string }>; text: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted">
+      <Icon className="h-4 w-4" /> {text}
     </div>
   );
 }
