@@ -9,7 +9,7 @@
  */
 import { getAppSettings, type AppSettings } from "@/lib/app-settings";
 import { isClientVisibleMedia, isClientVisibleTour } from "@/lib/client-media";
-import { getKuulaEmbedUrl } from "@/lib/kuula";
+import { getTourEmbedUrl, normalizeTourUrl } from "@/lib/tour-url";
 import { mediaSectionsFromProject } from "@/lib/project-media-sections";
 import { resolveProjectAccess } from "@/lib/project-access";
 import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
@@ -251,8 +251,8 @@ async function loadTours(db: TenantServiceClient, project: ProjectRow): Promise<
     .order("display_order");
   return ((data ?? []) as { id: string; tour_name: string; kuula_url: string; client_visible?: boolean }[])
     .filter((t) => isClientVisibleTour(t) && t.kuula_url)
-    .map((t) => ({ id: t.id, title: t.tour_name || "Virtual tour", embedUrl: getKuulaEmbedUrl(t.kuula_url) }))
-    .filter((t) => /^https:\/\//.test(t.embedUrl));
+    .map((t) => ({ id: t.id, title: t.tour_name || "Virtual tour", url: normalizeTourUrl(t.kuula_url) ?? "", embedUrl: getTourEmbedUrl(t.kuula_url) }))
+    .filter((t) => Boolean(t.url));
 }
 
 // ---------------------------------------------------------------------------

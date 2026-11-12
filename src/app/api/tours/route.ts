@@ -9,6 +9,7 @@ import {
 } from "@/lib/client-notification-window";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { canAccessProject } from "@/lib/project-access";
+import { normalizeTourUrl, TOUR_URL_ERROR } from "@/lib/tour-url";
 
 function storagePathFromPublicUrl(url: string): { bucket: string; path: string } | null {
   try {
@@ -35,6 +36,11 @@ export async function POST(request: Request) {
   if (!body.project_id || !body.tour_name || !body.kuula_url) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
+  // Any provider's https link; stored in the legacy `kuula_url` column.
+  const tourUrl = normalizeTourUrl(body.kuula_url);
+  if (!tourUrl) {
+    return NextResponse.json({ error: TOUR_URL_ERROR }, { status: 400 });
+  }
 
   if (!(await canAccessProject(auth.profile, body.project_id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -55,7 +61,7 @@ export async function POST(request: Request) {
     .insert({
       project_id: body.project_id,
       tour_name: body.tour_name,
-      kuula_url: body.kuula_url,
+      kuula_url: tourUrl,
       embed_code: body.embed_code || null,
       thumbnail_url: body.thumbnail_url || null,
       notes: body.notes || null,
@@ -101,6 +107,11 @@ export async function PATCH(request: Request) {
 
   if (!id) {
     return NextResponse.json({ error: "Tour id required" }, { status: 400 });
+  }
+  if ("kuula_url" in updates) {
+    const tourUrl = normalizeTourUrl(updates.kuula_url);
+    if (!tourUrl) return NextResponse.json({ error: TOUR_URL_ERROR }, { status: 400 });
+    updates.kuula_url = tourUrl;
   }
 
   const db = await createTenantServiceClient(tenant.businessId);

@@ -306,8 +306,12 @@ export function SiteProject({ view, project, preview = false, device = "desktop"
                 <div key={t.id} className={cn("site-reveal aspect-video overflow-hidden bg-black", theme.imgRadius)}>
                   {nav.preview ? (
                     <span className="flex h-full w-full items-center justify-center text-sm text-white/70">360° tour loads on the live site</span>
-                  ) : (
+                  ) : t.embedUrl ? (
                     <iframe src={t.embedUrl} title={t.title} className="h-full w-full" allow="fullscreen; xr-spatial-tracking; gyroscope; accelerometer" loading="lazy" />
+                  ) : (
+                    <a href={t.url} target="_blank" rel="noopener noreferrer" className="flex h-full w-full items-center justify-center">
+                      <span className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-lg">Open 360 Tour</span>
+                    </a>
                   )}
                 </div>
               ))}

@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { normalizeTourUrl, TOUR_URL_ERROR } from "@/lib/tour-url";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StickySaveBar } from "@/components/ui/sticky-save-bar";
@@ -1073,17 +1074,25 @@ export function AdminProjectDetail({
   }
 
   async function saveTourEdit(id: string) {
+    const tourUrl = normalizeTourUrl(editTourForm.kuula_url);
+    if (!tourUrl) {
+      toast.error(TOUR_URL_ERROR);
+      return;
+    }
     const res = await fetch("/api/tours", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ id, ...editTourForm }),
+      body: JSON.stringify({ id, ...editTourForm, kuula_url: tourUrl }),
     });
     if (res.ok) {
       const updated = await res.json();
       setTours((prev) => prev.map((t) => (t.id === id ? updated : t)));
       setEditingTour(null);
       toast.success("Tour updated");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error || "Failed to update tour");
     }
   }
 
@@ -1161,6 +1170,12 @@ export function AdminProjectDetail({
   async function handleCreateTour(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    // Any provider's link; the API stores it in the legacy `kuula_url` column.
+    const tourUrl = normalizeTourUrl(fd.get("tour_url"));
+    if (!tourUrl) {
+      toast.error(TOUR_URL_ERROR);
+      return;
+    }
     const res = await fetch("/api/tours", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1168,7 +1183,7 @@ export function AdminProjectDetail({
       body: JSON.stringify({
         project_id: initialProject.id,
         tour_name: fd.get("tour_name"),
-        kuula_url: fd.get("kuula_url"),
+        kuula_url: tourUrl,
         embed_code: fd.get("embed_code") || null,
         thumbnail_url: fd.get("thumbnail_url") || null,
         notes: fd.get("notes") || null,
@@ -1180,7 +1195,10 @@ export function AdminProjectDetail({
       setShowTourForm(false);
       toast.success("Tour added");
       router.refresh();
-    } else toast.error("Failed to add tour");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error || "Failed to add tour");
+    }
   }
 
   async function confirmDeleteModel() {
@@ -1518,7 +1536,20 @@ export function AdminProjectDetail({
   const tourCreateForm = (
             <form onSubmit={handleCreateTour} className="mb-4 max-w-2xl space-y-3 rounded-lg border border-border p-4">
               <Input name="tour_name" required placeholder="Tour name" />
-              <Input name="kuula_url" required placeholder="Kuula URL" />
+              <div className="space-y-1">
+                <Input
+                  name="tour_url"
+                  type="text"
+                  inputMode="url"
+                  required
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  aria-label="360 Tour URL"
+                  placeholder="360 Tour URL — https://example.com/your-360-tour"
+                />
+                <p className="text-xs text-muted">Paste a link to your 360 tour from any supported hosting platform.</p>
+              </div>
               <Input name="thumbnail_url" placeholder="Thumbnail URL (optional)" />
               <Textarea name="embed_code" placeholder="Embed code (optional)" rows={2} />
               <Textarea name="notes" placeholder="Notes for client (optional)" rows={2} />
@@ -1529,7 +1560,16 @@ export function AdminProjectDetail({
   const renderTourEdit = (t: Tour) => (
                 <div className="space-y-2 rounded-lg border border-border p-3">
                   <Input value={editTourForm.tour_name} onChange={(e) => setEditTourForm({ ...editTourForm, tour_name: e.target.value })} />
-                  <Input value={editTourForm.kuula_url} onChange={(e) => setEditTourForm({ ...editTourForm, kuula_url: e.target.value })} />
+                  <Input
+                    value={editTourForm.kuula_url}
+                    onChange={(e) => setEditTourForm({ ...editTourForm, kuula_url: e.target.value })}
+                    inputMode="url"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    aria-label="360 Tour URL"
+                    placeholder="360 Tour URL — https://example.com/your-360-tour"
+                  />
                   <Textarea value={editTourForm.notes} onChange={(e) => setEditTourForm({ ...editTourForm, notes: e.target.value })} rows={2} />
                   <div className="flex gap-2">
                     <Button size="sm" variant="accent" onClick={() => saveTourEdit(t.id)}>Save</Button>

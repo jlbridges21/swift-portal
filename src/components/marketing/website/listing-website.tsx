@@ -427,7 +427,13 @@ function Tours({ view, skin }: { view: ListingView; skin: Skin }) {
         <div className="mt-8 space-y-6">
           {view.tours.map((t) => (
             <div key={t.id} className={`overflow-hidden ${skin.imgRadius} bg-black aspect-video`}>
-              <iframe src={t.embedUrl} title={t.title} className="h-full w-full" allow="fullscreen; xr-spatial-tracking; gyroscope; accelerometer" loading="lazy" />
+              {t.embedUrl ? (
+                <iframe src={t.embedUrl} title={t.title} className="h-full w-full" allow="fullscreen; xr-spatial-tracking; gyroscope; accelerometer" loading="lazy" />
+              ) : (
+                <a href={t.url} target="_blank" rel="noopener noreferrer" className="flex h-full w-full items-center justify-center">
+                  <span className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-lg">Open 360 Tour</span>
+                </a>
+              )}
             </div>
           ))}
         </div>

@@ -282,6 +282,7 @@ export interface Tour {
   client_id?: string | null;
   tour_name: string;
   thumbnail_url: string | null;
+  /** Tour link from any provider (Kuula, Matterport, CloudPano, …); legacy column name. */
   kuula_url: string;
   embed_code: string | null;
   display_order: number;

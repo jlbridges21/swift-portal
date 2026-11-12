@@ -21,6 +21,7 @@ import { formatDate } from "@/lib/utils";
 import { formatFileSize } from "@/lib/brand";
 import { DAM_SUGGESTED_TAGS } from "@/lib/constants";
 import type { LibraryAsset, LibraryAssetKind } from "@/lib/media-library";
+import { getTourEmbedUrl } from "@/lib/tour-url";
 import {
   Search, Star, ImageIcon, Video, FileText, Globe, Download, ExternalLink, Box,
   X, Filter, ChevronDown, Trash2, Tag, Pencil, Loader2, CheckSquare, Square, Upload, Share2,
@@ -1182,8 +1183,17 @@ function AssetDrawer({
                 allow="fullscreen; xr-spatial-tracking; accelerometer; gyroscope"
                 allowFullScreen
               />
+            ) : asset.kind === "tour" && asset.kuula_url && getTourEmbedUrl(asset.kuula_url) ? (
+              <iframe src={getTourEmbedUrl(asset.kuula_url)!} className="h-full w-full" title={asset.title} allowFullScreen />
             ) : asset.kind === "tour" && asset.kuula_url ? (
-              <iframe src={asset.kuula_url} className="h-full w-full" title={asset.title} />
+              <a
+                href={asset.kuula_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-full w-full items-center justify-center"
+              >
+                <span className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-lg">Open 360 Tour</span>
+              </a>
             ) : asset.media_source === "youtube" && asset.embed_url ? (
               <iframe src={asset.embed_url} className="h-full w-full" title={asset.title} allowFullScreen />
             ) : isVideoAsset(asset) ? (

@@ -253,7 +253,8 @@ export type PhotoCategory =
   | "view"
   | "floorplan";
 
-export type TourItem = { id: string; title: string; embedUrl: string };
+/** `url` opens the tour; `embedUrl` is set only for hosts known to allow iframes. */
+export type TourItem = { id: string; title: string; url: string; embedUrl: string | null };
 
 export const SOCIAL_ASSETS: {
   key: SocialAssetKey;

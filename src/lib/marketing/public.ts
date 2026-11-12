@@ -12,7 +12,7 @@
 import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getAppSettings } from "@/lib/app-settings";
 import { isClientVisibleTour } from "@/lib/client-media";
-import { getKuulaEmbedUrl } from "@/lib/kuula";
+import { getTourEmbedUrl, normalizeTourUrl } from "@/lib/tour-url";
 import { isUuid, type AssetRef, type MarketingContent, type MediaIndexItem, type TourItem } from "@/lib/marketing/model";
 import {
   businessLogoFromSettings,
@@ -84,8 +84,8 @@ async function resolve(db: TenantServiceClient, kit: KitPublicRow | null): Promi
     const { data } = await db.from("tours").select("id, tour_name, kuula_url, client_visible").eq("project_id", project.id).order("display_order");
     tours = ((data ?? []) as { id: string; tour_name: string; kuula_url: string; client_visible?: boolean }[])
       .filter((t) => isClientVisibleTour(t) && t.kuula_url)
-      .map((t) => ({ id: t.id, title: t.tour_name || "Virtual tour", embedUrl: getKuulaEmbedUrl(t.kuula_url) }))
-      .filter((t) => /^https:\/\//.test(t.embedUrl));
+      .map((t) => ({ id: t.id, title: t.tour_name || "Virtual tour", url: normalizeTourUrl(t.kuula_url) ?? "", embedUrl: getTourEmbedUrl(t.kuula_url) }))
+      .filter((t) => Boolean(t.url));
   }
   const settings = await getAppSettings(db.businessId);
   return {

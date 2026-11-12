@@ -14,7 +14,7 @@
 import { getAppSettings, saveAppSettings } from "@/lib/app-settings";
 import { normalizeStatus } from "@/lib/constants";
 import { isClientVisibleTour } from "@/lib/client-media";
-import { getKuulaEmbedUrl } from "@/lib/kuula";
+import { getTourEmbedUrl, normalizeTourUrl } from "@/lib/tour-url";
 import { getYouTubeEmbedUrl, getYouTubeThumbnail } from "@/lib/youtube";
 import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supabase/tenant-service";
 import { loadEligibleMedia, loadProjectRow, type EligibleMediaRow } from "@/lib/marketing/server";
@@ -55,8 +55,8 @@ async function loadTours(db: TenantServiceClient, project: ProjectRow): Promise<
     .order("display_order");
   return ((data ?? []) as { id: string; tour_name: string; kuula_url: string; client_visible?: boolean }[])
     .filter((t) => isClientVisibleTour(t) && t.kuula_url)
-    .map((t) => ({ id: t.id, title: t.tour_name || "Virtual tour", embedUrl: getKuulaEmbedUrl(t.kuula_url) }))
-    .filter((t) => /^https:\/\//.test(t.embedUrl));
+    .map((t) => ({ id: t.id, title: t.tour_name || "Virtual tour", url: normalizeTourUrl(t.kuula_url) ?? "", embedUrl: getTourEmbedUrl(t.kuula_url) }))
+    .filter((t) => Boolean(t.url));
 }
 
 function toImage(mode: PortfolioUrlMode, projectId: string, row: EligibleMediaRow, title: string): SiteImage {
