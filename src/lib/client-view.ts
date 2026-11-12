@@ -4,6 +4,7 @@
  *
  * No server-only imports here: this file must stay safe for "use client".
  */
+import { projectMatchesServices } from "@/lib/project-service-names";
 import { PROJECT_STATUSES, type ProjectStatus } from "@/lib/constants";
 
 // ── NEW badge ────────────────────────────────────────────────────────────────
@@ -113,7 +114,8 @@ export function filterProjectsByService<T extends Pick<ClientViewProject, "servi
   services: string[]
 ): T[] {
   if (services.length === 0) return projects;
-  return projects.filter((p) => services.includes(p.service_type));
+  // ANY of the project's services ("A + B" for several) matches.
+  return projects.filter((p) => projectMatchesServices(p, services));
 }
 
 // ── Sorting + dates ─────────────────────────────────────────────────────────

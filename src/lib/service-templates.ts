@@ -1,6 +1,12 @@
 import type { QuoteLineItem } from "@/lib/types";
 import { formatIncludesBlock } from "@/lib/quote-display";
 import {
+  buildSectionedDescription,
+  CUSTOM_QUOTE_LABEL,
+  TOTAL_PENDING_NOTE,
+} from "@/lib/estimate-sections";
+import { formatServiceList, MULTI_SERVICE_LABEL, MULTI_SERVICE_SEPARATOR } from "@/lib/project-service-names";
+import {
   DEFAULT_PRELIMINARY_DISCLAIMER,
   preliminaryEstimateDisclaimer,
 } from "@/lib/preliminary-disclaimer";
@@ -411,6 +417,104 @@ export function buildPreliminaryEstimatePayloadFromTemplate(
   };
 }
 
+/** Integer-cent price a template quotes up front, or null for hidden / unpriced services. */
+export function templateQuotedPriceCents(template: ServiceTemplate): number | null {
+  if (template.hidePricing) return null;
+  const fromItems = template.lineItems.reduce((sum, item) => sum + Math.round(Number(item.amount_cents) || 0), 0);
+  const cents = fromItems > 0 ? fromItems : Math.round(Number(template.startingAtCents) || 0);
+  return cents > 0 ? cents : null;
+}
+
+export type ConsolidatedServiceLine = {
+  serviceId: string | null;
+  name: string;
+  /** Null = Custom Quote (hidden pricing, $0 or no price). Never the hidden price. */
+  priceCents: number | null;
+  label: string;
+};
+
+function formatWholeDollars(cents: number): string {
+  const dollars = cents / 100;
+  return Number.isInteger(dollars)
+    ? `$${dollars.toLocaleString("en-US")}`
+    : `$${dollars.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * ONE preliminary estimate for several services: one line item per priced
+ * service (price snapshotted now, integer cents) and deliverables grouped under
+ * each service heading with that service's own label, description and notes.
+ * Hidden or unpriced services get a "Custom Quote" section and no line item,
+ * and the notes say the total is partial. The hidden price is never read.
+ */
+export function buildConsolidatedEstimatePayload(
+  templates: ServiceTemplate[],
+  brand?: { portalName: string; businessName: string }
+) {
+  const filled = brand ?? { portalName: "the portal", businessName: "our team" };
+  const branded = templates.map((template) => applyServiceTemplateBrand(template, filled));
+  const services: ConsolidatedServiceLine[] = branded.map((template) => {
+    const priceCents = templateQuotedPriceCents(template);
+    const startingLabel = template.startingLabel.trim();
+    const label =
+      priceCents == null
+        ? CUSTOM_QUOTE_LABEL
+        : startingLabel && /\$/.test(startingLabel)
+          ? startingLabel
+          : `Starting at ${formatWholeDollars(priceCents)}`;
+    return { serviceId: template.dbId ?? null, name: template.title, priceCents, label };
+  });
+
+  const priced = services.filter((s) => s.priceCents != null);
+  const custom = services.filter((s) => s.priceCents == null);
+  const line_items: QuoteLineItem[] = priced.length
+    ? priced.map((s) => ({ description: s.name, amount_cents: s.priceCents as number }))
+    : [{ description: "Custom Proposal Required", amount_cents: 0 }];
+  const total_cents = line_items.reduce((sum, item) => sum + item.amount_cents, 0);
+
+  const description = buildSectionedDescription(
+    branded.map((template, index) => ({
+      heading: template.title,
+      label: services[index].label,
+      description: template.description ?? null,
+      includes: template.includes,
+      notes: template.notes,
+    }))
+  );
+
+  const noteParts = [
+    `Combined preliminary estimate for ${formatServiceList(services.map((s) => s.name))}. Each price is the starting price for that service.`,
+  ];
+  if (custom.length && priced.length) {
+    noteParts.push(`${CUSTOM_QUOTE_LABEL}: ${formatServiceList(custom.map((s) => s.name))}. ${TOTAL_PENDING_NOTE}`);
+  } else if (custom.length) {
+    noteParts.push(`${formatServiceList(custom.map((s) => s.name))} will be priced in a custom proposal.`);
+  }
+
+  return {
+    title: `Preliminary Estimate — ${MULTI_SERVICE_LABEL}`,
+    description,
+    line_items,
+    total_cents,
+    notes: noteParts.join("\n\n"),
+    quote_kind: "preliminary" as const,
+    hidePricing: priced.length === 0,
+    services,
+  };
+}
+
+/** Single-service projects keep the existing payload; two or more get one combined estimate. */
+export function buildPreliminaryEstimatePayloadForTemplates(
+  templates: ServiceTemplate[],
+  brand?: { portalName: string; businessName: string }
+) {
+  if (templates.length <= 1) {
+    const single = buildPreliminaryEstimatePayloadFromTemplate(templates[0], brand);
+    return { ...single, services: null as ConsolidatedServiceLine[] | null };
+  }
+  return buildConsolidatedEstimatePayload(templates, brand);
+}
+
 const LEGACY_PAYMENT_DESCRIPTIONS: Record<string, string> = {
   "Aerial Photography": "Professional aerial photography package for the selected property.",
   "Aerial Videography": "Professional aerial videography package for the selected property.",
@@ -435,6 +539,12 @@ export function getServicePaymentDescription(
   template?: ServiceTemplate | null
 ): string {
   const trimmed = serviceType.trim();
+  if (!template && !LEGACY_PAYMENT_DESCRIPTIONS[trimmed]) {
+    const names = trimmed.split(MULTI_SERVICE_SEPARATOR).map((n) => n.trim()).filter(Boolean);
+    if (names.length > 1) {
+      return `Professional media services for the selected property: ${formatServiceList(names)}.`.slice(0, 250);
+    }
+  }
   const fromRow = template?.description?.trim().split("\n")[0]?.trim();
   if (fromRow && !fromRow.includes("{{")) {
     return fromRow.slice(0, 250);

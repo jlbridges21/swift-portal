@@ -1,3 +1,4 @@
+import { projectServiceNames } from "@/lib/project-service-names";
 import { createClient } from "@/lib/supabase/server";
 import { listBusinessServices } from "@/lib/business-services";
 import {
@@ -85,6 +86,8 @@ function normalizeName(value: string | null | undefined): string {
 type ServiceResolver = {
   defs: AnalyticsServiceDef[];
   keyFor: (p: { service_id: string | null; service_type: string | null }) => string | null;
+  /** Every service a project carries ("A + B" counts under A and under B). */
+  keysFor: (p: { service_id: string | null; service_type: string | null }) => string[];
   labelFor: (key: string) => string;
 };
 
@@ -101,8 +104,16 @@ async function loadServiceResolver(businessId: string): Promise<ServiceResolver>
     }
   }
   const labels = new Map(defs.map((d) => [d.key, d.label]));
-  return {
+  const resolver: ServiceResolver = {
     defs,
+    keysFor(p) {
+      const names = projectServiceNames(p);
+      if (names.length <= 1) {
+        const key = resolver.keyFor(p);
+        return key ? [key] : [];
+      }
+      return [...new Set(names.map((name) => resolver.keyFor({ service_id: null, service_type: name })).filter((k): k is string => Boolean(k)))];
+    },
     keyFor(p) {
       if (p.service_id && byId.has(p.service_id)) return p.service_id;
       const n = normalizeName(p.service_type);
@@ -118,6 +129,7 @@ async function loadServiceResolver(businessId: string): Promise<ServiceResolver>
     },
     labelFor: (key) => labels.get(key) ?? key,
   };
+  return resolver;
 }
 
 /** Raw, business-scoped rows for one range — the input to every analytics calculation. */
@@ -182,8 +194,7 @@ async function loadAnalyticsInput(
   ]);
 
   const projects: AnalyticsProjectRow[] = projectRows.map((p) => {
-    const key = services.keyFor(p);
-    return { id: p.id, business_id: p.business_id, created_at: p.created_at, service_keys: key ? [key] : [] };
+    return { id: p.id, business_id: p.business_id, created_at: p.created_at, service_keys: services.keysFor(p) };
   });
 
   const paymentMap = new Map<string, AnalyticsPaymentRow>();
@@ -305,7 +316,7 @@ export async function loadDashboardDrilldown(
     const p = details.get(a.projectId);
     if (!p) continue;
     const client = one(p.clients);
-    const keys = a.serviceKeys.length ? a.serviceKeys : [services.keyFor(p)].filter((k): k is string => Boolean(k));
+    const keys = a.serviceKeys.length ? a.serviceKeys : services.keysFor(p);
     rows.push({
       id: p.id,
       name: p.project_name,

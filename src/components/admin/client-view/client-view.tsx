@@ -1,5 +1,6 @@
 "use client";
 
+import { projectServiceNames } from "@/lib/project-service-names";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -143,7 +144,7 @@ export function ClientView({
   const isAll = effectiveId === ALL_CLIENTS;
 
   const clientProjects = filterProjectsByClient(projects, effectiveId, projectClientIds);
-  const serviceOptions = [...new Set(clientProjects.map((p) => p.service_type).filter(Boolean))].sort();
+  const serviceOptions = [...new Set(clientProjects.flatMap((p) => projectServiceNames(p)).filter(Boolean))].sort();
   const activeServices = services.filter((s) => serviceOptions.includes(s));
   const shown = sortClientViewProjects(filterProjectsByService(clientProjects, activeServices), sort);
   const draftCount = filterProjectsByService(clientProjects, draftServices).length;

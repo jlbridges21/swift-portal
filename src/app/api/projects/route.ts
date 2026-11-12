@@ -9,9 +9,11 @@ import { clientStatusNotification } from "@/lib/client-messages";
 import { notifyProjectClients } from "@/lib/notifications";
 import { defaultProjectTitle, formatAutoProjectName, resolveAddressFromBody } from "@/lib/address";
 import { linkProjectToProperty } from "@/lib/properties";
-import { createPreliminaryEstimate, upsertPreliminaryEstimate } from "@/lib/preliminary-estimates";
+import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { resolveServiceId } from "@/lib/business-services";
+import { resolveSelectedServices, writeProjectServiceLinks } from "@/lib/project-services";
+import { projectTitleForServices } from "@/lib/project-service-names";
 import { getAppSettings, type NotificationEventKey } from "@/lib/app-settings";
 import {
   isMissingFinancialSectionColumnError,
@@ -52,9 +54,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: addressError || "Missing required fields" }, { status: 400 });
     }
 
-    if (!body.client_id || !body.service_type) {
+    if (!body.client_id || (!body.service_type && body.service_ids === undefined && body.service_names === undefined)) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+    // One project for every selected service; validated against this business's catalog.
+    const resolvedServices = await resolveSelectedServices(businessId, body, { legacyField: "service_type" });
+    if (!resolvedServices.ok) {
+      return NextResponse.json({ error: resolvedServices.error }, { status: resolvedServices.status });
+    }
+    const selected = resolvedServices.services;
+    const serviceType = resolvedServices.serviceType;
+    const multiService = selected.length > 1;
 
     const { canAccessClient } = await import("@/lib/staff-access");
     if (!(await canAccessClient(businessId, profile, body.client_id))) {
@@ -74,12 +84,14 @@ export async function POST(request: Request) {
     const street =
       String(body.street_address ?? "").trim() || property_address.split(",")[0]?.trim() || property_address;
 
+    // One service keeps the existing auto-name; several read "Street — Multiple Services".
     const projectName =
       (typeof body.project_name === "string" && body.project_name.trim()) ||
-      formatAutoProjectName(clientName, street, body.service_type) ||
-      defaultProjectTitle(property_address, body.service_type);
+      (multiService
+        ? projectTitleForServices(street, selected.map((s) => s.name))
+        : formatAutoProjectName(clientName, street, serviceType) || defaultProjectTitle(property_address, serviceType));
 
-    const serviceId = await resolveServiceId(businessId, body.service_type);
+    const serviceId = resolvedServices.primaryServiceId;
     const appSettings = await getAppSettings(businessId);
     const sectionDefaults = projectColumnsFromMediaSections(
       normalizeProjectMediaSections(appSettings.mediaSectionDefaults)
@@ -90,7 +102,7 @@ export async function POST(request: Request) {
       client_id: body.client_id,
       project_name: projectName,
       property_address,
-      service_type: body.service_type,
+      service_type: serviceType,
       service_id: serviceId,
       status: body.status || "new_request",
       shoot_date: null,
@@ -116,6 +128,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    await writeProjectServiceLinks(await createTenantServiceClient(businessId), project.id, selected);
+
     await linkProjectToProperty(project.id, body.client_id, property_address, businessId);
     // Settings → New Project Setup → Default Documents: each project gets its own copies.
     await copyDefaultDocumentsToProject(businessId, project.id);
@@ -134,10 +148,11 @@ export async function POST(request: Request) {
       creatorRole: profile.role,
     });
 
-    await createPreliminaryEstimate(project.id, body.service_type, {
+    await createPreliminaryEstimate(project.id, serviceType, {
       userId: profile.id,
       skipIfExists: true,
       businessId,
+      templates: selected.map((s) => s.template),
     });
 
     const proposedShootAt = body.proposed_shoot_at || body.shoot_date;
@@ -216,9 +231,9 @@ export async function PATCH(request: Request) {
       Object.assign(updates, projectColumnsFromMediaSections(parsed));
     }
 
-    if (typeof updates.service_type === "string") {
-      updates.service_id = await resolveServiceId(businessId, updates.service_type);
-    }
+    // Service links are managed by PUT /api/projects/[id]/services; never mass-assigned here.
+    delete updates.service_id;
+    delete updates.request_key;
 
     const { canAccessProject } = await import("@/lib/project-access");
     if (!(await canAccessProject(profile, id))) {
@@ -229,10 +244,22 @@ export async function PATCH(request: Request) {
 
     const { data: existing } = await supabase
       .from("projects")
-      .select("status")
+      .select("status, service_type")
       .eq("id", id)
       .eq("business_id", businessId)
       .single();
+
+    // Legacy single "Service Type" edits. An unchanged value (the Classic form
+    // re-sends it on every save) must not re-resolve a multi-service project.
+    let legacyServiceChange = false;
+    if (typeof updates.service_type === "string") {
+      if (existing && updates.service_type.trim() === String(existing.service_type ?? "").trim()) {
+        delete updates.service_type;
+      } else {
+        updates.service_id = await resolveServiceId(businessId, updates.service_type);
+        legacyServiceChange = true;
+      }
+    }
 
     let { data, error } = await supabase
       .from("projects")
@@ -339,8 +366,11 @@ export async function PATCH(request: Request) {
       }
     }
 
-    if (updates.service_type && typeof updates.service_type === "string") {
-      await upsertPreliminaryEstimate(id, updates.service_type, { businessId });
+    // The estimate is independent of the project's services once created: no regeneration here.
+    if (legacyServiceChange && typeof updates.service_type === "string") {
+      await writeProjectServiceLinks(await createTenantServiceClient(businessId), id, [
+        { id: (updates.service_id as string | null) ?? null, name: updates.service_type },
+      ]);
     }
 
     return NextResponse.json(data);

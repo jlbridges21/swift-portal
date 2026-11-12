@@ -1,5 +1,6 @@
 "use client";
 
+import { parseEstimateDescription } from "@/lib/estimate-sections";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Copy, Download, Eye, Loader2, MoreHorizontal, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -54,6 +55,8 @@ export function proposalHistoryStatus(quote: ProjectQuote, now = Date.now()): { 
 }
 
 function proposalSummary(quote: ProjectQuote): string {
+  const parsed = parseEstimateDescription(quote.description);
+  if (parsed.sections.length) return parsed.sections.map((section) => section.heading).join(" · ");
   const intro = getQuoteIntroText(quote.description);
   if (intro) return intro.replace(/\s+/g, " ");
   const includes = parseQuoteIncludes(quote.description);

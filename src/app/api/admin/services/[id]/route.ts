@@ -109,7 +109,12 @@ export async function DELETE(
     .eq("service_id", id);
 
   const { data: byType } = await db.from("projects").select("id").in("service_type", names);
-  const used = (byId ?? 0) + (byType ?? []).length;
+  // Secondary services of multi-service projects (v127 links; missing table = none).
+  const { count: byLink, error: linkError } = await db
+    .from("project_services")
+    .select("id", { count: "exact", head: true })
+    .eq("service_id", id);
+  const used = (byId ?? 0) + (byType ?? []).length + (linkError ? 0 : (byLink ?? 0));
   if (used > 0) {
     return NextResponse.json(
       {

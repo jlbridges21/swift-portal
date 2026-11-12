@@ -17,6 +17,7 @@ import { getProjectPublicVideoIds } from "@/lib/video-public-shares";
 import { loadKitSummary } from "@/lib/marketing/server";
 import { getProjectHeroBannerUrl } from "@/lib/cover";
 import { listBusinessServices } from "@/lib/business-services";
+import { loadProjectServiceLinks } from "@/lib/project-services";
 import { listProjectClientFavorites } from "@/lib/client-favorites";
 
 interface PageProps {
@@ -175,10 +176,23 @@ export default async function AdminProjectPage({ params }: PageProps) {
   // New interface hero + Project Type picker. Both degrade quietly (no banner / free-text type).
   const [heroBannerUrl, serviceRows, clientFavorites] = await Promise.all([
     getProjectHeroBannerUrl(project, tenant.businessId).catch(() => null),
-    listBusinessServices(tenant.businessId, { activeOnly: true }).catch(() => []),
+    listBusinessServices(tenant.businessId).catch(() => []),
     listProjectClientFavorites(tenant.businessId, id).catch(() => ({ available: false, rows: [] })),
   ]);
-  const serviceOptions = serviceRows.map((s) => s.name).filter(Boolean);
+  const serviceOptions = serviceRows.filter((s) => s.is_active).map((s) => s.name).filter(Boolean);
+  // Multi-service picker: active services, plus inactive ones only while linked to this project.
+  const serviceLinks = (await loadProjectServiceLinks(db, [id])).get(id) ?? [];
+  const serviceIds = serviceLinks.length
+    ? serviceLinks.map((l) => l.service_id)
+    : project.service_id
+      ? [project.service_id as string]
+      : [];
+  const serviceCatalog = serviceRows
+    .filter((s) => s.is_active || serviceIds.includes(s.id))
+    .map((s) => {
+      const linkedName = serviceLinks.find((l) => l.service_id === s.id)?.service_name;
+      return { id: s.id, name: !s.is_active && linkedName ? linkedName : s.name, inactive: !s.is_active };
+    });
 
   return (
     <div className="min-h-screen bg-background">
@@ -224,6 +238,9 @@ export default async function AdminProjectPage({ params }: PageProps) {
           canManageMarketingOffers={canManageMarketingOffers}
           heroBannerUrl={heroBannerUrl}
           serviceOptions={serviceOptions}
+          /* A historical free-text service that matches no catalog entry keeps the legacy picker. */
+          serviceCatalog={serviceIds.length || !project.service_type ? serviceCatalog : []}
+          serviceIds={serviceIds}
           clientFavorites={clientFavorites}
           businessRequiresDeliveredForDownloads={appSettings.payments.requireDeliveredForDownloads}
         />

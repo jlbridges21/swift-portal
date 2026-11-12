@@ -19,6 +19,8 @@ import { loadProjectStorageBytes } from "@/lib/project-storage";
 import { getUiExperience } from "@/lib/ui-rollout-server";
 import { parseWorkspaceViewCookie } from "@/lib/projects-workspace";
 import { ProjectsWorkspace } from "@/components/admin/projects-workspace/projects-workspace";
+import { getAppSettings } from "@/lib/app-settings";
+import { resolveBusinessTimeZone } from "@/lib/google-calendar";
 
 interface PageProps {
   searchParams: Promise<{ view?: string; stage?: string; status?: string }>;
@@ -100,6 +102,11 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
   const canCreate = !isStaff || staffCan(profile, "projects.create");
 
   if (inNewShell) {
+    // Calendar view places shoots by the business's configured zone (same as the Shoot Calendar).
+    const businessTimeZone = resolveBusinessTimeZone(
+      (await getAppSettings(tenant.businessId)).workflow.businessDefaults.timezone
+    ).timeZone;
+    const owner = isOwnerAdmin(profile);
     return (
       <div className="min-h-screen bg-background">
         <main className="app-page app-page-wide mx-auto max-w-[100vw] px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
@@ -139,6 +146,16 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
             hiddenCount={hiddenCount}
             canCreateProject={canCreate}
             canSeeHidden={!isStaff}
+            businessTimeZone={businessTimeZone}
+            bulkPermissions={{
+              canEdit: staffCan(profile, "projects.edit"),
+              canHide: staffCan(profile, "projects.delete"),
+              canManageStaff: staffCan(profile, "projects.manage_staff"),
+              // Permanent delete and Restore need business-admin access on the server.
+              canDelete: owner && staffCan(profile, "projects.delete"),
+              canDeleteMedia: owner && staffCan(profile, "media.delete"),
+              canRestore: owner,
+            }}
           />
         </main>
       </div>

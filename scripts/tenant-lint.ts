@@ -67,6 +67,7 @@ const BUSINESS_OWNED_TABLES = new Set([
   "notifications",
   "payments",
   "project_clients",
+  "project_services",
   "project_message_reads",
   "project_messages",
   "project_quotes",

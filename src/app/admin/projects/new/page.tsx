@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ServiceSelect } from "@/components/forms/service-select";
+import { ServiceMultiSelect } from "@/components/forms/service-multi-select";
 import { CreateClientModal } from "@/components/admin/create-client-modal";
 import { PROJECT_STATUSES } from "@/lib/constants";
 import type { Client as FullClient } from "@/lib/types";
@@ -63,6 +63,7 @@ export default function NewProjectPage() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError("");
 
@@ -98,7 +99,8 @@ export default function NewProjectPage() {
           <CardHeader>
             <CardTitle>Create Project</CardTitle>
             <p className="text-sm text-muted">
-              Project name is generated automatically from the client, address, and service.
+              Project name is generated automatically from the client, address, and service. Pick several
+              services to create one project with one combined preliminary estimate.
             </p>
           </CardHeader>
           <CardContent>
@@ -148,8 +150,8 @@ export default function NewProjectPage() {
               </div>
               <div className="grid gap-5 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="service_type">Service Type *</Label>
-                  <ServiceSelect id="service_type" name="service_type" required placeholder="Select service" />
+                  <Label htmlFor="service_type">Services *</Label>
+                  <ServiceMultiSelect id="service_type" name="service_type" required placeholder="Select services" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>

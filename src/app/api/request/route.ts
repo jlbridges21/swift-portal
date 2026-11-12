@@ -12,6 +12,15 @@ import { buildPortalLeadPayload } from "@/lib/ghl/build-portal-lead-payload";
 import { syncNewProjectLeadToGhl } from "@/lib/ghl/sync-portal-lead";
 import { getAppSettings } from "@/lib/app-settings";
 import { resolveServiceId } from "@/lib/business-services";
+import { resolveSelectedServices, writeProjectServiceLinks, type SelectedService } from "@/lib/project-services";
+import { formatServiceList, projectTitleForServices } from "@/lib/project-service-names";
+import {
+  findProjectByRequestKey,
+  findRecentDuplicateRequest,
+  insertRequestProject,
+  parseRequestKey,
+  type ExistingRequestProject,
+} from "@/lib/request-dedupe";
 import { resolvePublicSignupBusinessId } from "@/lib/tenant";
 import {
   isMissingFinancialSectionColumnError,
@@ -58,13 +67,36 @@ export async function POST(request: Request) {
     const businessId = resolved.businessId;
     const appSettingsEarly = await getAppSettings(businessId);
     const instantPreliminary = appSettingsEarly.proposals.autoPreliminaryEstimate !== false;
-    const serviceRequested = instantPreliminary ? String(service_requested ?? "").trim() : "";
-    if (instantPreliminary && !serviceRequested) {
-      return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
+
+    // Services are validated against THIS business's catalog. Prices and totals
+    // never come from the browser; the estimate is built from business_services.
+    let selected: SelectedService[] = [];
+    let serviceRequested = "";
+    let primaryServiceId: string | null = null;
+    if (instantPreliminary) {
+      const hasSelection =
+        body.service_ids !== undefined || body.service_names !== undefined || String(service_requested ?? "").trim();
+      if (!hasSelection) {
+        return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
+      }
+      const resolvedServices = await resolveSelectedServices(businessId, body as Record<string, unknown>);
+      if (!resolvedServices.ok) {
+        return NextResponse.json({ error: resolvedServices.error }, { status: resolvedServices.status });
+      }
+      selected = resolvedServices.services;
+      serviceRequested = resolvedServices.serviceType;
+      primaryServiceId = resolvedServices.primaryServiceId;
     }
+    const serviceNames = selected.map((s) => s.name);
+    const serviceLabel = formatServiceList(serviceNames) || serviceRequested;
+    const requestKey = parseRequestKey(body.request_key);
 
     const raw = await createServiceClient();
     const db = await createTenantServiceClient(businessId);
+
+    // Same form submission again: answer with the project it already created.
+    const keyed = await findProjectByRequestKey(db, requestKey);
+    if (keyed) return duplicateResponse(db, businessId, keyed);
 
     // ── Scenario D: signed in as a client of THIS business ──
     const profile = await getProfile();
@@ -187,8 +219,20 @@ export async function POST(request: Request) {
     const { data: linkedClient } = await db.from("clients").select("user_id").eq("id", clientId).maybeSingle();
     const actorUserId = sessionClient ? profile!.id : (linkedClient?.user_id as string | null) ?? null;
 
-    const projectName = defaultProjectTitle(property_address, serviceRequested);
-    const serviceId = await resolveServiceId(businessId, serviceRequested);
+    // No request key (API callers, pre-v127 forms): catch an immediate repeat.
+    if (!requestKey) {
+      const recent = await findRecentDuplicateRequest(db, {
+        clientId,
+        propertyAddress: property_address,
+        serviceType: serviceRequested,
+      });
+      if (recent) return duplicateResponse(db, businessId, recent);
+    }
+
+    const projectName = selected.length
+      ? projectTitleForServices(property_address, serviceNames)
+      : defaultProjectTitle(property_address, serviceRequested);
+    const serviceId = selected.length ? primaryServiceId : await resolveServiceId(businessId, serviceRequested);
     const sectionDefaults = projectColumnsFromMediaSections(
       normalizeProjectMediaSections(appSettingsEarly.mediaSectionDefaults)
     );
@@ -205,23 +249,22 @@ export async function POST(request: Request) {
       ghl_sync_status: "pending",
       ...sectionDefaults,
     };
-    let { data: project, error: projectError } = await db
-      .from("projects")
-      .insert(projectInsert)
-      .select()
-      .single();
-    if (projectError && isMissingFinancialSectionColumnError(projectError)) {
-      // Pre-v113 database: create without the estimates/payments visibility columns.
-      ({ data: project, error: projectError } = await db
-        .from("projects")
-        .insert(withoutFinancialSectionColumns(projectInsert))
-        .select()
-        .single());
+    const inserted = await insertRequestProject(db, projectInsert, requestKey, async (row) => {
+      let result = await db.from("projects").insert(row).select().single();
+      if (result.error && isMissingFinancialSectionColumnError(result.error)) {
+        // Pre-v113 database: create without the estimates/payments visibility columns.
+        result = await db.from("projects").insert(withoutFinancialSectionColumns(row)).select().single();
+      }
+      return { data: result.data as Record<string, unknown> | null, error: result.error };
+    });
+    if (inserted.kind === "duplicate") return duplicateResponse(db, businessId, inserted.project);
+    if (inserted.kind === "error") {
+      return NextResponse.json({ error: inserted.message }, { status: 500 });
     }
+    const project = inserted.project as { id: string; project_name: string };
 
-    if (projectError) {
-      return NextResponse.json({ error: projectError.message }, { status: 500 });
-    }
+    // One link per selected service (v127). Separate from the estimate's line items.
+    if (selected.length) await writeProjectServiceLinks(db, project.id, selected);
 
     await linkProjectToProperty(project.id, clientId, property_address, businessId);
     // Settings → New Project Setup → Default Documents: each project gets its own copies.
@@ -252,7 +295,7 @@ export async function POST(request: Request) {
       {
         activity_type: "proposal_submitted",
         description: instantPreliminary
-          ? `Proposal submitted for ${serviceRequested}`
+          ? `Proposal submitted for ${serviceLabel}`
           : `Inquiry submitted for ${property_address}`,
         lead_id: lead?.id,
         project_id: project.id,
@@ -262,6 +305,7 @@ export async function POST(request: Request) {
         metadata: {
           email,
           service: activityServiceLabel,
+          ...(serviceNames.length > 1 ? { services: serviceNames } : {}),
           auto_created: true,
           inquiry: !instantPreliminary,
           request_scenario: scenario,
@@ -297,7 +341,7 @@ export async function POST(request: Request) {
       eventKey: "new_project_request",
       title: instantPreliminary ? "New Project Request" : "New Project Inquiry",
       body: instantPreliminary
-        ? `${person.fullName} submitted a request for ${serviceRequested} at ${property_address}. A preliminary estimate was generated automatically.`
+        ? `${person.fullName} submitted a request for ${serviceLabel} at ${property_address}. ${serviceNames.length > 1 ? "One combined preliminary estimate was" : "A preliminary estimate was"} generated automatically.`
         : `${person.fullName} sent an inquiry for ${property_address}. No preliminary estimate was created — follow up manually.`,
       link: `/admin/projects/${project.id}`,
       projectId: project.id,
@@ -312,7 +356,7 @@ export async function POST(request: Request) {
       eventKey: "new_project_request",
       title: instantPreliminary ? "We received your project request" : "We received your inquiry",
       body: instantPreliminary
-        ? `Thanks ${person.firstName || person.fullName} — we received your request for ${serviceRequested} at ${property_address}. You don't need to do anything else; we'll follow up shortly.`
+        ? `Thanks ${person.firstName || person.fullName} — we received your request for ${serviceLabel} at ${property_address}. You don't need to do anything else; we'll follow up shortly.`
         : `Thanks ${person.firstName || person.fullName} — we received your inquiry for ${property_address}. You don't need to do anything else; we'll follow up shortly.`,
       link: `/dashboard/projects/${project.id}`,
       projectId: project.id,
@@ -324,6 +368,7 @@ export async function POST(request: Request) {
         userId: actorUserId,
         skipIfExists: true,
         businessId,
+        templates: selected.map((s) => s.template),
       });
     }
 
@@ -377,6 +422,38 @@ export async function POST(request: Request) {
     console.error("Request submission error:", err);
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
+}
+
+/**
+ * A repeated submission: nothing is created or sent again. The thank-you link
+ * is issued for the existing project but never as a fresh-client activation
+ * (that one went out with the first response and by email).
+ */
+async function duplicateResponse(
+  db: Awaited<ReturnType<typeof createTenantServiceClient>>,
+  businessId: string,
+  project: ExistingRequestProject
+) {
+  let thankYouUrl: string | null = null;
+  if (project.client_id) {
+    const { data: client } = await db.from("clients").select("id, email").eq("id", project.client_id).maybeSingle();
+    if (client?.email) {
+      try {
+        const token = sealActivationToken({
+          kind: "request",
+          businessId,
+          clientId: client.id as string,
+          email: normalizeEmail(client.email as string),
+          projectId: project.id,
+          freshClient: false,
+        });
+        thankYouUrl = `${THANK_YOU_PATH}?t=${encodeURIComponent(token)}`;
+      } catch {
+        thankYouUrl = null;
+      }
+    }
+  }
+  return NextResponse.json({ success: true, projectId: project.id, duplicate: true, thankYouUrl });
 }
 
 /** Public form input only fills empty fields on an existing client — never overwrites. */

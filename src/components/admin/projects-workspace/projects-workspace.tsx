@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { projectServiceNames } from "@/lib/project-service-names";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { EyeOff, FolderKanban, Plus, SearchX } from "lucide-react";
+import { ArchiveRestore, EyeOff, FolderKanban, Plus, SearchX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CheckboxOption } from "@/components/ui/checkbox-dropdown";
 import { ClientView, type ClientViewPermissions } from "@/components/admin/client-view/client-view";
-import { ClientViewCalendar } from "@/components/admin/client-view/client-view-calendar";
 import { ClientProfileModalProvider } from "@/components/admin/client-view/client-profile-modal";
-import { useProjectStageMove } from "@/components/admin/client-view/client-view-shared";
+import { useProjectStageMove, type ClientViewProjectRow } from "@/components/admin/client-view/client-view-shared";
+import type { ActionMenuItem } from "@/components/ui/action-menu";
 import { STAFF_FILTER_UNASSIGNED, projectMatchesStaffFilter } from "@/components/admin/admin-projects-staff-filter";
 import type { PipelineProjectRow, PipelineStageParam } from "@/lib/admin-project-pipeline";
 import type { ClientViewData } from "@/lib/client-view-data";
@@ -47,6 +48,10 @@ import {
   type FilterPanelState,
 } from "@/components/admin/projects-workspace/projects-toolbar";
 import { ProjectsBoard, ProjectsGrid, ProjectsList, useHeroUrls } from "@/components/admin/projects-workspace/projects-views";
+import { ProjectsCalendar } from "@/components/admin/projects-workspace/projects-calendar";
+import { useProjectBulkActions, type ProjectBulkPermissions } from "@/components/admin/projects-workspace/projects-bulk";
+
+const NO_BULK: ProjectBulkPermissions = { canEdit: false, canHide: false, canManageStaff: false, canDelete: false, canDeleteMedia: false, canRestore: false };
 
 type StaffOption = { id: string; email: string; full_name: string | null };
 
@@ -71,7 +76,7 @@ function writeStore(key: string, value: unknown, storage: "session" | "local") {
 }
 
 /**
- * New interface Projects page: Pipeline (default) | List | Client | Grid | Calendar, with
+ * New interface Projects page: Pipeline (default) | Client | Grid | List | Calendar, with
  * Filters, Staff and Sort in one toolbar and Hidden Projects / New Project always on the right.
  * Classic keeps AdminProjectsWithStaffFilter unchanged.
  */
@@ -94,6 +99,8 @@ export function ProjectsWorkspace({
   hiddenCount,
   canCreateProject,
   canSeeHidden,
+  businessTimeZone = "America/New_York",
+  bulkPermissions = NO_BULK,
 }: {
   projects: PipelineProjectRow[];
   stage?: PipelineStageParam | null;
@@ -114,6 +121,10 @@ export function ProjectsWorkspace({
   hiddenCount: number;
   canCreateProject: boolean;
   canSeeHidden: boolean;
+  /** Business time zone (Settings → workflow defaults) for the Month / Week calendar. */
+  businessTimeZone?: string;
+  /** List view multi-select + row Hide/Restore. */
+  bulkPermissions?: ProjectBulkPermissions;
 }) {
   const router = useRouter();
   const [refreshing, startRefresh] = useTransition();
@@ -134,6 +145,7 @@ export function ProjectsWorkspace({
 
   function changeView(next: ProjectsWorkspaceView) {
     setView(next);
+    setSelected(new Set());
     const secure = window.location.protocol === "https:" ? "; Secure" : "";
     document.cookie = `${PROJECTS_VIEW_COOKIE}=${encodeURIComponent(serializeWorkspaceViewCookie(next, currentUserId))}; Path=/admin; Max-Age=${PROJECTS_VIEW_COOKIE_MAX_AGE}; SameSite=Lax${secure}`;
     // Client view data (clients + junctions) is only loaded server-side when it's the saved view.
@@ -157,9 +169,16 @@ export function ProjectsWorkspace({
     writeStore(SORT_KEY, next, "local");
   }
 
+  // Hidden / restored / deleted from this page leave the list at once; fresh server data resets it.
+  const [removed, setRemoved] = useState<Set<string>>(() => new Set());
+  const [removedFor, setRemovedFor] = useState(projects);
+  if (removedFor !== projects) {
+    setRemovedFor(projects);
+    setRemoved(new Set());
+  }
   const staffFiltered = useMemo(
-    () => projects.filter((p) => projectMatchesStaffFilter(p.id, staffSel, projectStaffIds)),
-    [projects, staffSel, projectStaffIds]
+    () => projects.filter((p) => !removed.has(p.id) && projectMatchesStaffFilter(p.id, staffSel, projectStaffIds)),
+    [projects, removed, staffSel, projectStaffIds]
   );
   const { moveProject, projects: moved } = useProjectStageMove(staffFiltered);
 
@@ -175,8 +194,68 @@ export function ProjectsWorkspace({
     [panel]
   );
   const shown = useMemo(() => sortProjects(filterProjects(moved, filters, search), sort), [moved, filters, search, sort]);
-  const serviceOptions = useMemo(() => [...new Set(projects.map((p) => p.service_type).filter(Boolean))].sort(), [projects]);
+  const serviceOptions = useMemo(
+    () => [...new Set(projects.flatMap((p) => projectServiceNames(p)).filter(Boolean))].sort(),
+    [projects]
+  );
   const hero = useHeroUrls(heroUrls);
+
+  // ── List selection (scoped to the rows shown: filters/search drop rows from it) ──
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const lastToggled = useRef<string | null>(null);
+  useEffect(() => {
+    setSelected((cur) => {
+      if (cur.size === 0) return cur;
+      const ids = new Set(shown.map((p) => p.id));
+      const next = new Set([...cur].filter((id) => ids.has(id)));
+      return next.size === cur.size ? cur : next;
+    });
+  }, [shown]);
+  const selectedProjects = useMemo(() => shown.filter((p) => selected.has(p.id)), [shown, selected]);
+  const bulk = useProjectBulkActions({
+    permissions: bulkPermissions,
+    staff,
+    showDeleted,
+    onRemoved: (ids) => setRemoved((cur) => new Set([...cur, ...ids])),
+    onSettled: (doneIds) =>
+      setSelected((cur) => {
+        const next = new Set(cur);
+        doneIds.forEach((id) => next.delete(id));
+        return next;
+      }),
+  });
+  const canBulk = showDeleted
+    ? bulkPermissions.canRestore || bulkPermissions.canDelete
+    : bulkPermissions.canEdit || bulkPermissions.canHide || bulkPermissions.canManageStaff || bulkPermissions.canDelete;
+  const listSelection = canBulk
+    ? {
+        selected,
+        toggle: (id: string, range: boolean) => {
+          setSelected((cur) => {
+            const next = new Set(cur);
+            const from = range && lastToggled.current ? shown.findIndex((p) => p.id === lastToggled.current) : -1;
+            const to = shown.findIndex((p) => p.id === id);
+            if (from >= 0 && to >= 0) {
+              // Shift-click: select the whole range, like the Media Library.
+              const [a, b] = from < to ? [from, to] : [to, from];
+              for (let i = a; i <= b; i++) next.add(shown[i].id);
+            } else if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          });
+          lastToggled.current = id;
+        },
+        toggleAll: () => setSelected((cur) => (shown.length > 0 && shown.every((p) => cur.has(p.id)) ? new Set() : new Set(shown.map((p) => p.id)))),
+      }
+    : undefined;
+  const rowActions = (p: ClientViewProjectRow): ActionMenuItem[] =>
+    showDeleted
+      ? bulkPermissions.canRestore
+        ? [{ id: "restore", label: "Restore project", icon: ArchiveRestore, description: "Back to active projects", disabled: bulk.busy, onSelect: () => bulk.restore([p]) }]
+        : []
+      : bulkPermissions.canHide
+        ? [{ id: "hide", label: "Hide project", icon: EyeOff, description: "Moves it to Hidden Projects — nothing is deleted", disabled: bulk.busy, onSelect: () => bulk.hide([p]) }]
+        : [];
 
   const panelCount =
     (panel.statuses.length ? 1 : 0) +
@@ -303,13 +382,27 @@ export function ProjectsWorkspace({
             ) : null}
           </div>
         ) : view === "list" ? (
-          <ProjectsList projects={shown} heroUrls={hero} sort={sort} onSort={changeSort} canOpenClients={canOpenClients} onMove={moveProject} />
+          <div className={cn(selectedProjects.length > 0 && "pb-20")}>
+            <ProjectsList
+              projects={shown}
+              heroUrls={hero}
+              sort={sort}
+              onSort={changeSort}
+              canOpenClients={canOpenClients}
+              onMove={moveProject}
+              selection={listSelection}
+              rowActions={rowActions}
+            />
+          </div>
         ) : view === "grid" ? (
           <ProjectsGrid projects={shown} heroUrls={hero} storageBytes={storageBytes} canOpenClients={canOpenClients} onMove={moveProject} />
         ) : view === "calendar" ? (
-          <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
-            <ClientViewCalendar projects={shown} heroUrls={hero ?? null} showClientName canOpenCalendar={clientViewPermissions?.canOpenCalendar ?? false} />
-          </section>
+          <ProjectsCalendar
+            projects={shown}
+            heroUrls={hero ?? null}
+            timeZone={businessTimeZone}
+            canOpenCalendar={clientViewPermissions?.canOpenCalendar ?? false}
+          />
         ) : (
           <>
             {shown.length === 0 && projects.length > 0 ? (
@@ -331,6 +424,8 @@ export function ProjectsWorkspace({
             />
           </>
         )}
+        {view === "list" ? bulk.bar(selectedProjects, () => setSelected(new Set())) : null}
+        {bulk.dialogs}
       </div>
     </ClientProfileModalProvider>
   );

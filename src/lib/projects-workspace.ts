@@ -2,6 +2,7 @@
  * New interface Projects page — pure helpers (views, saved view, sorting, filters).
  * Client-safe: no server imports. Classic keeps using lib/client-view.ts as before.
  */
+import { projectMatchesServices } from "@/lib/project-service-names";
 import { PROJECT_STATUSES, type ProjectStatus } from "@/lib/constants";
 import type { PipelineProjectRow } from "@/lib/admin-project-pipeline";
 import { projectShootAt } from "@/lib/client-view";
@@ -134,7 +135,7 @@ export function filterProjects<T extends PipelineProjectRow>(projects: T[], f: P
   return projects.filter(
     (p) =>
       (!f.statuses.length || f.statuses.includes(p.status)) &&
-      (!f.services.length || f.services.includes(p.service_type)) &&
+      projectMatchesServices(p, f.services) &&
       (!f.payments.length || f.payments.includes(projectPaymentStatus(p))) &&
       inRange(projectShootAt(p), f.shoot) &&
       inRange(p.created_at, f.created) &&

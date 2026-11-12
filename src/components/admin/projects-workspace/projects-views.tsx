@@ -18,6 +18,8 @@ import type { ProjectStatus } from "@/lib/constants";
 import type { ProjectStorageMap } from "@/lib/project-storage";
 import { projectPaymentStatus, type ProjectsSort } from "@/lib/projects-workspace";
 import { cn } from "@/lib/utils";
+import type { ActionMenuItem } from "@/components/ui/action-menu";
+import { SelectCheckbox } from "@/components/admin/projects-workspace/projects-bulk";
 
 type Move = (project: ClientViewProjectRow, next: ProjectStatus) => void;
 
@@ -271,6 +273,8 @@ export function ProjectsList({
   onSort,
   canOpenClients,
   onMove,
+  selection,
+  rowActions,
 }: {
   projects: ClientViewProjectRow[];
   heroUrls: Record<string, string | null> | null | undefined;
@@ -278,8 +282,18 @@ export function ProjectsList({
   onSort: (s: ProjectsSort) => void;
   canOpenClients: boolean;
   onMove: Move;
+  /** Checkbox column (omit to hide it). "Select all" covers the rows shown — never more. */
+  selection?: {
+    selected: Set<string>;
+    toggle: (id: string, range: boolean) => void;
+    toggleAll: () => void;
+  };
+  /** Extra ··· items per row (Hide / Restore). */
+  rowActions?: (p: ClientViewProjectRow) => ActionMenuItem[];
 }) {
   const router = useRouter();
+  const selectedShown = selection ? projects.filter((p) => selection.selected.has(p.id)).length : 0;
+  const headerState: boolean | "mixed" = selectedShown === 0 ? false : selectedShown === projects.length ? true : "mixed";
   const updated = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
   const columns: Column[] = [
     { label: "Project", asc: "name_asc", desc: "name_desc", className: "w-auto" },
@@ -295,6 +309,15 @@ export function ProjectsList({
       <table className="w-full table-fixed text-sm">
         <thead className="border-b border-border bg-subtle/60">
           <tr>
+            {selection ? (
+              <th className="w-11 pl-1.5 pr-0 sm:w-12 sm:pl-2">
+                <SelectCheckbox
+                  checked={headerState}
+                  onToggle={selection.toggleAll}
+                  label={headerState === true ? "Deselect all shown projects" : `Select all ${projects.length.toLocaleString()} shown projects`}
+                />
+              </th>
+            ) : null}
             {columns.map((c) => (
               <SortHeader key={c.label} col={c} sort={sort} onSort={onSort} />
             ))}
@@ -305,8 +328,19 @@ export function ProjectsList({
           {projects.map((p) => {
             const date = formatCardDate(p);
             const pay = projectPaymentStatus(p);
+            const isSelected = selection?.selected.has(p.id) ?? false;
             return (
-              <tr key={p.id} onClick={() => router.push(`/admin/projects/${p.id}`)} className="cursor-pointer transition-colors hover:bg-subtle/60">
+              <tr
+                key={p.id}
+                onClick={() => router.push(`/admin/projects/${p.id}`)}
+                aria-selected={selection ? isSelected : undefined}
+                className={cn("cursor-pointer transition-colors", isSelected ? "bg-accent/[0.07] hover:bg-accent/10" : "hover:bg-subtle/60")}
+              >
+                {selection ? (
+                  <td className="pl-1.5 pr-0 sm:pl-2" onClick={(e) => e.stopPropagation()}>
+                    <SelectCheckbox checked={isSelected} onToggle={(e) => selection.toggle(p.id, e.shiftKey)} label={`Select ${p.project_name}`} />
+                  </td>
+                ) : null}
                 <td className="px-3 py-2.5">
                   <div className="flex min-w-0 items-center gap-3">
                     <Hero url={heroFor(heroUrls, p.id)} sizes="72px" className="hidden h-11 w-16 shrink-0 rounded-lg sm:block" />
@@ -334,7 +368,7 @@ export function ProjectsList({
                 </td>
                 <td className="hidden truncate px-3 py-2.5 text-xs text-muted xl:table-cell">{updated.format(new Date(p.updated_at))}</td>
                 <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <ProjectActionsButton project={p} onMove={onMove} canOpenClients={canOpenClients} />
+                  <ProjectActionsButton project={p} onMove={onMove} canOpenClients={canOpenClients} extraItems={rowActions?.(p)} />
                 </td>
               </tr>
             );

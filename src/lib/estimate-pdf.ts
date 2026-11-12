@@ -8,6 +8,7 @@ import {
   type QuoteDepositColumns,
 } from "@/lib/payment-quote";
 import type { QuoteLineItem } from "@/lib/types";
+import { estimateTotalPending, hasEstimateSections, parseEstimateDescription } from "@/lib/estimate-sections";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { DepositMode } from "@/lib/workflow-settings";
 
@@ -377,7 +378,37 @@ async function buildEstimatePdfUnstable(
   if (input.title.trim()) {
     draw(input.title.trim(), { font: bold, size: 13, color: ink, gap: 4 });
   }
-  if (input.description.trim()) {
+  if (input.description.trim() && hasEstimateSections(input.description)) {
+    // Grouped deliverables: one block per service (heading, label, bullets, notes).
+    const parsed = parseEstimateDescription(input.description);
+    if (parsed.intro) draw(parsed.intro, { font: regular, size: 10, color: ink, gap: 8 });
+    const bulletX = MARGIN_X + 16;
+    for (const section of parsed.sections) {
+      // Keep a heading with its label and first deliverable on one page.
+      ensure(50);
+      draw(section.heading, { font: bold, size: 11, color: ink, gap: 2 });
+      for (const line of section.lines) {
+        if (line.kind === "label") {
+          draw(line.text, { font: bold, size: 9, color: brand, gap: 3 });
+        } else if (line.kind === "bullet") {
+          const wrapped = wrapText(line.text, regular, 10, CONTENT_WIDTH - (bulletX - MARGIN_X));
+          wrapped.forEach((text, index) => {
+            ensure(13);
+            if (index === 0) {
+              cursor.page.drawText("•", { x: MARGIN_X + 5, y: cursor.y - 10, size: 10, font: regular, color: brand });
+            }
+            cursor.page.drawText(text, { x: bulletX, y: cursor.y - 10, size: 10, font: regular, color: ink });
+            cursor.y -= 13;
+          });
+          cursor.y -= 1;
+        } else {
+          draw(line.text, { font: regular, size: 9, color: muted, gap: 3 });
+        }
+      }
+      cursor.y -= 8;
+    }
+    cursor.y -= 2;
+  } else if (input.description.trim()) {
     draw(input.description.trim(), { font: regular, size: 10, color: ink, gap: 10 });
   }
 
@@ -456,9 +487,11 @@ async function buildEstimatePdfUnstable(
     color: brand,
   });
   cursor.y -= 16;
-  const total = `Total ${formatCurrency(input.totalCents)}`;
+  // A combined estimate with a Custom Quote service is never printed as the final total.
+  const totalPending = estimateTotalPending(input.notes);
+  const total = `${totalPending ? "Estimated subtotal" : "Total"} ${formatCurrency(input.totalCents)}`;
   const totalWidth = bold.widthOfTextAtSize(total, 12);
-  ensure(16);
+  ensure(totalPending ? 30 : 16);
   cursor.page.drawText(total, {
     x: PAGE_WIDTH - MARGIN_X - totalWidth,
     y: cursor.y - 12,
@@ -467,8 +500,21 @@ async function buildEstimatePdfUnstable(
     color: ink,
   });
   cursor.y -= 22;
+  if (totalPending) {
+    const pendingLine = "Full total pending a custom quote";
+    const pendingWidth = regular.widthOfTextAtSize(pendingLine, 9);
+    cursor.page.drawText(pendingLine, {
+      x: PAGE_WIDTH - MARGIN_X - pendingWidth,
+      y: cursor.y - 6,
+      size: 9,
+      font: regular,
+      color: muted,
+    });
+    cursor.y -= 16;
+  }
 
-  if (depositLine) {
+  // Deposit wording quotes "Total …": skip it while the full total is still pending.
+  if (depositLine && !totalPending) {
     draw(depositLine, { font: regular, size: 10, color: ink, gap: 8 });
   }
 

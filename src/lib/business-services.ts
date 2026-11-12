@@ -7,6 +7,7 @@ import {
   matchServiceTemplate,
   type ServiceTemplate,
 } from "@/lib/service-templates";
+import { MULTI_SERVICE_SEPARATOR } from "@/lib/project-service-names";
 
 export type { BusinessServiceRow };
 
@@ -107,16 +108,20 @@ export async function listServiceTemplatesForBusiness(
   return rows.map(rowToServiceTemplate);
 }
 
+/**
+ * Active services for request / create-project pickers. Names and ids only:
+ * public forms never receive prices. `id` is null for the empty-catalog fallback.
+ */
 export async function listActiveServiceOptions(
   businessId: string
-): Promise<{ value: string; label: string }[]> {
+): Promise<{ id: string | null; value: string; label: string }[]> {
   const all = await listBusinessServices(businessId, { bypassCache: true });
   if (all.length === 0) {
-    return FALLBACK_SERVICE_TEMPLATES.map((t) => ({ value: t.title, label: t.title }));
+    return FALLBACK_SERVICE_TEMPLATES.map((t) => ({ id: null, value: t.title, label: t.title }));
   }
   return all
     .filter((row) => row.is_active)
-    .map((row) => ({ value: row.name, label: row.name }));
+    .map((row) => ({ id: row.id, value: row.name, label: row.name }));
 }
 
 export function slugifyServiceName(name: string): string {
@@ -161,6 +166,11 @@ export async function getServicePaymentDescriptionForBusiness(
   serviceType: string,
   businessId: string
 ): Promise<string> {
+  // "A + B" (several services) has no single template to describe it.
+  if (serviceType.includes(MULTI_SERVICE_SEPARATOR)) {
+    const rows = await listBusinessServices(businessId);
+    if (!rows.some((row) => row.name === serviceType.trim())) return getServicePaymentDescription(serviceType);
+  }
   const template = await getServiceTemplate(serviceType, businessId);
   return getServicePaymentDescription(serviceType, template);
 }

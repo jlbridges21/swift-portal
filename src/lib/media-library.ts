@@ -1,3 +1,4 @@
+import { projectServiceNames } from "@/lib/project-service-names";
 import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supabase/tenant-service";
 import type { MediaAsset, Project3dModel, Tour } from "@/lib/types";
 import { loadLibraryFolderMembers, type LibraryFolderMembers } from "@/lib/library-folders";
@@ -827,7 +828,10 @@ export async function queryMediaLibraryAll(
 
   // All filters combine with AND; values within one filter combine with OR.
   if (rf.kinds.size) combined = combined.filter((a) => rf.kinds.has(a.kind));
-  if (rf.services.size) combined = combined.filter((a) => rf.services.has(a.service_type));
+  // A multi-service project ("A + B") matches if ANY of its services is selected.
+  if (rf.services.size) {
+    combined = combined.filter((a) => projectServiceNames(a).some((name) => rf.services.has(name)));
+  }
   if (rf.clientIds.size) {
     combined = combined.filter((a) => !!a.client_id && rf.clientIds.has(a.client_id));
   }
@@ -1144,7 +1148,7 @@ export async function getLibraryFilterOptions(
     const aliases = Array.isArray(row.aliases) ? row.aliases.map(String) : [];
     return [row.name, ...aliases];
   });
-  const fromProjects = (projects ?? []).map((row) => row.service_type).filter(Boolean);
+  const fromProjects = (projects ?? []).flatMap((row) => projectServiceNames(row)).filter(Boolean);
   const services = [...new Set([...fromCatalog, ...fromProjects].filter(Boolean))].sort() as string[];
   const tags = [...new Set((tagRows ?? []).map((row) => row.tag).filter(Boolean))].sort() as string[];
 

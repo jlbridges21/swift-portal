@@ -10,6 +10,7 @@
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test:proposal-pdf-archive": "npx tsx scripts/verify-proposal-pdf-archive.ts",
+    "test:multi-service-estimates": "npx tsx scripts/verify-multi-service-estimates.ts",
     "test:email-sender": "npx tsx scripts/verify-email-sender-policy.ts",
     "test:settings-patch": "npx tsx scripts/verify-settings-patch-validation.ts",
     "test:portal-url": "npx tsx scripts/verify-portal-url.ts",

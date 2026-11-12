@@ -16,7 +16,6 @@ import {
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { CheckboxDropdown, useDismiss, type CheckboxOption } from "@/components/ui/checkbox-dropdown";
-import { isClientViewNewBadgeActive } from "@/lib/client-view";
 import {
   PAYMENT_STATUS_OPTIONS,
   PROJECTS_SORT_OPTIONS,
@@ -30,9 +29,9 @@ import { cn } from "@/lib/utils";
 
 const VIEWS: { value: ProjectsWorkspaceView; label: string; icon: typeof List }[] = [
   { value: "pipeline", label: "Pipeline", icon: Columns3 },
-  { value: "list", label: "List", icon: List },
   { value: "client", label: "Client", icon: Users },
   { value: "grid", label: "Grid", icon: LayoutGrid },
+  { value: "list", label: "List", icon: List },
   { value: "calendar", label: "Calendar", icon: CalendarDays },
 ];
 
@@ -47,7 +46,6 @@ export function ProjectsViewSelector({
   showClient: boolean;
   loading?: boolean;
 }) {
-  const showNew = isClientViewNewBadgeActive();
   return (
     <div role="radiogroup" aria-label="Project view" className="flex min-w-0 rounded-xl border border-border bg-subtle p-1">
       {VIEWS.filter((v) => v.value !== "client" || showClient).map(({ value: v, label, icon: Icon }) => {
@@ -70,11 +68,6 @@ export function ProjectsViewSelector({
           >
             <Icon className="h-4 w-4 shrink-0" aria-hidden />
             <span className="hidden md:inline">{label}</span>
-            {v === "client" && showNew ? (
-              <span className="absolute -right-1 -top-1.5 rounded-full bg-blue-600 px-1 py-px text-[9px] font-semibold uppercase leading-3 tracking-wide text-white md:static md:px-1.5 md:text-[10px] md:leading-4">
-                New
-              </span>
-            ) : null}
           </button>
         );
       })}

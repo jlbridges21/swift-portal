@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ServiceSelect } from "@/components/forms/service-select";
+import { ServiceMultiSelect } from "@/components/forms/service-multi-select";
 import { AddressFields } from "@/components/forms/address-fields";
+import { newRequestKey } from "@/lib/request-key";
 
 export function LoggedInRequestForm({
   instantPreliminaryEstimate = true,
@@ -19,15 +20,19 @@ export function LoggedInRequestForm({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // One key per form load: a repeated submit returns the same project instead of a second one.
+  const requestKey = useRef<string | null>(null);
   const inquiryMode = !instantPreliminaryEstimate;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError("");
 
     const formData = new FormData(e.currentTarget);
-    const data = Object.fromEntries(formData.entries());
+    requestKey.current ??= newRequestKey();
+    const data = { ...Object.fromEntries(formData.entries()), request_key: requestKey.current };
 
     try {
       const res = await fetch("/api/request/logged-in", {
@@ -73,12 +78,12 @@ export function LoggedInRequestForm({
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="service_requested">Service *</Label>
-                    <ServiceSelect
+                    <Label htmlFor="service_requested">Services *</Label>
+                    <ServiceMultiSelect
                       id="service_requested"
                       name="service_requested"
                       required
-                      placeholder="Select service"
+                      placeholder="Select services"
                     />
                   </div>
                   <div className="space-y-2">

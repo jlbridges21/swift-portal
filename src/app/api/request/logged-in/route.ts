@@ -12,6 +12,14 @@ import { buildPortalLeadPayload } from "@/lib/ghl/build-portal-lead-payload";
 import { syncNewProjectLeadToGhl } from "@/lib/ghl/sync-portal-lead";
 import { getAppSettings } from "@/lib/app-settings";
 import { resolveServiceId } from "@/lib/business-services";
+import { resolveSelectedServices, writeProjectServiceLinks, type SelectedService } from "@/lib/project-services";
+import { formatServiceList, projectTitleForServices } from "@/lib/project-service-names";
+import {
+  findProjectByRequestKey,
+  findRecentDuplicateRequest,
+  insertRequestProject,
+  parseRequestKey,
+} from "@/lib/request-dedupe";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import {
   isMissingFinancialSectionColumnError,
@@ -41,15 +49,42 @@ export async function POST(request: Request) {
 
   const createSettings = await getAppSettings(businessId);
   const instantPreliminary = createSettings.proposals.autoPreliminaryEstimate !== false;
-  const serviceRequested = instantPreliminary
-    ? String(service_requested ?? "").trim()
-    : "";
-  if (instantPreliminary && !serviceRequested) {
-    return NextResponse.json({ error: "Service type is required." }, { status: 400 });
+  let selected: SelectedService[] = [];
+  let serviceRequested = "";
+  let primaryServiceId: string | null = null;
+  if (instantPreliminary) {
+    const hasSelection =
+      body.service_ids !== undefined || body.service_names !== undefined || String(service_requested ?? "").trim();
+    if (!hasSelection) {
+      return NextResponse.json({ error: "Service type is required." }, { status: 400 });
+    }
+    const resolvedServices = await resolveSelectedServices(businessId, body as Record<string, unknown>);
+    if (!resolvedServices.ok) {
+      return NextResponse.json({ error: resolvedServices.error }, { status: resolvedServices.status });
+    }
+    selected = resolvedServices.services;
+    serviceRequested = resolvedServices.serviceType;
+    primaryServiceId = resolvedServices.primaryServiceId;
   }
+  const serviceNames = selected.map((s) => s.name);
+  const serviceLabel = formatServiceList(serviceNames) || serviceRequested;
+  const requestKey = parseRequestKey(body.request_key);
 
   const db = await createTenantServiceClient(businessId);
   const clientId = profile.client_id;
+
+  const keyed = await findProjectByRequestKey(db, requestKey);
+  if (keyed) {
+    return NextResponse.json({ success: true, projectId: keyed.id, duplicate: true });
+  }
+  if (!requestKey) {
+    const recent = await findRecentDuplicateRequest(db, {
+      clientId,
+      propertyAddress: property_address ?? "",
+      serviceType: serviceRequested,
+    });
+    if (recent) return NextResponse.json({ success: true, projectId: recent.id, duplicate: true });
+  }
 
   const { data: client } = await db
     .from("clients")
@@ -67,8 +102,10 @@ export async function POST(request: Request) {
     name: client.name || profile.full_name,
   });
 
-  const projectName = defaultProjectTitle(property_address, serviceRequested);
-  const serviceId = await resolveServiceId(businessId, serviceRequested);
+  const projectName = selected.length
+    ? projectTitleForServices(property_address, serviceNames)
+    : defaultProjectTitle(property_address, serviceRequested);
+  const serviceId = selected.length ? primaryServiceId : await resolveServiceId(businessId, serviceRequested);
   const sectionDefaults = projectColumnsFromMediaSections(
     normalizeProjectMediaSections(createSettings.mediaSectionDefaults)
   );
@@ -85,23 +122,22 @@ export async function POST(request: Request) {
     ghl_sync_status: "pending",
     ...sectionDefaults,
   };
-  let { data: project, error: projectError } = await db
-    .from("projects")
-    .insert(projectInsert)
-    .select()
-    .single();
-  if (projectError && isMissingFinancialSectionColumnError(projectError)) {
-    // Pre-v113 database: create without the estimates/payments visibility columns.
-    ({ data: project, error: projectError } = await db
-      .from("projects")
-      .insert(withoutFinancialSectionColumns(projectInsert))
-      .select()
-      .single());
+  const inserted = await insertRequestProject(db, projectInsert, requestKey, async (row) => {
+    let result = await db.from("projects").insert(row).select().single();
+    if (result.error && isMissingFinancialSectionColumnError(result.error)) {
+      // Pre-v113 database: create without the estimates/payments visibility columns.
+      result = await db.from("projects").insert(withoutFinancialSectionColumns(row)).select().single();
+    }
+    return { data: result.data as Record<string, unknown> | null, error: result.error };
+  });
+  if (inserted.kind === "duplicate") {
+    return NextResponse.json({ success: true, projectId: inserted.project.id, duplicate: true });
   }
-
-  if (projectError) {
-    return NextResponse.json({ error: projectError.message }, { status: 500 });
+  if (inserted.kind === "error") {
+    return NextResponse.json({ error: inserted.message }, { status: 500 });
   }
+  const project = inserted.project as { id: string };
+  if (selected.length) await writeProjectServiceLinks(db, project.id, selected);
 
   await linkProjectToProperty(project.id, clientId, property_address, businessId);
   // Settings → New Project Setup → Default Documents: each project gets its own copies.
@@ -131,13 +167,17 @@ export async function POST(request: Request) {
   await logProjectActivity(
     "proposal_submitted",
     instantPreliminary
-      ? `New project requested: ${serviceRequested}`
+      ? `New project requested: ${serviceLabel}`
       : `Inquiry submitted for ${property_address}`,
     {
       businessId,
       projectId: project.id,
       userId: profile.id,
-      metadata: { client_id: clientId, inquiry: !instantPreliminary },
+      metadata: {
+        client_id: clientId,
+        inquiry: !instantPreliminary,
+        ...(serviceNames.length > 1 ? { services: serviceNames } : {}),
+      },
     }
   );
 
@@ -146,7 +186,7 @@ export async function POST(request: Request) {
     eventKey: "new_project_request",
     title: instantPreliminary ? "New Project Request" : "New Project Inquiry",
     body: instantPreliminary
-      ? `${person.fullName} requested ${serviceRequested} at ${property_address}. A preliminary estimate was generated automatically.`
+      ? `${person.fullName} requested ${serviceLabel} at ${property_address}. ${serviceNames.length > 1 ? "One combined preliminary estimate was" : "A preliminary estimate was"} generated automatically.`
       : `${person.fullName} sent an inquiry for ${property_address}. No preliminary estimate was created — follow up manually.`,
     link: `/admin/projects/${project.id}`,
     projectId: project.id,
@@ -159,7 +199,7 @@ export async function POST(request: Request) {
     eventKey: "new_project_request",
     title: instantPreliminary ? "We received your project request" : "We received your inquiry",
     body: instantPreliminary
-      ? `Thanks ${person.fullName} — we received your request for ${serviceRequested} at ${property_address}.`
+      ? `Thanks ${person.fullName} — we received your request for ${serviceLabel} at ${property_address}.`
       : `Thanks ${person.fullName} — we received your inquiry for ${property_address}. We'll follow up shortly.`,
     link: `/dashboard/projects/${project.id}`,
     projectId: project.id,
@@ -171,6 +211,7 @@ export async function POST(request: Request) {
       userId: profile.id,
       skipIfExists: true,
       businessId,
+      templates: selected.map((s) => s.template),
     });
   }
 

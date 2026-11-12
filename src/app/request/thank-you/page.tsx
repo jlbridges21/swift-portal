@@ -15,6 +15,8 @@ import { loadActivationContext } from "@/lib/portal-activation-server";
 import { maskEmail, resolveThankYouMode } from "@/lib/portal-activation";
 import { formatDate } from "@/lib/utils";
 import type { ProjectQuote } from "@/lib/types";
+import { loadProjectServiceLinks } from "@/lib/project-services";
+import { projectServiceNames } from "@/lib/project-service-names";
 
 export const dynamic = "force-dynamic";
 
@@ -118,7 +120,11 @@ export default async function RequestThankYouPage({ searchParams }: PageProps) {
         .limit(1)
         .maybeSingle()
     : { data: null };
+  // The estimate exactly as saved when the request was submitted (or as the business has
+  // since edited it). Never rebuilt from current Settings → Services prices.
   const quote = (quoteRow as ProjectQuote | null) ?? null;
+  const links = project ? ((await loadProjectServiceLinks(db, [project.id])).get(project.id) ?? []) : [];
+  const serviceNames = links.length ? links.map((l) => l.service_name) : project ? projectServiceNames(project) : [];
 
   const profile = await getProfile();
   const signedInAsClient = profile?.role === "client" && profile.client_id === ctx.client.id;
@@ -146,10 +152,27 @@ export default async function RequestThankYouPage({ searchParams }: PageProps) {
                 <p className="text-foreground">{project.property_address}</p>
               </div>
             ) : null}
-            {project.service_type ? (
+            {serviceNames.length === 1 ? (
               <div className="flex items-start gap-2">
                 <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden />
-                <p className="text-foreground">{project.service_type}</p>
+                <p className="text-foreground">{serviceNames[0]}</p>
+              </div>
+            ) : serviceNames.length > 1 ? (
+              <div className="flex items-start gap-2">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden />
+                <div className="min-w-0">
+                  <p className="text-foreground">{serviceNames.length} services requested</p>
+                  <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Selected services">
+                    {serviceNames.map((name) => (
+                      <li
+                        key={name}
+                        className="rounded-full bg-accent-subtle px-2.5 py-0.5 text-xs font-medium text-accent"
+                      >
+                        {name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             ) : null}
             {project.shoot_date ? (

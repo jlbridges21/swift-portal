@@ -43,6 +43,11 @@ import {
   type EstimatePdfInput,
 } from "@/lib/estimate-pdf";
 import { ProposalHistoryDialog } from "@/components/projects/proposal-history-dialog";
+import {
+  EstimateEditor,
+  estimateFormTotalCents,
+  type EstimateFormState,
+} from "@/components/projects/estimate-editor";
 import type { ProposalDelivery } from "@/lib/proposal-delivery";
 
 interface QuoteSectionProps {
@@ -118,16 +123,7 @@ const SKIP_REASON_TEXT: Record<string, string> = {
   business_not_live: "this business can't send email right now",
 };
 
-type QuoteFormState = {
-  title: string;
-  description: string;
-  notes: string;
-  expires_at: string;
-  line_items: QuoteLineItem[];
-  deposit_mode: DepositMode;
-  deposit_percent: number;
-  deposit_amount_cents: number;
-};
+type QuoteFormState = EstimateFormState;
 
 export function QuoteSection({
   projectId,
@@ -162,7 +158,6 @@ export function QuoteSection({
   const [requestingChanges, setRequestingChanges] = useState(false);
   const [showChangeForm, setShowChangeForm] = useState(false);
   const [converting, setConverting] = useState(false);
-  const [showMobilePreview, setShowMobilePreview] = useState(false);
   const [oneWayMiles, setOneWayMiles] = useState("");
   const manualTravel = Boolean(travel?.enabled && travel.distanceMode === "manual");
   const [changeFeedback, setChangeFeedback] = useState("");
@@ -291,15 +286,7 @@ export function QuoteSection({
     ]
   );
 
-  function updateLineItem(index: number, field: keyof QuoteLineItem, value: string | number) {
-    setForm((f) => {
-      const items = [...f.line_items];
-      items[index] = { ...items[index], [field]: value };
-      return { ...f, line_items: items };
-    });
-  }
-
-  const totalCents = form.line_items.reduce((s, i) => s + (Number(i.amount_cents) || 0), 0);
+  const totalCents = estimateFormTotalCents(form.line_items);
   const formTerms =
     totalCents > 0
       ? quotePaymentTermsText(totalCents, {
@@ -308,72 +295,6 @@ export function QuoteSection({
           depositAmountCents: form.deposit_amount_cents,
         })
       : null;
-
-  function renderDepositControls() {
-    return (
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium text-heading">Deposit due on approval</legend>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="radio"
-            name="quote-deposit-mode"
-            className="size-4 shrink-0 accent-accent"
-            checked={form.deposit_mode === "none"}
-            onChange={() => setForm((f) => ({ ...f, deposit_mode: "none" }))}
-          />
-          Full project total
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="radio"
-            name="quote-deposit-mode"
-            className="size-4 shrink-0 accent-accent"
-            checked={form.deposit_mode === "percent"}
-            onChange={() => setForm((f) => ({ ...f, deposit_mode: "percent" }))}
-          />
-          Percent of the quote
-        </label>
-        {form.deposit_mode === "percent" && (
-          <div className="space-y-1 pl-6">
-            <Label htmlFor="quote-deposit-percent">Deposit percent (1–99)</Label>
-            <Input
-              id="quote-deposit-percent"
-              type="number"
-              min={1}
-              max={99}
-              value={form.deposit_percent}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                if (!e.target.value || !Number.isFinite(n)) return;
-                if (n < 1 || n > 99) return;
-                setForm((f) => ({ ...f, deposit_percent: Math.round(n) }));
-              }}
-              className="w-28"
-            />
-          </div>
-        )}
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="radio"
-            name="quote-deposit-mode"
-            className="size-4 shrink-0 accent-accent"
-            checked={form.deposit_mode === "amount"}
-            onChange={() => setForm((f) => ({ ...f, deposit_mode: "amount" }))}
-          />
-          Fixed amount
-        </label>
-        {form.deposit_mode === "amount" && (
-          <div className="pl-6">
-            <CurrencyInput
-              valueCents={form.deposit_amount_cents}
-              onChangeCents={(cents) => setForm((f) => ({ ...f, deposit_amount_cents: cents }))}
-              className="w-32"
-            />
-          </div>
-        )}
-      </fieldset>
-    );
-  }
 
   function depositFieldsFor(quote?: ProjectQuote) {
     if (quote?.deposit_mode) {
@@ -721,14 +642,18 @@ export function QuoteSection({
         expires_at: form.expires_at || null,
         line_items: form.line_items.map((i) => ({
           description: i.description,
-          amount_cents: Number(i.amount_cents) || 0,
+          amount_cents: Math.round(Number(i.amount_cents) || 0),
         })),
+        deposit_mode: form.deposit_mode,
+        deposit_percent: form.deposit_percent,
+        deposit_amount_cents: form.deposit_amount_cents,
       }),
     });
     setLoading(false);
     if (res.ok) {
       const updated = await res.json();
       setQuotes((prev) => prev.map((q) => (q.id === updated.id ? updated : q)));
+      // Still preliminary: nothing is converted and the client is not notified.
       toast.success("Preliminary estimate saved");
       setShowForm(false);
       setEditingId(null);
@@ -945,105 +870,89 @@ export function QuoteSection({
     return null;
   }
 
-  function renderQuoteForm() {
+  function closeForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(blankForm());
+  }
+
+  function renderTravelField() {
+    if (!manualTravel || editingPreliminary) return null;
     return (
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)] lg:items-start">
-      <div className="min-w-0 space-y-4 rounded-2xl bg-slate-50/60 surface-dark:bg-subtle/60 p-6 ring-1 ring-black/[0.04]">
-        <p className="text-sm font-medium text-heading">
-          {editingId ? "Edit draft proposal" : "New proposal"}
+      <div className="space-y-2">
+        <Label htmlFor="travel-one-way-miles">One-way miles</Label>
+        <Input
+          id="travel-one-way-miles"
+          type="number"
+          min={0}
+          value={oneWayMiles}
+          onChange={(e) => {
+            const value = e.target.value;
+            setOneWayMiles(value);
+            setForm((f) => ({ ...f, line_items: applyManualMiles(value, f.line_items) }));
+          }}
+        />
+        <p className="text-xs text-muted">
+          Straight-line miles from your business ZIP to the property. A per-mile fee uses the round trip. Clients never see this number.
         </p>
-        <div className="space-y-2">
-          <Label>Proposal Title</Label>
-          <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Aerial Media Package" />
-        </div>
-        <div className="space-y-2">
-          <Label>Description & Includes</Label>
-          <Textarea
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            rows={8}
-            placeholder={"Optional intro paragraph\n\nIncludes\n• Deliverable one\n• Deliverable two"}
-          />
-        </div>
-        {manualTravel && !editingPreliminary && (
-          <div className="space-y-2">
-            <Label htmlFor="travel-one-way-miles">One-way miles</Label>
-            <Input
-              id="travel-one-way-miles"
-              type="number"
-              min={0}
-              value={oneWayMiles}
-              onChange={(e) => {
-                const value = e.target.value;
-                setOneWayMiles(value);
-                setForm((f) => ({ ...f, line_items: applyManualMiles(value, f.line_items) }));
-              }}
-            />
-            <p className="text-xs text-muted">
-              Straight-line miles from your business ZIP to the property. A per-mile fee uses the round trip. Clients never see this number.
-            </p>
-          </div>
-        )}
-        <div className="space-y-2">
-          <Label>Line Items</Label>
-          {form.line_items.map((item, i) => (
-            <div key={`form-line-${i}`} className="flex gap-2">
-              <Input
-                placeholder="Package name"
-                value={item.description}
-                onChange={(e) => updateLineItem(i, "description", e.target.value)}
-                className="flex-1"
-              />
-              <CurrencyInput
-                valueCents={item.amount_cents}
-                onChangeCents={(cents) => updateLineItem(i, "amount_cents", cents)}
-                className="w-32"
-              />
-              {form.line_items.length > 1 && (
-                <Button variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, line_items: f.line_items.filter((_, j) => j !== i) }))}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          ))}
-          <Button variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, line_items: [...f.line_items, { description: "", amount_cents: 0 }] }))}>
-            <Plus className="h-4 w-4" /> Add Line Item
-          </Button>
-        </div>
-        <p className="text-sm font-medium">Total: {formatCurrency(totalCents)}</p>
-        {formTerms && <p className="text-sm leading-relaxed text-slate-600">{formTerms}</p>}
-        {renderDepositControls()}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Expiration Date</Label>
-            <Input type="date" value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label>Notes</Label>
-            <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="accent" disabled={loading || !form.title} onClick={() => submitQuote(true)}>
-            <Send className="h-4 w-4" /> {loading ? "Sending…" : "Send to Client"}
-          </Button>
-          {editingId && (
-            <Button variant="outline" disabled={loading || !form.title} onClick={() => submitQuote(false)}>
-              {loading ? "Saving…" : "Save Draft"}
+      </div>
+    );
+  }
+
+  /** One editor for both: preliminary estimates and official proposals differ only in their actions. */
+  function renderQuoteForm() {
+    if (editingPreliminary) {
+      return (
+        <EstimateEditor
+          heading="Edit preliminary estimate"
+          badge={<Badge>Preliminary</Badge>}
+          intro="Saving keeps this a preliminary estimate. Nothing is sent and the client is not notified."
+          form={form}
+          setForm={setForm}
+          paymentTerms={formTerms}
+          previewInput={previewInput}
+          logoUrl={brand.logoUrl}
+          actions={
+            <>
+              <Button variant="accent" disabled={loading || converting || !form.title} onClick={savePreliminaryEdits}>
+                {loading ? "Saving…" : "Save Estimate"}
+              </Button>
+              <Button variant="outline" disabled={converting || loading || !form.title} onClick={convertToOfficial}>
+                <Send className="h-4 w-4" /> {converting ? "Converting…" : "Convert to Official Proposal"}
+              </Button>
+              <Button variant="outline" onClick={closeForm}>
+                Cancel
+              </Button>
+            </>
+          }
+        />
+      );
+    }
+    return (
+      <EstimateEditor
+        heading={editingId ? "Edit draft proposal" : "New proposal"}
+        form={form}
+        setForm={setForm}
+        extraFields={renderTravelField()}
+        paymentTerms={formTerms}
+        previewInput={previewInput}
+        logoUrl={brand.logoUrl}
+        actions={
+          <>
+            <Button variant="accent" disabled={loading || !form.title} onClick={() => submitQuote(true)}>
+              <Send className="h-4 w-4" /> {loading ? "Sending…" : "Send to Client"}
             </Button>
-          )}
-          <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); setForm(blankForm()); }}>
-            Cancel
-          </Button>
-          <Button type="button" variant="outline" className="lg:hidden" onClick={() => setShowMobilePreview((open) => !open)}>
-            {showMobilePreview ? "Hide preview" : "Preview"}
-          </Button>
-        </div>
-      </div>
-      <div className={showMobilePreview ? "min-w-0" : "hidden min-w-0 lg:block"}>
-        <EstimatePdfPreview input={previewInput} logoUrl={brand.logoUrl} />
-      </div>
-      </div>
+            {editingId && (
+              <Button variant="outline" disabled={loading || !form.title} onClick={() => submitQuote(false)}>
+                {loading ? "Saving…" : "Save Draft"}
+              </Button>
+            )}
+            <Button variant="outline" onClick={closeForm}>
+              Cancel
+            </Button>
+          </>
+        }
+      />
     );
   }
 
@@ -1131,61 +1040,7 @@ export function QuoteSection({
           </Card>
         )}
 
-        {showForm && (
-          <>
-            {editingPreliminary ? (
-              <div className="space-y-4 rounded-2xl bg-slate-50/60 surface-dark:bg-subtle/60 p-6 ring-1 ring-black/[0.04]">
-                <p className="text-sm font-medium text-heading">Edit preliminary estimate</p>
-                <div className="space-y-2">
-                  <Label>Title</Label>
-                  <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Description & Includes</Label>
-                  <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={8} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Package Price</Label>
-                  {form.line_items.map((item, i) => (
-                    <div key={`prelim-line-${i}`} className="flex gap-2">
-                      <Input
-                        placeholder="Package name"
-                        value={item.description}
-                        onChange={(e) => updateLineItem(i, "description", e.target.value)}
-                        className="flex-1"
-                      />
-                      <CurrencyInput
-                        valueCents={item.amount_cents}
-                        onChangeCents={(cents) => updateLineItem(i, "amount_cents", cents)}
-                        className="w-32"
-                      />
-                    </div>
-                  ))}
-                </div>
-                <p className="text-sm font-medium">Total: {formatCurrency(totalCents)}</p>
-                {formTerms && <p className="text-sm leading-relaxed text-slate-600">{formTerms}</p>}
-                {renderDepositControls()}
-                <div className="space-y-2">
-                  <Label>Notes</Label>
-                  <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" disabled={loading || !form.title} onClick={savePreliminaryEdits}>
-                    Save Estimate
-                  </Button>
-                  <Button variant="accent" disabled={converting || loading || !form.title} onClick={convertToOfficial}>
-                    <Send className="h-4 w-4" /> Convert to Official Proposal
-                  </Button>
-                  <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); setForm(blankForm()); }}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              renderQuoteForm()
-            )}
-          </>
-        )}
+        {showForm && renderQuoteForm()}
 
       </div>
 

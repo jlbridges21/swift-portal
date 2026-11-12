@@ -2,6 +2,8 @@
 
 import { parseProjectDownloadAccess, type ProjectDownloadAccess } from "@/lib/deliverables";
 import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from "react";
+import { ProjectServicesPicker } from "@/components/admin/project-services-picker";
+import type { ServiceOption } from "@/components/forms/service-multi-select";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -196,6 +198,10 @@ interface AdminProjectDetailProps {
   heroBannerUrl?: string | null;
   /** New interface: the business's service names for the Project Type picker. */
   serviceOptions?: string[];
+  /** Every business service (inactive flagged) for the multi-service picker. Empty = legacy picker. */
+  serviceCatalog?: ServiceOption[];
+  /** Services linked to this project (v127 links, else the primary service_id). */
+  serviceIds?: string[];
   /** Client photo likes (read-only here; only clients change them). */
   clientFavorites?: ProjectClientFavorites;
   /** Admin Settings › Payments › Download Access — the default the project override falls back to. */
@@ -278,6 +284,8 @@ export function AdminProjectDetail({
   canManageMarketingOffers = false,
   heroBannerUrl = null,
   serviceOptions = [],
+  serviceCatalog = [],
+  serviceIds = [],
   clientFavorites: initialClientFavorites,
   businessRequiresDeliveredForDownloads = true,
 }: AdminProjectDetailProps) {
@@ -1698,8 +1706,21 @@ export function AdminProjectDetail({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Service Type</Label>
-              <Input value={form.service_type} onChange={(e) => setForm({ ...form, service_type: e.target.value })} />
+              <Label htmlFor="classic-project-services">Services</Label>
+              {serviceCatalog.length ? (
+                <ProjectServicesPicker
+                  id="classic-project-services"
+                  projectId={initialProject.id}
+                  catalog={serviceCatalog}
+                  initialIds={serviceIds}
+                  onSaved={({ serviceType }) => {
+                    if (serviceType) setForm((f) => ({ ...f, service_type: serviceType }));
+                    router.refresh();
+                  }}
+                />
+              ) : (
+                <Input value={form.service_type} onChange={(e) => setForm({ ...form, service_type: e.target.value })} />
+              )}
             </div>
             <div className="space-y-2">
               <Label>Delivery Date</Label>
@@ -2197,26 +2218,44 @@ export function AdminProjectDetail({
             />
 
             <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
+              {serviceCatalog.length ? (
+                <div className="flex min-w-0 shrink-0 items-center gap-3 lg:w-[22rem]">
+                  <label htmlFor="project-services" className="shrink-0 text-sm font-medium text-heading">
+                    Services
+                  </label>
+                  <ProjectServicesPicker
+                    projectId={initialProject.id}
+                    catalog={serviceCatalog}
+                    initialIds={serviceIds}
+                    className="min-w-0 flex-1"
+                    onSaved={({ serviceType }) => {
+                      if (serviceType) setForm((f) => ({ ...f, service_type: serviceType }));
+                      router.refresh();
+                    }}
+                  />
+                </div>
+              ) : (
               <label className="flex shrink-0 items-center gap-3">
-                <span className="text-sm font-medium text-heading">Project Type</span>
-                <span className="relative inline-flex min-w-0 flex-1 items-center lg:w-64 lg:flex-none">
-                  <Home className="pointer-events-none absolute left-3 h-4 w-4 text-muted" aria-hidden />
-                  <select
-                    value={form.service_type}
-                    disabled={typeSaving}
-                    onChange={(e) => void changeServiceType(e.target.value)}
-                    className="h-10 w-full min-w-0 appearance-none truncate rounded-lg border border-border bg-card pl-9 pr-9 text-sm font-medium text-heading shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
-                  >
-                    {!form.service_type ? <option value="">Choose a type…</option> : null}
-                    {typeChoices.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-muted" aria-hidden />
-                </span>
-              </label>
+                  <span className="text-sm font-medium text-heading">Project Type</span>
+                  <span className="relative inline-flex min-w-0 flex-1 items-center lg:w-64 lg:flex-none">
+                    <Home className="pointer-events-none absolute left-3 h-4 w-4 text-muted" aria-hidden />
+                    <select
+                      value={form.service_type}
+                      disabled={typeSaving}
+                      onChange={(e) => void changeServiceType(e.target.value)}
+                      className="h-10 w-full min-w-0 appearance-none truncate rounded-lg border border-border bg-card pl-9 pr-9 text-sm font-medium text-heading shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+                    >
+                      {!form.service_type ? <option value="">Choose a type…</option> : null}
+                      {typeChoices.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-muted" aria-hidden />
+                  </span>
+                </label>
+              )}
               <div aria-hidden className="hidden w-px self-stretch bg-border lg:block" />
               <div className="min-w-0 flex-1">
                 <StatusSummary

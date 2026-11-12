@@ -9,6 +9,7 @@ interface CurrencyInputProps {
   onChangeCents: (cents: number) => void;
   className?: string;
   placeholder?: string;
+  "aria-label"?: string;
 }
 
 function formatDollars(cents: number): string {
@@ -27,7 +28,13 @@ function parseDollars(raw: string): number {
   return Math.round(value * 100);
 }
 
-export function CurrencyInput({ valueCents, onChangeCents, className, placeholder = "0.00" }: CurrencyInputProps) {
+export function CurrencyInput({
+  valueCents,
+  onChangeCents,
+  className,
+  placeholder = "0.00",
+  "aria-label": ariaLabel,
+}: CurrencyInputProps) {
   const [display, setDisplay] = useState(() => (valueCents ? formatDollars(valueCents) : ""));
 
   useEffect(() => {
@@ -43,6 +50,7 @@ export function CurrencyInput({ valueCents, onChangeCents, className, placeholde
       <Input
         type="text"
         inputMode="decimal"
+        aria-label={ariaLabel}
         placeholder={placeholder}
         value={display}
         onChange={(e) => {

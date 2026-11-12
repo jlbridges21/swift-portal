@@ -1,5 +1,6 @@
 import type { ProjectQuote, QuoteLineItem, QuoteStatus } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
+import { estimateTotalPending, hasEstimateSections } from "@/lib/estimate-sections";
 
 export const ARCHIVED_QUOTE_NOTE = "Archived — superseded by a newer official proposal.";
 
@@ -172,7 +173,7 @@ export function getPaidLineItems(quote: ProjectQuote): QuoteLineItem[] {
 
 export function getQuotePackageName(quote: ProjectQuote): string {
   const paid = getPaidLineItems(quote);
-  if (paid.length === 1) return paid[0].description;
+  if (paid.length === 1 && !hasEstimateSections(quote.description)) return paid[0].description;
   return quote.title
     .replace(/^Preliminary Estimate — /i, "")
     .replace(/^Official Proposal — /i, "")
@@ -185,6 +186,21 @@ export function getQuotePriceDisplay(quote: ProjectQuote): {
   priceLabel: string;
   priceCents: number;
 } {
+  // Combined (multi-service) estimate: the total is the sum of priced services. While a
+  // Custom Quote is pending it is never shown as the price on its own.
+  if (hasEstimateSections(quote.description)) {
+    const priced = getPaidLineItems(quote).length > 0 && quote.total_cents > 0;
+    if (!priced) return { showPrice: false, priceLabel: "Custom Quote", priceCents: 0 };
+    if (estimateTotalPending(quote.notes)) {
+      return {
+        showPrice: false,
+        priceLabel: `${formatCurrency(quote.total_cents)} + Custom Quote`,
+        priceCents: quote.total_cents,
+      };
+    }
+    return { showPrice: true, priceLabel: formatCurrency(quote.total_cents), priceCents: quote.total_cents };
+  }
+
   const startingNote = quote.notes?.split("\n").find((line) => /starting at|per visit|custom/i.test(line));
   const isCustom =
     quote.total_cents === 0 ||

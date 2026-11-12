@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ServiceSelect } from "@/components/forms/service-select";
+import { ServiceMultiSelect } from "@/components/forms/service-multi-select";
+import { newRequestKey } from "@/lib/request-key";
 import { AddressFields } from "@/components/forms/address-fields";
 import { CheckCircle2, Loader2, UserRound } from "lucide-react";
 
@@ -41,6 +42,8 @@ export function RequestFormBody({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [submittedInline, setSubmittedInline] = useState<string | null>(null);
+  // One key per form load: a repeated submit returns the same project instead of a second one.
+  const requestKey = useRef<string | null>(null);
   const inquiryMode = !instantPreliminaryEstimate;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -49,7 +52,8 @@ export function RequestFormBody({
     setLoading(true);
     setError("");
 
-    const data = Object.fromEntries(new FormData(e.currentTarget).entries());
+    requestKey.current ??= newRequestKey();
+    const data = { ...Object.fromEntries(new FormData(e.currentTarget).entries()), request_key: requestKey.current };
 
     try {
       const res = await fetch("/api/request", {
@@ -166,8 +170,8 @@ export function RequestFormBody({
                   ) : (
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="service_requested">Service Requested *</Label>
-                        <ServiceSelect id="service_requested" name="service_requested" required />
+                        <Label htmlFor="service_requested">Services Requested *</Label>
+                        <ServiceMultiSelect id="service_requested" name="service_requested" required size="lg" />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="preferred_date">Preferred Date</Label>

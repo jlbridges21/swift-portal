@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { MULTI_SERVICE_LABEL, MULTI_SERVICE_SEPARATOR } from "@/lib/project-service-names";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -24,7 +25,8 @@ export function formatDate(date: string | Date | null): string {
 /** Default display name: "123 Main St — Aerial Photography" */
 export function defaultProjectName(propertyAddress: string, serviceType: string): string {
   const address = propertyAddress.trim();
-  const service = serviceType.trim();
+  // Several services ("A + B") read "Multiple Services"; the full list stays on the project.
+  const service = serviceType.includes(MULTI_SERVICE_SEPARATOR) ? MULTI_SERVICE_LABEL : serviceType.trim();
   if (!address && !service) return "";
   if (!service) return address;
   if (!address) return service;

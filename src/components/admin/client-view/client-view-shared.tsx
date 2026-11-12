@@ -1,5 +1,6 @@
 "use client";
 
+import { compactServiceLabel, projectServiceNames } from "@/lib/project-service-names";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, FolderOpen, MoreHorizontal, User } from "lucide-react";
@@ -35,15 +36,19 @@ export function StagePill({ status, className }: { status: ProjectStatus; classN
 
 export function ServicePill({ service, className }: { service: string; className?: string }) {
   if (!service) return null;
+  // Several services ("A + B"): "A +1", full list on hover / for screen readers.
+  const names = projectServiceNames({ service_type: service });
+  const label = compactServiceLabel({ service_type: service });
   return (
     <span
       className={cn(
         "inline-block max-w-full truncate rounded-full bg-accent-subtle px-2 py-0.5 text-[11px] font-medium text-accent",
         className
       )}
-      title={service}
+      title={names.join(", ")}
+      aria-label={names.length > 1 ? `Services: ${names.join(", ")}` : undefined}
     >
-      {service}
+      {label}
     </span>
   );
 }
@@ -101,11 +106,14 @@ export function ProjectActionsButton({
   onMove,
   canOpenClients,
   className,
+  extraItems,
 }: {
   project: ClientViewProjectRow;
   onMove: (project: ClientViewProjectRow, next: ProjectStatus) => void;
   canOpenClients: boolean;
   className?: string;
+  /** Appended after a separator (e.g. Hide / Restore in the Projects List). */
+  extraItems?: ActionMenuItem[];
 }) {
   const router = useRouter();
   const openClientProfile = useOpenClientProfile();
@@ -149,6 +157,7 @@ export function ProjectActionsButton({
       }
     );
   }
+  if (extraItems?.length) items.push({ type: "separator", id: "sep-extra" }, ...extraItems);
 
   return (
     <>

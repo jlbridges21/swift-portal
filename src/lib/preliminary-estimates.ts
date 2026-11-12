@@ -7,6 +7,11 @@ import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
 import { decidePreliminaryTravel } from "@/lib/preliminary-travel";
 import type { ZipQuery } from "@/lib/zip-distance";
 import { logWorkflowSkipped } from "@/lib/workflow";
+import {
+  buildConsolidatedEstimatePayload,
+  buildPreliminaryEstimatePayloadFromTemplate,
+  type ServiceTemplate,
+} from "@/lib/service-templates";
 
 async function resolveProjectBusinessId(projectId: string): Promise<string | null> {
   const raw = await createServiceClient();
@@ -18,82 +23,25 @@ async function resolveProjectBusinessId(projectId: string): Promise<string | nul
   return data?.business_id ?? null;
 }
 
-export async function upsertPreliminaryEstimate(
-  projectId: string,
-  serviceType: string,
-  options?: { userId?: string | null; businessId?: string }
-) {
-  if (!serviceType?.trim()) {
-    return null;
-  }
-
-  const businessId = options?.businessId || (await resolveProjectBusinessId(projectId));
-  if (!businessId) {
-    console.warn("[preliminary-estimate] skipped upsert — could not resolve businessId", { projectId });
-    return null;
-  }
-
-  const appSettings = await getAppSettings(businessId);
-  if (!appSettings.proposals.autoPreliminaryEstimate) {
-    return null;
-  }
-
-  const db = await createTenantServiceClient(businessId);
-
-  const { data: existing } = await db
-    .from("project_quotes")
-    .select("id")
-    .eq("project_id", projectId)
-    .eq("quote_kind", "preliminary")
-    .maybeSingle();
-
-  if (existing) {
-    const payload = await buildPreliminaryEstimateWithTravel({
-      projectId,
-      serviceType,
-      businessId,
-      appSettings,
-      db: db as unknown as TravelEstimateDb,
-    });
-    const expiresAt = addProposalExpiration(
-      new Date(),
-      appSettings.proposals.defaultEstimateExpirationDays
-    );
-    const { data: updated, error } = await db
-      .from("project_quotes")
-      .update({
-        title: payload.title,
-        description: payload.description,
-        line_items: payload.line_items,
-        total_cents: payload.total_cents,
-        notes: payload.notes,
-        expires_at: expiresAt,
-        status: "sent",
-        sent_at: new Date().toISOString(),
-        ...(payload.travelActive ? { travel_one_way_miles: payload.oneWayMiles } : {}),
-      })
-      .eq("id", existing.id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("[preliminary-estimate] failed to update:", error.message);
-      return null;
-    }
-    return updated;
-  }
-
-  return createPreliminaryEstimate(projectId, serviceType, {
-    userId: options?.userId,
-    skipIfExists: false,
-    businessId,
-  });
-}
+/*
+ * There is deliberately no "regenerate" / upsert path. Once created, a
+ * preliminary estimate is independent: changing the project's services, its
+ * type or Settings → Services prices never rewrites it. Businesses edit it.
+ */
 
 export async function createPreliminaryEstimate(
   projectId: string,
   serviceType: string,
-  options?: { userId?: string | null; skipIfExists?: boolean; businessId?: string }
+  options?: {
+    userId?: string | null;
+    skipIfExists?: boolean;
+    businessId?: string;
+    /**
+     * Services validated against this business's catalog. Two or more build ONE
+     * combined estimate; omitted / one keeps the single-service estimate.
+     */
+    templates?: ServiceTemplate[];
+  }
 ) {
   if (!serviceType?.trim()) {
     return null;
@@ -128,6 +76,7 @@ export async function createPreliminaryEstimate(
     businessId,
     appSettings,
     db: db as unknown as TravelEstimateDb,
+    templates: options?.templates,
   });
   const expiresAt = addProposalExpiration(
     new Date(),
@@ -165,7 +114,11 @@ export async function createPreliminaryEstimate(
       businessId,
       projectId,
       userId: options?.userId ?? null,
-      metadata: { quoteId: quote.id, serviceType },
+      metadata: {
+        quoteId: quote.id,
+        serviceType,
+        ...(payload.services ? { services: payload.services.map((s) => s.name), combined: true } : {}),
+      },
     }
   );
 
@@ -201,16 +154,19 @@ async function buildPreliminaryEstimateWithTravel(input: {
   businessId: string;
   appSettings: Awaited<ReturnType<typeof getAppSettings>>;
   db: TravelEstimateDb;
+  templates?: ServiceTemplate[];
 }) {
   const { projectId, serviceType, businessId, appSettings, db } = input;
-  const built = await buildPreliminaryEstimatePayload(
-    serviceType,
-    {
-      portalName: appSettings.business.portalName,
-      businessName: appSettings.business.businessName,
-    },
-    businessId
-  );
+  const brand = {
+    portalName: appSettings.business.portalName,
+    businessName: appSettings.business.businessName,
+  };
+  const built =
+    input.templates && input.templates.length > 1
+      ? buildConsolidatedEstimatePayload(input.templates, brand)
+      : input.templates?.length === 1
+        ? { ...buildPreliminaryEstimatePayloadFromTemplate(input.templates[0], brand), services: null }
+        : { ...(await buildPreliminaryEstimatePayload(serviceType, brand, businessId)), services: null };
   const { data: project } = await db
     .from("projects")
     .select("property_address")
@@ -251,5 +207,6 @@ async function buildPreliminaryEstimateWithTravel(input: {
     notes: built.notes,
     travelActive: decision.active,
     oneWayMiles: decision.oneWayMiles,
+    services: built.services,
   };
 }

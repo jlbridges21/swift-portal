@@ -14,6 +14,8 @@ import { quotePaymentTermsText, resolveQuoteDepositTerms, type DepositTerms } fr
 import { formatCurrency } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2 } from "lucide-react";
+import { estimateTotalPending, parseEstimateDescription, sectionIsCustomQuote } from "@/lib/estimate-sections";
+import { EstimatePriceTable, EstimateSectionsView } from "@/components/projects/estimate-sections-view";
 import { cn } from "@/lib/utils";
 
 interface ProposalCardProps {
@@ -30,8 +32,13 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
   const brand = usePortalBrand();
   const packageName = getQuotePackageName(quote);
   const { showPrice, priceLabel, priceCents } = getQuotePriceDisplay(quote);
-  const includes = parseQuoteIncludes(quote.description);
-  const intro = getQuoteIntroText(quote.description);
+  // Combined (multi-service) estimates group deliverables under each service heading.
+  const parsed = parseEstimateDescription(quote.description);
+  const sectioned = parsed.sections.length > 0;
+  const totalPending = sectioned && estimateTotalPending(quote.notes);
+  const customCount = parsed.sections.filter(sectionIsCustomQuote).length;
+  const includes = sectioned ? [] : parseQuoteIncludes(quote.description);
+  const intro = sectioned ? parsed.intro || null : getQuoteIntroText(quote.description);
   const isApproved = quote.status === "approved";
   const isPreliminary = kind === "preliminary";
   const needsReview = !isAdmin && kind === "official" && quote.status === "sent";
@@ -63,7 +70,7 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
             {preliminaryEstimateDisclaimer(brand.name, brand.preliminaryDisclaimer)}
           </p>
           <p className="text-xs leading-relaxed text-slate-500 surface-dark:text-muted">
-            This is not the final proposal. Final pricing will be confirmed after {brand.name}
+            This is not the final proposal. Final pricing will be confirmed after {brand.name}{" "}
             reviews the property, schedules the shoot, and confirms the project scope.
           </p>
         </div>
@@ -77,7 +84,12 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-2">
-          {showPrice && priceLabel.toLowerCase().includes("starting") && (
+          {sectioned && (showPrice || totalPending) && (
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">
+              {totalPending ? "Priced services so far" : "Estimated total"}
+            </p>
+          )}
+          {!sectioned && showPrice && priceLabel.toLowerCase().includes("starting") && (
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">
               {priceLabel}
             </p>
@@ -85,12 +97,23 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
           <h3 className="text-xl font-semibold tracking-tight text-slate-900 surface-dark:text-heading sm:text-2xl">
             {packageName}
           </h3>
+          {sectioned && totalPending && (
+            <>
+              <p className="text-3xl font-bold tracking-tight text-slate-900 surface-dark:text-heading sm:text-4xl">
+                {formatCurrency(priceCents)}
+              </p>
+              <p className="max-w-md text-sm leading-relaxed text-slate-600 surface-dark:text-foreground">
+                Plus a custom quote for {customCount === 1 ? "the remaining service" : "the remaining services"}. The
+                full total is pending.
+              </p>
+            </>
+          )}
           {showPrice && (
             <p className="text-3xl font-bold tracking-tight text-slate-900 surface-dark:text-heading sm:text-4xl">
               {priceLabel.toLowerCase().includes("starting") ? formatCurrency(priceCents) : priceLabel}
             </p>
           )}
-          {!showPrice && (
+          {!showPrice && !totalPending && (
             <p className="text-lg font-semibold tracking-tight text-slate-700 surface-dark:text-foreground">{priceLabel}</p>
           )}
           {paymentTerms && (
@@ -112,7 +135,9 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
         <p className="mt-4 text-sm leading-relaxed text-slate-600 surface-dark:text-foreground">{intro}</p>
       )}
 
-      {(quote.line_items ?? []).filter((item) => item.amount_cents > 0).length > 1 && (
+      {sectioned && <EstimatePriceTable quote={quote} sections={parsed.sections} className="mt-5" />}
+
+      {!sectioned && (quote.line_items ?? []).filter((item) => item.amount_cents > 0).length > 1 && (
         <ul className="mt-5 space-y-2">
           {quote.line_items
             .filter((item) => item.amount_cents > 0)
@@ -130,6 +155,8 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
           Straight-line distance used: {quote.travel_one_way_miles} miles one way. Clients do not see this.
         </p>
       )}
+
+      {sectioned && <EstimateSectionsView sections={parsed.sections} className="mt-5" />}
 
       {includes.length > 0 && (
         <div className="mt-5">
