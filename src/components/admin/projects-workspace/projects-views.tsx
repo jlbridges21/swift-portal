@@ -30,7 +30,16 @@ export function useHeroUrls(promise?: Promise<Record<string, string | null>>) {
       return;
     }
     let live = true;
-    promise.then((m) => live && setUrls(m)).catch(() => live && setUrls(null));
+    // A promise streamed from a Server Component arrives as a React thenable whose
+    // .then() returns undefined — never chain .catch(); pass the rejection handler instead.
+    promise.then(
+      (m) => {
+        if (live) setUrls(m);
+      },
+      () => {
+        if (live) setUrls(null);
+      }
+    );
     return () => {
       live = false;
     };
