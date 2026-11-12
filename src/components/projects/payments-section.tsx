@@ -98,6 +98,13 @@ interface PaymentsSectionProps {
   allowClientPayInFull?: boolean;
   /** Downloads already open (business default or project override) — drop the "pay to unlock" line. */
   downloadsUnlocked?: boolean;
+  /**
+   * Open payments that are optional Marketing Kit add-ons (linked through marketing_kit_purchases).
+   * Listed apart from required project charges, in calm blue, and never tied to downloads.
+   */
+  optionalPaymentIds?: string[];
+  /** Short item labels for optional payments ("Property Website", …), keyed by payment id. */
+  optionalPaymentLabels?: Record<string, string>;
 }
 
 function quoteForPayment(quotes: ProjectQuote[], payment: Payment): ProjectQuote | undefined {
@@ -266,9 +273,14 @@ export function PaymentsSection({
   depositAmountCents = 0,
   allowClientPayInFull = false,
   downloadsUnlocked = false,
+  optionalPaymentIds,
+  optionalPaymentLabels = {},
 }: PaymentsSectionProps) {
   const brand = usePortalBrand();
-  const outstanding = payments.filter((p) => isOutstandingPayment(p.status));
+  const optionalIds = new Set(optionalPaymentIds ?? []);
+  const outstandingAll = payments.filter((p) => isOutstandingPayment(p.status));
+  const outstanding = outstandingAll.filter((p) => !optionalIds.has(p.id));
+  const optionalOutstanding = outstandingAll.filter((p) => optionalIds.has(p.id));
   const processing = payments.filter((p) => p.status === "processing");
   const paid = payments.filter((p) => p.status === "paid");
   const cancelled = payments.filter((p) => p.status === "cancelled");
@@ -314,6 +326,42 @@ export function PaymentsSection({
                         depositAmountCents={depositAmountCents}
                         allowClientPayInFull={allowClientPayInFull}
                         downloadsLocked={!downloadsUnlocked}
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {optionalOutstanding.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-1">Optional add-ons</h3>
+            <p className="mb-3 text-sm text-muted">
+              Marketing Kit items you started. Complete checkout whenever you&apos;re ready — your project media isn&apos;t affected.
+            </p>
+            <div className="space-y-3">
+              {optionalOutstanding.map((p) => (
+                <Card key={p.id} className="border-accent/25 bg-gradient-to-r from-accent-subtle to-white shadow-sm surface-dark:from-background surface-dark:to-background">
+                  <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xl font-bold text-heading">{formatCurrency(p.amount)}</p>
+                        <Badge className="bg-accent-subtle text-accent">Optional</Badge>
+                      </div>
+                      <p className="text-sm text-muted mt-0.5">{optionalPaymentLabels[p.id] || p.description}</p>
+                    </div>
+                    {!isPreview && (
+                      <PayChoices
+                        payment={p}
+                        quote={undefined}
+                        paidCents={0}
+                        depositMode={depositMode}
+                        depositPercent={depositPercent}
+                        depositAmountCents={depositAmountCents}
+                        allowClientPayInFull={allowClientPayInFull}
+                        downloadsLocked={false}
                       />
                     )}
                   </CardContent>

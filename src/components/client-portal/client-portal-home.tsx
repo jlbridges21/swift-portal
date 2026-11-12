@@ -23,6 +23,8 @@ export type PortalHomeProject = {
   coverUrl: string | null;
   /** Open payment links on this project (visible payments only). */
   dueCents: number;
+  /** Open optional Marketing Kit add-on charges (never shown as "due"). */
+  optionalDueCents: number;
   /** A shared proposal waits for approval. */
   estimateAwaiting: { title: string; priceCents: number | null } | null;
   nextStepTitle: string | null;
@@ -54,7 +56,7 @@ export function ClientPortalHome({
   const activeCount = projects.filter((p) => !p.delivered).length;
   const deliveredCount = projects.length - activeCount;
   const attention = useMemo(
-    () => projects.filter((p) => p.dueCents > 0 || p.estimateAwaiting),
+    () => projects.filter((p) => p.dueCents > 0 || p.estimateAwaiting || p.optionalDueCents > 0),
     [projects]
   );
   const shown = projects.filter((p) => (filter === "all" ? true : filter === "active" ? !p.delivered : p.delivered));
@@ -105,11 +107,16 @@ export function ClientPortalHome({
                   </span>
                   <div className="min-w-0">
                     <p className="font-semibold text-heading">
-                      {p.dueCents > 0 ? `${formatCurrency(p.dueCents)} due` : "Estimate ready for review"}
+                      {p.dueCents > 0
+                        ? `${formatCurrency(p.dueCents)} due`
+                        : p.estimateAwaiting
+                          ? "Estimate ready for review"
+                          : `Marketing Kit checkout · ${formatCurrency(p.optionalDueCents)}`}
                     </p>
                     <p className="truncate text-sm text-muted">
                       {p.name}
                       {p.dueCents <= 0 && p.estimateAwaiting?.priceCents != null ? ` · ${formatCurrency(p.estimateAwaiting.priceCents)}` : ""}
+                      {p.dueCents <= 0 && !p.estimateAwaiting ? " · optional add-ons" : ""}
                     </p>
                   </div>
                 </div>
@@ -120,7 +127,7 @@ export function ClientPortalHome({
                     p.dueCents > 0 ? "" : "text-accent"
                   )}
                 >
-                  {p.dueCents > 0 ? "Pay Now" : "Review Estimate"} <ArrowRight className="h-4 w-4" />
+                  {p.dueCents > 0 ? "Pay Now" : p.estimateAwaiting ? "Review Estimate" : "Complete Checkout"} <ArrowRight className="h-4 w-4" />
                 </span>
               </Link>
             ))}
@@ -211,6 +218,10 @@ function ProjectCard({ project: p }: { project: PortalHomeProject }) {
         {p.dueCents > 0 ? (
           <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm">
             <CreditCard className="h-3 w-3" /> {formatCurrency(p.dueCents)} due
+          </span>
+        ) : p.optionalDueCents > 0 && !p.estimateAwaiting ? (
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-accent-foreground shadow-sm">
+            <CreditCard className="h-3 w-3" /> {formatCurrency(p.optionalDueCents)} checkout
           </span>
         ) : p.estimateAwaiting ? (
           <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-accent-foreground shadow-sm">

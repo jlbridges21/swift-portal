@@ -320,11 +320,14 @@ function StatusBanner({ ctx }: { ctx: PortalCtx }) {
     const amount = formatCurrency(f.dueCents);
     const downloadsHeldByPayment = mediaReady && !ctx.clientDownloadsUnlocked;
     const title = downloadsHeldByPayment ? "Your media is ready!" : "Payment due";
-    const body = downloadsHeldByPayment
-      ? `A payment of ${amount} is required before you can download your files.`
-      : mediaReady && ctx.clientDownloadsUnlocked
-        ? `A payment of ${amount} is due. Your downloads are already available.`
-        : `A payment of ${amount} is due for this project.`;
+    const optionalNote =
+      f.optionalDueCents > 0 ? ` Optional Marketing Kit items (${formatCurrency(f.optionalDueCents)}) can be paid separately.` : "";
+    const body =
+      (downloadsHeldByPayment
+        ? `A payment of ${amount} is required before you can download your files.`
+        : mediaReady && ctx.clientDownloadsUnlocked
+          ? `A payment of ${amount} is outstanding for your project. Your downloads are already available.`
+          : `A payment of ${amount} is outstanding for your project.`) + optionalNote;
     return (
       <BannerShell tone="red" icon={CreditCard} title={title} body={body}>
         <Button variant="accent" className="min-h-11" onClick={() => ctx.goTo("pay", undefined, "payments")}>
@@ -350,6 +353,29 @@ function StatusBanner({ ctx }: { ctx: PortalCtx }) {
         <Button variant="accent" className="min-h-11" onClick={() => ctx.goTo("pay", undefined, "quote")}>
           Review Estimate <ArrowRight className="h-4 w-4" />
         </Button>
+      </BannerShell>
+    );
+  }
+
+  if (hasPay && f.kind === "checkout") {
+    const amount = formatCurrency(f.optionalDueCents);
+    return (
+      <BannerShell
+        tone="blue"
+        icon={Megaphone}
+        title="Complete your Marketing Kit checkout"
+        body={`You have ${amount} in optional marketing assets awaiting payment (${f.optionalCharges
+          .map((c) => c.label)
+          .join(", ")}). Complete checkout whenever you're ready — your project media isn't affected.`}
+      >
+        <Button variant="accent" className="min-h-11" onClick={() => ctx.goTo("pay", undefined, "payments")}>
+          Complete Checkout — {amount}
+        </Button>
+        {ctx.availableTabs.has("marketing") ? (
+          <Button variant="outline" className="min-h-11" onClick={() => ctx.goTo("marketing")}>
+            <Megaphone className="h-4 w-4" /> View Marketing Kit
+          </Button>
+        ) : null}
       </BannerShell>
     );
   }

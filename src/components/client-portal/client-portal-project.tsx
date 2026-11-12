@@ -85,6 +85,7 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
     paymentOptions = { bankAvailable: false, passCardFee: false },
     marketingKit = null,
     clientFavoriteIds = null,
+    marketingPaymentLinks = {},
   } = props;
 
   const searchParams = useSearchParams();
@@ -135,9 +136,9 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
   const financial = useMemo(
     () =>
       canViewFinancials && !isSharedViewer
-        ? resolvePortalFinancialState(show.estimates ? quotes : [], show.payments ? payments : [])
+        ? resolvePortalFinancialState(show.estimates ? quotes : [], show.payments ? payments : [], marketingPaymentLinks)
         : resolvePortalFinancialState([], []),
-    [canViewFinancials, isSharedViewer, quotes, payments, show.estimates, show.payments]
+    [canViewFinancials, isSharedViewer, quotes, payments, show.estimates, show.payments, marketingPaymentLinks]
   );
 
   const marketingProducts = useMemo(() => {
@@ -446,6 +447,8 @@ function payTabAppearance(ctx: PortalCtx): { suffix: string | null; tone: "blue"
   switch (f.kind) {
     case "due":
       return { suffix: `${formatCurrency(f.dueCents)} Due`, tone: "red" };
+    case "checkout":
+      return { suffix: `${formatCurrency(f.optionalDueCents)} Checkout`, tone: "blue" };
     case "balance":
       return { suffix: `${formatCurrency(f.balanceCents)} Balance`, tone: "amber" };
     case "review":
@@ -473,7 +476,9 @@ function ProjectTabsNav({ tab, ctx }: { tab: PortalTab; ctx: PortalCtx }) {
 
   return (
     <nav aria-label="Project sections" className="mx-auto w-full max-w-7xl px-2 sm:px-4 lg:px-6">
-      <div ref={scrollerRef} className="no-scrollbar flex items-center gap-1 overflow-x-auto py-2">
+      {/* overflow-x-auto clips to the padding box: px/-mx leave room for the active ring and focus ring
+          at both ends without changing alignment or bar height. */}
+      <div ref={scrollerRef} className="no-scrollbar -mx-2 flex items-center gap-1 overflow-x-auto px-2 py-2">
         {items.map((t) => {
           const { label, icon: Icon } = TAB_META[t];
           const active = tab === t;

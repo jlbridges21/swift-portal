@@ -383,6 +383,8 @@ export function EstimatePayTab({ ctx }: { ctx: PortalCtx }) {
               depositAmountCents={ctx.depositAmountCents}
               allowClientPayInFull={ctx.allowClientPayInFull}
               downloadsUnlocked={ctx.clientDownloadsUnlocked}
+              optionalPaymentIds={ctx.financial.optionalCharges.map((c) => c.payment.id)}
+              optionalPaymentLabels={Object.fromEntries(ctx.financial.optionalCharges.map((c) => [c.payment.id, c.label]))}
             />
           </div>
         ) : null}
@@ -470,6 +472,9 @@ function FinancialSummary({ ctx }: { ctx: PortalCtx }) {
           f.openPayments.length > 1 ? `${f.openPayments.length} open payments` : first?.description || null,
           first?.due_date ? `Due ${formatDate(first.due_date)}` : null,
           f.coveredCents > 0 ? `${formatCurrency(f.coveredCents)} already paid` : null,
+          f.optionalDueCents > 0
+            ? `Also open: ${formatCurrency(f.optionalDueCents)} in optional Marketing Kit add-ons (${f.optionalCharges.map((c) => c.label).join(", ")}) — not required for your project.`
+            : null,
           media && !ctx.clientDownloadsUnlocked ? "Downloads unlock once your payment is complete." : null,
         ]}
         action={
@@ -479,6 +484,30 @@ function FinancialSummary({ ctx }: { ctx: PortalCtx }) {
             onClick={() => document.getElementById("payments")?.scrollIntoView({ behavior: "smooth", block: "start" })}
           >
             Pay Now — {formatCurrency(f.dueCents)}
+          </Button>
+        }
+      />
+    );
+  }
+
+  if (f.kind === "checkout") {
+    return (
+      <SummaryPanel
+        tone="blue"
+        icon={Megaphone}
+        eyebrow="Marketing Kit Checkout"
+        amount={formatCurrency(f.optionalDueCents)}
+        lines={[
+          ...f.optionalCharges.map((c) => `${c.label} — ${formatCurrency(c.payment.amount)}`),
+          "These are optional add-ons. Nothing else is due right now, and your project media isn't affected — complete checkout whenever you're ready.",
+        ]}
+        action={
+          <Button
+            variant="accent"
+            className="min-h-11 w-full sm:w-auto"
+            onClick={() => document.getElementById("payments")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          >
+            Complete Checkout — {formatCurrency(f.optionalDueCents)}
           </Button>
         }
       />

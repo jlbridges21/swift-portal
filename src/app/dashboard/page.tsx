@@ -29,6 +29,7 @@ import { getProjectActiveQuote, getQuotePriceDisplay } from "@/lib/quote-display
 import { PayNowButton } from "@/components/payments/pay-now-button";
 import type { Project, ShootProposal, ActivityLog, ProjectQuote } from "@/lib/types";
 import { getClientPortalInterface } from "@/lib/ui-rollout-server";
+import { loadMarketingPaymentLinks } from "@/lib/marketing/payment-links";
 import { ClientPortalHome, type PortalHomeProject } from "@/components/client-portal/client-portal-home";
 
 export default async function ClientDashboard() {
@@ -152,9 +153,19 @@ export default async function ClientDashboard() {
 
   // New Experience: clients follow the business owner's interface choice.
   if ((await getClientPortalInterface(tenant.businessId)) === "new") {
+    // Optional Marketing Kit add-on charges are shown apart from required project payments.
+    const addonPaymentIds = new Set(
+      Object.keys(
+        outstandingInvoices.length
+          ? await loadMarketingPaymentLinks(tenant.businessId, Array.from(new Set(outstandingInvoices.map((pay) => pay.project_id))))
+          : {}
+      )
+    );
     const homeProjects: PortalHomeProject[] = (projects ?? []).map((p) => {
       const delivered = normalizeStatus(p.status) === "delivered";
-      const dueCents = outstandingInvoices.filter((pay) => pay.project_id === p.id).reduce((sum, pay) => sum + pay.amount, 0);
+      const open = outstandingInvoices.filter((pay) => pay.project_id === p.id);
+      const dueCents = open.filter((pay) => !addonPaymentIds.has(pay.id)).reduce((sum, pay) => sum + pay.amount, 0);
+      const optionalDueCents = open.filter((pay) => addonPaymentIds.has(pay.id)).reduce((sum, pay) => sum + pay.amount, 0);
       const active = isSharedViewer ? null : getProjectActiveQuote(quotesByProject.get(p.id) ?? [], "client");
       const awaiting = active && active.kind === "official" && active.quote.status === "sent" ? active.quote : null;
       const price = awaiting ? getQuotePriceDisplay(awaiting) : null;
@@ -174,6 +185,7 @@ export default async function ClientDashboard() {
         delivered,
         coverUrl: coverMap.get(p.id) ?? null,
         dueCents,
+        optionalDueCents,
         estimateAwaiting: awaiting ? { title: awaiting.title, priceCents: price?.showPrice ? price.priceCents : null } : null,
         nextStepTitle: step?.title ?? null,
         dateLabel: delivered && p.delivery_date

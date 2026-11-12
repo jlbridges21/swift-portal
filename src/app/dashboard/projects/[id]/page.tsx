@@ -39,6 +39,7 @@ import type {
 import { ProjectPageClient } from "@/components/projects/project-page-client";
 import { ClientPortalProject } from "@/components/client-portal/client-portal-project";
 import { getClientPortalInterfaceFor } from "@/lib/ui-rollout-server";
+import { loadMarketingPaymentLinks } from "@/lib/marketing/payment-links";
 import { UrlToastHandler } from "@/components/ui/url-toast-handler";
 
 interface PageProps {
@@ -231,8 +232,11 @@ async function ProjectContent({
   // New Experience portal: clients follow the business owner's interface; a business user
   // previewing the client view sees the portal for the interface they use themselves.
   const portalInterface = await getClientPortalInterfaceFor(profile, tenant.businessId);
-  const PortalPage =
-    portalInterface === "new" && !(isAdminViewer && !preview) ? ClientPortalProject : ProjectPageClient;
+  const useNewPortal = portalInterface === "new" && !(isAdminViewer && !preview);
+  const PortalPage = useNewPortal ? ClientPortalProject : ProjectPageClient;
+  // Which open charges are optional Marketing Kit add-ons (presentation only).
+  const marketingPaymentLinks =
+    useNewPortal && visiblePayments.length ? await loadMarketingPaymentLinks(tenant.businessId, [id]) : {};
 
   return (
     <>
@@ -281,6 +285,7 @@ async function ProjectContent({
         canAccessVideoReviews={canAccessReviews}
         marketingKit={marketingKit}
         clientFavoriteIds={clientFavoriteIds}
+        marketingPaymentLinks={marketingPaymentLinks}
       />
     </>
   );

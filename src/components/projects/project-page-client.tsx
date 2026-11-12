@@ -40,6 +40,7 @@ import type { HeroMedia } from "@/lib/cover";
 import { ProjectHero } from "@/components/projects/project-hero";
 import { ClientMarketingUpsell } from "@/components/marketing/client-marketing-upsell";
 import type { KitSummary } from "@/lib/marketing/server";
+import type { MarketingProduct } from "@/lib/marketing/model";
 import { paidCentsForQuote, quoteOutstandingBalanceCents } from "@/lib/payment-quote";
 import type { PaymentAutomationSettings } from "@/lib/workflow-settings";
 import { ViewOnlyAccessChip } from "@/components/ui/view-only-access-chip";
@@ -99,6 +100,8 @@ export interface ProjectPageClientProps {
   marketingKit?: KitSummary | null;
   /** The signed-in client's liked photo ids; null hides the heart controls. */
   clientFavoriteIds?: string[] | null;
+  /** payment id → Marketing Kit add-ons it pays for (optional charges). New client portal only. */
+  marketingPaymentLinks?: Record<string, MarketingProduct[]>;
 }
 
 const REVISION_STATUS_LABEL: Record<string, string> = {
