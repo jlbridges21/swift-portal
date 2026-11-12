@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, Box, CheckCircle2, Clapperboard, Clock, CreditCard, Eye, FileText, Images, Megaphone, Rotate3d, X,
+  ArrowLeft, Box, LayoutGrid, CheckCircle2, Clapperboard, Clock, CreditCard, Eye, FileText, Images, Megaphone, Rotate3d, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ProjectPageClientProps } from "@/components/projects/project-page-client";
@@ -18,7 +18,7 @@ import { HashScrollHandler } from "@/components/ui/hash-scroll-handler";
 import { PortalTopBar } from "@/components/client-portal/portal-ui";
 import { resolvePortalFinancialState } from "@/components/client-portal/portal-financial-state";
 import { parsePortalTab, type PortalCtx, type PortalTab } from "@/components/client-portal/portal-context";
-import { GalleryTab } from "@/components/client-portal/portal-gallery";
+import { GalleryTab, PhotosTab } from "@/components/client-portal/portal-gallery";
 import {
   EstimatePayTab, FilesTab, MarketingTab, ModelsTab, ToursTab, VideosTab,
 } from "@/components/client-portal/portal-sections";
@@ -39,7 +39,7 @@ const HASH_TAB: Record<string, PortalTab> = {
   payments: "pay",
   scheduling: "gallery",
   "deliverable-review": "gallery",
-  "photo-gallery": "gallery",
+  "photo-gallery": "photos",
   video: "videos",
   models: "models",
   documents: "files",
@@ -86,6 +86,7 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
     marketingKit = null,
     clientFavoriteIds = null,
     marketingPaymentLinks = {},
+    tourEmbedUrls,
   } = props;
 
   const searchParams = useSearchParams();
@@ -148,6 +149,7 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
 
   const availableTabs = useMemo(() => {
     const set = new Set<PortalTab>(["gallery"]);
+    if (show.photos && photos.length > 0) set.add("photos");
     if (show.videos && videos.length > 0) set.add("videos");
     if (show.tours && tours.length > 0) set.add("tours");
     if (show.models && models.length > 0) set.add("models");
@@ -155,17 +157,20 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
     if (show.documents && documents.length > 0) set.add("files");
     if (canViewFinancials && !isSharedViewer && (show.estimates || show.payments)) set.add("pay");
     return set;
-  }, [show.videos, show.tours, show.models, show.documents, show.estimates, show.payments, videos.length, tours.length, models.length, documents.length, marketingProducts.length, canViewFinancials, isSharedViewer]);
+  }, [show.photos, photos.length, show.videos, show.tours, show.models, show.documents, show.estimates, show.payments, videos.length, tours.length, models.length, documents.length, marketingProducts.length, canViewFinancials, isSharedViewer]);
 
-  const tab: PortalTab = availableTabs.has(requestedTab) ? requestedTab : "gallery";
+  // Links from before the Photos tab (?album=… with no tab) open the Photos tab.
+  const legacyAlbum = requestedTab === "gallery" && Boolean(searchParams.get("album"));
+  const wanted: PortalTab = legacyAlbum ? "photos" : requestedTab;
+  const tab: PortalTab = availableTabs.has(wanted) ? wanted : "gallery";
 
   const goTo = useCallback(
     (next: PortalTab, extra?: Record<string, string | null>, hash?: string) => {
       const params = new URLSearchParams(window.location.search);
       if (next === "gallery") params.delete("tab");
       else params.set("tab", next);
-      // Leaving the gallery drops the album; callers pass it again when they want one.
-      if (next !== "gallery" || !extra || !("album" in extra)) params.delete("album");
+      // Only the Photos tab keeps an album (folder / all / favorites); callers pass it when they want one.
+      if (next !== "photos" || !extra || !("album" in extra)) params.delete("album");
       for (const [k, v] of Object.entries(extra ?? {})) {
         if (v == null) params.delete(k);
         else params.set(k, v);
@@ -351,6 +356,7 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
     favoriteDownloadCount,
     availableTabs,
     marketingProducts,
+    tourEmbedUrls,
   };
 
   const pageTitle = project.property_address?.trim() || project.project_name;
@@ -376,6 +382,7 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
 
         <main className="mx-auto w-full max-w-7xl px-4 pb-16 pt-4 sm:px-6 sm:pt-6 lg:px-8">
           {tab === "gallery" && <GalleryTab ctx={ctx} />}
+          {tab === "photos" && <PhotosTab ctx={ctx} />}
           {tab === "videos" && <VideosTab ctx={ctx} />}
           {tab === "tours" && <ToursTab ctx={ctx} />}
           {tab === "models" && <ModelsTab ctx={ctx} />}
@@ -432,7 +439,8 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
 }
 
 const TAB_META: Record<PortalTab, { label: string; icon: ComponentType<{ className?: string }> }> = {
-  gallery: { label: "Gallery", icon: Images },
+  gallery: { label: "Gallery", icon: LayoutGrid },
+  photos: { label: "Photos", icon: Images },
   videos: { label: "Videos", icon: Clapperboard },
   tours: { label: "360 Tours", icon: Rotate3d },
   models: { label: "3D Models", icon: Box },
@@ -463,7 +471,7 @@ function payTabAppearance(ctx: PortalCtx): { suffix: string | null; tone: "blue"
 }
 
 function ProjectTabsNav({ tab, ctx }: { tab: PortalTab; ctx: PortalCtx }) {
-  const order: PortalTab[] = ["gallery", "videos", "tours", "models", "marketing", "files"];
+  const order: PortalTab[] = ["gallery", "photos", "videos", "tours", "models", "marketing", "files"];
   const items = order.filter((t) => ctx.availableTabs.has(t));
   const pay = ctx.availableTabs.has("pay") ? payTabAppearance(ctx) : null;
   const scrollerRef = useRef<HTMLDivElement>(null);

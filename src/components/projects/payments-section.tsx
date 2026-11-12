@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Clock, CreditCard, Landmark, Receipt } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
-import { paymentCheckoutPath, paymentMethodLabel } from "@/lib/payment-status";
+import { paymentCheckoutPath, paymentMethodLabel, paymentReceiptHref } from "@/lib/payment-status";
 import { cardFeeCents } from "@/lib/card-fee";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import { clientPayChoice, paidCentsForQuote, resolveQuoteDepositTerms } from "@/lib/payment-quote";
@@ -210,7 +210,7 @@ export function CheckoutChoiceButtons({
           setPending(null);
           afterPayment(true);
         }}
-        fallbackReceiptHref={`/api/payments/${payment.id}/receipt`}
+        fallbackReceiptHref={paymentReceiptHref(payment.id)}
         doneLabel="Return to project"
       />
       <PayMethodPicker method={method} onChange={setMethod} sampleCents={buttons[0]?.cents ?? payment.amount} />
@@ -421,19 +421,12 @@ export function PaymentsSection({
                     </div>
                     <div className="flex items-center gap-2 sm:shrink-0">
                       <Badge variant="success">Paid</Badge>
-                      {p.stripe_receipt_url ? (
-                        <a href={p.stripe_receipt_url} target="_blank" rel="noopener noreferrer">
-                          <Button variant="outline" size="sm">
-                            View receipt
-                          </Button>
-                        </a>
-                      ) : (
-                        <a href={`/api/payments/${p.id}/receipt`}>
-                          <Button variant="outline" size="sm">
-                            Payment record
-                          </Button>
-                        </a>
-                      )}
+                      {/* ShootPortal's own receipt page. Stripe-hosted receipt links expire. */}
+                      <a href={paymentReceiptHref(p.id)}>
+                        <Button variant="outline" size="sm">
+                          View receipt
+                        </Button>
+                      </a>
                     </div>
                   </div>
                 ))}
@@ -495,7 +488,7 @@ function CheckoutReturnResume({ payments, downloadsLocked }: { payments: Payment
         setDismissed(true);
         afterPayment(true);
       }}
-      fallbackReceiptHref={`/api/payments/${payment.id}/receipt`}
+      fallbackReceiptHref={paymentReceiptHref(payment.id)}
       doneLabel="Return to project"
     />
   );

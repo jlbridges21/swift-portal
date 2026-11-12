@@ -41,7 +41,8 @@ function receiptBody(args: {
   ];
   if (args.bankTransfer) lines.push("Paid by bank transfer (ACH).");
   else if (args.cardLast4) lines.push(`Card ending ${args.cardLast4}.`);
-  if (args.receiptUrl) lines.push(`Stripe receipt: ${args.receiptUrl}`);
+  // No Stripe receipt_url here: Stripe expires those links. The CTA opens the
+  // permanent ShootPortal receipt instead.
   return lines.join(" ");
 }
 
@@ -63,7 +64,7 @@ export function buildReceiptMail(args: {
     subject,
     title: subject,
     body: receiptBody(args),
-    ctaLabel: "View in portal",
+    ctaLabel: "View receipt",
     ctaUrl: args.portalUrl,
   };
 }
@@ -187,8 +188,9 @@ export async function sendPaymentReceiptEmails(
 ): Promise<{ sent: ReceiptMail[]; skipped: string[] }> {
   const settings = await getAppSettings(args.businessId);
   const origin = await getBusinessPortalOriginById(args.businessId);
-  const clientPortal = `${origin}/dashboard/projects/${args.payment.project_id}#payments`;
-  const businessPortal = `${origin}/admin/projects/${args.payment.project_id}#payments`;
+  // Permanent ShootPortal receipt pages (sign-in required, access checked per viewer).
+  const clientPortal = `${origin}/dashboard/projects/${args.payment.project_id}/receipts/${args.payment.id}`;
+  const businessPortal = `${origin}/admin/projects/${args.payment.project_id}/receipts/${args.payment.id}`;
   const send = deps?.send ?? (async (mail: ReceiptMail) => {
     await sendBrandedEmail({
       businessId: args.businessId,

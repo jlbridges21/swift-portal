@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { paymentCheckoutPath } from "@/lib/payment-status";
+import { paymentCheckoutPath, paymentReceiptHref } from "@/lib/payment-status";
 import { EmbeddedCheckoutModal, postStartCheckout } from "@/components/payments/embedded-checkout-modal";
 
 /** "Pay Now" that opens ShootPortal's embedded checkout instead of redirecting to Stripe. */
@@ -29,7 +29,7 @@ export function PayNowButton({ paymentId, title, className }: { paymentId: strin
         statusUrl={(sessionId) => `${paymentCheckoutPath(paymentId)}/status${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ""}`}
         title={title}
         onSettled={() => router.refresh()}
-        fallbackReceiptHref={`/api/payments/${paymentId}/receipt`}
+        fallbackReceiptHref={paymentReceiptHref(paymentId)}
       />
     </>
   );

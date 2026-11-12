@@ -23,6 +23,14 @@ export function paymentCheckoutPath(paymentId: string): string {
   return `/api/payments/${paymentId}/checkout`;
 }
 
+/**
+ * Stable ShootPortal receipt link for a paid payment. Routes the viewer to their portal's
+ * receipt page. Never a Stripe-hosted receipt_url — those expire.
+ */
+export function paymentReceiptHref(paymentId: string): string {
+  return `/api/payments/${paymentId}/receipt`;
+}
+
 /** How a payment was made, for history rows and receipts. */
 export function paymentMethodLabel(payment: { payment_method_type?: string | null; card_last4?: string | null; stripe_checkout_session_id?: string | null; stripe_payment_intent_id?: string | null }): string | null {
   switch (payment.payment_method_type) {

@@ -41,7 +41,7 @@ export type SiteVideo = {
 };
 
 /** `url` opens the tour; `embedUrl` is set only for hosts known to allow iframes. */
-export type SiteTour = { id: string; title: string; url: string; embedUrl: string | null };
+export type SiteTour = { id: string; title: string; url: string; embedUrl: string | null; thumbnailUrl?: string | null };
 
 /** One approved portfolio project with public-safe media (built server-side). */
 export type SitePortfolioProject = {

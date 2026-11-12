@@ -18,6 +18,8 @@ export function PublicPayPage({ token, view }: { token: string; view: PublicPayV
   const [open, setOpen] = useState(false);
   const [dismissedReturn, setDismissedReturn] = useState(false);
   const base = `/api/public/pay/${encodeURIComponent(token)}`;
+  // ShootPortal receipt page for this pay link (Stripe-hosted receipt links expire).
+  const receiptHref = `/pay/${encodeURIComponent(token)}/receipt`;
 
   const startCheckout = useCallback(({ method }: { method: "card" | "bank" }) => postStartCheckout(`${base}/session`, { method }), [base]);
   const statusUrl = useCallback(
@@ -66,13 +68,11 @@ export function PublicPayPage({ token, view }: { token: string; view: PublicPayV
                 title="Paid — thank you!"
                 detail={view.paidAt ? `Paid ${formatDate(view.paidAt)}` : "This payment is complete."}
                 action={
-                  view.receiptUrl ? (
-                    <a href={view.receiptUrl} target="_blank" rel="noopener noreferrer">
-                      <Button variant="outline" size="sm" className="min-h-10">
-                        <Receipt className="h-4 w-4" aria-hidden /> Receipt
-                      </Button>
-                    </a>
-                  ) : null
+                  <a href={receiptHref}>
+                    <Button variant="outline" size="sm" className="min-h-10">
+                      <Receipt className="h-4 w-4" aria-hidden /> View receipt
+                    </Button>
+                  </a>
                 }
               />
             ) : view.status === "processing" ? (
@@ -120,6 +120,7 @@ export function PublicPayPage({ token, view }: { token: string; view: PublicPayV
         resumeSessionId={open ? null : resume}
         title="Payment request"
         onSettled={() => router.refresh()}
+        fallbackReceiptHref={receiptHref}
         doneLabel="Done"
       />
     </main>

@@ -45,7 +45,7 @@ export type EmbeddedCheckoutModalProps = {
   /** Downloads were locked before paying; show the unlock message when the server says they're open. */
   downloadsWereLocked?: boolean;
   onDownloadMedia?: () => void;
-  /** Receipt fallback when Stripe's receipt link isn't available yet. */
+  /** ShootPortal receipt page for this payment (preferred over Stripe's expiring receipt_url). */
   fallbackReceiptHref?: string | null;
   doneLabel?: string;
   /** Shown in the success note once the server confirms payment (e.g. "Your Marketing Kit is unlocked."). */
@@ -456,7 +456,8 @@ function EmbeddedCheckoutDialog({
 
   const summary = start?.summary;
   const total = summary?.totalCents ?? outcome?.amountCents ?? 0;
-  const receiptHref = outcome?.receiptUrl || fallbackReceiptHref || null;
+  // ShootPortal's permanent receipt page first; Stripe's hosted receipt_url expires.
+  const receiptHref = fallbackReceiptHref || outcome?.receiptUrl || null;
 
   return (
     <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-4">

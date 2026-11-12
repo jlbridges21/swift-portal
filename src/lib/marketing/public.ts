@@ -12,7 +12,8 @@
 import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getAppSettings } from "@/lib/app-settings";
 import { isClientVisibleTour } from "@/lib/client-media";
-import { getTourEmbedUrl, normalizeTourUrl } from "@/lib/tour-url";
+import { normalizeTourUrl } from "@/lib/tour-url";
+import { resolveTourEmbedMap } from "@/lib/tour-embed-server";
 import { isUuid, type AssetRef, type MarketingContent, type MediaIndexItem, type TourItem } from "@/lib/marketing/model";
 import {
   businessLogoFromSettings,
@@ -81,11 +82,22 @@ async function resolve(db: TenantServiceClient, kit: KitPublicRow | null): Promi
   };
   let tours: TourItem[] = [];
   if (project.client_section_tours !== false && content.website.sections.some((s) => s.key === "tour" && s.visible)) {
-    const { data } = await db.from("tours").select("id, tour_name, kuula_url, client_visible").eq("project_id", project.id).order("display_order");
-    tours = ((data ?? []) as { id: string; tour_name: string; kuula_url: string; client_visible?: boolean }[])
-      .filter((t) => isClientVisibleTour(t) && t.kuula_url)
-      .map((t) => ({ id: t.id, title: t.tour_name || "Virtual tour", url: normalizeTourUrl(t.kuula_url) ?? "", embedUrl: getTourEmbedUrl(t.kuula_url) }))
-      .filter((t) => Boolean(t.url));
+    const { data } = await db
+      .from("tours")
+      .select("id, tour_name, kuula_url, embed_code, thumbnail_url, client_visible")
+      .eq("project_id", project.id)
+      .order("display_order");
+    const rows = ((data ?? []) as { id: string; tour_name: string; kuula_url: string; embed_code?: string | null; thumbnail_url?: string | null; client_visible?: boolean }[])
+      .filter((t) => isClientVisibleTour(t) && t.kuula_url && normalizeTourUrl(t.kuula_url));
+    // Same resolver as the client portal: embed code → provider embed URL → framing check.
+    const embeds = await resolveTourEmbedMap(rows);
+    tours = rows.map((t) => ({
+      id: t.id,
+      title: t.tour_name || "Virtual tour",
+      url: normalizeTourUrl(t.kuula_url) ?? "",
+      embedUrl: embeds[t.id] ?? null,
+      thumbnailUrl: t.thumbnail_url?.startsWith("https://") ? t.thumbnail_url : null,
+    }));
   }
   const settings = await getAppSettings(db.businessId);
   return {

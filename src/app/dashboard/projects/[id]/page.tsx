@@ -40,6 +40,7 @@ import { ProjectPageClient } from "@/components/projects/project-page-client";
 import { ClientPortalProject } from "@/components/client-portal/client-portal-project";
 import { getClientPortalInterfaceFor } from "@/lib/ui-rollout-server";
 import { loadMarketingPaymentLinks } from "@/lib/marketing/payment-links";
+import { resolveTourEmbedMap } from "@/lib/tour-embed-server";
 import { UrlToastHandler } from "@/components/ui/url-toast-handler";
 
 interface PageProps {
@@ -237,6 +238,8 @@ async function ProjectContent({
   // Which open charges are optional Marketing Kit add-ons (presentation only).
   const marketingPaymentLinks =
     useNewPortal && visiblePayments.length ? await loadMarketingPaymentLinks(tenant.businessId, [id]) : {};
+  // How each visible tour is shown: embedded viewer, or a link when the provider blocks framing.
+  const tourEmbedUrls = visibleTours.length ? await resolveTourEmbedMap(visibleTours) : {};
 
   return (
     <>
@@ -286,6 +289,7 @@ async function ProjectContent({
         marketingKit={marketingKit}
         clientFavoriteIds={clientFavoriteIds}
         marketingPaymentLinks={marketingPaymentLinks}
+        tourEmbedUrls={tourEmbedUrls}
       />
     </>
   );

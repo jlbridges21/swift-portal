@@ -22,6 +22,7 @@ import { mediaDisplayName } from "@/lib/media-display-name";
 import { PRODUCT_LABEL, type MarketingProduct } from "@/lib/marketing/model";
 import { formatCents } from "@/lib/marketing/offers";
 import { getQuotePriceDisplay } from "@/lib/quote-display";
+import { paymentReceiptHref } from "@/lib/payment-status";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { MediaAsset } from "@/lib/types";
 
@@ -106,7 +107,7 @@ export function ToursTab({ ctx }: { ctx: PortalCtx }) {
         {ctx.tours.map((tour) => (
           <div key={tour.id} className="overflow-hidden rounded-2xl border border-border shadow-sm">
             {tour.description ? <p className="border-b border-border bg-card px-5 py-3 text-sm text-muted">{tour.description}</p> : null}
-            <TourCard tour={tour} embedInPortal />
+            <TourCard tour={tour} embedInPortal embedUrl={ctx.tourEmbedUrls ? ctx.tourEmbedUrls[tour.id] ?? null : undefined} />
           </div>
         ))}
       </div>
@@ -407,7 +408,8 @@ function FinancialSummary({ ctx }: { ctx: PortalCtx }) {
 
   if (f.kind === "paid") {
     const last = f.paidPayments[0];
-    const receiptHref = last?.stripe_receipt_url || (last ? `/api/payments/${last.id}/receipt` : null);
+    // ShootPortal's own receipt page (Stripe-hosted receipt links expire).
+    const receiptHref = last ? paymentReceiptHref(last.id) : null;
     return (
       <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <div className="flex items-center gap-4 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-4 surface-dark:from-card surface-dark:to-card sm:p-5">
@@ -451,7 +453,7 @@ function FinancialSummary({ ctx }: { ctx: PortalCtx }) {
             <ArrowLeft className="h-4 w-4" /> Return to Gallery
           </Button>
           {receiptHref ? (
-            <a href={receiptHref} target={last?.stripe_receipt_url ? "_blank" : undefined} rel="noopener noreferrer" className={cn(buttonVariants({ variant: "outline" }), "min-h-11 sm:min-w-48")}>
+            <a href={receiptHref} className={cn(buttonVariants({ variant: "outline" }), "min-h-11 sm:min-w-48")}>
               <Receipt className="h-4 w-4" /> View Receipt
             </a>
           ) : null}

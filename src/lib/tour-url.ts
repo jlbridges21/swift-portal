@@ -51,3 +51,33 @@ export function getTourEmbedUrl(tourUrl: string | null | undefined): string | nu
   if (hostIs(host, "cloudpano.com")) return url;
   return null;
 }
+
+/**
+ * The iframe `src` from a provider's embed code (`<iframe src="https://…">`), https only.
+ * Only the URL is used — the rest of the pasted HTML is never rendered on published pages.
+ */
+export function embedSrcFromCode(code: string | null | undefined): string | null {
+  if (!code) return null;
+  const match = code.match(/<iframe\b[^>]*?\bsrc\s*=\s*(["'])(.*?)\1/i);
+  if (!match) return null;
+  const src = match[2].replace(/&amp;/g, "&").trim();
+  return src.startsWith("https://") ? normalizeTourUrl(src) : null;
+}
+
+/**
+ * Whether a response's own headers allow other sites to frame it.
+ * X-Frame-Options DENY/SAMEORIGIN or a CSP frame-ancestors list without `*` mean no.
+ * (A frame-ancestors list naming specific hosts can't include our many custom domains.)
+ */
+export function headersAllowFraming(headers: { get(name: string): string | null }): boolean {
+  const xfo = (headers.get("x-frame-options") ?? "").trim().toLowerCase();
+  if (xfo === "deny" || xfo === "sameorigin" || xfo.startsWith("allow-from")) return false;
+  const csp = headers.get("content-security-policy") ?? "";
+  for (const directive of csp.split(";")) {
+    const parts = directive.trim().toLowerCase().split(/\s+/);
+    if (parts[0] !== "frame-ancestors") continue;
+    const sources = parts.slice(1);
+    if (!sources.includes("*") && !sources.includes("https:")) return false;
+  }
+  return true;
+}

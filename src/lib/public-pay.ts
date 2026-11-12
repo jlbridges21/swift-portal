@@ -21,7 +21,6 @@ export type PublicPayView = {
   dueDate: string | null;
   status: "open" | "paid" | "processing" | "cancelled";
   paidAt: string | null;
-  receiptUrl: string | null;
 };
 
 export type ResolvedPublicPayment = {
@@ -79,7 +78,6 @@ export function publicPayView(payment: Payment): PublicPayView {
     dueDate: payment.due_date,
     status,
     paidAt: payment.paid_at,
-    receiptUrl: payment.stripe_receipt_url,
   };
 }
 

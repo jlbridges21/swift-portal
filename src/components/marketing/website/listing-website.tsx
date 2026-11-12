@@ -8,6 +8,7 @@
  * preview frames. Sections render in the user's order and hide themselves when the
  * underlying facts or media are missing — nothing is invented to fill a layout.
  */
+import { TourViewer } from "@/components/tours/tour-viewer";
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { PoweredByShootPortal } from "@/components/website/powered-by";
 import { Bath, BedDouble, CalendarDays, Check, ChevronLeft, ChevronRight, Globe, Mail, Maximize2, Phone, Ruler, X } from "lucide-react";
@@ -426,15 +427,14 @@ function Tours({ view, skin }: { view: ListingView; skin: Skin }) {
         </H>
         <div className="mt-8 space-y-6">
           {view.tours.map((t) => (
-            <div key={t.id} className={`overflow-hidden ${skin.imgRadius} bg-black aspect-video`}>
-              {t.embedUrl ? (
-                <iframe src={t.embedUrl} title={t.title} className="h-full w-full" allow="fullscreen; xr-spatial-tracking; gyroscope; accelerometer" loading="lazy" />
-              ) : (
-                <a href={t.url} target="_blank" rel="noopener noreferrer" className="flex h-full w-full items-center justify-center">
-                  <span className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-lg">Open 360 Tour</span>
-                </a>
-              )}
-            </div>
+            <TourViewer
+              key={t.id}
+              title={t.title}
+              url={t.url}
+              embedUrl={t.embedUrl}
+              thumbnailUrl={t.thumbnailUrl}
+              className={skin.imgRadius}
+            />
           ))}
         </div>
       </div>

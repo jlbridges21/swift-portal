@@ -6,9 +6,9 @@ import type { MediaAsset, Revision } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import type { PortalFinancialState } from "@/components/client-portal/portal-financial-state";
 
-export type PortalTab = "gallery" | "videos" | "tours" | "models" | "marketing" | "files" | "pay";
+export type PortalTab = "gallery" | "photos" | "videos" | "tours" | "models" | "marketing" | "files" | "pay";
 
-export const PORTAL_TABS: PortalTab[] = ["gallery", "videos", "tours", "models", "marketing", "files", "pay"];
+export const PORTAL_TABS: PortalTab[] = ["gallery", "photos", "videos", "tours", "models", "marketing", "files", "pay"];
 
 export function parsePortalTab(raw: string | null | undefined): PortalTab {
   return PORTAL_TABS.includes(raw as PortalTab) ? (raw as PortalTab) : "gallery";
@@ -75,6 +75,8 @@ export type PortalCtx = Required<
   zipFavorites: ZipController;
   favoriteDownloadCount: number;
   availableTabs: Set<PortalTab>;
+  /** tour id → iframe URL resolved on the server (null = provider blocks embedding). */
+  tourEmbedUrls?: Record<string, string | null>;
   /** Marketing add-ons the client can see on this project. */
   marketingProducts: ("website" | "social")[];
 };

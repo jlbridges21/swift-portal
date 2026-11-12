@@ -14,7 +14,8 @@
 import { getAppSettings, saveAppSettings } from "@/lib/app-settings";
 import { normalizeStatus } from "@/lib/constants";
 import { isClientVisibleTour } from "@/lib/client-media";
-import { getTourEmbedUrl, normalizeTourUrl } from "@/lib/tour-url";
+import { normalizeTourUrl } from "@/lib/tour-url";
+import { resolveTourEmbedMap } from "@/lib/tour-embed-server";
 import { getYouTubeEmbedUrl, getYouTubeThumbnail } from "@/lib/youtube";
 import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supabase/tenant-service";
 import { loadEligibleMedia, loadProjectRow, type EligibleMediaRow } from "@/lib/marketing/server";
@@ -50,13 +51,19 @@ async function loadTours(db: TenantServiceClient, project: ProjectRow): Promise<
   if (project.client_section_tours === false) return [];
   const { data } = await db
     .from("tours")
-    .select("id, tour_name, kuula_url, client_visible")
+    .select("id, tour_name, kuula_url, embed_code, thumbnail_url, client_visible")
     .eq("project_id", project.id)
     .order("display_order");
-  return ((data ?? []) as { id: string; tour_name: string; kuula_url: string; client_visible?: boolean }[])
-    .filter((t) => isClientVisibleTour(t) && t.kuula_url)
-    .map((t) => ({ id: t.id, title: t.tour_name || "Virtual tour", url: normalizeTourUrl(t.kuula_url) ?? "", embedUrl: getTourEmbedUrl(t.kuula_url) }))
-    .filter((t) => Boolean(t.url));
+  const rows = ((data ?? []) as { id: string; tour_name: string; kuula_url: string; embed_code?: string | null; thumbnail_url?: string | null; client_visible?: boolean }[])
+    .filter((t) => isClientVisibleTour(t) && t.kuula_url && normalizeTourUrl(t.kuula_url));
+  const embeds = await resolveTourEmbedMap(rows);
+  return rows.map((t) => ({
+    id: t.id,
+    title: t.tour_name || "Virtual tour",
+    url: normalizeTourUrl(t.kuula_url) ?? "",
+    embedUrl: embeds[t.id] ?? null,
+    thumbnailUrl: t.thumbnail_url?.startsWith("https://") ? t.thumbnail_url : null,
+  }));
 }
 
 function toImage(mode: PortfolioUrlMode, projectId: string, row: EligibleMediaRow, title: string): SiteImage {

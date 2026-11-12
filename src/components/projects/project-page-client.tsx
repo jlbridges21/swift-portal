@@ -102,6 +102,8 @@ export interface ProjectPageClientProps {
   clientFavoriteIds?: string[] | null;
   /** payment id → Marketing Kit add-ons it pays for (optional charges). New client portal only. */
   marketingPaymentLinks?: Record<string, MarketingProduct[]>;
+  /** tour id → iframe URL from resolveTourEmbedUrl (null = provider blocks embedding). */
+  tourEmbedUrls?: Record<string, string | null>;
 }
 
 const REVISION_STATUS_LABEL: Record<string, string> = {
@@ -178,6 +180,7 @@ export function ProjectPageClient({
   paymentOptions = { bankAvailable: false, passCardFee: false },
   marketingKit = null,
   clientFavoriteIds = null,
+  tourEmbedUrls,
 }: ProjectPageClientProps) {
   const router = useRouter();
   const favoritesController = useClientFavorites(project.id, clientFavoriteIds ?? []);
@@ -565,7 +568,7 @@ export function ProjectPageClient({
               <div className="space-y-6">
                 {tours.map((tour) => (
                   <div key={tour.id} className="rounded-2xl overflow-hidden shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-                    <TourCard tour={tour} embedInPortal />
+                    <TourCard tour={tour} embedInPortal embedUrl={tourEmbedUrls ? tourEmbedUrls[tour.id] ?? null : undefined} />
                   </div>
                 ))}
               </div>
@@ -775,7 +778,7 @@ export function ProjectPageClient({
               <div className="space-y-6">
                 {tours.map((tour) => (
                   <div key={tour.id} className="rounded-2xl overflow-hidden shadow-lg shadow-slate-200/40 ring-1 ring-black/5">
-                    <TourCard tour={tour} embedInPortal />
+                    <TourCard tour={tour} embedInPortal embedUrl={tourEmbedUrls ? tourEmbedUrls[tour.id] ?? null : undefined} />
                   </div>
                 ))}
               </div>

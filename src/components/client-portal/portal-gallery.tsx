@@ -44,10 +44,15 @@ function sortPhotos(list: MediaAsset[]) {
   });
 }
 
+/** Gallery = the project home page (overview of every media type). */
 export function GalleryTab({ ctx }: { ctx: PortalCtx }) {
-  const album = useSearchParams().get("album");
-  if (album && ctx.show.photos) return <FullGallery ctx={ctx} album={album} />;
   return <GalleryHome ctx={ctx} />;
+}
+
+/** Photos = the dedicated full gallery (?tab=photos&album=folders | all | favorites | unfiled | <folderId>). */
+export function PhotosTab({ ctx }: { ctx: PortalCtx }) {
+  const album = useSearchParams().get("album") || (ctx.mediaFolders.length ? "folders" : "all");
+  return <FullGallery ctx={ctx} album={album} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,7 +106,7 @@ function GalleryHome({ ctx }: { ctx: PortalCtx }) {
               }
               action={
                 photos.length ? (
-                  <PortalPillButton onClick={() => ctx.goTo("gallery", { album: ctx.mediaFolders.length ? "folders" : "all" })}>
+                  <PortalPillButton onClick={() => ctx.goTo("photos", { album: ctx.mediaFolders.length ? "folders" : "all" })}>
                     View Full Gallery <ArrowRight className="h-3.5 w-3.5" />
                   </PortalPillButton>
                 ) : null
@@ -114,7 +119,7 @@ function GalleryHome({ ctx }: { ctx: PortalCtx }) {
                   getDownloadUrl={ctx.getDownloadUrl}
                   downloadsAllowed={ctx.downloadsUnlocked}
                   favorites={ctx.favorites}
-                  onMore={() => ctx.goTo("gallery", { album: "all" })}
+                  onMore={() => ctx.goTo("photos", { album: "all" })}
                 />
               ) : (
                 <EmptyState icon={Images} title="No photos yet" description="Your photos will appear here once your shoot is ready." />
@@ -155,9 +160,19 @@ function GalleryHome({ ctx }: { ctx: PortalCtx }) {
           ) : null}
 
           {ctx.availableTabs.has("tours") || ctx.availableTabs.has("models") ? (
-            <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
-              {ctx.availableTabs.has("tours") ? <TourPreviewCard ctx={ctx} /> : null}
-              {ctx.availableTabs.has("models") ? <ModelPreviewCard ctx={ctx} /> : null}
+            // Only the media types that exist; a lone card uses the full width (no empty column).
+            <div
+              className={cn(
+                "grid gap-4 sm:gap-5",
+                ctx.availableTabs.has("tours") && ctx.availableTabs.has("models") && "sm:grid-cols-2"
+              )}
+            >
+              {ctx.availableTabs.has("tours") ? (
+                <TourPreviewCard ctx={ctx} wide={!ctx.availableTabs.has("models")} />
+              ) : null}
+              {ctx.availableTabs.has("models") ? (
+                <ModelPreviewCard ctx={ctx} wide={!ctx.availableTabs.has("tours")} />
+              ) : null}
             </div>
           ) : null}
 
@@ -281,7 +296,7 @@ function PortalHero({ ctx }: { ctx: PortalCtx }) {
               {showFavorites && !locked ? (
                 <button
                   type="button"
-                  onClick={ctx.favoriteDownloadCount > 0 ? ctx.zipFavorites.start : () => ctx.goTo("gallery", { album: "favorites" })}
+                  onClick={ctx.favoriteDownloadCount > 0 ? ctx.zipFavorites.start : () => ctx.goTo("photos", { album: "favorites" })}
                   disabled={ctx.zipFavorites.active}
                   title={ctx.favoriteDownloadCount > 0 ? "Download your favorite photos" : "Heart photos to build your favorites"}
                   className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-white/90 disabled:opacity-60"
@@ -292,7 +307,7 @@ function PortalHero({ ctx }: { ctx: PortalCtx }) {
               ) : showFavorites && ctx.favorites!.count > 0 ? (
                 <button
                   type="button"
-                  onClick={() => ctx.goTo("gallery", { album: "favorites" })}
+                  onClick={() => ctx.goTo("photos", { album: "favorites" })}
                   className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-white/90"
                 >
                   <Heart className="h-4 w-4 fill-current text-accent" /> Favorites ({ctx.favorites!.count})
@@ -452,8 +467,19 @@ function BannerShell({
   );
 }
 
-function TourPreviewCard({ ctx }: { ctx: PortalCtx }) {
+/**
+ * 360 tour preview on the home page — a picture, not the live tour (keeps Gallery fast).
+ * Image: the tour's own thumbnail → the project cover → the first photo → a quiet placeholder.
+ * Clicking opens the 360 Tours tab, where the tour is embedded and interactive.
+ */
+function TourPreviewCard({ ctx, wide }: { ctx: PortalCtx; wide: boolean }) {
   const tour = ctx.tours[0];
+  const tourThumb = ctx.tours.find((t) => t.thumbnail_url?.startsWith("https://"))?.thumbnail_url ?? null;
+  const heroImage = ctx.hero?.type === "image" ? ctx.hero.url : ctx.hero?.type === "youtube" ? ctx.hero.posterUrl : null;
+  const firstPhotoId = !tourThumb && !heroImage && ctx.show.photos ? sortPhotos(ctx.photos)[0]?.id ?? null : null;
+  const thumbs = useThumbUrls(firstPhotoId ? [firstPhotoId] : []);
+  const [failed, setFailed] = useState(false);
+  const image = tourThumb || heroImage || (firstPhotoId ? thumbs[firstPhotoId] : null) || null;
   return (
     <PortalCard
       title={ctx.tours.length > 1 ? "360° Virtual Tours" : "360° Virtual Tour"}
@@ -463,15 +489,36 @@ function TourPreviewCard({ ctx }: { ctx: PortalCtx }) {
       <button
         type="button"
         onClick={() => ctx.goTo("tours")}
-        className="group relative block aspect-[16/9] w-full overflow-hidden rounded-xl bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-      >
-        {tour.thumbnail_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={tour.thumbnail_url} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
-        ) : (
-          <div aria-hidden className="absolute inset-0 bg-[radial-gradient(120%_120%_at_80%_0%,color-mix(in_srgb,var(--color-accent)_45%,transparent),transparent_60%),linear-gradient(135deg,#0f172a,#1e293b)]" />
+        aria-label={`View 360 tour${tour.tour_name ? `: ${tour.tour_name}` : ""}`}
+        className={cn(
+          "group relative block w-full overflow-hidden rounded-xl bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
+          wide ? "aspect-[16/9] sm:aspect-[21/9]" : "aspect-[16/9]"
         )}
-        <span className="absolute inset-0 bg-black/20" aria-hidden />
+      >
+        {image && !failed ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image}
+            alt=""
+            loading="lazy"
+            onError={() => setFailed(true)}
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
+          />
+        ) : (
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-[radial-gradient(120%_120%_at_80%_0%,color-mix(in_srgb,var(--color-accent)_45%,transparent),transparent_60%),linear-gradient(135deg,#0f172a,#1e293b)]"
+          />
+        )}
+        <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-black/20" />
+        {/* 360 badge so the card reads as an interactive tour */}
+        <span
+          aria-hidden
+          className="absolute left-1/2 top-[42%] flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border border-white/50 bg-black/30 text-white backdrop-blur-sm transition-transform duration-300 group-hover:scale-110"
+        >
+          <Rotate3d className="h-6 w-6" />
+          <span className="text-[10px] font-bold tracking-wide">360°</span>
+        </span>
         <span className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-accent-foreground shadow-lg">
           <Rotate3d className="h-4 w-4" /> View 360 Tour <ArrowRight className="h-4 w-4" />
         </span>
@@ -480,7 +527,7 @@ function TourPreviewCard({ ctx }: { ctx: PortalCtx }) {
   );
 }
 
-function ModelPreviewCard({ ctx }: { ctx: PortalCtx }) {
+function ModelPreviewCard({ ctx, wide }: { ctx: PortalCtx; wide: boolean }) {
   const model = ctx.models[0];
   return (
     <PortalCard
@@ -491,7 +538,7 @@ function ModelPreviewCard({ ctx }: { ctx: PortalCtx }) {
       <button
         type="button"
         onClick={() => ctx.goTo("models")}
-        className="group relative block aspect-[16/9] w-full overflow-hidden rounded-xl bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+        className={cn("group relative block w-full overflow-hidden rounded-xl bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2", wide ? "aspect-[16/9] sm:aspect-[21/9]" : "aspect-[16/9]")}
       >
         <div aria-hidden className="absolute inset-0 bg-[radial-gradient(90%_90%_at_50%_40%,#334155,transparent_70%),linear-gradient(135deg,#0f172a,#111827)]" />
         <Box className="absolute left-1/2 top-[40%] h-14 w-14 -translate-x-1/2 -translate-y-1/2 text-white/25 transition-transform duration-500 group-hover:scale-110" aria-hidden />
@@ -586,7 +633,7 @@ function ProjectUpdates({ ctx }: { ctx: PortalCtx }) {
 
       {ctx.activities.length > 0 ? (
         <PortalCard title="Project Activity" icon={History} className={canRevise || ctx.revisions.length > 0 ? undefined : "xl:col-span-2"}>
-          <ProjectActivityTimeline activities={ctx.activities} clientMode />
+          <ProjectActivityTimeline activities={ctx.activities} clientMode bare pageSize={3} />
         </PortalCard>
       ) : null}
     </div>
@@ -732,7 +779,7 @@ function FavoritesCard({ ctx }: { ctx: PortalCtx }) {
       {favPhotos.length ? (
         <button
           type="button"
-          onClick={() => ctx.goTo("gallery", { album: "favorites" })}
+          onClick={() => ctx.goTo("photos", { album: "favorites" })}
           className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
           <div className="grid grid-cols-4 gap-1.5">
@@ -857,8 +904,8 @@ function FullGallery({ ctx, album }: { ctx: PortalCtx; album: string }) {
   }, [view, visibleFolders, byFolder, all, unfiled]);
   const coverUrls = useThumbUrls(coverIds);
 
-  const go = (next: string) => ctx.goTo("gallery", { album: next });
-  const crumbs: { label: string; album?: string; home?: boolean }[] = [{ label: "Gallery", home: true }];
+  const go = (next: string) => ctx.goTo("photos", { album: next });
+  const crumbs: { label: string; album?: string; home?: boolean }[] = [{ label: "Photos", album: hasFolders ? "folders" : "all" }];
   if (view === "folders") crumbs.push({ label: "All Folders" });
   else if (view === "all") crumbs.push({ label: "All Photos" });
   else if (view === "favorites") crumbs.push({ label: "Favorites" });
@@ -891,7 +938,7 @@ function FullGallery({ ctx, album }: { ctx: PortalCtx; album: string }) {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => (c.home ? ctx.goTo("gallery") : go(c.album!))}
+                    onClick={() => go(c.album!)}
                     className="rounded font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     {c.label}

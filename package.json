@@ -16,6 +16,7 @@
     "test:comped-access": "npx tsx scripts/verify-comped-access.ts",
     "test:stripe-billing-guards": "npx tsx scripts/verify-stripe-billing-guards.ts",
     "test:stripe-payment-reconcile": "npx tsx scripts/verify-stripe-payment-reconcile.ts",
+    "test:payment-receipt-view": "npx tsx scripts/verify-payment-receipt-view.ts",
     "test:ach-payments": "npx tsx scripts/verify-ach-payments.ts",
     "test:embedded-checkout": "npx tsx scripts/verify-embedded-checkout.ts",
     "test:checkout-guards-stripe": "npx tsx --env-file=.env.local scripts/verify-checkout-guards-stripe.ts",

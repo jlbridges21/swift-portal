@@ -6,13 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { History } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePaginatedActivities } from "@/lib/use-paginated-activities";
+import { ACTIVITY_PAGE_SIZE, usePaginatedActivities } from "@/lib/use-paginated-activities";
 
 interface ProjectActivityTimelineProps {
   activities: ActivityLog[];
   className?: string;
   clientMode?: boolean;
   onRevisionClick?: (revisionId: string) => void;
+  /** Entries shown at first and added per "Load More" (default 10). */
+  pageSize?: number;
+  /** Render without the card shell and title (when the caller already provides one). */
+  bare?: boolean;
 }
 
 export function ProjectActivityTimeline({
@@ -20,8 +24,10 @@ export function ProjectActivityTimeline({
   className,
   clientMode = false,
   onRevisionClick,
+  pageSize = ACTIVITY_PAGE_SIZE,
+  bare = false,
 }: ProjectActivityTimelineProps) {
-  const { visible, hasMore, allShown, loadMore } = usePaginatedActivities(activities);
+  const { visible, hasMore, allShown, loadMore } = usePaginatedActivities(activities, pageSize);
 
   function displayFor(log: ActivityLog) {
     return clientMode
@@ -29,15 +35,8 @@ export function ProjectActivityTimeline({
       : getActivityDisplay(log.activity_type, log.description);
   }
 
-  return (
-    <Card className={className} id="activity">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <History className="h-5 w-5 text-accent" />
-          Project Activity
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+  const content = (
+    <>
         {visible.length === 0 ? (
           <p className="text-sm text-muted text-center py-6">Activity will appear here as your project progresses.</p>
         ) : (
@@ -85,15 +84,34 @@ export function ProjectActivityTimeline({
             </div>
             {hasMore && (
               <Button type="button" variant="outline" className="mt-4 w-full min-h-11" onClick={loadMore}>
-                Load 10 More
+                {pageSize === ACTIVITY_PAGE_SIZE ? "Load 10 More" : "Load More"}
               </Button>
             )}
-            {allShown && activities.length > 10 && (
+            {allShown && activities.length > pageSize && (
               <p className="mt-4 text-center text-xs text-muted">All activities shown</p>
             )}
           </>
         )}
-      </CardContent>
+    </>
+  );
+
+  if (bare) {
+    return (
+      <div id="activity" className={className}>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Card className={className} id="activity">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <History className="h-5 w-5 text-accent" />
+          Project Activity
+        </CardTitle>
+      </CardHeader>
+      <CardContent>{content}</CardContent>
     </Card>
   );
 }

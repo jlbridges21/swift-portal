@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { isOutstandingPayment } from "@/components/projects/payments-section";
 import { useMarkPaymentPaid } from "@/lib/use-mark-payment-paid";
-import { paymentMethodLabel } from "@/lib/payment-status";
+import { paymentMethodLabel, paymentReceiptHref } from "@/lib/payment-status";
 import { cn } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -85,17 +85,10 @@ export function AdminPaymentActions({
             {markingPaidId === payment.id ? "Marking…" : "Mark as Paid"}
           </Button>
         )}
-        {payment.status === "paid" && payment.stripe_receipt_url ? (
-          <a href={payment.stripe_receipt_url} target="_blank" rel="noopener noreferrer">
+        {payment.status === "paid" ? (
+          <a href={paymentReceiptHref(payment.id)}>
             <Button variant="outline" size="sm" className="min-h-11">
               View receipt
-            </Button>
-          </a>
-        ) : null}
-        {payment.status === "paid" && !payment.stripe_receipt_url ? (
-          <a href={`/api/payments/${payment.id}/receipt`}>
-            <Button variant="outline" size="sm" className="min-h-11">
-              Payment record
             </Button>
           </a>
         ) : null}
