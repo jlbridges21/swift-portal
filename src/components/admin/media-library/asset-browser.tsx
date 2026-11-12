@@ -150,7 +150,13 @@ export type AssetBrowserProps = {
   /** "Add from library" mode: pick media for this folder, then return to it. */
   pickForFolder?: { id: string; name: string } | null;
   onTotalChange?: (total: number) => void;
+  /** Shown left of the desktop filter bar (e.g. the compact "create your first folder" card). */
+  filterCompanion?: React.ReactNode;
+  /** Shown between the filters and the search/sort toolbar (e.g. the folder strip). */
+  belowFilters?: React.ReactNode;
 };
+
+const FILTERS_OPEN_KEY = "sp:media:filters-open";
 
 export function AssetBrowser({
   scope,
@@ -168,6 +174,8 @@ export function AssetBrowser({
   onUpload,
   pickForFolder = null,
   onTotalChange,
+  filterCompanion,
+  belowFilters,
 }: AssetBrowserProps) {
   const router = useRouter();
   const inFolder = scope.kind === "folder" ? scope.folder : null;
@@ -186,6 +194,22 @@ export function AssetBrowser({
   const [debouncedQ, setDebouncedQ] = useState(initialQuery);
   const [filters, setFilters] = useState<LibraryFilterState>(EMPTY_FILTERS);
   const [filtersExpanded, setFiltersExpanded] = useState(true);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(FILTERS_OPEN_KEY) === "0") setFiltersExpanded(false);
+    } catch {
+      /* storage blocked */
+    }
+  }, []);
+  const toggleFilters = () =>
+    setFiltersExpanded((open) => {
+      try {
+        window.localStorage.setItem(FILTERS_OPEN_KEY, open ? "0" : "1");
+      } catch {
+        /* storage blocked */
+      }
+      return !open;
+    });
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sort, setSort] = useState<LibrarySort>(inFolder ? "added" : "newest");
   const [view, setView] = useStoredViewMode("sp:media:view");
@@ -643,7 +667,7 @@ export function AssetBrowser({
   const libraryEmpty = !filtered && total === 0 && !loading && !loadError;
 
   return (
-    <div className={cn("min-w-0 space-y-4", selectMode && "pb-36 sm:pb-24")}>
+    <div className={cn("min-w-0 space-y-3", selectMode && "pb-36 sm:pb-24")}>
       {pickForFolder ? (
         <div className="flex flex-col gap-3 rounded-2xl border border-accent/30 bg-accent-subtle/60 p-3 sm:flex-row sm:items-center sm:p-4">
           <FolderPlus className="hidden h-5 w-5 shrink-0 text-accent sm:block" aria-hidden />
@@ -662,8 +686,18 @@ export function AssetBrowser({
         </div>
       ) : null}
 
-      {/* Filters: desktop row; phones/tablets get search + a Filters sheet. */}
-      <DesktopFilterBar filters={filters} onChange={setFilters} sets={optionSets} expanded={filtersExpanded} onToggle={() => setFiltersExpanded((v) => !v)} />
+      {/* Filters: desktop bar (sharing its row with the optional companion card); phones and
+          tablets get search + a Filters sheet in the toolbar instead. */}
+      {filterCompanion ? (
+        <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-stretch">
+          <div className="min-w-0 lg:w-64 lg:shrink-0">{filterCompanion}</div>
+          <DesktopFilterBar filters={filters} onChange={setFilters} sets={optionSets} expanded={filtersExpanded} onToggle={toggleFilters} className="flex-1" />
+        </div>
+      ) : (
+        <DesktopFilterBar filters={filters} onChange={setFilters} sets={optionSets} expanded={filtersExpanded} onToggle={toggleFilters} />
+      )}
+
+      {belowFilters}
 
       <div className="flex min-w-0 flex-wrap items-center gap-2.5">
         <LibrarySearch
@@ -673,7 +707,7 @@ export function AssetBrowser({
           className="min-w-0 flex-1 basis-full sm:basis-64 lg:max-w-md"
         />
         <FilterSheetButton count={chips.length} onClick={() => setSheetOpen(true)} />
-        <p className="hidden text-sm text-muted lg:block" aria-live="polite">
+        <p className="hidden whitespace-nowrap text-sm text-muted sm:block" aria-live="polite">
           {loading && page === 1 ? "Loading…" : plural(total, "asset")}
         </p>
         <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -691,10 +725,12 @@ export function AssetBrowser({
         </div>
       </div>
 
-      <ActiveFilterChips chips={chips} onClearAll={() => setFilters(EMPTY_FILTERS)} />
-      <p className="text-sm text-muted lg:hidden" aria-live="polite">
-        {loading && page === 1 ? "Loading…" : plural(total, "asset")}
-      </p>
+      {/* Phones/tablets: active filter chips (desktop shows them in the collapsed filter bar). */}
+      {/* Phones: the count sits with any active chips (it doesn't fit in the toolbar row). */}
+      <div className="flex min-w-0 flex-wrap items-center gap-2 lg:hidden">
+        {chips.length ? <ActiveFilterChips chips={chips} onClearAll={() => setFilters(EMPTY_FILTERS)} /> : null}
+        <p className="ml-auto text-xs text-muted sm:hidden">{loading && page === 1 ? "Loading…" : plural(total, "asset")}</p>
+      </div>
 
       {/* Selection toolbar */}
       {selectMode ? (

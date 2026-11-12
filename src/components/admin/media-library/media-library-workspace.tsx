@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowRight,
+  ChevronLeft,
   ChevronRight,
   Folder,
   FolderOpen,
@@ -49,6 +50,9 @@ import {
 } from "@/components/admin/media-library/folder-client";
 
 export type MediaLibraryView = "all" | "folders" | "folder";
+
+/** Folders shown in the All Media row before "+N more". */
+const STRIP_MAX = 16;
 
 export type MediaLibraryWorkspaceProps = {
   view: MediaLibraryView;
@@ -214,7 +218,95 @@ export function MediaLibraryWorkspace({
     const q = folderQuery.trim().toLowerCase();
     return sortLibraryFolders(q ? folders.filter((f) => f.name.toLowerCase().includes(q)) : folders, folderSort);
   }, [folders, folderQuery, folderSort]);
-  const stripFolders = useMemo(() => sortLibraryFolders(folders, "updated").slice(0, 12), [folders]);
+  const stripFolders = useMemo(() => sortLibraryFolders(folders, "updated").slice(0, STRIP_MAX), [folders]);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const scrollStrip = (dir: 1 | -1) => {
+    const el = stripRef.current;
+    if (el) el.scrollBy({ left: dir * Math.max(240, el.clientWidth * 0.8), behavior: "smooth" });
+  };
+
+  // All Media: folders as one compact, horizontally scrolling row under the filters.
+  const folderStrip =
+    view === "all" && foldersReady && folders.length ? (
+      <section aria-labelledby="folders-strip-heading" className="min-w-0">
+        {/* Phones/tablets: heading line above the row. Desktop: label and links share the row. */}
+        <div className="mb-2 flex items-center gap-2 lg:hidden">
+          <h2 className="text-base font-semibold text-heading">Folders</h2>
+          <span className="text-sm text-muted">{folders.length}</span>
+          <Link href="/admin/media/folders" className="ml-auto inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-accent hover:underline">
+            View All <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+        </div>
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="hidden w-20 shrink-0 lg:block">
+            <h2 id="folders-strip-heading" className="text-base font-semibold text-heading">
+              Folders
+            </h2>
+            <p className="text-xs text-muted">{folders.length.toLocaleString()} total</p>
+          </div>
+          <div
+            ref={stripRef}
+            className="-mx-4 min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto scroll-px-4 px-4 py-0.5 sm:mx-0 sm:scroll-px-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            <ul className="grid auto-cols-[minmax(12.5rem,1fr)] grid-flow-col gap-2.5 sm:auto-cols-[minmax(13.5rem,1fr)] [&>li]:snap-start">
+              {stripFolders.map((f) => (
+                <li key={f.id} className="min-w-0">
+                  <FolderStripCard
+                    folder={f}
+                    onMenu={(folder, el) => setMenu({ folder, anchor: { kind: "element", element: el } })}
+                    onDropItems={permissions.organize ? (t, keys) => void dropOnFolder(t, keys) : undefined}
+                  />
+                </li>
+              ))}
+              {folders.length > STRIP_MAX ? (
+                <li className="min-w-0">
+                  <Link
+                    href="/admin/media/folders"
+                    className="flex h-16 items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border bg-card text-sm font-semibold text-accent hover:border-accent/40 hover:bg-accent-subtle/40"
+                  >
+                    +{(folders.length - STRIP_MAX).toLocaleString()} more <ArrowRight className="h-4 w-4" aria-hidden />
+                  </Link>
+                </li>
+              ) : null}
+            </ul>
+          </div>
+          <div className="hidden shrink-0 flex-col items-end gap-1 lg:flex">
+            {folders.length > 4 ? (
+              <div className="flex gap-1">
+                <button type="button" onClick={() => scrollStrip(-1)} aria-label="Scroll folders left" className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-card text-muted hover:bg-subtle hover:text-heading">
+                  <ChevronLeft className="h-4 w-4" aria-hidden />
+                </button>
+                <button type="button" onClick={() => scrollStrip(1)} aria-label="Scroll folders right" className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-card text-muted hover:bg-subtle hover:text-heading">
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
+            ) : null}
+            <Link href="/admin/media/folders" className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold text-accent hover:underline">
+              View All <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          </div>
+        </div>
+      </section>
+    ) : null;
+
+  // All Media with no folders yet: a compact invitation that shares the filter row.
+  const createFolderCard =
+    view === "all" && foldersReady && !folders.length && permissions.organize ? (
+      <button
+        type="button"
+        onClick={() => setNameDialog({ mode: "create" })}
+        className="group flex h-full min-h-14 w-full items-center gap-3 rounded-2xl border border-dashed border-accent/35 bg-card px-3 py-2 text-left shadow-sm transition-colors hover:border-accent/60 hover:bg-accent-subtle/40"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-subtle text-accent transition-colors group-hover:bg-accent group-hover:text-accent-foreground">
+          <FolderPlus className="h-5 w-5" aria-hidden />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold text-heading">Create a folder</span>
+          <span className="block truncate text-xs text-muted">Group media from any project</span>
+        </span>
+        <Plus className="ml-auto h-4 w-4 shrink-0 text-accent" aria-hidden />
+      </button>
+    ) : null;
 
   const tabs = (
     <div className="flex min-w-0 items-center gap-2">
@@ -248,55 +340,9 @@ export function MediaLibraryWorkspace({
   ) : null;
 
   return (
-    <div className="min-w-0 space-y-5">
+    <div className="min-w-0 space-y-3 sm:space-y-4">
       {tabs}
       {setupNotice}
-
-      {view === "all" && foldersReady ? (
-        <section aria-labelledby="folders-strip-heading" className="min-w-0 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 id="folders-strip-heading" className="text-lg font-semibold text-heading">
-              Folders
-            </h2>
-            {folders.length ? (
-              <Link href="/admin/media/folders" className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-accent hover:underline">
-                View All Folders <ArrowRight className="h-4 w-4" aria-hidden />
-              </Link>
-            ) : null}
-          </div>
-          {folders.length ? (
-            <div className="-mx-4 snap-x snap-mandatory overflow-x-auto scroll-px-4 px-4 py-1 sm:mx-0 sm:scroll-px-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <ul className="grid auto-cols-[minmax(13rem,1fr)] grid-flow-col gap-3 sm:auto-cols-[minmax(14rem,1fr)] [&>li]:snap-start">
-                {stripFolders.map((f) => (
-                  <li key={f.id} className="min-w-0">
-                    <FolderStripCard
-                      folder={f}
-                      onMenu={(folder, el) => setMenu({ folder, anchor: { kind: "element", element: el } })}
-                      onDropItems={permissions.organize ? (t, keys) => void dropOnFolder(t, keys) : undefined}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : permissions.organize ? (
-            <button
-              type="button"
-              onClick={() => setNameDialog({ mode: "create" })}
-              className="flex min-h-[4.5rem] w-full items-center gap-3 rounded-2xl border border-dashed border-border bg-card px-4 text-left transition-colors hover:border-accent/40 hover:bg-accent-subtle/40 sm:w-auto sm:pr-8"
-            >
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-subtle text-accent">
-                <Plus className="h-5 w-5" aria-hidden />
-              </span>
-              <span>
-                <span className="block text-sm font-semibold text-heading">Create your first folder</span>
-                <span className="block text-xs text-muted">Group media from any project — nothing is copied.</span>
-              </span>
-            </button>
-          ) : (
-            <p className="text-sm text-muted">No folders yet.</p>
-          )}
-        </section>
-      ) : null}
 
       {view === "folders" ? (
         <section className="min-w-0 space-y-4" aria-labelledby="folders-heading">
@@ -457,6 +503,8 @@ export function MediaLibraryWorkspace({
           onShareFolder={openFolderShare}
           onUpload={() => setUploadOpen(true)}
           pickForFolder={pickForFolder}
+          filterCompanion={createFolderCard}
+          belowFilters={folderStrip}
         />
       ) : null}
 

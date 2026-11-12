@@ -85,28 +85,37 @@ export function LibrarySearch({ value, onChange, placeholder, className }: { val
   );
 }
 
-/** Desktop (lg+) filter row — mockup 1. */
+/**
+ * Desktop (lg+) filter bar. Expanded: the five dropdowns share one row (they wrap only when the
+ * bar is narrow, e.g. beside the "create your first folder" card). Collapsed: one slim row with
+ * the active selections as removable chips. Always one control height (h-10) so it lines up with
+ * the toolbar below.
+ */
 export function DesktopFilterBar({
   filters,
   onChange,
   sets,
   expanded,
   onToggle,
+  className,
 }: {
   filters: LibraryFilterState;
   onChange: (next: LibraryFilterState) => void;
   sets: FilterOptionSets;
   expanded: boolean;
   onToggle: () => void;
+  className?: string;
 }) {
-  const active = activeFilterChips(filters, sets, onChange).length;
+  const chips = activeFilterChips(filters, sets, onChange);
+  const active = chips.length;
   return (
-    <div className="hidden rounded-2xl border border-border bg-card p-2.5 shadow-sm lg:block">
-      <div className="flex min-w-0 items-center gap-2.5">
+    <div className={cn("hidden min-w-0 rounded-2xl border border-border bg-card p-2 shadow-sm lg:block", className)}>
+      <div className="flex min-w-0 items-start gap-2">
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={expanded}
+          title={expanded ? "Hide filters" : "Show filters"}
           className={cn(
             "inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors",
             expanded || active ? "border-accent/30 bg-accent-subtle text-accent" : "border-border text-heading hover:bg-subtle"
@@ -114,11 +123,15 @@ export function DesktopFilterBar({
         >
           <Filter className="h-4 w-4" aria-hidden />
           Filters
-          {active ? <span className="rounded-full bg-accent px-1.5 text-[11px] leading-5 text-accent-foreground">{active}</span> : null}
+          {active ? (
+            <span className="min-w-5 rounded-full bg-accent px-1.5 text-center text-[11px] leading-5 text-accent-foreground" aria-label={`${active} active`}>
+              {active}
+            </span>
+          ) : null}
           <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} aria-hidden />
         </button>
         {expanded ? (
-          <div className="grid min-w-0 flex-1 grid-cols-5 gap-2.5">
+          <div className="grid min-w-0 flex-1 grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2">
             <CheckboxDropdown label="Media Type" options={TYPE_OPTIONS} selected={filters.types} onChange={(types) => onChange({ ...filters, types })} searchable={false} />
             <CheckboxDropdown label="Services" options={sets.services} selected={filters.services} onChange={(services) => onChange({ ...filters, services })} emptyText="No services yet" />
             <CheckboxDropdown label="Clients" options={sets.clients} selected={filters.clientIds} onChange={(clientIds) => onChange({ ...filters, clientIds })} emptyText="No clients yet" />
@@ -137,8 +150,29 @@ export function DesktopFilterBar({
               className="[&>div:last-child]:left-auto [&>div:last-child]:right-0"
             />
           </div>
+        ) : active ? (
+          <div className="flex min-h-10 min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            {chips.map((f) => (
+              <span key={f.key} className="inline-flex max-w-full items-center gap-1 rounded-full border border-accent/30 bg-accent-subtle/60 py-0.5 pl-2.5 pr-0.5 text-xs">
+                <span className="text-muted">{f.label}:</span>
+                <span className="max-w-[12rem] truncate font-medium text-heading" title={f.values.join(", ")}>
+                  {f.values.join(", ")}
+                </span>
+                <button
+                  type="button"
+                  onClick={f.clear}
+                  aria-label={`Clear ${f.label} filter`}
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-accent/10 hover:text-heading"
+                >
+                  <X className="h-3 w-3" aria-hidden />
+                </button>
+              </span>
+            ))}
+          </div>
         ) : (
-          <p className="min-w-0 flex-1 truncate text-sm text-muted">Media type, services, clients, properties, and date range</p>
+          <button type="button" onClick={onToggle} className="flex h-10 min-w-0 flex-1 items-center truncate text-left text-sm text-muted hover:text-heading">
+            Filter by media type, service, client, property, or date
+          </button>
         )}
         <button
           type="button"

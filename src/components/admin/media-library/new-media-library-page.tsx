@@ -73,7 +73,7 @@ export async function NewMediaLibraryPage({
         description={folder ? "Media Library folder" : PAGE_DESCRIPTION}
         crumbs={folder ? [{ label: "Media Library", href: "/admin/media" }, { label: "Folders", href: "/admin/media/folders" }] : undefined}
       />
-      <main className="app-page app-page-wide mx-auto max-w-[1600px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+      <main className="app-page app-page-wide mx-auto max-w-[1600px] px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
         <MediaLibraryWorkspace
           view={view}
           initialFolders={folderList.folders}

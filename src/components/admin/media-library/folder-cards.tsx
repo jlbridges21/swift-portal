@@ -103,12 +103,12 @@ export function FolderStripCard({ folder, onMenu, onDropItems }: CardProps) {
     <div
       {...drop.props}
       className={cn(
-        "group relative flex h-[4.5rem] min-w-0 items-center gap-3 rounded-2xl border bg-card pl-3 pr-1.5 shadow-sm transition-all hover:-translate-y-px hover:shadow-md",
+        "group relative flex h-16 min-w-0 items-center gap-3 rounded-2xl border bg-card pl-3 pr-1 shadow-sm transition-all hover:-translate-y-px hover:shadow-md",
         drop.over ? "border-accent ring-2 ring-accent/30" : "border-border"
       )}
     >
       <Link href={folderHref(folder.id)} className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={`Open folder ${folder.name}`} />
-      <FolderGlyph className="pointer-events-none h-10 w-10" />
+      <FolderGlyph className="pointer-events-none h-9 w-9" />
       <div className="pointer-events-none min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-heading" title={folder.name}>
           {folder.name}
