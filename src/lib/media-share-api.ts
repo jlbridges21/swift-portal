@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { canAccessMediaAsset, staffCan } from "@/lib/staff-access";
+import { canAccessMediaAsset, staffCan, visibleProjectIdsFor } from "@/lib/staff-access";
 import {
   MediaShareError,
   enableShareLink,
   folderSubject,
   getMediaShareState,
   invitePeople,
+  itemSubject,
+  libraryFolderSubject,
   loadShareableFolder,
+  loadShareableItem,
+  loadShareableLibraryFolder,
   loadShareablePhoto,
+  shareSubjectId,
   parseMediaShareExpiry,
   photoSubject,
   resendEmailShare,
@@ -43,8 +48,10 @@ type Gate =
   | { error?: undefined; profile: Profile; businessId: string; subject: ShareSubject; perms: PhotoSharePermissions };
 
 async function requireShareAccess(
-  load: (businessId: string) => Promise<{ subject: ShareSubject; projectId: string | null } | null>,
-  notFoundMessage: string
+  load: (businessId: string, profile: Profile) => Promise<{ subject: ShareSubject; projectId: string | null } | null>,
+  notFoundMessage: string,
+  /** Library folders span projects: skip the single-project check (the loader scopes instead). */
+  projectScoped = true
 ): Promise<Gate> {
   const profile = await getProfile();
   if (!profile) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
@@ -55,8 +62,8 @@ async function requireShareAccess(
   const tenant = await getTenantContext();
   if (!tenant) return { error: missingTenantResponse(profile.role) };
 
-  const found = await load(tenant.businessId);
-  if (!found || !(await canAccessMediaAsset(tenant.businessId, profile, found.projectId))) {
+  const found = await load(tenant.businessId, profile);
+  if (!found || (projectScoped && !(await canAccessMediaAsset(tenant.businessId, profile, found.projectId)))) {
     return { error: NextResponse.json({ error: notFoundMessage }, { status: 404 }) };
   }
   return { profile, businessId: tenant.businessId, subject: found.subject, perms };
@@ -82,8 +89,39 @@ export function requireFolderShareAccess(folderId: string): Promise<Gate> {
   }, "Folder not found.");
 }
 
+/**
+ * Gate for a Media Library folder's shares. A folder can hold media from any project, so
+ * sharing it is limited to people who can see every project (owners, and staff with
+ * "view all projects") — a scoped staff member could otherwise share media they can't see.
+ */
+export function requireLibraryFolderShareAccess(folderId: string): Promise<Gate> {
+  return requireShareAccess(
+    async (businessId, profile) => {
+      if ((await visibleProjectIdsFor(businessId, profile)) !== "all") return null;
+      const folder = await loadShareableLibraryFolder(businessId, folderId);
+      return folder ? { subject: libraryFolderSubject(folder), projectId: null } : null;
+    },
+    "Folder not found.",
+    false
+  );
+}
+
+/** Gate for one video / file / 360° tour / 3D model's shares (project scope as for photos). */
+export function requireItemShareAccess(kind: string, itemId: string): Promise<Gate> {
+  return requireShareAccess(async (businessId) => {
+    const item = await loadShareableItem(businessId, kind, itemId);
+    return item ? { subject: itemSubject(item), projectId: item.project_id } : null;
+  }, "Item not found.");
+}
+
 export async function shareStateResponse(gate: Exclude<Gate, { error: NextResponse }>) {
-  const state = await getMediaShareState(gate.subject);
+  let state: MediaShareState;
+  try {
+    state = await getMediaShareState(gate.subject);
+  } catch (error) {
+    if (error instanceof MediaShareError) return NextResponse.json({ error: error.message }, { status: error.status });
+    throw error;
+  }
   return NextResponse.json(
     { state: shareStateFor(state, gate.perms), permissions: gate.perms },
     { headers: NO_STORE }
@@ -197,7 +235,7 @@ export async function handleShareAction(gate: Exclude<Gate, { error: NextRespons
     if (error instanceof MediaShareError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    const subjectId = subject.kind === "photo" ? subject.photo.id : subject.folder.id;
+    const subjectId = shareSubjectId(subject);
     console.error("[media-shares] action failed", { kind: subject.kind, subjectId, action: body.action, error });
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }

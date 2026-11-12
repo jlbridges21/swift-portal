@@ -281,6 +281,9 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/photo/") ||
     path.startsWith("/folder/") ||
     path.startsWith("/api/public/photo/") ||
+    // Media Library folder + single-item shares (v126).
+    path.startsWith("/shared/") ||
+    path.startsWith("/api/public/shared/") ||
     path.startsWith("/v/") ||
     path.startsWith("/embed/") ||
     path.startsWith("/api/public/video/") ||

@@ -23,6 +23,7 @@
     "test:project-folder-zip": "npx tsx scripts/verify-project-folder-zip.ts",
     "test:photo-shares": "npx tsx scripts/verify-photo-shares.ts",
     "test:video-shares": "npx tsx scripts/verify-video-shares.ts",
+    "test:library-folders": "npx tsx scripts/verify-library-folders.ts",
     "test:paywall-checkout-http": "npx tsx scripts/verify-paywall-checkout-http.ts",
     "test:partner-lifecycle-e2e": "npx tsx scripts/verify-partner-lifecycle-e2e.ts",
     "test:plan-stripe-prices": "npx tsx scripts/verify-plan-stripe-price-consistency.ts",

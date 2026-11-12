@@ -93,7 +93,7 @@ type Selection =
 
 const EMPTY_SELECTION: Selection = { mode: "ids", keys: new Set() };
 
-type ResolvedItem = { id: string; kind: LibraryAssetKind; has_file: boolean; file_size: number | null };
+export type ResolvedItem = { id: string; kind: LibraryAssetKind; has_file: boolean; file_size: number | null };
 
 type BulkKind = "favorite" | "download" | "delete";
 
@@ -139,7 +139,7 @@ function plural(n: number, one: string, many = `${one}s`) {
 }
 
 /** Split downloadable files into ZIP parts bounded by file count and bytes. */
-function zipBatches(items: ResolvedItem[]): string[][] {
+export function zipBatches(items: ResolvedItem[]): string[][] {
   const batches: string[][] = [];
   let current: string[] = [];
   let bytes = 0;
@@ -162,7 +162,7 @@ function zipBatches(items: ResolvedItem[]): string[][] {
  * the browser streams the attachment. If the server answers with a JSON error instead,
  * the iframe loads it and we surface the message.
  */
-function submitZipDownload(ids: string[], part: number, parts: number) {
+export function submitZipDownload(ids: string[], part: number, parts: number) {
   const name = `media-zip-${Date.now()}-${part}`;
   const iframe = document.createElement("iframe");
   iframe.name = name;
@@ -1002,8 +1002,9 @@ function isVideoAsset(asset: LibraryAsset): boolean {
   return isVideoLibraryAsset(asset);
 }
 
-function AssetDrawer({
-  asset, projects, onClose, onUpdate, onFavorite, onShare, onDeleted, onEditPhoto, editOpening,
+/** Asset detail drawer. Exported for the New interface Media Library (which adds `extraActions`). */
+export function AssetDrawer({
+  asset, projects, onClose, onUpdate, onFavorite, onShare, onDeleted, onEditPhoto, editOpening, extraActions,
 }: {
   asset: LibraryAsset;
   projects: { id: string; project_name: string; property_address: string }[];
@@ -1016,6 +1017,8 @@ function AssetDrawer({
   /** Present for editable photos — opens the Photo Editor. */
   onEditPhoto?: () => void;
   editOpening?: boolean;
+  /** Extra buttons in the action row and content under it (New interface only; Classic passes none). */
+  extraActions?: React.ReactNode;
 }) {
   const isSharablePhoto = asset.kind === "photo" && asset.media_source !== "youtube";
   const isModel = asset.kind === "model";
@@ -1257,6 +1260,7 @@ function AssetDrawer({
               </Button>
             ) : null}
           </div>
+          {extraActions}
 
           {editing ? (
             <div className="space-y-3 rounded-xl border border-border p-4">

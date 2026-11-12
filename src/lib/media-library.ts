@@ -1,5 +1,6 @@
 import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supabase/tenant-service";
 import type { MediaAsset, Project3dModel, Tour } from "@/lib/types";
+import { loadLibraryFolderMembers, type LibraryFolderMembers } from "@/lib/library-folders";
 
 export type LibraryAssetKind = "photo" | "video" | "document" | "tour" | "model";
 
@@ -55,7 +56,13 @@ export interface LibraryAsset {
   version: number;
   /** True when a stored file backs this asset (not YouTube / Kuula / external embeds). */
   has_file: boolean;
+  /** Set only when the query is scoped to a Media Library folder: when it was added there. */
+  folder_added_at?: string | null;
 }
+
+/** Sort orders for the library grid. "added" applies inside a Media Library folder. */
+export type LibrarySort = "newest" | "oldest" | "name" | "size" | "added";
+export const LIBRARY_SORTS: LibrarySort[] = ["newest", "oldest", "name", "size", "added"];
 
 export interface LibraryFilters {
   q?: string;
@@ -77,6 +84,10 @@ export interface LibraryFilters {
   limit?: number;
   /** Staff scope: "all" or explicit project ids. Empty → no rows. */
   projectIds?: "all" | string[];
+  /** Restrict to the members of one Media Library folder (v126). */
+  libraryFolderId?: string;
+  /** Default "newest" (upload date, newest first). */
+  sort?: LibrarySort;
 }
 
 export interface LibraryResult {
@@ -515,6 +526,8 @@ interface ResolvedFilters {
   narrowedProjectIds: string[] | null;
   /** Staff scope; "all" or explicit ids. */
   scope: "all" | string[];
+  /** Members of a Media Library folder; null = not restricted. */
+  restrict: LibraryFolderMembers | null;
 }
 
 const MAX_NARROWED_PROJECT_IDS = 150;
@@ -525,7 +538,8 @@ function cleanList(values?: (string | null | undefined)[]): string[] {
 
 async function resolveFilters(
   db: TenantServiceClient,
-  filters: LibraryFilters
+  filters: LibraryFilters,
+  restrict: LibraryFolderMembers | null = null
 ): Promise<ResolvedFilters> {
   const kinds = new Set(
     cleanList(filters.types).filter((k): k is LibraryAssetKind =>
@@ -559,7 +573,22 @@ async function resolveFilters(
     to: filters.dateTo || presetRange.to,
     narrowedProjectIds,
     scope: filters.projectIds ?? "all",
+    restrict,
   };
+}
+
+const RESTRICT_CHUNK = 150;
+
+/**
+ * Ids a source may read when the query is folder-scoped, split into URL-safe chunks.
+ * null = unrestricted (one pass with no id filter); [] = nothing to read.
+ */
+function restrictChunks(rf: ResolvedFilters, source: keyof LibraryFolderMembers): (string[] | null)[] {
+  if (!rf.restrict) return [null];
+  const ids = [...rf.restrict[source].keys()];
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += RESTRICT_CHUNK) out.push(ids.slice(i, i + RESTRICT_CHUNK));
+  return out;
 }
 
 function wantsKind(rf: ResolvedFilters, kind: LibraryAssetKind): boolean {
@@ -586,41 +615,46 @@ async function fetchMediaAssets(
   if (!mediaKinds.length) return [];
   if (rf.scope !== "all" && rf.scope.length === 0) return [];
 
-  let query = db
-    .from("media_assets")
-    .select("*")
-    .in("media_type", mediaKinds)
-    .order("created_at", { ascending: false });
+  const rows: MediaAsset[] = [];
+  for (const idChunk of restrictChunks(rf, "media")) {
+    let query = db
+      .from("media_assets")
+      .select("*")
+      .in("media_type", mediaKinds)
+      .order("created_at", { ascending: false });
 
-  if (rf.from) query = query.gte("created_at", rf.from);
-  if (rf.to) query = query.lte("created_at", rf.to);
-  if (rf.scope !== "all") query = query.in("project_id", rf.scope);
-  if (favoritesOnly) query = query.eq("is_favorite", true);
+    if (idChunk) query = query.in("id", idChunk);
+    if (rf.from) query = query.gte("created_at", rf.from);
+    if (rf.to) query = query.lte("created_at", rf.to);
+    if (rf.scope !== "all") query = query.in("project_id", rf.scope);
+    if (favoritesOnly) query = query.eq("is_favorite", true);
 
-  // Media rows can carry client_id / property_id directly (unassigned uploads) or
-  // inherit them from their project — match either.
-  if (rf.narrowedProjectIds) {
-    const pids = rf.narrowedProjectIds;
-    if (rf.clientIds.size) {
-      const parts = [`client_id.in.(${[...rf.clientIds].join(",")})`];
-      if (pids.length) parts.push(`project_id.in.(${pids.join(",")})`);
-      query = query.or(parts.join(","));
+    // Media rows can carry client_id / property_id directly (unassigned uploads) or
+    // inherit them from their project — match either.
+    if (rf.narrowedProjectIds) {
+      const pids = rf.narrowedProjectIds;
+      if (rf.clientIds.size) {
+        const parts = [`client_id.in.(${[...rf.clientIds].join(",")})`];
+        if (pids.length) parts.push(`project_id.in.(${pids.join(",")})`);
+        query = query.or(parts.join(","));
+      }
+      if (rf.propertyIds.size) {
+        const parts = [`property_id.in.(${[...rf.propertyIds].join(",")})`];
+        if (pids.length) parts.push(`project_id.in.(${pids.join(",")})`);
+        query = query.or(parts.join(","));
+      }
     }
-    if (rf.propertyIds.size) {
-      const parts = [`property_id.in.(${[...rf.propertyIds].join(",")})`];
-      if (pids.length) parts.push(`project_id.in.(${pids.join(",")})`);
-      query = query.or(parts.join(","));
+
+    const { data, error } = await query.limit(2000);
+
+    if (error) {
+      console.error("[media-library] media_assets query failed:", error.message);
+      if (!idChunk) return [];
+      continue;
     }
+    rows.push(...((data ?? []) as MediaAsset[]));
   }
 
-  const { data, error } = await query.limit(2000);
-
-  if (error) {
-    console.error("[media-library] media_assets query failed:", error.message);
-    return [];
-  }
-
-  const rows = (data ?? []) as MediaAsset[];
   const projectMap = await loadProjectMap(
     db,
     rows.map((r) => r.project_id).filter((id): id is string => !!id)
@@ -649,6 +683,8 @@ async function fetchDetachedRows<T extends { id: string }>(
   favoritesOnly: boolean
 ): Promise<T[]> {
   if (rf.scope !== "all" || !rf.narrowedProjectIds || !rf.clientIds.size || rf.propertyIds.size) return [];
+  // Folder-scoped queries already read folder members by id (detached ones included).
+  if (rf.restrict) return [];
   let query = db
     .from(table)
     .select("*")
@@ -672,19 +708,23 @@ async function fetchTourAssets(
   const pids = projectIdConstraint(rf);
   if (pids && pids.length === 0) return [];
 
-  let query = db.from("tours").select("*").order("created_at", { ascending: false });
-  if (rf.from) query = query.gte("created_at", rf.from);
-  if (rf.to) query = query.lte("created_at", rf.to);
-  if (pids) query = query.in("project_id", pids);
-  if (favoritesOnly) query = query.eq("is_favorite", true);
+  const rows: Tour[] = [];
+  for (const idChunk of restrictChunks(rf, "tour")) {
+    let query = db.from("tours").select("*").order("created_at", { ascending: false });
+    if (idChunk) query = query.in("id", idChunk);
+    if (rf.from) query = query.gte("created_at", rf.from);
+    if (rf.to) query = query.lte("created_at", rf.to);
+    if (pids) query = query.in("project_id", pids);
+    if (favoritesOnly) query = query.eq("is_favorite", true);
 
-  const { data, error } = await query.limit(500);
-  if (error) {
-    console.error("[media-library] tours query failed:", error.message);
-    return [];
+    const { data, error } = await query.limit(500);
+    if (error) {
+      console.error("[media-library] tours query failed:", error.message);
+      if (!idChunk) return [];
+      continue;
+    }
+    rows.push(...((data ?? []) as Tour[]));
   }
-
-  const rows = (data ?? []) as Tour[];
   rows.push(...(await fetchDetachedRows<Tour>(db, "tours", rf, favoritesOnly)));
   const projectMap = await loadProjectMap(
     db,
@@ -712,22 +752,25 @@ async function fetchModelAssets(
   const pids = projectIdConstraint(rf);
   if (pids && pids.length === 0) return [];
 
-  let query = db
-    .from("project_3d_models")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (rf.from) query = query.gte("created_at", rf.from);
-  if (rf.to) query = query.lte("created_at", rf.to);
-  if (pids) query = query.in("project_id", pids);
+  const rows: Project3dModel[] = [];
+  for (const idChunk of restrictChunks(rf, "model")) {
+    let query = db
+      .from("project_3d_models")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (idChunk) query = query.in("id", idChunk);
+    if (rf.from) query = query.gte("created_at", rf.from);
+    if (rf.to) query = query.lte("created_at", rf.to);
+    if (pids) query = query.in("project_id", pids);
 
-  const { data, error } = await query.limit(500);
-  if (error) {
-    // Table missing (migration v89 not applied) or transient failure — skip models.
-    console.error("[media-library] project_3d_models query failed:", error.message);
-    return [];
+    const { data, error } = await query.limit(500);
+    if (error) {
+      // Table missing (migration v89 not applied) or transient failure — skip models.
+      console.error("[media-library] project_3d_models query failed:", error.message);
+      return [];
+    }
+    rows.push(...((data ?? []) as Project3dModel[]));
   }
-
-  const rows = (data ?? []) as Project3dModel[];
   rows.push(...(await fetchDetachedRows<Project3dModel>(db, "project_3d_models", rf, favoritesOnly)));
   const projectMap = await loadProjectMap(
     db,
@@ -751,7 +794,17 @@ export async function queryMediaLibraryAll(
   filters: LibraryFilters
 ): Promise<LibraryAsset[]> {
   const db = await createTenantServiceClient(businessId);
-  const rf = await resolveFilters(db, filters);
+  let restrict: LibraryFolderMembers | null = null;
+  if (filters.libraryFolderId) {
+    // Unknown folder / missing table → empty result (never the whole library).
+    try {
+      restrict = await loadLibraryFolderMembers(businessId, filters.libraryFolderId);
+    } catch {
+      return [];
+    }
+    if (!restrict.media.size && !restrict.tour.size && !restrict.model.size) return [];
+  }
+  const rf = await resolveFilters(db, filters, restrict);
   const favoritesOnly = filters.favoritesOnly === true;
 
   const [mediaRows, tourRows, modelRows] = await Promise.all([
@@ -786,8 +839,42 @@ export async function queryMediaLibraryAll(
     combined = combined.filter((a) => matchesSearch(a, filters.q!.trim()));
   }
 
-  combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  return combined;
+  if (restrict) {
+    // Belt and braces: only folder members, each stamped with when it was added.
+    const members = restrict;
+    const scoped: LibraryAsset[] = [];
+    for (const a of combined) {
+      const map = a.kind === "tour" ? members.tour : a.kind === "model" ? members.model : members.media;
+      const added = map.get(a.id);
+      if (added !== undefined) scoped.push({ ...a, folder_added_at: added });
+    }
+    combined = scoped;
+  }
+
+  return sortLibraryAssets(combined, filters.sort);
+}
+
+/** Stable in-memory sort; unknown / missing sort = newest upload first (the Classic order). */
+export function sortLibraryAssets<T extends Pick<LibraryAsset, "created_at" | "title" | "file_size" | "folder_added_at">>(
+  assets: T[],
+  sort: LibrarySort | undefined
+): T[] {
+  const time = (iso: string | null | undefined) => (iso ? new Date(iso).getTime() || 0 : 0);
+  const newest = (a: T, b: T) => time(b.created_at) - time(a.created_at);
+  switch (sort) {
+    case "oldest":
+      return assets.sort((a, b) => time(a.created_at) - time(b.created_at));
+    case "name":
+      return assets.sort(
+        (a, b) => (a.title ?? "").localeCompare(b.title ?? "", undefined, { sensitivity: "base", numeric: true }) || newest(a, b)
+      );
+    case "size":
+      return assets.sort((a, b) => (b.file_size ?? -1) - (a.file_size ?? -1) || newest(a, b));
+    case "added":
+      return assets.sort((a, b) => time(b.folder_added_at) - time(a.folder_added_at) || newest(a, b));
+    default:
+      return assets.sort(newest);
+  }
 }
 
 export function countLibraryKinds(
@@ -838,6 +925,8 @@ export function parseLibraryFilters(
     dateFrom: sp.get("date_from") ?? undefined,
     dateTo: sp.get("date_to") ?? undefined,
     favoritesOnly: sp.get("favorites") === "1",
+    libraryFolderId: sp.get("library_folder") ?? undefined,
+    sort: LIBRARY_SORTS.includes(sp.get("sort") as LibrarySort) ? (sp.get("sort") as LibrarySort) : undefined,
   };
 }
 

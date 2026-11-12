@@ -195,6 +195,17 @@ body {
   padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
 }
 
+/* Media Library selection toolbar: floats at the bottom of the viewport (beside the sidebar) while the grid scrolls,
+   above the home indicator and (phones, installed PWA) above the admin tab bar. */
+.media-bulk-bar {
+  bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+@media (max-width: 767px) {
+  body[data-admin-pwa-nav]:not([data-admin-pwa-nav-off]) .media-bulk-bar {
+    bottom: calc(var(--admin-pwa-nav-height, 72px) + env(safe-area-inset-bottom, 0px) + 0.5rem);
+  }
+}
+
 /* Fixed drawers/modals that scroll above the admin PWA bottom nav */
 .admin-pwa-fixed-bottom-pad {
   padding-bottom: calc(var(--admin-pwa-nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);

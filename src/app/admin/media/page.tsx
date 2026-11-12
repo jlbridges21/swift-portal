@@ -8,15 +8,30 @@ import {
   visibleClientIdsFor,
   visibleProjectIdsFor,
 } from "@/lib/staff-access";
+import { getUiExperience } from "@/lib/ui-rollout-server";
+import { NewMediaLibraryPage } from "@/components/admin/media-library/new-media-library-page";
 
 interface PageProps {
-  searchParams: Promise<{ upload?: string; q?: string }>;
+  searchParams: Promise<{ upload?: string; q?: string; addTo?: string }>;
 }
 
 export default async function AdminMediaPage({ searchParams }: PageProps) {
   const { profile, tenant } = await requireAdminPage({ area: "media" });
   const sp = await searchParams;
   const initialQuery = (sp.q ?? "").trim().slice(0, 80);
+
+  // New interface: redesigned library (All Media + Folders). Classic below is unchanged.
+  if ((await getUiExperience(profile)).mode === "new") {
+    return (
+      <NewMediaLibraryPage
+        profile={profile}
+        businessId={tenant.businessId}
+        initialQuery={initialQuery}
+        openUpload={sp.upload === "1"}
+        addTo={sp.addTo ?? null}
+      />
+    );
+  }
   const projectIds = isOwnerAdmin(profile)
     ? ("all" as const)
     : await visibleProjectIdsFor(tenant.businessId, profile);

@@ -9,7 +9,7 @@ import { DownloadQualityDialog } from "@/components/projects/download-quality-di
 import { DOWNLOAD_QUALITY_PARAM, type DownloadQuality } from "@/lib/download-quality";
 import { cn } from "@/lib/utils";
 
-function PhotoShareHeader({ children }: { children?: React.ReactNode }) {
+export function PhotoShareHeader({ children }: { children?: React.ReactNode }) {
   const brand = usePortalBrand();
   return (
     <header className="border-b border-border bg-card/90 backdrop-blur">

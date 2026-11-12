@@ -22,7 +22,20 @@ import {
 export const FOLDER_SHARE_WARNING =
   "Everyone you share this folder with can see every photo in it — including photos you upload or move here later. Photos moved out of the folder, deleted, or hidden from the client stop being shared. The rest of the project is never shared.";
 
+/** Media Library folder share dialog (v126): live membership across projects. */
+export const LIBRARY_FOLDER_SHARE_WARNING =
+  "Everyone you share this folder with can see everything in it — including media you add later. Removing an item from the folder removes it from the shared view. Items marked internal-only are never shown, downloads still follow each project's download rules, and the projects themselves are never shared.";
+
 type Permissions = { email: boolean; link: boolean };
+
+const ITEM_NOUN: Record<string, string> = { video: "video", document: "file", tour: "360° tour", model: "3D model" };
+
+function shareEndpoint(kind: MediaShareSubjectKind, targetId: string, itemKind?: string): string {
+  if (kind === "folder") return `/api/media-folders/${targetId}/shares`;
+  if (kind === "library_folder") return `/api/library-folders/${targetId}/shares`;
+  if (kind === "item") return `/api/library-items/${encodeURIComponent(itemKind ?? "")}/${targetId}/shares`;
+  return `/api/media/${targetId}/shares`;
+}
 
 type Confirming =
   | { kind: "disable_link" }
@@ -55,6 +68,8 @@ export type PhotoShareTarget = {
   thumbUrl?: string | null;
   /** Defaults to a single photo. */
   kind?: MediaShareSubjectKind;
+  /** For kind "item": video | document | tour | model. */
+  itemKind?: string;
 };
 
 type SummaryChange = (id: string, summary: PhotoShareSummary, kind: MediaShareSubjectKind) => void;
@@ -67,6 +82,7 @@ export function usePhotoShareDialog(onSummaryChange?: SummaryChange) {
       open
       onClose={() => setTarget(null)}
       kind={target.kind ?? "photo"}
+      itemKind={target.itemKind}
       targetId={target.id}
       targetName={target.name}
       thumbUrl={target.thumbUrl}
@@ -130,6 +146,7 @@ export function PhotoShareDialog({
   open,
   onClose,
   kind = "photo",
+  itemKind,
   targetId,
   targetName,
   thumbUrl,
@@ -138,13 +155,15 @@ export function PhotoShareDialog({
   open: boolean;
   onClose: () => void;
   kind?: MediaShareSubjectKind;
+  itemKind?: string;
   targetId: string;
   targetName: string;
   thumbUrl?: string | null;
   onSummaryChange?: SummaryChange;
 }) {
-  const isFolder = kind === "folder";
-  const endpoint = isFolder ? `/api/media-folders/${targetId}/shares` : `/api/media/${targetId}/shares`;
+  const isFolder = kind === "folder" || kind === "library_folder";
+  const endpoint = shareEndpoint(kind, targetId, itemKind);
+  const noun = isFolder ? "folder" : kind === "item" ? (ITEM_NOUN[itemKind ?? ""] ?? "file") : "photo";
   const [state, setState] = useState<MediaShareState | null>(null);
   const [perms, setPerms] = useState<Permissions>({ email: false, link: false });
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -244,7 +263,7 @@ export function PhotoShareDialog({
     : null;
 
   return (
-    <Modal open={open} onClose={onClose} title={isFolder ? "Share folder" : "Share photo"} className="sm:max-w-xl">
+    <Modal open={open} onClose={onClose} title={`Share ${noun}`} className="sm:max-w-xl">
       <div className="space-y-5 pb-1">
         <div className="flex items-center gap-3">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-subtle">
@@ -269,7 +288,7 @@ export function PhotoShareDialog({
             className="flex gap-2.5 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 surface-dark:border-amber-500/40 surface-dark:bg-amber-500/10 surface-dark:text-amber-100"
           >
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-            <p>{FOLDER_SHARE_WARNING}</p>
+            <p>{kind === "library_folder" ? LIBRARY_FOLDER_SHARE_WARNING : FOLDER_SHARE_WARNING}</p>
           </div>
         ) : null}
 
@@ -517,7 +536,7 @@ export function PhotoShareDialog({
                 ) : (
                   <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border p-3 sm:flex-row sm:items-center">
                     <p className="flex-1 text-sm text-muted">
-                      Off. Only people you invite can open this {isFolder ? "folder" : "photo"}.
+                      Off. Only people you invite can open this {noun}.
                     </p>
                     <Button
                       variant="outline"
@@ -536,9 +555,13 @@ export function PhotoShareDialog({
             <p className="flex gap-2 text-xs text-muted">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               <span>
-                {isFolder
-                  ? "Deleting the folder ends every share of it. Photos shared on their own keep those shares."
-                  : "Shares open this one photo only — never the project, folder, or other photos. Moving the photo to another folder or project, or deleting it, ends every share."}
+                {kind === "library_folder"
+                  ? "Deleting the folder ends every share of it — the media itself is never deleted. Items shared on their own keep those shares."
+                  : kind === "item"
+                    ? `Shares open this one ${noun} only — never the project or other media. Moving it to another project, or deleting it, ends every share.${itemKind === "video" || itemKind === "document" ? " Downloads also follow the project's download rules." : ""}`
+                    : isFolder
+                      ? "Deleting the folder ends every share of it. Photos shared on their own keep those shares."
+                      : "Shares open this one photo only — never the project, folder, or other photos. Moving the photo to another folder or project, or deleting it, ends every share."}
               </span>
             </p>
           </>

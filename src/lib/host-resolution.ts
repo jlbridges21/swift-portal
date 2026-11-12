@@ -241,6 +241,7 @@ const PORTAL_PATH_PREFIXES = [
   "/finish-setup",
   "/photo",
   "/folder",
+  "/shared",
   "/v",
   "/embed",
   "/view",

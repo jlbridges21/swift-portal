@@ -1,8 +1,12 @@
 /** Client-safe types for photo and folder sharing (no server imports). */
 import type { ShareExpiryPreset } from "@/lib/project-share-expiry";
 
-/** What a share opens: one photo, or one folder and the photos in it at access time. */
-export type MediaShareSubjectKind = "photo" | "folder";
+/**
+ * What a share opens: one photo, one project folder and the photos in it at access time,
+ * one Media Library folder (v126, live membership across projects), or one non-photo item
+ * (video, file, 360° tour, 3D model — v126).
+ */
+export type MediaShareSubjectKind = "photo" | "folder" | "library_folder" | "item";
 
 export type MediaShareExpiryPreset = Exclude<ShareExpiryPreset, "one_time" | "custom">;
 

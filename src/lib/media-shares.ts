@@ -50,6 +50,8 @@ const MAX_INVITES_PER_REQUEST = 20;
 
 const SHARE_COLUMNS =
   "id, business_id, media_asset_id, media_folder_id, project_id, folder_id, kind, email, allow_download, access_mode, access_starts_at, access_expires_at, expiry_preset, created_at, notified_at, last_accessed_at, view_count, revoked_at, token_ciphertext";
+/** v126 subjects. Selected separately so photo/folder shares keep working before the migration. */
+const V126_SHARE_COLUMNS = `${SHARE_COLUMNS}, library_folder_id, tour_id, model_id`;
 
 type MediaShareRow = {
   id: string;
@@ -71,6 +73,9 @@ type MediaShareRow = {
   view_count: number;
   revoked_at: string | null;
   token_ciphertext: string | null;
+  library_folder_id?: string | null;
+  tour_id?: string | null;
+  model_id?: string | null;
 };
 
 export type ShareablePhoto = {
@@ -103,9 +108,32 @@ export type ShareableFolder = {
 
 const FOLDER_COLUMNS = "id, business_id, project_id, name";
 
+/** A Media Library folder (v126): an organizational collection, not tied to a project. */
+export type ShareableLibraryFolder = {
+  id: string;
+  business_id: string;
+  name: string;
+};
+
+/**
+ * One non-photo asset shared on its own (v126): a video or file (media_assets), a 360° tour,
+ * or a 3D model. Photos keep their own "photo" subject and /photo/ links.
+ */
+export type ShareableItem = {
+  kind: "video" | "document" | "tour" | "model";
+  id: string;
+  business_id: string;
+  project_id: string | null;
+  /** Project photo folder snapshot (media_assets only; always null for tours/models). */
+  folder_id: string | null;
+  title: string;
+};
+
 export type ShareSubject =
   | { kind: "photo"; photo: ShareablePhoto }
-  | { kind: "folder"; folder: ShareableFolder };
+  | { kind: "folder"; folder: ShareableFolder }
+  | { kind: "library_folder"; libraryFolder: ShareableLibraryFolder }
+  | { kind: "item"; item: ShareableItem };
 
 export function photoSubject(photo: ShareablePhoto): ShareSubject {
   return { kind: "photo", photo };
@@ -115,31 +143,96 @@ export function folderSubject(folder: ShareableFolder): ShareSubject {
   return { kind: "folder", folder };
 }
 
-function subjectId(subject: ShareSubject): string {
-  return subject.kind === "photo" ? subject.photo.id : subject.folder.id;
+export function libraryFolderSubject(folder: ShareableLibraryFolder): ShareSubject {
+  return { kind: "library_folder", libraryFolder: folder };
 }
 
+export function itemSubject(item: ShareableItem): ShareSubject {
+  return { kind: "item", item };
+}
+
+export function shareSubjectId(subject: ShareSubject): string {
+  switch (subject.kind) {
+    case "photo":
+      return subject.photo.id;
+    case "folder":
+      return subject.folder.id;
+    case "library_folder":
+      return subject.libraryFolder.id;
+    case "item":
+      return subject.item.id;
+  }
+}
+const subjectId = shareSubjectId;
+
 function subjectBusinessId(subject: ShareSubject): string {
-  return subject.kind === "photo" ? subject.photo.business_id : subject.folder.business_id;
+  switch (subject.kind) {
+    case "photo":
+      return subject.photo.business_id;
+    case "folder":
+      return subject.folder.business_id;
+    case "library_folder":
+      return subject.libraryFolder.business_id;
+    case "item":
+      return subject.item.business_id;
+  }
 }
 
 function subjectProjectId(subject: ShareSubject): string | null {
-  return subject.kind === "photo" ? subject.photo.project_id : subject.folder.project_id;
+  switch (subject.kind) {
+    case "photo":
+      return subject.photo.project_id;
+    case "folder":
+      return subject.folder.project_id;
+    case "library_folder":
+      return null;
+    case "item":
+      return subject.item.project_id;
+  }
 }
 
-function subjectColumn(subject: ShareSubject): "media_asset_id" | "media_folder_id" {
-  return subject.kind === "photo" ? "media_asset_id" : "media_folder_id";
+type SubjectColumn = "media_asset_id" | "media_folder_id" | "library_folder_id" | "tour_id" | "model_id";
+
+function subjectColumn(subject: ShareSubject): SubjectColumn {
+  switch (subject.kind) {
+    case "photo":
+      return "media_asset_id";
+    case "folder":
+      return "media_folder_id";
+    case "library_folder":
+      return "library_folder_id";
+    case "item":
+      return subject.item.kind === "tour" ? "tour_id" : subject.item.kind === "model" ? "model_id" : "media_asset_id";
+  }
+}
+
+/** Photo and project-folder shares predate v126; only newer subjects read the new columns. */
+function subjectShareColumns(subject: ShareSubject): string {
+  return subject.kind === "photo" || subject.kind === "folder" ? SHARE_COLUMNS : V126_SHARE_COLUMNS;
 }
 
 function subjectLabel(subject: ShareSubject): string {
   if (subject.kind === "folder") return `the folder “${subject.folder.name}”`;
+  if (subject.kind === "library_folder") return `the folder “${subject.libraryFolder.name}”`;
+  if (subject.kind === "item") return subject.item.title.trim() || "a file";
   return subject.photo.title?.trim() || subject.photo.file_name?.trim() || "a photo";
 }
 
-/** Columns that pin a new share to its subject (and the subject's location for photos). */
+/** Columns that pin a new share to its subject (and the subject's location for photos/items). */
 function subjectInsertFields(subject: ShareSubject) {
   if (subject.kind === "folder") {
     return { media_folder_id: subject.folder.id, project_id: subject.folder.project_id, folder_id: null };
+  }
+  if (subject.kind === "library_folder") {
+    // Not tied to any project: membership is evaluated live, item by item.
+    return { library_folder_id: subject.libraryFolder.id, project_id: null, folder_id: null };
+  }
+  if (subject.kind === "item") {
+    return {
+      [subjectColumn(subject)]: subject.item.id,
+      project_id: subject.item.project_id,
+      folder_id: subject.item.folder_id,
+    };
   }
   return {
     media_asset_id: subject.photo.id,
@@ -190,6 +283,75 @@ export async function loadShareableFolder(
   return (data as ShareableFolder | null) ?? null;
 }
 
+/** Media Library folder in this business, or null (also null before migration v126). */
+export async function loadShareableLibraryFolder(
+  businessId: string,
+  folderId: string
+): Promise<ShareableLibraryFolder | null> {
+  if (!UUID_PATTERN.test(folderId)) return null;
+  const db = await createTenantServiceClient(businessId);
+  const { data, error } = await db.from("library_folders").select("id, business_id, name").eq("id", folderId).maybeSingle();
+  if (error) return null;
+  return (data as ShareableLibraryFolder | null) ?? null;
+}
+
+const ITEM_MEDIA_TYPES = new Set(["video", "document"]);
+
+/** A video/file/tour/3D model in this business that can be shared on its own, or null. */
+export async function loadShareableItem(
+  businessId: string,
+  kind: string,
+  id: string
+): Promise<ShareableItem | null> {
+  if (!UUID_PATTERN.test(id)) return null;
+  const db = await createTenantServiceClient(businessId);
+  if (kind === "tour") {
+    const { data } = await db.from("tours").select("id, business_id, project_id, tour_name").eq("id", id).maybeSingle();
+    if (!data) return null;
+    return {
+      kind: "tour",
+      id: data.id as string,
+      business_id: data.business_id as string,
+      project_id: (data.project_id as string | null) ?? null,
+      folder_id: null,
+      title: (data.tour_name as string | null) || "360° tour",
+    };
+  }
+  if (kind === "model") {
+    const { data, error } = await db
+      .from("project_3d_models")
+      .select("id, business_id, project_id, title")
+      .eq("id", id)
+      .maybeSingle();
+    if (error || !data) return null;
+    return {
+      kind: "model",
+      id: data.id as string,
+      business_id: data.business_id as string,
+      project_id: (data.project_id as string | null) ?? null,
+      folder_id: null,
+      title: (data.title as string | null) || "3D model",
+    };
+  }
+  if (kind !== "video" && kind !== "document") return null;
+  const { data } = await db
+    .from("media_assets")
+    .select("id, business_id, project_id, folder_id, media_type, media_source, file_path, title, file_name, embed_url")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data || !ITEM_MEDIA_TYPES.has(data.media_type as string)) return null;
+  // Needs either a stored file or (YouTube) an embed to show.
+  if (!data.file_path && !data.embed_url) return null;
+  return {
+    kind: data.media_type as "video" | "document",
+    id: data.id as string,
+    business_id: data.business_id as string,
+    project_id: (data.project_id as string | null) ?? null,
+    folder_id: (data.folder_id as string | null) ?? null,
+    title: (data.title as string | null) || (data.file_name as string | null) || "File",
+  };
+}
+
 function sealLinkToken(rawToken: string): string {
   return sealWithPurpose(LINK_CIPHER_PURPOSE, LINK_CIPHER_WHAT, Buffer.from(rawToken, "utf8"));
 }
@@ -202,8 +364,10 @@ function openLinkToken(ciphertext: string): string | null {
   }
 }
 
+/** /photo/… and /folder/… (project folders) are unchanged; library folders and items use /shared/…. */
 export function buildMediaSharePath(rawToken: string, kind: MediaShareSubjectKind = "photo"): string {
-  return `/${kind}/${encodeURIComponent(rawToken)}`;
+  const prefix = kind === "photo" || kind === "folder" ? kind : "shared";
+  return `/${prefix}/${encodeURIComponent(rawToken)}`;
 }
 
 export async function buildMediaShareUrl(
@@ -240,13 +404,16 @@ function isLive(row: Pick<MediaShareRow, "revoked_at" | "access_mode" | "access_
 
 async function activeSharesFor(subject: ShareSubject): Promise<MediaShareRow[]> {
   const db = await createTenantServiceClient(subjectBusinessId(subject));
-  const { data } = await db
+  const { data, error } = await db
     .from("media_shares")
-    .select(SHARE_COLUMNS)
+    .select(subjectShareColumns(subject))
     .eq(subjectColumn(subject), subjectId(subject))
     .is("revoked_at", null)
     .order("created_at", { ascending: true });
-  return (data as MediaShareRow[] | null) ?? [];
+  if (error && subject.kind !== "photo" && subject.kind !== "folder") {
+    throw new MediaShareError("Sharing for this item isn't set up yet. Run migration v126.", 503);
+  }
+  return (data as unknown as MediaShareRow[] | null) ?? [];
 }
 
 type ShareAction =
@@ -267,10 +434,10 @@ async function logShareEvent(
   const businessId = subjectBusinessId(subject);
   const projectId = subjectProjectId(subject);
   const activityType = `${subject.kind}_${action}`;
-  if (subject.kind === "photo") {
+  if (subject.kind === "photo" || (subject.kind === "item" && subjectColumn(subject) === "media_asset_id")) {
     await logMediaEvent({
       businessId,
-      mediaAssetId: subject.photo.id,
+      mediaAssetId: subjectId(subject),
       projectId,
       userId: actorId,
       eventType: activityType,
@@ -371,6 +538,32 @@ async function sendShareEmail(subject: ShareSubject, email: string, rawToken: st
   const settings = await getAppSettings(businessId);
   const businessName = settings.business.businessName.trim() || "Your photographer";
   const url = await buildMediaShareUrl(businessId, rawToken, subject.kind);
+  if (subject.kind === "library_folder") {
+    return sendBrandedEmail({
+      businessId,
+      to: email,
+      subject: `${businessName} shared a folder with you`,
+      title: "A folder was shared with you",
+      body: `${businessName} shared the folder “${subject.libraryFolder.name}” with you. This link was sent only to you — please don't forward it.`,
+      ctaLabel: "Open folder",
+      ctaUrl: url,
+      emailType: "folder_share_invite",
+    });
+  }
+  if (subject.kind === "item") {
+    const noun =
+      subject.item.kind === "video" ? "a video" : subject.item.kind === "tour" ? "a 360° tour" : subject.item.kind === "model" ? "a 3D model" : "a file";
+    return sendBrandedEmail({
+      businessId,
+      to: email,
+      subject: `${businessName} shared ${noun} with you`,
+      title: `${noun.charAt(0).toUpperCase()}${noun.slice(1)} was shared with you`,
+      body: `${businessName} shared “${subject.item.title}” with you. This link was sent only to you — please don't forward it.`,
+      ctaLabel: "Open",
+      ctaUrl: url,
+      emailType: "photo_share_invite",
+    });
+  }
   if (subject.kind === "folder") {
     return sendBrandedEmail({
       businessId,
@@ -677,12 +870,18 @@ export async function resolveMediaShareToken(
   if (!hostBusinessId || !isWellFormedShareToken(rawToken)) return null;
 
   const db = await createTenantServiceClient(hostBusinessId);
-  const { data } = await db
+  const tokenHash = hashShareAccessToken(rawToken);
+  let { data, error } = await db
     .from("media_shares")
-    .select(SHARE_COLUMNS)
-    .eq("access_token_hash", hashShareAccessToken(rawToken))
+    .select(V126_SHARE_COLUMNS)
+    .eq("access_token_hash", tokenHash)
     .maybeSingle();
-  const share = (data as MediaShareRow | null) ?? null;
+  if (error) {
+    // Before migration v126: the new columns don't exist yet — photo/folder shares still resolve.
+    ({ data, error } = await db.from("media_shares").select(SHARE_COLUMNS).eq("access_token_hash", tokenHash).maybeSingle());
+    if (error) return null;
+  }
+  const share = (data as unknown as MediaShareRow | null) ?? null;
   if (!share || share.business_id !== hostBusinessId || !isLive(share)) return null;
 
   let subject: ShareSubject;
@@ -693,10 +892,25 @@ export async function resolveMediaShareToken(
       .eq("id", share.media_asset_id)
       .maybeSingle();
     const photo = (assetData as ShareablePhoto | null) ?? null;
-    if (!isShareablePhoto(photo)) return null;
+    if (!photo) return null;
     if ((photo.project_id ?? null) !== (share.project_id ?? null)) return null;
     if ((photo.folder_id ?? null) !== (share.folder_id ?? null)) return null;
-    subject = photoSubject(photo);
+    if (photo.media_type === "photo") {
+      if (!isShareablePhoto(photo)) return null;
+      subject = photoSubject(photo);
+    } else {
+      const item = await loadShareableItem(hostBusinessId, photo.media_type, photo.id);
+      if (!item) return null;
+      subject = itemSubject(item);
+    }
+  } else if (share.tour_id || share.model_id) {
+    const item = await loadShareableItem(hostBusinessId, share.tour_id ? "tour" : "model", (share.tour_id ?? share.model_id) as string);
+    if (!item || (item.project_id ?? null) !== (share.project_id ?? null)) return null;
+    subject = itemSubject(item);
+  } else if (share.library_folder_id) {
+    const folder = await loadShareableLibraryFolder(hostBusinessId, share.library_folder_id);
+    if (!folder) return null;
+    subject = libraryFolderSubject(folder);
   } else if (share.media_folder_id) {
     const { data: folderData } = await db
       .from("media_folders")
@@ -752,6 +966,8 @@ export async function resolveSharedPhoto(
   if (subject.kind === "photo") {
     return !photoId || photoId === subject.photo.id ? subject.photo : null;
   }
+  // Library folders and single items are served by /api/public/shared/… with their own rules.
+  if (subject.kind !== "folder") return null;
   if (!photoId || !UUID_PATTERN.test(photoId)) return null;
   const db = await createTenantServiceClient(share.businessId);
   const { data } = await db.from("media_assets").select(PHOTO_COLUMNS).eq("id", photoId).maybeSingle();

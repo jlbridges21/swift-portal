@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,31 @@ interface MediaUploadModalProps {
   projects: ProjectOption[];
   defaultProjectId?: string | null;
   onUploaded?: () => void;
+  /**
+   * New interface Media Library: also add the uploads to a library folder (by reference).
+   * Omitted in Classic, where the modal is unchanged.
+   */
+  libraryFolders?: { id: string; name: string }[];
+  defaultLibraryFolderId?: string | null;
+  /** Called after uploads were added to a library folder. */
+  onAddedToFolder?: (folderId: string, count: number) => void;
+}
+
+/** Add freshly uploaded assets to a Media Library folder (chunks of 500, best effort). */
+async function addUploadsToLibraryFolder(folderId: string, ids: string[]): Promise<number> {
+  let added = 0;
+  for (let i = 0; i < ids.length; i += 500) {
+    const res = await fetch(`/api/library-folders/${folderId}/items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ items: ids.slice(i, i + 500) }),
+    });
+    if (!res.ok) throw new Error();
+    const json = (await res.json().catch(() => ({}))) as { added?: number };
+    added += json.added ?? 0;
+  }
+  return added;
 }
 
 export function MediaUploadModal({
@@ -32,9 +57,16 @@ export function MediaUploadModal({
   projects,
   defaultProjectId,
   onUploaded,
+  libraryFolders,
+  defaultLibraryFolderId,
+  onAddedToFolder,
 }: MediaUploadModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [projectId, setProjectId] = useState(defaultProjectId ?? "");
+  const [libraryFolderId, setLibraryFolderId] = useState(defaultLibraryFolderId ?? "");
+  useEffect(() => {
+    if (open) setLibraryFolderId(defaultLibraryFolderId ?? "");
+  }, [open, defaultLibraryFolderId]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
@@ -80,6 +112,7 @@ export function MediaUploadModal({
     };
 
     const files = [...pendingFiles];
+    const targetFolder = libraryFolders && libraryFolderId ? libraryFolders.find((f) => f.id === libraryFolderId) ?? null : null;
     resetForm();
     onClose();
 
@@ -88,7 +121,22 @@ export function MediaUploadModal({
       projectId: selectedProject,
       metadata: meta,
       onBatchComplete: ({ uploaded, errors }) => {
-        if (uploaded.length) {
+        if (uploaded.length && targetFolder) {
+          // Reference only — the files stay where they were uploaded (project or Unassigned).
+          void addUploadsToLibraryFolder(
+            targetFolder.id,
+            uploaded.map((a) => `${a.media_type === "video" ? "video" : a.media_type === "document" ? "document" : "photo"}:${a.id}`)
+          )
+            .then((added) => {
+              toast.success(`${uploaded.length} file${uploaded.length === 1 ? "" : "s"} uploaded to “${targetFolder.name}”`);
+              onAddedToFolder?.(targetFolder.id, added);
+              onUploaded?.();
+            })
+            .catch(() => {
+              toast.error(`Uploaded, but couldn't add to “${targetFolder.name}”. Add them from All Media.`);
+              onUploaded?.();
+            });
+        } else if (uploaded.length) {
           toast.success(`${uploaded.length} file${uploaded.length === 1 ? "" : "s"} uploaded`);
           onUploaded?.();
         }
@@ -118,6 +166,21 @@ export function MediaUploadModal({
             ]}
           />
         </div>
+
+        {libraryFolders ? (
+          <div className="space-y-2">
+            <Label>Add to folder (optional)</Label>
+            <Select
+              value={libraryFolderId}
+              onChange={(e) => setLibraryFolderId(e.target.value)}
+              options={[
+                { value: "", label: "No folder" },
+                ...libraryFolders.map((f) => ({ value: f.id, label: f.name })),
+              ]}
+            />
+            <p className="text-xs text-muted">Folders organize media — files aren&apos;t copied or moved.</p>
+          </div>
+        ) : null}
 
         <div className="space-y-2">
           <Label>Photos &amp; videos</Label>
