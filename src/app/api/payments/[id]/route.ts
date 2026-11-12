@@ -84,7 +84,7 @@ export async function DELETE(
 
     const { data: existing } = await db
       .from("payments")
-      .select("id, project_id")
+      .select("id, project_id, status, stripe_account_id, stripe_checkout_session_id, stripe_payment_link_id")
       .eq("id", id)
       .maybeSingle();
     if (!existing) {
@@ -94,6 +94,19 @@ export async function DELETE(
       const { canAccessProject } = await import("@/lib/project-access");
       if (!(await canAccessProject(profile, existing.project_id))) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+    }
+
+    // Close the emailed Stripe link and any open checkout first, or a client could still pay a
+    // request that no longer exists (and the money would arrive with nothing to record it).
+    if (existing.status !== "paid" && existing.status !== "processing") {
+      const { retirePaymentCheckouts } = await import("@/lib/checkout-closure");
+      const closure = await retirePaymentCheckouts(existing);
+      if (closure.completedSessionId) {
+        return NextResponse.json(
+          { error: "The client just completed a payment for this request. Refresh to see it before deleting." },
+          { status: 409 }
+        );
       }
     }
 

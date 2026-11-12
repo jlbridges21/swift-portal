@@ -291,3 +291,42 @@ export async function loadRolloutAnalytics(): Promise<RolloutAnalytics | null> {
 }
 
 export { effectivePhase };
+
+// ---------------------------------------------------------------------------
+// Client portal
+// ---------------------------------------------------------------------------
+
+/**
+ * Which client portal this business's clients get. Clients have no interface choice of their
+ * own: they follow the business owner's New/Classic experience (the owner's saved choice during
+ * the optional rollout; the platform default otherwise). Fails safe to Classic.
+ */
+export const getClientPortalInterface = cache(async (businessId: string): Promise<UiInterface> => {
+  try {
+    const raw = await createServiceClient();
+    const { data } = await raw.from("businesses").select("owner_user_id").eq("id", businessId).maybeSingle();
+    const ownerId = (data?.owner_user_id as string | null) ?? null;
+    const [config, pref] = await Promise.all([
+      loadRolloutConfig(),
+      ownerId ? loadUserUiPreference(ownerId) : Promise.resolve(EMPTY_USER_UI_PREFERENCE),
+    ]);
+    return resolveUiExperience(config, pref, { isSuperAdmin: false }).mode;
+  } catch (err) {
+    console.error("[ui-rollout] client portal interface failed", err);
+    return "classic";
+  }
+});
+
+/**
+ * Client portal interface for a viewer: clients (and share viewers) follow the business; a
+ * business user previewing the client view sees the portal for the interface they use.
+ */
+export async function getClientPortalInterfaceFor(
+  profile: Pick<Profile, "id" | "role">,
+  businessId: string
+): Promise<UiInterface> {
+  if (profile.role === "admin" || profile.role === "staff" || profile.role === "super_admin") {
+    return (await getUiExperience(profile)).mode;
+  }
+  return getClientPortalInterface(businessId);
+}

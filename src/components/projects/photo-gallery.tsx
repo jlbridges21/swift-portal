@@ -16,6 +16,7 @@ import { ExpandableMediaList } from "@/components/projects/expandable-media-list
 import { Images } from "lucide-react";
 import { createThumbRequestQueue, getCachedThumbUrl } from "@/lib/media-thumb-client";
 import { downloadMediaAsset } from "@/lib/download";
+import { formatFileSize } from "@/lib/brand";
 import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
 import type { DownloadQuality } from "@/lib/download-quality";
 
@@ -40,6 +41,17 @@ interface PhotoGalleryProps {
   favorites?: ClientFavoritesController;
   /** Shown instead of the default empty state (e.g. the Favorites view). */
   emptyState?: React.ReactNode;
+  /**
+   * grid (default) — responsive thumbnail grid.
+   * list — compact rows (thumbnail, name, size, heart).
+   * mosaic — a short preview (`mosaicCount` photos) whose last tile opens `onMore`.
+   * The viewer always pages through every photo in `photos`.
+   */
+  layout?: "grid" | "list" | "mosaic";
+  /** Grid layout: replaces PHOTO_GRID_CLASS. */
+  gridClassName?: string;
+  mosaicCount?: number;
+  onMore?: () => void;
 }
 
 export function PhotoGallery({
@@ -51,6 +63,10 @@ export function PhotoGallery({
   thumbnailsEndpoint,
   favorites,
   emptyState,
+  layout = "grid",
+  gridClassName,
+  mosaicCount = 7,
+  onMore,
 }: PhotoGalleryProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
@@ -159,24 +175,100 @@ export function PhotoGallery({
     />
   );
 
-  return (
-    <>
-      {compactInitialCount != null && photos.length > compactInitialCount ? (
+  const openAt = async (photo: MediaAsset, index: number) => {
+    const url = await loadFull(photo);
+    if (url) setLightboxIndex(index);
+  };
+
+  let body: React.ReactNode;
+  if (layout === "mosaic") {
+    const shown = photos.slice(0, mosaicCount);
+    const extra = photos.length - shown.length;
+    body = (
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-12 sm:gap-3">
+        {shown.map((photo, index) => {
+          const span = index < 3 ? "sm:col-span-4" : "sm:col-span-3";
+          const first = index === 0 ? "col-span-2" : "";
+          const isMore = extra > 0 && index === shown.length - 1 && onMore;
+          return (
+            <div key={`mosaic-${photo.id}`} className={cn("relative min-w-0", first, span)}>
+              {renderThumbnail(photo, index, "w-full")}
+              {isMore ? (
+                <button
+                  type="button"
+                  onClick={onMore}
+                  className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1 rounded-xl bg-black/55 text-white transition hover:bg-black/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                  aria-label={`View all ${photos.length} photos`}
+                >
+                  <Images className="h-6 w-6" aria-hidden />
+                  <span className="text-base font-semibold">+{extra + 1} more</span>
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  } else if (layout === "list") {
+    body = (
+      <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+        {photos.map((photo, index) => (
+          <li key={`list-${photo.id}`} className="flex items-center gap-3 p-2 pr-3">
+            <PhotoThumbnail
+              photo={photo}
+              thumbUrl={thumbUrls[photo.id]}
+              failed={loadErrors[photo.id]}
+              loading={loadingIds.has(photo.id) && !thumbUrls[photo.id]}
+              onLoadThumb={() => loadThumb(photo)}
+              onClick={() => void openAt(photo, index)}
+              className="w-24 shrink-0 rounded-lg sm:w-28"
+            />
+            <button
+              type="button"
+              onClick={() => void openAt(photo, index)}
+              className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:underline"
+            >
+              <span className="block truncate text-sm font-medium text-heading">{mediaDisplayName(photo)}</span>
+              <span className="block text-xs text-muted">
+                {[photo.file_size ? formatFileSize(photo.file_size) : null, `Photo ${index + 1} of ${photos.length}`]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </button>
+            {favorites ? (
+              <FavoriteHeart
+                liked={favorites.isFavorite(photo.id)}
+                onToggle={() => favorites.toggle(photo.id)}
+                label={mediaDisplayName(photo)}
+                className={favorites.isFavorite(photo.id) ? "" : "bg-slate-500/70 hover:bg-slate-600/80"}
+              />
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    );
+  } else {
+    body =
+      compactInitialCount != null && photos.length > compactInitialCount ? (
         <ExpandableMediaList
           items={photos}
           initialCount={compactInitialCount}
           labelSingular="photo"
           labelPlural="photos"
-          listClassName={PHOTO_GRID_CLASS}
+          listClassName={gridClassName ?? PHOTO_GRID_CLASS}
           viewAllLabel={(n) => `View all ${n} photos`}
           renderItem={(photo, index) => renderThumbnail(photo, index, "w-full")}
         />
       ) : (
-        <div className={PHOTO_GRID_CLASS}>
+        <div className={gridClassName ?? PHOTO_GRID_CLASS}>
           {photos.map((photo, index) => renderThumbnail(photo, index))}
         </div>
-      )}
+      );
+  }
 
+  return (
+    <>
+      {body}
       {safeLightboxIndex !== null && (
         <PhotoLightbox
           photos={photos}

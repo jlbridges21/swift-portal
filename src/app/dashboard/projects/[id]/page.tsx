@@ -37,6 +37,8 @@ import type {
   ShootProposal,
 } from "@/lib/types";
 import { ProjectPageClient } from "@/components/projects/project-page-client";
+import { ClientPortalProject } from "@/components/client-portal/client-portal-project";
+import { getClientPortalInterfaceFor } from "@/lib/ui-rollout-server";
 import { UrlToastHandler } from "@/components/ui/url-toast-handler";
 
 interface PageProps {
@@ -226,12 +228,18 @@ async function ProjectContent({
     }
   }
 
+  // New Experience portal: clients follow the business owner's interface; a business user
+  // previewing the client view sees the portal for the interface they use themselves.
+  const portalInterface = await getClientPortalInterfaceFor(profile, tenant.businessId);
+  const PortalPage =
+    portalInterface === "new" && !(isAdminViewer && !preview) ? ClientPortalProject : ProjectPageClient;
+
   return (
     <>
       <Suspense>
         <UrlToastHandler />
       </Suspense>
-      <ProjectPageClient
+      <PortalPage
         project={project}
         hero={hero}
         photos={photos}

@@ -9,6 +9,7 @@ import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessage
 import { logProjectActivity } from "@/lib/activity";
 import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
 import { idempotencyKey } from "@/lib/idempotency";
+import { hasPayLinkSecret, payLinkPath, signPayLinkToken } from "@/lib/pay-link";
 import {
   isOpenPaymentStatus,
   paidCentsForQuote,
@@ -229,12 +230,16 @@ export async function createPaymentLink(input: CreatePaymentLinkInput): Promise<
     throw err;
   }
 
+  // Clients get the branded ShootPortal pay page (embedded Stripe checkout, no login). The
+  // Stripe Payment Link stays on the row as the fallback and keeps working for links already sent.
+  const brandedPayUrl = hasPayLinkSecret() ? `${tenantOrigin}${payLinkPath(signPayLinkToken(paymentRow.id, input.businessId))}` : null;
+
   const { data: payment, error } = await db
     .from("payments")
     .update({
       stripe_payment_link_id: paymentLink.id,
       stripe_payment_link_url: paymentLink.url,
-      payment_link_url: paymentLink.url,
+      payment_link_url: brandedPayUrl ?? paymentLink.url,
       status: "sent",
     })
     .eq("id", paymentRow.id)
@@ -248,7 +253,7 @@ export async function createPaymentLink(input: CreatePaymentLinkInput): Promise<
 
   const amountStr = formatCurrency(amount);
   const payWorkflow = appSettings.workflow.payments;
-  const payUrl = paymentLink.url;
+  const payUrl = brandedPayUrl ?? paymentLink.url;
 
   if (payWorkflow.autoMoveOnPaymentLink) {
     const clientBody = input.followUpToApproval

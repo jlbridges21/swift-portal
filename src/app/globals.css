@@ -417,3 +417,12 @@ html[data-standalone] header.app-sticky-top {
 @media (prefers-reduced-motion: reduce) {
   .sp-heart-pop { animation: none; }
 }
+
+/* Horizontal scrollers (client portal tabs, folder chips) without a visible scrollbar. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

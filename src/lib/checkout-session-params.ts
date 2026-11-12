@@ -17,14 +17,22 @@ export function buildPaymentCheckoutParams(args: {
   feeCents: number;
   metadata: Stripe.MetadataParam;
   appUrl: string;
-  /** "marketing" returns the client to the project's Marketing Kit instead of Payments. */
-  returnTo?: "payments" | "marketing";
+  /**
+   * "marketing" returns the client to the project's Marketing Kit instead of Payments.
+   * `{ path }` returns to another same-origin page (the public /pay/{token} page).
+   */
+  returnTo?: CheckoutReturnTarget;
+  /**
+   * "hosted" (default) redirects to checkout.stripe.com. "elements" renders the Payment Element
+   * inside ShootPortal (Checkout Sessions + `ui_mode: "elements"`); Stripe only sends the client
+   * to `return_url` when a payment method needs a redirect (some bank or wallet flows).
+   */
+  uiMode?: "hosted" | "elements";
+  /** Prefills the receipt email for embedded checkout (Stripe requires one before confirming). */
+  customerEmail?: string | null;
 }): Stripe.Checkout.SessionCreateParams {
   const { payment, method, feeCents, metadata, appUrl } = args;
-  const back =
-    args.returnTo === "marketing"
-      ? { path: `/dashboard/projects/${payment.project_id}/marketing`, hash: "" }
-      : { path: `/dashboard/projects/${payment.project_id}`, hash: "#payments" };
+  const back = checkoutReturnLocation(payment.project_id, args.returnTo);
   const fee = method === "card" ? Math.max(0, Math.round(feeCents)) : 0;
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
@@ -63,14 +71,45 @@ export function buildPaymentCheckoutParams(args: {
         ? { payment_method_types: ["card"] }
         : { excluded_payment_method_types: ["us_bank_account"] };
 
-  return {
+  const common: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
     line_items: lineItems,
     ...methodParams,
     metadata,
     payment_intent_data: { metadata },
     client_reference_id: payment.id,
+  };
+
+  if (args.uiMode === "elements") {
+    const email = args.customerEmail?.trim();
+    const sep = back.path.includes("?") ? "&" : "?";
+    return {
+      ...common,
+      ui_mode: "elements",
+      ...(email && SIMPLE_EMAIL_RE.test(email) ? { customer_email: email } : {}),
+      // {CHECKOUT_SESSION_ID} is filled in by Stripe; the page verifies the session server-side.
+      return_url: `${appUrl}${back.path}${sep}payment=returned&payment_id=${payment.id}&session_id={CHECKOUT_SESSION_ID}${back.hash}`,
+    };
+  }
+
+  return {
+    ...common,
     success_url: `${appUrl}${back.path}?payment=${method === "bank" ? "bank_started" : "success"}${back.hash}`,
     cancel_url: `${appUrl}${back.path}?payment=cancelled${back.hash}`,
   };
+}
+
+export type CheckoutReturnTarget = "payments" | "marketing" | { path: string };
+
+const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function checkoutReturnLocation(projectId: string, target: CheckoutReturnTarget | undefined): { path: string; hash: string } {
+  if (target && typeof target === "object") {
+    // Same-origin paths only — never an absolute URL from a caller.
+    const path = target.path.startsWith("/") && !target.path.startsWith("//") ? target.path : `/dashboard/projects/${projectId}`;
+    return { path, hash: "" };
+  }
+  return target === "marketing"
+    ? { path: `/dashboard/projects/${projectId}/marketing`, hash: "" }
+    : { path: `/dashboard/projects/${projectId}`, hash: "#payments" };
 }

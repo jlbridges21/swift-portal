@@ -5,10 +5,15 @@ import { requireAuth } from "@/lib/auth";
 import { canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getStripeForBusiness, isBankPaymentAvailable, portalCheckoutBaseUrl, StripeConnectNotReadyError } from "@/lib/stripe-connect";
-import { buildStripePaymentMetadata, CLIENT_FEE_METADATA_KEY } from "@/lib/stripe-metadata";
-import { isPaymentComplete, isPaymentCovered } from "@/lib/payment-status";
-import { CARD_FEE_LINE_NAME, cardFeeCents } from "@/lib/card-fee";
-import { buildPaymentCheckoutParams } from "@/lib/checkout-session-params";
+import { isPaymentCovered } from "@/lib/payment-status";
+import { CARD_FEE_LINE_NAME } from "@/lib/card-fee";
+import {
+  BANK_UNAVAILABLE_MESSAGE,
+  CheckoutStartError,
+  createClientCheckoutSession,
+  expireCheckoutSession,
+  type CheckoutMethod,
+} from "@/lib/client-checkout";
 import { ensureCheckoutNotAlreadyPaid } from "@/lib/stripe-payment-reconcile";
 import { depositPaymentDescription, fullPaymentDescription, resolveDepositCharge, resolveQuoteDepositTerms } from "@/lib/payment-quote";
 import { getAppSettings } from "@/lib/app-settings";
@@ -18,10 +23,6 @@ import type Stripe from "stripe";
 
 const ALREADY_PAID_MESSAGE = "This payment has already been completed.";
 const PROCESSING_MESSAGE = "This payment is already processing. Bank payments usually clear in a few business days.";
-const BANK_UNAVAILABLE_MESSAGE = "Bank payments aren't available for this business. Please pay by card.";
-
-/** card = cards and wallets (plus the business's other Stripe methods); bank = US bank account (ACH). */
-type CheckoutMethod = "card" | "bank";
 
 function coveredMessage(status: string): string {
   return status === "processing" ? PROCESSING_MESSAGE : ALREADY_PAID_MESSAGE;
@@ -61,91 +62,30 @@ async function createCheckoutSession(
   businessId: string,
   business: { slug: string; custom_domain?: string | null },
   method: CheckoutMethod = "card",
-  returnTo: "payments" | "marketing" = "payments"
+  returnTo: "payments" | "marketing" = "payments",
+  options: { uiMode?: "hosted" | "elements"; requestHost?: string | null } = {}
 ) {
-  const appUrl = portalCheckoutBaseUrl(business);
-  if (!appUrl) {
-    return { ok: false as const, response: NextResponse.json({ error: "App URL not configured" }, { status: 500 }) };
-  }
-
-  const metadata = buildStripePaymentMetadata({
-    paymentId: payment.id,
-    businessId: payment.business_id || businessId,
-    projectId: payment.project_id,
-    clientId: payment.client_id ?? undefined,
-  });
-
-  let stripeContext;
   try {
-    stripeContext = await getStripeForBusiness(businessId);
+    const result = await createClientCheckoutSession({
+      payment,
+      businessId,
+      business,
+      method,
+      returnTo,
+      uiMode: options.uiMode,
+      requestHost: options.requestHost,
+    });
+    return { ok: true as const, ...result };
   } catch (err) {
-    if (err instanceof StripeConnectNotReadyError) {
-      return { ok: false as const, response: NextResponse.json({ error: err.message }, { status: 400 }) };
+    if (err instanceof CheckoutStartError) {
+      return { ok: false as const, response: NextResponse.json({ error: err.message }, { status: err.status }) };
     }
     throw err;
   }
-
-  const { stripe, requestOptions, stripeAccountId } = stripeContext;
-
-  if (method === "bank" && !(await isBankPaymentAvailable(businessId))) {
-    return { ok: false as const, response: NextResponse.json({ error: BANK_UNAVAILABLE_MESSAGE }, { status: 400 }) };
-  }
-
-  const settings = await getAppSettings(businessId);
-  const feeCents = method === "card" && settings.workflow.payments.passCardFeeToClient ? cardFeeCents(payment.amount) : 0;
-  const sessionMetadata: Stripe.MetadataParam = { ...metadata, ...(feeCents > 0 ? { [CLIENT_FEE_METADATA_KEY]: String(feeCents) } : {}) };
-
-  const sessionParams = buildPaymentCheckoutParams({
-    payment,
-    method,
-    feeCents,
-    metadata: sessionMetadata,
-    appUrl,
-    returnTo,
-  });
-
-  const session = requestOptions
-    ? await stripe.checkout.sessions.create(sessionParams, requestOptions)
-    : await stripe.checkout.sessions.create(sessionParams);
-
-  if (!session.url) {
-    return {
-      ok: false as const,
-      response: NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 }),
-    };
-  }
-
-  const db = await createTenantServiceClient(businessId);
-  await db
-    .from("payments")
-    .update({
-      stripe_checkout_session_id: session.id,
-      ...(payment.stripe_account_id ? {} : { stripe_account_id: stripeAccountId }),
-    })
-    .eq("id", payment.id);
-
-  return { ok: true as const, session };
 }
 
-async function expireCheckoutSession(
-  payment: Payment,
-  stripe: Stripe,
-  requestOptions?: StripeConnectRequestOptions
-): Promise<boolean> {
-  if (!payment.stripe_checkout_session_id) return true;
-  try {
-    if (requestOptions) {
-      await stripe.checkout.sessions.expire(payment.stripe_checkout_session_id, {}, requestOptions);
-    } else {
-      await stripe.checkout.sessions.expire(payment.stripe_checkout_session_id);
-    }
-    return true;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (/status of `expired`/i.test(message)) return true;
-    console.warn("[payments/checkout] previous checkout session was not expired", err);
-    return false;
-  }
+function expireStoredCheckoutSession(payment: Payment, stripe: Stripe, requestOptions?: StripeConnectRequestOptions) {
+  return expireCheckoutSession(payment.stripe_checkout_session_id, stripe, requestOptions);
 }
 
 async function closeDepositCheckout(
@@ -161,7 +101,7 @@ async function closeDepositCheckout(
       await stripe.paymentLinks.update(payment.stripe_payment_link_id, update);
     }
   }
-  return expireCheckoutSession(payment, stripe, requestOptions);
+  return expireStoredCheckoutSession(payment, stripe, requestOptions);
 }
 
 async function paymentLinkChargeCents(
@@ -347,7 +287,7 @@ async function settleDeposit(payment: Payment, businessId: string): Promise<Paym
   }
 
   const { stripe, requestOptions } = await getStripeForBusiness(businessId);
-  const expired = await expireCheckoutSession(payment, stripe, requestOptions);
+  const expired = await expireStoredCheckoutSession(payment, stripe, requestOptions);
   if (!expired) {
     throw new CheckoutChoiceError("The open checkout session could not be closed.", 409);
   }
@@ -457,8 +397,10 @@ export async function POST(
     let choice: string | undefined;
     let methodRaw: string | undefined;
     let returnTo: "payments" | "marketing" = "payments";
+    let embedded = false;
     try {
       const body = await request.json();
+      if (body && body.embedded === true) embedded = true;
       if (body && typeof body.choice === "string") choice = body.choice;
       if (body && typeof body.method === "string") methodRaw = body.method;
       if (body && body.returnTo === "marketing") returnTo = "marketing";
@@ -491,9 +433,16 @@ export async function POST(
       return NextResponse.json({ error: block.message ?? ALREADY_PAID_MESSAGE }, { status: 409 });
     }
 
-    const result = await createCheckoutSession(paymentToCharge, tenant.businessId, tenant.business, method, returnTo);
+    const result = await createCheckoutSession(paymentToCharge, tenant.businessId, tenant.business, method, returnTo, {
+      uiMode: embedded ? "elements" : "hosted",
+      requestHost: request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
+    });
     if (!result.ok) return result.response;
 
+    if (result.embedded) {
+      // Embedded (Payment Element) checkout: no redirect. Only the client secret leaves the server.
+      return NextResponse.json(result.embedded);
+    }
     return NextResponse.json({ url: result.session.url, sessionId: result.session.id });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Checkout failed";

@@ -230,7 +230,7 @@ export async function POST(request: Request) {
             paymentId: payment.id,
             businessId: payment.business_id,
           });
-          await handleCheckoutExpired(payment, session.metadata);
+          await handleCheckoutExpired(payment, session.metadata, { session, eventCreated: event.created });
         }
         recordEvent = true;
         break;

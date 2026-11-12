@@ -14,6 +14,7 @@ import {
   handlePaymentSuccess,
   resolvePaymentFromCheckoutSession,
 } from "@/lib/stripe-payments";
+import { findInFlightStripePayment } from "@/lib/checkout-closure";
 import type { Payment } from "@/lib/types";
 import type Stripe from "stripe";
 
@@ -160,7 +161,8 @@ async function sessionToSucceededPayment(
 
 /** Query Stripe directly for a succeeded, non-refunded payment tied to this row. */
 export async function findSucceededStripePaymentForRecord(
-  payment: Payment
+  payment: Payment,
+  options: { searchByMetadata?: boolean } = {}
 ): Promise<StripeSucceededPayment | null> {
   const { stripe, requestOptions } = getStripeForStoredAccount(payment.stripe_account_id);
 
@@ -268,6 +270,20 @@ export async function findSucceededStripePaymentForRecord(
         paymentId: payment.id,
         paymentLinkId: payment.stripe_payment_link_id,
         error: err instanceof Error ? err.message : err,
+      });
+    }
+  }
+
+  if (options.searchByMetadata) {
+    // Money that went through a session/link the row no longer points at (an older tab, a
+    // replaced session, a lost webhook). Re-check it through the PaymentIntent path above.
+    const hit = await findInFlightStripePayment(payment);
+    if (hit?.status === "succeeded" && hit.paymentIntentId !== payment.stripe_payment_intent_id) {
+      return findSucceededStripePaymentForRecord({
+        ...payment,
+        stripe_payment_intent_id: hit.paymentIntentId,
+        stripe_checkout_session_id: null,
+        stripe_payment_link_id: null,
       });
     }
   }
@@ -408,7 +424,8 @@ async function reconcileBankPaymentState(
 /** Idempotent — safe if webhook already recorded the payment. */
 export async function reconcilePaymentFromStripe(
   payment: Payment,
-  source: string
+  source: string,
+  options: { searchByMetadata?: boolean } = {}
 ): Promise<ReconcilePaymentResult> {
   const businessId = payment.business_id ?? null;
   const base = {
@@ -427,7 +444,7 @@ export async function reconcilePaymentFromStripe(
     return { ...base, alreadyPaid: true };
   }
 
-  const stripeMatch = await findSucceededStripePaymentForRecord(payment);
+  const stripeMatch = await findSucceededStripePaymentForRecord(payment, options);
   if (!stripeMatch) {
     // No settled money. A bank debit may have started (missed webhook) or failed while processing.
     const bank = await reconcileBankPaymentState(payment, source);
@@ -550,7 +567,7 @@ export async function ensureCheckoutNotAlreadyPaid(
     };
   }
 
-  const reconcile = await reconcilePaymentFromStripe(payment, `${source}:preflight`);
+  const reconcile = await reconcilePaymentFromStripe(payment, `${source}:preflight`, { searchByMetadata: true });
   if (reconcile.skipped === "bank_payment_processing") {
     return { blocked: true, message: "This payment is already processing." };
   }

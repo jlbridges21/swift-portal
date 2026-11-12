@@ -57,7 +57,7 @@ import {
   type ProjectMediaSections,
 } from "@/lib/project-media-sections";
 
-interface ProjectPageClientProps {
+export interface ProjectPageClientProps {
   project: Project;
   hero: HeroMedia;
   photos: MediaAsset[];

@@ -10,6 +10,7 @@
  * Add-on payments never drive project status automation: paying $49 for a website must not
  * move a project to Delivered or unlock downloads that the main invoice controls.
  */
+import { retirePaymentCheckouts } from "@/lib/checkout-closure";
 import { logProjectActivity } from "@/lib/activity";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getStripeForBusiness, StripeConnectNotReadyError } from "@/lib/stripe-connect";
@@ -219,6 +220,18 @@ export async function createAddonPayment(
     for (const pid of orphanPayments) {
       const { data: others } = await ctx.db.from("marketing_kit_purchases").select("id").eq("payment_id", pid).eq("status", "pending").limit(1);
       if (!others?.length) {
+        // Retire its open checkout / link first so the replaced purchase can't still be paid.
+        const { data: row } = await ctx.db
+          .from("payments")
+          .select("id, status, stripe_account_id, stripe_checkout_session_id, stripe_payment_link_id")
+          .eq("id", pid)
+          .maybeSingle();
+        if (row && (row.status === "pending" || row.status === "sent")) {
+          const closure = await retirePaymentCheckouts(row);
+          if (closure.completedSessionId) {
+            throw new MarketingError("Your earlier payment for this is being confirmed. Refresh in a moment.", 409);
+          }
+        }
         await ctx.db.from("payments").update({ status: "cancelled" }).eq("id", pid).in("status", ["pending", "sent"]);
       }
     }

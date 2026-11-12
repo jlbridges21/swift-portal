@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { EmbeddedCheckoutModal, postStartCheckout, useCheckoutReturn } from "@/components/payments/embedded-checkout-modal";
+import { paymentCheckoutPath } from "@/lib/payment-status";
 import { cn } from "@/lib/utils";
 import { MarketingFontFaces } from "@/components/marketing/website/listing-website";
 import { useKit, kitFetch, type KitApi } from "@/components/marketing/editor/use-kit";
@@ -99,6 +101,7 @@ function PurchaseDialog({ kit, open, onClose, preselect }: { kit: KitApi; open: 
   const [chosen, setChosen] = useState<MarketingProduct[]>(preselect ? [preselect] : lockable);
   const [method, setMethod] = useState<"pay_now" | "add_to_invoice">("pay_now");
   const [working, setWorking] = useState(false);
+  const [checkoutPaymentId, setCheckoutPaymentId] = useState<string | null>(null);
   useEffect(() => {
     if (open) setChosen(preselect && lockable.includes(preselect) ? [preselect] : lockable);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -125,15 +128,26 @@ function PurchaseDialog({ kit, open, onClose, preselect }: { kit: KitApi; open: 
         onClose();
         return;
       }
-      const { url } = await kitFetch<{ url: string }>(`/api/payments/${paymentId}/checkout`, {
-        method: "POST",
-        body: JSON.stringify({ method: "card", returnTo: "marketing" }),
-      });
-      window.location.assign(url);
+      // Pay inside ShootPortal (embedded Stripe checkout) — no redirect to Stripe.
+      setCheckoutPaymentId(paymentId);
+      setWorking(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't start checkout");
       setWorking(false);
     }
+  }
+
+  if (checkoutPaymentId) {
+    return (
+      <MarketingCheckout
+        kit={kit}
+        paymentId={checkoutPaymentId}
+        onClose={() => {
+          setCheckoutPaymentId(null);
+          onClose();
+        }}
+      />
+    );
   }
 
   return (
@@ -243,6 +257,49 @@ function DomainNotice({ state, projectId }: { state: KitClientState; projectId: 
       </div>
     </div>
   );
+}
+
+/** Embedded checkout for a Marketing Kit add-on payment. Access unlocks only once the server confirms payment. */
+function MarketingCheckout({ kit, paymentId, resumeSessionId, onClose }: { kit: KitApi; paymentId: string; resumeSessionId?: string; onClose: () => void }) {
+  const startCheckout = useCallback(
+    ({ method }: { method: "card" | "bank" }) =>
+      postStartCheckout(paymentCheckoutPath(paymentId), { method, returnTo: "marketing", embedded: true }),
+    [paymentId]
+  );
+  const refreshUntilUnlocked = useCallback(async () => {
+    for (let n = 0; n < 6; n++) {
+      const next = await kit.refresh();
+      if (next && (next.access.website.hasAccess || next.access.social.hasAccess)) return;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }, [kit]);
+  return (
+    <EmbeddedCheckoutModal
+      open
+      onClose={() => {
+        onClose();
+        void kit.refresh();
+      }}
+      startCheckout={startCheckout}
+      statusUrl={(sessionId) => `${paymentCheckoutPath(paymentId)}/status${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ""}`}
+      resumeSessionId={resumeSessionId}
+      title="Marketing Kit"
+      onSettled={(outcome) => {
+        if (outcome.state === "paid") void refreshUntilUnlocked();
+      }}
+      paidMessage="Your Marketing Kit is unlocked — publish your website and download your posts."
+      fallbackReceiptHref={`/api/payments/${paymentId}/receipt`}
+      doneLabel="Back to Marketing Kit"
+    />
+  );
+}
+
+/** Return from a redirect-based payment method: verify the session in the checkout modal. */
+function MarketingCheckoutResume({ kit }: { kit: KitApi }) {
+  const returned = useCheckoutReturn((id) => kit.state.access.website.pendingPaymentId === id || kit.state.access.social.pendingPaymentId === id);
+  const [dismissed, setDismissed] = useState(false);
+  if (!returned?.paymentId || dismissed) return null;
+  return <MarketingCheckout kit={kit} paymentId={returned.paymentId} resumeSessionId={returned.sessionId} onClose={() => setDismissed(true)} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -666,6 +723,7 @@ export function MarketingKitEditor({ initialState, backHref, sitesHref = null, i
         </div>
       ) : null}
       {purchase !== false ? <PurchaseDialog kit={kit} open onClose={() => setPurchase(false)} preselect={purchase} /> : null}
+      <MarketingCheckoutResume kit={kit} />
       <Modal
         open={confirmPublish}
         onClose={() => setConfirmPublish(false)}

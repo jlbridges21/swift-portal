@@ -276,7 +276,7 @@ export async function POST(request: Request) {
             attribution.businessId === connectBusinessId &&
             payment.status === "pending"
           ) {
-            await handleCheckoutExpired(payment, session.metadata);
+            await handleCheckoutExpired(payment, session.metadata, { session, eventCreated: event.created });
           } else if (!attribution.ok || attribution.businessId !== connectBusinessId) {
             console.error("[stripe-connect-webhook] checkout.expired rejected — business mismatch", {
               paymentId: payment.id,
@@ -333,7 +333,17 @@ export async function POST(request: Request) {
             : await loadDisputedCharge(event.data.object as Stripe.Dispute, connectedAccountId);
         if (charge && (event.type === "charge.dispute.created" || charge.refunded === true)) {
           const payment = await resolvePaymentFromCharge(charge, connectedAccountId);
-          if (connectPaymentMatches(event.type, connectBusinessId, payment, { metadata: charge.metadata })) {
+          const chargeIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+          // Refunding an accidental duplicate charge must not revoke the purchase the client's
+          // recorded payment still covers: only the charge on the row's own PaymentIntent counts.
+          const isRecordedCharge = !payment?.stripe_payment_intent_id || !chargeIntentId || chargeIntentId === payment.stripe_payment_intent_id;
+          if (!isRecordedCharge) {
+            logConnect("refund/dispute on a non-recorded (duplicate) charge — purchases kept", {
+              eventType: event.type,
+              paymentId: payment?.id,
+              chargeIntentId,
+            });
+          } else if (connectPaymentMatches(event.type, connectBusinessId, payment, { metadata: charge.metadata })) {
             await revokePurchasesForPayment(
               connectBusinessId,
               payment.id,

@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useId, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useId, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import type { Payment, ProjectQuote } from "@/lib/types";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,7 +14,7 @@ import { cardFeeCents } from "@/lib/card-fee";
 import { usePortalBrand } from "@/components/brand/brand-provider";
 import { clientPayChoice, paidCentsForQuote, resolveQuoteDepositTerms } from "@/lib/payment-quote";
 import type { PaymentAutomationSettings } from "@/lib/workflow-settings";
-import { toast } from "sonner";
+import { EmbeddedCheckoutModal, postStartCheckout, useCheckoutReturn } from "@/components/payments/embedded-checkout-modal";
 
 /** Payment awaiting client action (link sent but not yet paid). */
 export function isOutstandingPayment(status: string): boolean {
@@ -104,46 +105,65 @@ function quoteForPayment(quotes: ProjectQuote[], payment: Payment): ProjectQuote
   return quotes.find((quote) => quote.id === payment.quote_id);
 }
 
+/** Status endpoint the checkout modal polls; verified on the server against Stripe. */
+function checkoutStatusUrl(paymentId: string) {
+  return (sessionId: string | null) =>
+    `${paymentCheckoutPath(paymentId)}/status${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ""}`;
+}
+
+/** After paying: refresh server data (payment status, unlocked downloads), optionally jump to media. */
+function useAfterPayment() {
+  const router = useRouter();
+  return useCallback(
+    (scrollToMedia = false) => {
+      router.refresh();
+      if (scrollToMedia) {
+        window.setTimeout(() => {
+          document.getElementById("photo-gallery")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 400);
+      }
+    },
+    [router]
+  );
+}
+
 export function CheckoutChoiceButtons({
   payment,
   choice,
+  downloadsLocked = false,
 }: {
   payment: Pick<Payment, "id" | "amount">;
   choice: { depositCents: number; totalCents: number; rowIsFull: boolean; offerPayInFull: boolean } | null;
+  /** Client downloads are still locked — the success screen announces the unlock when the server confirms it. */
+  downloadsLocked?: boolean;
 }) {
   const { passCardFee } = useContext(PaymentOptionsContext);
   const [pending, setPending] = useState<"full" | "deposit" | "default" | null>(null);
   const [method, setMethod] = useState<PayMethod>("card");
+  const [checkout, setCheckout] = useState<{ choice: "full" | "deposit" | "default"; method: PayMethod } | null>(null);
+  const afterPayment = useAfterPayment();
 
-  async function start(next: "full" | "deposit" | "default") {
+  function start(next: "full" | "deposit" | "default") {
     if (pending) return;
     setPending(next);
-    try {
-      const res = await fetch(paymentCheckoutPath(payment.id), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ...(next === "default" ? {} : { choice: next }), method }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (res.ok && data.url) {
-        window.location.href = data.url;
-        return;
-      }
-      toast.error(data.error || "Could not start checkout");
-      setPending(null);
-    } catch {
-      toast.error("Could not start checkout");
-      setPending(null);
-    }
+    setCheckout({ choice: next, method });
   }
+
+  const startCheckout = useCallback(
+    ({ method: m, first }: { method: PayMethod; first: boolean }) => {
+      const choiceBody = checkout && checkout.choice !== "default" && first ? { choice: checkout.choice } : {};
+      // Embedded checkout: amounts are computed on the server from the payment row.
+      return postStartCheckout(paymentCheckoutPath(payment.id), { ...choiceBody, method: m, embedded: true });
+    },
+    [checkout, payment.id]
+  );
 
   /** Button label; card payments show the fee the client will pay on top. */
   const label = (text: string, cents: number) => {
     const fee = method === "card" && passCardFee ? cardFeeCents(cents) : 0;
     return fee > 0 ? `${text} + ${formatCurrency(fee)} fee` : text;
   };
-  const busyLabel = method === "bank" ? "Opening bank checkout…" : "Starting checkout…";
+  const busyLabel = "Opening secure checkout…";
 
   const buttons: { key: "full" | "deposit" | "default"; text: string; cents: number; primary: boolean }[] = [];
   if (!choice) {
@@ -165,6 +185,27 @@ export function CheckoutChoiceButtons({
 
   return (
     <div className="flex w-full flex-col gap-3 sm:w-80">
+      <EmbeddedCheckoutModal
+        open={checkout != null}
+        onClose={() => {
+          setCheckout(null);
+          setPending(null);
+          afterPayment();
+        }}
+        startCheckout={startCheckout}
+        statusUrl={checkoutStatusUrl(payment.id)}
+        title="Project payment"
+        initialMethod={checkout?.method ?? method}
+        onSettled={() => afterPayment()}
+        downloadsWereLocked={downloadsLocked}
+        onDownloadMedia={() => {
+          setCheckout(null);
+          setPending(null);
+          afterPayment(true);
+        }}
+        fallbackReceiptHref={`/api/payments/${payment.id}/receipt`}
+        doneLabel="Return to project"
+      />
       <PayMethodPicker method={method} onChange={setMethod} sampleCents={buttons[0]?.cents ?? payment.amount} />
       <div className="flex flex-col gap-2">
         {buttons.map((b) => (
@@ -191,8 +232,10 @@ function PayChoices({
   depositPercent,
   depositAmountCents,
   allowClientPayInFull,
+  downloadsLocked,
 }: {
   payment: Payment;
+  downloadsLocked?: boolean;
   quote?: ProjectQuote;
   paidCents: number;
   depositMode: PaymentAutomationSettings["depositMode"];
@@ -210,7 +253,7 @@ function PayChoices({
       })
     : null;
 
-  return <CheckoutChoiceButtons payment={payment} choice={choice} />;
+  return <CheckoutChoiceButtons payment={payment} choice={choice} downloadsLocked={downloadsLocked} />;
 }
 
 export function PaymentsSection({
@@ -234,6 +277,7 @@ export function PaymentsSection({
 
   return (
     <section id="payments">
+      {!isPreview ? <CheckoutReturnResume payments={payments} downloadsLocked={!downloadsUnlocked} /> : null}
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-heading">
         <CreditCard className="h-5 w-5" /> Payments
       </h2>
@@ -269,6 +313,7 @@ export function PaymentsSection({
                         depositPercent={depositPercent}
                         depositAmountCents={depositAmountCents}
                         allowClientPayInFull={allowClientPayInFull}
+                        downloadsLocked={!downloadsUnlocked}
                       />
                     )}
                   </CardContent>
@@ -367,5 +412,43 @@ export function PaymentsSection({
       </div>
       )}
     </section>
+  );
+}
+
+/**
+ * A redirect-based payment method (some wallets and banks) sent the client back here.
+ * Reopen the checkout in "confirming" mode; it verifies the session with the server.
+ */
+function CheckoutReturnResume({ payments, downloadsLocked }: { payments: Payment[]; downloadsLocked: boolean }) {
+  const returned = useCheckoutReturn((id) => payments.some((p) => p.id === id && p.status !== "paid"));
+  const [dismissed, setDismissed] = useState(false);
+  const afterPayment = useAfterPayment();
+  const payment = returned ? payments.find((p) => p.id === returned.paymentId) : undefined;
+  const startCheckout = useCallback(
+    ({ method }: { method: PayMethod }) =>
+      postStartCheckout(paymentCheckoutPath(payment?.id ?? ""), { method, embedded: true }),
+    [payment?.id]
+  );
+  if (!returned || !payment || dismissed) return null;
+  return (
+    <EmbeddedCheckoutModal
+      open
+      onClose={() => {
+        setDismissed(true);
+        afterPayment();
+      }}
+      startCheckout={startCheckout}
+      statusUrl={checkoutStatusUrl(payment.id)}
+      resumeSessionId={returned.sessionId}
+      title="Project payment"
+      onSettled={() => afterPayment()}
+      downloadsWereLocked={downloadsLocked}
+      onDownloadMedia={() => {
+        setDismissed(true);
+        afterPayment(true);
+      }}
+      fallbackReceiptHref={`/api/payments/${payment.id}/receipt`}
+      doneLabel="Return to project"
+    />
   );
 }

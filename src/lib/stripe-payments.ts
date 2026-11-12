@@ -11,6 +11,7 @@ import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessage
 import { getStripeForStoredAccount } from "@/lib/stripe-connect";
 import { parseBusinessIdFromMetadata, parsePaymentIdFromMetadata } from "@/lib/stripe-metadata";
 import { isPaymentComplete, isPaymentCovered } from "@/lib/payment-status";
+import { closeOpenCheckoutsForPayment, wasClosedEarly } from "@/lib/checkout-closure";
 import type { Payment, PaymentMethodType } from "@/lib/types";
 import type Stripe from "stripe";
 
@@ -96,6 +97,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
   const { payments: payWorkflow } = appSettings.workflow;
 
   if (isPaymentComplete(payment.status)) {
+    await flagUnexpectedStripePayment(businessId, payment, paymentIntentId, source);
     // Marketing Kit add-on: re-run the (idempotent) grant in case an earlier attempt failed.
     if (await isMarketingAddonPayment(businessId, payment.id)) {
       await grantPurchasesForPayment(businessId, payment.id);
@@ -145,8 +147,15 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
   }
 
   if (!updated) {
+    // Lost a race with another writer, or the row is no longer payable (cancelled/refunded).
+    const { data: current } = await db.from("payments").select("*").eq("id", payment.id).maybeSingle();
+    if (current) await flagUnexpectedStripePayment(businessId, current as Payment, paymentIntentId, source);
     return { alreadyPaid: true, paymentId: payment.id, updated: false, businessId };
   }
+
+  // Settled: no other checkout for this row may still take money (open in-app session after a
+  // manual "mark paid", a Payment Link session in another tab, ...).
+  await closeOpenCheckoutsForPayment(payment, { exceptSessionId: checkoutSessionId ?? null });
 
   if (payment.stripe_payment_link_id) {
     try {
@@ -168,6 +177,10 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
   // status automation. An add-on payment must never move the project to Delivered or unlock
   // downloads that the main invoice controls.
   const isMarketingAddon = await isMarketingAddonPayment(businessId, payment.id);
+  // A deposit (or any quote payment that leaves a balance) must not deliver the project: that
+  // would unlock downloads gated on Delivered before the balance is paid.
+  const remainingQuoteCents = isMarketingAddon ? 0 : await remainingQuoteBalanceCents(db, payment);
+  const leavesBalance = remainingQuoteCents > 0;
   if (isMarketingAddon) {
     await grantPurchasesForPayment(businessId, payment.id);
     await logProjectActivity("payment_received", activityDescription, {
@@ -182,6 +195,13 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
       projectId: payment.project_id,
       idempotencyKey: `payment:${payment.id}:received`,
       metadata: { paymentId: payment.id, source },
+    });
+  } else if (leavesBalance) {
+    await logProjectActivity("payment_received", activityDescription + " (" + formatCents(remainingQuoteCents) + " balance remaining)", {
+      businessId,
+      projectId: payment.project_id,
+      idempotencyKey: "payment:" + payment.id + ":received",
+      metadata: { paymentId: payment.id, source, remainingQuoteCents },
     });
   } else if (payWorkflow.autoMoveOnStripePaid) {
     await setProjectStatus({
@@ -210,7 +230,7 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
     );
   }
 
-  if (payWorkflow.autoUnlockDownloads && !wasProcessing && !isMarketingAddon) {
+  if (payWorkflow.autoUnlockDownloads && !wasProcessing && !isMarketingAddon && !leavesBalance) {
     await logWorkflowAudit(payment.project_id, "Downloads automatically unlocked after payment.", {
       idempotencyKey: `workflow:downloads-unlocked:${payment.id}`,
     });
@@ -271,7 +291,9 @@ export async function handlePaymentSuccess(options: PaymentSuccessOptions) {
         ? `Your ${amountStr} payment for ${payment.description} is confirmed. It's ready in your Marketing Kit.`
         : wasProcessing
           ? `Your ${amountStr} bank payment has cleared. Thank you!`
-          : completedBody,
+          : leavesBalance
+            ? `Your ${amountStr} payment is confirmed. Thank you! The remaining ${formatCents(remainingQuoteCents)} is due later.`
+            : completedBody,
       link: isMarketingAddon
         ? `/dashboard/projects/${payment.project_id}/marketing`
         : `/dashboard/projects/${payment.project_id}#payments`,
@@ -362,6 +384,8 @@ export async function handlePaymentProcessing(options: PaymentProcessingOptions)
   }
   if (!updated) return { updated: false, paymentId: payment.id, businessId };
 
+  await closeOpenCheckoutsForPayment(payment, { exceptSessionId: checkoutSessionId ?? null });
+
   // Stop the emailed link from being paid a second time while this one clears.
   if (payment.stripe_payment_link_id) {
     try {
@@ -380,8 +404,9 @@ export async function handlePaymentProcessing(options: PaymentProcessingOptions)
   // Marketing Kit add-on: access is granted when the bank payment clears (handlePaymentSuccess),
   // and an add-on never changes project status.
   const isMarketingAddon = await isMarketingAddonPayment(businessId, payment.id);
+  const leavesBalance = !isMarketingAddon && (await remainingQuoteBalanceCents(db, payment)) > 0;
 
-  if (payWorkflow.autoMoveOnStripePaid && !isMarketingAddon) {
+  if (payWorkflow.autoMoveOnStripePaid && !isMarketingAddon && !leavesBalance) {
     await setProjectStatus({
       projectId: payment.project_id,
       status: "delivered",
@@ -426,7 +451,7 @@ export async function handlePaymentProcessing(options: PaymentProcessingOptions)
       title: "Payment processing",
       body: isMarketingAddon
         ? `Your ${amountStr} bank payment is processing and usually clears in a few business days. Your Marketing Kit unlocks as soon as it does.`
-        : payWorkflow.autoMoveOnStripePaid
+        : payWorkflow.autoMoveOnStripePaid && !leavesBalance
         ? `Your ${amountStr} bank payment is processing and usually clears in a few business days. Your files are ready to download now.`
         : `Your ${amountStr} bank payment is processing and usually clears in a few business days.`,
       link: `/dashboard/projects/${payment.project_id}#payments`,
@@ -706,7 +731,21 @@ export async function handlePaymentFailed(payment: Payment, reason: string, meta
   }
 }
 
-export async function handleCheckoutExpired(payment: Payment, metadata?: Stripe.Metadata | null) {
+export async function handleCheckoutExpired(
+  payment: Payment,
+  metadata?: Stripe.Metadata | null,
+  context?: { session: Pick<Stripe.Checkout.Session, "id" | "ui_mode" | "expires_at" | "payment_link">; eventCreated: number }
+) {
+  if (context) {
+    const { session, eventCreated } = context;
+    // In-app checkouts restart on their own, and sessions ShootPortal closed (replaced, settled,
+    // cancelled) or that the row no longer uses need no admin follow-up.
+    // Webhook payloads render at the endpoint's API version: older versions call in-app
+    // ("elements") sessions "custom".
+    if ((session.ui_mode as string | null) === "elements" || (session.ui_mode as string | null) === "custom") return;
+    if (wasClosedEarly(session, eventCreated)) return;
+    if (!session.payment_link && session.id !== payment.stripe_checkout_session_id) return;
+  }
   const attribution = checkPaymentBusinessAttribution(payment, metadata);
   if (!attribution.ok) {
     console.error("[stripe-webhook] refusing checkout-expired write — cannot attribute business", {
@@ -733,5 +772,106 @@ export async function handleCheckoutExpired(payment: Payment, metadata?: Stripe.
     body: `Client checkout expired for ${payment.description}. Resend the payment link if needed.`,
     link: `/admin/projects/${payment.project_id}#payments`,
     projectId: payment.project_id,
+  });
+}
+
+function formatCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+/**
+ * For a payment tied to a proposal/quote: what the client still owes on that quote once this
+ * payment counts (paid + processing). 0 for payments not tied to a quote, so standalone
+ * invoices keep their existing "payment → Delivered" automation.
+ */
+async function remainingQuoteBalanceCents(
+  db: Awaited<ReturnType<typeof createTenantServiceClient>>,
+  payment: Pick<Payment, "id" | "quote_id" | "amount">
+): Promise<number> {
+  if (!payment.quote_id) return 0;
+  const { data: quote } = await db.from("project_quotes").select("total_cents").eq("id", payment.quote_id).maybeSingle();
+  const total = (quote as { total_cents?: number } | null)?.total_cents ?? 0;
+  if (total <= 0) return 0;
+  const { data: rows } = await db.from("payments").select("id, amount, status").eq("quote_id", payment.quote_id);
+  return quoteBalanceAfterPaymentCents(total, rows ?? [], payment);
+}
+
+/** Pure: quote balance once `payment` counts, alongside the other paid/processing rows. */
+export function quoteBalanceAfterPaymentCents(
+  quoteTotalCents: number,
+  rows: { id: string; amount: number; status: string }[],
+  payment: { id: string; amount: number }
+): number {
+  let covered = payment.amount;
+  for (const row of rows) {
+    if (row.id !== payment.id && isPaymentCovered(row.status)) covered += row.amount;
+  }
+  return Math.max(0, quoteTotalCents - covered);
+}
+
+/** Pure: does an incoming Stripe payment look like a second charge for this row? */
+export function classifyUnexpectedStripePayment(
+  payment: Pick<Payment, "status" | "stripe_payment_intent_id" | "payment_method_type">,
+  paymentIntentId: string | undefined,
+  source: string
+): "duplicate" | "not_payable" | null {
+  if (!paymentIntentId || source === "manual_admin") return null;
+  if (paymentIntentId === payment.stripe_payment_intent_id) return null;
+  if (payment.status === "cancelled" || payment.status === "failed" || payment.status === "expired") return "not_payable";
+  if (payment.status === "processing") return "duplicate";
+  if (payment.status === "paid" && (Boolean(payment.stripe_payment_intent_id) || payment.payment_method_type === "manual")) return "duplicate";
+  return null;
+}
+
+/**
+ * Stripe reports money for a row that is already settled with a different PaymentIntent, or
+ * that is no longer payable (cancelled / refunded). The client may have been charged twice:
+ * never ignore it silently. Logged on the project (excluded from revenue) and the business is
+ * told to review and refund in Stripe. Idempotent per PaymentIntent.
+ */
+async function flagUnexpectedStripePayment(
+  businessId: string,
+  payment: Payment,
+  paymentIntentId: string | undefined,
+  source: string
+): Promise<void> {
+  const kind = classifyUnexpectedStripePayment(payment, paymentIntentId, source);
+  if (!kind || !paymentIntentId) return;
+  const notPayable = kind === "not_payable";
+
+  const amountStr = formatCents(payment.amount);
+  const reason = notPayable
+    ? `a ${payment.status} payment request`
+    : payment.payment_method_type === "manual"
+      ? "a payment you already marked as paid"
+      : "a payment that was already paid";
+  console.error("[stripe-payments] unexpected Stripe payment for settled/closed row", {
+    paymentId: payment.id,
+    status: payment.status,
+    storedPaymentIntentId: payment.stripe_payment_intent_id,
+    incomingPaymentIntentId: paymentIntentId,
+    source,
+  });
+  const key = `payment:unexpected-charge:${payment.id}:${paymentIntentId}`;
+  await logProjectActivity(
+    "payment_requested",
+    `Possible duplicate charge: Stripe payment ${paymentIntentId} received for ${reason} (${amountStr}) — not counted as revenue`,
+    {
+      businessId,
+      projectId: payment.project_id,
+      idempotencyKey: key,
+      metadata: { paymentId: payment.id, stripePaymentIntentId: paymentIntentId, status: payment.status, excludedFromRevenue: true, source },
+    }
+  );
+  await notifyAdmins({
+    businessId,
+    type: "payment_received",
+    eventKey: "payment_received",
+    title: "Review possible duplicate payment",
+    body: `Stripe received another ${amountStr} payment for ${reason} (${payment.description}). Check Stripe and refund the extra charge if it wasn't intended.`,
+    link: `/admin/projects/${payment.project_id}#payments`,
+    projectId: payment.project_id,
+    paymentId: payment.id,
+    idempotencyKey: key,
   });
 }

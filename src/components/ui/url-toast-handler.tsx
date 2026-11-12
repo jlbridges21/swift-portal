@@ -24,6 +24,12 @@ export function UrlToastHandler() {
     const next = new URLSearchParams(searchParams.toString());
     next.delete("welcome");
     next.delete("payment");
+    if (payment === "returned") {
+      // Embedded checkout return (redirect-based payment method): the checkout modal reads
+      // these on mount and verifies the session itself — no toast here.
+      next.delete("payment_id");
+      next.delete("session_id");
+    }
     const qs = next.toString();
     const hash = payment ? "#payments" : "";
     const nextUrl = `${pathname}${qs ? `?${qs}` : ""}${hash}`;

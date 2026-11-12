@@ -26,8 +26,10 @@ import {
 } from "lucide-react";
 import { formatShootDateTime, getProjectShootDateTime } from "@/lib/scheduling";
 import { getProjectActiveQuote, getQuotePriceDisplay } from "@/lib/quote-display";
-import { paymentCheckoutPath } from "@/lib/payment-status";
+import { PayNowButton } from "@/components/payments/pay-now-button";
 import type { Project, ShootProposal, ActivityLog, ProjectQuote } from "@/lib/types";
+import { getClientPortalInterface } from "@/lib/ui-rollout-server";
+import { ClientPortalHome, type PortalHomeProject } from "@/components/client-portal/client-portal-home";
 
 export default async function ClientDashboard() {
   const profile = await getProfile();
@@ -147,6 +149,58 @@ export default async function ClientDashboard() {
         }
       )
     : null;
+
+  // New Experience: clients follow the business owner's interface choice.
+  if ((await getClientPortalInterface(tenant.businessId)) === "new") {
+    const homeProjects: PortalHomeProject[] = (projects ?? []).map((p) => {
+      const delivered = normalizeStatus(p.status) === "delivered";
+      const dueCents = outstandingInvoices.filter((pay) => pay.project_id === p.id).reduce((sum, pay) => sum + pay.amount, 0);
+      const active = isSharedViewer ? null : getProjectActiveQuote(quotesByProject.get(p.id) ?? [], "client");
+      const awaiting = active && active.kind === "official" && active.quote.status === "sent" ? active.quote : null;
+      const price = awaiting ? getQuotePriceDisplay(awaiting) : null;
+      const shootWhen = getProjectShootDateTime(p, proposalsByProject.get(p.id) ?? []);
+      const step = isSharedViewer
+        ? null
+        : getClientNextStep(p, dueCents > 0, proposalsByProject.get(p.id) ?? [], brand.name, {
+            hasQuote: (quotesByProject.get(p.id) ?? []).length > 0,
+            downloadsUnlocked: downloadsUnlockedFor(p),
+          });
+      return {
+        id: p.id,
+        name: p.project_name,
+        address: p.property_address ?? "",
+        serviceType: p.service_type || null,
+        status: p.status,
+        delivered,
+        coverUrl: coverMap.get(p.id) ?? null,
+        dueCents,
+        estimateAwaiting: awaiting ? { title: awaiting.title, priceCents: price?.showPrice ? price.priceCents : null } : null,
+        nextStepTitle: step?.title ?? null,
+        dateLabel: delivered && p.delivery_date
+          ? `Delivered ${formatDate(p.delivery_date)}`
+          : shootWhen
+            ? `Shoot ${formatShootDateTime(shootWhen, { month: "short", day: "numeric", year: "numeric" })}`
+            : null,
+        updatedAt: p.updated_at,
+      };
+    });
+    return (
+      <>
+        <Suspense>
+          <UrlToastHandler />
+        </Suspense>
+        <ClientPortalHome
+          firstName={firstName}
+          businessName={brand.name}
+          userName={profile.full_name ?? null}
+          userAvatar={profile.avatar_url ?? null}
+          isSharedViewer={isSharedViewer}
+          projects={homeProjects}
+          activities={filterClientVisibleActivities((activities ?? []) as (ActivityLog & { projects?: { id: string; project_name: string } | null })[])}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white surface-dark:from-background surface-dark:to-background">
@@ -363,9 +417,13 @@ export default async function ClientDashboard() {
                             {(payment.projects as { project_name: string }).project_name}
                           </p>
                         )}
-                        <a href={paymentCheckoutPath(payment.id)} className="mt-3 block">
-                          <Button variant="accent" size="sm" className="w-full min-h-11">Pay Now</Button>
-                        </a>
+                        <div className="mt-3">
+                          <PayNowButton
+                            paymentId={payment.id}
+                            title={(payment.projects as { project_name: string } | undefined)?.project_name || "Project payment"}
+                            className="w-full min-h-11"
+                          />
+                        </div>
                       </CardContent>
                     </Card>
                   ))}

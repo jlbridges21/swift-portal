@@ -284,6 +284,9 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/v/") ||
     path.startsWith("/embed/") ||
     path.startsWith("/api/public/video/") ||
+    // Signed pay links (/pay/{token}) are authorized by the token, like share links.
+    path.startsWith("/pay/") ||
+    path.startsWith("/api/public/pay/") ||
     isPublicListingPath;
 
   const protectedPaths = [
