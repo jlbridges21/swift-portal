@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Box, Check, CheckCircle2, Clapperboard, Clock, CreditCard, Download,
   ExternalLink, Eye, File, FileSpreadsheet, FileText, Globe, Images, Lock, Megaphone, Palette, Receipt,
-  Rotate3d,
+  Rotate3d, ShoppingCart,
 } from "lucide-react";
 import { VideoGrid } from "@/components/projects/video-grid";
 import { TourCard } from "@/components/projects/tour-card";
@@ -15,6 +15,7 @@ import { PaymentsSection } from "@/components/projects/payments-section";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { PortalCard, ThumbTile, useThumbUrls } from "@/components/client-portal/portal-ui";
+import { openCart } from "@/components/client-portal/portal-cart";
 import type { PortalCtx } from "@/components/client-portal/portal-context";
 import { formatFileSize } from "@/lib/brand";
 import { documentKindLabel, isPdf } from "@/lib/download";
@@ -177,7 +178,7 @@ export function MarketingTab({ ctx }: { ctx: PortalCtx }) {
               : a.state === "included"
                 ? { label: "Included free", tone: "green" as const }
                 : a.state === "pending_payment"
-                  ? { label: "Payment pending", tone: "amber" as const }
+                  ? { label: "In your cart", tone: "blue" as const }
                   : { label: formatCents(a.offer.priceCents), tone: "blue" as const };
           const primaryLabel = a.hasAccess
             ? p === "website"
@@ -186,7 +187,7 @@ export function MarketingTab({ ctx }: { ctx: PortalCtx }) {
                 : "Customize & Publish"
               : "Open Social Media Kit"
             : a.state === "pending_payment"
-              ? "View & Complete Payment"
+              ? "Preview & Checkout"
               : `Preview & Unlock — ${formatCents(a.offer.priceCents)}`;
           return (
             <section key={p} className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -226,7 +227,6 @@ export function MarketingTab({ ctx }: { ctx: PortalCtx }) {
                         className={cn(
                           "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold",
                           status.tone === "green" && "bg-emerald-50 text-emerald-700",
-                          status.tone === "amber" && "bg-amber-50 text-amber-800",
                           status.tone === "blue" && "bg-accent-subtle text-accent"
                         )}
                       >
@@ -252,6 +252,11 @@ export function MarketingTab({ ctx }: { ctx: PortalCtx }) {
                       {primaryLabel} <ArrowRight className="h-4 w-4" />
                     </Link>
                   )}
+                  {a.state === "pending_payment" && !ctx.isPreview ? (
+                    <Button variant="outline" className="min-h-11 text-accent" onClick={() => openCart()}>
+                      <ShoppingCart className="h-4 w-4" /> View Cart
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </section>
@@ -504,13 +509,20 @@ function FinancialSummary({ ctx }: { ctx: PortalCtx }) {
           "These are optional add-ons. Nothing else is due right now, and your project media isn't affected — complete checkout whenever you're ready.",
         ]}
         action={
-          <Button
-            variant="accent"
-            className="min-h-11 w-full sm:w-auto"
-            onClick={() => document.getElementById("payments")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-          >
-            Complete Checkout — {formatCurrency(f.optionalDueCents)}
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button
+              variant="accent"
+              className="min-h-11 w-full sm:w-auto"
+              onClick={() => document.getElementById("payments")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            >
+              Complete Checkout — {formatCurrency(f.optionalDueCents)}
+            </Button>
+            {ctx.isPreview ? null : (
+              <Button variant="outline" className="min-h-11 w-full text-accent sm:w-auto" onClick={() => openCart()}>
+                <ShoppingCart className="h-4 w-4" /> Manage Cart
+              </Button>
+            )}
+          </div>
         }
       />
     );

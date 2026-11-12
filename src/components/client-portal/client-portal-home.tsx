@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { CoverPlaceholder } from "@/components/projects/cover-placeholder";
 import { ActivityFeed } from "@/components/admin/activity-feed";
 import { PortalCard, PortalTopBar } from "@/components/client-portal/portal-ui";
+import { openCart } from "@/components/client-portal/portal-cart";
 import type { ActivityLog } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -85,10 +86,13 @@ export function ClientPortalHome({
 
         {attention.length > 0 && !isSharedViewer ? (
           <section aria-label="Needs your attention" className="mt-6 space-y-2">
-            {attention.map((p) => (
-              <Link
+            {attention.map((p) => {
+              // Optional add-ons only: the reminder opens the cart (review, remove or check out).
+              const cartOnly = p.dueCents <= 0 && !p.estimateAwaiting;
+              return (
+              <AttentionRow
                 key={`attn-${p.id}`}
-                href={`/dashboard/projects/${p.id}?tab=pay`}
+                href={cartOnly ? null : `/dashboard/projects/${p.id}?tab=pay`}
                 className={cn(
                   "flex flex-col gap-3 rounded-2xl border p-4 shadow-sm transition hover:shadow-md sm:flex-row sm:items-center",
                   p.dueCents > 0
@@ -127,10 +131,11 @@ export function ClientPortalHome({
                     p.dueCents > 0 ? "" : "text-accent"
                   )}
                 >
-                  {p.dueCents > 0 ? "Pay Now" : p.estimateAwaiting ? "Review Estimate" : "Complete Checkout"} <ArrowRight className="h-4 w-4" />
+                  {p.dueCents > 0 ? "Pay Now" : p.estimateAwaiting ? "Review Estimate" : "View Cart"} <ArrowRight className="h-4 w-4" />
                 </span>
-              </Link>
-            ))}
+              </AttentionRow>
+              );
+            })}
           </section>
         ) : null}
 
@@ -254,5 +259,21 @@ function ProjectCard({ project: p }: { project: PortalHomeProject }) {
         </div>
       </div>
     </Link>
+  );
+}
+
+/** A My Projects reminder row: a link, or (optional add-ons only) a button that opens the cart. */
+function AttentionRow({ href, className, children }: { href: string | null; className: string; children: React.ReactNode }) {
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={() => openCart()} className={cn(className, "w-full text-left")}>
+      {children}
+    </button>
   );
 }

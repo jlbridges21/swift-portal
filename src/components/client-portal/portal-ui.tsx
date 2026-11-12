@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { CartButton } from "@/components/client-portal/portal-cart";
 import { Avatar } from "@/components/ui/avatar";
 import { createThumbRequestQueue } from "@/lib/media-thumb-client";
 import { cn } from "@/lib/utils";
@@ -304,6 +305,9 @@ export function PortalTopBar({
           )}
           {preview ? null : (
             <>
+              <div className="shrink-0">
+                <CartButton />
+              </div>
               <div className="shrink-0">
                 <NotificationBell />
               </div>

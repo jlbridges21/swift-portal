@@ -16,6 +16,7 @@ import {
   Loader2,
   Lock,
   Monitor,
+  ShoppingCart,
   Palette,
   SlidersHorizontal,
   PanelsTopLeft,
@@ -26,6 +27,7 @@ import {
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { EmbeddedCheckoutModal, postStartCheckout, useCheckoutReturn } from "@/components/payments/embedded-checkout-modal";
+import { CartButton, notifyCartChanged, openCart, useCartChanged } from "@/components/client-portal/portal-cart";
 import { paymentCheckoutPath } from "@/lib/payment-status";
 import { cn } from "@/lib/utils";
 import { MarketingFontFaces } from "@/components/marketing/website/listing-website";
@@ -60,14 +62,14 @@ export type MarketingKitEditorProps = {
   urlFactory?: (state: KitClientState) => UrlResolver;
 };
 
-function accessLabel(a: ProductAccess): { text: string; tone: "green" | "amber" | "slate" } {
+function accessLabel(a: ProductAccess, isBusiness = true): { text: string; tone: "green" | "amber" | "slate" | "blue" } {
   switch (a.state) {
     case "included":
       return { text: "Included", tone: "green" };
     case "purchased":
       return { text: a.purchase?.status === "comped" ? "Included" : "Purchased", tone: "green" };
     case "pending_payment":
-      return { text: "Payment pending", tone: "amber" };
+      return isBusiness ? { text: "Payment pending", tone: "amber" } : { text: "In cart", tone: "blue" };
     case "locked":
       return { text: formatCents(a.offer.priceCents), tone: "slate" };
     default:
@@ -113,17 +115,27 @@ function PurchaseDialog({ kit, open, onClose, preselect }: { kit: KitApi; open: 
       ? s.bundlePriceCents
       : null;
   const total = bundle ?? sum;
+  const alreadyInCart = chosen.length > 0 && chosen.every((p) => s.access[p].state === "pending_payment");
 
-  async function submit() {
-    if (!chosen.length) return;
+  async function submit(mode: "checkout" | "cart" = "checkout") {
+    if (!chosen.length || working) return;
     setWorking(true);
     try {
-      const { paymentId } = await kitFetch<{ paymentId: string }>(`/api/marketing/${s.projectId}/purchase`, {
+      const { paymentId, reused } = await kitFetch<{ paymentId: string; reused?: boolean }>(`/api/marketing/${s.projectId}/purchase`, {
         method: "POST",
         body: JSON.stringify({ products: chosen, method }),
       });
+      notifyCartChanged();
       if (method === "add_to_invoice") {
         toast.success("Added to your project invoice. It unlocks as soon as it's paid.");
+        await kit.refresh();
+        onClose();
+        return;
+      }
+      if (mode === "cart") {
+        toast.success(reused ? "Already in your cart" : "Added to your cart", {
+          action: { label: "View Cart", onClick: () => openCart() },
+        });
         await kit.refresh();
         onClose();
         return;
@@ -160,15 +172,22 @@ function PurchaseDialog({ kit, open, onClose, preselect }: { kit: KitApi; open: 
           <Button variant="outline" onClick={onClose} disabled={working}>
             Not now
           </Button>
+          {method === "pay_now" ? (
+            <Button variant="outline" onClick={() => void submit("cart")} disabled={working || !chosen.length} className="min-h-11 text-accent">
+              <ShoppingCart className="h-4 w-4" /> {alreadyInCart ? "Keep in Cart" : "Add to Cart"}
+            </Button>
+          ) : null}
           <Button variant="accent" onClick={() => void submit()} disabled={working || !chosen.length} className="min-h-11">
             {working ? <Loader2 className="h-4 w-4 animate-spin" /> : method === "pay_now" ? <CreditCard className="h-4 w-4" /> : <Check className="h-4 w-4" />}
-            {method === "pay_now" ? `Pay ${formatCents(total)}` : `Add ${formatCents(total)} to invoice`}
+            {method === "pay_now" ? `Checkout · ${formatCents(total)}` : `Add ${formatCents(total)} to invoice`}
           </Button>
         </div>
       }
     >
       <div className="space-y-4">
-        <p className="text-sm text-muted">You&apos;re seeing the real thing — your photos, your details. Unlock to publish and download.</p>
+        <p className="text-sm text-muted">
+          You&apos;re seeing the real thing — your photos, your details. Unlock to publish and download, or add it to your cart and check out whenever you&apos;re ready.
+        </p>
         <div className="space-y-2">
           {lockable.map((p) => (
             <label key={p} className={cn("flex cursor-pointer items-center gap-3 rounded-xl border p-4", chosen.includes(p) ? "border-accent bg-accent/5" : "border-border")}>
@@ -279,13 +298,14 @@ function MarketingCheckout({ kit, paymentId, resumeSessionId, onClose }: { kit: 
       onClose={() => {
         onClose();
         void kit.refresh();
+        notifyCartChanged();
       }}
       startCheckout={startCheckout}
       statusUrl={(sessionId) => `${paymentCheckoutPath(paymentId)}/status${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ""}`}
       resumeSessionId={resumeSessionId}
       title="Marketing Kit"
       onSettled={(outcome) => {
-        if (outcome.state === "paid") void refreshUntilUnlocked();
+        if (outcome.state === "paid") void refreshUntilUnlocked().then(notifyCartChanged);
       }}
       paidMessage="Your Marketing Kit is unlocked — publish your website and download your posts."
       fallbackReceiptHref={`/api/payments/${paymentId}/receipt`}
@@ -309,6 +329,10 @@ function MarketingCheckoutResume({ kit }: { kit: KitApi }) {
 export function MarketingKitEditor({ initialState, backHref, sitesHref = null, initialTab = "website", paymentReturn, urlFactory }: MarketingKitEditorProps) {
   const kit = useKit(initialState, urlFactory);
   const router = useRouter();
+  // Removed from the cart (here or in another tab) or paid elsewhere: re-read access.
+  useCartChanged(() => {
+    if (!kit.state.permissions.isBusiness) void kit.refresh();
+  });
   const s = kit.state;
   const [tab, setTab] = useState<Tab>(initialTab);
   const [previewing, setPreviewing] = useState(false);
@@ -489,7 +513,8 @@ export function MarketingKitEditor({ initialState, backHref, sitesHref = null, i
         ) : null
       ) : !s.permissions.isBusiness && (s.access.website.state === "locked" || s.access.website.state === "pending_payment") ? (
         <Button size="sm" variant="accent" onClick={() => setPurchase("website")}>
-          <Lock className="h-4 w-4" /> {s.access.website.state === "pending_payment" ? "Complete purchase" : `Purchase · ${formatCents(s.access.website.offer.priceCents)}`}
+          {s.access.website.state === "pending_payment" ? <ShoppingCart className="h-4 w-4" /> : <Lock className="h-4 w-4" />}{" "}
+          {s.access.website.state === "pending_payment" ? "In Cart · Checkout" : `Purchase · ${formatCents(s.access.website.offer.priceCents)}`}
         </Button>
       ) : null}
     </div>
@@ -502,7 +527,8 @@ export function MarketingKitEditor({ initialState, backHref, sitesHref = null, i
         </Button>
       ) : s.access.social.state === "locked" || s.access.social.state === "pending_payment" ? (
         <Button size="sm" variant="accent" onClick={() => setPurchase("social")}>
-          <Lock className="h-4 w-4" /> {s.access.social.state === "pending_payment" ? "Complete purchase" : `Purchase · ${formatCents(s.access.social.offer.priceCents)}`}
+          {s.access.social.state === "pending_payment" ? <ShoppingCart className="h-4 w-4" /> : <Lock className="h-4 w-4" />}{" "}
+          {s.access.social.state === "pending_payment" ? "In Cart · Checkout" : `Purchase · ${formatCents(s.access.social.offer.priceCents)}`}
         </Button>
       ) : null}
     </div>
@@ -557,8 +583,8 @@ export function MarketingKitEditor({ initialState, backHref, sitesHref = null, i
     <EmptyMedia business={s.permissions.isBusiness} />
   );
   const tabs: { id: Tab; label: string; product: MarketingProduct; chip: React.ReactNode }[] = [
-    { id: "website", label: "Property Website", product: "website", chip: s.access.website.hasAccess || s.permissions.isBusiness ? websiteStatusChip(s.website) : <Chip tone={accessLabel(s.access.website).tone}>{accessLabel(s.access.website).text}</Chip> },
-    { id: "social", label: "Social Media Kit", product: "social", chip: <Chip tone={accessLabel(s.access.social).tone}>{accessLabel(s.access.social).text}</Chip> },
+    { id: "website", label: "Property Website", product: "website", chip: s.access.website.hasAccess || s.permissions.isBusiness ? websiteStatusChip(s.website) : <Chip tone={accessLabel(s.access.website, false).tone}>{accessLabel(s.access.website, false).text}</Chip> },
+    { id: "social", label: "Social Media Kit", product: "social", chip: <Chip tone={accessLabel(s.access.social, s.permissions.isBusiness).tone}>{accessLabel(s.access.social, s.permissions.isBusiness).text}</Chip> },
   ];
 
   return (
@@ -597,6 +623,7 @@ export function MarketingKitEditor({ initialState, backHref, sitesHref = null, i
             {s.permissions.canEdit ? saveText : "View only"}
           </p>
           <div className="hidden md:block">{tab === "website" ? websiteActions : socialActions}</div>
+          {!s.permissions.isBusiness ? <CartButton className="-ml-2" /> : null}
         </div>
         <nav className="flex gap-1 px-3" aria-label="Marketing Kit">
           {tabs.map((t) => (
@@ -616,11 +643,16 @@ export function MarketingKitEditor({ initialState, backHref, sitesHref = null, i
       </header>
 
       {/* Locked / pending banners */}
-      {!s.permissions.isBusiness && !s.access[tab].hasAccess ? (
+      {!s.permissions.isBusiness && !s.access[tab].hasAccess && s.access[tab].state === "pending_payment" ? (
+        <div className="shrink-0 border-b border-accent/20 bg-accent-subtle px-4 py-2 text-center text-xs text-heading sm:text-sm">
+          {PRODUCT_LABEL[tab]} is in your cart. It unlocks as soon as checkout is complete — or remove it anytime.{" "}
+          <button type="button" onClick={() => openCart()} className="font-semibold text-accent underline-offset-2 hover:underline">
+            View Cart
+          </button>
+        </div>
+      ) : !s.permissions.isBusiness && !s.access[tab].hasAccess ? (
         <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs text-amber-900 sm:text-sm">
-          {s.access[tab].state === "pending_payment"
-            ? "Your payment is pending. This unlocks automatically once it's paid."
-            : `This is a full preview with your real photos and details. Purchase to ${tab === "website" ? "publish your website" : "download full-resolution files"}.`}
+          {`This is a full preview with your real photos and details. Purchase to ${tab === "website" ? "publish your website" : "download full-resolution files"}.`}
         </div>
       ) : s.permissions.isBusiness && s.access[tab].state === "locked" ? (
         <div className="shrink-0 border-b border-border bg-white px-4 py-2 text-center text-xs text-muted surface-dark:bg-card">
@@ -645,7 +677,7 @@ export function MarketingKitEditor({ initialState, backHref, sitesHref = null, i
           onDownload={(it) => void download(it)}
           purchase={
             !s.permissions.canDownload && (s.access.social.state === "locked" || s.access.social.state === "pending_payment")
-              ? { label: s.access.social.state === "pending_payment" ? "Complete purchase" : `Unlock · ${formatCents(s.access.social.offer.priceCents)}`, onClick: () => setPurchase("social") }
+              ? { label: s.access.social.state === "pending_payment" ? "In Cart · Checkout" : `Unlock · ${formatCents(s.access.social.offer.priceCents)}`, onClick: () => setPurchase("social") }
               : null
           }
         />

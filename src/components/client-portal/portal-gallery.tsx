@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight, Box, CalendarDays, CheckCircle2, ChevronRight, Clapperboard, CreditCard, Download, Eye, FileText,
   Folder, Heart, History, Home, Images, LayoutGrid, List, Lock, MapPin, Megaphone, MessageSquare, Phone,
-  Rotate3d, Sparkles, Tag, Truck,
+  Rotate3d, ShoppingCart, Sparkles, Tag, Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PhotoGallery } from "@/components/projects/photo-gallery";
@@ -22,6 +22,7 @@ import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PortalCard, PortalPillButton, ThumbTile, useThumbUrls } from "@/components/client-portal/portal-ui";
+import { openCart } from "@/components/client-portal/portal-cart";
 import type { PortalCtx } from "@/components/client-portal/portal-context";
 import { getClientNextStep } from "@/lib/journey";
 import { PROJECT_STATUSES, getStatusOrder, normalizeStatus } from "@/lib/constants";
@@ -386,11 +387,11 @@ function StatusBanner({ ctx }: { ctx: PortalCtx }) {
         <Button variant="accent" className="min-h-11" onClick={() => ctx.goTo("pay", undefined, "payments")}>
           Complete Checkout — {amount}
         </Button>
-        {ctx.availableTabs.has("marketing") ? (
-          <Button variant="outline" className="min-h-11" onClick={() => ctx.goTo("marketing")}>
-            <Megaphone className="h-4 w-4" /> View Marketing Kit
+        {ctx.isPreview ? null : (
+          <Button variant="outline" className="min-h-11 text-accent" onClick={() => openCart()}>
+            <ShoppingCart className="h-4 w-4" /> View Cart
           </Button>
-        ) : null}
+        )}
       </BannerShell>
     );
   }

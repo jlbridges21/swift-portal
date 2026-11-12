@@ -38,6 +38,15 @@ function adminAccessForDeletedProject(
   return { allowed: false, kind: "denied" };
 }
 
+/** clients.id for a client profile (profile.client_id, or its single clients row by user_id). */
+export async function resolveProfileClientId(profile: Profile): Promise<string | null> {
+  if (profile.role !== "client") return null;
+  if (profile.client_id) return profile.client_id;
+  const raw = await createServiceClient();
+  const { data } = await raw.from("clients").select("id").eq("user_id", profile.id).is("deleted_at", null).limit(2);
+  return (data?.length ?? 0) === 1 ? (data![0].id as string) : null;
+}
+
 /**
  * The client row (clients.id) through which this profile is assigned to the project — the
  * project's primary client or a project_clients link — or null. Same rule as portal access.

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { CartButton } from "@/components/client-portal/portal-cart";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, Menu, Plus, Settings, Sparkles, X, RefreshCw, Loader2 } from "lucide-react";
@@ -369,6 +370,9 @@ export function Header({
                   <RefreshCw className="h-5 w-5" />
                 )}
               </Button>
+              <div className="shrink-0">
+                <CartButton />
+              </div>
               <div className="shrink-0">
                 <NotificationBell />
               </div>
