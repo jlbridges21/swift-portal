@@ -225,6 +225,7 @@ export default async function AdminProjectPage({ params }: PageProps) {
           heroBannerUrl={heroBannerUrl}
           serviceOptions={serviceOptions}
           clientFavorites={clientFavorites}
+          businessRequiresDeliveredForDownloads={appSettings.payments.requireDeliveredForDownloads}
         />
       </main>
     </div>

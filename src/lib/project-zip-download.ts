@@ -9,6 +9,7 @@ import {
   DOWNLOAD_GATE_API_MESSAGE,
   resolveProjectDownloadAllowed,
 } from "@/lib/deliverables";
+import { resolveProjectRequireDelivered } from "@/lib/project-download-access";
 import { filterClientMedia, isClientVisibleMedia } from "@/lib/client-media";
 import {
   DEFAULT_PROJECT_MEDIA_SECTIONS,
@@ -680,10 +681,16 @@ export async function authorizeProjectZipDownload(
   const isAdmin = access.kind === "admin";
 
   if (
+    !isAdmin &&
     !resolveProjectDownloadAllowed({
       projectStatus: project.status,
       isAdmin,
-      requireDeliveredForDownloads,
+      // Business default + this project's override (v124).
+      requireDeliveredForDownloads: await resolveProjectRequireDelivered(
+        supabase,
+        projectId,
+        requireDeliveredForDownloads
+      ),
     })
   ) {
     return {

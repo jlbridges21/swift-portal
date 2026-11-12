@@ -162,7 +162,7 @@ export function ProposalHistoryDialog({
               label: "Duplicate & Revise",
               icon: Copy,
               disabled: busy,
-              hint: "New draft. This proposal stays as it is.",
+              description: "Creates a new draft; original stays unchanged.",
               onSelect: () => onDuplicate(quote),
             } as ActionMenuItem,
           ]

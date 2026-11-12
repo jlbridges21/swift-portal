@@ -178,7 +178,7 @@ export async function PATCH(request: Request) {
     if (!tenant) return missingTenantResponse(profile.role);
     const businessId = tenant.businessId;
     const body = await request.json();
-    const { id, media_sections, marketing_visible, ...rest } = body;
+    const { id, media_sections, marketing_visible, download_access, ...rest } = body;
     const updates: Record<string, unknown> = { ...rest };
     // Section visibility only via media_sections — refuse raw column mass-assignment.
     delete updates.media_sections;
@@ -190,6 +190,7 @@ export async function PATCH(request: Request) {
     delete updates.client_section_estimates;
     delete updates.client_section_payments;
     delete updates.client_section_marketing;
+    delete updates.client_download_access;
 
     // Marketing Kit visibility (v123): true / false, or null to go back to automatic.
     if (marketing_visible !== undefined) {
@@ -197,6 +198,14 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "Invalid marketing_visible" }, { status: 400 });
       }
       updates.client_section_marketing = marketing_visible;
+    }
+
+    // Client download override (v124): "default" | "allow" | "restrict". Business users only (requireAdmin above).
+    if (download_access !== undefined) {
+      if (download_access !== "default" && download_access !== "allow" && download_access !== "restrict") {
+        return NextResponse.json({ error: "Invalid download_access" }, { status: 400 });
+      }
+      updates.client_download_access = download_access === "default" ? null : download_access;
     }
 
     if (media_sections !== undefined) {
@@ -232,6 +241,13 @@ export async function PATCH(request: Request) {
       .eq("business_id", businessId)
       .select()
       .single();
+
+    if (error && "client_download_access" in updates && (error.message ?? "").includes("client_download_access")) {
+      return NextResponse.json(
+        { error: "Per-project download access needs database migration v124." },
+        { status: 409 }
+      );
+    }
 
     if (error && "client_section_marketing" in updates && (error.message ?? "").includes("client_section_marketing")) {
       return NextResponse.json(

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { recordEgress } from "@/lib/egress-metering";
 import { getPublicHostContext } from "@/lib/host-resolution";
 import { getAppSettings } from "@/lib/app-settings";
+import { resolveProjectRequireDelivered } from "@/lib/project-download-access";
 import {
   buildFolderZipFilename,
   buildZipFilename,
@@ -67,7 +68,11 @@ export async function GET(
       !resolveProjectDownloadAllowed({
         projectStatus: normalizeStatus(project.status ?? "new_request"),
         isAdmin: false,
-        requireDeliveredForDownloads: appSettings.payments.requireDeliveredForDownloads,
+        requireDeliveredForDownloads: await resolveProjectRequireDelivered(
+          db,
+          projectId,
+          appSettings.payments.requireDeliveredForDownloads
+        ),
       })
     ) {
       return zipErrorResponse(

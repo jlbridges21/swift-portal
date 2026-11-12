@@ -95,6 +95,8 @@ interface PaymentsSectionProps {
   depositPercent?: number;
   depositAmountCents?: number;
   allowClientPayInFull?: boolean;
+  /** Downloads already open (business default or project override) — drop the "pay to unlock" line. */
+  downloadsUnlocked?: boolean;
 }
 
 function quoteForPayment(quotes: ProjectQuote[], payment: Payment): ProjectQuote | undefined {
@@ -220,6 +222,7 @@ export function PaymentsSection({
   depositPercent = 50,
   depositAmountCents = 0,
   allowClientPayInFull = false,
+  downloadsUnlocked = false,
 }: PaymentsSectionProps) {
   const brand = usePortalBrand();
   const outstanding = payments.filter((p) => isOutstandingPayment(p.status));
@@ -239,7 +242,7 @@ export function PaymentsSection({
         <EmptyState
           icon={CreditCard}
           title="No payment requested yet"
-          description={`No payment has been requested yet. Once your project is approved, ${brand.name} will send your secure payment link here. You'll be able to pay online and immediately unlock your high-resolution downloads.`}
+          description={`No payment has been requested yet. Once your project is approved, ${brand.name} will send your secure payment link here. You'll be able to pay online${downloadsUnlocked ? "." : " and immediately unlock your high-resolution downloads."}`}
         />
       ) : (
       <div className="space-y-6">

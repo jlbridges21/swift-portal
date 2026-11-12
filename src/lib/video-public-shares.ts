@@ -25,6 +25,7 @@ import { getAppSettings } from "@/lib/app-settings";
 import { logProjectActivity } from "@/lib/activity";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { resolveProjectDownloadAllowed } from "@/lib/deliverables";
+import { resolveProjectRequireDelivered } from "@/lib/project-download-access";
 import { normalizeStatus } from "@/lib/constants";
 import { mediaDisplayName } from "@/lib/media-display-name";
 import { logMediaEvent } from "@/lib/media-library";
@@ -195,7 +196,11 @@ export async function resolveVideoShareActor(
     !resolveProjectDownloadAllowed({
       projectStatus: normalizeStatus((project.status as string) ?? "new_request"),
       isAdmin: false,
-      requireDeliveredForDownloads: settings.payments.requireDeliveredForDownloads,
+      requireDeliveredForDownloads: await resolveProjectRequireDelivered(
+        db,
+        video.project_id,
+        settings.payments.requireDeliveredForDownloads
+      ),
     })
   ) {
     blockedReason = "not_delivered";

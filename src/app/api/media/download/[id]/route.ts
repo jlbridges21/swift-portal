@@ -7,6 +7,7 @@ import {
   resolveProjectDownloadAllowed,
 } from "@/lib/deliverables";
 import { getAppSettings } from "@/lib/app-settings";
+import { resolveProjectRequireDelivered } from "@/lib/project-download-access";
 import { touchProjectShareAccess } from "@/lib/project-access";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { logMediaEvent, trackMediaDownload } from "@/lib/media-library";
@@ -62,7 +63,6 @@ export async function GET(
   const isAdmin = isOwnerAdmin(profile) || staffCan(profile, "area.media");
   const canDownloadOriginals = isOwnerAdmin(profile) || staffCan(profile, "media.download_originals");
   const appSettings = await getAppSettings(tenant.businessId);
-  const requireDeliveredForDownloads = appSettings.payments.requireDeliveredForDownloads;
 
   const mediaAccess = await assertMediaAssetProjectAccess(profile, tenant, asset);
   if (!mediaAccess.ok) {
@@ -105,6 +105,11 @@ export async function GET(
     return NextResponse.json({ error: "This file is not available." }, { status: 404 });
   }
 
+  const requireDeliveredForDownloads = await resolveProjectRequireDelivered(
+    db,
+    asset.project_id,
+    appSettings.payments.requireDeliveredForDownloads
+  );
   const downloadsAllowed = resolveProjectDownloadAllowed({
     projectStatus,
     isAdmin: canDownloadOriginals,

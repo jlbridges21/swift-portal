@@ -1,5 +1,6 @@
 "use client";
 
+import { parseProjectDownloadAccess, type ProjectDownloadAccess } from "@/lib/deliverables";
 import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -72,6 +73,7 @@ import {
   StatusPill,
   StatusSummary,
   VisibilityPanel,
+  ClientDownloadsControl,
   WorkspaceTabs,
   type VisibilityRow,
   type WorkspaceTab,
@@ -195,6 +197,8 @@ interface AdminProjectDetailProps {
   serviceOptions?: string[];
   /** Client photo likes (read-only here; only clients change them). */
   clientFavorites?: ProjectClientFavorites;
+  /** Admin Settings › Payments › Download Access — the default the project override falls back to. */
+  businessRequiresDeliveredForDownloads?: boolean;
 }
 
 type WorkspaceTabKey = "media" | "estimates" | "marketing" | "payments" | "details";
@@ -274,6 +278,7 @@ export function AdminProjectDetail({
   heroBannerUrl = null,
   serviceOptions = [],
   clientFavorites: initialClientFavorites,
+  businessRequiresDeliveredForDownloads = true,
 }: AdminProjectDetailProps) {
   const router = useRouter();
   const inAppShell = useInAdminAppShell();
@@ -395,6 +400,13 @@ export function AdminProjectDetail({
     : false;
   const [marketingVisible, setMarketingVisibleState] = useState(marketingVisibleFromServer);
   const [marketingVisSaving, setMarketingVisSaving] = useState(false);
+  // Client download override (v124). Saved on change; reverts on failure.
+  const downloadAccessFromServer = parseProjectDownloadAccess(initialProject.client_download_access);
+  const [downloadAccess, setDownloadAccessState] = useState<ProjectDownloadAccess>(downloadAccessFromServer);
+  const [downloadAccessSaving, setDownloadAccessSaving] = useState(false);
+  useEffect(() => {
+    setDownloadAccessState(downloadAccessFromServer);
+  }, [downloadAccessFromServer]);
   useEffect(() => {
     setMarketingVisibleState(marketingVisibleFromServer);
   }, [marketingVisibleFromServer]);
@@ -656,6 +668,39 @@ export function AdminProjectDetail({
       toast.error("Failed to update client section visibility");
     } finally {
       setSectionSaving(null);
+    }
+  }
+
+  async function setDownloadAccess(next: ProjectDownloadAccess) {
+    const prev = downloadAccess;
+    if (next === prev) return;
+    setDownloadAccessState(next);
+    setDownloadAccessSaving(true);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id: initialProject.id, download_access: next }),
+      });
+      if (!res.ok) {
+        setDownloadAccessState(prev);
+        toast.error(await readServerError(res, "Couldn't update client downloads"));
+        return;
+      }
+      toast.success(
+        next === "allow"
+          ? "Client downloads enabled for this project"
+          : next === "restrict"
+            ? "Client downloads restricted until Delivered"
+            : "Client downloads follow your business default"
+      );
+      router.refresh();
+    } catch {
+      setDownloadAccessState(prev);
+      toast.error("Couldn't update client downloads");
+    } finally {
+      setDownloadAccessSaving(false);
     }
   }
 
@@ -2066,7 +2111,17 @@ export function AdminProjectDetail({
           extraClients={Math.max(0, linkedClientCount - 1)}
           onManage={() => setShowClientsModal(true)}
         />
-        <VisibilityPanel rows={visibilityRows} />
+        <VisibilityPanel
+          rows={visibilityRows}
+          footer={
+            <ClientDownloadsControl
+              value={downloadAccess}
+              businessRequiresDelivered={businessRequiresDeliveredForDownloads}
+              saving={downloadAccessSaving}
+              onChange={(v) => void setDownloadAccess(v)}
+            />
+          }
+        />
         <ActivityPreview
           activities={activities}
           onViewAll={() => setShowActivityModal(true)}

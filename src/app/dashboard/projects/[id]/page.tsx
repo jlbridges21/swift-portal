@@ -18,7 +18,7 @@ import {
 import { listProjectVideoReviews } from "@/lib/video-reviews";
 import { resolveAssignedClientId, resolveProjectAccess } from "@/lib/project-access";
 import { listClientFavoriteIds } from "@/lib/client-favorites";
-import { resolveProjectDownloadAllowed } from "@/lib/deliverables";
+import { effectiveRequireDeliveredForDownloads, resolveProjectDownloadAllowed } from "@/lib/deliverables";
 import { normalizeStatus } from "@/lib/constants";
 import { getProjectPublicVideoIds } from "@/lib/video-public-shares";
 import { loadKitSummary } from "@/lib/marketing/server";
@@ -157,6 +157,11 @@ async function ProjectContent({
   }
 
   const appSettings = await getAppSettings(tenant.businessId);
+  // Business download gate + this project's override (v124; absent column = business default).
+  const requireDeliveredForDownloads = effectiveRequireDeliveredForDownloads(
+    appSettings.payments.requireDeliveredForDownloads,
+    (projectRow as { client_download_access?: unknown }).client_download_access
+  );
   const project = isSharedViewer ? sanitizeProjectForMediaViewer(projectRow) : projectRow;
   const db = await createTenantServiceClient(tenant.businessId);
   const versionMap = await loadVideoReviewVersionMap(db, id);
@@ -200,7 +205,7 @@ async function ProjectContent({
       resolveProjectDownloadAllowed({
         projectStatus: normalizeStatus(projectRow.status ?? "new_request"),
         isAdmin: false,
-        requireDeliveredForDownloads: appSettings.payments.requireDeliveredForDownloads,
+        requireDeliveredForDownloads,
       }));
   const documents = visibleMedia.filter((m) => m.media_type === "document");
   // Marketing Kit offer: assigned client (and admin preview). Shared viewers never see it.
@@ -247,7 +252,7 @@ async function ProjectContent({
             : []
         }
         allowClientProposalChanges={canViewFinancials && appSettings.proposals.allowClientProposalChanges}
-        requireDeliveredForDownloads={appSettings.payments.requireDeliveredForDownloads}
+        requireDeliveredForDownloads={requireDeliveredForDownloads}
         depositMode={appSettings.workflow.payments.depositMode}
         depositPercent={appSettings.workflow.payments.depositPercent}
         depositAmountCents={appSettings.workflow.payments.depositAmountCents}

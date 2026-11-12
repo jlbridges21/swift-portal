@@ -7,6 +7,7 @@ import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getProjectHeroMedia } from "@/lib/cover";
 import { filterClientMedia, filterClientTours, filterClientModels } from "@/lib/client-media";
 import { getAppSettings } from "@/lib/app-settings";
+import { resolveProjectRequireDelivered } from "@/lib/project-download-access";
 import {
   filterMediaByClientSections,
   filterToursByClientSections,
@@ -95,7 +96,11 @@ export async function loadPublicProjectView(
     models: visibleModels,
     mediaFolders: mediaFolders ?? [],
     videoReviews,
-    requireDeliveredForDownloads: appSettings.payments.requireDeliveredForDownloads,
+    requireDeliveredForDownloads: await resolveProjectRequireDelivered(
+      db,
+      projectId,
+      appSettings.payments.requireDeliveredForDownloads
+    ),
     mediaSections,
   };
 }

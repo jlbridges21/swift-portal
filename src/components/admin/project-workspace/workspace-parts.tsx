@@ -9,12 +9,15 @@
 
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
+import { Select } from "@/components/ui/select";
+import { parseProjectDownloadAccess, type ProjectDownloadAccess } from "@/lib/deliverables";
 import {
   Activity,
   ArrowRight,
   Calendar,
   Check,
   ChevronDown,
+  Download,
   ChevronRight,
   ChevronUp,
   ExternalLink,
@@ -573,7 +576,7 @@ export type VisibilityRow = {
   onReadOnlyClick?: () => void;
 };
 
-export function VisibilityPanel({ rows }: { rows: VisibilityRow[] }) {
+export function VisibilityPanel({ rows, footer }: { rows: VisibilityRow[]; footer?: ReactNode }) {
   return (
     <SidebarCard
       title="Client Portal Visibility"
@@ -622,7 +625,74 @@ export function VisibilityPanel({ rows }: { rows: VisibilityRow[] }) {
           )
         )}
       </ul>
+      {footer}
     </SidebarCard>
+  );
+}
+
+const DOWNLOAD_ACCESS_OPTIONS: { value: ProjectDownloadAccess; label: string }[] = [
+  { value: "default", label: "Use Business Default" },
+  { value: "allow", label: "Allow Downloads" },
+  { value: "restrict", label: "Restrict Until Delivered" },
+];
+
+/**
+ * Per-project download timing override (v124). Sits under the visibility switches in the
+ * Client Portal Visibility card; it controls when clients may download, not what they see.
+ */
+export function ClientDownloadsControl({
+  value,
+  businessRequiresDelivered,
+  saving,
+  onChange,
+}: {
+  value: ProjectDownloadAccess;
+  /** Admin Settings › Payments › Download Access ("Require Delivered"). */
+  businessRequiresDelivered: boolean;
+  saving?: boolean;
+  onChange: (value: ProjectDownloadAccess) => void;
+}) {
+  const status =
+    value === "allow"
+      ? { tone: "open" as const, text: "Downloads enabled for this project, even before payment." }
+      : value === "restrict"
+        ? { tone: "locked" as const, text: "Downloads become available when this project is Delivered." }
+        : businessRequiresDelivered
+          ? { tone: "locked" as const, text: "Following business settings: Downloads require Delivered status." }
+          : { tone: "neutral" as const, text: "Following business settings: Downloads are available before Delivered." };
+
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-heading">
+        <Download className="h-4 w-4 text-muted" /> Client Downloads
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted" aria-label="Saving" /> : null}
+      </h3>
+      <p className="mt-0.5 text-xs text-muted">Control when clients can download media from this project.</p>
+      <Select
+        aria-label="Client download access"
+        className="mt-2 h-9"
+        value={value}
+        disabled={saving}
+        options={DOWNLOAD_ACCESS_OPTIONS}
+        onChange={(e) => onChange(parseProjectDownloadAccess(e.target.value))}
+      />
+      <p
+        className={cn(
+          "mt-2 flex items-start gap-1.5 text-xs",
+          status.tone === "open" ? "text-emerald-700 surface-dark:text-emerald-400" : "text-muted"
+        )}
+        aria-live="polite"
+      >
+        <span
+          aria-hidden
+          className={cn(
+            "mt-1 h-1.5 w-1.5 shrink-0 rounded-full",
+            status.tone === "open" ? "bg-emerald-500" : status.tone === "locked" ? "bg-amber-500" : "bg-slate-400"
+          )}
+        />
+        {status.text}
+      </p>
+    </div>
   );
 }
 

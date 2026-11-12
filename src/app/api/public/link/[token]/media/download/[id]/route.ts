@@ -6,6 +6,7 @@ import {
   resolveProjectDownloadAllowed,
 } from "@/lib/deliverables";
 import { getAppSettings } from "@/lib/app-settings";
+import { resolveProjectRequireDelivered } from "@/lib/project-download-access";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { loadPublicLinkMediaAsset } from "@/lib/load-public-project-view";
 import { normalizeStatus } from "@/lib/constants";
@@ -64,7 +65,11 @@ export async function GET(
   const downloadsAllowed = resolveProjectDownloadAllowed({
     projectStatus,
     isAdmin: false,
-    requireDeliveredForDownloads: appSettings.payments.requireDeliveredForDownloads,
+    requireDeliveredForDownloads: await resolveProjectRequireDelivered(
+      db,
+      ctx.projectId,
+      appSettings.payments.requireDeliveredForDownloads
+    ),
   });
 
   const { searchParams } = new URL(request.url);

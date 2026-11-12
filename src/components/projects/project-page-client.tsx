@@ -196,14 +196,13 @@ export function ProjectPageClient({
   const [pendingPhotoDownload, setPendingPhotoDownload] = useState<MediaAsset | null>(null);
 
   const status = normalizeStatus(project.status);
-  const downloadsUnlocked =
-    isPreview ||
-    isAdmin ||
-    resolveProjectDownloadAllowed({
-      projectStatus: status,
-      isAdmin: false,
-      requireDeliveredForDownloads,
-    });
+  // What the client gets (also drives client copy in preview). Business viewers always download.
+  const clientDownloadsUnlocked = resolveProjectDownloadAllowed({
+    projectStatus: status,
+    isAdmin: false,
+    requireDeliveredForDownloads,
+  });
+  const downloadsUnlocked = isPreview || isAdmin || clientDownloadsUnlocked;
   const downloadLockMessage = clientDownloadLockMessage(status, requireDeliveredForDownloads);
   const revealHiddenSections = !!isAdmin && !isPreview;
   const showPhotos = revealHiddenSections || isMediaSectionVisibleForClient(mediaSections, "photos");
@@ -234,7 +233,7 @@ export function ProjectPageClient({
     showPayments && pendingPayments.length > 0,
     shootProposals,
     brand.name,
-    { hasQuote: showEstimates && quotes.length > 0 }
+    { hasQuote: showEstimates && quotes.length > 0, downloadsUnlocked: clientDownloadsUnlocked }
   );
   // Don't point the banner at a section the client can't see.
   const clientStep =
@@ -905,6 +904,7 @@ export function ProjectPageClient({
           depositPercent={depositPercent}
           depositAmountCents={depositAmountCents}
           allowClientPayInFull={allowClientPayInFull}
+          downloadsUnlocked={clientDownloadsUnlocked}
         />
         )}
 

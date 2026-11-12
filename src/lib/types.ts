@@ -211,6 +211,8 @@ export interface Project {
   /** Client-facing Estimates & Proposals / Payments sections (v113). Admins always see both. */
   client_section_estimates?: boolean;
   client_section_payments?: boolean;
+  /** v124 client download override: null = business default. */
+  client_download_access?: "allow" | "restrict" | null;
   created_at: string;
   updated_at: string;
   clients?: Client | null;

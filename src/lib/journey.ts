@@ -16,7 +16,7 @@ export function getClientNextStep(
   hasPendingPayment: boolean,
   proposals: ShootProposal[] = [],
   businessName = "our team",
-  options?: { hasQuote?: boolean }
+  options?: { hasQuote?: boolean; downloadsUnlocked?: boolean }
 ): NextStepInfo {
   const status = normalizeStatus(project.status);
   const shootWhen = getProjectShootDateTime(project, proposals);
@@ -104,9 +104,13 @@ export function getClientNextStep(
     case "awaiting_payment":
       return {
         title: getClientStatusLabel("awaiting_payment"),
-        description: hasPendingPayment
-          ? "Your deliverables are approved. Complete your final payment to unlock all downloads."
-          : "Please complete your outstanding invoice to receive your deliverables.",
+        // downloadsUnlocked: the business opened downloads early (project override) — don't
+        // claim payment is required to download; the invoice is still outstanding.
+        description: options?.downloadsUnlocked
+          ? "Your deliverables are ready to download. Please complete your outstanding invoice."
+          : hasPendingPayment
+            ? "Your deliverables are approved. Complete your final payment to unlock all downloads."
+            : "Please complete your outstanding invoice to receive your deliverables.",
         actionLabel: "View Invoice",
         actionHref: "#payments",
         variant: "warning",

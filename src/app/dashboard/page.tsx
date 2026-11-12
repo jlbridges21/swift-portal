@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { getProfile } from "@/lib/auth";
 import { getAppSettings } from "@/lib/app-settings";
+import { effectiveRequireDeliveredForDownloads, resolveProjectDownloadAllowed } from "@/lib/deliverables";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { requireTenantContext } from "@/lib/tenant";
 import { createClient } from "@/lib/supabase/server";
@@ -46,6 +47,15 @@ export default async function ClientDashboard() {
 
   const appSettings = await getAppSettings(tenant.businessId);
   const brand = getPortalBrandFromSettings(appSettings);
+  const downloadsUnlockedFor = (project: { status?: string | null; client_download_access?: unknown }) =>
+    resolveProjectDownloadAllowed({
+      projectStatus: project.status ?? "new_request",
+      isAdmin: false,
+      requireDeliveredForDownloads: effectiveRequireDeliveredForDownloads(
+        appSettings.payments.requireDeliveredForDownloads,
+        project.client_download_access
+      ),
+    });
   const firstName = profile.full_name?.split(" ")[0] || "there";
 
   const projectQuery = supabase
@@ -131,7 +141,10 @@ export default async function ClientDashboard() {
         !!featuredPayment,
         proposalsByProject.get(featured.id) ?? [],
         brand.name,
-        { hasQuote: (quotesByProject.get(featured.id) ?? []).length > 0 }
+        {
+          hasQuote: (quotesByProject.get(featured.id) ?? []).length > 0,
+          downloadsUnlocked: downloadsUnlockedFor(featured),
+        }
       )
     : null;
 
@@ -241,7 +254,10 @@ export default async function ClientDashboard() {
                   outstandingInvoices.some((p) => p.project_id === project.id),
                   proposalsByProject.get(project.id) ?? [],
                   brand.name,
-                  { hasQuote: (quotesByProject.get(project.id) ?? []).length > 0 }
+                  {
+                    hasQuote: (quotesByProject.get(project.id) ?? []).length > 0,
+                    downloadsUnlocked: downloadsUnlockedFor(project),
+                  }
                 );
                 return (
                   <Link key={`active-${project.id}`} href={`/dashboard/projects/${project.id}`}>

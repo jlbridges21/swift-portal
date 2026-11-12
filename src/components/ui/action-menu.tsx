@@ -22,6 +22,8 @@ export type ActionMenuItem =
       destructive?: boolean;
       disabled?: boolean;
       hint?: string;
+      /** Secondary muted line under the label; the item becomes a two-line row. */
+      description?: string;
     }
   | { type: "separator"; id: string }
   | { type: "label"; id: string; label: string };
@@ -39,6 +41,8 @@ interface ActionMenuProps {
 }
 
 const MENU_WIDTH = 240;
+/** Wider popover when any item carries a two-line description. */
+const MENU_WIDTH_WITH_DESCRIPTIONS = 280;
 const EDGE = 8;
 
 function useIsSheet() {
@@ -62,6 +66,9 @@ export function ActionMenu({ anchor, onClose, items, title }: ActionMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const open = anchor !== null;
+  const menuWidth = items.some((item) => item.type !== "separator" && item.type !== "label" && item.description)
+    ? MENU_WIDTH_WITH_DESCRIPTIONS
+    : MENU_WIDTH;
 
   useLayoutEffect(() => {
     if (!anchor || isSheet) {
@@ -78,14 +85,14 @@ export function ActionMenu({ anchor, onClose, items, title }: ActionMenuProps) {
     } else {
       const rect = anchor.element.getBoundingClientRect();
       top = rect.bottom + 4;
-      left = rect.right - MENU_WIDTH;
+      left = rect.right - menuWidth;
       if (top + height > window.innerHeight - EDGE) top = rect.top - height - 4;
     }
     if (top + height > window.innerHeight - EDGE) top = window.innerHeight - height - EDGE;
     top = Math.max(EDGE, top);
-    left = Math.min(Math.max(EDGE, left), window.innerWidth - MENU_WIDTH - EDGE);
+    left = Math.min(Math.max(EDGE, left), window.innerWidth - menuWidth - EDGE);
     setPosition({ top, left });
-  }, [anchor, isSheet]);
+  }, [anchor, isSheet, menuWidth]);
 
   useEffect(() => {
     if (!open) return;
@@ -157,6 +164,7 @@ export function ActionMenu({ anchor, onClose, items, title }: ActionMenuProps) {
       );
     }
     const Icon = item.icon;
+    const twoLine = Boolean(item.description);
     return (
       <button
         key={item.id}
@@ -169,14 +177,26 @@ export function ActionMenu({ anchor, onClose, items, title }: ActionMenuProps) {
           item.onSelect();
         }}
         className={cn(
-          "flex w-full items-center gap-3 rounded-md px-3 text-left text-sm outline-none transition-colors",
-          isSheet ? "min-h-12" : "min-h-9",
+          "flex w-full gap-3 rounded-md px-3 text-left text-sm outline-none transition-colors",
+          twoLine ? "items-start py-2.5" : "items-center",
+          isSheet ? "min-h-12" : twoLine ? "min-h-[52px]" : "min-h-9",
           "focus-visible:bg-accent-subtle hover:bg-accent-subtle disabled:pointer-events-none disabled:opacity-50",
           item.destructive ? "text-red-600 surface-dark:text-red-400" : "text-foreground"
         )}
       >
-        {Icon ? <Icon className="h-4 w-4 shrink-0 opacity-80" /> : <span className="w-4" aria-hidden />}
-        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+        {Icon ? (
+          <Icon className={cn("h-4 w-4 shrink-0 opacity-80", twoLine && "mt-0.5")} />
+        ) : (
+          <span className="w-4 shrink-0" aria-hidden />
+        )}
+        {twoLine ? (
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium leading-5">{item.label}</span>
+            <span className="mt-0.5 block text-xs leading-4 text-muted">{item.description}</span>
+          </span>
+        ) : (
+          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+        )}
         {item.hint ? <span className="shrink-0 text-xs text-muted">{item.hint}</span> : null}
       </button>
     );
@@ -218,7 +238,8 @@ export function ActionMenu({ anchor, onClose, items, title }: ActionMenuProps) {
         aria-label={title}
         className="fixed z-[111] rounded-lg border border-border bg-card p-1 shadow-xl"
         style={{
-          width: MENU_WIDTH,
+          width: menuWidth,
+          maxWidth: `calc(100vw - ${EDGE * 2}px)`,
           top: position?.top ?? -9999,
           left: position?.left ?? -9999,
         }}
