@@ -15,6 +15,7 @@ import { videosToGridEntries } from "@/components/projects/video-grid";
 import { ClientMessagesChat } from "@/components/projects/client-messages-chat";
 import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
 import { HashScrollHandler } from "@/components/ui/hash-scroll-handler";
+import { useVisualViewport } from "@/hooks/use-visual-viewport";
 import { PortalTopBar } from "@/components/client-portal/portal-ui";
 import { resolvePortalFinancialState } from "@/components/client-portal/portal-financial-state";
 import { parsePortalTab, type PortalCtx, type PortalTab } from "@/components/client-portal/portal-context";
@@ -94,6 +95,7 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
   const [revisions, setRevisionsState] = useState(initialRevisions);
   const setRevisions = useCallback((fn: (prev: typeof initialRevisions) => typeof initialRevisions) => setRevisionsState(fn), []);
   const [messagesOpen, setMessagesOpen] = useState(false);
+  const messagesViewport = useVisualViewport(messagesOpen);
   const [pendingPhotoDownload, setPendingPhotoDownload] = useState<MediaAsset | null>(null);
   const navRef = useRef<HTMLDivElement>(null);
 
@@ -400,13 +402,21 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
         </div>
 
         {messagesOpen && canMessage ? (
-          <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label="Messages">
+          // Pinned to the visual viewport so the composer rides directly above the phone keyboard
+          // (iOS pans instead of resizing); falls back to inset-0 before the first measurement.
+          <div
+            className={cn("fixed inset-x-0 z-[60] flex justify-end", !messagesViewport && "inset-y-0")}
+            style={messagesViewport ? { top: messagesViewport.top, height: messagesViewport.height } : undefined}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Messages"
+          >
             <button type="button" aria-label="Close messages" className="absolute inset-0 bg-slate-900/40" onClick={() => setMessagesOpen(false)} />
             <div
               className="relative flex h-full w-full max-w-md flex-col bg-card shadow-2xl"
-              style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+              style={{ paddingTop: messagesViewport?.keyboardOpen ? undefined : "env(safe-area-inset-top, 0px)" }}
             >
-              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
                 <p className="text-base font-semibold text-heading">Messages</p>
                 <button
                   type="button"
@@ -417,8 +427,13 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                <ClientMessagesChat projectId={project.id} clientId={project.client_id ?? undefined} />
+              <div className="min-h-0 flex-1">
+                <ClientMessagesChat
+                  projectId={project.id}
+                  clientId={project.client_id ?? undefined}
+                  layout="fill"
+                  showHeader={false}
+                />
               </div>
             </div>
           </div>

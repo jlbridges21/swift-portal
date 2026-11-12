@@ -71,7 +71,7 @@ import {
   ProjectHero,
   RowOverflow,
   StatTile,
-  StatusPill,
+  ProjectActionBar,
   StatusSummary,
   VisibilityPanel,
   ClientDownloadsControl,
@@ -2175,30 +2175,14 @@ export function AdminProjectDetail({
 
     return (
       <div className="space-y-4 pb-6">
-        {/* Project action bar */}
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <StatusPill status={form.status} saving={statusSaving} onChange={(next) => void changeStatus(next)} />
-          <Button variant="accent" className="h-9" onClick={() => setShowShareModal(true)}>
-            <Share2 className="h-4 w-4" /> Share
-          </Button>
-          <a
-            href={portalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(buttonVariants({ variant: "outline" }), "h-9")}
-          >
-            <ExternalLink className="h-4 w-4" /> Client Preview
-          </a>
-          <Button
-            variant="outline"
-            className="h-9 w-9 px-0"
-            aria-label="More project actions"
-            aria-haspopup="menu"
-            onClick={(e) => setProjectMenuAnchor({ kind: "element", element: e.currentTarget })}
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </div>
+        <ProjectActionBar
+          status={form.status}
+          statusSaving={statusSaving}
+          onStatusChange={(next) => void changeStatus(next)}
+          onShare={() => setShowShareModal(true)}
+          previewUrl={portalUrl}
+          onMore={(element) => setProjectMenuAnchor({ kind: "element", element })}
+        />
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_17rem] 2xl:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="min-w-0 space-y-4">

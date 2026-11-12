@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import { Select } from "@/components/ui/select";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { parseProjectDownloadAccess, type ProjectDownloadAccess } from "@/lib/deliverables";
 import {
   Activity,
@@ -32,6 +33,7 @@ import {
   Pencil,
   Phone,
   Play,
+  Share2,
   Trash2,
   UserRound,
 } from "lucide-react";
@@ -70,10 +72,13 @@ export function StatusPill({
   status,
   saving,
   onChange,
+  className,
 }: {
   status: string;
   saving: boolean;
   onChange: (status: string) => void;
+  /** Layout overrides (e.g. flex-1 min-w-0 to share a phone toolbar row). */
+  className?: string;
 }) {
   const normalized = normalizeStatus(status);
   return (
@@ -81,14 +86,20 @@ export function StatusPill({
       className={cn(
         "relative inline-flex h-9 items-center gap-1.5 rounded-full border pl-3 pr-8 text-sm font-semibold shadow-sm transition-colors",
         statusPillTone(status),
-        saving && "opacity-70"
+        saving && "opacity-70",
+        className
       )}
     >
-      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-      <span className="max-w-[11rem] truncate">
+      {saving ? (
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+      ) : (
+        // Phones drop the check so the status word keeps its room in the one-row toolbar.
+        <Check className="hidden h-4 w-4 shrink-0 min-[400px]:block" />
+      )}
+      <span className="min-w-0 max-w-[11rem] truncate">
         {PROJECT_STATUSES.find((s) => s.value === normalized)?.label ?? status}
       </span>
-      <ChevronDown className="pointer-events-none absolute right-2.5 h-4 w-4 opacity-70" aria-hidden />
+      <ChevronDown className="pointer-events-none absolute right-2 h-4 w-4 opacity-70 sm:right-2.5" aria-hidden />
       <select
         aria-label="Project status"
         value={normalized}
@@ -103,6 +114,65 @@ export function StatusPill({
         ))}
       </select>
     </label>
+  );
+}
+
+/**
+ * Project page toolbar: Status · Share · Client Preview · More, on one row at every width.
+ * Phones: Status flexes and truncates, Client Preview shortens to "Preview" (icon-only under
+ * 375px, still labelled for assistive tech), More stays an icon. Desktop is unchanged.
+ */
+export function ProjectActionBar({
+  status,
+  statusSaving,
+  onStatusChange,
+  onShare,
+  previewUrl,
+  onMore,
+}: {
+  status: string;
+  statusSaving: boolean;
+  onStatusChange: (status: string) => void;
+  onShare: () => void;
+  previewUrl: string;
+  onMore: (trigger: HTMLElement) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 sm:flex-wrap sm:justify-end sm:gap-2">
+      <StatusPill
+        status={status}
+        saving={statusSaving}
+        onChange={onStatusChange}
+        className="h-10 min-w-0 flex-1 pl-2.5 pr-6 sm:h-9 sm:flex-none sm:pl-3 sm:pr-8"
+      />
+      <Button variant="accent" className="h-10 shrink-0 gap-1.5 px-2.5 sm:h-9 sm:gap-2 sm:px-4" onClick={onShare}>
+        <Share2 className="h-4 w-4" /> Share
+      </Button>
+      <a
+        href={previewUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Client Preview"
+        title="Client Preview"
+        className={cn(
+          buttonVariants({ variant: "outline" }),
+          "h-10 w-10 shrink-0 gap-1.5 px-0 min-[375px]:w-auto min-[375px]:px-3 sm:h-9 sm:gap-2 sm:px-4"
+        )}
+      >
+        <ExternalLink className="h-4 w-4" />
+        <span className="hidden min-[375px]:inline sm:hidden">Preview</span>
+        <span className="hidden sm:inline">Client Preview</span>
+      </a>
+      <Button
+        variant="outline"
+        className="h-10 w-10 shrink-0 px-0 sm:h-9 sm:w-9"
+        aria-label="More project actions"
+        aria-haspopup="menu"
+        onClick={(e) => onMore(e.currentTarget)}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </Button>
+    </div>
   );
 }
 

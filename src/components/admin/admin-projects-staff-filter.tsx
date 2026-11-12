@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { PHONE_QUERY, useMediaQuery } from "@/hooks/use-media-query";
+import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 
 const STORAGE_KEY = "admin.projects.staffFilter";
@@ -54,6 +57,9 @@ export function AdminProjectsStaffFilter({
 }) {
   const [selected, setSelected] = useState<string[]>(defaultSelected ?? []);
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string[]>([]);
+  const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
+  const isPhone = useMediaQuery(PHONE_QUERY);
 
   useEffect(() => {
     if (defaultSelected && defaultSelected.length > 0) {
@@ -77,10 +83,19 @@ export function AdminProjectsStaffFilter({
     });
   }
 
+  function apply(next: string[]) {
+    setSelected(next);
+    writeStored(next);
+    onFilterChange(next);
+  }
+
   function clear() {
-    setSelected([]);
-    writeStored([]);
-    onFilterChange([]);
+    apply([]);
+  }
+
+  function toggleOpen() {
+    if (!open) setDraft(selected);
+    setOpen((o) => !o);
   }
 
   const label = useMemo(() => {
@@ -100,7 +115,8 @@ export function AdminProjectsStaffFilter({
           type="button"
           size="sm"
           variant="outline"
-          onClick={() => setOpen((o) => !o)}
+          ref={setTrigger}
+          onClick={toggleOpen}
           aria-expanded={open}
         >
           Filter by staff
@@ -124,44 +140,111 @@ export function AdminProjectsStaffFilter({
         {end ? <div className="ml-auto flex flex-wrap items-center gap-2">{end}</div> : null}
       </div>
 
-      {open ? (
-        <div className="absolute left-0 z-20 mt-2 w-72 rounded-xl border border-border bg-white surface-dark:bg-card p-3 shadow-lg">
-          <p className="mb-2 text-xs font-medium text-slate-500 surface-dark:text-muted">
-            Multi-select — show projects for any selected staff
-          </p>
-          <ul className="max-h-64 space-y-1 overflow-y-auto">
-            <li>
-              <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 surface-dark:hover:bg-subtle">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(STAFF_FILTER_UNASSIGNED)}
-                  onChange={() => toggle(STAFF_FILTER_UNASSIGNED)}
-                />
-                Unassigned
-              </label>
-            </li>
-            {staff.map((s) => (
-              <li key={s.id}>
-                <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 surface-dark:hover:bg-subtle">
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(s.id)}
-                    onChange={() => toggle(s.id)}
-                  />
-                  <span className="truncate">{s.full_name || s.email}</span>
-                </label>
-              </li>
-            ))}
-            {staff.length === 0 ? (
-              <li className="px-2 py-2 text-xs text-slate-500 surface-dark:text-muted">No staff members yet.</li>
-            ) : null}
-          </ul>
-        </div>
+      {open && !isPhone ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close staff filter"
+            tabIndex={-1}
+            className="fixed inset-0 z-10 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute left-0 z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-white surface-dark:bg-card p-3 shadow-lg">
+            <p className="mb-2 text-xs font-medium text-slate-500 surface-dark:text-muted">
+              Multi-select — show projects for any selected staff
+            </p>
+            <StaffOptionList staff={staff} selected={selected} onToggle={toggle} />
+          </div>
+        </>
       ) : null}
+
+      <BottomSheet
+        open={open && isPhone}
+        onClose={() => setOpen(false)}
+        title="Filter by staff"
+        description="Show projects for any selected staff"
+        surfaceFrom={trigger}
+        footer={
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 flex-1"
+              disabled={draft.length === 0}
+              onClick={() => setDraft([])}
+            >
+              Clear filters
+            </Button>
+            <Button
+              type="button"
+              variant="accent"
+              className="h-11 flex-[1.4]"
+              onClick={() => {
+                apply(draft);
+                setOpen(false);
+              }}
+            >
+              Apply{draft.length > 0 ? ` (${draft.length})` : ""}
+            </Button>
+          </div>
+        }
+      >
+        <StaffOptionList
+          staff={staff}
+          selected={draft}
+          onToggle={(id) => setDraft((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))}
+          sheet
+        />
+      </BottomSheet>
 
       {/* projectStaffIds kept for callers; filtering happens in parent */}
       <span className="sr-only">{Object.keys(projectStaffIds).length} projects mapped</span>
     </div>
+  );
+}
+
+/** Unassigned + each staff member, shared by the desktop dropdown and the phone sheet. */
+function StaffOptionList({
+  staff,
+  selected,
+  onToggle,
+  sheet = false,
+}: {
+  staff: StaffOption[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  sheet?: boolean;
+}) {
+  const rowClass = cn(
+    "flex cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-slate-50 surface-dark:hover:bg-subtle",
+    sheet ? "min-h-12 gap-3 text-[15px]" : "py-1.5"
+  );
+  const boxClass = cn(sheet && "h-5 w-5 shrink-0 accent-[var(--color-accent)]");
+  return (
+    <ul className={cn("space-y-1", !sheet && "max-h-64 overflow-y-auto")}>
+      <li>
+        <label className={rowClass}>
+          <input
+            type="checkbox"
+            className={boxClass}
+            checked={selected.includes(STAFF_FILTER_UNASSIGNED)}
+            onChange={() => onToggle(STAFF_FILTER_UNASSIGNED)}
+          />
+          Unassigned
+        </label>
+      </li>
+      {staff.map((s) => (
+        <li key={s.id}>
+          <label className={rowClass}>
+            <input type="checkbox" className={boxClass} checked={selected.includes(s.id)} onChange={() => onToggle(s.id)} />
+            <span className="truncate">{s.full_name || s.email}</span>
+          </label>
+        </li>
+      ))}
+      {staff.length === 0 ? (
+        <li className="px-2 py-2 text-xs text-slate-500 surface-dark:text-muted">No staff members yet.</li>
+      ) : null}
+    </ul>
   );
 }
 

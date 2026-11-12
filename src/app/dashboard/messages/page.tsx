@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/auth";
 import { Header } from "@/components/layout/header";
-import { ClientMessagesChat } from "@/components/projects/client-messages-chat";
+import { ClientMessagesScreen } from "@/components/client-portal/client-messages-screen";
 
 export default async function ClientMessagesPage() {
   const profile = await getProfile();
@@ -11,9 +11,7 @@ export default async function ClientMessagesPage() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] surface-dark:bg-background">
       <Header variant="dashboard" userRole="client" />
-      <main className="mobile-container py-8 pb-16">
-        <ClientMessagesChat />
-      </main>
+      <ClientMessagesScreen />
     </div>
   );
 }

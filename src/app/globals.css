@@ -426,3 +426,31 @@ html[data-standalone] header.app-sticky-top {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Phone bottom sheets (BottomSheet): slide up over a fading backdrop. */
+@keyframes sp-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes sp-sheet-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.sp-sheet-panel {
+  animation: sp-sheet-up 240ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.sp-sheet-backdrop {
+  animation: sp-sheet-fade 200ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-sheet-panel,
+  .sp-sheet-backdrop { animation: none; }
+}
+
+/* Client chat composer: clear the home indicator, except while the keyboard covers it. */
+.sp-chat-composer {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+html[data-keyboard="open"] .sp-chat-composer {
+  padding-bottom: 0.5rem;
+}

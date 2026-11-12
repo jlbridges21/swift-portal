@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { PHONE_QUERY, useMediaQuery } from "@/hooks/use-media-query";
 import { ActionMenu, type ActionMenuAnchor, type ActionMenuItem } from "@/components/ui/action-menu";
 import { ClientSidebar } from "@/components/admin/client-view/client-sidebar";
 import { ClientViewBoard } from "@/components/admin/client-view/client-view-board";
@@ -107,6 +109,9 @@ export function ClientView({
   const [sort, setSort] = useState<ClientViewSort>("updated");
   const [services, setServices] = useState<string[]>([]);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [draftServices, setDraftServices] = useState<string[]>([]);
+  const [filterButton, setFilterButton] = useState<HTMLButtonElement | null>(null);
+  const isPhone = useMediaQuery(PHONE_QUERY);
   const [addedClients, setAddedClients] = useState<ClientViewClient[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const { moveProject, projects } = useProjectStageMove(baseProjects);
@@ -141,6 +146,13 @@ export function ClientView({
   const serviceOptions = [...new Set(clientProjects.map((p) => p.service_type).filter(Boolean))].sort();
   const activeServices = services.filter((s) => serviceOptions.includes(s));
   const shown = sortClientViewProjects(filterProjectsByService(clientProjects, activeServices), sort);
+  const draftCount = filterProjectsByService(clientProjects, draftServices).length;
+
+  function openFilter() {
+    // The phone sheet edits a draft (Apply / Clear / Close); the desktop dropdown applies live.
+    setDraftServices(activeServices);
+    setFilterOpen(true);
+  }
 
   function selectClient(id: string) {
     setSelectedId(id);
@@ -217,11 +229,13 @@ export function ClientView({
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Button
+                  ref={setFilterButton}
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setFilterOpen((o) => !o)}
+                  onClick={() => (filterOpen ? setFilterOpen(false) : openFilter())}
                   aria-expanded={filterOpen}
+                  aria-haspopup="dialog"
                   className={cn(activeServices.length > 0 && "border-accent text-accent")}
                 >
                   <Filter className="h-3.5 w-3.5" />
@@ -232,7 +246,7 @@ export function ClientView({
                     </span>
                   ) : null}
                 </Button>
-                {filterOpen ? (
+                {filterOpen && !isPhone ? (
                   <>
                     <button
                       type="button"
@@ -249,31 +263,54 @@ export function ClientView({
                           </button>
                         ) : null}
                       </div>
-                      {serviceOptions.length === 0 ? (
-                        <p className="py-2 text-xs text-muted">No packages on these projects yet.</p>
-                      ) : (
-                        <ul className="max-h-64 space-y-0.5 overflow-y-auto">
-                          {serviceOptions.map((service) => (
-                            <li key={service}>
-                              <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 surface-dark:hover:bg-subtle">
-                                <input
-                                  type="checkbox"
-                                  checked={activeServices.includes(service)}
-                                  onChange={() =>
-                                    setServices((prev) =>
-                                      prev.includes(service) ? prev.filter((s) => s !== service) : [...prev, service]
-                                    )
-                                  }
-                                />
-                                <span className="truncate">{service}</span>
-                              </label>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                      <ServiceOptionList
+                        options={serviceOptions}
+                        selected={activeServices}
+                        onToggle={(service) => setServices((prev) => toggleValue(prev, service))}
+                      />
                     </div>
                   </>
                 ) : null}
+                {/* Phones: the anchored dropdown ran off the left edge (the button sits at the
+                    left once the toolbar stacks). A portaled bottom sheet can't be clipped. */}
+                <BottomSheet
+                  open={filterOpen && isPhone}
+                  onClose={() => setFilterOpen(false)}
+                  title="Filter projects"
+                  description="Package / service"
+                  surfaceFrom={filterButton}
+                  footer={
+                    <div className="flex items-center gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11 flex-1"
+                        disabled={draftServices.length === 0}
+                        onClick={() => setDraftServices([])}
+                      >
+                        Clear filters
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="accent"
+                        className="h-11 flex-[1.4]"
+                        onClick={() => {
+                          setServices(draftServices);
+                          setFilterOpen(false);
+                        }}
+                      >
+                        Show {draftCount} project{draftCount === 1 ? "" : "s"}
+                      </Button>
+                    </div>
+                  }
+                >
+                  <ServiceOptionList
+                    options={serviceOptions}
+                    selected={draftServices}
+                    onToggle={(service) => setDraftServices((prev) => toggleValue(prev, service))}
+                    sheet
+                  />
+                </BottomSheet>
               </div>
 
               <label className="relative inline-flex h-8 items-center rounded-md border border-border bg-card text-xs font-medium text-foreground hover:bg-accent-subtle">
@@ -325,6 +362,49 @@ export function ClientView({
         </section>
       </div>
     </ClientProfileModalProvider>
+  );
+}
+
+function toggleValue(list: string[], value: string): string[] {
+  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+}
+
+/** Package / service checkboxes, shared by the desktop dropdown and the phone sheet. */
+function ServiceOptionList({
+  options,
+  selected,
+  onToggle,
+  sheet = false,
+}: {
+  options: string[];
+  selected: string[];
+  onToggle: (service: string) => void;
+  sheet?: boolean;
+}) {
+  if (options.length === 0) {
+    return <p className={cn("text-xs text-muted", sheet ? "py-6 text-center" : "py-2")}>No packages on these projects yet.</p>;
+  }
+  return (
+    <ul className={cn("space-y-0.5", !sheet && "max-h-64 overflow-y-auto")}>
+      {options.map((service) => (
+        <li key={service}>
+          <label
+            className={cn(
+              "flex cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-slate-50 surface-dark:hover:bg-subtle",
+              sheet ? "min-h-12 gap-3 text-[15px]" : "py-1.5"
+            )}
+          >
+            <input
+              type="checkbox"
+              className={cn(sheet && "h-5 w-5 shrink-0 accent-[var(--color-accent)]")}
+              checked={selected.includes(service)}
+              onChange={() => onToggle(service)}
+            />
+            <span className="truncate">{service}</span>
+          </label>
+        </li>
+      ))}
+    </ul>
   );
 }
 
