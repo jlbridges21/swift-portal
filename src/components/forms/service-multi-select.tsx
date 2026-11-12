@@ -44,6 +44,12 @@ type Props = {
   className?: string;
   /** "md" = 40px (admin forms), "lg" = 44px (public / touch forms). */
   size?: "md" | "lg";
+  /**
+   * "chips" (default) lists every selection as a removable chip, so the field
+   * grows. "compact" keeps one fixed-height line ("Aerial Photography +3 more");
+   * selections are viewed and changed in the dropdown.
+   */
+  display?: "chips" | "compact";
   "aria-describedby"?: string;
 };
 
@@ -66,8 +72,10 @@ export function ServiceMultiSelect({
   disabled,
   className,
   size = "md",
+  display = "chips",
   "aria-describedby": describedBy,
 }: Props) {
+  const compact = display === "compact";
   const [loaded, setLoaded] = useState<ServiceOption[] | null>(providedOptions ?? null);
   const [internal, setInternal] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
@@ -215,7 +223,8 @@ export function ServiceMultiSelect({
         e.preventDefault();
         openList();
       }
-      if (e.key === "Backspace" && selectedKeys.length && e.target === buttonRef.current) {
+      // Compact mode shows no chips, so Backspace must not remove an unseen selection.
+      if (!compact && e.key === "Backspace" && selectedKeys.length && e.target === buttonRef.current) {
         e.preventDefault();
         commit(selectedKeys.slice(0, -1));
       }
@@ -273,13 +282,14 @@ export function ServiceMultiSelect({
         }}
         onKeyDown={onKeyDown}
         className={cn(
-          "flex w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-lg border bg-white py-1 pl-2 pr-1 text-sm text-foreground transition-colors surface-dark:bg-card",
-          size === "lg" ? "min-h-11" : "min-h-10",
+          "flex w-full cursor-pointer items-center gap-1.5 rounded-lg border bg-white py-1 pl-2 pr-1 text-sm text-foreground transition-colors surface-dark:bg-card",
+          compact ? "flex-nowrap" : "flex-wrap",
+          compact ? (size === "lg" ? "h-11" : "h-10") : size === "lg" ? "min-h-11" : "min-h-10",
           open ? "border-accent ring-2 ring-accent/30" : invalid ? "border-red-400" : "border-border",
           disabled && "cursor-not-allowed opacity-50"
         )}
       >
-        {selected.map((option) => (
+        {(compact ? [] : selected).map((option) => (
           <span
             key={optionKey(option)}
             className="inline-flex max-w-full items-center gap-1 rounded-full bg-accent-subtle py-0.5 pl-2.5 pr-1 text-xs font-medium text-accent"
@@ -317,12 +327,24 @@ export function ServiceMultiSelect({
           aria-invalid={invalid || undefined}
           aria-required={required || undefined}
           onClick={() => (open ? close(false) : openList())}
+          title={compact && names.length ? names.join(", ") : undefined}
           className={cn(
-            "flex min-w-[7rem] flex-1 items-center justify-between gap-2 self-stretch rounded-md px-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-            names.length ? "text-muted" : "text-muted/90"
+            "flex flex-1 items-center justify-between gap-2 self-stretch rounded-md px-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+            compact ? "min-w-0" : "min-w-[7rem]",
+            names.length ? (compact ? "text-foreground" : "text-muted") : "text-muted/90"
           )}
         >
-          <span className={cn("truncate", names.length ? "sr-only" : "")}>{summary}</span>
+          {compact && names.length ? (
+            <span className="flex min-w-0 items-baseline gap-1.5">
+              <span className="truncate font-medium">{names[0]}</span>
+              {names.length > 1 ? (
+                <span className="shrink-0 text-xs font-medium text-muted">+{names.length - 1} more</span>
+              ) : null}
+              <span className="sr-only">{`. ${summary}: ${names.join(", ")}`}</span>
+            </span>
+          ) : (
+            <span className={cn("truncate", names.length ? "sr-only" : "")}>{summary}</span>
+          )}
           <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 text-muted transition-transform", open && "rotate-180")} aria-hidden />
         </button>
       </div>

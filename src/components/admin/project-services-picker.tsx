@@ -20,6 +20,7 @@ export function ProjectServicesPicker({
   onSaved,
   id = "project-services",
   className,
+  compact,
 }: {
   projectId: string;
   /** Every business service; inactive ones show only while still linked. */
@@ -29,6 +30,8 @@ export function ProjectServicesPicker({
   onSaved?: (result: { serviceType: string; names: string[] }) => void;
   id?: string;
   className?: string;
+  /** One fixed-height line instead of a chip per service (New interface). */
+  compact?: boolean;
 }) {
   const [ids, setIds] = useState(initialIds);
   const saved = useRef(initialIds);
@@ -80,6 +83,7 @@ export function ProjectServicesPicker({
       value={ids}
       disabled={disabled}
       className={className}
+      display={compact ? "compact" : "chips"}
       placeholder="Choose services…"
       onChange={(next) => {
         setIds(next);

@@ -2228,6 +2228,7 @@ export function AdminProjectDetail({
                     catalog={serviceCatalog}
                     initialIds={serviceIds}
                     className="min-w-0 flex-1"
+                    compact
                     onSaved={({ serviceType }) => {
                       if (serviceType) setForm((f) => ({ ...f, service_type: serviceType }));
                       router.refresh();
