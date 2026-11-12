@@ -76,6 +76,8 @@ export function LoginForm({
   const queryUnavailable =
     queryError === "unavailable"
       ? "This portal is unavailable. Your business is suspended or no longer active."
+      : queryError === "team_access_removed" || queryCode === "team_access_removed"
+        ? "Your team access to this portal has been removed. Ask the business owner to re-invite you."
       : queryError === "oauth_link_conflict" || queryCode === "oauth_link_conflict"
         ? "An account already exists for this email. Sign in with your password and verify your email before connecting Google."
         : queryError === "tenant_no_match" || queryCode === "tenant_no_match"

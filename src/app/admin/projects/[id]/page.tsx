@@ -215,6 +215,10 @@ export default async function AdminProjectPage({ params }: PageProps) {
           depositPercent={appSettings.workflow.payments.depositPercent}
           depositAmountCents={appSettings.workflow.payments.depositAmountCents}
           travel={appSettings.travel}
+          proposalExpiration={{
+            autoSetOnSend: appSettings.workflow.proposals.autoSetExpiration,
+            defaultDays: appSettings.proposals.defaultProposalExpirationDays,
+          }}
           marketingKit={marketingKit}
           canEditMarketing={canEditMarketing}
           canManageMarketingOffers={canManageMarketingOffers}

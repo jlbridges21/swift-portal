@@ -169,6 +169,23 @@ async function marketingUploadRefs(
   return { refs, keep };
 }
 
+/** Stored official-proposal PDFs: {business}/proposals/{project}/{quote}/sent-*.pdf. */
+async function proposalPdfRefs(db: TenantServiceClient, projectId: string): Promise<StorageRef[]> {
+  const prefix = `${db.businessId}/proposals/${projectId}`;
+  const storage = db.raw.storage.from("project-media");
+  const { data: quoteFolders, error } = await storage.list(prefix, { limit: 1000 });
+  if (error || !quoteFolders?.length) return [];
+  const refs: StorageRef[] = [];
+  for (const folder of quoteFolders) {
+    if (folder.id || !folder.name) continue; // folders have no id
+    const { data: files } = await storage.list(`${prefix}/${folder.name}`, { limit: 1000 });
+    for (const file of files ?? []) {
+      if (file.id && file.name) refs.push({ bucket: "project-media", path: `${prefix}/${folder.name}/${file.name}` });
+    }
+  }
+  return refs;
+}
+
 export async function permanentlyDeleteProject(
   db: TenantServiceClient,
   projectId: string,
@@ -202,6 +219,7 @@ export async function permanentlyDeleteProject(
       if (ref) refs.push(ref);
     }
   }
+  refs.push(...(await proposalPdfRefs(db, projectId)));
   const { removed, failed } = await removeStorage(db, planStorageRemoval(db.businessId, refs, marketing.keep));
 
   return {

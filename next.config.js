@@ -4,6 +4,9 @@ const nextConfig = {
   // (public/marketing-fonts). Make sure they ship with the export function.
   outputFileTracingIncludes: {
     "/api/marketing/[projectId]/export": ["./public/marketing-fonts/**/*"],
+    // Official proposal PDFs render on the server with the same Inter files the editor preview loads.
+    "/api/quotes": ["./public/fonts/Inter-*.ttf"],
+    "/api/quotes/[id]/pdf": ["./public/fonts/Inter-*.ttf"],
   },
   images: {
     // 75 is the default; 90 keeps UI text sharp in marketing product screenshots (ShowcaseImage).

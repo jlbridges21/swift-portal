@@ -1,6 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
-import { sendBrandedEmail } from "@/lib/email";
+import { sendBrandedEmail, type EmailAttachment } from "@/lib/email";
 import { sendAdminPushNotification } from "@/lib/onesignal-push";
 import { sendClientEmailNotification } from "@/lib/client-email-notifications";
 import { getAppSettings } from "@/lib/app-settings";
@@ -37,6 +37,35 @@ interface NotifyOptions {
    * In-app rows are still created.
    */
   idempotencyKey?: string;
+  /** Client emails only: files attached to the message (e.g. the proposal PDF). */
+  attachments?: EmailAttachment[];
+  /** Client emails only: subject when the business has no custom subject for this event. */
+  emailSubject?: string;
+  /** Client emails only: button label for clients with an active portal. */
+  emailCtaLabel?: string;
+  /** Skip in-app rows (an email-only retry of a message already delivered in-app). */
+  skipInApp?: boolean;
+  /** Limit delivery to these portal users (retry for the recipients that failed). */
+  onlyUserIds?: string[];
+}
+
+/** Per-recipient outcome of a client or admin email, so callers can report it honestly. */
+export interface NotifyEmailResult {
+  userId: string;
+  email: string;
+  role: "admin" | "staff" | "client";
+  sent: boolean;
+  reason?: string;
+  error?: string;
+  messageId?: string;
+}
+
+export interface NotifyResult {
+  /** False when nothing was attempted (business not live, idempotent duplicate, ...). */
+  delivered: boolean;
+  skippedReason?: string;
+  recipients: number;
+  emails: NotifyEmailResult[];
 }
 
 interface NotificationRecipient {
@@ -333,7 +362,8 @@ async function claimClientNotification(
   return "error";
 }
 
-export async function notifyUsers(options: NotifyOptions) {
+export async function notifyUsers(options: NotifyOptions): Promise<NotifyResult> {
+  const emails: NotifyEmailResult[] = [];
   const businessId = await resolveNotifyBusinessId(options);
   if (!businessId) {
     console.warn("[notifications] skipped — could not resolve businessId", {
@@ -341,12 +371,12 @@ export async function notifyUsers(options: NotifyOptions) {
       projectId: options.projectId,
       clientId: options.clientId,
     });
-    return;
+    return { delivered: false, skippedReason: "no_business", recipients: 0, emails };
   }
 
   if (!(await isLiveBusiness(businessId))) {
     console.info("[notifications] skipped — business is not live", { businessId, type: options.type });
-    return;
+    return { delivered: false, skippedReason: "business_not_live", recipients: 0, emails };
   }
 
   const db = await createTenantServiceClient(businessId);
@@ -384,7 +414,9 @@ export async function notifyUsers(options: NotifyOptions) {
   }
 
   const unique = new Map<string, NotificationRecipient>();
+  const onlyUserIds = options.onlyUserIds ? new Set(options.onlyUserIds) : null;
   for (const recipient of recipients) {
+    if (onlyUserIds && !onlyUserIds.has(recipient.id)) continue;
     if (recipient.id && !unique.has(recipient.id)) unique.set(recipient.id, recipient);
   }
 
@@ -425,7 +457,7 @@ export async function notifyUsers(options: NotifyOptions) {
     }
 
     const shouldCreateInApp =
-      allowInApp && user.in_app_notifications_enabled !== false;
+      !options.skipInApp && allowInApp && user.in_app_notifications_enabled !== false;
 
     let notificationId: string | null = null;
 
@@ -449,6 +481,9 @@ export async function notifyUsers(options: NotifyOptions) {
     if (!sendOutbound || options.sendEmail === false || !user.email || !allowEmail) {
       if (sendOutbound && options.sendEmail !== false && !user.email) {
         console.warn("[email] skipped — missing email for user:", user.id, options.type);
+        emails.push({ userId: user.id, email: "", role: user.role, sent: false, reason: "no_email" });
+      } else if (sendOutbound && options.sendEmail !== false && !allowEmail) {
+        emails.push({ userId: user.id, email: user.email, role: user.role, sent: false, reason: "email_turned_off" });
       }
       continue;
     }
@@ -463,7 +498,7 @@ export async function notifyUsers(options: NotifyOptions) {
 
     if (user.role === "admin" || user.role === "staff") {
       try {
-        await sendBrandedEmail({
+        const adminResult = await sendBrandedEmail({
           businessId,
           to: user.email,
           subject: options.title,
@@ -479,6 +514,15 @@ export async function notifyUsers(options: NotifyOptions) {
             notificationId,
             emailType: options.type,
           },
+        });
+        emails.push({
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          sent: adminResult.sent,
+          reason: adminResult.sent ? undefined : adminResult.skipReason ?? "send_failed",
+          error: adminResult.error,
+          messageId: adminResult.messageId,
         });
       } catch (error) {
         console.error("[email] admin notification error:", options.type, error);
@@ -501,6 +545,18 @@ export async function notifyUsers(options: NotifyOptions) {
         projectName: projectContext?.project_name,
         projectStatus: projectContext?.status,
         notificationId,
+        defaultSubject: options.emailSubject,
+        ctaLabel: options.emailCtaLabel,
+        attachments: options.attachments,
+      });
+      emails.push({
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        sent: emailResult.sent,
+        reason: emailResult.reason,
+        error: emailResult.error,
+        messageId: emailResult.messageId,
       });
 
       if (!emailResult.sent) {
@@ -515,6 +571,14 @@ export async function notifyUsers(options: NotifyOptions) {
       }
     } catch (error) {
       console.error("[email] client notification unexpected error:", options.type, error);
+      emails.push({
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        sent: false,
+        reason: "error",
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -541,6 +605,13 @@ export async function notifyUsers(options: NotifyOptions) {
       console.error("[onesignal] admin push unexpected error:", options.type, error);
     }
   }
+
+  return {
+    delivered: sendOutbound,
+    skippedReason: sendOutbound ? undefined : "duplicate",
+    recipients: unique.size,
+    emails,
+  };
 }
 
 export async function notifyAdmins(options: Omit<NotifyOptions, "notifyAdmins" | "notifyClients">) {

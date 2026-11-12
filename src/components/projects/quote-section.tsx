@@ -16,6 +16,7 @@ import {
   getProjectActiveQuote,
   getLatestPreliminaryQuote,
   hasOfficialProposal,
+  isArchivedQuote,
   isPreliminaryQuote,
   ARCHIVED_QUOTE_NOTE,
 } from "@/lib/quote-display";
@@ -36,10 +37,13 @@ import {
 } from "@/components/projects/estimate-pdf-preview";
 import {
   estimateAddressLines,
+  estimateInputForQuote,
   estimateInputFromFields,
   estimateIssuedAt,
   type EstimatePdfInput,
 } from "@/lib/estimate-pdf";
+import { ProposalHistoryDialog } from "@/components/projects/proposal-history-dialog";
+import type { ProposalDelivery } from "@/lib/proposal-delivery";
 
 interface QuoteSectionProps {
   projectId: string;
@@ -65,7 +69,54 @@ interface QuoteSectionProps {
   travel?: TravelSettings | null;
   /** Admin-only control rendered beside the section title (e.g. client visibility toggle). */
   titleAccessory?: ReactNode;
+  /** Admin: Proposal History modal, opened from the workspace's Proposals tile. */
+  historyOpen?: boolean;
+  onHistoryOpenChange?: (open: boolean) => void;
+  /**
+   * Business proposal settings, so the preview prints the expiration date the
+   * server will set when the proposal is sent.
+   */
+  proposalExpiration?: { autoSetOnSend: boolean; defaultDays: number };
 }
+
+type QuoteResponse = ProjectQuote & { delivery?: ProposalDelivery | null; duplicate_request?: boolean };
+
+function browserTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function newQuoteId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
+        (Number(c) ^ (Math.floor(Math.random() * 256) & (15 >> (Number(c) / 4)))).toString(16)
+      );
+}
+
+/** Same rule as addProposalExpiration on the server. */
+function defaultExpiry(days: number): string | null {
+  if (!days || days <= 0) return null;
+  const expires = new Date();
+  expires.setDate(expires.getDate() + days);
+  return expires.toISOString();
+}
+
+/** Strip delivery fields before the row goes into state. */
+function quoteRow(response: QuoteResponse): ProjectQuote {
+  const { delivery: _delivery, duplicate_request: _duplicate, ...row } = response;
+  return row;
+}
+
+const SKIP_REASON_TEXT: Record<string, string> = {
+  opted_out: "turned off email notifications",
+  email_turned_off: "proposal emails are turned off in Automated Emails",
+  no_email: "has no email address",
+  business_not_live: "this business can't send email right now",
+};
 
 type QuoteFormState = {
   title: string;
@@ -97,6 +148,9 @@ export function QuoteSection({
   depositAmountCents = 0,
   travel = null,
   titleAccessory,
+  historyOpen = false,
+  onHistoryOpenChange,
+  proposalExpiration,
 }: QuoteSectionProps) {
   const router = useRouter();
   const brand = usePortalBrand();
@@ -130,6 +184,8 @@ export function QuoteSection({
   }
 
   const [form, setForm] = useState<QuoteFormState>(blankForm);
+  /** Id a new proposal will be created with: the preview shows its real reference, and retries reuse it. */
+  const [draftId, setDraftId] = useState<string | null>(null);
 
   useEffect(() => {
     setQuotes(initialQuotes);
@@ -147,6 +203,16 @@ export function QuoteSection({
       : null;
 
   const editingQuote = editingId ? quotes.find((q) => q.id === editingId) ?? null : null;
+  /** An unsent revision drafted after the client's change request (Duplicate no longer archives the original). */
+  const pendingRevision = changesRequestedQuote
+    ? quotes.find(
+        (q) =>
+          !isPreliminaryQuote(q) &&
+          q.status === "draft" &&
+          !isArchivedQuote(q) &&
+          new Date(q.created_at).getTime() > new Date(changesRequestedQuote.updated_at || changesRequestedQuote.created_at).getTime()
+      ) ?? null
+    : null;
   const editingPreliminary = !!editingQuote && isPreliminaryQuote(editingQuote);
   const depositFallback = {
     depositMode,
@@ -155,32 +221,30 @@ export function QuoteSection({
   };
 
   function estimateFields(quote: ProjectQuote): EstimatePdfInput {
-    return estimateInputFromFields({
-      businessName: brand.name,
-      legalName: brand.legalName,
-      addressLines: estimateAddressLines(brand),
-      phone: brand.phoneNumber,
-      email: brand.contactEmail,
-      website: brand.websiteUrl,
-      brandPrimaryColor: brand.primaryColor,
-      quoteId: quote.id,
-      issuedAt: estimateIssuedAt(quote.created_at),
-      expiresAt: quote.expires_at,
+    return estimateInputForQuote({
+      brand,
+      quote,
       clientName: clientName || "Client",
       projectName: projectName || "",
       propertyAddress: propertyAddress || "",
-      title: quote.title,
-      description: quote.description || "",
-      notes: quote.notes || "",
-      lineItems: quote.line_items,
-      depositMode: quote.deposit_mode ?? null,
-      depositPercent: quote.deposit_percent ?? null,
-      depositAmountCents: quote.deposit_amount_cents ?? null,
       depositFallback,
-      totalCents: quote.total_cents,
+      timeZone: browserTimeZone(),
     });
   }
 
+  /** What the server will print as the expiration once this form is sent. */
+  const previewExpiresAt = (() => {
+    const typed = form.expires_at || null;
+    if (!proposalExpiration || editingPreliminary) return typed;
+    if (editingId) {
+      return proposalExpiration.autoSetOnSend ? defaultExpiry(proposalExpiration.defaultDays) : typed;
+    }
+    return typed || defaultExpiry(proposalExpiration.defaultDays);
+  })();
+  // Day precision is all the PDF prints; recomputing per render must not re-trigger the preview.
+  const previewExpiresDay = previewExpiresAt ? previewExpiresAt.slice(0, 10) : null;
+
+  const editingCreatedAt = editingQuote?.created_at;
   const previewInput = useMemo(
     () =>
       estimateInputFromFields({
@@ -191,9 +255,10 @@ export function QuoteSection({
         email: brand.contactEmail,
         website: brand.websiteUrl,
         brandPrimaryColor: brand.primaryColor,
-        quoteId: editingId,
-        issuedAt: estimateIssuedAt(editingQuote?.created_at),
-        expiresAt: form.expires_at || null,
+        quoteId: editingId ?? draftId,
+        issuedAt: estimateIssuedAt(editingCreatedAt),
+        timeZone: browserTimeZone(),
+        expiresAt: previewExpiresDay,
         clientName: clientName || "Client",
         projectName: projectName || "",
         propertyAddress: propertyAddress || "",
@@ -216,9 +281,11 @@ export function QuoteSection({
       depositAmountCents,
       depositMode,
       depositPercent,
+      draftId,
+      editingCreatedAt,
       editingId,
-      editingQuote?.created_at,
       form,
+      previewExpiresDay,
       projectName,
       propertyAddress,
     ]
@@ -331,6 +398,7 @@ export function QuoteSection({
 
   function openCreateForm() {
     setEditingId(null);
+    setDraftId(newQuoteId());
     setOneWayMiles("");
     setForm(blankForm());
     setShowForm(true);
@@ -338,6 +406,7 @@ export function QuoteSection({
 
   function openEditForm(quote: ProjectQuote) {
     setEditingId(quote.id);
+    setDraftId(null);
     const miles = quote.travel_one_way_miles == null ? "" : String(quote.travel_one_way_miles);
     setOneWayMiles(miles);
     setForm({
@@ -362,21 +431,107 @@ export function QuoteSection({
     setLoading(false);
     if (res.ok) {
       const draft = await res.json();
-      setQuotes((prev) => {
-        const archived = prev.map((q) =>
-          !isPreliminaryQuote(q) && q.id !== draft.id
-            ? { ...q, status: "draft" as const, notes: ARCHIVED_QUOTE_NOTE }
-            : q
-        );
-        return [draft, ...archived];
-      });
+      // The source proposal is untouched; older proposals are archived only when this draft is sent.
+      setQuotes((prev) => [draft, ...prev]);
+      onHistoryOpenChange?.(false);
       openEditForm(draft);
-      toast.success("Draft revision created — edit and send when ready");
+      toast.success("Draft revision created. The original proposal is unchanged.");
       router.refresh();
     } else {
       const data = await res.json().catch(() => ({}));
       toast.error(data.error || "Failed to duplicate proposal");
     }
+  }
+
+  /** Superseded locally the way the server archives on send. */
+  function withSentQuote(prev: ProjectQuote[], sent: ProjectQuote): ProjectQuote[] {
+    const archived = prev.map((q) =>
+      !isPreliminaryQuote(q) &&
+      q.id !== sent.id &&
+      q.status !== "approved" &&
+      !isArchivedQuote(q)
+        ? { ...q, status: "draft" as const, notes: ARCHIVED_QUOTE_NOTE }
+        : q
+    );
+    return archived.some((q) => q.id === sent.id)
+      ? archived.map((q) => (q.id === sent.id ? sent : q))
+      : [sent, ...archived];
+  }
+
+  async function retryProposalEmail(quoteId: string, userIds: string[]) {
+    const res = await fetch("/api/quotes", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id: quoteId, action: "resend_email", user_ids: userIds, time_zone: browserTimeZone() }),
+    });
+    const data = (await res.json().catch(() => ({}))) as QuoteResponse & { error?: string };
+    if (!res.ok) {
+      toast.error(data.error || "The email couldn't be sent. Try again.");
+      return;
+    }
+    reportDelivery(data, "retry");
+  }
+
+  /**
+   * Tell the business exactly what happened. Success only when the email
+   * provider accepted the message; failures keep a Retry that emails only the
+   * recipients that failed.
+   */
+  function reportDelivery(response: QuoteResponse, context: "send" | "retry") {
+    const delivery = response.delivery;
+    if (!delivery) {
+      if (response.duplicate_request) toast.info("This proposal was already sent. Nothing was sent again.");
+      return;
+    }
+    const { email, pdf } = delivery;
+    const names = (list: { email: string }[]) => list.map((r) => r.email || "a client").join(", ");
+    if (email.duplicate) {
+      toast.info("This proposal email was already sent.");
+    } else if (email.failed.length) {
+      const ids = email.failed.map((f) => f.userId);
+      toast.error(
+        `${context === "send" ? "The proposal is marked sent in the portal, but the email" : "The email"} to ${names(email.failed)} failed: ${email.failed[0].error}`,
+        {
+          duration: 20000,
+          action: { label: "Retry email", onClick: () => void retryProposalEmail(response.id, ids) },
+        }
+      );
+      if (email.sent.length) toast.success(`Emailed ${names(email.sent)} with the PDF attached.`);
+    } else if (email.sent.length) {
+      toast.success(`Proposal emailed to ${names(email.sent)} with the PDF attached.`);
+    } else if (email.recipients === 0) {
+      toast.warning(
+        "The proposal is in the client portal, but no email went out: no client on this project has portal access yet."
+      );
+    } else if (email.skipped.length) {
+      const first = email.skipped[0];
+      toast.warning(
+        `The proposal is in the client portal, but no email went out: ${first.email || "the client"} ${SKIP_REASON_TEXT[first.reason] ?? `was skipped (${first.reason})`}.`
+      );
+    }
+    if (!pdf.stored) {
+      toast.warning("The PDF was attached, but its archive copy couldn't be saved. Downloads will rebuild it from the proposal.");
+    }
+  }
+
+  async function sendDraft(quoteId: string): Promise<QuoteResponse | null> {
+    const sendRes = await fetch("/api/quotes", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id: quoteId, action: "send", time_zone: browserTimeZone() }),
+    });
+    const data = (await sendRes.json().catch(() => ({}))) as QuoteResponse & { error?: string };
+    if (!sendRes.ok) {
+      toast.error(data.error || "Failed to send proposal");
+      return null;
+    }
+    const row = quoteRow(data);
+    setQuotes((prev) => (row.status === "sent" ? withSentQuote(prev, row) : prev.map((q) => (q.id === row.id ? row : q))));
+    if (row.status === "sent") onStatusChange?.("quote_sent");
+    reportDelivery(data, "send");
+    return data;
   }
 
   async function submitQuote(send: boolean) {
@@ -417,24 +572,15 @@ export function QuoteSection({
         return;
       }
       if (send) {
-        const sendRes = await fetch("/api/quotes", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ id: editingId, action: "send" }),
-        });
+        const saved = (await updateRes.json()) as ProjectQuote;
+        setQuotes((prev) => prev.map((q) => (q.id === editingId ? saved : q)));
+        const sent = await sendDraft(editingId);
         setLoading(false);
-        if (sendRes.ok) {
-          const updated = await sendRes.json();
-          setQuotes((prev) => prev.map((q) => (q.id === editingId ? updated : q)));
-          onStatusChange?.("quote_sent");
-          toast.success("Revised proposal sent to client");
+        if (sent) {
           setShowForm(false);
           setEditingId(null);
           setForm(blankForm());
           router.refresh();
-        } else {
-          toast.error("Failed to send proposal");
         }
         return;
       }
@@ -451,33 +597,33 @@ export function QuoteSection({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ project_id: projectId, ...payload, send }),
+      body: JSON.stringify({
+        project_id: projectId,
+        ...payload,
+        send,
+        ...(draftId ? { id: draftId } : {}),
+        time_zone: browserTimeZone(),
+      }),
     });
     setLoading(false);
+    const data = (await res.json().catch(() => ({}))) as QuoteResponse & { error?: string };
     if (res.ok) {
-      const quote = await res.json();
-      setQuotes((prev) => {
-        const archived = prev.map((q) =>
-          !isPreliminaryQuote(q) && q.id !== quote.id
-            ? { ...q, status: "draft" as const, notes: ARCHIVED_QUOTE_NOTE }
-            : q
-        );
-        return [quote, ...archived];
-      });
+      const quote = quoteRow(data);
+      setQuotes((prev) => withSentQuote(prev, quote));
       const wasSent = quote.status === "sent";
-      if (wasSent) onStatusChange?.("quote_sent");
-      toast.success(
-        wasSent
-          ? "Quote sent to client"
-          : send
-            ? "Draft saved — admin review is required before sending"
-            : "Quote saved"
-      );
+      if (wasSent) {
+        onStatusChange?.("quote_sent");
+        reportDelivery(data, "send");
+      } else {
+        toast.success(send ? "Draft saved — admin review is required before sending" : "Quote saved");
+      }
       setShowForm(false);
+      setDraftId(null);
       setForm(blankForm());
       router.refresh();
     } else {
-      toast.error("Failed to save quote");
+      // The form stays open with the same id, so trying again cannot create a second proposal.
+      toast.error(data.error || "Failed to save quote");
     }
   }
 
@@ -487,22 +633,16 @@ export function QuoteSection({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ id: quote.id, action: "convert_to_official" }),
+      body: JSON.stringify({ id: quote.id, action: "convert_to_official", time_zone: browserTimeZone() }),
     });
     setConverting(false);
     if (res.ok) {
-      const official = await res.json();
-      setQuotes((prev) => {
-        const archived = prev.map((q) =>
-          !isPreliminaryQuote(q) && q.id !== official.id
-            ? { ...q, status: "draft" as const, notes: ARCHIVED_QUOTE_NOTE }
-            : q
-        );
-        return [official, ...archived];
-      });
+      const data = (await res.json()) as QuoteResponse;
+      const official = quoteRow(data);
+      setQuotes((prev) => withSentQuote(prev, official));
       if (official.status === "sent") {
         onStatusChange?.("quote_sent");
-        toast.success("Official proposal sent to client");
+        reportDelivery(data, "send");
       } else {
         toast.success("Official proposal drafted — review and send when ready");
       }
@@ -534,6 +674,7 @@ export function QuoteSection({
         deposit_mode: form.deposit_mode,
         deposit_percent: form.deposit_percent,
         deposit_amount_cents: form.deposit_amount_cents,
+        time_zone: browserTimeZone(),
         ...(manualTravel
           ? {
               travel_one_way_miles:
@@ -546,18 +687,12 @@ export function QuoteSection({
     });
     setConverting(false);
     if (res.ok) {
-      const official = await res.json();
-      setQuotes((prev) => {
-        const archived = prev.map((q) =>
-          !isPreliminaryQuote(q) && q.id !== official.id
-            ? { ...q, status: "draft" as const, notes: ARCHIVED_QUOTE_NOTE }
-            : q
-        );
-        return [official, ...archived];
-      });
+      const data = (await res.json()) as QuoteResponse;
+      const official = quoteRow(data);
+      setQuotes((prev) => withSentQuote(prev, official));
       if (official.status === "sent") {
         onStatusChange?.("quote_sent");
-        toast.success("Official proposal sent to client");
+        reportDelivery(data, "send");
       } else {
         toast.success("Official proposal drafted — review and send when ready");
       }
@@ -670,19 +805,13 @@ export function QuoteSection({
             size="sm"
             disabled={loading}
             onClick={async () => {
-              const res = await fetch("/api/quotes", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ id: quote.id, action: "send" }),
-              });
-              if (res.ok) {
-                toast.success("Proposal sent");
-                router.refresh();
-              }
+              setLoading(true);
+              const sent = await sendDraft(quote.id);
+              setLoading(false);
+              if (sent) router.refresh();
             }}
           >
-            <Send className="h-4 w-4" /> Send
+            <Send className="h-4 w-4" /> {loading ? "Sending…" : "Send"}
           </Button>
         </>
       );
@@ -694,7 +823,7 @@ export function QuoteSection({
           <Button variant="outline" size="sm" disabled={loading} onClick={() => duplicateQuote(quote)}>
             <Copy className="h-4 w-4" /> Duplicate & Revise
           </Button>
-          <DownloadEstimatePdfButton input={estimateFields(quote)} logoUrl={brand.logoUrl} />
+          <DownloadEstimatePdfButton input={estimateFields(quote)} logoUrl={brand.logoUrl} preferStoredCopy />
           {clientId && clientName && propertyAddress && (
             <ProposalPaymentLinkActions
               quote={quote}
@@ -714,7 +843,7 @@ export function QuoteSection({
 
     return (
       <>
-        <DownloadEstimatePdfButton input={estimateFields(quote)} logoUrl={brand.logoUrl} />
+        <DownloadEstimatePdfButton input={estimateFields(quote)} logoUrl={brand.logoUrl} preferStoredCopy />
         {clientId && clientName && propertyAddress && (
           <ProposalPaymentLinkActions
             quote={quote}
@@ -952,9 +1081,15 @@ export function QuoteSection({
                   )}
                 </div>
               </div>
-              <Button variant="accent" size="sm" disabled={loading} onClick={() => duplicateQuote(changesRequestedQuote)}>
-                <Copy className="h-4 w-4" /> Create Revised Proposal
-              </Button>
+              {pendingRevision ? (
+                <Button variant="accent" size="sm" onClick={() => openEditForm(pendingRevision)}>
+                  <Pencil className="h-4 w-4" /> Continue Revised Proposal
+                </Button>
+              ) : (
+                <Button variant="accent" size="sm" disabled={loading} onClick={() => duplicateQuote(changesRequestedQuote)}>
+                  <Copy className="h-4 w-4" /> Create Revised Proposal
+                </Button>
+              )}
             </CardContent>
           </Card>
         )}
@@ -1051,6 +1186,22 @@ export function QuoteSection({
         )}
 
       </div>
+
+      {asAdmin && onHistoryOpenChange ? (
+        <ProposalHistoryDialog
+          open={historyOpen}
+          onClose={() => onHistoryOpenChange(false)}
+          quotes={quotes}
+          pdfInputFor={estimateFields}
+          logoUrl={brand.logoUrl}
+          busy={loading}
+          onDuplicate={(quote) => void duplicateQuote(quote)}
+          onEditDraft={(quote) => {
+            onHistoryOpenChange(false);
+            openEditForm(quote);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

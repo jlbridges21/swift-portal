@@ -62,7 +62,7 @@ export async function ensureClientPortalLink(
         };
       }
       if (profile.role !== "admin" && profile.client_id !== client.id) {
-        await db.raw.from("profiles").update({ client_id: client.id, role: "client" }).eq("id", profile.id);
+        await db.raw.from("profiles").update({ client_id: client.id, role: "client", disabled_at: null }).eq("id", profile.id);
       } else if (profile.role === "admin" && profile.client_id !== client.id) {
         await db.raw.from("profiles").update({ client_id: client.id }).eq("id", profile.id);
       }
@@ -109,7 +109,7 @@ export async function ensureClientPortalLink(
     if (profileByEmail.role !== "admin") {
       await db.raw
         .from("profiles")
-        .update({ client_id: client.id, role: "client" })
+        .update({ client_id: client.id, role: "client", disabled_at: null })
         .eq("id", profileByEmail.id);
     } else if (profileByEmail.client_id !== client.id) {
       await db.raw.from("profiles").update({ client_id: client.id }).eq("id", profileByEmail.id);
@@ -176,7 +176,7 @@ export async function enableClientPortalAccess(
     if (existingProfile.role !== "admin") {
       await db.raw
         .from("profiles")
-        .update({ client_id: client.id, role: "client" })
+        .update({ client_id: client.id, role: "client", disabled_at: null })
         .eq("id", client.user_id);
     } else {
       await db.raw.from("profiles").update({ client_id: client.id }).eq("id", client.user_id);

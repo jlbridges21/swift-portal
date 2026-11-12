@@ -184,6 +184,8 @@ interface AdminProjectDetailProps {
   depositPercent?: number;
   depositAmountCents?: number;
   travel?: import("@/lib/travel-fee").TravelSettings | null;
+  /** Expiration the server sets on send, so the proposal preview prints the same date. */
+  proposalExpiration?: { autoSetOnSend: boolean; defaultDays: number };
   marketingKit?: KitSummary | null;
   canEditMarketing?: boolean;
   canManageMarketingOffers?: boolean;
@@ -265,6 +267,7 @@ export function AdminProjectDetail({
   depositPercent = 50,
   depositAmountCents = 0,
   travel = null,
+  proposalExpiration,
   marketingKit = null,
   canEditMarketing = false,
   canManageMarketingOffers = false,
@@ -276,6 +279,7 @@ export function AdminProjectDetail({
   const inAppShell = useInAdminAppShell();
   const [activeTab, setActiveTabState] = useState<WorkspaceTabKey>("media");
   const [mediaCategory, setMediaCategory] = useState<MediaCategory>("all");
+  const [proposalHistoryOpen, setProposalHistoryOpen] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
   const [typeSaving, setTypeSaving] = useState(false);
   const [showCoverDialog, setShowCoverDialog] = useState(false);
@@ -2415,7 +2419,13 @@ export function AdminProjectDetail({
                 className="space-y-4"
               >
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <StatTile label="Proposals" value={String(quotes.length)} hint={quotes.length === 0 ? "None yet" : null} />
+                  <StatTile
+                    label="Proposals"
+                    value={String(quotes.length)}
+                    hint={quotes.length === 0 ? "None yet" : null}
+                    onClick={quotes.length > 0 ? () => setProposalHistoryOpen(true) : undefined}
+                    ariaLabel={`Proposal history, ${quotes.length} ${quotes.length === 1 ? "proposal" : "proposals"}`}
+                  />
                   <StatTile
                     label={quoteTotals.focus?.status === "approved" ? "Accepted total" : "Latest total"}
                     value={quoteTotals.focus ? formatCurrency(quoteTotals.focus.total_cents) : "—"}
@@ -2451,6 +2461,9 @@ export function AdminProjectDetail({
                     travel={travel}
                     onPaymentCreated={(payment) => setPaymentList((prev) => [payment, ...prev])}
                     onStatusChange={(status) => setForm((f) => ({ ...f, status: status as Project["status"] }))}
+                    historyOpen={proposalHistoryOpen}
+                    onHistoryOpenChange={setProposalHistoryOpen}
+                    proposalExpiration={proposalExpiration}
                   />
                 </div>
               </div>
@@ -2795,6 +2808,7 @@ export function AdminProjectDetail({
           depositPercent={depositPercent}
           depositAmountCents={depositAmountCents}
           travel={travel}
+          proposalExpiration={proposalExpiration}
           onPaymentCreated={(payment) => setPaymentList((prev) => [payment, ...prev])}
           onStatusChange={(status) =>
             setForm((f) => ({ ...f, status: status as Project["status"] }))

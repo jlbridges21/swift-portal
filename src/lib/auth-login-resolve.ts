@@ -224,8 +224,16 @@ export async function resolveLoginDestination(
 
   // (a) Existing business
   if (profile.business_id) {
-    if (profile.disabled_at) {
-      return portalUnavailableError();
+    // disabled_at is set when someone is removed from the Team; it never applies to clients.
+    if (profile.disabled_at && profile.role !== "client") {
+      return {
+        kind: "error",
+        error:
+          "Your team access to this portal has been removed. Ask the business owner to re-invite you.",
+        status: 403,
+        signOut: true,
+        code: "team_access_removed",
+      };
     }
     const own = await lookupBusinessById(profile.business_id);
     if (!own || own.status !== "active") {

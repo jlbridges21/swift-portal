@@ -1,5 +1,10 @@
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
-import { composeBrandedEmailHtml, sendBrandedEmail, type EmailPreviewDraft } from "@/lib/email";
+import {
+  composeBrandedEmailHtml,
+  sendBrandedEmail,
+  type EmailAttachment,
+  type EmailPreviewDraft,
+} from "@/lib/email";
 import { getAppSettings, type AppSettings, type NotificationEventKey } from "@/lib/app-settings";
 import { getStatusOrder } from "@/lib/constants";
 import type { PremiumEmailContent, PremiumEmailTemplate } from "@/lib/email-templates";
@@ -33,6 +38,11 @@ export interface ClientEmailNotificationOptions {
   notificationId?: string | null;
   /** Optional subject override from editable workflow email templates. */
   subject?: string;
+  /** Used only when the business has no custom subject for this email. */
+  defaultSubject?: string;
+  /** Button label for an active portal client (the activation CTA keeps its own label). */
+  ctaLabel?: string;
+  attachments?: EmailAttachment[];
 }
 
 export interface ClientEmailNotificationResult {
@@ -260,6 +270,8 @@ export function assembleClientEmailPresentation(
     projectName?: string;
     projectStatus?: string;
     subject?: string;
+    defaultSubject?: string;
+    ctaLabel?: string;
     resolvedUrl?: string;
     brandNames: { businessName: string; portalName: string };
   }
@@ -284,6 +296,9 @@ export function assembleClientEmailPresentation(
       });
     }
   }
+  if (!subjectOverride && options.defaultSubject?.trim()) {
+    subjectOverride = options.defaultSubject.trim();
+  }
 
   let body = options.message;
   let title = options.title;
@@ -304,7 +319,9 @@ export function assembleClientEmailPresentation(
     subjectOverride,
     options.eventKey
   );
-  return withActivationCta(presentation);
+  return withActivationCta(
+    options.ctaLabel?.trim() ? { ...presentation, ctaLabel: options.ctaLabel.trim() } : presentation
+  );
 }
 
 /**
@@ -397,6 +414,8 @@ export async function sendClientEmailNotification(
     projectName: options.projectName,
     projectStatus: options.projectStatus,
     subject: options.subject,
+    defaultSubject: options.defaultSubject,
+    ctaLabel: options.ctaLabel,
     resolvedUrl: await resolveClientCtaUrl(options),
     brandNames: {
       businessName: appSettings.business.businessName,
@@ -417,6 +436,7 @@ export async function sendClientEmailNotification(
       ctaUrl: presentation.ctaUrl,
       progressStep: presentation.progressStep,
       emailType: options.eventType,
+      attachments: options.attachments,
       analytics: {
         projectId: options.projectId,
         notificationId: options.notificationId,

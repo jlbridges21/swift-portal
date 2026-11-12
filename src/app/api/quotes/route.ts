@@ -7,8 +7,8 @@ import { idempotencyKey } from "@/lib/idempotency";
 import { setProjectStatus, setProjectStatusForward } from "@/lib/status-automation";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
-import { portalLink, resolveProjectMessageTemplate, logWorkflowAudit, logWorkflowSkipped } from "@/lib/workflow";
+import { notifyAdmins } from "@/lib/notifications";
+import { logWorkflowAudit, logWorkflowSkipped } from "@/lib/workflow";
 import { archivePreviousOfficialQuotes } from "@/lib/quote-archive";
 import { canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
 import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
@@ -26,6 +26,74 @@ import type { PaymentAutomationSettings } from "@/lib/workflow-settings";
 import { StripeConnectNotReadyError } from "@/lib/stripe-connect";
 import { withManualTravelLine } from "@/lib/travel-fee";
 import type { AppSettings } from "@/lib/app-settings";
+import type { ProjectQuote } from "@/lib/types";
+import { notesWithoutArchiveMarker, safeTimeZone } from "@/lib/estimate-pdf";
+import {
+  emailProposalToClients,
+  ensureProposalPdf,
+  proposalPdfPath,
+  renderProposalPdf,
+  storeProposalPdf,
+  type ProposalDelivery,
+} from "@/lib/proposal-delivery";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const PDF_FAILED_MESSAGE =
+  "The proposal PDF couldn't be generated, so nothing was sent. Try again in a moment.";
+
+type PreparedPdf = { bytes: Uint8Array; stored: boolean; error?: string };
+
+/**
+ * Render the exact PDF for a proposal that is about to be sent and keep the
+ * write-once copy. Runs before any status change so a PDF failure sends nothing.
+ */
+async function prepareSendPdf(
+  businessId: string,
+  candidate: ProjectQuote,
+  appSettings: AppSettings,
+  timeZone: string | null
+): Promise<{ ok: true; pdf: PreparedPdf; projectName: string } | { ok: false }> {
+  try {
+    const { bytes, context } = await renderProposalPdf({ businessId, quote: candidate, appSettings, timeZone });
+    const db = await createTenantServiceClient(businessId);
+    const store = candidate.sent_at
+      ? await storeProposalPdf(
+          db,
+          proposalPdfPath(businessId, candidate.project_id, candidate.id, candidate.sent_at),
+          bytes
+        )
+      : { stored: false as const, error: undefined };
+    return { ok: true, pdf: { bytes, stored: store.stored, error: store.error }, projectName: context.projectName };
+  } catch (error) {
+    console.error("[quotes] proposal PDF render failed", { quoteId: candidate.id, error });
+    return { ok: false };
+  }
+}
+
+async function deliverProposal(args: {
+  businessId: string;
+  quote: ProjectQuote;
+  appSettings: AppSettings;
+  pdf: PreparedPdf;
+  projectName: string;
+  title: string;
+  fallbackBody?: string;
+}): Promise<ProposalDelivery> {
+  const email = await emailProposalToClients({
+    businessId: args.businessId,
+    quote: args.quote,
+    appSettings: args.appSettings,
+    pdfBytes: args.pdf.bytes,
+    projectName: args.projectName,
+    title: args.title,
+    fallbackBody: args.fallbackBody,
+  });
+  return {
+    pdf: { attached: true, stored: args.pdf.stored, error: args.pdf.error },
+    email,
+  };
+}
 
 function manualTravelLineItems(
   lineItems: { description: string; amount_cents: number }[],
@@ -126,6 +194,10 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const { project_id, title, description, line_items, notes, expires_at, send } = body;
+  const timeZone = safeTimeZone(body.time_zone);
+  // The editor picks the id up front so its preview shows the real reference
+  // and a retried request finds the row it already created.
+  const requestedId = typeof body.id === "string" && UUID_RE.test(body.id) ? body.id : null;
 
   if (!project_id || !title || !line_items?.length) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -155,31 +227,75 @@ export async function POST(request: Request) {
     ? addProposalExpiration(new Date(), appSettings.proposals.defaultProposalExpirationDays)
     : null;
 
-  const { data: quote, error } = await db
-    .from("project_quotes")
-    .insert({
-      project_id,
-      title,
-      description: description || null,
-      line_items: pricedLineItems,
-      total_cents,
-      ...(manualTravel.oneWayMiles !== undefined ? { travel_one_way_miles: manualTravel.oneWayMiles } : {}),
-      notes: notes || null,
-      expires_at: expires_at || expiresAt,
-      status,
-      quote_kind: "official",
-      sent_at: willSend ? new Date().toISOString() : null,
-      created_by: profile.id,
-      ...depositColumnsForQuote(body, appSettings.workflow.payments),
-    })
-    .select()
-    .single();
+  if (requestedId) {
+    const { data: existing } = await db
+      .from("project_quotes")
+      .select("*")
+      .eq("id", requestedId)
+      .maybeSingle();
+    if (existing) {
+      if (existing.project_id !== project_id) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      // Same request again (double click, network retry): nothing new is created or sent.
+      return NextResponse.json({ ...existing, delivery: null, duplicate_request: true });
+    }
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const quoteId = requestedId ?? crypto.randomUUID();
+  const nowIso = new Date().toISOString();
+  const row = {
+    id: quoteId,
+    project_id,
+    title,
+    description: description || null,
+    line_items: pricedLineItems,
+    total_cents,
+    ...(manualTravel.oneWayMiles !== undefined ? { travel_one_way_miles: manualTravel.oneWayMiles } : {}),
+    notes: notes || null,
+    expires_at: expires_at || expiresAt,
+    status,
+    quote_kind: "official" as const,
+    sent_at: willSend ? nowIso : null,
+    created_by: profile.id,
+    // Pinned so the PDF's issue date and the row agree.
+    ...(willSend ? { created_at: nowIso } : {}),
+    ...depositColumnsForQuote(body, appSettings.workflow.payments),
+  };
+
+  let prepared: { pdf: PreparedPdf; projectName: string } | null = null;
+  if (willSend) {
+    const result = await prepareSendPdf(
+      businessId,
+      {
+        ...row,
+        business_id: businessId,
+        approved_at: null,
+        changes_feedback: null,
+        created_at: nowIso,
+        updated_at: nowIso,
+      } as ProjectQuote,
+      appSettings,
+      timeZone
+    );
+    if (!result.ok) return NextResponse.json({ error: PDF_FAILED_MESSAGE, code: "pdf_failed" }, { status: 500 });
+    prepared = result;
+  }
+
+  const { data: quote, error } = await db.from("project_quotes").insert(row).select().single();
+
+  if (error) {
+    if (error.code === "23505" && requestedId) {
+      const { data: existing } = await db.from("project_quotes").select("*").eq("id", requestedId).maybeSingle();
+      if (existing) return NextResponse.json({ ...existing, delivery: null, duplicate_request: true });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   await archivePreviousOfficialQuotes(businessId, project_id, quote.id);
 
-  if (willSend) {
+  let delivery: ProposalDelivery | null = null;
+  if (willSend && prepared) {
     await setProjectStatusForward({
       projectId: project_id,
       status: "quote_sent",
@@ -197,18 +313,17 @@ export async function POST(request: Request) {
       metadata: { quoteId: quote.id, total_cents },
     });
 
-    await notifyProjectClients({
+    delivery = await deliverProposal({
       businessId,
-      type: "quote_sent",
-      eventKey: "official_proposal_sent",
+      quote: quote as ProjectQuote,
+      appSettings,
+      pdf: prepared.pdf,
+      projectName: prepared.projectName,
       title: "Your official proposal is ready",
-      body: `${appSettings.business.businessName} sent an official proposal for "${title}". Review and approve in your portal.`,
-      link: `/dashboard/projects/${project_id}#quote`,
-      projectId: project_id,
     });
   }
 
-  return NextResponse.json(quote);
+  return NextResponse.json({ ...quote, delivery });
 }
 
 export async function PATCH(request: Request) {
@@ -250,11 +365,11 @@ export async function PATCH(request: Request) {
       );
     }
     if (quote.status === "sent" || quote.status === "approved") {
-      return NextResponse.json(quote);
+      // Already sent (a retry or a second tab): never re-send or re-log.
+      return NextResponse.json({ ...quote, delivery: null, duplicate_request: true });
     }
     const appSettings = await getAppSettings(businessId);
-
-    await archivePreviousOfficialQuotes(businessId, quote.project_id, id);
+    const sentAt = new Date().toISOString();
 
     const expiresAt =
       appSettings.workflow.proposals.autoSetExpiration
@@ -270,17 +385,37 @@ export async function PATCH(request: Request) {
           })
         : {};
 
+    const sendPatch = {
+      status: "sent" as const,
+      sent_at: sentAt,
+      ...depositPatch,
+      ...(expiresAt ? { expires_at: expiresAt } : {}),
+    };
+    const prepared = await prepareSendPdf(
+      businessId,
+      { ...(quote as ProjectQuote), ...sendPatch },
+      appSettings,
+      safeTimeZone(body.time_zone)
+    );
+    if (!prepared.ok) {
+      return NextResponse.json({ error: PDF_FAILED_MESSAGE, code: "pdf_failed" }, { status: 500 });
+    }
+
+    await archivePreviousOfficialQuotes(businessId, quote.project_id, id);
+
+    // Conditional on the status we read, so two concurrent sends cannot both deliver.
     const { data: updated } = await db
       .from("project_quotes")
-      .update({
-        status: "sent",
-        sent_at: new Date().toISOString(),
-        ...depositPatch,
-        ...(expiresAt ? { expires_at: expiresAt } : {}),
-      })
+      .update(sendPatch)
       .eq("id", id)
+      .eq("status", quote.status)
       .select()
-      .single();
+      .maybeSingle();
+
+    if (!updated) {
+      const { data: current } = await db.from("project_quotes").select("*").eq("id", id).maybeSingle();
+      return NextResponse.json({ ...(current ?? quote), delivery: null, duplicate_request: true });
+    }
 
     await setProjectStatusForward({
       projectId: quote.project_id,
@@ -299,26 +434,56 @@ export async function PATCH(request: Request) {
       metadata: { quoteId: id },
     });
 
-    await notifyProjectClients({
+    const delivery = await deliverProposal({
       businessId,
-      type: "quote_sent",
-      eventKey: "official_proposal_sent",
+      quote: updated as ProjectQuote,
+      appSettings,
+      pdf: prepared.pdf,
+      projectName: prepared.projectName,
       title: "Review Proposal",
-      body: await resolveProjectMessageTemplate(
-        appSettings.workflow,
-        "proposal_ready",
-        quote.project_id,
-        {
-          project_name: quote.title,
-          portal_link: await portalLink(`/dashboard/projects/${quote.project_id}#quote`, businessId),
-        },
-        `Review your proposal for "${quote.title}".`
-      ),
-      link: `/dashboard/projects/${quote.project_id}#quote`,
-      projectId: quote.project_id,
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({ ...updated, delivery });
+  }
+
+  if (action === "resend_email" && (isOwnerAdmin(profile) || staffCan(profile, "money.create_send_estimates"))) {
+    // Email-only retry for the recipients whose email failed. No status, activity or in-app changes.
+    if (quote.quote_kind === "preliminary" || !["sent", "approved", "changes_requested"].includes(quote.status)) {
+      return NextResponse.json({ error: "Only a sent proposal can be emailed again." }, { status: 400 });
+    }
+    const userIds = Array.isArray(body.user_ids)
+      ? (body.user_ids as unknown[]).filter((v): v is string => typeof v === "string" && UUID_RE.test(v))
+      : [];
+    if (!userIds.length) {
+      return NextResponse.json({ error: "Choose who to email again." }, { status: 400 });
+    }
+    const appSettings = await getAppSettings(businessId);
+    let pdf: Awaited<ReturnType<typeof ensureProposalPdf>>;
+    try {
+      pdf = await ensureProposalPdf({
+        businessId,
+        quote: quote as ProjectQuote,
+        appSettings,
+        timeZone: safeTimeZone(body.time_zone),
+      });
+    } catch (error) {
+      console.error("[quotes] proposal PDF render failed (resend)", { quoteId: id, error });
+      return NextResponse.json({ error: "The proposal PDF couldn't be generated. Nothing was emailed.", code: "pdf_failed" }, { status: 500 });
+    }
+    const email = await emailProposalToClients({
+      businessId,
+      quote: quote as ProjectQuote,
+      appSettings,
+      pdfBytes: pdf.bytes,
+      projectName: pdf.projectName,
+      title: "Review Proposal",
+      retryUserIds: userIds,
+    });
+    const delivery: ProposalDelivery = {
+      pdf: { attached: true, stored: pdf.stored, error: pdf.storeError },
+      email,
+    };
+    return NextResponse.json({ ...quote, delivery });
   }
 
   if (action === "convert_to_official" && (isOwnerAdmin(profile) || staffCan(profile, "money.create_send_estimates"))) {
@@ -357,28 +522,56 @@ export async function PATCH(request: Request) {
         .eq("id", id);
     }
 
+    const officialId = crypto.randomUUID();
+    const convertedAt = new Date().toISOString();
+    const officialRow = {
+      id: officialId,
+      project_id: quote.project_id,
+      title: finalTitle.startsWith("Official Proposal")
+        ? finalTitle
+        : `Official Proposal — ${finalTitle}`,
+      description: description ?? quote.description,
+      line_items: finalLineItems,
+      total_cents,
+      notes: notes ?? quote.notes,
+      expires_at: expires_at ?? proposalExpiresAt ?? quote.expires_at,
+      status: requireReview ? "draft" : "sent",
+      quote_kind: "official",
+      sent_at: null as string | null,
+      created_by: profile.id,
+      travel_one_way_miles:
+        manualTravel.oneWayMiles !== undefined
+          ? manualTravel.oneWayMiles
+          : (quote.travel_one_way_miles ?? null),
+      ...depositColumnsForQuote(body, appSettings.workflow.payments),
+      ...(requireReview ? {} : { created_at: convertedAt }),
+    };
+    if (!requireReview) officialRow.sent_at = convertedAt;
+
+    let convertPdf: { pdf: PreparedPdf; projectName: string } | null = null;
+    if (!requireReview) {
+      const result = await prepareSendPdf(
+        businessId,
+        {
+          ...officialRow,
+          business_id: businessId,
+          approved_at: null,
+          changes_feedback: null,
+          created_at: convertedAt,
+          updated_at: convertedAt,
+        } as ProjectQuote,
+        appSettings,
+        safeTimeZone(body.time_zone)
+      );
+      if (!result.ok) {
+        return NextResponse.json({ error: PDF_FAILED_MESSAGE, code: "pdf_failed" }, { status: 500 });
+      }
+      convertPdf = result;
+    }
+
     const { data: official, error: officialError } = await db
       .from("project_quotes")
-      .insert({
-        project_id: quote.project_id,
-        title: finalTitle.startsWith("Official Proposal")
-          ? finalTitle
-          : `Official Proposal — ${finalTitle}`,
-        description: description ?? quote.description,
-        line_items: finalLineItems,
-        total_cents,
-        notes: notes ?? quote.notes,
-        expires_at: expires_at ?? proposalExpiresAt ?? quote.expires_at,
-        status: requireReview ? "draft" : "sent",
-        quote_kind: "official",
-        sent_at: requireReview ? null : new Date().toISOString(),
-        created_by: profile.id,
-        travel_one_way_miles:
-          manualTravel.oneWayMiles !== undefined
-            ? manualTravel.oneWayMiles
-            : (quote.travel_one_way_miles ?? null),
-        ...depositColumnsForQuote(body, appSettings.workflow.payments),
-      })
+      .insert(officialRow)
       .select()
       .single();
 
@@ -388,6 +581,7 @@ export async function PATCH(request: Request) {
 
     await archivePreviousOfficialQuotes(businessId, quote.project_id, official.id);
 
+    let convertDelivery: ProposalDelivery | null = null;
     if (!requireReview) {
       await setProjectStatusForward({
         projectId: quote.project_id,
@@ -406,15 +600,16 @@ export async function PATCH(request: Request) {
         metadata: { quoteId: official.id, preliminaryQuoteId: id },
       });
 
-      await notifyProjectClients({
-        businessId,
-        type: "quote_sent",
-        eventKey: "official_proposal_sent",
-        title: "Your official proposal is ready",
-        body: `${appSettings.business.businessName} sent your official proposal. Review and approve it in your portal.`,
-        link: `/dashboard/projects/${quote.project_id}#quote`,
-        projectId: quote.project_id,
-      });
+      if (convertPdf) {
+        convertDelivery = await deliverProposal({
+          businessId,
+          quote: official as ProjectQuote,
+          appSettings,
+          pdf: convertPdf.pdf,
+          projectName: convertPdf.projectName,
+          title: "Your official proposal is ready",
+        });
+      }
     } else {
       await logProjectActivity("quote_sent", `Official proposal draft created: ${official.title}`, {
         businessId,
@@ -424,7 +619,7 @@ export async function PATCH(request: Request) {
       });
     }
 
-    return NextResponse.json(official);
+    return NextResponse.json({ ...official, delivery: convertDelivery });
   }
 
   if (action === "approve" && profile.role === "client") {
@@ -643,28 +838,38 @@ export async function PATCH(request: Request) {
   if (action === "duplicate" && (isOwnerAdmin(profile) || staffCan(profile, "money.create_send_estimates"))) {
     const revisionNumber = body.revision_label || "Revised";
     const appSettings = await getAppSettings(businessId);
+    // The source proposal is read, never written: its status, timestamps,
+    // payments and stored PDF stay as they were. Older proposals are archived
+    // only when this revision is actually sent.
+    const sourceTerms =
+      quote.deposit_mode != null
+        ? {
+            deposit_mode: quote.deposit_mode,
+            deposit_percent: quote.deposit_percent ?? null,
+            deposit_amount_cents: quote.deposit_amount_cents ?? null,
+          }
+        : depositColumnsForQuote({}, appSettings.workflow.payments);
+    const baseTitle = String(quote.title).replace(/\s*\((?:Revised|Revision)[^)]*\)\s*$/i, "");
     const { data: newQuote, error } = await db
       .from("project_quotes")
       .insert({
         project_id: quote.project_id,
-        title: body.title || `${quote.title} (${revisionNumber})`,
+        title: body.title || `${baseTitle} (${revisionNumber})`,
         description: quote.description,
         line_items: quote.line_items,
         total_cents: quote.total_cents,
         travel_one_way_miles: quote.travel_one_way_miles ?? null,
-        notes: body.notes ?? quote.notes,
+        notes: body.notes ?? (notesWithoutArchiveMarker(quote.notes) || null),
         expires_at: quote.expires_at,
         status: "draft",
         quote_kind: "official",
         created_by: profile.id,
-        ...depositColumnsForQuote({}, appSettings.workflow.payments),
+        ...sourceTerms,
       })
       .select()
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    await archivePreviousOfficialQuotes(businessId, quote.project_id, newQuote.id);
 
     await logProjectActivity("quote_revised", `Draft revision created from "${quote.title}"`, {
       businessId,

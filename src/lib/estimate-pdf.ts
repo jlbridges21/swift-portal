@@ -47,6 +47,11 @@ export type EstimatePdfInput = {
   quoteId: string | null;
   /** Stable instant written into the PDF metadata so two renders match. */
   issuedAt: Date;
+  /**
+   * IANA zone for the printed issue date. The server renders the sent PDF with
+   * the sender's zone so it shows the same date as the editor preview.
+   */
+  timeZone?: string | null;
   expiresAt: string | null;
   clientName: string;
   projectName: string;
@@ -128,6 +133,28 @@ function calendarLabel(value: string | null | undefined): string | null {
     day: "numeric",
     year: "numeric",
   }).format(date);
+}
+
+/** A zone Intl accepts, else null. Untrusted input (request bodies) is fine. */
+export function safeTimeZone(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim() || value.length > 64) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value.trim() });
+    return value.trim();
+  } catch {
+    return null;
+  }
+}
+
+function issuedDateLabel(issuedAt: Date, timeZone: string | null | undefined): string {
+  const zone = safeTimeZone(timeZone);
+  if (!zone) return formatDate(issuedAt);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: zone,
+  }).format(issuedAt);
 }
 
 function parseBrandColor(hex: string): RGB {
@@ -340,7 +367,7 @@ async function buildEstimatePdfUnstable(
   }
   cursor.y -= 32;
 
-  draw(`Date: ${formatDate(input.issuedAt)}`, { font: regular, size: 10, color: ink, gap: 1 });
+  draw(`Date: ${issuedDateLabel(input.issuedAt, input.timeZone)}`, { font: regular, size: 10, color: ink, gap: 1 });
   const expires = calendarLabel(input.expiresAt);
   if (expires) draw(`Expires: ${expires}`, { font: regular, size: 10, color: ink, gap: 1 });
   draw(`Client: ${input.clientName.trim() || "Client"}`, { font: regular, size: 10, color: ink, gap: 1 });
@@ -493,6 +520,7 @@ export function estimateInputFromFields(fields: {
   brandPrimaryColor: string;
   quoteId: string | null;
   issuedAt: Date;
+  timeZone?: string | null;
   expiresAt: string | null;
   clientName: string;
   projectName: string;
@@ -522,6 +550,7 @@ export function estimateInputFromFields(fields: {
     brandPrimaryColor: fields.brandPrimaryColor,
     quoteId: fields.quoteId,
     issuedAt: fields.issuedAt,
+    timeZone: fields.timeZone ?? null,
     expiresAt: fields.expiresAt,
     clientName: fields.clientName,
     projectName: fields.projectName,
@@ -538,4 +567,81 @@ export function estimateInputFromFields(fields: {
     },
     depositFallback: fields.depositFallback,
   };
+}
+
+/** Business identity the PDF prints. PortalBrand on the client, the same mapping on the server. */
+export type EstimateBrandFields = {
+  name: string;
+  legalName: string;
+  phoneNumber: string;
+  contactEmail: string;
+  websiteUrl: string;
+  primaryColor: string;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+};
+
+/** Notes as they read when the proposal was sent (archiving prepends a marker). */
+export function notesWithoutArchiveMarker(notes: string | null | undefined): string {
+  return (notes || "")
+    .replace(/^Archived — superseded by a newer official proposal\.\s*/u, "")
+    .trim();
+}
+
+/**
+ * The one mapping from a saved quote to PDF input. The admin download, the
+ * history preview and the server-rendered attachment all call this, so the
+ * emailed PDF cannot drift from what the business previewed.
+ */
+export function estimateInputForQuote(args: {
+  brand: EstimateBrandFields;
+  quote: {
+    id: string;
+    created_at: string | null;
+    expires_at: string | null;
+    title: string;
+    description: string | null;
+    notes: string | null;
+    line_items: QuoteLineItem[];
+    total_cents: number;
+    deposit_mode?: DepositMode | null;
+    deposit_percent?: number | null;
+    deposit_amount_cents?: number | null;
+  };
+  clientName: string;
+  projectName: string;
+  propertyAddress: string;
+  depositFallback: DepositTerms;
+  timeZone?: string | null;
+}): EstimatePdfInput {
+  const { brand, quote } = args;
+  return estimateInputFromFields({
+    businessName: brand.name,
+    legalName: brand.legalName,
+    addressLines: estimateAddressLines(brand),
+    phone: brand.phoneNumber,
+    email: brand.contactEmail,
+    website: brand.websiteUrl,
+    brandPrimaryColor: brand.primaryColor,
+    quoteId: quote.id,
+    issuedAt: estimateIssuedAt(quote.created_at),
+    timeZone: args.timeZone ?? null,
+    expiresAt: quote.expires_at,
+    clientName: args.clientName || "Client",
+    projectName: args.projectName || "",
+    propertyAddress: args.propertyAddress || "",
+    title: quote.title,
+    description: quote.description || "",
+    notes: notesWithoutArchiveMarker(quote.notes),
+    lineItems: quote.line_items,
+    depositMode: quote.deposit_mode ?? null,
+    depositPercent: quote.deposit_percent ?? null,
+    depositAmountCents: quote.deposit_amount_cents ?? null,
+    depositFallback: args.depositFallback,
+    totalCents: quote.total_cents,
+  });
 }

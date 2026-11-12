@@ -81,7 +81,7 @@ async function resolveCapabilities(): Promise<Capabilities> {
   if (
     profile.business_id &&
     (profile.role === "admin" || profile.role === "client" || profile.role === "staff") &&
-    !profile.disabled_at
+    (!profile.disabled_at || profile.role === "client")
   ) {
     const biz = await lookupBusinessById(profile.business_id);
     const active = Boolean(biz && biz.status === "active" && !biz.deleted_at);

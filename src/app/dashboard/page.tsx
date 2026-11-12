@@ -33,7 +33,7 @@ export default async function ClientDashboard() {
   if (!profile) redirect("/login");
   if (profile.role === "admin") redirect("/admin");
   if (profile.role === "staff") redirect("/staff");
-  if (profile.disabled_at) redirect("/login?error=unavailable");
+  // disabled_at is a Team-removal flag (staff/admin only); clients are never blocked by it.
 
   const supabase = await createClient();
   const tenant = await requireTenantContext();

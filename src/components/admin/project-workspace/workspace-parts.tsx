@@ -920,15 +920,38 @@ export function StatTile({
   value,
   hint,
   tone = "default",
+  onClick,
+  actionLabel = "View all",
+  ariaLabel,
 }: {
   label: string;
   value: string;
   hint?: string | null;
   tone?: "default" | "success" | "warning" | "accent";
+  /** Makes the tile a button (hover state + a small "View all" affordance). */
+  onClick?: () => void;
+  actionLabel?: string;
+  ariaLabel?: string;
 }) {
+  const Root = onClick ? "button" : "div";
   return (
-    <div className="min-w-0 rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
-      <p className="text-xs font-medium text-muted">{label}</p>
+    <Root
+      {...(onClick ? { type: "button" as const, onClick, "aria-label": ariaLabel, "aria-haspopup": "dialog" as const } : {})}
+      className={cn(
+        "min-w-0 rounded-xl border border-border bg-card px-4 py-3 text-left shadow-sm",
+        onClick &&
+          "group cursor-pointer transition-colors hover:border-accent/40 hover:bg-accent/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      )}
+    >
+      <p className="flex items-center justify-between gap-2 text-xs font-medium text-muted">
+        <span className="truncate">{label}</span>
+        {onClick ? (
+          <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-accent opacity-80 transition-opacity group-hover:opacity-100">
+            {actionLabel}
+            <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden />
+          </span>
+        ) : null}
+      </p>
       <p
         className={cn(
           "mt-0.5 truncate text-xl font-semibold tracking-tight",
@@ -941,6 +964,6 @@ export function StatTile({
         {value}
       </p>
       {hint ? <p className="mt-0.5 truncate text-xs text-muted">{hint}</p> : null}
-    </div>
+    </Root>
   );
 }

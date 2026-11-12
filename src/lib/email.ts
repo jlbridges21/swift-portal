@@ -161,6 +161,12 @@ export function composeBrandedEmailHtml(input: {
   });
 }
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 export interface SendEmailOptions {
   businessId: string;
   to: string;
@@ -173,6 +179,8 @@ export interface SendEmailOptions {
   ctaUrl?: string;
   progressStep?: number;
   emailType?: string;
+  /** Files sent with the message (e.g. the proposal PDF). Resend rejects the send if they are invalid. */
+  attachments?: EmailAttachment[];
   analytics?: {
     projectId?: string | null;
     notificationId?: string | null;
@@ -258,6 +266,15 @@ export async function sendBrandedEmail(options: SendEmailOptions): Promise<Email
       html,
       replyTo,
       tags: tags.length ? tags : undefined,
+      ...(options.attachments?.length
+        ? {
+            attachments: options.attachments.map((file) => ({
+              filename: file.filename,
+              content: file.content,
+              ...(file.contentType ? { contentType: file.contentType } : {}),
+            })),
+          }
+        : {}),
     });
 
     if (error) {
