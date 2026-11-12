@@ -4,6 +4,7 @@ import { getProfile } from "@/lib/auth";
 import { requireAdminApi } from "@/lib/api-auth";
 import {
   buildClientCrmTimeline,
+  countClientUnreadMessages,
   getClientMessages,
   listAdminConversations,
   markClientMessagesRead,
@@ -71,6 +72,11 @@ export async function GET(request: Request) {
   // Client: only their own conversation
   if (!profile.client_id) {
     return NextResponse.json({ error: "No client profile linked" }, { status: 403 });
+  }
+
+  if (unreadOnly) {
+    const count = await countClientUnreadMessages(businessId, profile.client_id, profile.id);
+    return NextResponse.json({ count });
   }
 
   const messages = await getClientMessages(businessId, profile.client_id, profile.id);

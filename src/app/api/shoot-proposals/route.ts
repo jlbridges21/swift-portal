@@ -11,7 +11,8 @@ import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { canAccessProject } from "@/lib/project-access";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
-import { syncShootToGoogleSafe } from "@/lib/google-calendar";
+import { resolveBusinessTimeZone, syncShootToGoogleSafe } from "@/lib/google-calendar";
+import { zonedDayKey } from "@/lib/google-calendar-pull";
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -335,20 +336,34 @@ export async function PATCH(request: Request) {
       .single();
 
     if (!shoot) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (Number.isNaN(new Date(proposed_at).getTime())) {
+      return NextResponse.json({ error: "Invalid proposed_at" }, { status: 400 });
+    }
 
-    await db
+    const appSettings = await getAppSettings(businessId);
+    const scheduling = appSettings.workflow.scheduling;
+    const timeZone = resolveBusinessTimeZone(appSettings.workflow.businessDefaults.timezone).timeZone;
+
+    const { error: moveError } = await db
       .from("shoot_proposals")
       .update({ proposed_at })
       .eq("id", id);
+    // Nothing is logged, synced or sent unless the move itself saved.
+    if (moveError) {
+      return NextResponse.json({ error: "Couldn't save the new shoot time." }, { status: 500 });
+    }
 
+    // The shoot's calendar day in the business zone (an evening shoot is not "tomorrow" in UTC).
     await db
       .from("projects")
-      .update({ shoot_date: proposed_at.split("T")[0] })
+      .update({ shoot_date: zonedDayKey(proposed_at, timeZone) })
       .eq("id", shoot.project_id);
 
-    const dateStr = new Date(proposed_at).toLocaleString();
-    const appSettings = await getAppSettings(businessId);
-    const scheduling = appSettings.workflow.scheduling;
+    const dateStr = new Date(proposed_at).toLocaleString("en-US", {
+      timeZone,
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
 
     if (scheduling.logSchedulingChanges) {
       await logProjectActivity("shoot_rescheduled", `Shoot rescheduled to ${dateStr}`, {

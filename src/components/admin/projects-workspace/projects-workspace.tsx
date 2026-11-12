@@ -48,7 +48,7 @@ import {
   type FilterPanelState,
 } from "@/components/admin/projects-workspace/projects-toolbar";
 import { ProjectsBoard, ProjectsGrid, ProjectsList, useHeroUrls } from "@/components/admin/projects-workspace/projects-views";
-import { ProjectsCalendar } from "@/components/admin/projects-workspace/projects-calendar";
+import { ProjectsCalendar, type ProjectsCalendarPermissions } from "@/components/admin/projects-workspace/projects-calendar";
 import { useProjectBulkActions, type ProjectBulkPermissions } from "@/components/admin/projects-workspace/projects-bulk";
 
 const NO_BULK: ProjectBulkPermissions = { canEdit: false, canHide: false, canManageStaff: false, canDelete: false, canDeleteMedia: false, canRestore: false };
@@ -101,6 +101,7 @@ export function ProjectsWorkspace({
   canSeeHidden,
   businessTimeZone = "America/New_York",
   bulkPermissions = NO_BULK,
+  calendarPermissions,
 }: {
   projects: PipelineProjectRow[];
   stage?: PipelineStageParam | null;
@@ -125,6 +126,8 @@ export function ProjectsWorkspace({
   businessTimeZone?: string;
   /** List view multi-select + row Hide/Restore. */
   bulkPermissions?: ProjectBulkPermissions;
+  /** Calendar: staff picker + drag/reschedule (all off when omitted). */
+  calendarPermissions?: ProjectsCalendarPermissions;
 }) {
   const router = useRouter();
   const [refreshing, startRefresh] = useTransition();
@@ -402,6 +405,9 @@ export function ProjectsWorkspace({
             heroUrls={hero ?? null}
             timeZone={businessTimeZone}
             canOpenCalendar={clientViewPermissions?.canOpenCalendar ?? false}
+            staff={staff}
+            projectStaffIds={projectStaffIds}
+            permissions={calendarPermissions}
           />
         ) : (
           <>

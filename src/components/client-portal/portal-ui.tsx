@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { UnreadCountBadge } from "@/components/notifications/unread-count-badge";
+import { useClientUnreadMessages } from "@/lib/use-client-unread-messages";
 import { CartButton } from "@/components/client-portal/portal-cart";
 import { Avatar } from "@/components/ui/avatar";
 import { createThumbRequestQueue } from "@/lib/media-thumb-client";
@@ -207,6 +209,10 @@ export function PortalTopBar({
     avatar?: string | null;
   }>({ name: userName, avatar: userAvatar });
   const menuRef = useRef<HTMLDivElement>(null);
+  // Business previews of the client view would otherwise count the studio's own inbox.
+  const messagesUnread = useClientUnreadMessages(!preview);
+  const messagesLabel =
+    messagesUnread > 0 ? `Messages, ${messagesUnread} unread` : "Messages";
 
   useEffect(() => {
     if (userName !== undefined || preview) return;
@@ -243,7 +249,7 @@ export function PortalTopBar({
   }, [menuOpen]);
 
   const messagesButtonClass =
-    "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-heading transition-colors hover:bg-accent-subtle hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+    "relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-heading transition-colors hover:bg-accent-subtle hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
   return (
     <header className="app-sticky-top app-safe-x sticky top-0 z-40 w-full border-b border-border/80 bg-card/95 backdrop-blur-lg">
@@ -288,19 +294,21 @@ export function PortalTopBar({
               type="button"
               onClick={onOpenMessages}
               className={messagesButtonClass}
-              aria-label="Messages"
+              aria-label={messagesLabel}
               title="Messages"
             >
               <MessageSquare className="h-[18px] w-[18px]" />
+              <UnreadCountBadge count={messagesUnread} />
             </button>
           ) : (
             <Link
               href={messagesHref}
               className={messagesButtonClass}
-              aria-label="Messages"
+              aria-label={messagesLabel}
               title="Messages"
             >
               <MessageSquare className="h-[18px] w-[18px]" />
+              <UnreadCountBadge count={messagesUnread} />
             </Link>
           )}
           {preview ? null : (

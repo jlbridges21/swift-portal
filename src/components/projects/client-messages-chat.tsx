@@ -6,6 +6,7 @@ import type { ClientMessage } from "@/lib/types";
 import { ArrowUp, Loader2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { usePortalBrand } from "@/components/brand/brand-provider";
+import { announceMessagesRead } from "@/lib/use-client-unread-messages";
 
 interface ClientMessagesChatProps {
   /** Optional project context when composing from a project page */
@@ -83,6 +84,7 @@ export function ClientMessagesChat({
       body: JSON.stringify({}),
     }).then(() => {
       setMessages((prev) => prev.map((m) => ({ ...m, is_unread: false })));
+      announceMessagesRead();
     });
   }, [loading, messages]);
 

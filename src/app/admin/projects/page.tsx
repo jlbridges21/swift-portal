@@ -156,6 +156,12 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
               canDeleteMedia: owner && staffCan(profile, "media.delete"),
               canRestore: owner,
             }}
+            calendarPermissions={{
+              canManageStaff: staffCan(profile, "projects.manage_staff"),
+              // Same rule as the Shoot Calendar's drag (PATCH /api/shoot-proposals update_date).
+              canReschedule: staffCan(profile, "scheduling.confirm"),
+              canEditDate: staffCan(profile, "projects.edit"),
+            }}
           />
         </main>
       </div>

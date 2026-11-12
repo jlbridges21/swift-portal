@@ -208,3 +208,57 @@ export const CALENDAR_EVENT_STYLES: Record<ProjectStatus, { chip: string; dot: s
   awaiting_payment: { dot: "bg-orange-500", chip: "bg-orange-50 text-orange-900 hover:bg-orange-100 surface-dark:bg-orange-500/15 surface-dark:text-orange-100", block: "border-orange-500 bg-orange-50 text-orange-950 surface-dark:bg-orange-500/20 surface-dark:text-orange-50" },
   delivered: { dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-900 hover:bg-emerald-100 surface-dark:bg-emerald-500/15 surface-dark:text-emerald-100", block: "border-emerald-500 bg-emerald-50 text-emerald-950 surface-dark:bg-emerald-500/20 surface-dark:text-emerald-50" },
 };
+
+// ── Rescheduling (wall-clock time in the business zone → instant) ──────────
+
+/** Zone offset (local − UTC) in minutes at an instant. */
+function zoneOffsetMinutes(utcMs: number, timeZone: string): number {
+  const z = zonedDayAndMinutes(new Date(utcMs), timeZone);
+  if (!z) return 0;
+  const local = keyToUtc(z.dayKey).getTime() + z.minutes * 60_000;
+  return Math.round((local - Math.floor(utcMs / 60_000) * 60_000) / 60_000);
+}
+
+/**
+ * The instant for `minutes` after midnight on `dayKey` in `timeZone`. Two passes settle the
+ * offset across DST changes; a wall time inside a spring-forward gap lands just after it.
+ */
+export function zonedTimeToIso(dayKey: string, minutes: number, timeZone: string): string {
+  const naive = keyToUtc(dayKey).getTime() + minutes * 60_000;
+  const a = naive - zoneOffsetMinutes(naive, timeZone) * 60_000;
+  const b = naive - zoneOffsetMinutes(a, timeZone) * 60_000;
+  const matches = (ts: number) => {
+    const z = zonedDayAndMinutes(new Date(ts), timeZone);
+    return z?.dayKey === dayKey && z.minutes === minutes;
+  };
+  // Fall-back hour: both match → the earlier one. Spring-forward gap: neither → the later one.
+  const ts = matches(a) && matches(b) ? Math.min(a, b) : matches(a) ? a : matches(b) ? b : Math.max(a, b);
+  return new Date(ts).toISOString();
+}
+
+export const SNAP_MINUTES = 15;
+
+export function snapMinutes(minutes: number, durationMin: number): number {
+  const snapped = Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;
+  return Math.min(Math.max(0, snapped), 24 * 60 - Math.max(SNAP_MINUTES, durationMin));
+}
+
+/** "14:30" for <input type="time">. */
+export function minutesToHHMM(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+export function hhmmToMinutes(value: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec(value);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  return h < 24 && min < 60 ? h * 60 + min : null;
+}
+
+/** "Thu, Nov 12 · 9:30 AM" (or the date alone for all-day). */
+export function describeSlot(dayKey: string, iso: string | null, timeZone: string): string {
+  const day = formatDayKey(dayKey, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  if (!iso) return `${day} (all day)`;
+  return `${day} · ${new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit" }).format(new Date(iso))}`;
+}

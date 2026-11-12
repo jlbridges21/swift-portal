@@ -83,6 +83,8 @@ export interface PipelineProjectRow {
   paid?: boolean;
   recentActivity?: string;
   confirmedShootAt?: string | null;
+  /** The confirmed shoot_proposals row behind confirmedShootAt (Projects calendar reschedule). */
+  confirmedShootId?: string | null;
 }
 
 type ClientRef = { name: string; company: string | null; deleted_at?: string | null } | null;
@@ -222,7 +224,8 @@ function enrichProjects(
   pendingSet: Set<string>,
   latestActivity: Map<string, string>,
   confirmedShootMap: Map<string, string>,
-  paidSet?: Set<string>
+  paidSet?: Set<string>,
+  confirmedShootIds?: Map<string, string>
 ): PipelineProjectRow[] {
   return rows.map((p) => ({
     id: p.id as string,
@@ -242,6 +245,7 @@ function enrichProjects(
     ...(paidSet ? { paid: paidSet.has(p.id as string) } : {}),
     recentActivity: latestActivity.get(p.id as string),
     confirmedShootAt: confirmedShootMap.get(p.id as string) ?? null,
+    confirmedShootId: confirmedShootIds?.get(p.id as string) ?? null,
   }));
 }
 
@@ -299,7 +303,7 @@ export async function buildPipelineContext(
       .limit(200),
     supabase
       .from("shoot_proposals")
-      .select("project_id, proposed_at")
+      .select("id, project_id, proposed_at")
       .eq("business_id", bid)
       .eq("status", "confirmed"),
   ]);
@@ -323,7 +327,8 @@ export async function buildPipelineContext(
     pendingSet,
     latestActivity,
     confirmedShootMap,
-    new Set(payments.filter((p) => p.status === "paid").map((p) => p.project_id as string))
+    new Set(payments.filter((p) => p.status === "paid").map((p) => p.project_id as string)),
+    new Map(confirmedShoots?.map((s) => [s.project_id, s.id]))
   );
 
   // Staff: scope to assigned projects (or all if projects.view_all).
@@ -391,7 +396,7 @@ export async function loadPipelinePageProjects(options: {
           .limit(200),
         supabase
           .from("shoot_proposals")
-          .select("project_id, proposed_at")
+          .select("id, project_id, proposed_at")
           .eq("business_id", bid)
           .eq("status", "confirmed"),
       ]);
@@ -411,7 +416,9 @@ export async function loadPipelinePageProjects(options: {
       hiddenProjects ?? [],
       pendingSet,
       latestActivity,
-      confirmedShootMap
+      confirmedShootMap,
+      undefined,
+      new Map(confirmedShoots?.map((s) => [s.project_id, s.id]))
     );
     if (profile && profile.role === "staff") {
       const visible = await visibleProjectIdsFor(bid, profile);

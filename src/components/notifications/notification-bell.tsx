@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
+import { UnreadCountBadge } from "@/components/notifications/unread-count-badge";
 import type { LucideIcon } from "lucide-react";
 
 interface NotificationItem {
@@ -210,11 +211,7 @@ export function NotificationBell() {
         aria-expanded={open}
       >
         <Bell className="h-4 w-4" />
-        {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-foreground">
-            {unreadCount > 9 ? "9+" : unreadCount}
-          </span>
-        )}
+        <UnreadCountBadge count={unreadCount} />
       </Button>
 
       {open && (
@@ -270,7 +267,7 @@ export function NotificationBell() {
                         onClick={() => handleNotificationClick(n)}
                         className={cn(
                           "flex w-full gap-3 text-left px-4 py-3 border-b border-border last:border-0 hover:bg-slate-50 surface-dark:hover:bg-subtle transition-colors min-h-11",
-                          !n.read_at && "bg-sky-50/60"
+                          !n.read_at && "bg-accent-subtle/60"
                         )}
                       >
                         <div

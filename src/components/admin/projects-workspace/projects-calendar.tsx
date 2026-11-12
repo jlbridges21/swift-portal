@@ -3,12 +3,22 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, ExternalLink, MapPin, User, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, ExternalLink, Loader2, MapPin, User, Users, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { ClientViewCalendar } from "@/components/admin/client-view/client-view-calendar";
 import { ServicePill, StagePill, type ClientViewProjectRow } from "@/components/admin/client-view/client-view-shared";
 import {
   CALENDAR_EVENT_STYLES,
   SHOOT_EVENT_MINUTES,
+  SNAP_MINUTES,
+  describeSlot,
+  hhmmToMinutes,
+  minutesToHHMM,
+  snapMinutes,
+  zonedTimeToIso,
   addDaysKey,
   addMonthsKey,
   compactTime,
@@ -43,27 +53,59 @@ function eventTitle(p: ClientViewProjectRow) {
   return p.project_name || p.property_address || "Untitled project";
 }
 
+export type CalendarStaffOption = { id: string; email: string; full_name: string | null };
+
+export type ProjectsCalendarPermissions = {
+  /** projects.manage_staff — staff picker in the event preview. */
+  canManageStaff: boolean;
+  /** scheduling.confirm — move a confirmed shoot (same rule as the Shoot Calendar). */
+  canReschedule: boolean;
+  /** projects.edit — move a date-only shoot (no confirmed time yet). */
+  canEditDate: boolean;
+};
+
+type PendingMove = { event: CalEvent; toDay: string; toIso: string | null };
+
+/** Drag + click wiring shared by the Month and Week grids. */
+type DragApi = {
+  canDrag: (e: CalEvent) => boolean;
+  /** Dropped somewhere new: asks for confirmation. Same slot → no-op. */
+  drop: (e: CalEvent, toDay: string, toMin: number) => void;
+  /** Set after a drag so the trailing click doesn't open the preview. */
+  suppressClick: { current: boolean };
+};
+
 /**
  * Projects page Calendar: Month (default) | Week | List over the projects the toolbar's
- * filters already narrowed. A view of ShootPortal projects only — it never writes to Google
- * Calendar; the dedicated Shoot Calendar page stays the place to reschedule.
+ * filters already narrowed. Shoots can be dragged to a new day (Month) or day + time
+ * (Week, 15-minute snap) and, after confirmation, are saved through the same endpoints the
+ * Shoot Calendar uses — so Google Calendar sync, activity logs and the client's reschedule
+ * notification behave exactly as they do there. Nothing is saved or sent before Confirm.
  */
 export function ProjectsCalendar({
   projects,
   heroUrls,
   timeZone,
   canOpenCalendar,
+  staff = [],
+  projectStaffIds = {},
+  permissions = { canManageStaff: false, canReschedule: false, canEditDate: false },
 }: {
   projects: ClientViewProjectRow[];
   heroUrls: Record<string, string | null> | null;
   timeZone: string;
   canOpenCalendar: boolean;
+  staff?: CalendarStaffOption[];
+  projectStaffIds?: Record<string, string[]>;
+  permissions?: ProjectsCalendarPermissions;
 }) {
+  const router = useRouter();
   const [mode, setMode] = useState<CalendarMode>("month");
   const [today, setToday] = useState(() => todayKey(timeZone));
   const [anchor, setAnchor] = useState(today);
   const [preview, setPreview] = useState<{ event: CalEvent; el: HTMLElement } | null>(null);
   const [dayPopover, setDayPopover] = useState<{ dayKey: string; el: HTMLElement } | null>(null);
+  const suppressClick = useRef(false);
 
   // Roll "today" over at midnight (business zone) for pages left open.
   useEffect(() => {
@@ -71,9 +113,97 @@ export function ProjectsCalendar({
     return () => window.clearInterval(t);
   }, [timeZone]);
 
-  const events = useMemo(() => projectCalendarEvents(projects, timeZone), [projects, timeZone]);
+  // ── Schedule moves: shown at once (optimistic), dropped on Cancel / failure / fresh data ──
+  const [moves, setMoves] = useState<Record<string, Pick<ClientViewProjectRow, "confirmedShootAt" | "shoot_date">>>({});
+  const [movesFor, setMovesFor] = useState(projects);
+  if (movesFor !== projects) {
+    setMovesFor(projects);
+    setMoves({});
+  }
+  const [pending, setPending] = useState<PendingMove | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+
+  const shown = useMemo(() => projects.map((p) => (moves[p.id] ? { ...p, ...moves[p.id] } : p)), [projects, moves]);
+  const events = useMemo(() => projectCalendarEvents(shown, timeZone), [shown, timeZone]);
   const byDay = useMemo(() => groupEventsByDay(events), [events]);
   const unscheduled = projects.length - events.length;
+
+  const canDrag = (e: CalEvent) =>
+    e.allDay ? permissions.canEditDate : permissions.canReschedule && Boolean(e.project.confirmedShootId);
+
+  function clearMove(id: string) {
+    setMoves((m) => {
+      const next = { ...m };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function requestMove(event: CalEvent, toDay: string, toMin: number) {
+    if (savingRef.current || pending) return;
+    const toIso = event.allDay ? null : zonedTimeToIso(toDay, toMin, timeZone);
+    if (event.allDay ? toDay === event.dayKey : toIso === event.startIso) return;
+    setPreview(null);
+    setDayPopover(null);
+    setMoves((m) => ({
+      ...m,
+      [event.project.id]: event.allDay ? { shoot_date: toDay, confirmedShootAt: null } : { confirmedShootAt: toIso, shoot_date: toDay },
+    }));
+    setPending({ event, toDay, toIso });
+  }
+
+  function cancelMove() {
+    if (savingRef.current || !pending) return;
+    clearMove(pending.event.project.id);
+    setPending(null);
+  }
+
+  async function confirmMove() {
+    if (savingRef.current || !pending) return;
+    savingRef.current = true;
+    setSaving(true);
+    const { event, toDay, toIso } = pending;
+    try {
+      const res = event.allDay
+        ? await fetch("/api/projects", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ id: event.project.id, shoot_date: toDay }),
+          })
+        : await fetch("/api/shoot-proposals", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ id: event.project.confirmedShootId, action: "update_date", proposed_at: toIso }),
+          });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(
+          res.status === 403 || res.status === 401
+            ? "You don’t have permission to reschedule this shoot."
+            : res.status === 404
+              ? "This shoot was changed or removed. Refresh and try again."
+              : body.error || "Couldn’t reschedule the shoot."
+        );
+      }
+      toast.success(`${eventTitle(event.project)} moved to ${describeSlot(toDay, toIso, timeZone)}`);
+      router.refresh();
+    } catch (err) {
+      clearMove(event.project.id);
+      toast.error(err instanceof Error ? err.message : "Couldn’t reschedule the shoot.");
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+      setPending(null);
+    }
+  }
+
+  const dragApi: DragApi = { canDrag, drop: requestMove, suppressClick };
+
+  // ── Staff assignment (auto-saves when the picker closes; survives the popover closing) ──
+  const staffSaver = useStaffSaver(projectStaffIds, staff);
 
   const step = (dir: 1 | -1) => setAnchor((a) => (mode === "week" ? addDaysKey(a, dir * 7) : addMonthsKey(a, dir)));
   const week = weekKeys(anchor);
@@ -85,11 +215,17 @@ export function ProjectsCalendar({
         : "Upcoming shoots";
 
   const openEvent = (event: CalEvent, el: HTMLElement) => {
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return;
+    }
     // From the "+ N more" list the chip unmounts with it, so anchor to its "+ N more" button.
     const anchorEl = dayPopover && el.closest('[role="dialog"]') ? dayPopover.el : el;
     setDayPopover(null);
     setPreview({ event, el: anchorEl });
   };
+  // Keep the open preview in step with optimistic moves / fresh data.
+  const previewEvent = preview ? events.find((e) => e.project.id === preview.event.project.id) ?? preview.event : null;
 
   return (
     <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-sm" aria-label="Project calendar">
@@ -154,6 +290,7 @@ export function ProjectsCalendar({
           today={today}
           byDay={byDay}
           timeZone={timeZone}
+          drag={dragApi}
           onOpenEvent={openEvent}
           onMore={(dayKey, el) => {
             setPreview(null);
@@ -165,10 +302,10 @@ export function ProjectsCalendar({
           }}
         />
       ) : mode === "week" ? (
-        <WeekGrid days={week} today={today} byDay={byDay} timeZone={timeZone} onOpenEvent={openEvent} />
+        <WeekGrid days={week} today={today} byDay={byDay} timeZone={timeZone} drag={dragApi} onOpenEvent={openEvent} />
       ) : (
         <div className="p-4 sm:p-5">
-          <ClientViewCalendar projects={projects} heroUrls={heroUrls} showClientName canOpenCalendar={canOpenCalendar} />
+          <ClientViewCalendar projects={shown} heroUrls={heroUrls} showClientName canOpenCalendar={canOpenCalendar} />
         </div>
       )}
 
@@ -186,13 +323,133 @@ export function ProjectsCalendar({
         </Popover>
       ) : null}
 
-      {preview ? (
-        <Popover anchor={preview.el} onClose={() => setPreview(null)} label={eventTitle(preview.event.project)}>
-          <EventPreview event={preview.event} timeZone={timeZone} />
+      {preview && previewEvent ? (
+        <Popover anchor={preview.el} onClose={() => setPreview(null)} label={eventTitle(previewEvent.project)}>
+          <EventPreview
+            event={previewEvent}
+            timeZone={timeZone}
+            staff={staff}
+            staffSaver={staffSaver}
+            canManageStaff={permissions.canManageStaff}
+            canMove={canDrag(previewEvent)}
+            onReschedule={(toDay, toMin) => requestMove(previewEvent, toDay, toMin)}
+          />
         </Popover>
       ) : null}
+
+      <Modal
+        open={!!pending}
+        onClose={cancelMove}
+        title="Reschedule Shoot?"
+        footer={
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" className="min-h-11 sm:min-h-10" disabled={saving} onClick={cancelMove}>
+              Cancel
+            </Button>
+            <Button variant="accent" className="min-h-11 sm:min-h-10" disabled={saving} onClick={() => void confirmMove()}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+              {saving ? "Rescheduling…" : "Confirm Reschedule"}
+            </Button>
+          </div>
+        }
+      >
+        {pending ? (
+          <div className="space-y-3 text-sm text-muted">
+            <p>
+              Move <strong className="text-heading">{eventTitle(pending.event.project)}</strong> from{" "}
+              <strong className="text-heading">{describeSlot(pending.event.dayKey, pending.event.startIso, timeZone)}</strong> to{" "}
+              <strong className="text-heading">{describeSlot(pending.toDay, pending.toIso, timeZone)}</strong>?
+            </p>
+            <p className="text-xs">
+              {pending.event.allDay
+                ? "Only the shoot date changes. No time has been confirmed yet."
+                : "Google Calendar and the client’s reschedule notification update the same way as on the Shoot Calendar (per your Scheduling settings)."}
+            </p>
+          </div>
+        ) : null}
+      </Modal>
     </section>
   );
+}
+
+// ── Staff assignment saver ───────────────────────────────────────────────────
+
+type StaffSaveState = "saving" | "saved" | "error";
+type StaffSaver = {
+  assigned: (projectId: string) => string[];
+  state: (projectId: string) => StaffSaveState | undefined;
+  commit: (projectId: string, next: string[]) => void;
+};
+
+/**
+ * Applies a picker's final selection as adds/removes through /api/project-staff (the same
+ * endpoint as the project page). Lives above the popover so a save in flight finishes even
+ * if the popover closes; failures roll that project back and say so.
+ */
+function useStaffSaver(projectStaffIds: Record<string, string[]>, staff: CalendarStaffOption[]): StaffSaver {
+  const router = useRouter();
+  const [local, setLocal] = useState<Record<string, string[]>>({});
+  const [states, setStates] = useState<Record<string, StaffSaveState>>({});
+  const [localFor, setLocalFor] = useState(projectStaffIds);
+  if (localFor !== projectStaffIds) {
+    setLocalFor(projectStaffIds);
+    setLocal({});
+  }
+  const inFlight = useRef<Record<string, Promise<void>>>({});
+  // Read the latest selection after awaiting an earlier save (not the closure's copy).
+  const latest = useRef({ local, projectStaffIds });
+  useLayoutEffect(() => {
+    latest.current = { local, projectStaffIds };
+  });
+  const assigned = (id: string) => local[id] ?? projectStaffIds[id] ?? [];
+
+  function commit(projectId: string, next: string[]) {
+    const run = async () => {
+      // Wait for an earlier save on this project so requests never interleave.
+      await inFlight.current[projectId];
+      const before = latest.current.local[projectId] ?? latest.current.projectStaffIds[projectId] ?? [];
+      const valid = new Set(staff.map((s) => s.id));
+      const target = [...new Set(next)].filter((id) => valid.has(id) || before.includes(id));
+      const adds = target.filter((id) => !before.includes(id));
+      const removes = before.filter((id) => !target.includes(id));
+      if (!adds.length && !removes.length) return;
+      setLocal((l) => ({ ...l, [projectId]: target }));
+      setStates((s) => ({ ...s, [projectId]: "saving" }));
+      const results = await Promise.all([
+        ...adds.map((user_id) =>
+          fetch("/api/project-staff", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ project_id: projectId, user_id }),
+          }).then((r) => (r.ok ? null : user_id), () => user_id)
+        ),
+        ...removes.map((user_id) =>
+          fetch(`/api/project-staff?project_id=${encodeURIComponent(projectId)}&user_id=${encodeURIComponent(user_id)}`, {
+            method: "DELETE",
+            credentials: "include",
+          }).then((r) => (r.ok ? null : user_id), () => user_id)
+        ),
+      ]);
+      const failed = new Set(results.filter((x): x is string => !!x));
+      if (failed.size) {
+        // Roll back only what failed: a failed add isn't assigned, a failed remove still is.
+        setLocal((l) => ({
+          ...l,
+          [projectId]: [...target.filter((id) => !(failed.has(id) && adds.includes(id))), ...removes.filter((id) => failed.has(id))],
+        }));
+        setStates((s) => ({ ...s, [projectId]: "error" }));
+        toast.error(`Couldn’t update ${failed.size === 1 ? "one staff assignment" : `${failed.size} staff assignments`}. Please try again.`);
+      } else {
+        setStates((s) => ({ ...s, [projectId]: "saved" }));
+      }
+      if (failed.size < adds.length + removes.length) router.refresh();
+    };
+    const p = run();
+    inFlight.current[projectId] = p.catch(() => undefined);
+  }
+
+  return { assigned, state: (id) => states[id], commit };
 }
 
 function weekTitle(start: string, end: string) {
@@ -217,24 +474,134 @@ function IconButton({ label, onClick, children }: { label: string; onClick: () =
   );
 }
 
+// ── Pointer drag (mouse / pen only: touch keeps native scrolling; phones use the preview's Reschedule) ──
+
+type DragSession = { event: CalEvent; x0: number; y0: number; active: boolean; el: HTMLElement; pointerId: number; grabMin: number };
+type DragHandlers = {
+  onStart?: (s: DragSession) => void;
+  onMove: (s: DragSession, x: number, y: number) => void;
+  onEnd: (s: DragSession) => void;
+  onCancel: () => void;
+};
+
+/** Click vs drag: nothing moves until the pointer travels 5px; Escape cancels mid-drag. */
+function useEventDrag(api: DragApi, handlers: DragHandlers) {
+  const session = useRef<DragSession | null>(null);
+  const h = useRef(handlers);
+  useLayoutEffect(() => {
+    h.current = handlers;
+  });
+  const [dragging, setDragging] = useState<CalEvent | null>(null);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      const s = session.current;
+      session.current = null;
+      api.suppressClick.current = true;
+      try {
+        s?.el.releasePointerCapture(s.pointerId);
+      } catch {
+        /* already released */
+      }
+      setDragging(null);
+      h.current.onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [dragging, api.suppressClick]);
+
+  function bind(event: CalEvent) {
+    if (!api.canDrag(event)) return {};
+    return {
+      onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+        if (e.button !== 0 || e.pointerType === "touch") return;
+        e.preventDefault(); // no text selection while dragging
+        api.suppressClick.current = false;
+        session.current = { event, x0: e.clientX, y0: e.clientY, active: false, el: e.currentTarget, pointerId: e.pointerId, grabMin: 0 };
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          /* unsupported */
+        }
+      },
+      onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+        const s = session.current;
+        if (!s || s.pointerId !== e.pointerId) return;
+        if (!s.active) {
+          if (Math.hypot(e.clientX - s.x0, e.clientY - s.y0) < 5) return;
+          s.active = true;
+          h.current.onStart?.(s);
+          setDragging(s.event);
+        }
+        h.current.onMove(s, e.clientX, e.clientY);
+      },
+      onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
+        const s = session.current;
+        if (!s || s.pointerId !== e.pointerId) return;
+        session.current = null;
+        if (!s.active) return; // a plain click
+        api.suppressClick.current = true;
+        window.setTimeout(() => (api.suppressClick.current = false), 0);
+        setDragging(null);
+        h.current.onEnd(s);
+      },
+      onPointerCancel: () => {
+        session.current = null;
+        setDragging(null);
+        h.current.onCancel();
+      },
+      "aria-roledescription": "draggable shoot",
+    };
+  }
+
+  return { bind, dragging };
+}
+
 // ── Month ───────────────────────────────────────────────────────────────────
 
-function EventChip({ event, timeZone, onOpen, dense = false }: { event: CalEvent; timeZone: string; onOpen: (e: CalEvent, el: HTMLElement) => void; dense?: boolean }) {
+function EventChip({
+  event,
+  timeZone,
+  onOpen,
+  dense = false,
+  dragProps,
+  dimmed = false,
+}: {
+  event: CalEvent;
+  timeZone: string;
+  onOpen: (e: CalEvent, el: HTMLElement) => void;
+  dense?: boolean;
+  dragProps?: ReturnType<ReturnType<typeof useEventDrag>["bind"]>;
+  dimmed?: boolean;
+}) {
   const style = CALENDAR_EVENT_STYLES[event.project.status];
   const time = event.startIso ? compactTime(event.startIso, timeZone) : null;
   const name = eventTitle(event.project);
+  const draggable = Boolean(dragProps && "onPointerDown" in dragProps);
   return (
     <button
       type="button"
+      {...dragProps}
       onClick={(e) => {
         e.stopPropagation();
         onOpen(event, e.currentTarget);
       }}
-      title={[time, name].filter(Boolean).join(" · ")}
+      title={[time, name].filter(Boolean).join(" · ") + (draggable ? " — drag to reschedule" : "")}
       className={cn(
         "flex w-full min-w-0 items-center gap-1 rounded-md text-left font-medium leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
         dense ? "h-5 px-1 text-[11px] sm:px-1.5 sm:text-xs" : "h-7 px-2 text-xs",
-        event.allDay ? style.chip : "text-foreground hover:bg-subtle"
+        event.allDay ? style.chip : "text-foreground hover:bg-subtle",
+        draggable && "cursor-grab active:cursor-grabbing",
+        dimmed && "opacity-40"
       )}
     >
       {!event.allDay ? <span className={cn("h-2 w-2 shrink-0 rounded-full", style.dot)} aria-hidden /> : null}
@@ -249,6 +616,7 @@ function MonthGrid({
   today,
   byDay,
   timeZone,
+  drag,
   onOpenEvent,
   onMore,
   onOpenDay,
@@ -257,6 +625,7 @@ function MonthGrid({
   today: string;
   byDay: Map<string, CalEvent[]>;
   timeZone: string;
+  drag: DragApi;
   onOpenEvent: (e: CalEvent, el: HTMLElement) => void;
   onMore: (dayKey: string, el: HTMLElement) => void;
   onOpenDay: (dayKey: string) => void;
@@ -264,6 +633,29 @@ function MonthGrid({
   const weeks = monthGridKeys(anchor);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [rowHeight, setRowHeight] = useState(110);
+  const [over, setOver] = useState<{ day: string | null; x: number; y: number } | null>(null);
+  const overDay = useRef<string | null>(null);
+
+  const { bind, dragging } = useEventDrag(drag, {
+    onMove: (_s, x, y) => {
+      // Only real day cells are drop targets; anywhere else drops nothing.
+      const cell = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-month-day]");
+      const day = cell && bodyRef.current?.contains(cell) ? cell.dataset.monthDay ?? null : null;
+      overDay.current = day;
+      setOver({ day, x, y });
+    },
+    onEnd: (s) => {
+      const day = overDay.current;
+      overDay.current = null;
+      setOver(null);
+      // Same day → nothing to save. The time and duration stay as they are.
+      if (day && day !== s.event.dayKey) drag.drop(s.event, day, s.event.startMin);
+    },
+    onCancel: () => {
+      overDay.current = null;
+      setOver(null);
+    },
+  });
 
   useLayoutEffect(() => {
     const el = bodyRef.current;
@@ -298,12 +690,15 @@ function MonthGrid({
               const overflow = list.length > fit;
               const visible = overflow ? list.slice(0, Math.max(0, fit - 1)) : list;
               const day = Number(key.slice(8));
+              const isTarget = dragging && over?.day === key;
               return (
                 <div
                   key={key}
+                  data-month-day={key}
                   className={cn(
-                    "flex min-h-0 min-w-0 flex-col gap-px overflow-hidden border-l border-border px-0.5 pb-1 first:border-l-0 sm:px-1",
-                    !inMonth && "bg-subtle/40"
+                    "flex min-h-0 min-w-0 flex-col gap-px overflow-hidden border-l border-border px-0.5 pb-1 transition-colors first:border-l-0 sm:px-1",
+                    !inMonth && "bg-subtle/40",
+                    isTarget && (key === dragging.dayKey ? "bg-subtle" : "bg-accent/10 ring-2 ring-inset ring-accent")
                   )}
                 >
                   <button
@@ -319,7 +714,15 @@ function MonthGrid({
                     {day === 1 && !isToday ? formatDayKey(key, { month: "short", day: "numeric" }) : day}
                   </button>
                   {visible.map((e) => (
-                    <EventChip key={e.project.id} event={e} timeZone={timeZone} onOpen={onOpenEvent} dense />
+                    <EventChip
+                      key={e.project.id}
+                      event={e}
+                      timeZone={timeZone}
+                      onOpen={onOpenEvent}
+                      dense
+                      dragProps={bind(e)}
+                      dimmed={dragging?.project.id === e.project.id}
+                    />
                   ))}
                   {overflow ? (
                     <button
@@ -337,6 +740,19 @@ function MonthGrid({
           </div>
         ))}
       </div>
+
+      {dragging && over ? (
+        <div
+          className="pointer-events-none fixed z-[90] max-w-56 rounded-lg border border-accent/40 bg-card px-2.5 py-1.5 text-xs shadow-lg"
+          style={{ left: over.x + 12, top: over.y + 12 }}
+          aria-hidden
+        >
+          <p className="truncate font-semibold text-heading">{eventTitle(dragging.project)}</p>
+          <p className="text-muted">
+            {over.day && over.day !== dragging.dayKey ? describeSlot(over.day, dragging.allDay ? null : zonedTimeToIso(over.day, dragging.startMin, timeZone), timeZone) : "Drop on another day"}
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -348,16 +764,61 @@ function WeekGrid({
   today,
   byDay,
   timeZone,
+  drag,
   onOpenEvent,
 }: {
   days: string[];
   today: string;
   byDay: Map<string, CalEvent[]>;
   timeZone: string;
+  drag: DragApi;
   onOpenEvent: (e: CalEvent, el: HTMLElement) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const colRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [nowMin, setNowMin] = useState<number | null>(null);
+  const [ghost, setGhost] = useState<{ dayKey: string; startMin: number } | null>(null);
+  const ghostRef = useRef<{ dayKey: string; startMin: number } | null>(null);
+
+  /** Day column + minutes under the pointer (null outside the seven day columns). */
+  const slotAt = (x: number, y: number) => {
+    const cols = colRefs.current;
+    for (let i = 0; i < cols.length; i++) {
+      const r = cols[i]?.getBoundingClientRect();
+      if (r && x >= r.left && x < r.right) return { dayKey: days[i], minutes: ((y - r.top) / HOUR_PX) * 60 };
+    }
+    return null;
+  };
+
+  const { bind, dragging } = useEventDrag(drag, {
+    onStart: (s) => {
+      // Keep the grab point under the cursor: grabbing the bottom of a block doesn't jump it.
+      const at = slotAt(s.x0, s.y0);
+      s.grabMin = at ? at.minutes - s.event.startMin : 0;
+    },
+    onMove: (s, x, y) => {
+      const sc = scrollRef.current;
+      if (sc) {
+        const r = sc.getBoundingClientRect();
+        if (y < r.top + 96) sc.scrollTop -= 12;
+        else if (y > r.bottom - 32) sc.scrollTop += 12;
+      }
+      const at = slotAt(x, y);
+      const next = at ? { dayKey: at.dayKey, startMin: snapMinutes(at.minutes - s.grabMin, s.event.endMin - s.event.startMin) } : null;
+      ghostRef.current = next;
+      setGhost(next);
+    },
+    onEnd: (s) => {
+      const g = ghostRef.current;
+      ghostRef.current = null;
+      setGhost(null);
+      if (g) drag.drop(s.event, g.dayKey, g.startMin);
+    },
+    onCancel: () => {
+      ghostRef.current = null;
+      setGhost(null);
+    },
+  });
 
   useEffect(() => {
     const tick = () => setNowMin(zonedDayAndMinutes(new Date(), timeZone)?.minutes ?? null);
@@ -445,7 +906,13 @@ function WeekGrid({
             ))}
           </div>
           {days.map((d, i) => (
-            <div key={d} className={cn("relative border-l border-border", d === today && "bg-accent-subtle/25")}>
+            <div
+              key={d}
+              ref={(el) => {
+                colRefs.current[i] = el;
+              }}
+              className={cn("relative border-l border-border", d === today && "bg-accent-subtle/25")}
+            >
               {Array.from({ length: 24 }, (_, h) => (
                 <div key={h} className="border-b border-border/60" style={{ height: HOUR_PX }} aria-hidden />
               ))}
@@ -459,10 +926,13 @@ function WeekGrid({
                   <button
                     key={event.project.id}
                     type="button"
+                    {...bind(event)}
                     onClick={(e) => onOpenEvent(event, e.currentTarget)}
                     className={cn(
                       "absolute z-[1] overflow-hidden rounded-md border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight shadow-sm ring-1 ring-card transition-[filter] hover:z-[2] hover:brightness-95 focus-visible:z-[2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                      style.block
+                      style.block,
+                      drag.canDrag(event) && "cursor-grab active:cursor-grabbing",
+                      dragging?.project.id === event.project.id && "opacity-40"
                     )}
                     style={{ top: top + 1, height, left: `calc(${column * width}% + 2px)`, width: `calc(${width}% - 4px)` }}
                     title={`${eventTitle(event.project)} · ${event.startIso ? formatTimeRange(event.startIso, SHOOT_EVENT_MINUTES, timeZone) : ""}`}
@@ -477,6 +947,18 @@ function WeekGrid({
                   </button>
                 );
               })}
+              {dragging && ghost?.dayKey === d ? (
+                <div
+                  className="pointer-events-none absolute inset-x-0.5 z-[4] overflow-hidden rounded-md border-2 border-accent bg-card/95 px-1.5 py-0.5 text-[11px] leading-tight shadow-lg"
+                  style={{ top: (ghost.startMin / 60) * HOUR_PX + 1, height: Math.max(22, ((dragging.endMin - dragging.startMin) / 60) * HOUR_PX - 2) }}
+                  aria-hidden
+                >
+                  <span className="block truncate font-semibold text-heading">{eventTitle(dragging.project)}</span>
+                  <span className="block truncate font-medium text-accent">
+                    {formatTimeRange(zonedTimeToIso(d, ghost.startMin, timeZone), dragging.endMin - dragging.startMin, timeZone)}
+                  </span>
+                </div>
+              ) : null}
               {d === today && nowMin !== null ? (
                 <div className="pointer-events-none absolute inset-x-0 z-[3] flex items-center" style={{ top: (nowMin / 60) * HOUR_PX }} aria-hidden>
                   <span className="-ml-1.5 h-3 w-3 rounded-full bg-red-500" />
@@ -497,9 +979,26 @@ function hourLabel(h: number) {
 
 // ── Popover + event preview ─────────────────────────────────────────────────
 
-function EventPreview({ event, timeZone }: { event: CalEvent; timeZone: string }) {
+function EventPreview({
+  event,
+  timeZone,
+  staff,
+  staffSaver,
+  canManageStaff,
+  canMove,
+  onReschedule,
+}: {
+  event: CalEvent;
+  timeZone: string;
+  staff: CalendarStaffOption[];
+  staffSaver: StaffSaver;
+  canManageStaff: boolean;
+  canMove: boolean;
+  onReschedule: (toDay: string, toMin: number) => void;
+}) {
   const p = event.project;
   const style = CALENDAR_EVENT_STYLES[p.status];
+  const [moving, setMoving] = useState(false);
   return (
     <div className="space-y-3">
       <div className="flex items-start gap-2.5 pr-7">
@@ -511,8 +1010,14 @@ function EventPreview({ event, timeZone }: { event: CalEvent; timeZone: string }
             {formatDayKey(event.dayKey, { weekday: "long", month: "long", day: "numeric" })}
             {event.startIso ? ` · ${formatTimeRange(event.startIso, SHOOT_EVENT_MINUTES, timeZone)}` : " · Time not confirmed"}
           </p>
+          {canMove && !moving ? (
+            <button type="button" onClick={() => setMoving(true)} className="mt-0.5 text-xs font-semibold text-accent hover:underline">
+              Reschedule
+            </button>
+          ) : null}
         </div>
       </div>
+      {moving ? <RescheduleForm event={event} onCancel={() => setMoving(false)} onSubmit={onReschedule} /> : null}
       <div className="space-y-1.5 text-sm">
         {p.property_address && p.property_address !== p.project_name ? (
           <p className="flex items-start gap-2 text-foreground">
@@ -526,6 +1031,7 @@ function EventPreview({ event, timeZone }: { event: CalEvent; timeZone: string }
             <span className="truncate">{p.clients.name}</span>
           </p>
         ) : null}
+        <StaffPicker projectId={p.id} staff={staff} saver={staffSaver} canManage={canManageStaff} />
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           <StagePill status={p.status} />
           <ServicePill service={p.service_type} />
@@ -537,6 +1043,177 @@ function EventPreview({ event, timeZone }: { event: CalEvent; timeZone: string }
       >
         <ExternalLink className="h-4 w-4" aria-hidden /> Open Project
       </Link>
+    </div>
+  );
+}
+
+/** Keyboard / touch alternative to dragging: pick a date (and time for confirmed shoots). */
+function RescheduleForm({ event, onCancel, onSubmit }: { event: CalEvent; onCancel: () => void; onSubmit: (toDay: string, toMin: number) => void }) {
+  const [day, setDay] = useState(event.dayKey);
+  const [time, setTime] = useState(minutesToHHMM(event.startMin));
+  const minutes = event.allDay ? 0 : hhmmToMinutes(time);
+  const valid = /^\d{4}-\d{2}-\d{2}$/.test(day) && minutes !== null;
+  return (
+    <form
+      className="space-y-2 rounded-xl border border-border bg-subtle/60 p-2.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (valid) onSubmit(day, minutes!);
+      }}
+    >
+      <div className="flex gap-2">
+        <label className="min-w-0 flex-1 text-xs font-medium text-muted">
+          Date
+          <input
+            type="date"
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+            className="mt-0.5 h-9 w-full rounded-lg border border-border bg-card px-2 text-sm text-foreground"
+            required
+          />
+        </label>
+        {!event.allDay ? (
+          <label className="w-28 shrink-0 text-xs font-medium text-muted">
+            Time
+            <input
+              type="time"
+              step={SNAP_MINUTES * 60}
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              className="mt-0.5 h-9 w-full rounded-lg border border-border bg-card px-2 text-sm text-foreground"
+              required
+            />
+          </label>
+        ) : null}
+      </div>
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={onCancel} className="h-8 rounded-lg px-3 text-sm font-medium text-muted hover:bg-card hover:text-heading">
+          Cancel
+        </button>
+        <button type="submit" disabled={!valid} className="h-8 rounded-lg bg-accent px-3 text-sm font-semibold text-accent-foreground disabled:opacity-50">
+          Move…
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Multi-select staff for one project. Changes stay local while the list is open and save
+ * when it closes (click outside the list, Escape, or the popover closing).
+ */
+function StaffPicker({ projectId, staff, saver, canManage }: { projectId: string; staff: CalendarStaffOption[]; saver: StaffSaver; canManage: boolean }) {
+  const current = saver.assigned(projectId);
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string[] | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const draftRef = useRef<string[] | null>(null);
+  const saverRef = useRef(saver);
+  useLayoutEffect(() => {
+    draftRef.current = draft;
+    saverRef.current = saver;
+  });
+
+  const nameOf = (id: string) => {
+    const s = staff.find((m) => m.id === id);
+    return s ? s.full_name || s.email : "Staff member";
+  };
+  const close = () => {
+    const d = draftRef.current;
+    draftRef.current = null; // the unmount save below must not repeat this one
+    setOpen(false);
+    setDraft(null);
+    if (d) saverRef.current.commit(projectId, d);
+  };
+
+  // Click outside the list (but inside the popover) closes + saves.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!boxRef.current?.contains(e.target as Node)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        close();
+      }
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // The popover closing (unmount) with the list open still saves.
+  useEffect(
+    () => () => {
+      const d = draftRef.current;
+      if (d) saverRef.current.commit(projectId, d);
+    },
+    [projectId]
+  );
+
+  const selected = draft ?? current;
+  const state = saver.state(projectId);
+  const summary = current.length ? current.map(nameOf).join(", ") : "Unassigned";
+
+  return (
+    <div ref={boxRef} className="relative">
+      <div className="flex items-center gap-2">
+        <Users className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+        {canManage && staff.length ? (
+          <button
+            type="button"
+            onClick={() => (open ? close() : (setDraft(current), setOpen(true)))}
+            aria-expanded={open}
+            aria-haspopup="listbox"
+            className="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-card px-2 text-left text-sm hover:bg-subtle"
+          >
+            <span className={cn("min-w-0 flex-1 truncate", current.length ? "text-foreground" : "text-muted")}>
+              {open ? `${selected.length} selected` : summary}
+            </span>
+            <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted transition-transform", open && "rotate-180")} aria-hidden />
+          </button>
+        ) : (
+          <span className={cn("min-w-0 flex-1 truncate", current.length ? "text-foreground" : "text-muted")}>{summary}</span>
+        )}
+        <span className="flex w-4 shrink-0 justify-center" aria-live="polite">
+          {state === "saving" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted" aria-label="Saving staff" />
+          ) : state === "saved" ? (
+            <Check className="h-3.5 w-3.5 text-emerald-600" aria-label="Staff saved" />
+          ) : null}
+        </span>
+      </div>
+      {open ? (
+        <ul role="listbox" aria-multiselectable="true" aria-label="Assigned staff" className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-sm">
+          {staff.map((m) => {
+            const on = selected.includes(m.id);
+            return (
+              <li key={m.id}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={on}
+                  onClick={() => setDraft((d) => {
+                    const base = d ?? current;
+                    return on ? base.filter((id) => id !== m.id) : [...base, m.id];
+                  })}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-subtle"
+                >
+                  <span className={cn("flex h-4 w-4 shrink-0 items-center justify-center rounded border-2", on ? "border-accent bg-accent text-accent-foreground" : "border-slate-300 surface-dark:border-border")}>
+                    {on ? <Check className="h-3 w-3" strokeWidth={3} aria-hidden /> : null}
+                  </span>
+                  <span className="min-w-0 truncate">{m.full_name || m.email}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }

@@ -393,6 +393,40 @@ export async function buildClientCrmTimeline(
   );
 }
 
+/**
+ * Unread count for a client portal user: studio messages in their client thread (which covers
+ * every project) that this user has no `client_message_reads` row for. Same tables and read
+ * rule as `getClientMessages().is_unread`; messages sent from the client side never count.
+ */
+export async function countClientUnreadMessages(
+  businessId: string,
+  clientId: string,
+  viewerUserId: string
+): Promise<number> {
+  const db = await createTenantServiceClient(businessId);
+  const { data: messages } = await db
+    .from("client_messages")
+    .select("id, sender_user_id")
+    .eq("client_id", clientId)
+    .neq("sender_role", "client")
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  const candidates = (messages ?? []).filter((m) => m.sender_user_id !== viewerUserId);
+  if (!candidates.length) return 0;
+
+  const { data: reads } = await db
+    .from("client_message_reads")
+    .select("message_id")
+    .eq("user_id", viewerUserId)
+    .in(
+      "message_id",
+      candidates.map((m) => m.id)
+    );
+  const readSet = new Set((reads ?? []).map((r) => r.message_id));
+  return candidates.filter((m) => !readSet.has(m.id)).length;
+}
+
 export async function countAdminUnreadMessages(
   businessId: string,
   adminUserId: string
