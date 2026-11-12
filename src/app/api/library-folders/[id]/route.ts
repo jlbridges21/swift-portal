@@ -5,7 +5,14 @@ import {
   renameLibraryFolder,
   setLibraryFolderCover,
 } from "@/lib/library-folders";
-import { NO_STORE, badFolderId, canManageWholeFolder, folderErrorResponse, requireLibraryFolderAccess } from "@/lib/library-folder-api";
+import {
+  NO_STORE,
+  authorizedItemRefs,
+  badFolderId,
+  canManageWholeFolder,
+  folderErrorResponse,
+  requireLibraryFolderAccess,
+} from "@/lib/library-folder-api";
 import { isUuid, normalizeLibraryFolderName } from "@/lib/library-folder-types";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +53,12 @@ export async function PATCH(request: Request, { params }: Ctx) {
     }
     if (body.coverAssetId !== undefined) {
       if (body.coverAssetId !== null && !isUuid(body.coverAssetId)) {
-        return NextResponse.json({ error: "Choose a photo for the cover." }, { status: 400 });
+        return NextResponse.json({ error: "Choose a photo or a video for the cover." }, { status: 400 });
+      }
+      // The cover may come from anywhere in the library: the user must be able to see it.
+      if (body.coverAssetId !== null) {
+        const { refs } = await authorizedItemRefs(auth.businessId, auth.profile, [`photo:${body.coverAssetId}`]);
+        if (!refs.length) return NextResponse.json({ error: "That photo or video isn't available." }, { status: 404 });
       }
       await setLibraryFolderCover(auth.businessId, id, body.coverAssetId);
     }

@@ -18,8 +18,13 @@ export type LibraryFolderSummary = {
   id: string;
   name: string;
   itemCount: number;
-  /** Photo shown on the card: the manual cover, else the newest photo added. */
+  /**
+   * Image shown on the card: the manual cover (a photo, or a video's stored poster), else the
+   * automatic one. Rendered through the normal thumbnail endpoint, so no new files are made.
+   */
   coverAssetId: string | null;
+  /** Automatic cover (newest photo added, else newest video with a poster): the fallback when the manual cover can't load. */
+  autoCoverAssetId: string | null;
   coverMode: "auto" | "manual";
   createdAt: string;
   updatedAt: string;

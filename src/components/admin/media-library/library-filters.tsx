@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Filter, Search, SlidersHorizontal, X } from "lucide-react";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
-import { CheckboxDropdown, type CheckboxOption } from "@/components/ui/checkbox-dropdown";
+import { CheckboxDropdown, useDismiss, type CheckboxOption } from "@/components/ui/checkbox-dropdown";
 import {
   ALL_TIME,
   DateRangeFilter,
@@ -59,7 +59,7 @@ export function activeFilterChips(
 }
 
 /** Search box used on every breakpoint. */
-export function LibrarySearch({ value, onChange, placeholder, className }: { value: string; onChange: (v: string) => void; placeholder: string; className?: string }) {
+export function LibrarySearch({ value, onChange, placeholder, className, compact = false }: { value: string; onChange: (v: string) => void; placeholder: string; className?: string; compact?: boolean }) {
   return (
     <label className={cn("relative block min-w-0", className)}>
       <span className="sr-only">{placeholder}</span>
@@ -69,7 +69,10 @@ export function LibrarySearch({ value, onChange, placeholder, className }: { val
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="h-11 w-full rounded-xl border border-border bg-card pl-10 pr-9 text-sm text-heading shadow-sm placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+        className={cn(
+          "w-full rounded-xl border border-border bg-card pl-10 pr-9 text-sm text-heading placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20",
+          compact ? "h-10 rounded-lg" : "h-11 shadow-sm"
+        )}
       />
       {value ? (
         <button
@@ -184,6 +187,131 @@ export function DesktopFilterBar({
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Toolbar "Filters" button. Desktop (lg+): opens a popover with the five filters, applied live.
+ * Phones/tablets: hands off to the bottom sheet (`onOpenSheet`). Badge = number of active filters.
+ */
+export function FiltersPopoverButton({
+  filters,
+  onChange,
+  sets,
+  onOpenSheet,
+  resultsLabel,
+}: {
+  filters: LibraryFilterState;
+  onChange: (next: LibraryFilterState) => void;
+  sets: FilterOptionSets;
+  onOpenSheet: () => void;
+  resultsLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useDismiss(open, ref, () => setOpen(false));
+  const active = activeFilterChips(filters, sets, onChange).length;
+
+  function toggle() {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+      onOpenSheet();
+      return;
+    }
+    setOpen((o) => !o);
+  }
+
+  const field = (label: string, control: React.ReactNode) => (
+    <div className="min-w-0 space-y-1.5">
+      <p className="text-xs font-medium text-muted">{label}</p>
+      {control}
+    </div>
+  );
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        className={cn(
+          "inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors",
+          open || active ? "border-accent/30 bg-accent-subtle text-accent" : "border-border bg-card text-heading hover:bg-subtle"
+        )}
+      >
+        <Filter className="h-4 w-4" aria-hidden />
+        Filters
+        {active ? (
+          <span className="min-w-5 rounded-full bg-accent px-1.5 text-center text-[11px] leading-5 text-accent-foreground" aria-label={`${active} active`}>
+            {active}
+          </span>
+        ) : null}
+        <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} aria-hidden />
+      </button>
+      {open ? (
+        <div
+          role="dialog"
+          aria-label="Filter media"
+          className="absolute left-0 top-full z-40 mt-2 w-[min(46rem,calc(100vw-2rem))] rounded-2xl border border-border bg-card p-4 shadow-xl"
+        >
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-heading">Filter media</h3>
+            <p className="text-xs text-muted">Media must match every filter you set.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {field("Media type", <CheckboxDropdown label="Media Type" options={TYPE_OPTIONS} selected={filters.types} onChange={(types) => onChange({ ...filters, types })} searchable={false} />)}
+            {field("Services", <CheckboxDropdown label="Services" options={sets.services} selected={filters.services} onChange={(services) => onChange({ ...filters, services })} emptyText="No services yet" />)}
+            {field("Clients", <CheckboxDropdown label="Clients" options={sets.clients} selected={filters.clientIds} onChange={(clientIds) => onChange({ ...filters, clientIds })} emptyText="No clients yet" />)}
+            {field("Properties", <CheckboxDropdown label="Properties" options={sets.properties} selected={filters.propertyIds} onChange={(propertyIds) => onChange({ ...filters, propertyIds })} emptyText="No properties yet" />)}
+            {field("Date range", <DateRangeFilter label="Date Range" value={filters.dateRange} onChange={(dateRange) => onChange({ ...filters, dateRange })} />)}
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3">
+            <button
+              type="button"
+              onClick={() => onChange(EMPTY_FILTERS)}
+              disabled={!active}
+              className="min-h-9 rounded-lg px-2 text-sm font-medium text-accent hover:bg-accent-subtle disabled:pointer-events-none disabled:opacity-40"
+            >
+              Clear all
+            </button>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted" aria-live="polite">
+                {resultsLabel}
+              </span>
+              <Button variant="accent" size="sm" className="min-h-9" onClick={() => setOpen(false)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Removable chips for the toolbar (no wrapper chrome; caller lays them out). */
+export function FilterChipList({ chips }: { chips: ActiveFilterChip[] }) {
+  return (
+    <>
+      {chips.map((f) => (
+        <span
+          key={f.key}
+          className="inline-flex h-8 max-w-[16rem] shrink-0 items-center gap-1 rounded-lg border border-accent/25 bg-accent-subtle/70 pl-2.5 pr-0.5 text-sm font-medium text-accent"
+        >
+          <span className="truncate" title={`${f.label}: ${f.values.join(", ")}`}>
+            {f.values.join(", ")}
+          </span>
+          <button
+            type="button"
+            onClick={f.clear}
+            aria-label={`Remove ${f.label} filter`}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-accent/80 hover:bg-accent/10 hover:text-accent"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        </span>
+      ))}
+    </>
   );
 }
 

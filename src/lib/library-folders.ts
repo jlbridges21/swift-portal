@@ -129,15 +129,21 @@ export async function listLibraryFolders(businessId: string): Promise<LibraryFol
     byId.set(s.folder_id, { item_count: Number(s.item_count) || 0, auto_cover_id: s.auto_cover_id });
   }
 
+  // Folders with no photos fall back to the newest video that has a stored poster.
+  const needVideo = rows.filter((r) => (byId.get(r.id)?.item_count ?? 0) > 0 && !byId.get(r.id)?.auto_cover_id).map((r) => r.id);
+  const videoCovers = needVideo.length ? await newestVideoPosters(db, needVideo) : new Map<string, string>();
+
   return {
     setupRequired: false,
     folders: rows.map((r) => {
       const s = byId.get(r.id);
+      const auto = s?.auto_cover_id ?? videoCovers.get(r.id) ?? null;
       return {
         id: r.id,
         name: r.name,
         itemCount: s?.item_count ?? 0,
-        coverAssetId: r.cover_media_asset_id ?? s?.auto_cover_id ?? null,
+        coverAssetId: r.cover_media_asset_id ?? auto,
+        autoCoverAssetId: auto,
         coverMode: r.cover_media_asset_id ? "manual" : "auto",
         createdAt: r.created_at,
         updatedAt: r.updated_at,
@@ -153,6 +159,36 @@ export async function libraryFolderIsShared(businessId: string, folderId: string
   const shares = await folderShareSummaries(db);
   const s = shares[folderId];
   return Boolean(s && (s.link || s.people > 0));
+}
+
+/** Newest-added uploaded video with a stored poster, per folder (YouTube links have none). */
+async function newestVideoPosters(db: TenantServiceClient, folderIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (const part of chunk(folderIds, IN_CHUNK)) {
+    const { data, error } = await db
+      .from("library_folder_items")
+      .select("folder_id, media_asset_id, added_at")
+      .in("folder_id", part)
+      .not("media_asset_id", "is", null)
+      .order("added_at", { ascending: false })
+      .limit(2000);
+    if (error || !data?.length) continue;
+    const rows = data as { folder_id: string; media_asset_id: string }[];
+    const ids = [...new Set(rows.map((r) => r.media_asset_id))];
+    const ok = new Set<string>();
+    for (const idPart of chunk(ids, IN_CHUNK)) {
+      const { data: assets } = await db
+        .from("media_assets")
+        .select("id")
+        .in("id", idPart)
+        .eq("media_type", "video")
+        .not("thumbnail_url", "is", null)
+        .neq("media_source", "youtube");
+      for (const a of (assets ?? []) as { id: string }[]) ok.add(a.id);
+    }
+    for (const r of rows) if (!out.has(r.folder_id) && ok.has(r.media_asset_id)) out.set(r.folder_id, r.media_asset_id);
+  }
+  return out;
 }
 
 export type LibraryFolderMembers = {
@@ -231,20 +267,27 @@ export async function renameLibraryFolder(businessId: string, folderId: string, 
   return data as LibraryFolderRow;
 }
 
-/** Manual cover (must be a photo in the folder) or null for automatic. */
+/**
+ * Manual cover, or null for automatic. Any photo, or any uploaded video that already has a
+ * stored poster, from anywhere in this business's library — it doesn't have to be in the
+ * folder. Only the reference is saved: the poster is the video's existing thumbnail, so no
+ * new file is created. Callers check the user may see the asset.
+ */
 export async function setLibraryFolderCover(businessId: string, folderId: string, assetId: string | null): Promise<void> {
   const db = await createTenantServiceClient(businessId);
   if (assetId) {
-    const { data: member } = await db
-      .from("library_folder_items")
-      .select("id")
-      .eq("folder_id", folderId)
-      .eq("media_asset_id", assetId)
+    const { data: asset } = await db
+      .from("media_assets")
+      .select("media_type, media_source, file_path, thumbnail_url")
+      .eq("id", assetId)
       .maybeSingle();
-    if (!member) throw new LibraryFolderError("Choose a photo that's in this folder.", 400);
-    const { data: asset } = await db.from("media_assets").select("media_type, media_source").eq("id", assetId).maybeSingle();
-    if (!asset || asset.media_type !== "photo" || asset.media_source === "youtube") {
-      throw new LibraryFolderError("Only photos can be used as a folder cover.", 400);
+    if (!asset || !isEligibleCover(asset)) {
+      throw new LibraryFolderError(
+        asset?.media_type === "video"
+          ? "This video's thumbnail isn't ready yet. Try again once it finishes processing."
+          : "Choose a photo or a video for the cover.",
+        400
+      );
     }
   }
   const { data, error } = await db
@@ -255,6 +298,14 @@ export async function setLibraryFolderCover(businessId: string, folderId: string
     .maybeSingle();
   if (error) fail(error, "Couldn't update the cover.");
   if (!data) throw new LibraryFolderError("Folder not found.", 404);
+}
+
+/** Photos with a file, or uploaded videos with a stored poster. */
+export function isEligibleCover(a: { media_type: string | null; media_source: string | null; file_path?: string | null; thumbnail_url: string | null }): boolean {
+  if (a.media_source === "youtube") return false;
+  if (a.media_type === "photo") return Boolean(a.file_path);
+  if (a.media_type === "video") return Boolean(a.thumbnail_url);
+  return false;
 }
 
 /**

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Folder, FolderPlus, ImageIcon, Loader2, Search, Sparkles } from "lucide-react";
+import { Check, Folder, FolderPlus, ImageIcon, Loader2, Play, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -268,7 +268,20 @@ export function AddToFolderDialog({
   );
 }
 
-/** Choose the folder cover from its photos, or go back to automatic. */
+/** A photo, or an uploaded video whose stored poster exists (posters are reused, never generated here). */
+function coverEligibility(a: LibraryAsset): "ok" | "processing" | "no" {
+  if (a.media_source === "youtube") return "no";
+  if (a.kind === "photo") return a.has_file ? "ok" : "no";
+  if (a.kind === "video") return a.thumbnail_url ? "ok" : "processing";
+  return "no";
+}
+
+const COVER_PAGE = 60;
+
+/**
+ * Choose the folder cover: any photo or video poster, from this folder or from the whole
+ * library (it doesn't have to be in the folder), or go back to automatic.
+ */
 export function CoverPickerDialog({
   open,
   folder,
@@ -280,24 +293,50 @@ export function CoverPickerDialog({
   onClose: () => void;
   onSave: (assetId: string | null) => Promise<boolean>;
 }) {
-  const [photos, setPhotos] = useState<LibraryAsset[] | null>(null);
+  const [scope, setScope] = useState<"folder" | "library">("folder");
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [items, setItems] = useState<LibraryAsset[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const thumbs = useThumbUrls(photos?.map((p) => p.id) ?? []);
+  const thumbs = useThumbUrls(items?.filter((p) => coverEligibility(p) === "ok").map((p) => p.id) ?? []);
 
   useEffect(() => {
     if (!open || !folder) return;
-    setPhotos(null);
+    setScope(folder.itemCount > 0 ? "folder" : "library");
+    setQuery("");
+    setDebounced("");
     setSelected(folder.coverMode === "manual" ? folder.coverAssetId : null);
-    const qs = new URLSearchParams({ library_folder: folder.id, type: "photo", sort: "added", limit: "60" });
+  }, [open, folder]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query.trim()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  useEffect(() => {
+    if (!open || !folder) return;
+    let cancelled = false;
+    setItems(null);
+    const qs = new URLSearchParams({ sort: scope === "folder" ? "added" : "newest", limit: String(COVER_PAGE) });
+    qs.append("type", "photo");
+    qs.append("type", "video");
+    if (scope === "folder") qs.set("library_folder", folder.id);
+    if (debounced) qs.set("q", debounced);
     void fetch(`/api/media/library?${qs}`, { credentials: "include", cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d: { assets: LibraryAsset[] }) => setPhotos(d.assets))
+      .then((d: { assets: LibraryAsset[] }) => {
+        if (!cancelled) setItems(d.assets.filter((a) => coverEligibility(a) !== "no"));
+      })
       .catch(() => {
-        setPhotos([]);
-        toast.error("Couldn't load this folder's photos.");
+        if (cancelled) return;
+        setItems([]);
+        toast.error("Couldn't load photos and videos.");
       });
-  }, [open, folder]);
+    return () => {
+      cancelled = true;
+    };
+  }, [open, folder, scope, debounced]);
 
   async function save() {
     setBusy(true);
@@ -305,6 +344,21 @@ export function CoverPickerDialog({
     setBusy(false);
     if (ok) onClose();
   }
+
+  const tab = (value: "folder" | "library", label: string) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={scope === value}
+      onClick={() => setScope(value)}
+      className={cn(
+        "h-9 flex-1 rounded-lg px-3 text-sm font-semibold transition-colors sm:flex-none",
+        scope === value ? "bg-card text-accent shadow-sm ring-1 ring-border" : "text-muted hover:text-heading"
+      )}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <Modal
@@ -317,7 +371,7 @@ export function CoverPickerDialog({
           <Button variant="outline" onClick={onClose} disabled={busy} className="min-h-11 sm:min-h-10">
             Cancel
           </Button>
-          <Button variant="accent" onClick={() => void save()} disabled={busy || photos === null} className="min-h-11 sm:min-h-10">
+          <Button variant="accent" onClick={() => void save()} disabled={busy} className="min-h-11 sm:min-h-10">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Save cover
           </Button>
@@ -339,46 +393,94 @@ export function CoverPickerDialog({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold text-heading">Automatic</span>
-            <span className="block text-xs text-muted">Use the most recently added photo.</span>
+            <span className="block text-xs text-muted">Use the most recently added photo (or video, if there are no photos).</span>
           </span>
           {selected === null ? <Check className="h-5 w-5 text-accent" aria-hidden /> : null}
         </button>
 
-        {photos === null ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div role="tablist" aria-label="Choose from" className="flex rounded-xl border border-border bg-subtle p-1">
+            {tab("folder", "This folder")}
+            {tab("library", "All media")}
+          </div>
+          <label className="relative block min-w-0 flex-1">
+            <span className="sr-only">Search photos and videos</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search photos and videos…"
+              className="h-11 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-sm text-heading placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+            />
+          </label>
+        </div>
+
+        {items === null ? (
           <div className="flex justify-center py-10">
             <Loader2 className="h-6 w-6 animate-spin text-muted" aria-hidden />
           </div>
-        ) : photos.length === 0 ? (
+        ) : items.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-4 py-8 text-center">
             <ImageIcon className="h-6 w-6 text-muted" aria-hidden />
-            <p className="text-sm text-muted">Add photos to this folder to choose a cover.</p>
+            <p className="text-sm text-muted">
+              {debounced
+                ? "No photos or videos match your search."
+                : scope === "folder"
+                  ? "This folder has no photos or videos yet. Pick one from All media instead."
+                  : "No photos or videos in your library yet."}
+            </p>
           </div>
         ) : (
-          <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-            {photos.map((p) => (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelected(p.id)}
-                  aria-pressed={selected === p.id}
-                  aria-label={`Use ${p.title} as cover`}
-                  className={cn(
-                    "relative block aspect-[4/3] w-full overflow-hidden rounded-lg border-2 bg-subtle",
-                    selected === p.id ? "border-accent" : "border-transparent hover:border-border"
-                  )}
-                >
-                  {thumbs[p.id] ? <RemoteImage src={thumbs[p.id]} alt="" fill sizes="160px" className="object-cover" /> : null}
-                  {selected === p.id ? (
-                    <span className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-foreground shadow">
-                      <Check className="h-4 w-4" aria-hidden />
-                    </span>
-                  ) : null}
-                </button>
-              </li>
-            ))}
+          <ul className="grid max-h-[50vh] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
+            {items.map((p) => {
+              const state = coverEligibility(p);
+              const isSel = selected === p.id;
+              return (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    disabled={state !== "ok"}
+                    onClick={() => setSelected(p.id)}
+                    aria-pressed={isSel}
+                    aria-label={state === "ok" ? `Use ${p.title} as cover` : `${p.title}: thumbnail still processing`}
+                    title={p.title}
+                    className={cn(
+                      "relative block aspect-[4/3] w-full overflow-hidden rounded-lg border-2 bg-subtle disabled:cursor-not-allowed",
+                      isSel ? "border-accent" : "border-transparent hover:border-border"
+                    )}
+                  >
+                    {state === "ok" && thumbs[p.id] ? (
+                      <RemoteImage src={thumbs[p.id]} alt="" fill sizes="160px" className="object-cover" />
+                    ) : (
+                      <span className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center text-[11px] text-muted">
+                        {state === "processing" ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                            Thumbnail processing
+                          </>
+                        ) : (
+                          <ImageIcon className="h-5 w-5" aria-hidden />
+                        )}
+                      </span>
+                    )}
+                    {p.kind === "video" ? (
+                      <span className="absolute bottom-1 left-1 inline-flex items-center gap-1 rounded bg-black/60 px-1 py-0.5 text-[10px] font-medium text-white">
+                        <Play className="h-2.5 w-2.5" aria-hidden /> Video
+                      </span>
+                    ) : null}
+                    {isSel ? (
+                      <span className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-foreground shadow">
+                        <Check className="h-4 w-4" aria-hidden />
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
-        {photos && photos.length >= 60 ? <p className="text-xs text-muted">Showing the 60 most recently added photos.</p> : null}
+        {items && items.length >= COVER_PAGE ? <p className="text-xs text-muted">Showing the first {COVER_PAGE}. Search to find a specific photo or video.</p> : null}
       </div>
     </Modal>
   );

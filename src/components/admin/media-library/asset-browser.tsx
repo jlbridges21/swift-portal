@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   ArrowUpDown,
-  CheckSquare,
   ChevronDown,
   Download,
   ExternalLink,
@@ -16,13 +15,12 @@ import {
   FolderPlus,
   ImageIcon,
   ImagePlus,
-  ListChecks,
   Loader2,
+  MapPin,
   MoreHorizontal,
   Play,
   Share2,
   SlidersHorizontal,
-  Square,
   Star,
   Trash2,
   Upload,
@@ -48,11 +46,10 @@ import { createThumbRequestQueue } from "@/lib/media-thumb-client";
 import { UNFILED_FOLDER_SCOPE } from "@/lib/project-zip-assets";
 import { cn } from "@/lib/utils";
 import {
-  ActiveFilterChips,
-  DesktopFilterBar,
+  FilterChipList,
   EMPTY_FILTERS,
   FilterSheet,
-  FilterSheetButton,
+  FiltersPopoverButton,
   LibrarySearch,
   activeFilterChips,
   type FilterOptionSets,
@@ -150,13 +147,10 @@ export type AssetBrowserProps = {
   /** "Add from library" mode: pick media for this folder, then return to it. */
   pickForFolder?: { id: string; name: string } | null;
   onTotalChange?: (total: number) => void;
-  /** Shown left of the desktop filter bar (e.g. the compact "create your first folder" card). */
-  filterCompanion?: React.ReactNode;
   /** Shown between the filters and the search/sort toolbar (e.g. the folder strip). */
   belowFilters?: React.ReactNode;
 };
 
-const FILTERS_OPEN_KEY = "sp:media:filters-open";
 
 export function AssetBrowser({
   scope,
@@ -174,7 +168,6 @@ export function AssetBrowser({
   onUpload,
   pickForFolder = null,
   onTotalChange,
-  filterCompanion,
   belowFilters,
 }: AssetBrowserProps) {
   const router = useRouter();
@@ -193,27 +186,11 @@ export function AssetBrowser({
   const [q, setQ] = useState(initialQuery);
   const [debouncedQ, setDebouncedQ] = useState(initialQuery);
   const [filters, setFilters] = useState<LibraryFilterState>(EMPTY_FILTERS);
-  const [filtersExpanded, setFiltersExpanded] = useState(true);
-  useEffect(() => {
-    try {
-      if (window.localStorage.getItem(FILTERS_OPEN_KEY) === "0") setFiltersExpanded(false);
-    } catch {
-      /* storage blocked */
-    }
-  }, []);
-  const toggleFilters = () =>
-    setFiltersExpanded((open) => {
-      try {
-        window.localStorage.setItem(FILTERS_OPEN_KEY, open ? "0" : "1");
-      } catch {
-        /* storage blocked */
-      }
-      return !open;
-    });
+
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sort, setSort] = useState<LibrarySort>(inFolder ? "added" : "newest");
   const [view, setView] = useStoredViewMode("sp:media:view");
-  const [selectMode, setSelectMode] = useState(Boolean(pickForFolder));
+  const [bulkMenu, setBulkMenu] = useState<ActionMenuAnchor | null>(null);
   const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
   const [resolving, setResolving] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
@@ -350,6 +327,8 @@ export function AssetBrowser({
   );
   const selectedCount = selection.mode === "all" ? Math.max(0, total - selection.excluded.size) : selection.keys.size;
   const allMatchingSelected = selection.mode === "all" && selection.excluded.size === 0;
+  /** Any checkbox ticked: card clicks toggle selection and the bottom action bar shows. */
+  const selectMode = selectedCount > 0 || Boolean(pickForFolder);
   const selectedPhotoCount = useMemo(() => {
     if (selection.mode === "ids") return [...selection.keys].filter((k) => k.startsWith("photo:")).length;
     return Math.max(0, (kindCounts.photo ?? 0) - [...selection.excluded].filter((k) => k.startsWith("photo:")).length);
@@ -370,11 +349,9 @@ export function AssetBrowser({
       else keys.add(key);
       return { mode: "ids", keys };
     });
-    if (!selectMode) setSelectMode(true);
   }
 
   function exitSelect() {
-    setSelectMode(false);
     setSelection(EMPTY_SELECTION);
   }
 
@@ -593,7 +570,10 @@ export function AssetBrowser({
     if (res.ok) {
       toast.success("Folder cover updated");
       onFoldersChanged();
-    } else toast.error("Couldn't update the cover.");
+    } else {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      toast.error(json.error || "Couldn't update the cover.");
+    }
   }
 
   // ── Drawer: which folders contain this asset ────────────────────────────
@@ -629,7 +609,8 @@ export function AssetBrowser({
         if (a.kind !== "model")
           items.push({ id: "fav", label: a.is_favorite ? "Remove from favorites" : "Add to favorites", icon: Star, onSelect: () => void toggleFavorite(a) });
         if (inFolder && permissions.organize) {
-          if (a.kind === "photo" && a.media_source !== "youtube")
+          // Photos, or videos whose poster already exists (the poster becomes the cover image).
+          if (a.media_source !== "youtube" && ((a.kind === "photo" && a.has_file) || (a.kind === "video" && a.thumbnail_url)))
             items.push({ id: "cover", label: "Use as folder cover", icon: ImagePlus, onSelect: () => void setFolderCover(a) });
           items.push({ type: "separator", id: "sep-folder" });
           items.push({
@@ -667,143 +648,203 @@ export function AssetBrowser({
   const libraryEmpty = !filtered && total === 0 && !loading && !loadError;
 
   return (
-    <div className={cn("min-w-0 space-y-3", selectMode && "pb-36 sm:pb-24")}>
+    <div className={cn("min-w-0 space-y-4", selectMode && "pb-32 sm:pb-24")}>
       {pickForFolder ? (
         <div className="flex flex-col gap-3 rounded-2xl border border-accent/30 bg-accent-subtle/60 p-3 sm:flex-row sm:items-center sm:p-4">
           <FolderPlus className="hidden h-5 w-5 shrink-0 text-accent sm:block" aria-hidden />
           <p className="min-w-0 flex-1 text-sm text-heading">
-            Select media to add to <span className="font-semibold">“{pickForFolder.name}”</span>. Originals stay in their projects.
+            Tick the media to add to <span className="font-semibold">“{pickForFolder.name}”</span>, then use the bar at the bottom. Originals stay in their projects.
           </p>
-          <div className="flex shrink-0 gap-2">
-            <Link href={`/admin/media/folders/${pickForFolder.id}`} className="inline-flex min-h-10 items-center rounded-lg border border-border bg-card px-3 text-sm font-medium text-heading hover:bg-subtle">
-              Cancel
-            </Link>
-            <Button variant="accent" className="min-h-10" disabled={!selectedCount || bulkBusy} onClick={() => void confirmPickForFolder()}>
-              {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4" />}
-              Add {selectedCount ? selectedCount.toLocaleString() : ""} to folder
-            </Button>
-          </div>
+          <Link href={`/admin/media/folders/${pickForFolder.id}`} className="inline-flex min-h-10 shrink-0 items-center rounded-lg border border-border bg-card px-3 text-sm font-medium text-heading hover:bg-subtle">
+            Cancel
+          </Link>
         </div>
       ) : null}
 
-      {/* Filters: desktop bar (sharing its row with the optional companion card); phones and
-          tablets get search + a Filters sheet in the toolbar instead. */}
-      {filterCompanion ? (
-        <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-stretch">
-          <div className="min-w-0 lg:w-64 lg:shrink-0">{filterCompanion}</div>
-          <DesktopFilterBar filters={filters} onChange={setFilters} sets={optionSets} expanded={filtersExpanded} onToggle={toggleFilters} className="flex-1" />
-        </div>
-      ) : (
-        <DesktopFilterBar filters={filters} onChange={setFilters} sets={optionSets} expanded={filtersExpanded} onToggle={toggleFilters} />
-      )}
-
       {belowFilters}
 
-      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-        <LibrarySearch
-          value={q}
-          onChange={setQ}
-          placeholder={inFolder ? `Search in ${inFolder.name}…` : "Search by file name, project, address, client…"}
-          className="min-w-0 flex-1 basis-full sm:basis-64 lg:max-w-md"
-        />
-        <FilterSheetButton count={chips.length} onClick={() => setSheetOpen(true)} />
-        <p className="hidden whitespace-nowrap text-sm text-muted sm:block" aria-live="polite">
-          {loading && page === 1 ? "Loading…" : plural(total, "asset")}
-        </p>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
-            className={cn("h-11 rounded-xl px-3.5", selectMode && "border-accent/40 bg-accent-subtle text-accent")}
-            aria-pressed={selectMode}
-          >
-            {selectMode ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-            <span className="hidden sm:inline">{selectMode ? "Done" : "Select"}</span>
-          </Button>
+      {/* One toolbar: [search · Filters · active chips · Clear All] + sort and view on the right. */}
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm">
+          <LibrarySearch
+            value={q}
+            onChange={setQ}
+            compact
+            placeholder={inFolder ? `Search ${inFolder.name}…` : "Search media..."}
+            className="w-full sm:w-64 xl:w-80"
+          />
+          <FiltersPopoverButton
+            filters={filters}
+            onChange={setFilters}
+            sets={optionSets}
+            onOpenSheet={() => setSheetOpen(true)}
+            resultsLabel={loading && page === 1 ? "Loading…" : plural(total, "result")}
+          />
+          {chips.length ? (
+            <div className="order-last flex w-full min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none] lg:order-none lg:w-auto lg:flex-1 lg:flex-wrap lg:overflow-visible [&::-webkit-scrollbar]:hidden">
+              <FilterChipList chips={chips} />
+            </div>
+          ) : (
+            <div className="hidden flex-1 lg:block" />
+          )}
+          {filtered ? (
+            <span className="hidden whitespace-nowrap text-xs text-muted xl:inline" aria-live="polite">
+              {loading && page === 1 ? "Loading…" : plural(total, "result")}
+            </span>
+          ) : null}
+          {chips.length || debouncedQ.trim() ? (
+            <button
+              type="button"
+              onClick={() => {
+                setFilters(EMPTY_FILTERS);
+                setQ("");
+              }}
+              className="h-9 shrink-0 rounded-lg px-2.5 text-sm font-semibold text-accent hover:bg-accent-subtle"
+            >
+              Clear All
+            </button>
+          ) : null}
+          {/* Phones/tablets: sort + view share the Filters line. */}
+          <div className="ml-auto flex shrink-0 items-center gap-2 lg:hidden">
+            <SortControl value={sort} onChange={setSort} options={sortOptions} />
+            <ViewModeToggle value={view} onChange={setView} />
+          </div>
+        </div>
+        <div className="hidden shrink-0 items-center gap-2 pt-0.5 lg:flex">
           <SortControl value={sort} onChange={setSort} options={sortOptions} />
           <ViewModeToggle value={view} onChange={setView} />
         </div>
       </div>
 
-      {/* Phones/tablets: active filter chips (desktop shows them in the collapsed filter bar). */}
-      {/* Phones: the count sits with any active chips (it doesn't fit in the toolbar row). */}
-      <div className="flex min-w-0 flex-wrap items-center gap-2 lg:hidden">
-        {chips.length ? <ActiveFilterChips chips={chips} onClearAll={() => setFilters(EMPTY_FILTERS)} /> : null}
-        <p className="ml-auto text-xs text-muted sm:hidden">{loading && page === 1 ? "Loading…" : plural(total, "asset")}</p>
-      </div>
-
-      {/* Selection toolbar */}
+      {/* Bottom selection bar: only while something is selected (or while picking for a folder). */}
       {selectMode ? (
-        <div className="media-bulk-bar fixed left-[calc(var(--admin-sidebar-w,0px)+0.75rem)] right-3 z-40 mx-auto max-w-5xl rounded-2xl border border-accent/30 bg-card/95 p-2.5 shadow-xl backdrop-blur" role="toolbar" aria-label="Selection actions">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <button type="button" onClick={exitSelect} aria-label="Exit selection" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-subtle hover:text-heading">
-              <X className="h-5 w-5" aria-hidden />
+        <div
+          className="media-bulk-bar fixed left-[calc(var(--admin-sidebar-w,0px)+0.75rem)] right-3 z-40 mx-auto max-w-5xl rounded-2xl border border-border bg-card/95 px-3 py-2.5 shadow-[0_12px_40px_-12px_rgba(15,23,42,0.35)] backdrop-blur sm:px-4"
+          role="toolbar"
+          aria-label="Selection actions"
+        >
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={allMatchingSelected ? true : selectedCount > 0 ? "mixed" : false}
+              aria-label={allMatchingSelected ? "Clear selection" : `Select all ${total.toLocaleString()}`}
+              title={allMatchingSelected ? "Clear selection" : `Select all ${total.toLocaleString()}`}
+              disabled={bulkBusy || total === 0}
+              onClick={() => (allMatchingSelected ? exitSelect() : setSelection({ mode: "all", query: filterQuery, excluded: new Set() }))}
+              className="flex h-9 w-7 shrink-0 items-center justify-center rounded-lg hover:bg-subtle sm:w-9"
+            >
+              <span
+                className={cn(
+                  "flex h-5 w-5 items-center justify-center rounded-md border-2",
+                  selectedCount > 0 ? "border-accent bg-accent text-accent-foreground" : "border-slate-300 bg-card"
+                )}
+              >
+                {allMatchingSelected ? (
+                  <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden>
+                    <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : selectedCount > 0 ? (
+                  <span className="h-0.5 w-2.5 rounded bg-current" aria-hidden />
+                ) : null}
+              </span>
             </button>
-            <span className="min-w-0 text-sm font-semibold text-heading">
-              {selection.mode === "all"
-                ? allMatchingSelected
-                  ? `All ${selectedCount.toLocaleString()} selected`
-                  : `${selectedCount.toLocaleString()} of ${total.toLocaleString()} selected`
-                : `${selectedCount.toLocaleString()} selected`}
+            <span className="min-w-0 truncate text-sm font-semibold text-heading" aria-live="polite">
+              {selectedCount === 0
+                ? "Select items"
+                : selection.mode === "all" && !allMatchingSelected
+                  ? `${selectedCount.toLocaleString()} of ${total.toLocaleString()} selected`
+                  : (
+                    <>
+                      {selectedCount.toLocaleString()}
+                      <span className="hidden sm:inline"> {selectedCount === 1 ? "item" : "items"}</span> selected
+                    </>
+                  )}
             </span>
-            {!allMatchingSelected && total > 0 ? (
-              <Button variant="ghost" size="sm" className="min-h-10" onClick={() => setSelection({ mode: "all", query: filterQuery, excluded: new Set() })} disabled={bulkBusy}>
-                <ListChecks className="h-4 w-4" /> <span className="hidden sm:inline">Select all</span> {total.toLocaleString()}
-              </Button>
-            ) : null}
             {busyLabel || resolving ? (
-              <span className="flex items-center gap-1.5 text-xs text-muted">
+              <span className="hidden items-center gap-1.5 text-xs text-muted md:flex">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> {busyLabel ?? "Loading selection…"}
               </span>
             ) : null}
-            {selectedCount > 0 && !pickForFolder ? (
-              <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto">
-                {permissions.organize && foldersReady ? (
-                  <Button variant="accent" size="sm" className="min-h-10" disabled={bulkBusy} onClick={() => void bulkAddToFolder()}>
-                    <FolderPlus className="h-4 w-4" /> Add to folder
-                  </Button>
-                ) : null}
-                {inFolder && permissions.organize ? (
-                  <Button variant="outline" size="sm" className="min-h-10" disabled={bulkBusy} onClick={() => void bulkRemoveFromFolder()}>
-                    <FolderMinus className="h-4 w-4" /> Remove
-                  </Button>
-                ) : null}
-                {canShareItems && (selectedCount === 1 || permissions.shareFolders) ? (
-                  <Button variant="outline" size="sm" className="min-h-10" disabled={bulkBusy} onClick={() => void bulkShare()}>
-                    <Share2 className="h-4 w-4" /> Share
-                  </Button>
-                ) : null}
-                <Button variant="outline" size="sm" className="min-h-10" disabled={bulkBusy} onClick={() => void bulkDownload()}>
-                  <Download className="h-4 w-4" /> <span className="hidden sm:inline">Download</span>
+
+            <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+              {pickForFolder ? (
+                <Button variant="accent" className="h-10 rounded-xl" disabled={!selectedCount || bulkBusy} onClick={() => void confirmPickForFolder()}>
+                  <FolderPlus className="h-4 w-4" /> Add to “{pickForFolder.name}”
                 </Button>
-                {selectedPhotoCount > 0 ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="min-h-10"
-                    disabled={bulkBusy || photoEditor.opening}
-                    onClick={() =>
-                      void resolveSelection().then((items) => {
-                        const ids = items?.filter((i) => i.kind === "photo").map((i) => i.id) ?? [];
-                        if (ids.length) void photoEditor.open({ mediaIds: ids });
-                      })
-                    }
-                  >
-                    <SlidersHorizontal className="h-4 w-4" /> <span className="hidden md:inline">{photoEditorLabel(selectedPhotoCount)}</span>
-                  </Button>
-                ) : null}
-                {permissions.deleteMedia ? (
-                  <Button variant="outline" size="sm" className="min-h-10 text-red-600 hover:text-red-700" disabled={bulkBusy} onClick={() => void bulkDelete()} aria-label="Delete permanently">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                ) : null}
-              </div>
-            ) : selectedCount === 0 ? (
-              <span className="text-xs text-muted sm:ml-auto">Tap items to select them.</span>
-            ) : null}
+              ) : selectedCount > 0 ? (
+                <>
+                  {permissions.organize && foldersReady ? (
+                    <BulkButton icon={FolderPlus} label="Add to Folder" disabled={bulkBusy} onClick={() => void bulkAddToFolder()} />
+                  ) : null}
+                  {canShareItems && (selectedCount === 1 || permissions.shareFolders) ? (
+                    <BulkButton icon={Share2} label="Share" disabled={bulkBusy} onClick={() => void bulkShare()} />
+                  ) : null}
+                  <BulkButton icon={Download} label="Download" disabled={bulkBusy} onClick={() => void bulkDownload()} />
+                  {permissions.deleteMedia ? (
+                    <BulkButton icon={Trash2} label="Delete" tone="danger" disabled={bulkBusy} onClick={() => void bulkDelete()} />
+                  ) : null}
+                  {(inFolder && permissions.organize) || selectedPhotoCount > 0 ? (
+                    <button
+                      type="button"
+                      disabled={bulkBusy}
+                      onClick={(e) => setBulkMenu({ kind: "element", element: e.currentTarget })}
+                      aria-label="More actions"
+                      aria-haspopup="menu"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted hover:bg-subtle hover:text-heading disabled:opacity-50"
+                    >
+                      <MoreHorizontal className="h-5 w-5" aria-hidden />
+                    </button>
+                  ) : null}
+                </>
+              ) : null}
+              <button
+                type="button"
+                onClick={exitSelect}
+                disabled={!!pickForFolder && selectedCount === 0}
+                aria-label="Clear selection"
+                title="Clear selection"
+                className="flex h-10 w-8 items-center justify-center rounded-xl text-muted hover:bg-subtle hover:text-heading disabled:opacity-40 sm:w-10"
+              >
+                <X className="h-5 w-5" aria-hidden />
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
+
+      <ActionMenu
+        anchor={bulkMenu}
+        onClose={() => setBulkMenu(null)}
+        title="More actions"
+        items={[
+          ...(inFolder && permissions.organize
+            ? ([
+                {
+                  id: "remove",
+                  label: "Remove from folder",
+                  description: "Keeps the originals in their projects",
+                  icon: FolderMinus,
+                  onSelect: () => void bulkRemoveFromFolder(),
+                },
+              ] satisfies ActionMenuItem[])
+            : []),
+          ...(selectedPhotoCount > 0
+            ? ([
+                {
+                  id: "edit",
+                  label: photoEditorLabel(selectedPhotoCount),
+                  icon: SlidersHorizontal,
+                  onSelect: () =>
+                    void resolveSelection().then((items) => {
+                      const ids = items?.filter((i) => i.kind === "photo").map((i) => i.id) ?? [];
+                      if (ids.length) void photoEditor.open({ mediaIds: ids });
+                    }),
+                },
+              ] satisfies ActionMenuItem[])
+            : []),
+        ]}
+      />
 
       {/* Results */}
       {loadError && assets.length === 0 ? (
@@ -853,7 +894,7 @@ export function AssetBrowser({
           </button>
         </div>
       ) : view === "grid" ? (
-        <ul className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 2xl:grid-cols-5">
+        <ul className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
           {assets.map((asset) => (
             <li key={assetKey(asset)} className="min-w-0">
               <MediaCard
@@ -1037,6 +1078,37 @@ export function AssetBrowser({
   );
 }
 
+function BulkButton({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  tone = "default",
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: "default" | "danger";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={cn(
+        "inline-flex h-10 w-9 shrink-0 items-center justify-center gap-2 rounded-xl border bg-card text-sm font-semibold transition-colors disabled:opacity-50 sm:w-10 md:w-auto md:px-4",
+        tone === "danger" ? "border-red-200 text-red-600 hover:bg-red-50 surface-dark:border-red-500/30 surface-dark:hover:bg-red-500/10" : "border-border text-heading hover:bg-subtle"
+      )}
+    >
+      <Icon className="h-4 w-4" />
+      <span className="hidden md:inline">{label}</span>
+    </button>
+  );
+}
+
 /** Native select under a compact button: icon-only on phones, labeled from sm. */
 function SortControl({ value, onChange, options }: { value: LibrarySort; onChange: (v: LibrarySort) => void; options: { value: string; label: string }[] }) {
   const label = options.find((o) => o.value === value)?.label ?? "Sort";
@@ -1135,13 +1207,13 @@ function SelectBox({ selected, visible, onToggle, label }: { selected: boolean; 
       aria-label={label}
       className={cn(
         "absolute left-1.5 top-1.5 z-[2] flex h-9 w-9 items-center justify-center rounded-lg transition-opacity focus-visible:opacity-100",
-        visible || selected ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+        "opacity-100"
       )}
     >
       <span
         className={cn(
           "flex h-5 w-5 items-center justify-center rounded-md border-2 shadow-sm",
-          selected ? "border-accent bg-accent text-accent-foreground" : "border-white bg-black/20 backdrop-blur-sm"
+          selected ? "border-accent bg-accent text-accent-foreground" : visible ? "border-slate-300 bg-white" : "border-slate-300/90 bg-white/90 group-hover:border-accent/60"
         )}
       >
         {selected ? (
@@ -1167,7 +1239,7 @@ function MediaCard({ asset, thumbUrl, onVisible, selectMode, selected, onToggle,
       {...dragProps(dragKeys)}
       className={cn(
         "group relative flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-all hover:shadow-md",
-        selected ? "border-accent ring-2 ring-accent/30" : "border-border"
+        selected ? "border-accent shadow-md ring-2 ring-accent/40" : "border-border"
       )}
     >
       <button
@@ -1201,8 +1273,9 @@ function MediaCard({ asset, thumbUrl, onVisible, selectMode, selected, onToggle,
           <p className="truncate text-sm font-semibold text-heading" title={asset.title}>
             {asset.title}
           </p>
-          <p className="truncate text-xs text-muted" title={assetLocation(asset)}>
-            {assetLocation(asset)}
+          <p className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted" title={assetLocation(asset)}>
+            <MapPin className="h-3 w-3 shrink-0" aria-hidden />
+            <span className="truncate">{assetLocation(asset)}</span>
           </p>
           <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-1 text-xs text-muted">
             {size ? <span className="whitespace-nowrap">{size}</span> : null}

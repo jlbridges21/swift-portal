@@ -96,26 +96,39 @@ type CardProps = {
   onDropItems?: (folder: LibraryFolderSummary, keys: string[]) => void;
 };
 
-/** Compact card for the All Media folder row (mockup 1). */
-export function FolderStripCard({ folder, onMenu, onDropItems }: CardProps) {
+/**
+ * Compact card for the All Media folder row: cover preview (photo or video poster; gradient +
+ * folder icon when there's none), blue folder icon, name, item count, and the options menu.
+ */
+export function FolderStripCard({ folder, onMenu, onDropItems, coverUrl = null }: CardProps & { coverUrl?: string | null }) {
   const drop = useDropTarget(folder, onDropItems);
+  const shared = folder.share.link || folder.share.people > 0;
   return (
     <div
       {...drop.props}
       className={cn(
-        "group relative flex h-16 min-w-0 items-center gap-3 rounded-2xl border bg-card pl-3 pr-1 shadow-sm transition-all hover:-translate-y-px hover:shadow-md",
+        "group relative flex h-[5.25rem] min-w-0 items-center gap-3 rounded-2xl border bg-card p-2 pr-1.5 shadow-sm transition-all hover:-translate-y-px hover:shadow-md",
         drop.over ? "border-accent ring-2 ring-accent/30" : "border-border"
       )}
     >
       <Link href={folderHref(folder.id)} className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={`Open folder ${folder.name}`} />
-      <FolderGlyph className="pointer-events-none h-9 w-9" />
+      <span className="pointer-events-none relative h-full w-[5.5rem] shrink-0 overflow-hidden rounded-xl bg-subtle sm:w-[7.5rem]">
+        {coverUrl ? (
+          <RemoteImage src={coverUrl} alt="" fill sizes="120px" className="object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
+        ) : (
+          <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-accent-subtle to-subtle">
+            <Folder className="h-6 w-6 text-accent/50" aria-hidden />
+          </span>
+        )}
+      </span>
+      <Folder className="pointer-events-none hidden h-6 w-6 shrink-0 text-accent min-[400px]:block" aria-hidden />
       <div className="pointer-events-none min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-heading" title={folder.name}>
+        <p className="truncate text-[15px] font-semibold text-heading" title={folder.name}>
           {folder.name}
         </p>
-        <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+        <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted">
           <span className="truncate">{folderItemCountLabel(folder.itemCount)}</span>
-          {folder.share.link || folder.share.people ? (
+          {shared ? (
             <span className="inline-flex shrink-0 items-center text-accent" title="Shared">
               {folder.share.link ? <Link2 className="h-3.5 w-3.5" aria-hidden /> : <Users className="h-3.5 w-3.5" aria-hidden />}
               <span className="sr-only">Shared</span>

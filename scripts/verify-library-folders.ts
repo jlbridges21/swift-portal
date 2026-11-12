@@ -64,6 +64,7 @@ const f = (name: string, itemCount: number, updatedAt: string): LibraryFolderSum
   name,
   itemCount,
   coverAssetId: null,
+  autoCoverAssetId: null,
   coverMode: "auto",
   createdAt: updatedAt,
   updatedAt,
