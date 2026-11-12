@@ -17,6 +17,8 @@ import { parseProjectsViewCookie, PROJECTS_VIEW_COOKIE } from "@/lib/client-view
 import { loadClientViewData, loadProjectHeroPosters } from "@/lib/client-view-data";
 import { loadProjectStorageBytes } from "@/lib/project-storage";
 import { getUiExperience } from "@/lib/ui-rollout-server";
+import { parseWorkspaceViewCookie } from "@/lib/projects-workspace";
+import { ProjectsWorkspace } from "@/components/admin/projects-workspace/projects-workspace";
 
 interface PageProps {
   searchParams: Promise<{ view?: string; stage?: string; status?: string }>;
@@ -72,11 +74,12 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
       : staffAll.filter((s) => visibleStaffIds.has(s.id) || s.id === profile.id);
 
   // Saved per-user view preference. Hidden projects always use the Pipeline View.
-  const savedView = parseProjectsViewCookie(
-    (await cookies()).get(PROJECTS_VIEW_COOKIE)?.value,
-    profile.id
-  );
-  const initialView = showDeleted ? "pipeline" : savedView;
+  const viewCookie = (await cookies()).get(PROJECTS_VIEW_COOKIE)?.value;
+  const savedView = parseProjectsViewCookie(viewCookie, profile.id);
+  const inNewShell = (await getUiExperience(profile)).mode === "new";
+  // New interface: Pipeline | List | Client | Grid | Calendar (same cookie, compatible format).
+  const workspaceView = showDeleted ? "pipeline" : parseWorkspaceViewCookie(viewCookie, profile.id);
+  const initialView = showDeleted ? "pipeline" : inNewShell ? (workspaceView === "client" ? "client" : "pipeline") : savedView;
 
   // Card extras (hero posters, storage) stream in after the board renders —
   // not awaited here, so they never hold up the page. One batch for all cards.
@@ -96,7 +99,52 @@ export default async function AdminProjectsPage({ searchParams }: PageProps) {
   const isStaff = profile.role === "staff";
   const canCreate = !isStaff || staffCan(profile, "projects.create");
 
-  const inNewShell = (await getUiExperience(profile)).mode === "new";
+  if (inNewShell) {
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="app-page app-page-wide mx-auto max-w-[100vw] px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
+          <PageHeader
+            title={showDeleted ? "Hidden Projects" : "Projects"}
+            description={
+              showDeleted
+                ? `${hiddenCount} hidden project${hiddenCount === 1 ? "" : "s"}`
+                : `${activeCount} active project${activeCount === 1 ? "" : "s"}`
+            }
+          />
+          <ProjectsWorkspace
+            projects={projects}
+            stage={stage}
+            stageLabel={stageConfig?.label}
+            scrollToStatus={stageConfig?.scrollToStatus}
+            staff={staff}
+            projectStaffIds={projectStaffIds}
+            currentUserId={profile.id}
+            isStaff={isStaff}
+            initialView={workspaceView}
+            clientView={clientView}
+            clientViewPermissions={
+              showDeleted
+                ? undefined
+                : {
+                    canCreateProject: canCreate,
+                    canCreateClient: staffCan(profile, "clients.create"),
+                    canOpenClients: staffCan(profile, "area.clients"),
+                    canOpenCalendar: staffCan(profile, "area.calendar"),
+                  }
+            }
+            heroUrls={heroUrls}
+            storageBytes={storageBytes}
+            showDeleted={showDeleted}
+            activeCount={activeCount}
+            hiddenCount={hiddenCount}
+            canCreateProject={canCreate}
+            canSeeHidden={!isStaff}
+          />
+        </main>
+      </div>
+    );
+  }
+
   const projectActions = (
     <div className="flex flex-wrap gap-2">
       {!isStaff && (

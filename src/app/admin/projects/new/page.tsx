@@ -29,6 +29,12 @@ export default function NewProjectPage() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [clientId, setClientId] = useState("");
   const [createClientOpen, setCreateClientOpen] = useState(false);
+  // "+ Add Project" from a pipeline column (New interface) → ?status=<stage>
+  const [status, setStatus] = useState<string>(PROJECT_STATUSES[0].value);
+  useEffect(() => {
+    const preset = new URLSearchParams(window.location.search).get("status");
+    if (preset && PROJECT_STATUSES.some((s) => s.value === preset)) setStatus(preset);
+  }, []);
 
   useEffect(() => {
     fetch("/api/clients")
@@ -150,6 +156,8 @@ export default function NewProjectPage() {
                   <Select
                     id="status"
                     name="status"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
                     options={PROJECT_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
                   />
                 </div>

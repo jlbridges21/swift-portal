@@ -79,6 +79,8 @@ export interface PipelineProjectRow {
   cover_image_id?: string | null;
   cover_image_url?: string | null;
   pendingPayment?: boolean;
+  /** At least one payment marked paid (active pipeline only; undefined when not loaded). */
+  paid?: boolean;
   recentActivity?: string;
   confirmedShootAt?: string | null;
 }
@@ -219,7 +221,8 @@ function enrichProjects(
   rows: Array<Record<string, unknown>>,
   pendingSet: Set<string>,
   latestActivity: Map<string, string>,
-  confirmedShootMap: Map<string, string>
+  confirmedShootMap: Map<string, string>,
+  paidSet?: Set<string>
 ): PipelineProjectRow[] {
   return rows.map((p) => ({
     id: p.id as string,
@@ -236,6 +239,7 @@ function enrichProjects(
     cover_image_id: (p.cover_image_id as string | null) ?? null,
     cover_image_url: (p.cover_image_url as string | null) ?? null,
     pendingPayment: pendingSet.has(p.id as string),
+    ...(paidSet ? { paid: paidSet.has(p.id as string) } : {}),
     recentActivity: latestActivity.get(p.id as string),
     confirmedShootAt: confirmedShootMap.get(p.id as string) ?? null,
   }));
@@ -318,7 +322,8 @@ export async function buildPipelineContext(
     (allProjects ?? []).filter(isActiveProject),
     pendingSet,
     latestActivity,
-    confirmedShootMap
+    confirmedShootMap,
+    new Set(payments.filter((p) => p.status === "paid").map((p) => p.project_id as string))
   );
 
   // Staff: scope to assigned projects (or all if projects.view_all).
