@@ -895,6 +895,7 @@ export function QuoteSection({
               input={estimateFields(quote)}
               logoUrl={brand.logoUrl}
               className="min-h-11"
+              preferStoredCopy
             />
           </div>
           {previewMode && (
@@ -937,6 +938,7 @@ export function QuoteSection({
           input={estimateFields(quote)}
           logoUrl={brand.logoUrl}
           className="min-h-11"
+          preferStoredCopy
         />
       );
     }

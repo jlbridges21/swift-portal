@@ -169,18 +169,21 @@ async function marketingUploadRefs(
   return { refs, keep };
 }
 
-/** Stored official-proposal PDFs: {business}/proposals/{project}/{quote}/sent-*.pdf. */
+/** Archived official-proposal PDFs: {business}/proposals/{project}/{quote}/sent-*.pdf (current + legacy bucket). */
 async function proposalPdfRefs(db: TenantServiceClient, projectId: string): Promise<StorageRef[]> {
+  const { PROPOSAL_PDF_BUCKET, LEGACY_PROPOSAL_PDF_BUCKETS } = await import("@/lib/proposal-delivery");
   const prefix = `${db.businessId}/proposals/${projectId}`;
-  const storage = db.raw.storage.from("project-media");
-  const { data: quoteFolders, error } = await storage.list(prefix, { limit: 1000 });
-  if (error || !quoteFolders?.length) return [];
   const refs: StorageRef[] = [];
-  for (const folder of quoteFolders) {
-    if (folder.id || !folder.name) continue; // folders have no id
-    const { data: files } = await storage.list(`${prefix}/${folder.name}`, { limit: 1000 });
-    for (const file of files ?? []) {
-      if (file.id && file.name) refs.push({ bucket: "project-media", path: `${prefix}/${folder.name}/${file.name}` });
+  for (const bucket of [PROPOSAL_PDF_BUCKET, ...LEGACY_PROPOSAL_PDF_BUCKETS]) {
+    const storage = db.raw.storage.from(bucket);
+    const { data: quoteFolders, error } = await storage.list(prefix, { limit: 1000 });
+    if (error || !quoteFolders?.length) continue;
+    for (const folder of quoteFolders) {
+      if (folder.id || !folder.name) continue; // folders have no id
+      const { data: files } = await storage.list(`${prefix}/${folder.name}`, { limit: 1000 });
+      for (const file of files ?? []) {
+        if (file.id && file.name) refs.push({ bucket, path: `${prefix}/${folder.name}/${file.name}` });
+      }
     }
   }
   return refs;

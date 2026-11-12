@@ -29,11 +29,10 @@ import type { AppSettings } from "@/lib/app-settings";
 import type { ProjectQuote } from "@/lib/types";
 import { notesWithoutArchiveMarker, safeTimeZone } from "@/lib/estimate-pdf";
 import {
+  archiveSentProposalPdf,
   emailProposalToClients,
   ensureProposalPdf,
-  proposalPdfPath,
   renderProposalPdf,
-  storeProposalPdf,
   type ProposalDelivery,
 } from "@/lib/proposal-delivery";
 
@@ -42,11 +41,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const PDF_FAILED_MESSAGE =
   "The proposal PDF couldn't be generated, so nothing was sent. Try again in a moment.";
 
-type PreparedPdf = { bytes: Uint8Array; stored: boolean; error?: string };
+type PreparedPdf = { bytes: Uint8Array };
 
 /**
- * Render the exact PDF for a proposal that is about to be sent and keep the
- * write-once copy. Runs before any status change so a PDF failure sends nothing.
+ * Render the exact PDF for a proposal that is about to be sent. Runs before
+ * any status change so a PDF failure sends nothing. Archiving happens in
+ * deliverProposal, after the row is committed, so a duplicate or losing
+ * concurrent request never leaves an orphaned file.
  */
 async function prepareSendPdf(
   businessId: string,
@@ -56,21 +57,14 @@ async function prepareSendPdf(
 ): Promise<{ ok: true; pdf: PreparedPdf; projectName: string } | { ok: false }> {
   try {
     const { bytes, context } = await renderProposalPdf({ businessId, quote: candidate, appSettings, timeZone });
-    const db = await createTenantServiceClient(businessId);
-    const store = candidate.sent_at
-      ? await storeProposalPdf(
-          db,
-          proposalPdfPath(businessId, candidate.project_id, candidate.id, candidate.sent_at),
-          bytes
-        )
-      : { stored: false as const, error: undefined };
-    return { ok: true, pdf: { bytes, stored: store.stored, error: store.error }, projectName: context.projectName };
+    return { ok: true, pdf: { bytes }, projectName: context.projectName };
   } catch (error) {
     console.error("[quotes] proposal PDF render failed", { quoteId: candidate.id, error });
     return { ok: false };
   }
 }
 
+/** Archive (write-once, retried) and email in parallel. `quote` is the committed row. */
 async function deliverProposal(args: {
   businessId: string;
   quote: ProjectQuote;
@@ -80,17 +74,33 @@ async function deliverProposal(args: {
   title: string;
   fallbackBody?: string;
 }): Promise<ProposalDelivery> {
-  const email = await emailProposalToClients({
-    businessId: args.businessId,
-    quote: args.quote,
-    appSettings: args.appSettings,
-    pdfBytes: args.pdf.bytes,
-    projectName: args.projectName,
-    title: args.title,
-    fallbackBody: args.fallbackBody,
-  });
+  const archive = createTenantServiceClient(args.businessId)
+    .then((db) => archiveSentProposalPdf(db, args.quote, args.pdf.bytes))
+    .catch((error: unknown) => {
+      console.error("[quotes] proposal PDF archive threw", { quoteId: args.quote.id, error });
+      return { stored: false, error: error instanceof Error ? error.message : String(error) };
+    });
+  const [store, email] = await Promise.all([
+    archive,
+    emailProposalToClients({
+      businessId: args.businessId,
+      quote: args.quote,
+      appSettings: args.appSettings,
+      pdfBytes: args.pdf.bytes,
+      projectName: args.projectName,
+      title: args.title,
+      fallbackBody: args.fallbackBody,
+    }),
+  ]);
+  if (!store.stored) {
+    console.error("[quotes] proposal sent but PDF archive failed; downloads will archive it later", {
+      quoteId: args.quote.id,
+      projectId: args.quote.project_id,
+      error: store.error,
+    });
+  }
   return {
-    pdf: { attached: true, stored: args.pdf.stored, error: args.pdf.error },
+    pdf: { attached: true, stored: store.stored, error: store.error },
     email,
   };
 }

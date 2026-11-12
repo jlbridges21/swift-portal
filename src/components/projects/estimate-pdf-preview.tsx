@@ -114,7 +114,7 @@ export function DownloadEstimatePdfButton({
   input: EstimatePdfInput;
   logoUrl: string;
   className?: string;
-  /** Business view of a sent proposal: download the copy stored when it was sent. */
+  /** A sent proposal: download its archived copy (business and client portal). */
   preferStoredCopy?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
@@ -140,10 +140,20 @@ export function DownloadEstimatePdfButton({
   );
 }
 
-/** The immutable PDF stored when the proposal was sent, or null (legacy / never sent). */
+/**
+ * The archived PDF of a sent proposal (archived on first request for proposals
+ * sent before archiving worked), or null when never sent or unavailable.
+ */
 export async function fetchStoredProposalPdf(quoteId: string): Promise<Uint8Array | null> {
   try {
-    const response = await fetch(`/api/quotes/${encodeURIComponent(quoteId)}/pdf`, { credentials: "include" });
+    let timeZone = "";
+    try {
+      timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    } catch {
+      // Server falls back to its default zone.
+    }
+    const query = timeZone ? `?time_zone=${encodeURIComponent(timeZone)}` : "";
+    const response = await fetch(`/api/quotes/${encodeURIComponent(quoteId)}/pdf${query}`, { credentials: "include" });
     if (!response.ok) return null;
     return new Uint8Array(await response.arrayBuffer());
   } catch {
