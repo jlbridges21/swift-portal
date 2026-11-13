@@ -8,6 +8,7 @@ import { isOutstandingPayment } from "@/components/projects/payments-section";
 import { useMarkPaymentPaid } from "@/lib/use-mark-payment-paid";
 import { paymentMethodLabel, paymentReceiptHref } from "@/lib/payment-status";
 import { cn } from "@/lib/utils";
+import { useHydrated, viewerDateArgs } from "@/lib/use-hydrated";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,6 +30,8 @@ export function AdminPaymentActions({
   className,
 }: AdminPaymentActionsProps) {
   const { markPaid, markingPaidId } = useMarkPaymentPaid({ onUpdated });
+  // Server and first client render agree (UTC); the viewer's own time zone applies after hydration.
+  const { timeZone: viewerTimeZone } = viewerDateArgs(useHydrated());
   const link = payment.payment_link_url || payment.stripe_payment_link_url;
   const canMarkPaid = isOutstandingPayment(payment.status);
   const projectName = payment.projects?.project_name;
@@ -46,8 +49,8 @@ export function AdminPaymentActions({
           </p>
         )}
         <p className="text-xs text-muted mt-0.5">
-          {formatDate(payment.created_at)}
-          {payment.paid_at && ` · Paid ${formatDate(payment.paid_at)}`}
+          {formatDate(payment.created_at, viewerTimeZone)}
+          {payment.paid_at && ` · Paid ${formatDate(payment.paid_at, viewerTimeZone)}`}
           {(payment.status === "paid" || payment.status === "processing") && paymentMethodLabel(payment) ? ` · ${paymentMethodLabel(payment)}` : ""}
           {payment.client_fee_cents ? ` · client paid ${formatCurrency(payment.client_fee_cents)} card fee` : ""}
         </p>

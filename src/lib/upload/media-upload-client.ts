@@ -1,4 +1,8 @@
-import * as tus from "tus-js-client";
+// tus-js-client loads on first upload, not with every admin page (the upload manager lives in
+// the admin shell, so a static import put it in every admin bundle). Dynamic imports are cached
+// by the module system after the first load.
+type TusModule = typeof import("tus-js-client");
+const loadTus = (): Promise<TusModule> => import("tus-js-client");
 import { createClient } from "@/lib/supabase/client";
 import {
   TUS_MAX_STALL_RESUMES,
@@ -538,6 +542,25 @@ function uploadViaTus({
         })
       );
     };
+
+    let tus: TusModule;
+    try {
+      tus = await loadTus();
+    } catch (err) {
+      reject(
+        binaryError("Upload could not start. Check your connection and try again.", {
+          ...uploadLogContext(file, mimeType, projectId, filePath),
+          step: "uploading_binary",
+          uploadMethod: "tus",
+          bucket,
+          failurePhase: "before_binary",
+          failureKind: "network",
+          retryable: true,
+          rawDetails: { detail: err instanceof Error ? err.message : String(err) },
+        })
+      );
+      return;
+    }
 
     const upload = new tus.Upload(file, {
       endpoint,

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
 import type { MediaAsset, Project } from "@/lib/types";
 import { getYouTubeEmbedUrl, getYouTubeThumbnail } from "@/lib/youtube";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
@@ -251,6 +252,43 @@ export async function getProjectHeroPosterUrlMap(
   return result;
 }
 
+/**
+ * Banner signed URLs are reused within a 30-minute bucket instead of minted per page view.
+ *
+ * Why: every new token is a Supabase CDN miss, so the 1600px transform re-renders on every
+ * visit (measured 470–680 ms to first byte vs ~45 ms for a repeated URL) and the browser can
+ * never reuse its cached image. Reusing the URL makes repeat views CDN + browser cache hits.
+ *
+ * Safety: the key is (business, storage path, transform) — paths are tenant-prefixed and the
+ * business id is part of the key, so nothing is shared across studios. It is only reached from
+ * getProjectHeroBannerUrl, which runs after the page's access checks. URLs are signed for 60
+ * minutes and only handed out during their own 30-minute bucket, so a reused URL always has
+ * ≥30 minutes left (the key changes every bucket; nothing is served stale).
+ */
+const BANNER_SIGN_TTL_SECONDS = 3600;
+const BANNER_BUCKET_MS = 30 * 60 * 1000;
+
+function bannerUrlBucket(now = Date.now()): number {
+  return Math.floor(now / BANNER_BUCKET_MS);
+}
+
+const reusableBannerSignedUrl = unstable_cache(
+  async (businessId: string, filePath: string, transform: boolean, bucket: number): Promise<string | null> => {
+    void bucket; // part of the cache key only
+    const db = await createTenantServiceClient(businessId);
+    const { data, error } = await db.raw.storage
+      .from("project-media")
+      .createSignedUrl(
+        filePath,
+        BANNER_SIGN_TTL_SECONDS,
+        transform ? { transform: { width: BANNER_TRANSFORM_WIDTH, quality: 75 } } : undefined
+      );
+    return !error && data?.signedUrl ? data.signedUrl : null;
+  },
+  ["project-hero-banner-url-v1"],
+  { revalidate: BANNER_BUCKET_MS / 1000 }
+);
+
 /** Long edge for the New interface project hero banner (wide, so the 400px card thumb is too soft). */
 const BANNER_TRANSFORM_WIDTH = 1600;
 
@@ -291,12 +329,8 @@ export async function getProjectHeroBannerUrl(
   if (asset.media_type === "photo" && asset.media_source !== "youtube" && asset.file_path) {
     const size = asset.file_size ?? 0;
     const canTransform = size > 0 && size <= 25 * 1024 * 1024;
-    const { data, error } = await db.raw.storage.from("project-media").createSignedUrl(
-      asset.file_path,
-      3600,
-      canTransform ? { transform: { width: BANNER_TRANSFORM_WIDTH, quality: 75 } } : undefined
-    );
-    if (!error && data?.signedUrl) return data.signedUrl;
+    const url = await reusableBannerSignedUrl(businessId, asset.file_path, canTransform, bannerUrlBucket());
+    if (url) return url;
   }
   return posterUrlForAsset(db.raw, asset);
 }

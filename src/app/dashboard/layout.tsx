@@ -5,6 +5,8 @@ import { BrandProvider } from "@/components/brand/brand-provider";
 import { parseSurfaceMode } from "@/lib/brand-color";
 import { ClientSubscriptionNotice } from "@/components/dashboard/client-subscription-notice";
 import { getTenantContext } from "@/lib/tenant";
+import { getProfile } from "@/lib/auth";
+import { PortalViewerProvider } from "@/components/dashboard/portal-viewer-context";
 import { metadataFromBusiness } from "@/lib/site-metadata";
 import type { Metadata, Viewport } from "next";
 import { appChromeThemeColor } from "@/lib/pwa/metadata";
@@ -35,11 +37,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
         )
     );
   }
-  const settings = await getAppSettings(tenant.businessId);
+  // getProfile is request-cached (getTenantContext already loaded it), so this adds no query.
+  const [settings, profile] = await Promise.all([getAppSettings(tenant.businessId), getProfile()]);
   const brand = getPortalBrandFromSettings(settings);
 
   return (
     <BrandProvider brand={brand} surfaceMode={parseSurfaceMode(settings.business.surfaceMode)}>
+     <PortalViewerProvider viewer={{ name: profile?.full_name ?? null, avatarUrl: profile?.avatar_url ?? null }}>
       {tenant.role === "client" && (
         <ClientSubscriptionNotice
           businessName={tenant.business.name}
@@ -50,6 +54,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         />
       )}
       {children}
+     </PortalViewerProvider>
     </BrandProvider>
   );
 }

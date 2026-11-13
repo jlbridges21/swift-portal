@@ -137,6 +137,8 @@ export async function getClientListRows(
     clientsQuery = clientsQuery.in("id", options.clientIds);
   }
 
+  // Payments don't depend on the client rows, so they load alongside them.
+  const paymentsLoad = supabase.from("payments").select("client_id, amount, status").eq("business_id", businessId);
   const { data: clients } = await clientsQuery;
   const clientIds = (clients ?? []).map((c) => c.id);
 
@@ -144,18 +146,20 @@ export async function getClientListRows(
     clientIds.length
       ? supabase.from("client_stats").select("*").in("client_id", clientIds)
       : Promise.resolve({ data: [] as { client_id: string }[] }),
-    supabase.from("payments").select("client_id, amount, status").eq("business_id", businessId),
+    paymentsLoad,
   ]);
 
   const statsMap = new Map((statsRows ?? []).map((s) => [s.client_id as string, s]));
   const loginMap = new Map<string, string>();
 
-  const userIds = (clients ?? []).map((c) => c.user_id).filter(Boolean) as string[];
+  // Auth is only a fallback: clients.last_login_at (kept current by touchClientLogin) wins
+  // whenever it is set, so only look up portal users that have no stored login yet.
+  const userIds = (clients ?? [])
+    .filter((c) => c.user_id && !c.last_login_at)
+    .map((c) => c.user_id) as string[];
   if (userIds.length) {
     // Per-user lookups instead of auth.admin.listUsers({ perPage: 1000 }), which
     // enumerated the entire Auth directory (cross-tenant) and truncated at 1000.
-    // N getUserById calls is acceptable while the client list is small; batch or
-    // cache if this path becomes hot.
     const authUsers = await Promise.all(
       userIds.map((id) => db.raw.auth.admin.getUserById(id))
     );

@@ -13,12 +13,13 @@ export function formatCurrency(cents: number): string {
   }).format(cents / 100);
 }
 
-export function formatDate(date: string | Date | null): string {
+export function formatDate(date: string | Date | null, timeZone?: string): string {
   if (!date) return "—";
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone,
   }).format(new Date(date));
 }
 

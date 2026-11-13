@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ProjectLink } from "@/components/admin/projects-workspace/project-link";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, Calendar, CreditCard, MapPin, Plus, User } from "lucide-react";
 import { ProjectCoverImage } from "@/components/projects/project-cover-image";
@@ -92,7 +93,7 @@ function PipelineCard({
   const date = formatCardDate(project);
   return (
     <article className="group relative overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
-      <Link href={`/admin/projects/${project.id}`} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
+      <ProjectLink href={`/admin/projects/${project.id}`} className="relative block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
         <Hero url={heroUrl} sizes="(max-width: 640px) 70vw, 280px" className="aspect-[16/8] w-full" />
         <div className="space-y-1 px-3 pb-2.5 pt-2.5">
           <h4 className="line-clamp-2 pr-6 text-sm font-semibold leading-snug text-heading group-hover:text-accent">{project.project_name}</h4>
@@ -120,7 +121,7 @@ function PipelineCard({
             <ProjectStorageLabel projectId={project.id} storage={storageBytes} className="ml-auto text-[11px]" />
           </div>
         </div>
-      </Link>
+      </ProjectLink>
       <ProjectActionsButton project={project} onMove={onMove} canOpenClients={canOpenClients} className="absolute bottom-1.5 right-1.5" />
     </article>
   );
@@ -345,9 +346,9 @@ export function ProjectsList({
                   <div className="flex min-w-0 items-center gap-3">
                     <Hero url={heroFor(heroUrls, p.id)} sizes="72px" className="hidden h-11 w-16 shrink-0 rounded-lg sm:block" />
                     <div className="min-w-0">
-                      <Link href={`/admin/projects/${p.id}`} onClick={(e) => e.stopPropagation()} className="block truncate font-semibold text-heading hover:text-accent">
+                      <ProjectLink href={`/admin/projects/${p.id}`} onClick={(e) => e.stopPropagation()} className="relative block truncate font-semibold text-heading hover:text-accent">
                         {p.project_name}
-                      </Link>
+                      </ProjectLink>
                       <p className="truncate text-xs text-muted">{p.property_address || p.clients?.name || "—"}</p>
                       <div className="mt-1 md:hidden">
                         <StagePill status={p.status} />
@@ -401,7 +402,7 @@ export function ProjectsGrid({
         return (
           <li key={p.id} className="min-w-0">
             <article className="group relative h-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
-              <Link href={`/admin/projects/${p.id}`} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
+              <ProjectLink href={`/admin/projects/${p.id}`} className="relative block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
                 <div className="relative">
                   <Hero url={heroFor(heroUrls, p.id)} sizes="(min-width: 1536px) 18vw, (min-width: 1024px) 30vw, 90vw" className="aspect-[16/10] w-full" />
                   <span className="absolute left-2 top-2">
@@ -434,7 +435,7 @@ export function ProjectsGrid({
                   </div>
                   <ProjectStorageLabel projectId={p.id} storage={storageBytes} className="block text-[11px]" />
                 </div>
-              </Link>
+              </ProjectLink>
               <ProjectActionsButton project={p} onMove={onMove} canOpenClients={canOpenClients} className="absolute bottom-2 right-2" />
             </article>
           </li>

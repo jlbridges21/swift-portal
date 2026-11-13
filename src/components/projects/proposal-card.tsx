@@ -17,6 +17,7 @@ import { CheckCircle2 } from "lucide-react";
 import { estimateTotalPending, parseEstimateDescription, sectionIsCustomQuote } from "@/lib/estimate-sections";
 import { EstimatePriceTable, EstimateSectionsView } from "@/components/projects/estimate-sections-view";
 import { cn } from "@/lib/utils";
+import { useHydrated, viewerDateArgs } from "@/lib/use-hydrated";
 
 interface ProposalCardProps {
   quote: ProjectQuote;
@@ -30,6 +31,7 @@ interface ProposalCardProps {
 
 export function ProposalCard({ quote, kind, isAdmin, actions, className, depositFallback }: ProposalCardProps) {
   const brand = usePortalBrand();
+  const { locale: viewerLocale, timeZone: viewerTimeZone } = viewerDateArgs(useHydrated());
   const packageName = getQuotePackageName(quote);
   const { showPrice, priceLabel, priceCents } = getQuotePriceDisplay(quote);
   // Combined (multi-service) estimates group deliverables under each service heading.
@@ -196,7 +198,7 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
 
       {quote.expires_at && (
         <p className="mt-4 text-xs text-slate-500 surface-dark:text-muted">
-          Valid until {new Date(quote.expires_at).toLocaleDateString()}
+          Valid until {new Date(quote.expires_at).toLocaleDateString(viewerLocale, { timeZone: viewerTimeZone })}
         </p>
       )}
 
@@ -205,7 +207,7 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>
             Proposal approved
-            {quote.approved_at ? ` on ${new Date(quote.approved_at).toLocaleDateString()}` : ""}
+            {quote.approved_at ? ` on ${new Date(quote.approved_at).toLocaleDateString(viewerLocale, { timeZone: viewerTimeZone })}` : ""}
           </span>
         </div>
       )}

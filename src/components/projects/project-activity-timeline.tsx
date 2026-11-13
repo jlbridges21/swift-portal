@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { History } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useHydrated, viewerDateArgs } from "@/lib/use-hydrated";
 import { ACTIVITY_PAGE_SIZE, usePaginatedActivities } from "@/lib/use-paginated-activities";
 
 interface ProjectActivityTimelineProps {
@@ -28,6 +29,8 @@ export function ProjectActivityTimeline({
   bare = false,
 }: ProjectActivityTimelineProps) {
   const { visible, hasMore, allShown, loadMore } = usePaginatedActivities(activities, pageSize);
+  // Same text on the server and the hydration pass; viewer's own zone right after (no #418).
+  const { timeZone } = viewerDateArgs(useHydrated());
 
   function displayFor(log: ActivityLog) {
     return clientMode
@@ -69,6 +72,7 @@ export function ProjectActivityTimeline({
                         )}
                         <p className="text-xs text-muted mt-1">
                           {new Date(log.created_at).toLocaleString("en-US", {
+                            timeZone,
                             month: "short",
                             day: "numeric",
                             year: "numeric",

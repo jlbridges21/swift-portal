@@ -8,6 +8,14 @@ const nextConfig = {
     "/api/quotes": ["./public/fonts/Inter-*.ttf"],
     "/api/quotes/[id]/pdf": ["./public/fonts/Inter-*.ttf"],
   },
+  /**
+   * Experiment only (off by default = Next's 0s): client router cache for dynamic pages.
+   * Enable for a measurement build with EXPERIMENT_STALE_TIMES_DYNAMIC=30. Kept off unless its
+   * benefit is material and freshness tests pass (see scripts/perf/).
+   */
+  ...(process.env.EXPERIMENT_STALE_TIMES_DYNAMIC
+    ? { experimental: { staleTimes: { dynamic: Number(process.env.EXPERIMENT_STALE_TIMES_DYNAMIC) } } }
+    : {}),
   images: {
     // 75 is the default; 90 keeps UI text sharp in marketing product screenshots (ShowcaseImage).
     qualities: [75, 90],

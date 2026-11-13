@@ -542,15 +542,22 @@ export async function reconcileProjectPaymentsOnLoad(
     .eq("project_id", projectId)
     .eq("status", "paid");
 
-  for (const row of paidRows ?? []) {
-    const payment = row as Payment;
-    if (!payment.stripe_payment_intent_id || payment.stripe_payment_link_id) {
-      const backfilled = await backfillPaidPaymentStripeIds(payment);
-      if (backfilled) {
-        outstanding.changed = true;
+  // Each paid row is independent (its own Stripe lookups and its own row update), so the
+  // rows are reconciled concurrently instead of one Stripe round trip after another.
+  // Within a row the order is unchanged.
+  const backfills = await Promise.all(
+    (paidRows ?? []).map(async (row) => {
+      const payment = row as Payment;
+      if (!payment.stripe_payment_intent_id || payment.stripe_payment_link_id) {
+        const backfilled = await backfillPaidPaymentStripeIds(payment);
+        await findSucceededStripePaymentForRecord(payment);
+        return backfilled;
       }
-      await findSucceededStripePaymentForRecord(payment);
-    }
+      return false;
+    })
+  );
+  if (backfills.some(Boolean)) {
+    outstanding.changed = true;
   }
 
   return outstanding;

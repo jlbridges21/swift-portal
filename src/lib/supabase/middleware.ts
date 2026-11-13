@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { PERF_TRACE_COOKIE, perfTraceEnvEnabled } from "@/lib/perf/env";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   applyHostHeaders,
@@ -163,12 +164,22 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
+  // Benchmark-only timings (Server-Timing header); inert unless PERF_TRACE=1 on a non-production
+  // deployment AND the request opts in. Durations only.
+  const perfOn = perfTraceEnvEnabled() && Boolean(request.cookies.get(PERF_TRACE_COOKIE)?.value);
+  const perfT0 = performance.now();
+  const perfMarks: string[] = [];
+  const perfLap = (name: string, since: number) => {
+    if (perfOn) perfMarks.push(`${name};dur=${(performance.now() - since).toFixed(1)}`);
+  };
+  let perfSince = performance.now();
   const resolution = await resolveRequestHost({
     hostname: inbound,
     pathname: request.nextUrl.pathname,
     pathCookie: request.cookies.get(PATH_TENANT_COOKIE)?.value ?? null,
   });
 
+  perfLap("mw-host", perfSince);
   const requestHeaders = new Headers(request.headers);
   applyHostHeaders(requestHeaders, resolution);
 
@@ -263,9 +274,11 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
+  perfSince = performance.now();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  perfLap("mw-getuser", perfSince);
 
   const path = resolution.rewritePathname ?? request.nextUrl.pathname;
   const isApi = path.startsWith("/api/");
@@ -356,11 +369,13 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user) {
+    perfSince = performance.now();
     const { data: profile } = await supabase
       .from("profiles")
       .select("role, business_id, client_id, email, staff_permissions, disabled_at")
       .eq("id", user.id)
       .single();
+    perfLap("mw-profile", perfSince);
 
     // Build a minimal Profile for staff path checks (middleware select is partial).
     const staffProfile = profile
@@ -426,7 +441,9 @@ export async function updateSession(request: NextRequest) {
       return applyPathCookie(NextResponse.redirect(url), resolution);
     }
 
+    perfSince = performance.now();
     const ownBusiness = profile?.business_id ? await lookupBusinessById(profile.business_id) : null;
+    perfLap("mw-business", perfSince);
     const businessUnavailable =
       Boolean(profile?.business_id) &&
       profile?.role !== "super_admin" &&
@@ -956,5 +973,9 @@ export async function updateSession(request: NextRequest) {
     supabaseResponse.headers.set("Cache-Control", "private, no-store");
   }
 
+  if (perfOn) {
+    perfLap("mw-total", perfT0);
+    supabaseResponse.headers.set("Server-Timing", perfMarks.join(", "));
+  }
   return applyPathCookie(supabaseResponse, resolution);
 }

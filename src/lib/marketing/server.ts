@@ -890,16 +890,21 @@ export type KitSummary = {
 
 export async function loadKitSummary(businessId: string, projectId: string): Promise<KitSummary | null> {
   const db = await createTenantServiceClient(businessId);
-  const project = await loadProjectRow(db, projectId);
+  // Independent tenant-scoped reads run together (this sits on the project page's critical path).
+  // The kit read is harmless if the project turns out not to exist: nothing is returned or written.
+  const [project, appSettings, kitRead] = await Promise.all([
+    loadProjectRow(db, projectId),
+    getAppSettings(businessId),
+    db.from("marketing_kits").select(KIT_COLUMNS).eq("project_id", projectId).maybeSingle(),
+  ]);
   if (!project) return null;
-  const appSettings = await getAppSettings(businessId);
   const settings = appSettings.marketingKit;
   const blankAccess = (p: MarketingProduct): ProductAccess => resolveAccess(p, resolveOffer(p, settings, {}), []);
   const defaultsOut = {
     website: { mode: settings.website.offered ? settings.website.mode : ("unavailable" as const), priceCents: settings.website.priceCents },
     social: { mode: settings.social.offered ? settings.social.mode : ("unavailable" as const), priceCents: settings.social.priceCents },
   };
-  const { data: kitRow, error } = await db.from("marketing_kits").select(KIT_COLUMNS).eq("project_id", projectId).maybeSingle();
+  const { data: kitRow, error } = kitRead;
   if (isMarketingSchemaMissing(error)) {
     return {
       setupRequired: true,

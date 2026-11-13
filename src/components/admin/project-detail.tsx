@@ -1,7 +1,7 @@
 "use client";
 
 import { parseProjectDownloadAccess, type ProjectDownloadAccess } from "@/lib/deliverables";
-import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, Suspense, useMemo, useCallback, useRef, use, type ReactNode } from "react";
 import { ProjectServicesPicker } from "@/components/admin/project-services-picker";
 import type { ServiceOption } from "@/components/forms/service-multi-select";
 import { useRouter } from "next/navigation";
@@ -59,11 +59,13 @@ import {
   Trash,
   History,
   Copy,
+  Activity as ActivityIcon,
 } from "lucide-react";
 import { useInAdminAppShell } from "@/components/admin/app-shell/admin-app-shell-context";
 import { ActionMenu, type ActionMenuAnchor, type ActionMenuItem } from "@/components/ui/action-menu";
 import {
   ActivityPreview,
+  SidebarCard,
   CategoryChips,
   ChangeCoverDialog,
   ClientContactCard,
@@ -82,6 +84,8 @@ import {
   type WorkspaceTab,
 } from "@/components/admin/project-workspace/workspace-parts";
 import { MarketingAddOns } from "@/components/admin/project-workspace/marketing-addons";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useHydrated, viewerDateArgs } from "@/lib/use-hydrated";
 import type { ProjectClientFavorites } from "@/lib/client-favorites";
 import { documentKindLabel, downloadMediaFileChecked, isPdf, viewMediaAsset } from "@/lib/download";
 import { formatCurrency } from "@/lib/utils";
@@ -165,7 +169,8 @@ interface AdminProjectDetailProps {
   shootProposals: ShootProposal[];
   projectClients: { id: string; client_id: string; is_primary: boolean; clients: Client }[];
   allClients: Pick<Client, "id" | "name" | "email" | "company">[];
-  activities: ActivityLog[];
+  /** Streamed from the server (never blocks the page); a plain array also works. */
+  activities: ActivityLog[] | Promise<ActivityLog[]>;
   revisions: Revision[];
   quotes: ProjectQuote[];
   assetReviews: AssetReview[];
@@ -235,11 +240,12 @@ function shortLocation(address: string | null | undefined): string | null {
   return rest.length ? rest.join(", ") : parts[0];
 }
 
-function formatHeroDate(value: string | null | undefined, dateOnly = false): string | null {
+function formatHeroDate(value: string | null | undefined, dateOnly = false, timeZone?: string): string | null {
   if (!value) return null;
   const d = dateOnly ? new Date(`${value.slice(0, 10)}T12:00:00`) : new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  // Date-only values are pinned to local noon, so only timestamps need the hydration-safe zone.
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", ...(dateOnly ? {} : { timeZone }) });
 }
 
 async function readServerError(res: Response, fallback: string): Promise<string> {
@@ -289,6 +295,8 @@ export function AdminProjectDetail({
   clientFavorites: initialClientFavorites,
   businessRequiresDeliveredForDownloads = true,
 }: AdminProjectDetailProps) {
+  // Dates render identically on the server and the hydration pass, then in the viewer's zone.
+  const { locale: viewerLocale, timeZone: viewerTimeZone } = viewerDateArgs(useHydrated());
   const router = useRouter();
   const inAppShell = useInAdminAppShell();
   const [activeTab, setActiveTabState] = useState<WorkspaceTabKey>("media");
@@ -1914,7 +1922,7 @@ export function AdminProjectDetail({
       .filter((sp) => sp.status === "confirmed")
       .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
     const heroDate =
-      formatHeroDate(confirmedShoot?.proposed_at) ??
+      formatHeroDate(confirmedShoot?.proposed_at, false, viewerTimeZone) ??
       formatHeroDate(initialProject.shoot_date, true) ??
       (form.delivery_date ? `Delivery ${formatHeroDate(form.delivery_date, true)}` : null);
     const coverCandidates = [...photos, ...videos];
@@ -2093,11 +2101,11 @@ export function AdminProjectDetail({
       const response = !focus
         ? null
         : focus.status === "approved"
-          ? { label: "Accepted", hint: focus.approved_at ? new Date(focus.approved_at).toLocaleDateString() : null, tone: "success" as const }
+          ? { label: "Accepted", hint: focus.approved_at ? new Date(focus.approved_at).toLocaleDateString(viewerLocale, { timeZone: viewerTimeZone }) : null, tone: "success" as const }
           : focus.status === "changes_requested"
             ? { label: "Changes requested", hint: "Revise and resend", tone: "warning" as const }
             : focus.status === "sent"
-              ? { label: "Awaiting response", hint: focus.sent_at ? `Sent ${new Date(focus.sent_at).toLocaleDateString()}` : null, tone: "accent" as const }
+              ? { label: "Awaiting response", hint: focus.sent_at ? `Sent ${new Date(focus.sent_at).toLocaleDateString(viewerLocale, { timeZone: viewerTimeZone })}` : null, tone: "accent" as const }
               : { label: "Not sent yet", hint: "Send it when it's ready", tone: "default" as const };
       return { focus, response };
     })();
@@ -2183,14 +2191,20 @@ export function AdminProjectDetail({
             />
           }
         />
+        <Suspense fallback={<ActivityPreviewSkeleton />}>
+        <StreamedActivities source={activities}>
+        {(activityList) => (
         <ActivityPreview
-          activities={activities}
+          activities={activityList}
           onViewAll={() => setShowActivityModal(true)}
           onRevisionClick={(revisionId) => {
             const rev = revisions.find((r) => r.id === revisionId);
             if (rev) setSelectedRevision(rev);
           }}
         />
+        )}
+        </StreamedActivities>
+        </Suspense>
       </>
     );
 
@@ -2482,7 +2496,7 @@ export function AdminProjectDetail({
                               {name}
                             </p>
                             <p className="truncate text-xs text-muted">
-                              {[kind, d.file_size ? formatFileSize(d.file_size) : null, new Date(d.created_at).toLocaleDateString()]
+                              {[kind, d.file_size ? formatFileSize(d.file_size) : null, new Date(d.created_at).toLocaleDateString(viewerLocale, { timeZone: viewerTimeZone })]
                                 .filter(Boolean)
                                 .join(" · ")}
                               {!isClientVisibleMedia(d) ? " · Hidden from client" : ""}
@@ -2712,7 +2726,7 @@ export function AdminProjectDetail({
                         >
                           <p className="line-clamp-2 text-muted">{rev.description}</p>
                           <p className="mt-2 text-xs text-muted">
-                            {rev.status.replace("_", " ")} · {new Date(rev.created_at).toLocaleDateString()}
+                            {rev.status.replace("_", " ")} · {new Date(rev.created_at).toLocaleDateString(viewerLocale, { timeZone: viewerTimeZone })}
                           </p>
                         </button>
                       ))}
@@ -2769,8 +2783,11 @@ export function AdminProjectDetail({
         </Modal>
         <Modal open={showActivityModal} onClose={() => setShowActivityModal(false)} title="Project activity" className="sm:max-w-2xl">
           <div className="pb-4 [&>div]:border-0 [&>div]:shadow-none">
+            <Suspense fallback={<ActivityListSkeleton />}>
+            <StreamedActivities source={activities}>
+            {(activityList) => (
             <ProjectActivityTimeline
-              activities={activities}
+              activities={activityList}
               onRevisionClick={(revisionId) => {
                 const rev = revisions.find((r) => r.id === revisionId);
                 if (rev) {
@@ -2779,6 +2796,9 @@ export function AdminProjectDetail({
                 }
               }}
             />
+            )}
+            </StreamedActivities>
+            </Suspense>
           </div>
         </Modal>
         {sharedDialogs}
@@ -3172,7 +3192,7 @@ export function AdminProjectDetail({
                 className="w-full rounded-lg border border-border p-4 text-left text-sm hover:bg-slate-50 surface-dark:hover:bg-subtle"
               >
                 <p className="text-muted line-clamp-2">{rev.description}</p>
-                <p className="text-xs text-muted mt-2">{rev.status.replace("_", " ")} · {new Date(rev.created_at).toLocaleDateString()}</p>
+                <p className="text-xs text-muted mt-2">{rev.status.replace("_", " ")} · {new Date(rev.created_at).toLocaleDateString(viewerLocale, { timeZone: viewerTimeZone })}</p>
               </button>
             ))}
           </CardContent>
@@ -3232,13 +3252,19 @@ export function AdminProjectDetail({
         inbox (organized by client). Open a client conversation there to reply.
       </div>
 
-      <ProjectActivityTimeline
-        activities={activities}
-        onRevisionClick={(revisionId) => {
-          const rev = revisions.find((r) => r.id === revisionId);
-          if (rev) setSelectedRevision(rev);
-        }}
-      />
+      <Suspense fallback={<ActivityListSkeleton />}>
+        <StreamedActivities source={activities}>
+          {(activityList) => (
+            <ProjectActivityTimeline
+              activities={activityList}
+              onRevisionClick={(revisionId) => {
+                const rev = revisions.find((r) => r.id === revisionId);
+                if (rev) setSelectedRevision(rev);
+              }}
+            />
+          )}
+        </StreamedActivities>
+      </Suspense>
 
       {sharedDialogs}
 
@@ -3443,6 +3469,47 @@ function EmptyMediaState({ icon: Icon, text }: { icon: React.ComponentType<{ cla
   return (
     <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted">
       <Icon className="h-4 w-4" /> {text}
+    </div>
+  );
+}
+
+/**
+ * Reads the streamed activity history. The server sends it as a promise so the page renders
+ * without waiting for it; `use()` suspends only the activity panels (never .then().catch() —
+ * streamed RSC promises are thenables).
+ */
+function StreamedActivities({
+  source,
+  children,
+}: {
+  source: ActivityLog[] | Promise<ActivityLog[]>;
+  children: (activities: ActivityLog[]) => ReactNode;
+}) {
+  const list = Array.isArray(source) ? source : use(source);
+  return <>{children(list)}</>;
+}
+
+function ActivityPreviewSkeleton() {
+  return (
+    <SidebarCard title="Project Activity" icon={ActivityIcon}>
+      <ActivityListSkeleton />
+    </SidebarCard>
+  );
+}
+
+function ActivityListSkeleton() {
+  return (
+    <div className="space-y-3 p-4" aria-busy="true">
+      <span className="sr-only">Loading activity…</span>
+      {Array.from({ length: 4 }, (_, i) => (
+        <div key={i} className="flex gap-2.5">
+          <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+          <div className="flex-1 space-y-1.5">
+            <Skeleton className="h-3.5 w-4/5" />
+            <Skeleton className="h-2.5 w-1/3" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

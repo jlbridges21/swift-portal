@@ -8,6 +8,23 @@ import { cn } from "@/lib/utils";
 type MethodsState = { bankAvailable: boolean; passCardFee: boolean; canManage: boolean };
 
 /**
+ * The project page mounts this notice in more than one panel; they share one request.
+ * Kept per browser tab only, and only briefly, so a Settings change shows up on the next
+ * page that mounts the notice after the window (sign-out is a full page load, which clears it).
+ */
+const METHODS_REUSE_MS = 15_000;
+const methodsRequest: { promise: Promise<MethodsState | null> | null; at: number } = { promise: null, at: 0 };
+
+function loadPaymentMethods(): Promise<MethodsState | null> {
+  if (methodsRequest.promise && Date.now() - methodsRequest.at < METHODS_REUSE_MS) return methodsRequest.promise;
+  methodsRequest.at = Date.now();
+  methodsRequest.promise = fetch("/api/payments/methods", { credentials: "include" })
+    .then((res) => (res.ok ? (res.json() as Promise<MethodsState>) : null))
+    .catch(() => null);
+  return methodsRequest.promise;
+}
+
+/**
  * Tells the business, where it requests payment, whether clients can pay by bank (ACH).
  * Off: explains the benefit and links straight to Settings → Payments to turn it on.
  * On: a one-line confirmation.
@@ -17,12 +34,9 @@ export function BankPaymentsNotice({ className }: { className?: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/payments/methods", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: MethodsState | null) => {
-        if (!cancelled && data) setState(data);
-      })
-      .catch(() => undefined);
+    void loadPaymentMethods().then((data) => {
+      if (!cancelled && data) setState(data);
+    });
     return () => {
       cancelled = true;
     };

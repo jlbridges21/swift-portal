@@ -91,6 +91,7 @@
   "devDependencies": {
     "@types/archiver": "^8.0.0",
     "@types/qrcode": "^1.5.5",
-    "@types/web-push": "^3.6.4"
+    "@types/web-push": "^3.6.4",
+    "playwright": "^1.65.0"
   }
 }

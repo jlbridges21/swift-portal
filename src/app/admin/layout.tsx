@@ -41,10 +41,29 @@ export async function generateViewport(): Promise<Viewport> {
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const { profile, tenant } = await requireAdminPage();
-  const [settings, experience] = await Promise.all([getAppSettings(tenant.businessId), getUiExperience(profile)]);
-  const brand = getPortalBrandFromSettings(settings);
-  const caps = await getCapabilities();
   const isStaff = profile.role === "staff";
+  // Trial / scheduled-plan UI for owner admins. Best-effort: any failure just hides it.
+  const subStatus = tenant.business.subscription_status;
+  const wantsTrialUi = !isStaff && (subStatus === "trialing" || subStatus === "active");
+  const ownerTrialing = wantsTrialUi && subStatus === "trialing" && profile.role === "admin" && !tenant.impersonating;
+  // Everything below depends only on profile + tenant, so it runs in one parallel batch
+  // instead of a chain of round trips on every admin request.
+  const [settings, experience, caps, showTax, trialUi, activePlan] = await Promise.all([
+    getAppSettings(tenant.businessId),
+    getUiExperience(profile),
+    getCapabilities(),
+    isStaff ? Promise.resolve(false) : w9CountryDecision(tenant.businessId).then((d) => d.us),
+    wantsTrialUi
+      ? loadTrialUiContext(tenant.businessId, profile.id, { needModalState: ownerTrialing })
+      : Promise.resolve(null),
+    wantsTrialUi
+      ? assertActivePlanKey(tenant.business.plan || "studio").catch((err: unknown) => {
+          console.warn("[admin] plan lookup skipped", err instanceof Error ? err.message : err);
+          return null;
+        })
+      : Promise.resolve(null),
+  ]);
+  const brand = getPortalBrandFromSettings(settings);
   // Force showPartner false when profile.role === 'staff'.
   const showPartner = isStaff ? false : showPartnerNavItem(caps);
   const navPartnerLabel = isStaff ? "" : partnerNavLabel(caps);
@@ -56,7 +75,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     media: staffCan(profile, "media.upload"),
   };
   const headerRole = isStaff ? ("staff" as const) : ("admin" as const);
-  const showTax = isStaff ? false : (await w9CountryDecision(tenant.businessId)).us;
   const finishBanner =
     !isStaff &&
     showFinishSetupBanner({
@@ -66,13 +84,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       impersonating: tenant.impersonating,
     });
 
-  // Trial / scheduled-plan UI for owner admins. Best-effort: any failure just hides it.
-  const subStatus = tenant.business.subscription_status;
-  const wantsTrialUi = !isStaff && (subStatus === "trialing" || subStatus === "active");
-  const ownerTrialing = wantsTrialUi && subStatus === "trialing" && profile.role === "admin" && !tenant.impersonating;
-  const trialUi = wantsTrialUi
-    ? await loadTrialUiContext(tenant.businessId, profile.id, { needModalState: ownerTrialing })
-    : null;
   const scheduledPlan = trialUi ? getScheduledPlan({ ...tenant.business, journey: trialUi.journey }) : null;
 
   // Subscribe & Save prompts: trial users (and scheduled-plan users still inside their original
@@ -83,7 +94,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   let offer: OfferDisplay | null = null;
   if (wantsOffer) {
     try {
-      const plan = await assertActivePlanKey(tenant.business.plan || "studio");
+      if (!activePlan) throw new Error("plan unavailable");
+      const plan = activePlan;
       offer = await offerDisplayForBusiness(
         {
           id: tenant.businessId,
@@ -109,14 +121,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       scheduled: Boolean(scheduledPlan),
       seen: trialUi.seen,
     });
-    let plan: Awaited<ReturnType<typeof assertActivePlanKey>> | null = null;
-    if (decision.show) {
-      try {
-        plan = await assertActivePlanKey(tenant.business.plan || "studio");
-      } catch (err) {
-        console.warn("[admin] trial modal skipped", err instanceof Error ? err.message : err);
-      }
-    }
+    const plan = activePlan;
     if (decision.show && plan) {
       trialModal = (
         <TrialConversionModal

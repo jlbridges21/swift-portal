@@ -114,11 +114,12 @@ function activePaymentRows(rows: AdminPaymentRow[] | null): AdminPaymentRow[] {
 
 export async function fetchAdminDashboardData(businessId: string): Promise<AdminDashboardData> {
   const supabase = await createClient();
-  const ctx = await buildPipelineContext();
   const sevenDaysAgo = addDays(startOfToday(), -7);
 
-  const [{ data: outstandingPayments }, { data: recentlyPaid }, { data: expiredPayments }] =
+  // The pipeline context and the payment lists are independent: load them together.
+  const [ctx, { data: outstandingPayments }, { data: recentlyPaid }, { data: expiredPayments }] =
     await Promise.all([
+      buildPipelineContext(),
       supabase
         .from("payments")
         .select("*, projects(id, project_name, deleted_at, clients(name))")
