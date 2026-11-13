@@ -41,6 +41,8 @@
     "test:platform-economics": "npx tsx scripts/verify-platform-economics.ts",
     "test:marketing-kit": "npx tsx scripts/verify-marketing-kit.tsx",
     "test:business-website": "npx tsx scripts/verify-business-website.ts",
+    "test:photo-selection-toolbar": "npx tsx scripts/verify-photo-selection-toolbar.ts",
+    "test:pwa-safe-area": "npx tsx scripts/verify-pwa-safe-area.ts",
     "seo:audit": "npx tsx scripts/seo-audit.ts",
     "setup:stripe-billing": "npx tsx scripts/setup-stripe-billing.ts",
     "tenant-lint": "npx tsx scripts/tenant-lint.ts && npx tsx scripts/verify-marketing-css.ts",
