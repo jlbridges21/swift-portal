@@ -84,8 +84,9 @@ await check("signed_out_redirect", async () => {
   const hasCover = await page.locator('section[aria-label="Project cover"]').count();
   await ctx.close();
   assert(/\/login/.test(url.pathname), `expected /login, got ${url.pathname}`);
+  assert(url.host === new URL(BASE).host, `left the deployment host (landed on ${url.host})`);
   assert(hasCover === 0, "project UI rendered without a session");
-  return { landedOn: url.pathname, status: res?.status() };
+  return { landedOn: url.pathname, sameHost: true, status: res?.status() };
 });
 
 await check("tampered_token_rejected", async () => {
@@ -117,6 +118,7 @@ await check("tampered_token_rejected", async () => {
   const hasCover = await page.locator('section[aria-label="Project cover"]').count();
   await ctx.close();
   assert(/\/login/.test(url.pathname), `forged token was accepted (landed on ${url.pathname})`);
+  assert(url.host === new URL(BASE).host, `left the deployment host (landed on ${url.host})`);
   assert(hasCover === 0, "project UI rendered with a forged token");
   return { landedOn: url.pathname };
 });

@@ -224,6 +224,15 @@ export async function businessPortalHref(businessId: string, path: string): Prom
 }
 
 /**
+ * True only on a Vercel Preview deployment served from its own *.vercel.app hostname.
+ * Production (VERCEL_ENV=production, including its *.vercel.app alias) and local dev are false.
+ */
+export function isVercelPreviewHost(hostname: string, env: string | undefined = process.env.VERCEL_ENV): boolean {
+  const host = hostname.toLowerCase().split(":")[0] ?? "";
+  return env === "preview" && host.endsWith(".vercel.app");
+}
+
+/**
  * Where to send a logged-in user after auth, given the current request host.
  * Unmatched hosts (Vercel previews, bare localhost) stay on this origin.
  * Local `/b/{slug}` uses the same origin with the path prefix.
@@ -244,6 +253,11 @@ export function getLoginRedirectOrigin(
 ): string {
   const host = current.hostname.toLowerCase().split(":")[0];
   if (host === "localhost" || host === "127.0.0.1") {
+    return `${current.origin.replace(/\/$/, "")}/b/${business.slug}`;
+  }
+  // Vercel Preview: stay on the preview hostname and enter the tenant through /b/{slug}
+  // (never hand off to the tenant's production custom domain or subdomain).
+  if (isVercelPreviewHost(host)) {
     return `${current.origin.replace(/\/$/, "")}/b/${business.slug}`;
   }
   if (opts?.foreignTenantHost) {
