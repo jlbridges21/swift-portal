@@ -133,7 +133,7 @@ export type LandingFeatureCard = {
   description: string;
 };
 
-/** Current hardcoded cards — defaults so untouched tenants (incl. Swift) stay identical. */
+/** Defaults for untouched tenants — kept general (interior, video and drone shooters alike). */
 export const DEFAULT_FEATURE_CARDS: LandingFeatureCard[] = [
   {
     icon: "MessageSquare",
@@ -158,7 +158,7 @@ export const DEFAULT_FEATURE_CARDS: LandingFeatureCard[] = [
   {
     icon: "Video",
     title: "Video previews",
-    description: "Review aerial videos directly inside your project.",
+    description: "Review videos directly inside your project.",
   },
   {
     icon: "Globe",
@@ -262,16 +262,16 @@ export type LandingSettings = LandingContent & LandingAssets;
 export const DEFAULT_HERO_HEADLINE = "Request. Estimate. Track. Download.";
 export const DEFAULT_HERO_ACCENT = "All in one premium portal.";
 export const DEFAULT_HERO_SUBHEADLINE =
-  "Start a drone photo, video, or virtual tour project in minutes. Get a preliminary estimate, manage project progress, download final media, and pay securely without digging through emails.";
+  "Start a photo, video, drone, or virtual tour project in minutes. Get a preliminary estimate, manage project progress, download final media, and pay securely without digging through emails.";
 
 export const DEFAULT_CTA_PRIMARY = "Get Instant Estimate";
 export const DEFAULT_CTA_SECONDARY = "Client Login";
 
 export const DEFAULT_INDUSTRIES = [
   "real estate",
-  "golf courses",
-  "construction",
-  "land",
+  "residential listings",
+  "luxury homes",
+  "short-term rentals",
   "commercial properties",
 ] as const;
 
@@ -674,7 +674,7 @@ export function defaultBusinessDescription(
   const services =
     serviceNames.length > 0
       ? serviceNames.slice(0, 4).join(", ")
-      : "aerial photography, videography, and virtual tours";
+      : "photography, videography, and virtual tours";
   return sanitizeMultiline(
     `${name} delivers ${services} through a secure client portal — request a shoot, review estimates, track progress, and download final media in one place.`,
     LANDING_LIMITS.businessDescription
@@ -689,7 +689,8 @@ const INDUSTRY_HINTS: { match: RegExp; label: string }[] = [
   { match: /commercial|industrial|warehouse/i, label: "commercial properties" },
   { match: /360|tour|virtual/i, label: "virtual tours" },
   { match: /video|cinema|film/i, label: "video marketing" },
-  { match: /photo|image|still/i, label: "aerial photography" },
+  { match: /drone|aerial|uav/i, label: "aerial photography" },
+  { match: /photo|image|still/i, label: "photography" },
 ];
 
 export function deriveIndustries(input: {
@@ -697,9 +698,14 @@ export function deriveIndustries(input: {
   propertyTypes: string[];
 }): string[] {
   const haystack = [...input.serviceNames, ...input.propertyTypes].join(" | ");
+  const groundHaystack = [...input.serviceNames, ...input.propertyTypes]
+    .filter((item) => !/drone|aerial|uav/i.test(item))
+    .join(" | ");
   const found: string[] = [];
   for (const hint of INDUSTRY_HINTS) {
-    if (hint.match.test(haystack) && !found.includes(hint.label)) {
+    // "Drone Photos" alone is aerial work; plain photography needs a non-drone item.
+    const text = hint.label === "photography" ? groundHaystack : haystack;
+    if (hint.match.test(text) && !found.includes(hint.label)) {
       found.push(hint.label);
     }
     if (found.length >= LANDING_LIMITS.industriesMax) break;

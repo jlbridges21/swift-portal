@@ -214,9 +214,11 @@ const NICHE_COPY: Record<Niche, { headline: string; ctaHeading: string }> = {
     headline: "Real estate photography & video that make every listing stand out",
     ctaHeading: "Ready to showcase your next property?",
   },
+  // Drone work is usually one service among interior photo/video, so keep this
+  // broad enough for a photographer whose aerial shots are an add-on.
   aerial: {
-    headline: "Aerial photography & video from a whole new perspective",
-    ctaHeading: "Let’s plan your next flight.",
+    headline: "Photography, video & aerial media that make every property stand out",
+    ctaHeading: "Let’s plan your next shoot.",
   },
   wedding: { headline: "Your day, beautifully told", ctaHeading: "Let’s talk about your day." },
   portrait: { headline: "Portraits with personality", ctaHeading: "Book your session." },
