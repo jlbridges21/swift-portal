@@ -1,34 +1,58 @@
-import { addMonths, endOfMonth, startOfMonth, subMonths } from "date-fns";
+import { addDays, endOfMonth, startOfMonth, subDays } from "date-fns";
 import { Header, PageHeader } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { requireAdminPage } from "@/lib/admin-access";
 import { getProjectHeroPosterUrlMap } from "@/lib/cover";
 import { after } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
-import { ShootCalendar, type CalendarShoot } from "@/components/admin/shoot-calendar";
+import {
+  ShootCalendar,
+  type CalendarShoot,
+  type CalendarShootsResult,
+  type CalendarGoogleResult,
+} from "@/components/admin/shoot-calendar";
+import type { CalendarCreateProject } from "@/components/admin/shoot-calendar-mobile";
 import { isOwnerAdmin, staffCan, visibleProjectIdsFor } from "@/lib/staff-access";
 import { getAppSettings } from "@/lib/app-settings";
 import {
   getViewerCalendarColors,
-  listCalendarsForViewer,
-  loadExternalEventsForOwner,
+  loadViewerGoogleWindow,
   resolveBusinessTimeZone,
   retryAttentionSyncs,
-  type AccountCalendar,
   type ViewerCalendarColorPrefs,
 } from "@/lib/google-calendar";
-import { externalEventsVisibleTo, type ExternalCalendarEvent } from "@/lib/google-calendar-pull";
+import { externalEventsVisibleTo } from "@/lib/google-calendar-pull";
 import Link from "next/link";
 
+type ProposalProject = {
+  project_name: string;
+  property_address: string;
+  service_type: string;
+  status: string;
+  cover_image_id: string | null;
+  cover_image_url: string | null;
+  clients: { name: string } | null;
+} | null;
+
+/**
+ * Shoot Calendar. Only the cheap permission/settings reads are awaited: the page shell, the
+ * calendar grid and its controls render from them at once. Shoots, cover images, the
+ * create-shoot project list and Google events are each streamed to the client as their own
+ * promise, so a slow (or expired, rate-limited, unavailable) Google connection never holds up
+ * the grid or the ShootPortal shoots.
+ */
 export default async function AdminCalendarPage() {
   const { profile, tenant } = await requireAdminPage({ area: "calendar" });
   const db = await createTenantServiceClient(tenant.businessId);
   const owner = isOwnerAdmin(profile);
   const canCreateShoot = staffCan(profile, "scheduling.propose");
+  const readOnlyImpersonation = Boolean(tenant.impersonating && !tenant.allowWrites);
+  // Same rule as Projects → Calendar and PATCH /api/shoot-proposals update_date.
+  const canReschedule = staffCan(profile, "scheduling.confirm") && !readOnlyImpersonation;
 
   // Read-only impersonation never writes (after() can't read the impersonation cookie, so the
   // tenant client's write guard would not see it — skip the repair outright instead).
-  if (owner && !(tenant.impersonating && !tenant.allowWrites)) {
+  if (owner && !readOnlyImpersonation) {
     // Re-push shoots whose Google sync failed. Runs after the response is sent: each retry is
     // a sequential Google API call, and the page must not wait on them (failures stay flagged
     // on the shoot and are retried again on the next visit).
@@ -41,7 +65,7 @@ export default async function AdminCalendarPage() {
     });
   }
 
-  // Independent lookups in one parallel batch.
+  // Independent lookups in one parallel batch (all database reads; no Google calls).
   const [gcal, projectIds, settings, calendarColors] = await Promise.all([
     owner
       ? db
@@ -50,9 +74,7 @@ export default async function AdminCalendarPage() {
           .maybeSingle()
           .then(({ data }) => data)
       : Promise.resolve(null),
-    isOwnerAdmin(profile)
-      ? Promise.resolve("all" as const)
-      : visibleProjectIdsFor(tenant.businessId, profile),
+    owner ? Promise.resolve("all" as const) : visibleProjectIdsFor(tenant.businessId, profile),
     getAppSettings(tenant.businessId),
     owner
       ? getViewerCalendarColors(tenant.businessId, profile.id).catch((): ViewerCalendarColorPrefs => ({}))
@@ -65,110 +87,120 @@ export default async function AdminCalendarPage() {
     gcalStatus = gcal.status;
     gcalError = gcal.last_error;
   }
+  const googleActive = owner && gcalStatus === "active";
 
   const businessTimeZone = resolveBusinessTimeZone(settings.workflow.businessDefaults.timezone).timeZone;
-  const windowStart = startOfMonth(subMonths(new Date(), 1));
-  const windowEnd = endOfMonth(addMonths(new Date(), 1));
+  // Google window: this month plus a week either side (covers the month grid, the current
+  // week and time-zone edges). Other months are fetched by the client when navigated to.
+  const now = new Date();
+  const googleWindow = {
+    from: subDays(startOfMonth(now), 7).toISOString(),
+    to: addDays(endOfMonth(now), 7).toISOString(),
+  };
   const NO_MATCH = ["00000000-0000-0000-0000-000000000000"];
 
-  let proposalsQuery = db
-    .from("shoot_proposals")
-    .select(
-      "id, project_id, proposed_at, status, google_sync_status, google_sync_error, projects(project_name, property_address, service_type, status, cover_image_id, cover_image_url, clients(name))"
-    )
-    .in("status", ["confirmed", "pending"])
-    .order("proposed_at", { ascending: true });
-  if (projectIds !== "all") {
-    proposalsQuery = proposalsQuery.in("project_id", projectIds.length === 0 ? NO_MATCH : projectIds);
-  }
-
-  const loadCreateProjects = async (): Promise<{ id: string; name: string }[]> => {
-    if (!canCreateShoot) return [];
-    let projectQuery = db.from("projects").select("id, project_name").order("project_name").limit(100);
+  // ── Streamed sources (started now, not awaited) ──────────────────────────
+  // Every confirmed/pending shoot: a small set per business (20 rows / ~10 KB measured), so it
+  // stays one query; month/week navigation then needs no further shoot requests.
+  const proposalsPromise = (async () => {
+    let query = db
+      .from("shoot_proposals")
+      .select(
+        "id, project_id, proposed_at, status, google_sync_status, google_sync_error, projects(project_name, property_address, service_type, status, cover_image_id, cover_image_url, clients(name))"
+      )
+      .in("status", ["confirmed", "pending"])
+      .order("proposed_at", { ascending: true });
     if (projectIds !== "all") {
-      projectQuery = projectQuery.in("id", projectIds.length === 0 ? NO_MATCH : projectIds);
+      query = query.in("project_id", projectIds.length === 0 ? NO_MATCH : projectIds);
     }
-    const { data: projectRows } = await projectQuery;
-    return (projectRows ?? []).map((row) => ({
-      id: row.id as string,
-      name: (row.project_name as string) || "Untitled project",
-    }));
-  };
+    const { data, error } = await query;
+    if (error) throw new Error("shoots unavailable");
+    return data ?? [];
+  })();
 
-  const loadGoogle = async (): Promise<{
-    calendars: AccountCalendar[];
-    hidden: string[];
-    events: ExternalCalendarEvent[];
-  }> => {
-    if (!owner || gcalStatus !== "active") return { calendars: [], hidden: [], events: [] };
-    let calendars: AccountCalendar[] = [];
-    let hidden: string[] = [];
-    try {
-      const listed = await listCalendarsForViewer(tenant.businessId, profile.id);
-      calendars = listed.calendars;
-      hidden = listed.hiddenCalendarIds;
-    } catch {
-      console.error("[google-calendar] calendar list unavailable", { businessId: tenant.businessId });
+  const shootsSource: Promise<CalendarShootsResult> = proposalsPromise.then(
+    (rows) => ({
+      ok: true,
+      shoots: rows.map((item): CalendarShoot => {
+        const project = item.projects as unknown as ProposalProject;
+        return {
+          id: item.id,
+          project_id: item.project_id,
+          proposed_at: item.proposed_at,
+          proposal_status: item.status === "pending" ? "pending" : "confirmed",
+          google_sync_status: item.google_sync_status,
+          google_sync_error: item.google_sync_error,
+          project_name: project?.project_name ?? "Project",
+          client_name: project?.clients?.name ?? "Client",
+          property_address: project?.property_address ?? "",
+          service_type: project?.service_type ?? "",
+          status: project?.status ?? "scheduled",
+          cover_url: null, // filled in from coversSource
+        };
+      }),
+    }),
+    () => {
+      console.error("[calendar] shoots unavailable", { businessId: tenant.businessId });
+      return { ok: false };
     }
-    const loaded = await loadExternalEventsForOwner(
-      tenant.businessId,
-      windowStart.toISOString(),
-      windowEnd.toISOString(),
-      calendars.map((calendar) => calendar.id)
-    );
-    return { calendars, hidden, events: externalEventsVisibleTo(profile.role, loaded.events) };
-  };
+  );
 
-  type ProposalProject = {
-    project_name: string;
-    property_address: string;
-    service_type: string;
-    status: string;
-    cover_image_id: string | null;
-    cover_image_url: string | null;
-    clients: { name: string } | null;
-  } | null;
+  // Cover thumbnails are only used by Day/Agenda cards and the shoot dialog — never block on them.
+  const coversSource: Promise<Record<string, string | null>> = proposalsPromise
+    .then((rows) => {
+      const coverProjects = new Map<string, { id: string; cover_image_id: string | null; cover_image_url: string | null }>();
+      for (const item of rows) {
+        const project = item.projects as unknown as ProposalProject;
+        if (project && !coverProjects.has(item.project_id)) {
+          coverProjects.set(item.project_id, {
+            id: item.project_id,
+            cover_image_id: project.cover_image_id,
+            cover_image_url: project.cover_image_url,
+          });
+        }
+      }
+      return getProjectHeroPosterUrlMap([...coverProjects.values()], tenant.businessId);
+    })
+    .catch(() => ({}));
 
-  const [{ data: confirmed }, createProjects, google] = await Promise.all([
-    proposalsQuery,
-    loadCreateProjects(),
-    loadGoogle(),
-  ]);
-  const externalEvents = google.events;
-  const googleCalendars = google.calendars;
-  const hiddenCalendarIds = google.hidden;
+  const createProjectsSource: Promise<CalendarCreateProject[]> = canCreateShoot
+    ? (async () => {
+        let projectQuery = db.from("projects").select("id, project_name").order("project_name").limit(100);
+        if (projectIds !== "all") {
+          projectQuery = projectQuery.in("id", projectIds.length === 0 ? NO_MATCH : projectIds);
+        }
+        const { data: projectRows } = await projectQuery;
+        return (projectRows ?? []).map((row) => ({
+          id: row.id as string,
+          name: (row.project_name as string) || "Untitled project",
+        }));
+      })().catch(() => [])
+    : Promise.resolve([]);
 
-  // One batched poster lookup per distinct project (a project can have several shoots).
-  const coverProjects = new Map<string, { id: string; cover_image_id: string | null; cover_image_url: string | null }>();
-  for (const item of confirmed ?? []) {
-    const project = item.projects as unknown as ProposalProject;
-    if (project && !coverProjects.has(item.project_id)) {
-      coverProjects.set(item.project_id, {
-        id: item.project_id,
-        cover_image_id: project.cover_image_id,
-        cover_image_url: project.cover_image_url,
-      });
-    }
-  }
-  const coverUrls = await getProjectHeroPosterUrlMap([...coverProjects.values()], tenant.businessId);
-
-  const shoots: CalendarShoot[] = (confirmed ?? []).map((item) => {
-    const project = item.projects as unknown as ProposalProject;
-    return {
-      id: item.id,
-      project_id: item.project_id,
-      proposed_at: item.proposed_at,
-      proposal_status: item.status === "pending" ? "pending" : "confirmed",
-      google_sync_status: item.google_sync_status,
-      google_sync_error: item.google_sync_error,
-      project_name: project?.project_name ?? "Project",
-      client_name: project?.clients?.name ?? "Client",
-      property_address: project?.property_address ?? "",
-      service_type: project?.service_type ?? "",
-      status: project?.status ?? "scheduled",
-      cover_url: project ? (coverUrls[item.project_id] ?? null) : null,
-    };
-  });
+  const googleSource: Promise<CalendarGoogleResult> | null = googleActive
+    ? loadViewerGoogleWindow(tenant.businessId, profile.id, googleWindow.from, googleWindow.to, {
+        timeZone: businessTimeZone,
+      }).then(
+        (loaded) => ({
+          connected: loaded.connected,
+          calendars: loaded.calendars,
+          hiddenCalendarIds: loaded.hiddenCalendarIds,
+          loadedCalendarIds: loaded.loadedCalendarIds,
+          events: externalEventsVisibleTo(profile.role, loaded.events),
+          degraded: loaded.degraded,
+          window: googleWindow,
+        }),
+        () => ({
+          connected: true,
+          calendars: [],
+          hiddenCalendarIds: [],
+          loadedCalendarIds: [],
+          events: [],
+          degraded: true,
+          window: googleWindow,
+        })
+      )
+    : null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -192,21 +224,16 @@ export default async function AdminCalendarPage() {
         ) : null}
 
         <ShootCalendar
-          shoots={shoots}
-          externalEvents={owner ? externalEvents : []}
-          canLoadExternal={owner && gcalStatus === "active"}
-          googleCalendars={owner ? googleCalendars : []}
-          hiddenCalendarIds={owner ? hiddenCalendarIds : []}
+          shootsSource={shootsSource}
+          coversSource={coversSource}
+          googleSource={googleSource}
+          createProjectsSource={createProjectsSource}
+          canLoadExternal={googleActive}
           canChooseColors={owner}
           calendarColors={owner ? calendarColors : {}}
           businessTimeZone={businessTimeZone}
           canCreateShoot={canCreateShoot}
-          createProjects={createProjects}
-          externalWindow={
-            owner && gcalStatus === "active"
-              ? { from: windowStart.toISOString(), to: windowEnd.toISOString() }
-              : null
-          }
+          canReschedule={canReschedule}
         />
       </main>
     </div>

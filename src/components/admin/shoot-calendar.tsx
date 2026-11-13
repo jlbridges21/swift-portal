@@ -21,6 +21,8 @@ import {
   subDays,
   isToday,
   compareAsc,
+  startOfDay,
+  endOfDay,
 } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +44,28 @@ import {
   MapPin,
   Clock,
   PanelLeft,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
+import {
+  RescheduleConfirmModal,
+  TIMED_RESCHEDULE_NOTE,
+  WeekTimeGrid,
+  saveShootTime,
+  type DragApi,
+  type WeekGridEvent,
+} from "@/components/admin/calendar/week-time-grid";
+import { externalEventWeekSegments, shootWeekSegment } from "@/lib/calendar-week";
+import {
+  SHOOT_EVENT_MINUTES,
+  compactTime,
+  describeSlot,
+  formatTimeRange,
+  todayKey,
+  weekKeys,
+  zonedDayAndMinutes,
+  zonedTimeToIso,
+} from "@/lib/projects-calendar";
 import { agendaShootsForMonth } from "@/lib/calendar-agenda";
 import type { ExternalCalendarEvent } from "@/lib/google-calendar-pull";
 import type { AccountCalendar, ViewerCalendarColorPrefs } from "@/lib/google-calendar";
@@ -78,18 +101,79 @@ export interface CalendarShoot {
 type CalendarView = "month" | "week" | "day" | "agenda";
 type EventCardVariant = "full" | "compact" | "pill" | "week";
 
+/** Streamed from the page: the shoots, or a failure the grid reports without blocking. */
+export type CalendarShootsResult = { ok: true; shoots: CalendarShoot[] } | { ok: false };
+
+/** Streamed from the page: Google calendars + events for `window` (visible calendars only). */
+export type CalendarGoogleResult = {
+  connected: boolean;
+  calendars: AccountCalendar[];
+  hiddenCalendarIds: string[];
+  loadedCalendarIds: string[];
+  events: ExternalCalendarEvent[];
+  degraded: boolean;
+  window: { from: string; to: string };
+};
+
 interface ShootCalendarProps {
-  shoots: CalendarShoot[];
-  externalEvents?: ExternalCalendarEvent[];
+  /**
+   * Server promises (React Flight thenables). Consumed with `.then(ok, err)` only — chaining
+   * `.catch()` on a streamed thenable throws. A new promise arrives after router.refresh().
+   */
+  shootsSource: Promise<CalendarShootsResult>;
+  coversSource: Promise<Record<string, string | null>>;
+  googleSource: Promise<CalendarGoogleResult> | null;
+  createProjectsSource: Promise<CalendarCreateProject[]>;
   canLoadExternal?: boolean;
   canChooseColors?: boolean;
-  googleCalendars?: AccountCalendar[];
-  hiddenCalendarIds?: string[];
   calendarColors?: ViewerCalendarColorPrefs;
   businessTimeZone?: string;
-  externalWindow?: { from: string; to: string } | null;
   canCreateShoot?: boolean;
-  createProjects?: CalendarCreateProject[];
+  /** scheduling.confirm and not read-only impersonation. Drag-to-reschedule is hidden otherwise. */
+  canReschedule?: boolean;
+}
+
+type SourceStatus = "loading" | "ready" | "error";
+type GoogleStatus = "loading" | "ready" | "degraded" | "unavailable" | "error";
+
+/** One item in the Week grid: a ShootPortal shoot (draggable) or a read-only Google event. */
+type WeekItem = WeekGridEvent &
+  ({ kind: "shoot"; key: string; shoot: CalendarShoot } | { kind: "google"; key: string; event: ExternalCalendarEvent });
+
+function externalKey(event: ExternalCalendarEvent) {
+  return `${event.calendarId}:${event.id}`;
+}
+
+/** Subscribe to a streamed server promise; re-subscribes when a refresh delivers a new one. */
+function useStreamed<T>(source: Promise<T> | null, onValue: (value: T) => void, onError?: () => void) {
+  const handlers = useRef({ onValue, onError });
+  useLayoutEffect(() => {
+    handlers.current = { onValue, onError };
+  });
+  useEffect(() => {
+    if (!source) return;
+    let live = true;
+    // Two-argument then(): a streamed Flight thenable has no usable .catch().
+    source.then(
+      (value) => {
+        if (live) handlers.current.onValue(value);
+      },
+      () => {
+        if (live) handlers.current.onError?.();
+      }
+    );
+    return () => {
+      live = false;
+    };
+  }, [source]);
+}
+
+/** The Google fetch window around a month: the month plus a week either side. */
+function googleWindowFor(anchor: Date) {
+  return {
+    from: subDays(startOfMonth(anchor), 7).toISOString(),
+    to: addDays(endOfMonth(anchor), 7).toISOString(),
+  };
 }
 
 const CalendarPaintContext = createContext({
@@ -317,7 +401,9 @@ function MonthDayCell({
   onDragStart,
   onDragEnd,
   draggingId,
+  canDrag,
 }: {
+  canDrag: boolean;
   day: Date;
   dayShoots: CalendarShoot[];
   dayExternal: ExternalCalendarEvent[];
@@ -401,7 +487,7 @@ function MonthDayCell({
               key={shoot.id}
               shoot={shoot}
               variant="compact"
-              draggable
+              draggable={canDrag}
               isDragging={draggingId === shoot.id}
               onOpen={() => onOpenShoot(shoot)}
               onDragStart={(e) => onDragStart(e, shoot)}
@@ -547,27 +633,187 @@ function CalendarColorMenu({
   );
 }
 
+/** Small per-source loading / error notes. Renders nothing once everything has loaded. */
+function SourceStatusBar({
+  shootsStatus,
+  googleStatus,
+  onRetryShoots,
+  onRetryGoogle,
+}: {
+  shootsStatus: SourceStatus;
+  googleStatus: GoogleStatus | null;
+  onRetryShoots: () => void;
+  onRetryGoogle: () => void;
+}) {
+  const items: React.ReactNode[] = [];
+  if (shootsStatus === "loading") {
+    items.push(
+      <span key="s" className="inline-flex items-center gap-1 text-muted">
+        <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Loading shoots…
+      </span>
+    );
+  } else if (shootsStatus === "error") {
+    items.push(
+      <span key="s" className="inline-flex items-center gap-1 text-red-700">
+        Shoots couldn’t load.
+        <button type="button" onClick={onRetryShoots} className="inline-flex items-center gap-0.5 font-semibold underline">
+          <RefreshCw className="h-3 w-3" aria-hidden /> Retry
+        </button>
+      </span>
+    );
+  }
+  if (googleStatus === "loading") {
+    items.push(
+      <span key="g" className="inline-flex items-center gap-1 text-muted">
+        <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Loading Google…
+      </span>
+    );
+  } else if (googleStatus === "degraded" || googleStatus === "error") {
+    items.push(
+      <span key="g" className="inline-flex items-center gap-1 text-amber-800">
+        {googleStatus === "error" ? "Google events couldn’t load." : "Some Google calendars didn’t load."}
+        <button type="button" onClick={onRetryGoogle} className="inline-flex items-center gap-0.5 font-semibold underline">
+          <RefreshCw className="h-3 w-3" aria-hidden /> Retry
+        </button>
+      </span>
+    );
+  } else if (googleStatus === "unavailable") {
+    items.push(
+      <span key="g" className="text-amber-800">
+        Google Calendar is unavailable — reconnect it in Settings.
+      </span>
+    );
+  }
+  if (!items.length) return null;
+  return (
+    <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" data-calendar-status>
+      {items}
+    </div>
+  );
+}
+
+function GoogleAllDayChip({ event, onOpen }: { event: ExternalCalendarEvent; onOpen: () => void }) {
+  const { colorFor } = useContext(CalendarPaintContext);
+  const color = eventChipPaint(colorFor(event.calendarId, event.calendarColor), "#7C3AED").background;
+  return (
+    <button
+      type="button"
+      data-external-event={event.id}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+      title={`${event.title} · All day · Google (read-only)`}
+      className="flex h-5 w-full min-w-0 items-center gap-1 rounded-md border bg-card px-1 text-left text-[11px] font-medium text-heading sm:px-1.5"
+      style={{ borderColor: color, borderLeftWidth: 3 }}
+    >
+      <span className="min-w-0 truncate">{event.title}</span>
+    </button>
+  );
+}
+
+/**
+ * Week block colors. ShootPortal shoots: a tint of the Shoots color with a solid edge (pending:
+ * dashed outline) — the same shape Projects → Week uses. Google events: white card, outlined in
+ * their calendar color and labelled "Google", so the two never look alike.
+ */
+function weekBlockAppearance(
+  item: WeekItem,
+  shootColor: string,
+  colorFor: (calendarId: string, fallback?: string | null) => string,
+  timeZone: string
+) {
+  if (item.kind === "shoot") {
+    const solid = eventChipPaint(shootColor).background;
+    const pending = item.shoot.proposal_status === "pending";
+    return {
+      className: "text-heading",
+      style: {
+        borderLeftColor: solid,
+        backgroundColor: `color-mix(in srgb, ${solid} 16%, var(--color-card))`,
+        ...(pending ? { outline: `1px dashed ${solid}`, outlineOffset: -1 } : {}),
+      },
+      title: `${item.shoot.client_name} - ${item.shoot.project_name} · ${formatTimeRange(item.shoot.proposed_at, SHOOT_EVENT_MINUTES, timeZone)}${pending ? " · Pending" : ""}`,
+    };
+  }
+  const color = eventChipPaint(colorFor(item.event.calendarId, item.event.calendarColor), "#7C3AED").background;
+  return {
+    className: "bg-card text-heading",
+    style: { borderLeftColor: color, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} 45%, transparent)` },
+    title: `${item.event.title} · ${item.event.timeLabel} · Google (${item.event.calendarSummary}) — read-only`,
+  };
+}
+
 export function ShootCalendar({
-  shoots: initialShoots,
-  externalEvents: initialExternal = [],
+  shootsSource,
+  coversSource,
+  googleSource,
+  createProjectsSource,
   canLoadExternal = false,
   canChooseColors = false,
-  googleCalendars = [],
-  hiddenCalendarIds: initialHidden = [],
   calendarColors: initialColors = {},
   businessTimeZone = "America/New_York",
-  externalWindow: initialWindow = null,
   canCreateShoot = false,
-  createProjects = [],
+  canReschedule = false,
 }: ShootCalendarProps) {
   const router = useRouter();
   const [view, setView] = useState<CalendarView>("month");
   const [anchor, setAnchor] = useState(new Date());
-  const [shoots, setShoots] = useState(initialShoots);
-  const [externalEvents, setExternalEvents] = useState(initialExternal);
-  const [externalWindow, setExternalWindow] = useState(initialWindow);
-  const [hiddenCalendarIds, setHiddenCalendarIds] = useState(initialHidden);
+
+  // ── Sources: each fills in on its own; the grid never waits for them ──
+  const [shoots, setShoots] = useState<CalendarShoot[]>([]);
+  const [shootsStatus, setShootsStatus] = useState<SourceStatus>("loading");
+  const [covers, setCovers] = useState<Record<string, string | null>>({});
+  const [createProjects, setCreateProjects] = useState<CalendarCreateProject[]>([]);
+  const [googleCalendars, setGoogleCalendars] = useState<AccountCalendar[]>([]);
+  const [externalEvents, setExternalEvents] = useState<ExternalCalendarEvent[]>([]);
+  const [externalWindow, setExternalWindow] = useState<{ from: string; to: string } | null>(null);
+  const [loadedCalendarIds, setLoadedCalendarIds] = useState<string[]>([]);
+  const [hiddenCalendarIds, setHiddenCalendarIds] = useState<string[]>([]);
+  const [googleStatus, setGoogleStatus] = useState<GoogleStatus>(googleSource ? "loading" : "ready");
+  const [googleRetry, setGoogleRetry] = useState(0);
+  // The streamed first window has arrived (or failed): only then may navigation fetch more.
+  const [googleStreamDone, setGoogleStreamDone] = useState(!googleSource);
   const [calendarColors, setCalendarColors] = useState<ViewerCalendarColorPrefs>(initialColors);
+
+  // Optimistic reschedules (shoot id → new instant), dropped on Cancel / failure / fresh data.
+  const [moves, setMoves] = useState<Record<string, string>>({});
+  const [pendingMove, setPendingMove] = useState<{ shoot: CalendarShoot; toDay: string; toIso: string } | null>(null);
+  const [movingSaving, setMovingSaving] = useState(false);
+  const movingRef = useRef(false);
+  const suppressClick = useRef(false);
+
+  useStreamed(
+    shootsSource,
+    (result) => {
+      if (result.ok) {
+        setShoots(result.shoots);
+        setMoves({});
+        setShootsStatus("ready");
+      } else {
+        setShootsStatus("error");
+      }
+    },
+    () => setShootsStatus("error")
+  );
+  useStreamed(coversSource, setCovers);
+  useStreamed(createProjectsSource, setCreateProjects);
+  useStreamed(
+    googleSource,
+    (result) => {
+      setGoogleCalendars(result.calendars);
+      setHiddenCalendarIds(result.hiddenCalendarIds);
+      setLoadedCalendarIds(result.loadedCalendarIds);
+      setExternalEvents(result.events);
+      setExternalWindow(result.window);
+      setGoogleStatus(!result.connected ? "unavailable" : result.degraded ? "degraded" : "ready");
+      setGoogleStreamDone(true);
+    },
+    () => {
+      setGoogleStatus("error");
+      setGoogleStreamDone(true);
+    }
+  );
   const [colorMenu, setColorMenu] = useState<{ key: string; top: number; left: number; label: string; fallback: string } | null>(null);
   const [showShoots, setShowShoots] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -582,20 +828,23 @@ export function ShootCalendar({
 
   const { run: runUpdate, pending: saving } = useAsyncAction(
     async (id: string, proposed_at: string) => {
-      const res = await fetch("/api/shoot-proposals", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ id, action: "update_date", proposed_at }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      return res;
+      await saveShootTime(id, proposed_at);
     }
   );
 
+  const shownShoots = useMemo(
+    () =>
+      shoots.map((s) => {
+        const moved = moves[s.id];
+        const cover = covers[s.project_id];
+        if (!moved && cover === undefined) return s;
+        return { ...s, ...(moved ? { proposed_at: moved } : {}), ...(cover !== undefined ? { cover_url: cover } : {}) };
+      }),
+    [shoots, moves, covers]
+  );
   const sortedShoots = useMemo(
-    () => [...shoots].sort((a, b) => compareAsc(parseISO(a.proposed_at), parseISO(b.proposed_at))),
-    [shoots]
+    () => [...shownShoots].sort((a, b) => compareAsc(parseISO(a.proposed_at), parseISO(b.proposed_at))),
+    [shownShoots]
   );
   const agendaShoots = useMemo(
     () => agendaShootsForMonth(showShoots ? sortedShoots : [], anchor),
@@ -657,32 +906,91 @@ export function ShootCalendar({
     }
   }, [anchor, monthStart]);
 
+  // ── Google: fetch the window the view needs when it isn't loaded yet (navigation / retry) ──
+  // The days this view shows (local dates; the window carries a week of slack either side).
+  const needFrom =
+    view === "week" ? startOfWeek(anchor, { weekStartsOn: 0 }) : view === "day" ? startOfDay(anchor) : startOfMonth(anchor);
+  const needTo = view === "week" ? endOfWeek(anchor, { weekStartsOn: 0 }) : view === "day" ? endOfDay(anchor) : endOfMonth(anchor);
+  const needFromMs = needFrom.getTime();
+  const needToMs = needTo.getTime();
   useEffect(() => {
-    if (!canLoadExternal || !externalWindow) return;
-    const start = startOfMonth(anchor).getTime();
-    const end = endOfMonth(anchor).getTime();
-    if (start >= new Date(externalWindow.from).getTime() && end <= new Date(externalWindow.to).getTime()) return;
-    let cancelled = false;
-    const from = startOfMonth(subMonths(anchor, 1)).toISOString();
-    const to = endOfMonth(addMonths(anchor, 1)).toISOString();
-    void fetch(
-      `/api/integrations/google-calendar/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-      { credentials: "include" }
+    if (!canLoadExternal || !googleStreamDone) return;
+    // Nothing loaded yet (the streamed window failed): wait for an explicit Retry.
+    if (!externalWindow && googleRetry === 0) return;
+    const covered =
+      externalWindow &&
+      needFromMs >= new Date(externalWindow.from).getTime() &&
+      needToMs <= new Date(externalWindow.to).getTime();
+    if (covered && googleRetry === 0) return;
+    const win = googleWindowFor(new Date(needFromMs + (needToMs - needFromMs) / 2));
+    const controller = new AbortController();
+    setGoogleStatus("loading");
+    fetch(
+      `/api/integrations/google-calendar/events?from=${encodeURIComponent(win.from)}&to=${encodeURIComponent(win.to)}`,
+      { credentials: "include", signal: controller.signal }
     )
       .then(async (res) => {
-        if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { events?: ExternalCalendarEvent[] };
-        if (cancelled) return;
+        if (!res.ok) throw new Error(String(res.status));
+        const data = (await res.json()) as {
+          connected?: boolean;
+          events?: ExternalCalendarEvent[];
+          loadedCalendarIds?: string[];
+          degraded?: boolean;
+        };
         setExternalEvents(data.events ?? []);
-        setExternalWindow({ from, to });
+        setLoadedCalendarIds(data.loadedCalendarIds ?? []);
+        setExternalWindow(win);
+        setGoogleStatus(data.connected === false ? "unavailable" : data.degraded ? "degraded" : "ready");
       })
       .catch(() => {
-        // Keep the shoots and events already on the page when Google is unavailable.
+        if (controller.signal.aborted) return;
+        // Keep the shoots and any events already on the page when Google is unavailable.
+        setGoogleStatus("error");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setGoogleRetry(0);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [anchor, canLoadExternal, externalWindow]);
+    return () => controller.abort();
+    // Watching externalWindow can't loop: every window fetched here covers the view that asked
+    // for it. It does catch a refresh resetting the window while another month is on screen.
+  }, [canLoadExternal, googleStreamDone, externalWindow, needFromMs, needToMs, googleRetry]);
+
+  // A calendar turned back on whose events weren't loaded for this window: fetch just that one.
+  const missingCalendarIds = useMemo(() => {
+    if (!canLoadExternal || !externalWindow) return [];
+    const hidden = new Set(hiddenCalendarIds);
+    const loaded = new Set(loadedCalendarIds);
+    return googleCalendars.map((c) => c.id).filter((id) => !hidden.has(id) && !loaded.has(id));
+  }, [canLoadExternal, externalWindow, googleCalendars, hiddenCalendarIds, loadedCalendarIds]);
+  const missingKey = missingCalendarIds.join(",");
+  useEffect(() => {
+    if (!missingKey || !externalWindow || googleStatus === "loading") return;
+    const win = externalWindow;
+    const controller = new AbortController();
+    fetch(
+      `/api/integrations/google-calendar/events?from=${encodeURIComponent(win.from)}&to=${encodeURIComponent(win.to)}&calendars=${encodeURIComponent(missingKey)}`,
+      { credentials: "include", signal: controller.signal }
+    )
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        const data = (await res.json()) as { events?: ExternalCalendarEvent[]; loadedCalendarIds?: string[] };
+        const added = data.events ?? [];
+        setExternalEvents((current) => {
+          const seen = new Set(current.map(externalKey));
+          return [...current, ...added.filter((e) => !seen.has(externalKey(e)))];
+        });
+        // Mark them loaded even if Google returned nothing, so this never loops.
+        setLoadedCalendarIds((current) => [...new Set([...current, ...missingKey.split(",")])]);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setLoadedCalendarIds((current) => [...new Set([...current, ...missingKey.split(",")])]);
+        setGoogleStatus("degraded");
+      });
+    return () => controller.abort();
+    // externalWindow identity changes only with a new window fetch, which also resets the loaded set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missingKey, externalWindow]);
 
   useLayoutEffect(() => {
     if (view !== "agenda") return;
@@ -723,36 +1031,56 @@ export function ShootCalendar({
     };
   }, [view, anchor, agendaShoots, shownExternal]);
 
-  const openShoot = useCallback((shoot: CalendarShoot) => {
+  function openShoot(shoot: CalendarShoot) {
     const d = parseISO(shoot.proposed_at);
     setSelected(shoot);
     setEditDate(format(d, "yyyy-MM-dd"));
     setEditTime(format(d, "HH:mm"));
-  }, []);
+  }
 
-  const applyDateChange = useCallback(
-    async (shoot: CalendarShoot, targetDay: Date, keepTime = true) => {
-      const old = parseISO(shoot.proposed_at);
-      const next = new Date(targetDay);
-      if (keepTime) {
-        next.setHours(old.getHours(), old.getMinutes(), 0, 0);
-      }
-      const proposed_at = next.toISOString();
+  // ── Drag to reschedule (Week + Month): propose → confirm → save once ──
+  function requestMove(shoot: CalendarShoot, toDay: string, toMin: number) {
+    if (movingRef.current || pendingMove) return;
+    const toIso = zonedTimeToIso(toDay, toMin, businessTimeZone);
+    if (new Date(toIso).getTime() === new Date(shoot.proposed_at).getTime()) return; // same slot
+    setMoves((m) => ({ ...m, [shoot.id]: toIso }));
+    setPendingMove({ shoot, toDay, toIso });
+  }
 
-      revertRef.current = shoots;
-      setShoots((prev) => prev.map((s) => (s.id === shoot.id ? { ...s, proposed_at } : s)));
+  function clearMove(id: string) {
+    setMoves((m) => {
+      const next = { ...m };
+      delete next[id];
+      return next;
+    });
+  }
 
-      try {
-        await runUpdate(shoot.id, proposed_at);
-        toast.success("Shoot rescheduled");
-        router.refresh();
-      } catch {
-        if (revertRef.current) setShoots(revertRef.current);
-        toast.error("Failed to reschedule shoot");
-      }
-    },
-    [runUpdate, router, shoots]
-  );
+  function cancelMove() {
+    if (movingRef.current || !pendingMove) return;
+    clearMove(pendingMove.shoot.id);
+    setPendingMove(null);
+  }
+
+  async function confirmMove() {
+    if (movingRef.current || !pendingMove) return;
+    movingRef.current = true;
+    setMovingSaving(true);
+    const { shoot, toDay, toIso } = pendingMove;
+    try {
+      await saveShootTime(shoot.id, toIso);
+      toast.success(`${shoot.project_name} moved to ${describeSlot(toDay, toIso, businessTimeZone)}`);
+      setSelectedDayKey(toDay);
+      // Fresh shoots replace the optimistic move when they stream in (and Projects' cache too).
+      router.refresh();
+    } catch (err) {
+      clearMove(shoot.id);
+      toast.error(err instanceof Error ? err.message : "Couldn’t reschedule the shoot.");
+    } finally {
+      movingRef.current = false;
+      setMovingSaving(false);
+      setPendingMove(null);
+    }
+  }
 
   async function saveShootDate() {
     if (!selected || !editDate) return;
@@ -783,13 +1111,14 @@ export function ShootCalendar({
 
   function handleDropOnDay(e: React.DragEvent, day: Date) {
     e.preventDefault();
-    const id = e.dataTransfer.getData("shootId");
-    const shoot = shoots.find((s) => s.id === id);
-    if (!shoot) return;
-    if (isSameDay(parseISO(shoot.proposed_at), day)) return;
-    void applyDateChange(shoot, day);
     setDraggingId(null);
-    setSelectedDayKey(format(day, "yyyy-MM-dd"));
+    const id = e.dataTransfer.getData("shootId");
+    const shoot = shownShoots.find((s) => s.id === id);
+    if (!shoot || !canReschedule) return;
+    // Month cells move the day and keep the time of day (business zone), like Projects → Month.
+    const from = zonedDayAndMinutes(shoot.proposed_at, businessTimeZone);
+    if (!from) return;
+    requestMove(shoot, format(day, "yyyy-MM-dd"), from.minutes);
   }
 
   function navPrev() {
@@ -868,6 +1197,59 @@ export function ShootCalendar({
     });
   }
 
+  // ── Week grid items (business time zone, same model as Projects → Calendar → Week) ──
+  const weekDayKeys = weekKeys(format(anchor, "yyyy-MM-dd"));
+  const weekStartKey = weekDayKeys[0];
+  const businessToday = todayKey(businessTimeZone);
+  const weekByDay = useMemo(() => {
+    const map = new Map<string, WeekItem[]>();
+    if (view !== "week") return map;
+    const days = new Set(weekKeys(weekStartKey));
+    const push = (item: WeekItem) => {
+      if (!days.has(item.dayKey)) return;
+      const list = map.get(item.dayKey);
+      if (list) list.push(item);
+      else map.set(item.dayKey, [item]);
+    };
+    for (const shoot of visibleShoots) {
+      const seg = shootWeekSegment(shoot.proposed_at, businessTimeZone);
+      if (seg) push({ kind: "shoot", key: `shoot:${shoot.id}`, shoot, ...seg });
+    }
+    for (const event of shownExternal) {
+      const base = `google:${externalKey(event)}`;
+      for (const seg of externalEventWeekSegments(event, businessTimeZone)) {
+        push({ kind: "google", key: `${base}:${seg.dayKey}`, event, ...seg });
+      }
+    }
+    return map;
+  }, [view, weekStartKey, visibleShoots, shownExternal, businessTimeZone]);
+
+  const weekDrag: DragApi<WeekItem> = {
+    canDrag: (item) => item.kind === "shoot" && canReschedule,
+    drop: (item, toDay, toMin) => {
+      if (item.kind === "shoot") requestMove(item.shoot, toDay, toMin);
+    },
+    suppressClick,
+  };
+
+  function openWeekItem(item: WeekItem) {
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return;
+    }
+    if (item.kind === "shoot") openShoot(item.shoot);
+    else setOpenedExternal(item.event);
+  }
+
+  const sourceStatus = (
+    <SourceStatusBar
+      shootsStatus={shootsStatus}
+      googleStatus={canLoadExternal ? googleStatus : null}
+      onRetryShoots={() => router.refresh()}
+      onRetryGoogle={() => setGoogleRetry((n) => n + 1)}
+    />
+  );
+
   const headerLabel =
     view === "week"
       ? `${format(weekStart, "MMM d")} – ${format(weekEnd, "MMM d, yyyy")}`
@@ -896,6 +1278,7 @@ export function ShootCalendar({
     <CalendarPaintContext.Provider value={{ shootColor, colorFor }}>
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
       <div className="min-w-0 md:hidden">
+        <div className="mb-2 empty:hidden">{sourceStatus}</div>
         <MobileShootCalendar
           shoots={visibleShoots}
           externalEvents={shownExternal}
@@ -1093,11 +1476,18 @@ export function ShootCalendar({
             ))}
             </div>
           </div>
-          <p className="text-xs leading-relaxed text-muted sm:max-w-sm sm:text-right">
-            <span className="hidden md:inline">Drag shoots to another day to reschedule. </span>
-            Tap a ShootPortal event to edit it.
-            {canLoadExternal ? " Google events open in Google Calendar." : ""}
-          </p>
+          <div className="flex min-w-0 flex-col items-start gap-1 sm:items-end">
+            {sourceStatus}
+            <p className="text-xs leading-relaxed text-muted sm:max-w-sm sm:text-right">
+              {canReschedule ? (
+                <span className="hidden md:inline">
+                  {view === "week" ? "Drag shoots to a new day or time to reschedule. " : "Drag shoots to another day to reschedule. "}
+                </span>
+              ) : null}
+              Tap a ShootPortal event to {canReschedule ? "edit" : "view"} it.
+              {canLoadExternal ? " Google events are read-only and open in Google Calendar." : ""}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -1162,6 +1552,7 @@ export function ShootCalendar({
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                     draggingId={draggingId}
+                    canDrag={canReschedule}
                   />
                 );
               })}
@@ -1170,62 +1561,49 @@ export function ShootCalendar({
         )}
 
         {view === "week" && (
-          <div className="p-3 sm:p-0">
-            <div className="min-w-0 grid grid-cols-7 divide-x divide-border">
-              {weekDays.map((day) => {
-                const key = format(day, "yyyy-MM-dd");
-                const dayShoots = shootsByDay.get(key) ?? [];
-                const dayExternal = externalByDay.get(key) ?? [];
-                const today = isToday(day);
-
-                return (
-                  <div
-                    key={`wd-${key}`}
-                    className="min-h-[320px] min-w-0 px-1.5 py-2 lg:min-h-[360px] lg:px-2"
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => handleDropOnDay(e, day)}
-                  >
-                    <div className="mb-2 text-center">
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted">{format(day, "EEE")}</p>
-                      <p
-                        className={cn(
-                          "mx-auto mt-0.5 flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold",
-                          today && "bg-accent text-accent-foreground"
-                        )}
-                      >
-                        {format(day, "d")}
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      {dayShoots.length === 0 && dayExternal.length === 0 ? (
-                        <div className="rounded-md border border-dashed border-border/80 bg-slate-50/50 surface-dark:bg-subtle/50 px-1 py-6 text-center text-[10px] text-muted">
-                          —
-                        </div>
-                      ) : (
-                        <>
-                          {dayShoots.map((shoot) => (
-                            <ShootEventCard
-                              key={shoot.id}
-                              shoot={shoot}
-                              variant="week"
-                              draggable
-                              isDragging={draggingId === shoot.id}
-                              onOpen={() => openShoot(shoot)}
-                              onDragStart={(e) => handleDragStart(e, shoot)}
-                              onDragEnd={handleDragEnd}
-                            />
-                          ))}
-                          {dayExternal.map((event) => (
-                            <GoogleEventCard key={event.id} event={event} variant="week" onOpen={() => setOpenedExternal(event)} />
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <WeekTimeGrid<WeekItem>
+            className="h-[calc(var(--app-height,100dvh)-15rem)] min-h-[28rem] lg:h-auto lg:min-h-0 lg:flex-1"
+            days={weekDayKeys}
+            today={businessToday}
+            byDay={weekByDay}
+            timeZone={businessTimeZone}
+            drag={weekDrag}
+            onOpenEvent={(item) => openWeekItem(item)}
+            eventKey={(item) => item.key}
+            ghostLabel={(item) => (item.kind === "shoot" ? item.shoot.project_name : item.event.title)}
+            renderAllDay={(item) =>
+              item.kind === "google" ? (
+                <GoogleAllDayChip event={item.event} onOpen={() => setOpenedExternal(item.event)} />
+              ) : null
+            }
+            blockAppearance={(item) => weekBlockAppearance(item, shootColor, colorFor, businessTimeZone)}
+            renderBlock={(item, roomy) =>
+              item.kind === "shoot" ? (
+                <>
+                  <span className="block truncate font-semibold">{item.shoot.project_name}</span>
+                  {roomy ? (
+                    <>
+                      <span className="flex min-w-0 items-center gap-1 truncate opacity-80">
+                        <span className="tabular-nums">{compactTime(item.shoot.proposed_at, businessTimeZone)}</span>
+                        {item.shoot.proposal_status === "pending" ? <span className="font-semibold">· Pending</span> : null}
+                        {item.shoot.google_sync_status === "error" ? <span className="font-semibold">· Sync</span> : null}
+                      </span>
+                      <span className="block truncate opacity-80">{item.shoot.client_name}</span>
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <span className="block truncate font-semibold">{item.event.title}</span>
+                  {roomy ? (
+                    <span className="block truncate opacity-80">
+                      {item.event.timeLabel} · Google
+                    </span>
+                  ) : null}
+                </>
+              )
+            }
+          />
         )}
 
         {view === "day" && (
@@ -1314,8 +1692,8 @@ export function ShootCalendar({
             ) : null}
             <div className="flex gap-4">
               <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100 surface-dark:bg-subtle ring-1 ring-black/5 sm:h-20 sm:w-20">
-                {selected.cover_url ? (
-                  <RemoteImage src={selected.cover_url} alt="" fill className="object-cover" sizes="80px" />
+                {selected.cover_url || covers[selected.project_id] ? (
+                  <RemoteImage src={(selected.cover_url || covers[selected.project_id])!} alt="" fill className="object-cover" sizes="80px" />
                 ) : (
                   <CoverPlaceholder variant="thumb" />
                 )}
@@ -1365,6 +1743,25 @@ export function ShootCalendar({
           </div>
         )}
       </Modal>
+
+      <RescheduleConfirmModal
+        open={!!pendingMove}
+        title={pendingMove ? `${pendingMove.shoot.client_name} - ${pendingMove.shoot.project_name}` : ""}
+        fromLabel={
+          pendingMove
+            ? describeSlot(
+                zonedDayAndMinutes(pendingMove.shoot.proposed_at, businessTimeZone)?.dayKey ?? pendingMove.toDay,
+                pendingMove.shoot.proposed_at,
+                businessTimeZone
+              )
+            : ""
+        }
+        toLabel={pendingMove ? describeSlot(pendingMove.toDay, pendingMove.toIso, businessTimeZone) : ""}
+        note={TIMED_RESCHEDULE_NOTE}
+        saving={movingSaving}
+        onCancel={cancelMove}
+        onConfirm={() => void confirmMove()}
+      />
 
       <Modal open={!!openedExternal} onClose={() => setOpenedExternal(null)} title="Google Calendar">
         {openedExternal ? (

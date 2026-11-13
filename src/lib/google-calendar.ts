@@ -961,62 +961,129 @@ export async function updateReadCalendars(
   return { readCalendarIds: picked };
 }
 
+/** Per-request ceiling for each Google call made while rendering the Shoot Calendar. */
+const VIEW_GOOGLE_TIMEOUT_MS = 8_000;
+/** Calendars fetched at once (Google's per-user quota is generous; keep bursts small). */
+const VIEW_GOOGLE_CONCURRENCY = 4;
+
+const timedFetch: FetchLike = (input, init) =>
+  fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(VIEW_GOOGLE_TIMEOUT_MS) });
+
+export type ViewerGoogleWindow = {
+  /** False when the connection is missing or needs reconnecting (nothing was fetched). */
+  connected: boolean;
+  calendars: AccountCalendar[];
+  hiddenCalendarIds: string[];
+  /** Calendars whose events are included for this window (hidden ones are skipped). */
+  loadedCalendarIds: string[];
+  events: ExternalCalendarEvent[];
+  /** Some calendar timed out, was rate limited or failed; the rest are still returned. */
+  degraded: boolean;
+  timeZone: string;
+};
+
 /**
- * Live events for the owner calendar window. Never throws.
- * Does not use syncToken — a stale cursor must not blank the page.
- * 429 comes back as degraded with whatever events were collected.
+ * Everything the Shoot Calendar needs from Google for one window, in a single pass:
+ * one token check, one calendarList call, then events for the viewer's *visible* calendars
+ * only, fetched in parallel with a per-call timeout. Never throws, never writes to Google
+ * (an expired access token is refreshed and stored, exactly as before).
+ *
+ * `onlyCalendarIds` limits the event fetch to those calendars (still checked against the
+ * account's own list) — used when the viewer turns a hidden calendar back on.
  */
-export async function loadExternalEventsForOwner(
+export async function loadViewerGoogleWindow(
   businessId: string,
+  userId: string,
   timeMin: string,
   timeMax: string,
-  calendarIds?: string[]
-): Promise<{ events: ExternalCalendarEvent[]; degraded: boolean; timeZone: string }> {
+  opts: { timeZone?: string; onlyCalendarIds?: string[] } = {}
+): Promise<ViewerGoogleWindow> {
+  const empty = (timeZone: string, connected: boolean, degraded: boolean): ViewerGoogleWindow => ({
+    connected,
+    calendars: [],
+    hiddenCalendarIds: [],
+    loadedCalendarIds: [],
+    events: [],
+    degraded,
+    timeZone,
+  });
+  let timeZone = opts.timeZone || DEFAULT_TIMEZONE;
   try {
-    const settings = await getAppSettings(businessId);
-    const timeZone = resolveBusinessTimeZone(settings.workflow.businessDefaults.timezone).timeZone;
-    const row = await readConnection(businessId);
-    if (!row || row.status !== "active") return { events: [], degraded: false, timeZone };
-    const auth = await accessTokenFor(businessId, fetch);
-    if (!auth.ok) return { events: [], degraded: true, timeZone };
-    const colors = new Map<string, string | null>();
-    const summaries = new Map<string, string>();
-    try {
-      const calendars = await listAccountCalendars(auth.token);
-      for (const calendar of calendars) {
-        summaries.set(calendar.id, calendar.summary);
-        colors.set(calendar.id, calendar.backgroundColor);
-      }
-    } catch {
-      // Names fall back to the stored summary. The page still renders shoots.
+    if (!opts.timeZone) {
+      const settings = await getAppSettings(businessId);
+      timeZone = resolveBusinessTimeZone(settings.workflow.businessDefaults.timezone).timeZone;
     }
-    const ids = calendarIds ?? resolveReadCalendarIds(row.read_calendar_ids, row.calendar_id);
-    const events: ExternalCalendarEvent[] = [];
+    const auth = await accessTokenFor(businessId, timedFetch);
+    if (!auth.ok) return empty(timeZone, false, auth.error !== "not_connected");
+    const row = auth.row;
+    const hiddenRaw = row.viewer_hidden_calendar_ids?.[userId];
+    const hiddenCalendarIds = Array.isArray(hiddenRaw) ? hiddenRaw.filter((id) => typeof id === "string") : [];
+
     let degraded = false;
-    for (const id of ids) {
-      try {
-        const result = await listGoogleEvents({
-          accessToken: auth.token,
-          calendarId: id,
-          calendarSummary:
-            summaries.get(id) || (id === row.calendar_id ? row.calendar_summary || id : id),
-          calendarColor: colors.get(id) ?? null,
-          timeZone,
-          timeMin,
-          timeMax,
-          syncToken: null,
-        });
-        events.push(...result.events);
-        if (result.degraded) degraded = true;
-      } catch {
-        degraded = true;
-      }
+    let calendars: AccountCalendar[] = [];
+    try {
+      calendars = await listAccountCalendars(auth.token, timedFetch);
+    } catch {
+      degraded = true;
+      // The list is unavailable: fall back to the stored read calendars so events still show.
+      calendars = resolveReadCalendarIds(row.read_calendar_ids, row.calendar_id).map((id) => ({
+        id,
+        summary: id === row.calendar_id ? row.calendar_summary || id : id,
+        primary: id === "primary",
+        backgroundColor: null,
+        accessRole: null,
+      }));
     }
+
+    const hidden = new Set(hiddenCalendarIds);
+    const known = new Set(calendars.map((calendar) => calendar.id));
+    const targets = opts.onlyCalendarIds
+      ? [...new Set(opts.onlyCalendarIds)].filter((id) => known.has(id))
+      : calendars.map((calendar) => calendar.id).filter((id) => !hidden.has(id));
+    const byId = new Map(calendars.map((calendar) => [calendar.id, calendar]));
+
+    const events: ExternalCalendarEvent[] = [];
+    const loadedCalendarIds: string[] = [];
+    let next = 0;
+    const worker = async () => {
+      while (next < targets.length) {
+        const id = targets[next++];
+        const calendar = byId.get(id);
+        try {
+          const result = await listGoogleEvents({
+            accessToken: auth.token,
+            calendarId: id,
+            calendarSummary: calendar?.summary || id,
+            calendarColor: calendar?.backgroundColor ?? null,
+            timeZone,
+            timeMin,
+            timeMax,
+            syncToken: null,
+            transport: timedFetch,
+          });
+          events.push(...result.events);
+          if (result.degraded) degraded = true;
+          loadedCalendarIds.push(id);
+        } catch {
+          degraded = true;
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(VIEW_GOOGLE_CONCURRENCY, targets.length) }, worker));
+
     events.sort((a, b) => a.start.localeCompare(b.start) || a.title.localeCompare(b.title));
     const capped = events.length > 500;
-    return { events: capped ? events.slice(0, 500) : events, degraded: degraded || capped, timeZone };
+    return {
+      connected: true,
+      calendars,
+      hiddenCalendarIds,
+      loadedCalendarIds,
+      events: capped ? events.slice(0, 500) : events,
+      degraded: degraded || capped,
+      timeZone,
+    };
   } catch {
-    return { events: [], degraded: true, timeZone: DEFAULT_TIMEZONE };
+    return empty(timeZone, true, true);
   }
 }
 

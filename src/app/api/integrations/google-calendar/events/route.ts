@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { isOwnerAdmin } from "@/lib/staff-access";
-import { listCalendarsForViewer, loadExternalEventsForOwner } from "@/lib/google-calendar";
+import { loadViewerGoogleWindow } from "@/lib/google-calendar";
 import { externalEventsVisibleTo } from "@/lib/google-calendar-pull";
 
 const MAX_SPAN_MS = 120 * 24 * 60 * 60 * 1000;
@@ -30,21 +30,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "from and to must be a range of at most 120 days." }, { status: 400 });
   }
 
-  let calendarIds: string[] = [];
-  try {
-    const listed = await listCalendarsForViewer(tenant.businessId, profile.id);
-    calendarIds = listed.calendars.map((calendar) => calendar.id);
-  } catch {
-    return NextResponse.json({ events: [], degraded: true, timeZone: null });
-  }
-  const loaded = await loadExternalEventsForOwner(
-    tenant.businessId,
-    start.toISOString(),
-    end.toISOString(),
-    calendarIds
-  );
+  // Optional: only these calendars (e.g. one the viewer just turned back on). Ids are checked
+  // against the connected account's own calendar list inside loadViewerGoogleWindow.
+  const only = url.searchParams.get("calendars");
+  const onlyCalendarIds = only
+    ? only
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => id && id.length <= 256)
+        .slice(0, 50)
+    : undefined;
+
+  const loaded = await loadViewerGoogleWindow(tenant.businessId, profile.id, start.toISOString(), end.toISOString(), {
+    onlyCalendarIds,
+  });
   return NextResponse.json({
+    connected: loaded.connected,
     events: externalEventsVisibleTo(profile.role, loaded.events),
+    loadedCalendarIds: loaded.loadedCalendarIds,
     degraded: loaded.degraded,
     timeZone: loaded.timeZone,
   });

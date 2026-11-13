@@ -6,9 +6,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, ExternalLink, Loader2, MapPin, User, Users, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
 import { ClientViewCalendar } from "@/components/admin/client-view/client-view-calendar";
+import {
+  RescheduleConfirmModal,
+  TIMED_RESCHEDULE_NOTE,
+  WeekTimeGrid,
+  rescheduleErrorMessage,
+  saveShootTime,
+  useEventDrag,
+  type DragApi as SharedDragApi,
+  type DragBindProps,
+} from "@/components/admin/calendar/week-time-grid";
 import { ServicePill, StagePill, type ClientViewProjectRow } from "@/components/admin/client-view/client-view-shared";
 import {
   CALENDAR_EVENT_STYLES,
@@ -67,13 +75,7 @@ export type ProjectsCalendarPermissions = {
 type PendingMove = { event: CalEvent; toDay: string; toIso: string | null };
 
 /** Drag + click wiring shared by the Month and Week grids. */
-type DragApi = {
-  canDrag: (e: CalEvent) => boolean;
-  /** Dropped somewhere new: asks for confirmation. Same slot → no-op. */
-  drop: (e: CalEvent, toDay: string, toMin: number) => void;
-  /** Set after a drag so the trailing click doesn't open the preview. */
-  suppressClick: { current: boolean };
-};
+type DragApi = SharedDragApi<CalEvent>;
 
 /**
  * Projects page Calendar: Month (default) | Week | List over the projects the toolbar's
@@ -165,28 +167,16 @@ export function ProjectsCalendar({
     setSaving(true);
     const { event, toDay, toIso } = pending;
     try {
-      const res = event.allDay
-        ? await fetch("/api/projects", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ id: event.project.id, shoot_date: toDay }),
-          })
-        : await fetch("/api/shoot-proposals", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ id: event.project.confirmedShootId, action: "update_date", proposed_at: toIso }),
-          });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(
-          res.status === 403 || res.status === 401
-            ? "You don’t have permission to reschedule this shoot."
-            : res.status === 404
-              ? "This shoot was changed or removed. Refresh and try again."
-              : body.error || "Couldn’t reschedule the shoot."
-        );
+      if (event.allDay) {
+        const res = await fetch("/api/projects", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ id: event.project.id, shoot_date: toDay }),
+        });
+        if (!res.ok) throw new Error(await rescheduleErrorMessage(res));
+      } else {
+        await saveShootTime(String(event.project.confirmedShootId ?? ""), toIso ?? "");
       }
       toast.success(`${eventTitle(event.project)} moved to ${describeSlot(toDay, toIso, timeZone)}`);
       router.refresh();
@@ -302,7 +292,34 @@ export function ProjectsCalendar({
           }}
         />
       ) : mode === "week" ? (
-        <WeekGrid days={week} today={today} byDay={byDay} timeZone={timeZone} drag={dragApi} onOpenEvent={openEvent} />
+        <WeekTimeGrid
+          className={CALENDAR_HEIGHT}
+          days={week}
+          today={today}
+          byDay={byDay}
+          timeZone={timeZone}
+          drag={dragApi}
+          onOpenEvent={openEvent}
+          eventKey={(e) => e.project.id}
+          allDayHint="Shoot date set, time not confirmed"
+          ghostLabel={(e) => eventTitle(e.project)}
+          renderAllDay={(e) => <EventChip event={e} timeZone={timeZone} onOpen={openEvent} dense />}
+          blockAppearance={(e) => ({
+            className: CALENDAR_EVENT_STYLES[e.project.status].block,
+            title: `${eventTitle(e.project)} · ${e.startIso ? formatTimeRange(e.startIso, SHOOT_EVENT_MINUTES, timeZone) : ""}`,
+          })}
+          renderBlock={(e, roomy) => (
+            <>
+              <span className="block truncate font-semibold">{eventTitle(e.project)}</span>
+              {roomy ? (
+                <>
+                  <span className="block truncate opacity-80">{e.startIso ? compactTime(e.startIso, timeZone) : null}</span>
+                  <span className="block truncate opacity-80">{e.project.clients?.name || e.project.property_address}</span>
+                </>
+              ) : null}
+            </>
+          )}
+        />
       ) : (
         <div className="p-4 sm:p-5">
           <ClientViewCalendar projects={shown} heroUrls={heroUrls} showClientName canOpenCalendar={canOpenCalendar} />
@@ -337,37 +354,16 @@ export function ProjectsCalendar({
         </Popover>
       ) : null}
 
-      <Modal
+      <RescheduleConfirmModal
         open={!!pending}
-        onClose={cancelMove}
-        title="Reschedule Shoot?"
-        footer={
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button variant="outline" className="min-h-11 sm:min-h-10" disabled={saving} onClick={cancelMove}>
-              Cancel
-            </Button>
-            <Button variant="accent" className="min-h-11 sm:min-h-10" disabled={saving} onClick={() => void confirmMove()}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-              {saving ? "Rescheduling…" : "Confirm Reschedule"}
-            </Button>
-          </div>
-        }
-      >
-        {pending ? (
-          <div className="space-y-3 text-sm text-muted">
-            <p>
-              Move <strong className="text-heading">{eventTitle(pending.event.project)}</strong> from{" "}
-              <strong className="text-heading">{describeSlot(pending.event.dayKey, pending.event.startIso, timeZone)}</strong> to{" "}
-              <strong className="text-heading">{describeSlot(pending.toDay, pending.toIso, timeZone)}</strong>?
-            </p>
-            <p className="text-xs">
-              {pending.event.allDay
-                ? "Only the shoot date changes. No time has been confirmed yet."
-                : "Google Calendar and the client’s reschedule notification update the same way as on the Shoot Calendar (per your Scheduling settings)."}
-            </p>
-          </div>
-        ) : null}
-      </Modal>
+        title={pending ? eventTitle(pending.event.project) : ""}
+        fromLabel={pending ? describeSlot(pending.event.dayKey, pending.event.startIso, timeZone) : ""}
+        toLabel={pending ? describeSlot(pending.toDay, pending.toIso, timeZone) : ""}
+        note={pending?.event.allDay ? "Only the shoot date changes. No time has been confirmed yet." : TIMED_RESCHEDULE_NOTE}
+        saving={saving}
+        onCancel={cancelMove}
+        onConfirm={() => void confirmMove()}
+      />
     </section>
   );
 }
@@ -474,98 +470,6 @@ function IconButton({ label, onClick, children }: { label: string; onClick: () =
   );
 }
 
-// ── Pointer drag (mouse / pen only: touch keeps native scrolling; phones use the preview's Reschedule) ──
-
-type DragSession = { event: CalEvent; x0: number; y0: number; active: boolean; el: HTMLElement; pointerId: number; grabMin: number };
-type DragHandlers = {
-  onStart?: (s: DragSession) => void;
-  onMove: (s: DragSession, x: number, y: number) => void;
-  onEnd: (s: DragSession) => void;
-  onCancel: () => void;
-};
-
-/** Click vs drag: nothing moves until the pointer travels 5px; Escape cancels mid-drag. */
-function useEventDrag(api: DragApi, handlers: DragHandlers) {
-  const session = useRef<DragSession | null>(null);
-  const h = useRef(handlers);
-  useLayoutEffect(() => {
-    h.current = handlers;
-  });
-  const [dragging, setDragging] = useState<CalEvent | null>(null);
-
-  useEffect(() => {
-    if (!dragging) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      const s = session.current;
-      session.current = null;
-      api.suppressClick.current = true;
-      try {
-        s?.el.releasePointerCapture(s.pointerId);
-      } catch {
-        /* already released */
-      }
-      setDragging(null);
-      h.current.onCancel();
-    };
-    window.addEventListener("keydown", onKey);
-    document.body.style.cursor = "grabbing";
-    document.body.style.userSelect = "none";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-  }, [dragging, api.suppressClick]);
-
-  function bind(event: CalEvent) {
-    if (!api.canDrag(event)) return {};
-    return {
-      onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
-        if (e.button !== 0 || e.pointerType === "touch") return;
-        e.preventDefault(); // no text selection while dragging
-        api.suppressClick.current = false;
-        session.current = { event, x0: e.clientX, y0: e.clientY, active: false, el: e.currentTarget, pointerId: e.pointerId, grabMin: 0 };
-        try {
-          e.currentTarget.setPointerCapture(e.pointerId);
-        } catch {
-          /* unsupported */
-        }
-      },
-      onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
-        const s = session.current;
-        if (!s || s.pointerId !== e.pointerId) return;
-        if (!s.active) {
-          if (Math.hypot(e.clientX - s.x0, e.clientY - s.y0) < 5) return;
-          s.active = true;
-          h.current.onStart?.(s);
-          setDragging(s.event);
-        }
-        h.current.onMove(s, e.clientX, e.clientY);
-      },
-      onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
-        const s = session.current;
-        if (!s || s.pointerId !== e.pointerId) return;
-        session.current = null;
-        if (!s.active) return; // a plain click
-        api.suppressClick.current = true;
-        window.setTimeout(() => (api.suppressClick.current = false), 0);
-        setDragging(null);
-        h.current.onEnd(s);
-      },
-      onPointerCancel: () => {
-        session.current = null;
-        setDragging(null);
-        h.current.onCancel();
-      },
-      "aria-roledescription": "draggable shoot",
-    };
-  }
-
-  return { bind, dragging };
-}
-
 // ── Month ───────────────────────────────────────────────────────────────────
 
 function EventChip({
@@ -580,7 +484,7 @@ function EventChip({
   timeZone: string;
   onOpen: (e: CalEvent, el: HTMLElement) => void;
   dense?: boolean;
-  dragProps?: ReturnType<ReturnType<typeof useEventDrag>["bind"]>;
+  dragProps?: DragBindProps;
   dimmed?: boolean;
 }) {
   const style = CALENDAR_EVENT_STYLES[event.project.status];
@@ -755,226 +659,6 @@ function MonthGrid({
       ) : null}
     </div>
   );
-}
-
-// ── Week ────────────────────────────────────────────────────────────────────
-
-function WeekGrid({
-  days,
-  today,
-  byDay,
-  timeZone,
-  drag,
-  onOpenEvent,
-}: {
-  days: string[];
-  today: string;
-  byDay: Map<string, CalEvent[]>;
-  timeZone: string;
-  drag: DragApi;
-  onOpenEvent: (e: CalEvent, el: HTMLElement) => void;
-}) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const colRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const [nowMin, setNowMin] = useState<number | null>(null);
-  const [ghost, setGhost] = useState<{ dayKey: string; startMin: number } | null>(null);
-  const ghostRef = useRef<{ dayKey: string; startMin: number } | null>(null);
-
-  /** Day column + minutes under the pointer (null outside the seven day columns). */
-  const slotAt = (x: number, y: number) => {
-    const cols = colRefs.current;
-    for (let i = 0; i < cols.length; i++) {
-      const r = cols[i]?.getBoundingClientRect();
-      if (r && x >= r.left && x < r.right) return { dayKey: days[i], minutes: ((y - r.top) / HOUR_PX) * 60 };
-    }
-    return null;
-  };
-
-  const { bind, dragging } = useEventDrag(drag, {
-    onStart: (s) => {
-      // Keep the grab point under the cursor: grabbing the bottom of a block doesn't jump it.
-      const at = slotAt(s.x0, s.y0);
-      s.grabMin = at ? at.minutes - s.event.startMin : 0;
-    },
-    onMove: (s, x, y) => {
-      const sc = scrollRef.current;
-      if (sc) {
-        const r = sc.getBoundingClientRect();
-        if (y < r.top + 96) sc.scrollTop -= 12;
-        else if (y > r.bottom - 32) sc.scrollTop += 12;
-      }
-      const at = slotAt(x, y);
-      const next = at ? { dayKey: at.dayKey, startMin: snapMinutes(at.minutes - s.grabMin, s.event.endMin - s.event.startMin) } : null;
-      ghostRef.current = next;
-      setGhost(next);
-    },
-    onEnd: (s) => {
-      const g = ghostRef.current;
-      ghostRef.current = null;
-      setGhost(null);
-      if (g) drag.drop(s.event, g.dayKey, g.startMin);
-    },
-    onCancel: () => {
-      ghostRef.current = null;
-      setGhost(null);
-    },
-  });
-
-  useEffect(() => {
-    const tick = () => setNowMin(zonedDayAndMinutes(new Date(), timeZone)?.minutes ?? null);
-    tick();
-    const t = window.setInterval(tick, 60_000);
-    return () => window.clearInterval(t);
-  }, [timeZone]);
-
-  const allDay = days.map((d) => (byDay.get(d) ?? []).filter((e) => e.allDay));
-  const timed = days.map((d) => layoutOverlaps((byDay.get(d) ?? []).filter((e) => !e.allDay)));
-  const hasAllDay = allDay.some((l) => l.length > 0);
-  const showsToday = days.includes(today);
-
-  // Scroll to "now" on this week, otherwise to the first shoot (or 8 AM).
-  const weekId = days[0];
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const first = Math.min(...timed.flat().map((p) => p.event.startMin), Infinity);
-    const nowNow = zonedDayAndMinutes(new Date(), timeZone)?.minutes ?? 8 * 60;
-    const target = showsToday ? nowNow - 120 : Number.isFinite(first) ? first - 60 : 8 * 60;
-    el.scrollTop = Math.max(0, (target / 60) * HOUR_PX);
-    // Phones scroll the week sideways: bring today's column into view (next to the hour gutter).
-    el.scrollLeft = 0;
-    const todayCol = showsToday ? el.querySelector<HTMLElement>('[aria-current="date"]') : null;
-    if (todayCol && el.scrollWidth > el.clientWidth) {
-      const gutter = el.querySelector<HTMLElement>(".sticky.left-0")?.offsetWidth ?? 52;
-      el.scrollLeft = todayCol.getBoundingClientRect().left - el.getBoundingClientRect().left - gutter;
-    }
-    // Only when the week changes — not on every data refresh.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekId]);
-
-  const cols = "grid-cols-[3.25rem_repeat(7,minmax(5.5rem,1fr))] sm:grid-cols-[3.75rem_repeat(7,minmax(0,1fr))]";
-
-  return (
-    <div ref={scrollRef} className={cn("min-w-0 overflow-auto overscroll-contain [scrollbar-width:thin]", CALENDAR_HEIGHT)}>
-      <div className="min-w-[42rem] sm:min-w-0">
-        {/* Sticky day header (+ all-day row) */}
-        <div className="sticky top-0 z-20 border-b border-border bg-card">
-          <div className={cn("grid", cols)}>
-            <div className="sticky left-0 z-10 bg-card" />
-            {days.map((d) => {
-              const isToday = d === today;
-              return (
-                <div key={d} className="border-l border-border py-1.5 text-center" aria-current={isToday ? "date" : undefined}>
-                  <p className={cn("text-[11px] font-semibold uppercase tracking-wide", isToday ? "text-accent" : "text-muted")}>
-                    {formatDayKey(d, { weekday: "short" })}
-                  </p>
-                  <p
-                    className={cn(
-                      "mx-auto mt-0.5 flex h-8 w-8 items-center justify-center rounded-full text-lg font-semibold",
-                      isToday ? "bg-accent text-accent-foreground" : "text-heading"
-                    )}
-                  >
-                    {Number(d.slice(8))}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-          {hasAllDay ? (
-            <div className={cn("grid border-t border-border", cols)}>
-              <div className="sticky left-0 z-10 flex items-start justify-end bg-card py-1 pr-2 text-[10px] font-medium uppercase text-muted" title="Shoot date set, time not confirmed">
-                All day
-              </div>
-              {allDay.map((list, i) => (
-                <div key={days[i]} className="min-w-0 space-y-px border-l border-border p-0.5">
-                  {list.map((e) => (
-                    <EventChip key={e.project.id} event={e} timeZone={timeZone} onOpen={onOpenEvent} dense />
-                  ))}
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Time grid */}
-        <div className={cn("relative grid", cols)} style={{ height: HOUR_PX * 24 }}>
-          <div className="sticky left-0 z-10 bg-card">
-            {Array.from({ length: 24 }, (_, h) => (
-              <div key={h} className="relative pr-2 text-right text-[10px] text-muted" style={{ height: HOUR_PX }}>
-                {h > 0 ? <span className="absolute -top-2 right-2">{hourLabel(h)}</span> : null}
-              </div>
-            ))}
-          </div>
-          {days.map((d, i) => (
-            <div
-              key={d}
-              ref={(el) => {
-                colRefs.current[i] = el;
-              }}
-              className={cn("relative border-l border-border", d === today && "bg-accent-subtle/25")}
-            >
-              {Array.from({ length: 24 }, (_, h) => (
-                <div key={h} className="border-b border-border/60" style={{ height: HOUR_PX }} aria-hidden />
-              ))}
-              {timed[i].map(({ event, column, columns }) => {
-                const style = CALENDAR_EVENT_STYLES[event.project.status];
-                const top = (event.startMin / 60) * HOUR_PX;
-                const height = Math.max(22, ((event.endMin - event.startMin) / 60) * HOUR_PX - 2);
-                const width = 100 / columns;
-                const roomy = height >= 44;
-                return (
-                  <button
-                    key={event.project.id}
-                    type="button"
-                    {...bind(event)}
-                    onClick={(e) => onOpenEvent(event, e.currentTarget)}
-                    className={cn(
-                      "absolute z-[1] overflow-hidden rounded-md border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight shadow-sm ring-1 ring-card transition-[filter] hover:z-[2] hover:brightness-95 focus-visible:z-[2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                      style.block,
-                      drag.canDrag(event) && "cursor-grab active:cursor-grabbing",
-                      dragging?.project.id === event.project.id && "opacity-40"
-                    )}
-                    style={{ top: top + 1, height, left: `calc(${column * width}% + 2px)`, width: `calc(${width}% - 4px)` }}
-                    title={`${eventTitle(event.project)} · ${event.startIso ? formatTimeRange(event.startIso, SHOOT_EVENT_MINUTES, timeZone) : ""}`}
-                  >
-                    <span className="block truncate font-semibold">{eventTitle(event.project)}</span>
-                    {roomy ? (
-                      <>
-                        <span className="block truncate opacity-80">{event.startIso ? compactTime(event.startIso, timeZone) : null}</span>
-                        <span className="block truncate opacity-80">{event.project.clients?.name || event.project.property_address}</span>
-                      </>
-                    ) : null}
-                  </button>
-                );
-              })}
-              {dragging && ghost?.dayKey === d ? (
-                <div
-                  className="pointer-events-none absolute inset-x-0.5 z-[4] overflow-hidden rounded-md border-2 border-accent bg-card/95 px-1.5 py-0.5 text-[11px] leading-tight shadow-lg"
-                  style={{ top: (ghost.startMin / 60) * HOUR_PX + 1, height: Math.max(22, ((dragging.endMin - dragging.startMin) / 60) * HOUR_PX - 2) }}
-                  aria-hidden
-                >
-                  <span className="block truncate font-semibold text-heading">{eventTitle(dragging.project)}</span>
-                  <span className="block truncate font-medium text-accent">
-                    {formatTimeRange(zonedTimeToIso(d, ghost.startMin, timeZone), dragging.endMin - dragging.startMin, timeZone)}
-                  </span>
-                </div>
-              ) : null}
-              {d === today && nowMin !== null ? (
-                <div className="pointer-events-none absolute inset-x-0 z-[3] flex items-center" style={{ top: (nowMin / 60) * HOUR_PX }} aria-hidden>
-                  <span className="-ml-1.5 h-3 w-3 rounded-full bg-red-500" />
-                  <span className="h-0.5 flex-1 bg-red-500" />
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function hourLabel(h: number) {
-  return `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? "AM" : "PM"}`;
 }
 
 // ── Popover + event preview ─────────────────────────────────────────────────
