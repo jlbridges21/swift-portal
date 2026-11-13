@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { getAppSettings } from "@/lib/app-settings";
 import { parseSurfaceMode } from "@/lib/brand-color";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
-import { pwaIconUrl, pwaIconVersion } from "@/lib/pwa/metadata";
+import { appChromeThemeColor, pwaIconUrl, pwaIconVersion } from "@/lib/pwa/metadata";
 import { SITE, SITE_BACKGROUND_COLOR, SITE_ICONS, SITE_THEME_COLOR } from "@/lib/site-metadata";
 
 function platformManifest(): MetadataRoute.Manifest {
@@ -67,7 +67,9 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     display: "standalone",
     orientation: "portrait",
     background_color: surface,
-    theme_color: surface,
+    // Portal installs: the status bar takes the app header's surface (same value as the pages'
+    // theme-color meta, see appChromeThemeColor), so status bar + header read as one solid bar.
+    theme_color: onWebsiteDomain ? surface : appChromeThemeColor(business).themeColor,
     icons: [
       { src: pwaIconUrl(192, { version }), sizes: "192x192", type: "image/png", purpose: "any" },
       { src: pwaIconUrl(512, { version }), sizes: "512x512", type: "image/png", purpose: "any" },

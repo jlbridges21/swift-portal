@@ -1022,6 +1022,8 @@ export function AdminPhotoGrid({
     function onKey(e: KeyboardEvent) {
       if (dialogOpen) return;
       if (e.key === "Escape") {
+        // Already handled (e.g. it just closed the More / right-click menu): keep the selection.
+        if (e.defaultPrevented) return;
         if (placementMode) {
           setPlacementMode(false);
           return;
@@ -1630,6 +1632,27 @@ export function AdminPhotoGrid({
   const selectedList = useMemo(() => Array.from(selectedIds), [selectedIds]);
   const showSelectionChrome = selectionCount > 0 || (coarsePointer && selectMode);
   const remainingCount = visiblePhotos.length - selectionCount;
+  /* Which ends of the toolbar's scrollable action row have hidden actions (drives the edge fades). */
+  const toolbarScrollRef = useRef<HTMLDivElement>(null);
+  const [toolbarOverflow, setToolbarOverflow] = useState({ left: false, right: false });
+  useEffect(() => {
+    const el = toolbarScrollRef.current;
+    if (!el || !showSelectionChrome) return;
+    const update = () => {
+      const left = el.scrollLeft > 1;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setToolbarOverflow((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child);
+    el.addEventListener("scroll", update, { passive: true });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener("scroll", update);
+    };
+  }, [showSelectionChrome, selectionCount, placementMode]);
   const selectedAllVisible = selectedList.length > 0 && selectedList.every((id) => {
     const p = allProjectPhotos.find((x) => x.id === id);
     return p ? isClientVisible(p) : true;
@@ -1820,23 +1843,67 @@ export function AdminPhotoGrid({
   const singleDeletePhoto =
     deleteIds.length === 1 ? allProjectPhotos.find((p) => p.id === deleteIds[0]) ?? null : null;
 
+  /* Selection toolbar: one row that floats over the bottom of the viewport (it never takes space
+     in the page, so selecting a photo can't shift the grid under the pointer). Below xl the less-used
+     Top / Bottom / Place actions fold into "More"; if the row still doesn't fit (tablets, phones)
+     the middle group scrolls sideways — it never wraps to a second row. */
+  const toolbarBtn = "h-8 shrink-0 gap-1.5 whitespace-nowrap px-2 sm:h-9 xl:px-3";
+  const reorderMenuItems = (): ActionMenuItem[] => [
+    { id: "top", label: "Move to top", icon: ArrowUpToLine, onSelect: () => void moveIdsToInsertIndex(selectedIds, 0) },
+    {
+      id: "bottom",
+      label: "Move to bottom",
+      icon: ArrowDownToLine,
+      onSelect: () => void moveIdsToInsertIndex(selectedIds, remainingCount),
+    },
+    { id: "place", label: "Place…", icon: Move, onSelect: () => setPlacementMode(true) },
+  ];
   const selectionActions = (
     <>
-      <span className="text-sm font-medium text-heading">{selectionCount} selected</span>
-      <div className="flex flex-1 flex-wrap items-center gap-2">
+      <span
+        className="shrink-0 whitespace-nowrap pl-1 pr-1 text-sm font-semibold text-heading sm:pr-2"
+        aria-live="polite"
+        data-selection-count=""
+      >
+        {selectionCount}
+        <span className="sr-only sm:not-sr-only"> {selectionCount === 1 ? "photo" : "photos"}</span> selected
+      </span>
+      <div
+        ref={toolbarScrollRef}
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] xl:gap-1.5 [&::-webkit-scrollbar]:hidden",
+          // Fade whichever edge has more actions scrolled out of view.
+          toolbarOverflow.left && toolbarOverflow.right
+            ? "[mask-image:linear-gradient(to_right,transparent,black_20px,black_calc(100%-20px),transparent)]"
+            : toolbarOverflow.right
+              ? "[mask-image:linear-gradient(to_right,black_calc(100%-24px),transparent)]"
+              : toolbarOverflow.left
+                ? "[mask-image:linear-gradient(to_left,black_calc(100%-24px),transparent)]"
+                : null
+        )}
+        data-selection-actions=""
+      >
         {selectionCount > 0 && (
           <>
             <Button
               type="button"
               variant="accent"
               size="sm"
-              className="h-9"
+              className={toolbarBtn}
               disabled={photoEditor.opening}
+              title={`${photoEditorLabel(selectionCount)} in the photo editor`}
               onClick={() => editPhotos(selectedList)}
             >
               <SlidersHorizontal className="h-3.5 w-3.5" /> {photoEditorLabel(selectionCount)}
             </Button>
-            <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => requestMove(selectedList)}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={toolbarBtn}
+              title="Move the selected photos into another folder"
+              onClick={() => requestMove(selectedList)}
+            >
               <FolderInput className="h-3.5 w-3.5" /> Move to folder
             </Button>
             {reorderLocked ? null : (
@@ -1845,7 +1912,8 @@ export function AdminPhotoGrid({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-9"
+                  className={cn(toolbarBtn, "hidden xl:inline-flex")}
+                  title="Move the selected photos to the start of the gallery"
                   onClick={() => void moveIdsToInsertIndex(selectedIds, 0)}
                 >
                   <ArrowUpToLine className="h-3.5 w-3.5" /> Top
@@ -1854,13 +1922,38 @@ export function AdminPhotoGrid({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-9"
+                  className={cn(toolbarBtn, "hidden xl:inline-flex")}
+                  title="Move the selected photos to the end of the gallery"
                   onClick={() => void moveIdsToInsertIndex(selectedIds, remainingCount)}
                 >
                   <ArrowDownToLine className="h-3.5 w-3.5" /> Bottom
                 </Button>
-                <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setPlacementMode(true)}>
-                  <Move className="h-3.5 w-3.5" /> Place…
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={cn(toolbarBtn, "hidden xl:inline-flex")}
+                  title="Choose exactly where the selected photos go"
+                  onClick={() => setPlacementMode(true)}
+                >
+                  <Move className="h-3.5 w-3.5" /> Place
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={cn(toolbarBtn, "xl:hidden")}
+                  title="More: Top, Bottom, Place"
+                  aria-haspopup="menu"
+                  onClick={(e) =>
+                    setMenu({
+                      anchor: { kind: "element", element: e.currentTarget },
+                      title: "Reorder selected photos",
+                      items: reorderMenuItems(),
+                    })
+                  }
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" /> More
                 </Button>
               </>
             )}
@@ -1868,7 +1961,8 @@ export function AdminPhotoGrid({
               type="button"
               variant="outline"
               size="sm"
-              className="h-9"
+              className={toolbarBtn}
+              title={selectedAllVisible ? "Hide the selected photos from the client" : "Show the selected photos to the client"}
               onClick={() => void setVisibility(selectedList, !selectedAllVisible)}
             >
               {selectedAllVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -1880,7 +1974,8 @@ export function AdminPhotoGrid({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-9"
+          className={toolbarBtn}
+          title="Select every photo in this view"
           onClick={() => {
             setSelectedIds(new Set(visibleIds));
             if (coarsePointer) setSelectMode(true);
@@ -1888,21 +1983,34 @@ export function AdminPhotoGrid({
         >
           Select all
         </Button>
-        <Button type="button" variant="ghost" size="sm" className="h-9" onClick={clearSelection}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={toolbarBtn}
+          title={coarsePointer ? "Finish selecting" : "Clear the selection"}
+          onClick={clearSelection}
+        >
           <X className="h-3.5 w-3.5" /> {coarsePointer ? "Done" : "Clear"}
         </Button>
-        {selectionCount > 0 && (
+      </div>
+      {selectionCount > 0 && (
+        <div className="flex shrink-0 items-center gap-1 border-l border-border pl-1.5 sm:pl-2.5">
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="ml-auto h-9 border-red-300 text-red-600 hover:bg-red-50 surface-dark:border-red-500/40 surface-dark:text-red-400 surface-dark:hover:bg-red-500/10"
+            className={cn(
+              toolbarBtn,
+              "border-red-300 text-red-600 hover:bg-red-50 surface-dark:border-red-500/40 surface-dark:text-red-400 surface-dark:hover:bg-red-500/10"
+            )}
+            title="Delete the selected photos"
             onClick={() => setDeleteTarget({ kind: "photos", ids: selectedList })}
           >
             <Trash2 className="h-3.5 w-3.5" /> Delete
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </>
   );
 
@@ -2394,12 +2502,6 @@ export function AdminPhotoGrid({
               </div>
             )}
 
-            {!coarsePointer && showSelectionChrome && !placementMode && (
-              <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-card px-3 py-2 shadow-sm">
-                {selectionActions}
-              </div>
-            )}
-
             <div
               ref={scrollRef}
               className="relative max-h-[70vh] overflow-auto rounded-lg"
@@ -2499,10 +2601,18 @@ export function AdminPhotoGrid({
         </div>
       )}
 
-      {/* Mobile selection bar (bottom, thumb-reachable) */}
-      {coarsePointer && showSelectionChrome && !placementMode && (
-        <div className="fixed inset-x-0 bottom-[calc(var(--admin-pwa-nav-height)+env(safe-area-inset-bottom,0px))] z-50 border-t border-border bg-card/95 px-3 py-3 shadow-lg backdrop-blur md:bottom-0 md:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="mx-auto flex max-w-3xl flex-col gap-2">{selectionActions}</div>
+      {/* Floating selection toolbar (every pointer type). position:fixed and sized to its content, so it
+          takes no space in the page and only its visible box receives clicks. Sits beside the sidebar,
+          above the home indicator and (phones) above the admin tab bar via .media-bulk-bar; z-40 keeps it
+          over the grid but under menus (z-110) and modals (z-100). */}
+      {showSelectionChrome && !placementMode && (
+        <div
+          role="toolbar"
+          aria-label="Selected photo actions"
+          data-photo-selection-toolbar=""
+          className="media-bulk-bar fixed left-[calc(var(--admin-sidebar-w,0px)+0.75rem)] right-3 z-40 mx-auto flex w-fit max-w-[calc(100vw-var(--admin-sidebar-w,0px)-1.5rem)] items-center gap-1.5 rounded-2xl border border-border bg-card px-2 py-1.5 shadow-[0_12px_40px_-12px_rgba(15,23,42,0.35)] sm:py-2 xl:gap-2 xl:px-3"
+        >
+          {selectionActions}
         </div>
       )}
 
