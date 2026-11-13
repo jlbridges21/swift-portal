@@ -328,7 +328,12 @@ export function AdminSettingsClient({
     settings.proposals.autoPreliminaryEstimate !== savedSettings.proposals.autoPreliminaryEstimate;
   const travelDirty = JSON.stringify(settings.travel) !== JSON.stringify(savedSettings.travel);
   const tabAccent = sanitizeCssColor(settings.business.brandAccentColor, "#4F46E5");
-  const sections = visibleSettingsSections(showTax);
+  // New interface: Business Website is managed only under Sites → Business Website, so it is
+  // left out of the Settings nav. Old links/hashes to it still hand off there (below).
+  const inAppShell = useInAdminAppShell();
+  const sections = visibleSettingsSections(showTax).filter(
+    (s) => !inAppShell || s.id !== "landing"
+  );
 
   useEffect(() => {
     if (skipNextPropSync.current) {
@@ -503,7 +508,6 @@ export function AdminSettingsClient({
 
   // New interface: the Business Website editor lives at Sites → Business Website. Settings
   // links/hashes to it hand off there so there is only ever one place it is edited.
-  const inAppShell = useInAdminAppShell();
   const redirectToSites = inAppShell && section === "landing";
   useEffect(() => {
     if (!redirectToSites) return;
