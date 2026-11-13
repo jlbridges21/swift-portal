@@ -2,9 +2,10 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { readCleanHash } from "@/lib/url-hash";
 
 function scrollToHash() {
-  const hash = window.location.hash.replace("#", "");
+  const hash = readCleanHash();
   if (!hash) return;
 
   window.dispatchEvent(new Event("portal:hash-target"));

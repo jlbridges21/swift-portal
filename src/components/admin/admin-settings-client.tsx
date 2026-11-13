@@ -35,6 +35,7 @@ import { BRAND } from "@/lib/brand";
 import { brandContrastWarnings, deriveBrandTheme, parseSurfaceMode, sanitizeCssColor } from "@/lib/brand-color";
 import { logoLuminanceClass } from "@/lib/logo-luminance-class";
 import { sectionForHash, visibleSettingsSections, type SettingsSectionId } from "@/lib/settings-nav";
+import { readCleanHash } from "@/lib/url-hash";
 import { TaxInformationSettings, type W9ClientOption } from "@/components/admin/tax-information-settings";
 import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import { TravelFeesSettingsCard } from "@/components/admin/travel-fees-card";
@@ -346,7 +347,7 @@ export function AdminSettingsClient({
 
   useEffect(() => {
     const applyHash = () => {
-      const id = sectionForHash(window.location.hash);
+      const id = sectionForHash(readCleanHash());
       if (id && (id !== "tax" || showTax)) setSection(id);
     };
     applyHash();
@@ -512,7 +513,8 @@ export function AdminSettingsClient({
   useEffect(() => {
     if (!redirectToSites) return;
     // Keep deep links into the editor (e.g. #settings-website-portfolio from settings search).
-    const hash = /^#settings-website-[a-z-]+$/.test(window.location.hash) ? window.location.hash : "";
+    const current = readCleanHash();
+    const hash = /^settings-website-[a-z-]+$/.test(current) ? `#${current}` : "";
     router.replace(`/admin/sites/business${hash}`);
   }, [redirectToSites, router]);
 

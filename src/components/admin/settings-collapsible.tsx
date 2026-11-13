@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { readCleanHash } from "@/lib/url-hash";
 
 interface SettingsCollapsibleProps {
   title: string;
@@ -62,7 +63,7 @@ export function SettingsCollapsible({
   useEffect(() => {
     let timer = 0;
     const syncFromHash = () => {
-      const hash = window.location.hash.replace("#", "");
+      const hash = readCleanHash();
       if (!hashTargetsThisSection(hash, id)) return;
       setOpen(true);
       // The section above may still be opening. Scroll after that layout settles
