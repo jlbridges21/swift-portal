@@ -2,7 +2,8 @@ import { addMonths, endOfMonth, startOfMonth, subMonths } from "date-fns";
 import { Header, PageHeader } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { requireAdminPage } from "@/lib/admin-access";
-import { getProjectHeroPosterUrl } from "@/lib/cover";
+import { getProjectHeroPosterUrlMap } from "@/lib/cover";
+import { after } from "next/server";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { ShootCalendar, type CalendarShoot } from "@/components/admin/shoot-calendar";
 import { isOwnerAdmin, staffCan, visibleProjectIdsFor } from "@/lib/staff-access";
@@ -23,28 +24,52 @@ export default async function AdminCalendarPage() {
   const { profile, tenant } = await requireAdminPage({ area: "calendar" });
   const db = await createTenantServiceClient(tenant.businessId);
   const owner = isOwnerAdmin(profile);
+  const canCreateShoot = staffCan(profile, "scheduling.propose");
+
+  // Read-only impersonation never writes (after() can't read the impersonation cookie, so the
+  // tenant client's write guard would not see it — skip the repair outright instead).
+  if (owner && !(tenant.impersonating && !tenant.allowWrites)) {
+    // Re-push shoots whose Google sync failed. Runs after the response is sent: each retry is
+    // a sequential Google API call, and the page must not wait on them (failures stay flagged
+    // on the shoot and are retried again on the next visit).
+    after(async () => {
+      try {
+        await retryAttentionSyncs(tenant.businessId);
+      } catch {
+        // Best-effort background repair.
+      }
+    });
+  }
+
+  // Independent lookups in one parallel batch.
+  const [gcal, projectIds, settings, calendarColors] = await Promise.all([
+    owner
+      ? db
+          .from("google_calendar_connections")
+          .select("status, last_error")
+          .maybeSingle()
+          .then(({ data }) => data)
+      : Promise.resolve(null),
+    isOwnerAdmin(profile)
+      ? Promise.resolve("all" as const)
+      : visibleProjectIdsFor(tenant.businessId, profile),
+    getAppSettings(tenant.businessId),
+    owner
+      ? getViewerCalendarColors(tenant.businessId, profile.id).catch((): ViewerCalendarColorPrefs => ({}))
+      : Promise.resolve({} as ViewerCalendarColorPrefs),
+  ]);
 
   let gcalStatus: "disconnected" | "active" | "needs_reconnect" = "disconnected";
   let gcalError: string | null = null;
-  if (owner) {
-    const { data: gcal } = await db
-      .from("google_calendar_connections")
-      .select("status, last_error")
-      .maybeSingle();
-    if (gcal?.status === "active" || gcal?.status === "needs_reconnect") {
-      gcalStatus = gcal.status;
-      gcalError = gcal.last_error;
-    }
-    try {
-      await retryAttentionSyncs(tenant.businessId);
-    } catch {
-      // Retry must not block the calendar page.
-    }
+  if (gcal?.status === "active" || gcal?.status === "needs_reconnect") {
+    gcalStatus = gcal.status;
+    gcalError = gcal.last_error;
   }
 
-  const projectIds = isOwnerAdmin(profile)
-    ? ("all" as const)
-    : await visibleProjectIdsFor(tenant.businessId, profile);
+  const businessTimeZone = resolveBusinessTimeZone(settings.workflow.businessDefaults.timezone).timeZone;
+  const windowStart = startOfMonth(subMonths(new Date(), 1));
+  const windowEnd = endOfMonth(addMonths(new Date(), 1));
+  const NO_MATCH = ["00000000-0000-0000-0000-000000000000"];
 
   let proposalsQuery = db
     .from("shoot_proposals")
@@ -53,110 +78,97 @@ export default async function AdminCalendarPage() {
     )
     .in("status", ["confirmed", "pending"])
     .order("proposed_at", { ascending: true });
-
   if (projectIds !== "all") {
-    if (projectIds.length === 0) {
-      proposalsQuery = proposalsQuery.in("project_id", [
-        "00000000-0000-0000-0000-000000000000",
-      ]);
-    } else {
-      proposalsQuery = proposalsQuery.in("project_id", projectIds);
-    }
+    proposalsQuery = proposalsQuery.in("project_id", projectIds.length === 0 ? NO_MATCH : projectIds);
   }
 
-  const { data: confirmed } = await proposalsQuery;
-
-  const canCreateShoot = staffCan(profile, "scheduling.propose");
-  let createProjects: { id: string; name: string }[] = [];
-  if (canCreateShoot) {
+  const loadCreateProjects = async (): Promise<{ id: string; name: string }[]> => {
+    if (!canCreateShoot) return [];
     let projectQuery = db.from("projects").select("id, project_name").order("project_name").limit(100);
     if (projectIds !== "all") {
-      projectQuery = projectQuery.in(
-        "id",
-        projectIds.length === 0 ? ["00000000-0000-0000-0000-000000000000"] : projectIds
-      );
+      projectQuery = projectQuery.in("id", projectIds.length === 0 ? NO_MATCH : projectIds);
     }
     const { data: projectRows } = await projectQuery;
-    createProjects = (projectRows ?? []).map((row) => ({
+    return (projectRows ?? []).map((row) => ({
       id: row.id as string,
       name: (row.project_name as string) || "Untitled project",
     }));
-  }
+  };
 
-  const settings = await getAppSettings(tenant.businessId);
-  const businessTimeZone = resolveBusinessTimeZone(settings.workflow.businessDefaults.timezone).timeZone;
-  const windowStart = startOfMonth(subMonths(new Date(), 1));
-  const windowEnd = endOfMonth(addMonths(new Date(), 1));
-
-  let externalEvents: ExternalCalendarEvent[] = [];
-  let googleCalendars: AccountCalendar[] = [];
-  let hiddenCalendarIds: string[] = [];
-  let calendarColors: ViewerCalendarColorPrefs = {};
-  if (owner) {
-    try {
-      calendarColors = await getViewerCalendarColors(tenant.businessId, profile.id);
-    } catch {
-      calendarColors = {};
-    }
-  }
-  if (owner && gcalStatus === "active") {
+  const loadGoogle = async (): Promise<{
+    calendars: AccountCalendar[];
+    hidden: string[];
+    events: ExternalCalendarEvent[];
+  }> => {
+    if (!owner || gcalStatus !== "active") return { calendars: [], hidden: [], events: [] };
+    let calendars: AccountCalendar[] = [];
+    let hidden: string[] = [];
     try {
       const listed = await listCalendarsForViewer(tenant.businessId, profile.id);
-      googleCalendars = listed.calendars;
-      hiddenCalendarIds = listed.hiddenCalendarIds;
+      calendars = listed.calendars;
+      hidden = listed.hiddenCalendarIds;
     } catch {
       console.error("[google-calendar] calendar list unavailable", { businessId: tenant.businessId });
     }
-    const ids = googleCalendars.map((calendar) => calendar.id);
     const loaded = await loadExternalEventsForOwner(
       tenant.businessId,
       windowStart.toISOString(),
       windowEnd.toISOString(),
-      ids
+      calendars.map((calendar) => calendar.id)
     );
-    externalEvents = externalEventsVisibleTo(profile.role, loaded.events);
+    return { calendars, hidden, events: externalEventsVisibleTo(profile.role, loaded.events) };
+  };
+
+  type ProposalProject = {
+    project_name: string;
+    property_address: string;
+    service_type: string;
+    status: string;
+    cover_image_id: string | null;
+    cover_image_url: string | null;
+    clients: { name: string } | null;
+  } | null;
+
+  const [{ data: confirmed }, createProjects, google] = await Promise.all([
+    proposalsQuery,
+    loadCreateProjects(),
+    loadGoogle(),
+  ]);
+  const externalEvents = google.events;
+  const googleCalendars = google.calendars;
+  const hiddenCalendarIds = google.hidden;
+
+  // One batched poster lookup per distinct project (a project can have several shoots).
+  const coverProjects = new Map<string, { id: string; cover_image_id: string | null; cover_image_url: string | null }>();
+  for (const item of confirmed ?? []) {
+    const project = item.projects as unknown as ProposalProject;
+    if (project && !coverProjects.has(item.project_id)) {
+      coverProjects.set(item.project_id, {
+        id: item.project_id,
+        cover_image_id: project.cover_image_id,
+        cover_image_url: project.cover_image_url,
+      });
+    }
   }
+  const coverUrls = await getProjectHeroPosterUrlMap([...coverProjects.values()], tenant.businessId);
 
-  const shoots: CalendarShoot[] = await Promise.all(
-    (confirmed ?? []).map(async (item) => {
-      const project = item.projects as unknown as {
-        project_name: string;
-        property_address: string;
-        service_type: string;
-        status: string;
-        cover_image_id: string | null;
-        cover_image_url: string | null;
-        clients: { name: string } | null;
-      } | null;
-
-      const cover_url = project
-        ? await getProjectHeroPosterUrl(
-            db.raw,
-            {
-              id: item.project_id,
-              cover_image_id: project.cover_image_id,
-              cover_image_url: project.cover_image_url,
-            },
-            tenant.businessId
-          )
-        : null;
-
-      return {
-        id: item.id,
-        project_id: item.project_id,
-        proposed_at: item.proposed_at,
-        proposal_status: item.status === "pending" ? "pending" : "confirmed",
-        google_sync_status: item.google_sync_status,
-        google_sync_error: item.google_sync_error,
-        project_name: project?.project_name ?? "Project",
-        client_name: project?.clients?.name ?? "Client",
-        property_address: project?.property_address ?? "",
-        service_type: project?.service_type ?? "",
-        status: project?.status ?? "scheduled",
-        cover_url,
-      };
-    })
-  );
+  const shoots: CalendarShoot[] = (confirmed ?? []).map((item) => {
+    const project = item.projects as unknown as ProposalProject;
+    return {
+      id: item.id,
+      project_id: item.project_id,
+      proposed_at: item.proposed_at,
+      proposal_status: item.status === "pending" ? "pending" : "confirmed",
+      google_sync_status: item.google_sync_status,
+      google_sync_error: item.google_sync_error,
+      project_name: project?.project_name ?? "Project",
+      client_name: project?.clients?.name ?? "Client",
+      property_address: project?.property_address ?? "",
+      service_type: project?.service_type ?? "",
+      status: project?.status ?? "scheduled",
+      cover_url: project ? (coverUrls[item.project_id] ?? null) : null,
+    };
+  });
 
   return (
     <div className="min-h-screen bg-background">

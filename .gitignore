@@ -42,3 +42,7 @@ next-env.d.ts
 
 # Photo Editor engine (installed by scripts/lightcraft/install.mjs)
 /public/lightcraft/
+.env*
+
+# Navigation benchmark output (scripts/perf)
+/perf-results/

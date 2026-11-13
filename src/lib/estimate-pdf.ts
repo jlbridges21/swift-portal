@@ -1,5 +1,7 @@
-import * as fontkitNs from "@pdf-lib/fontkit";
-import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from "pdf-lib";
+// pdf-lib + fontkit (~1 MB) load only when a PDF is actually built. Client components import
+// the small helpers below (estimateReference, estimateInputForQuote…) on every project page;
+// a static import here put the whole PDF engine in those pages' bundles.
+import type { PDFFont, PDFImage, PDFPage, RGB } from "pdf-lib";
 import {
   quotePaymentTermsText,
   resolveDepositCharge,
@@ -71,11 +73,19 @@ type FontkitLike = {
   create: (buffer: Uint8Array | ArrayBuffer, postscriptName?: string) => unknown;
 };
 
-function resolveFontkit(): FontkitLike {
-  const ns = fontkitNs as unknown as FontkitLike & { default?: FontkitLike };
+function resolveFontkit(fontkitNs: unknown): FontkitLike {
+  const ns = fontkitNs as FontkitLike & { default?: FontkitLike };
   if (typeof ns.create === "function") return ns;
   if (ns.default && typeof ns.default.create === "function") return ns.default;
   throw new Error("Estimate font could not be loaded");
+}
+
+type PdfLib = typeof import("pdf-lib");
+
+/** The module system caches dynamic imports, so this only downloads/evaluates once. */
+async function loadPdfLib(): Promise<{ lib: PdfLib; fontkit: FontkitLike }> {
+  const [lib, fontkitNs] = await Promise.all([import("pdf-lib"), import("@pdf-lib/fontkit")]);
+  return { lib, fontkit: resolveFontkit(fontkitNs) };
 }
 
 /** EST- plus the first 8 hex characters of the quote id. No counter. */
@@ -158,7 +168,7 @@ function issuedDateLabel(issuedAt: Date, timeZone: string | null | undefined): s
   }).format(issuedAt);
 }
 
-function parseBrandColor(hex: string): RGB {
+function parseBrandColor(hex: string, rgb: PdfLib["rgb"]): RGB {
   const match = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
   if (!match) return rgb(0.035, 0.08, 0.16);
   const value = Number.parseInt(match[1], 16);
@@ -244,11 +254,15 @@ async function buildEstimatePdfUnstable(
   input: EstimatePdfInput,
   assets: EstimatePdfAssets
 ): Promise<Uint8Array> {
+  const {
+    lib: { PDFDocument, rgb },
+    fontkit,
+  } = await loadPdfLib();
   const doc = await PDFDocument.create({ updateMetadata: false });
-  doc.registerFontkit(resolveFontkit() as unknown as Parameters<PDFDocument["registerFontkit"]>[0]);
+  doc.registerFontkit(fontkit as unknown as Parameters<typeof doc.registerFontkit>[0]);
   const regular = await doc.embedFont(assets.fontRegular, { subset: true, customName: "EstimateText" });
   const bold = await doc.embedFont(assets.fontBold, { subset: true, customName: "EstimateText-Bold" });
-  const brand = parseBrandColor(input.brandPrimaryColor);
+  const brand = parseBrandColor(input.brandPrimaryColor, rgb);
   const ink = rgb(0.07, 0.09, 0.13);
   const muted = rgb(0.33, 0.37, 0.43);
   const reference = input.quoteId ? estimateReference(input.quoteId) : null;

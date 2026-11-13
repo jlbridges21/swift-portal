@@ -46,6 +46,7 @@ import { mediaDisplayName } from "@/lib/media-display-name";
 import type { ActivityLog, MediaAsset } from "@/lib/types";
 import type { NextStepInfo } from "@/lib/journey";
 import { cn } from "@/lib/utils";
+import { useHydrated, viewerDateArgs } from "@/lib/use-hydrated";
 
 // ---------------------------------------------------------------------------
 // Status
@@ -778,6 +779,8 @@ export function ActivityPreview({
   onRevisionClick?: (revisionId: string) => void;
 }) {
   const recent = activities.slice(0, limit);
+  // Same text on the server and the hydration pass; viewer's own zone right after (no #418).
+  const { locale, timeZone } = viewerDateArgs(useHydrated());
   return (
     <SidebarCard
       title="Project Activity"
@@ -819,7 +822,8 @@ export function ActivityPreview({
                     <p className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground">{description}</p>
                   )}
                   <p className="text-[11px] text-muted">
-                    {new Date(log.created_at).toLocaleString("en-US", {
+                    {new Date(log.created_at).toLocaleString(locale ?? "en-US", {
+                      timeZone,
                       month: "short",
                       day: "numeric",
                       year: "numeric",

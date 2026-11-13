@@ -1,3 +1,4 @@
+import { safeRelativePath } from "@/lib/safe-relative-path";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 
@@ -110,7 +111,8 @@ export function safeAuthNext(raw: string | null | undefined): string | null {
   const trimmed = raw.trim();
   if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return null;
   if (trimmed.includes("://")) return null;
-  return trimmed;
+  // Also rejects backslashes, control characters and encoded "//" / "\\" forms.
+  return safeRelativePath(trimmed);
 }
 
 export const EMAIL_OTP_TYPES = new Set<string>([

@@ -18,6 +18,7 @@ import {
 import { AuthDivider, GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { getCanonicalAuthConfirmUrl } from "@/lib/auth-confirm";
 import { resolvePostLoginRedirect } from "@/lib/auth-post-login-client";
+import { safeRelativePath } from "@/lib/safe-relative-path";
 
 /** Installed-app sign-in (/app): the business's own identity instead of the website header. */
 export type AppLoginBranding = { name: string; logoUrl: string | null };
@@ -40,7 +41,7 @@ function AppBrandTop({ app }: { app: AppLoginBranding }) {
 
 /** A same-origin path the user was heading to (notification tap, protected link) — never another site. */
 function safeReturnPath(raw: string | null): string | null {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return null;
+  if (!raw || !safeRelativePath(raw)) return null;
   if (raw === "/" || raw === "/app" || raw.startsWith("/login") || raw.startsWith("/auth")) return null;
   // Only specific screens (a project, a conversation…). Generic homes like "/dashboard" or "/admin"
   // keep the server's role-aware destination (owner vs staff vs client, onboarding, billing).
@@ -208,7 +209,12 @@ export function LoginForm({
     // Same-host destination: honor where the user was going (e.g. the project a notification
     // pointed at). Access is still enforced by the proxy for that path.
     const returnTo = safeReturnPath(searchParams.get("redirect"));
-    if (returnTo && !/^https?:\/\//.test(dest)) dest = returnTo;
+    if (returnTo && !/^https?:\/\//.test(dest)) {
+      // Preview deployments answer with a /b/{slug}/… path; the proxy's ?redirect= omits that
+      // prefix, so carry it over (production destinations never start with /b/).
+      const tenantPrefix = /^\/b\/[a-z0-9-]+(?=\/|$)/.exec(dest)?.[0];
+      dest = tenantPrefix && !returnTo.startsWith("/b/") ? `${tenantPrefix}${returnTo}` : returnTo;
+    }
     if (dest.startsWith("http://") || dest.startsWith("https://")) {
       window.location.assign(dest);
       return;

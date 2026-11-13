@@ -104,8 +104,18 @@ export function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60000);
-    return () => clearInterval(interval);
+    // Poll only while the tab is visible; catch up as soon as it is shown again.
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") void fetchNotifications();
+    }, 60000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void fetchNotifications();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   useEffect(() => {

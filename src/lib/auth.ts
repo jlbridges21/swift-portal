@@ -19,13 +19,30 @@ import {
  */
 export const profileQueryStats = { loads: 0 };
 
+/**
+ * Session identity for Server Components / route handlers.
+ *
+ * `getClaims()` verifies the access token's signature locally against the project's
+ * asymmetric (ES256) JWKS, which supabase-js caches per server instance. That skips the
+ * Supabase Auth round trip `getUser()` makes on every call. Revocation is still enforced
+ * per request: the proxy (`lib/supabase/middleware.ts`) runs `auth.getUser()` against the
+ * Auth server before any page, action or API route renders. If the project ever switches
+ * back to a symmetric (HS256) key, `getClaims()` falls back to `getUser()` on its own.
+ */
+async function getVerifiedSessionUser(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<{ id: string; email: string | null } | null> {
+  const { data, error } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (error || !claims?.sub) return null;
+  return { id: claims.sub, email: typeof claims.email === "string" && claims.email ? claims.email : null };
+}
+
 async function loadProfileFromDb(): Promise<Profile | null> {
   profileQueryStats.loads += 1;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getVerifiedSessionUser(supabase);
 
   if (!user) return null;
 
@@ -194,9 +211,7 @@ export async function logActivity(
   }
 ) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getVerifiedSessionUser(supabase);
 
   await logProjectActivity(activityType, description, {
     ...options,
