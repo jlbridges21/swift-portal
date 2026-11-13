@@ -31,6 +31,7 @@ import { PortfolioManager, type PortfolioState } from "@/components/admin/busine
 import { WebsitePreview, type PreviewPage } from "@/components/admin/business-website/website-preview";
 import { MediaPickerModal } from "@/components/admin/business-website/media-picker";
 import { UploadImageButton } from "@/components/admin/business-website/upload-image-button";
+import { IMAGE_UPLOAD_HINT } from "@/lib/optimize-upload-image";
 import { AboutPanel } from "@/components/admin/business-website/about-panel";
 import { TestimonialsPanel } from "@/components/admin/business-website/testimonials-panel";
 
@@ -373,6 +374,7 @@ export function BusinessWebsiteEditor({
                     </Button>
                   ) : null}
                 </div>
+                <p className="text-xs text-muted">{IMAGE_UPLOAD_HINT}</p>
               </div>
             ) : null}
             {website.heroSource === "video" ? (

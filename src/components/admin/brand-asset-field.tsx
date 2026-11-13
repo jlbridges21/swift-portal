@@ -1,10 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import {
+  IMAGE_UPLOAD_ACCEPT,
+  IMAGE_UPLOAD_HINT,
+  imageOptimizationErrorMessage,
+  optimizeImageForUpload,
+} from "@/lib/optimize-upload-image";
 
 export type BrandAssetKind = "logo" | "emailLogo" | "favicon" | "heroImage" | "howItWorksImage" | "landingLogo";
 
@@ -12,7 +20,15 @@ const MAX_BYTES = 4 * 1024 * 1024;
 
 const KIND_UI: Record<
   BrandAssetKind,
-  { label: string; accept: string; hint: string; types: Set<string>; extraExt: Set<string> }
+  {
+    label: string;
+    accept: string;
+    hint: string;
+    types: Set<string>;
+    extraExt: Set<string>;
+    /** Resize/compress in the browser instead of rejecting files over 4MB. */
+    optimize?: boolean;
+  }
 > = {
   logo: {
     label: "Logo",
@@ -37,10 +53,11 @@ const KIND_UI: Record<
   },
   heroImage: {
     label: "Hero image",
-    accept: "image/png,image/jpeg,image/webp",
-    hint: "PNG, JPEG, or WebP, under 4MB. Oversized images are resized. You can also paste an https URL.",
+    accept: IMAGE_UPLOAD_ACCEPT,
+    hint: IMAGE_UPLOAD_HINT,
     types: new Set(["image/png", "image/jpeg", "image/webp"]),
     extraExt: new Set(),
+    optimize: true,
   },
   howItWorksImage: {
     label: "Step image",
@@ -112,6 +129,8 @@ export function BrandAssetField({
   const ui = KIND_UI[kind];
   const fileInputId = `${inputId}-file`;
   const showPreview = Boolean(value.trim());
+  const [phase, setPhase] = useState<"idle" | "optimizing" | "uploading">("idle");
+  const busy = phase !== "idle";
 
   return (
     <div className="space-y-2 sm:col-span-2">
@@ -122,9 +141,16 @@ export function BrandAssetField({
           type="button"
           variant="outline"
           className="shrink-0"
+          disabled={busy}
+          aria-busy={busy}
           onClick={() => document.getElementById(fileInputId)?.click()}
         >
-          Upload {ui.label.toLowerCase()}
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {phase === "optimizing"
+            ? "Optimizing image…"
+            : phase === "uploading"
+              ? "Uploading…"
+              : `Upload ${ui.label.toLowerCase()}`}
         </Button>
         <input
           id={fileInputId}
@@ -132,22 +158,35 @@ export function BrandAssetField({
           accept={ui.accept}
           className="hidden"
           onChange={async (e) => {
-            const file = e.target.files?.[0];
+            let file = e.target.files?.[0];
             e.target.value = "";
             if (!file) return;
-            const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-            if (!ui.types.has(file.type) && !ui.extraExt.has(ext)) {
-              toast.error(
-                kind === "favicon"
-                  ? "Favicon must be a PNG, ICO, or SVG file."
-                  : `${ui.label} must be a PNG, JPEG, or WebP image.`
-              );
-              return;
+            if (ui.optimize) {
+              // Type, 25MB original cap and decode errors are all reported by the optimizer.
+              setPhase("optimizing");
+              try {
+                file = (await optimizeImageForUpload(file)).file;
+              } catch (error) {
+                setPhase("idle");
+                toast.error(imageOptimizationErrorMessage(error));
+                return;
+              }
+            } else {
+              const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+              if (!ui.types.has(file.type) && !ui.extraExt.has(ext)) {
+                toast.error(
+                  kind === "favicon"
+                    ? "Favicon must be a PNG, ICO, or SVG file."
+                    : `${ui.label} must be a PNG, JPEG, or WebP image.`
+                );
+                return;
+              }
+              if (file.size > MAX_BYTES) {
+                toast.error(`${ui.label} must be under 4MB.`);
+                return;
+              }
             }
-            if (file.size > MAX_BYTES) {
-              toast.error(`${ui.label} must be under 4MB.`);
-              return;
-            }
+            setPhase("uploading");
             const form = new FormData();
             form.append("file", file);
             form.append("kind", kind);
@@ -170,6 +209,8 @@ export function BrandAssetField({
               if (refreshOnUpload) router.refresh();
             } catch (error) {
               toast.error(error instanceof Error ? error.message : "Upload failed");
+            } finally {
+              setPhase("idle");
             }
           }}
         />
