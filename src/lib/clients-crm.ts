@@ -438,3 +438,235 @@ export async function touchClientActivity(clientId: string, businessId: string) 
     // non-blocking
   }
 }
+
+// ── New interface Clients page ────────────────────────────────────────────────
+
+type AuthFact = {
+  emailConfirmedAt: string | null;
+  lastSignInAt: string | null;
+  foreign: boolean;
+};
+
+const PORTAL_INVITE_ACTIVITY = "portal_invite_sent";
+const PORTAL_ACTIVATED_ACTIVITY_TYPE = "portal_activated";
+const AUTH_LOOKUP_CONCURRENCY = 8;
+
+/**
+ * Login facts for every linked client: one RPC (migration v129), or — until that migration
+ * is applied — per-user Auth lookups a few at a time plus one profiles query.
+ */
+async function loadClientAuthFacts(
+  businessId: string,
+  linked: { clientId: string; userId: string }[]
+): Promise<Map<string, AuthFact>> {
+  const facts = new Map<string, AuthFact>();
+  if (!linked.length) return facts;
+  const db = await createTenantServiceClient(businessId);
+  const { profileBelongsToBusiness } = await import("@/lib/client-portal-link");
+
+  const { data: rpcRows, error: rpcError } = await db.raw.rpc("client_portal_auth_facts", {
+    p_business_id: businessId,
+  });
+  if (!rpcError && Array.isArray(rpcRows)) {
+    for (const r of rpcRows as {
+      client_id: string;
+      email_confirmed_at: string | null;
+      last_sign_in_at: string | null;
+      profile_role: string | null;
+      profile_business_id: string | null;
+    }[]) {
+      const foreign =
+        r.profile_role !== null &&
+        !profileBelongsToBusiness({ role: r.profile_role, business_id: r.profile_business_id }, businessId);
+      facts.set(r.client_id, {
+        emailConfirmedAt: r.email_confirmed_at,
+        lastSignInAt: r.last_sign_in_at,
+        foreign,
+      });
+    }
+    return facts;
+  }
+
+  // Fallback (migration not applied yet): same checks as loadLoginFacts in portal-activation-server.
+  const userIds = [...new Set(linked.map((l) => l.userId))];
+  const { data: profiles } = await db.raw
+    .from("profiles")
+    .select("id, role, business_id")
+    .in("id", userIds);
+  const profileMap = new Map((profiles ?? []).map((p) => [p.id as string, p]));
+  const authByUser = new Map<string, { email_confirmed_at?: string | null; last_sign_in_at?: string | null } | null>();
+  let next = 0;
+  async function lane() {
+    while (next < userIds.length) {
+      const id = userIds[next++];
+      const profile = profileMap.get(id);
+      if (profile && !profileBelongsToBusiness(profile, businessId)) continue;
+      try {
+        const { data } = await db.raw.auth.admin.getUserById(id);
+        authByUser.set(id, data?.user ?? null);
+      } catch {
+        authByUser.set(id, null);
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(AUTH_LOOKUP_CONCURRENCY, userIds.length) }, lane));
+
+  for (const { clientId, userId } of linked) {
+    const profile = profileMap.get(userId);
+    const foreign = Boolean(profile && !profileBelongsToBusiness(profile, businessId));
+    const user = authByUser.get(userId);
+    facts.set(clientId, {
+      emailConfirmedAt: foreign ? null : user?.email_confirmed_at ?? null,
+      lastSignInAt: foreign ? null : user?.last_sign_in_at ?? null,
+      foreign,
+    });
+  }
+  return facts;
+}
+
+/** Invite / activation log rows, newest first (paged — PostgREST caps a response at 1000 rows). */
+async function loadPortalActivityLogs(
+  db: Awaited<ReturnType<typeof createTenantServiceClient>>
+): Promise<{ data: { client_id: string; activity_type: string; created_at: string }[] }> {
+  const PAGE = 1000;
+  const out: { client_id: string; activity_type: string; created_at: string }[] = [];
+  for (let page = 0; page < 10; page++) {
+    // Tenant client scopes business_id. Only invite/activation rows — a few per client at most.
+    const { data, error } = await db
+      .from("activity_logs")
+      .select("client_id, activity_type, created_at")
+      .in("activity_type", [PORTAL_INVITE_ACTIVITY, PORTAL_ACTIVATED_ACTIVITY_TYPE])
+      .not("client_id", "is", null)
+      .order("created_at", { ascending: false })
+      .range(page * PAGE, page * PAGE + PAGE - 1);
+    if (error || !data) break;
+    out.push(...(data as typeof out));
+    if (data.length < PAGE) break;
+  }
+  return { data: out };
+}
+
+const newest = (...values: (string | null | undefined)[]): string | null => {
+  let best: string | null = null;
+  let bestT = -Infinity;
+  for (const v of values) {
+    if (!v) continue;
+    const t = new Date(v).getTime();
+    if (!Number.isNaN(t) && t > bestT) {
+      best = v;
+      bestT = t;
+    }
+  }
+  return best;
+};
+
+/**
+ * Rows for the new interface Clients page: CRM stats plus real portal status
+ * (linked login confirmed? invite on record and still valid?) for every client.
+ */
+export async function getClientWorkspaceRows(
+  businessId: string,
+  options: {
+    includeDeleted?: boolean;
+    clientIds?: "all" | string[];
+    canViewMoney: boolean;
+  }
+): Promise<import("@/lib/clients-workspace").ClientWorkspaceRow[]> {
+  const { deriveClientPortalStatus } = await import("@/lib/clients-workspace");
+  const supabase = await createClient();
+  const db = await createTenantServiceClient(businessId);
+
+  if (options.clientIds && options.clientIds !== "all" && options.clientIds.length === 0) return [];
+
+  let clientsQuery = supabase
+    .from("clients")
+    .select("id, name, full_name, email, phone, company, referral_source, created_at, last_activity_at, last_login_at, user_id, deleted_at")
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false });
+  clientsQuery = options.includeDeleted
+    ? clientsQuery.not("deleted_at", "is", null)
+    : clientsQuery.is("deleted_at", null);
+  if (options.clientIds && options.clientIds !== "all") clientsQuery = clientsQuery.in("id", options.clientIds);
+
+  const [{ data: clients }, { data: portalLogs }] = await Promise.all([
+    clientsQuery,
+    loadPortalActivityLogs(db),
+  ]);
+  const list = clients ?? [];
+  const ids = list.map((c) => c.id as string);
+
+  const [{ data: statsRows }, authFacts] = await Promise.all([
+    ids.length
+      ? supabase.from("client_stats").select("*").in("client_id", ids)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    loadClientAuthFacts(
+      businessId,
+      list.filter((c) => c.user_id).map((c) => ({ clientId: c.id as string, userId: c.user_id as string }))
+    ),
+  ]);
+
+  const statsMap = new Map((statsRows ?? []).map((s) => [s.client_id as string, s]));
+  const lastInvite = new Map<string, string>();
+  const activated = new Map<string, string>();
+  for (const log of portalLogs ?? []) {
+    const cid = log.client_id as string;
+    const map = log.activity_type === PORTAL_INVITE_ACTIVITY ? lastInvite : activated;
+    if (!map.has(cid)) map.set(cid, log.created_at as string); // newest first
+  }
+
+  const now = Date.now();
+  return list.map((c) => {
+    const s = statsMap.get(c.id as string) as Record<string, unknown> | undefined;
+    const auth = authFacts.get(c.id as string);
+    const email = ((c.email as string | null) ?? "").trim();
+    const inviteAt = lastInvite.get(c.id as string) ?? null;
+    const portal_status = deriveClientPortalStatus({
+      hasEmail: Boolean(email),
+      foreign: auth?.foreign ?? false,
+      emailConfirmedAt: auth?.emailConfirmedAt ?? null,
+      lastInviteSentAt: inviteAt,
+      now,
+    });
+    const active = Number(s?.active_project_count ?? 0);
+    const delivered = Number(s?.delivered_project_count ?? 0);
+    return {
+      id: c.id as string,
+      name: ((c.full_name as string | null) || (c.name as string | null) || email || "Unnamed client").trim(),
+      email,
+      phone: (c.phone as string | null) ?? null,
+      company: (c.company as string | null) ?? null,
+      referral_source: (c.referral_source as string | null) ?? null,
+      created_at: c.created_at as string,
+      last_seen_at: newest(
+        c.last_activity_at as string | null,
+        c.last_login_at as string | null,
+        auth?.lastSignInAt ?? null
+      ),
+      total_projects: Number(s?.total_project_count ?? active + delivered),
+      active_projects: active,
+      lifetime_revenue: options.canViewMoney ? Number(s?.lifetime_revenue ?? 0) : 0,
+      outstanding_balance: options.canViewMoney ? Number(s?.outstanding_balance ?? 0) : 0,
+      portal_status,
+      invite_sent_at: inviteAt,
+      activated_at:
+        portal_status === "active"
+          ? activated.get(c.id as string) ?? auth?.emailConfirmedAt ?? null
+          : null,
+      deleted_at: (c.deleted_at as string | null) ?? null,
+    };
+  });
+}
+
+/** Hidden / active client counts for the "View Hidden Clients" toggle. */
+export async function countClients(
+  businessId: string,
+  options: { deleted: boolean; clientIds?: "all" | string[] }
+): Promise<number> {
+  if (options.clientIds && options.clientIds !== "all" && options.clientIds.length === 0) return 0;
+  const supabase = await createClient();
+  let q = supabase.from("clients").select("id", { count: "exact", head: true }).eq("business_id", businessId);
+  q = options.deleted ? q.not("deleted_at", "is", null) : q.is("deleted_at", null);
+  if (options.clientIds && options.clientIds !== "all") q = q.in("id", options.clientIds);
+  const { count } = await q;
+  return count ?? 0;
+}

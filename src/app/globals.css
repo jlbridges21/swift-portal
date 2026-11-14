@@ -458,6 +458,12 @@ html[data-standalone] header.app-sticky-top {
   .sp-sheet-backdrop { animation: none; }
 }
 
+/* Clients page detail panel: slides in from the right (drawer below xl). */
+@keyframes sp-panel-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
 /* Client chat composer: clear the home indicator, except while the keyboard covers it. */
 .sp-chat-composer {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));

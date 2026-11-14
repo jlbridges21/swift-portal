@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { requireAdminPage } from "@/lib/admin-access";
 import { Plus } from "lucide-react";
 import { ClientsTable } from "@/components/admin/clients-table";
-import { getClientListRows } from "@/lib/clients-crm";
-import { isOwnerAdmin, visibleClientIdsFor } from "@/lib/staff-access";
+import { countClients, getClientListRows, getClientWorkspaceRows } from "@/lib/clients-crm";
+import { isOwnerAdmin, staffCan, visibleClientIdsFor } from "@/lib/staff-access";
+import { getUiExperience } from "@/lib/ui-rollout-server";
+import { ClientsWorkspace } from "@/components/admin/clients-workspace/clients-workspace";
 
 interface PageProps {
   searchParams: Promise<{ view?: string }>;
@@ -19,6 +21,47 @@ export default async function AdminClientsPage({ searchParams }: PageProps) {
   const clientIds = isOwnerAdmin(profile)
     ? ("all" as const)
     : await visibleClientIdsFor(businessId, profile);
+
+  if ((await getUiExperience(profile)).mode === "new") {
+    const owner = isOwnerAdmin(profile);
+    const canViewMoney = staffCan(profile, "money.view");
+    const [rows, otherCount] = await Promise.all([
+      getClientWorkspaceRows(businessId, { includeDeleted: showDeleted, clientIds, canViewMoney }),
+      countClients(businessId, { deleted: !showDeleted, clientIds }),
+    ]);
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="app-page app-page-wide mx-auto max-w-[100vw] px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
+          <PageHeader
+            title={showDeleted ? "Hidden Clients" : "Clients"}
+            description={
+              showDeleted
+                ? `${rows.length} hidden client${rows.length === 1 ? "" : "s"}`
+                : "Manage your clients and their portal access in one place."
+            }
+          />
+          <ClientsWorkspace
+            clients={rows}
+            showDeleted={showDeleted}
+            hiddenCount={showDeleted ? rows.length : otherCount}
+            activeCount={showDeleted ? otherCount : rows.length}
+            permissions={{
+              canCreate: staffCan(profile, "clients.create"),
+              canEdit: staffCan(profile, "clients.edit"),
+              canDelete: staffCan(profile, "clients.delete"),
+              canAddToProjects: staffCan(profile, "clients.add_to_projects"),
+              canCreateProject: staffCan(profile, "projects.create"),
+              // Portal invite / recovery routes are owner/admin only (requireAdminApi adminOnly).
+              canManagePortal: owner,
+              canMessage: staffCan(profile, "area.messages"),
+              canViewMoney,
+            }}
+          />
+        </main>
+      </div>
+    );
+  }
+
   const rows = await getClientListRows(businessId, {
     includeDeleted: showDeleted,
     clientIds,
