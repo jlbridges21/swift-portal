@@ -28,6 +28,7 @@ import { formatLastSeen, formatShortDate, type ClientWorkspaceRow } from "@/lib/
 import { normalizeStatus } from "@/lib/constants";
 import { formatCurrency, cn } from "@/lib/utils";
 import { ClientAvatar, PortalStatusBadge } from "./clients-ui";
+import { ClientPanelMessages } from "./clients-panel-messages";
 import type { ClientActions, ClientsPermissions } from "./clients-actions";
 
 type Loaded =
@@ -46,6 +47,8 @@ export function ClientDetailPanel({
   onClose,
   onOpenProfile,
   refreshKey,
+  mode,
+  onModeChange,
 }: {
   client: ClientWorkspaceRow;
   permissions: ClientsPermissions;
@@ -55,6 +58,9 @@ export function ClientDetailPanel({
   onOpenProfile: (id: string) => void;
   /** Changes when the list data refreshes, so the projects card reloads too. */
   refreshKey: string;
+  /** "messages" swaps the panel body for this client's message thread. */
+  mode: "details" | "messages";
+  onModeChange: (mode: "details" | "messages") => void;
 }) {
   const [loaded, setLoaded] = useState<Loaded>(() => {
     const cached = profileCache.get(client.id);
@@ -115,6 +121,17 @@ export function ClientDetailPanel({
     }
   }
 
+  if (mode === "messages" && permissions.canMessage && !hidden) {
+    return (
+      <ClientPanelMessages
+        client={client}
+        canSend={permissions.canSendMessages}
+        onBack={() => onModeChange("details")}
+        onClose={onClose}
+      />
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Header */}
@@ -149,12 +166,13 @@ export function ClientDetailPanel({
         {/* Quick actions */}
         <div className="mt-4 space-y-2">
           {permissions.canMessage && !hidden ? (
-            <Link
-              href={`/admin/messages?client=${encodeURIComponent(client.id)}`}
+            <button
+              type="button"
+              onClick={() => onModeChange("messages")}
               className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-accent-foreground shadow-sm transition-opacity hover:opacity-90"
             >
               <MessageSquare className="h-4 w-4" aria-hidden /> Message
-            </Link>
+            </button>
           ) : null}
           <div className="flex gap-2">
             {permissions.canAddToProjects && !hidden ? (

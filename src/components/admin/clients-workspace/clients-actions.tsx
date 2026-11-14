@@ -33,7 +33,10 @@ export type ClientsPermissions = {
   canCreateProject: boolean;
   /** Owner/admin — portal invites and access recovery. */
   canManagePortal: boolean;
+  /** area.messages — read the thread. */
   canMessage: boolean;
+  /** messages.send — send from the panel. */
+  canSendMessages: boolean;
   canViewMoney: boolean;
 };
 

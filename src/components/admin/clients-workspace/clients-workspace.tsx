@@ -157,6 +157,7 @@ function ClientsWorkspaceInner({
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [panelId, setPanelId] = useState<string | null>(null);
+  const [panelMode, setPanelMode] = useState<"details" | "messages">("details");
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [rowMenu, setRowMenu] = useState<{ client: ClientWorkspaceRow; anchor: ActionMenuAnchor } | null>(null);
@@ -287,7 +288,10 @@ function ClientsWorkspaceInner({
         { id: "profile", label: "View Client Profile", icon: UserRound, onSelect: () => openProfile(c.id) },
       ];
       if (!hidden && permissions.canMessage) {
-        items.push({ id: "message", label: "Message Client", icon: MessageSquare, onSelect: () => router.push(`/admin/messages?client=${encodeURIComponent(c.id)}`) });
+        items.push({ id: "message", label: "Message Client", icon: MessageSquare, onSelect: () => {
+            setPanelMode("messages");
+            setPanelId(c.id);
+          } });
       }
       if (!hidden && permissions.canCreateProject) {
         items.push({ id: "new-project", label: "Add Project", icon: Plus, onSelect: () => router.push(`/admin/projects/new?client=${encodeURIComponent(c.id)}`) });
@@ -371,8 +375,11 @@ function ClientsWorkspaceInner({
     };
   }, [panelOpen]);
 
-  function openPanel(id: string) {
-    setPanelId((cur) => (cur === id ? cur : id));
+  /** Clicking a row opens its details; "Message" opens the thread. Re-clicking the open row keeps its view. */
+  function openPanel(id: string, mode?: "details" | "messages") {
+    if (mode) setPanelMode(mode);
+    else if (id !== panelId) setPanelMode("details");
+    setPanelId(id);
   }
 
   // ── Active filter chips ──
@@ -704,6 +711,8 @@ function ClientsWorkspaceInner({
               onClose={() => setPanelId(null)}
               onOpenProfile={openProfile}
               refreshKey={String(refreshKey)}
+              mode={panelMode}
+              onModeChange={setPanelMode}
             />
           </aside>
         </>

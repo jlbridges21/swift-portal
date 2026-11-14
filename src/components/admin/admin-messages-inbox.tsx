@@ -366,7 +366,8 @@ export function AdminMessagesInbox() {
   );
 }
 
-function TimelineRow({ item }: { item: CrmTimelineItem }) {
+/** One thread entry (message bubble or activity line) — shared with the Clients page panel. */
+export function TimelineRow({ item }: { item: CrmTimelineItem }) {
   if (item.kind === "message") {
     const mine = item.sender_role === "admin";
     const receipt =

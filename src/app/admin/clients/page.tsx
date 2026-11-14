@@ -54,6 +54,7 @@ export default async function AdminClientsPage({ searchParams }: PageProps) {
               // Portal invite / recovery routes are owner/admin only (requireAdminApi adminOnly).
               canManagePortal: owner,
               canMessage: staffCan(profile, "area.messages"),
+              canSendMessages: staffCan(profile, "messages.send"),
               canViewMoney,
             }}
           />
