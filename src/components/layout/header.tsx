@@ -6,6 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { HelpMenu } from "@/components/academy/help-menu";
+import { WatchHowPill } from "@/components/academy/watch-how";
 import { CartButton } from "@/components/client-portal/portal-cart";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -157,6 +159,7 @@ export function Header({
   const adminMobileLinks = [
     ...adminLinks,
     ...(showPartnerLink ? [{ href: partnerHref, label: partnerLabel }] : []),
+    { href: "/admin/academy", label: "Academy" },
     // Staff must not see studio Settings; they manage personal prefs at /staff/settings.
     ...(!isStaff
       ? [{ href: "/admin/settings", label: "Settings" }]
@@ -282,6 +285,8 @@ export function Header({
           ) : isAdminChrome ? (
             <>
               <AdminSearchTrigger />
+              <WatchHowPill className="hidden xl:inline-flex" />
+              <HelpMenu className="shrink-0" />
               <div className="shrink-0">
                 <NotificationBell />
               </div>

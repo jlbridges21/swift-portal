@@ -9,6 +9,7 @@ import { AdminAppShell } from "@/components/admin/app-shell/admin-app-shell";
 import type { AdminShellUser } from "@/components/admin/app-shell/admin-app-shell-context";
 import { UiRolloutProvider } from "@/components/admin/ui-rollout/ui-rollout";
 import type { UiExperience } from "@/lib/ui-rollout";
+import { AcademyProgressProvider } from "@/components/academy/academy-progress";
 
 const CLASSIC_EXPERIENCE: UiExperience = { mode: "classic", phase: "classic_only", canSwitch: false, banner: null };
 
@@ -75,6 +76,7 @@ export function AdminChromeProviders({
 
   return (
     <UiRolloutProvider value={experience}>
+    <AcademyProgressProvider>
     <AdminSearchContext.Provider value={value}>
       <UploadManagerProvider>
           {experience.mode === "new" ? (
@@ -93,6 +95,7 @@ export function AdminChromeProviders({
         <AdminCommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       </UploadManagerProvider>
     </AdminSearchContext.Provider>
+    </AcademyProgressProvider>
     </UiRolloutProvider>
   );
 }
