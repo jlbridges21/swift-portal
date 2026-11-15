@@ -179,7 +179,7 @@ export default async function PricingPage() {
         <DemoShowcase
           eyebrow="See what you get"
           title="The whole plan, in under a minute"
-          intro="A one-minute tour of real ShootPortal screens, from the client's request to payment and delivery under your own brand."
+          intro="A 90-second narrated tour of real ShootPortal screens, from the client's request to payment and delivery under your own brand."
           video={MEDIA.shared.tour}
           points={["Requests, proposals, and scheduling", "Video review, payments, and share links", "Your own brand and domain"]}
           ctaId="pricing:demo"

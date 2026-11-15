@@ -110,7 +110,7 @@ export default async function PhotographyBusinessManagementSoftwarePage() {
 
         <DemoShowcase
           title="See the whole business run in under a minute"
-          intro="A one-minute tour of real ShootPortal screens: requests, proposals, the calendar, the pipeline, video review, payments, share links, and your own brand and domain."
+          intro="A 90-second narrated tour of real ShootPortal screens: requests, proposals, the calendar, the pipeline, video review, payments, share links, and your own brand and domain."
           video={MEDIA.shared.tour}
           points={["Clients request and approve on your portal", "Projects, payments, and review in one place", "Everything under your own brand and domain"]}
           ctaId={cta("demo")}

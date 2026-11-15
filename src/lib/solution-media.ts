@@ -20,6 +20,8 @@ export type SolutionVideoAsset = {
   duration?: string;
   /** Interactive tour: chapter start times in seconds. */
   chapters?: { t: number; label: string }[];
+  /** Has a narration track (player offers sound). */
+  hasAudio?: boolean;
 };
 
 const W = { width: 2400, height: 1350 };
@@ -28,7 +30,7 @@ const img = (folder: string, file: string, alt: string, size: { width: number; h
   ...size,
   alt,
 });
-const vid = (folder: string, file: string, label: string, opts: { webm?: boolean; title?: string; duration?: string; chapters?: { t: number; label: string }[] } = {}): SolutionVideoAsset => ({
+const vid = (folder: string, file: string, label: string, opts: { webm?: boolean; title?: string; duration?: string; chapters?: { t: number; label: string }[]; hasAudio?: boolean } = {}): SolutionVideoAsset => ({
   mp4: `/solutions/${folder}/${file}.mp4`,
   webm: opts.webm ? `/solutions/${folder}/${file}.webm` : undefined,
   poster: `/solutions/${folder}/${file}-poster.webp`,
@@ -36,6 +38,7 @@ const vid = (folder: string, file: string, label: string, opts: { webm?: boolean
   title: opts.title,
   duration: opts.duration,
   chapters: opts.chapters,
+  hasAudio: opts.hasAudio,
 });
 
 export const MEDIA = {
@@ -119,11 +122,11 @@ export const MEDIA = {
     desktopMobile: img("shared", "shootportal-desktop-mobile-transparent", "ShootPortal on a laptop and phone", { width: 1909, height: 1146 }),
     trialCard: img("shared", "shootportal-free-trial-cta", "Run your media business in one place. 14-day free trial, no credit card required"),
     cycleLoop: vid("shared", "shootportal-full-workflow", "Animation of ShootPortal's connected workflow cycle: request, estimate, schedule, shoot, review, pay, deliver", { webm: true }),
-    tour: vid("shared", "shootportal-interactive-tour", "Product tour: a client requests a shoot and approves the proposal, the shoot lands on your calendar, the pipeline and media library, time-stamped video review, the client pays in one tap and downloads unlock, share links, and your own brand", {
-      title: "The complete ShootPortal workflow", duration: "1:03",
+    tour: vid("shared", "shootportal-product-video", "Narrated product video: a client books on the branded portal, the request lands in the Command Center, you send a proposal and the client approves it, you drag the shoot onto the calendar and move the job through the pipeline, the client leaves time-stamped video feedback, pays in one tap, downloads unlock, and everything carries your brand", {
+      title: "See how ShootPortal works", duration: "1:26", hasAudio: true,
       chapters: [
-        { t: 0, label: "Request" }, { t: 5.5, label: "Estimate" }, { t: 12.2, label: "Schedule" }, { t: 16.2, label: "Projects" }, { t: 23.8, label: "Media" },
-        { t: 27.8, label: "Review" }, { t: 32.2, label: "Pay" }, { t: 47.87, label: "Deliver" }, { t: 55.07, label: "Brand" },
+        { t: 0, label: "Overview" }, { t: 10.57, label: "Request" }, { t: 23.87, label: "Proposal" }, { t: 36.2, label: "Schedule" }, { t: 42.77, label: "Pipeline" },
+        { t: 48.77, label: "Review" }, { t: 56.27, label: "Pay" }, { t: 67.77, label: "Deliver" }, { t: 73.27, label: "Brand" },
       ],
     }),
     checkout: vid("shared", "checkout-motion", "Animation: the client taps Pay Now, pays by card in the in-app checkout, sees Payment successful with a receipt, and their downloads unlock while you get notified", { webm: true }),

@@ -159,9 +159,9 @@ export function PlatformLanding({
               webPageNode("/", "ShootPortal: Run Your Media Business in One Place", "Requests, estimates, scheduling, client portal, video review, payments, and delivery in one platform for photographers, videographers, and drone pilots."),
               videoNode(MEDIA.shared.tour, {
                 name: "ShootPortal product tour",
-                description: "A one-minute tour of real ShootPortal screens: client requests, proposal approval, calendar, pipeline, time-stamped video review, payments, share links, and branding.",
+                description: "A 90-second narrated tour of real ShootPortal screens: client requests, proposal approval, calendar, pipeline, time-stamped video review, payments, share links, and branding.",
                 uploadDate: DEMO_VIDEO_UPLOAD_DATE,
-                duration: "PT63S",
+                duration: "PT86S",
               })
             )
           ),
@@ -197,7 +197,7 @@ export function PlatformLanding({
                   variant="outline"
                   className="min-h-12 border-[#E2E8F0] bg-white/80 px-6 text-base font-medium text-[#0F172A] hover:bg-white focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-2"
                 >
-                  Watch the 1-minute tour
+                  Watch the 90-second tour
                 </Button>
               </a>
             </div>
@@ -245,8 +245,8 @@ export function PlatformLanding({
       <DemoShowcase
         id="product-demo"
         eyebrow="Product tour"
-        title="See a real job go from request to paid"
-        intro="A one-minute tour of real ShootPortal screens. Tap any step to jump to it: the client's request, proposal approval, your calendar, the pipeline, time-stamped video review, one-tap checkout, share links, and your own brand and domain."
+        title="See how ShootPortal runs a real job"
+        intro="A 90-second narrated walkthrough of the real app: a client books, you send the proposal, schedule the shoot, collect feedback, get paid, and deliver. Tap any step to jump to it."
         video={MEDIA.shared.tour}
         points={["Clients request and approve on your branded portal", "Video review, payments, and files on the same project", "Everything under your own brand and domain"]}
         ctaId="home:demo"

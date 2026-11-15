@@ -650,7 +650,7 @@ export function DemoShowcase({
             </li>
           ))}
         </ul>
-        <p className="mt-4 text-center text-xs text-slate-400">{REAL_CAPTURE_NOTE} No sound.</p>
+        <p className="mt-4 text-center text-xs text-slate-400">{REAL_CAPTURE_NOTE}{video.hasAudio ? " Narrated, with captions." : " No sound."}</p>
         <div className="mt-8 flex flex-col items-center gap-4">
           <TrialButton ctaId={ctaId} trialDays={trialDays} tone="dark" label={ctaLabel} />
           <TrialFacts trialDays={trialDays} tone="dark" className="justify-center" />

@@ -203,7 +203,7 @@ export default async function RealEstatePhotographyWorkflowSoftwarePage() {
 
         <DemoShowcase
           title="The whole workflow, end to end"
-          intro="A one-minute tour of real ShootPortal screens: requests, proposal approval, the calendar with Google, the pipeline, video review, marking payments, share links, and your own brand and domain."
+          intro="A 90-second narrated tour of real ShootPortal screens: requests, proposal approval, the calendar with Google, the pipeline, video review, marking payments, share links, and your own brand and domain."
           video={MEDIA.shared.tour}
           points={["Requests and approvals that move the job forward", "Video review and payments on the same project", "Everything under your own brand and domain"]}
           ctaId={cta("demo")}

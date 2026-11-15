@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Maximize2, Pause, Play, X } from "lucide-react";
+import { Maximize2, Pause, Play, Volume2, X } from "lucide-react";
 import type { SolutionImageAsset, SolutionVideoAsset } from "@/lib/solution-media";
 import { cn } from "@/lib/utils";
 
@@ -305,6 +305,8 @@ export function InteractiveTour({ video, className }: { video: SolutionVideoAsse
   const [time, setTime] = useState(0);
   const [dur, setDur] = useState(chapters.length ? chapters[chapters.length - 1].t + 6 : 60);
   const autoTried = useRef(false);
+  const [muted, setMuted] = useState(true);
+  const unmute = () => { if (!video.hasAudio) return; const v = ref.current; if (v) v.muted = false; setMuted(false); };
 
   // Attach the source once the player is close, autoplay muted the first time it is mostly visible.
   useEffect(() => {
@@ -335,6 +337,7 @@ export function InteractiveTour({ video, className }: { video: SolutionVideoAsse
     const v = ref.current;
     if (!v) return;
     setLoaded(true);
+    unmute();
     const go = () => { v.currentTime = chapters[i].t + 0.05; void v.play().catch(() => {}); };
     if (v.readyState >= 1) go();
     else v.addEventListener("loadedmetadata", go, { once: true });
@@ -343,7 +346,7 @@ export function InteractiveTour({ video, className }: { video: SolutionVideoAsse
     const v = ref.current;
     if (!v) return;
     setLoaded(true);
-    if (v.paused) void v.play().catch(() => {});
+    if (v.paused) { if (time < 0.2) unmute(); void v.play().catch(() => {}); }
     else v.pause();
   }
 
@@ -372,7 +375,7 @@ export function InteractiveTour({ video, className }: { video: SolutionVideoAsse
             onClick={toggle}
             className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/45 via-black/10 to-transparent focus-visible:outline-none"
           >
-            <span className="sr-only">Play the product tour</span>
+            <span className="sr-only">Play the product video{video.hasAudio ? " with sound" : ""}</span>
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/95 shadow-[0_20px_50px_-15px_rgba(79,70,229,0.9)] ring-8 ring-white/20 transition hover:scale-105 sm:h-20 sm:w-20">
               <Play className="ml-1 h-7 w-7 fill-[#4F46E5] text-[#4F46E5] sm:h-8 sm:w-8" aria-hidden />
             </span>
@@ -387,6 +390,15 @@ export function InteractiveTour({ video, className }: { video: SolutionVideoAsse
             {playing ? <Pause className="h-4 w-4" aria-hidden /> : <Play className="ml-0.5 h-4 w-4" aria-hidden />}
           </button>
         )}
+        {video.hasAudio && muted && (playing || time > 0.2) ? (
+          <button
+            type="button"
+            onClick={unmute}
+            className="absolute left-1/2 top-3 -translate-x-1/2 inline-flex items-center gap-2 rounded-full bg-black/65 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          >
+            <Volume2 className="h-4 w-4" aria-hidden /> Tap for sound
+          </button>
+        ) : null}
         {video.duration ? (
           <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">{video.duration}</span>
         ) : null}
