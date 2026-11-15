@@ -9,12 +9,13 @@ import type { AcademyProgressState } from "@/lib/academy/server";
 import { AcademyProgressProvider } from "@/components/academy/academy-progress";
 import { AdminCapabilitiesProvider } from "@/components/admin/admin-capabilities-context";
 import { AdminChromeProviders } from "@/components/admin/admin-chrome-providers";
+import { MenuDemo } from "./menu-demo";
 
 /**
  * Dev-only harness for the Academy UI with sample progress (no sign-in, no database).
- * /dev/academy-harness?view=course | lesson | done | shell  (&pill=V00 picks the shell's Watch how lesson)
+ * /dev/academy-harness?view=course | lesson | done | shell | menu  (&pill=V00 picks the shell's Watch how lesson)
  */
-export default async function AcademyHarness({ searchParams }: { searchParams: Promise<{ view?: string; pill?: string }> }) {
+export default async function AcademyHarness({ searchParams }: { searchParams: Promise<{ view?: string; pill?: string; lesson?: string }> }) {
   if (process.env.NODE_ENV === "production") notFound();
   const sp = await searchParams;
   const view = sp.view ?? "course";
@@ -28,6 +29,7 @@ export default async function AcademyHarness({ searchParams }: { searchParams: P
       ...(view === "done" ? {} : { V07: { percent: 40, position: 71, completedAt: null } }),
     },
   };
+  if (view === "menu") return <MenuDemo />;
   if (view === "shell") {
     // The real New-interface shell (sidebar + top bar) with sample progress.
     return (
@@ -58,7 +60,7 @@ export default async function AcademyHarness({ searchParams }: { searchParams: P
       </div>
       <main className="mx-auto max-w-[1440px] px-3 py-6 sm:px-6 lg:px-8">
         {view === "lesson" ? (
-          <LessonView lesson={ACADEMY_LESSONS[7]} initial={sample} autoplay={false} canTry />
+          <LessonView lesson={ACADEMY_LESSONS.find((l) => l.key === sp.lesson) ?? ACADEMY_LESSONS[7]} initial={sample} autoplay={false} canTry />
         ) : (
           <>
             <div className="mb-4">

@@ -166,11 +166,15 @@ export function LessonView({
             </div>
             <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-foreground">{lesson.description}</p>
           </div>
-          <div className="flex shrink-0 flex-col gap-2 sm:w-60">
+          <div className="flex shrink-0 flex-col gap-2 sm:w-64">
             {canTry && lesson.tryHref ? (
               <Link href={lesson.tryHref}>
-                <Button variant="accent" className="w-full gap-2">
-                  <ExternalLink className="h-4 w-4" aria-hidden /> Try it now: {lesson.tryLabel?.replace(/^Open /, "open ")}
+                <Button variant="accent" className="h-auto min-h-10 w-full justify-start gap-2.5 whitespace-normal py-2 text-left">
+                  <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+                  <span className="min-w-0 leading-tight">
+                    <span className="block font-semibold">Try it now</span>
+                    {lesson.tryLabel ? <span className="block text-xs font-normal opacity-90">{lesson.tryLabel}</span> : null}
+                  </span>
                 </Button>
               </Link>
             ) : null}

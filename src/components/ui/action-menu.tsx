@@ -66,7 +66,9 @@ export function ActionMenu({ anchor, onClose, items, title }: ActionMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const open = anchor !== null;
-  const menuWidth = items.some((item) => item.type !== "separator" && item.type !== "label" && item.description)
+  const menuWidth = items.some(
+    (item) => item.type !== "separator" && item.type !== "label" && (item.description || (item.hint && item.hint.length > 18))
+  )
     ? MENU_WIDTH_WITH_DESCRIPTIONS
     : MENU_WIDTH;
 
@@ -164,7 +166,10 @@ export function ActionMenu({ anchor, onClose, items, title }: ActionMenuProps) {
       );
     }
     const Icon = item.icon;
-    const twoLine = Boolean(item.description);
+    // A long hint would squeeze the label to nothing (it can't shrink), so it moves under the label.
+    const hintBelow = Boolean(item.hint && !item.description && item.hint.length > 18);
+    const secondLine = item.description ?? (hintBelow ? item.hint : undefined);
+    const twoLine = Boolean(secondLine);
     return (
       <button
         key={item.id}
@@ -192,12 +197,12 @@ export function ActionMenu({ anchor, onClose, items, title }: ActionMenuProps) {
         {twoLine ? (
           <span className="min-w-0 flex-1">
             <span className="block truncate font-medium leading-5">{item.label}</span>
-            <span className="mt-0.5 block text-xs leading-4 text-muted">{item.description}</span>
+            <span className="mt-0.5 block text-xs leading-4 text-muted">{secondLine}</span>
           </span>
         ) : (
           <span className="min-w-0 flex-1 truncate">{item.label}</span>
         )}
-        {item.hint ? <span className="shrink-0 text-xs text-muted">{item.hint}</span> : null}
+        {item.hint && !hintBelow ? <span className="shrink-0 whitespace-nowrap text-xs text-muted">{item.hint}</span> : null}
       </button>
     );
   });
