@@ -87,6 +87,8 @@ export const LessonPlayer = forwardRef<
       if (!p) return;
       const pos = p.getCurrentTime?.() ?? 0;
       const pct = Math.min(100, (furthest.current / duration) * 100);
+      // Nothing watched yet (a lesson merely opened, or React's dev double-mount): nothing to save.
+      if (pct < 1 && pos < 1) return;
       if (!keepalive && Math.abs(pct - lastSent.current) < 2) return;
       lastSent.current = pct;
       cb.current.onProgress(pct, pos, { keepalive });

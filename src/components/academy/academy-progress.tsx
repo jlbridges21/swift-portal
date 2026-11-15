@@ -38,6 +38,30 @@ export function AcademyProgressProvider({
   return <AcademyProgressStore initial={initial}>{children}</AcademyProgressStore>;
 }
 
+/**
+ * Progress only moves forward. A fetch can start before a save finishes and come back with the
+ * older copy, so a server read never takes away a higher percent, a completion or a certificate
+ * that this page already knows about.
+ */
+function mergeProgress(server: AcademyProgressState, local: AcademyProgressState | null): AcademyProgressState {
+  if (!local) return server;
+  const lessons: Record<string, AcademyLessonProgress> = { ...server.lessons };
+  for (const [key, mine] of Object.entries(local.lessons)) {
+    const theirs = lessons[key];
+    if (!theirs) {
+      lessons[key] = mine;
+      continue;
+    }
+    const mineAhead = mine.percent > theirs.percent;
+    lessons[key] = {
+      percent: Math.max(mine.percent, theirs.percent),
+      position: mineAhead ? mine.position : theirs.position,
+      completedAt: theirs.completedAt ?? mine.completedAt,
+    };
+  }
+  return { ...server, lessons, certificate: server.certificate ?? local.certificate };
+}
+
 function AcademyProgressStore({ children, initial }: { children: React.ReactNode; initial: AcademyProgressState | null }) {
   const [state, setState] = useState<AcademyProgressState | null>(initial);
   const inflight = useRef(false);
@@ -48,7 +72,7 @@ function AcademyProgressStore({ children, initial }: { children: React.ReactNode
     fetch("/api/academy/progress", { credentials: "include", cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data: AcademyProgressState | null) => {
-        if (data && typeof data === "object" && data.lessons) setState(data);
+        if (data && typeof data === "object" && data.lessons) setState((cur) => mergeProgress(data, cur));
       })
       .catch(() => {})
       .finally(() => {
