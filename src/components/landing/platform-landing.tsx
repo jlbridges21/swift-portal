@@ -161,7 +161,7 @@ export function PlatformLanding({
                 name: "ShootPortal product tour",
                 description: "A one-minute tour of real ShootPortal screens: client requests, proposal approval, calendar, pipeline, time-stamped video review, payments, share links, and branding.",
                 uploadDate: DEMO_VIDEO_UPLOAD_DATE,
-                duration: "PT61S",
+                duration: "PT63S",
               })
             )
           ),

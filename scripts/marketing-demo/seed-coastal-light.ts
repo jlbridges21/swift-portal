@@ -239,7 +239,7 @@ async function main() {
       primaryContactEmail: `hello@${DEMO_EMAIL_DOMAIN}`, supportEmail: `hello@${DEMO_EMAIL_DOMAIN}`,
       phoneNumber: "(251) 555-0100", websiteUrl: "https://coastallightmedia.example.com",
       city: "Orange Beach", state: "AL", postalCode: "36561", country: "US",
-      brandPrimaryColor: "#0E3B5C", brandAccentColor: "#F2994A",
+      brandPrimaryColor: "#1E1B4B", brandAccentColor: "#4F46E5",
     },
     proposals: { ...(settings.proposals ?? {}), autoPreliminaryEstimate: true, showPreliminaryToClients: true },
   };

@@ -120,7 +120,7 @@ export const MEDIA = {
     trialCard: img("shared", "shootportal-free-trial-cta", "Run your media business in one place. 14-day free trial, no credit card required"),
     cycleLoop: vid("shared", "shootportal-full-workflow", "Animation of ShootPortal's connected workflow cycle: request, estimate, schedule, shoot, review, pay, deliver", { webm: true }),
     tour: vid("shared", "shootportal-interactive-tour", "Product tour: a client requests a shoot and approves the proposal, the shoot lands on your calendar, the pipeline and media library, time-stamped video review, the client pays in one tap and downloads unlock, share links, and your own brand", {
-      title: "The complete ShootPortal workflow", duration: "1:01",
+      title: "The complete ShootPortal workflow", duration: "1:03",
       chapters: [
         { t: 0, label: "Request" }, { t: 5.5, label: "Estimate" }, { t: 12.2, label: "Schedule" }, { t: 16.2, label: "Projects" }, { t: 23.8, label: "Media" },
         { t: 27.8, label: "Review" }, { t: 32.2, label: "Pay" }, { t: 47.87, label: "Deliver" }, { t: 55.07, label: "Brand" },
