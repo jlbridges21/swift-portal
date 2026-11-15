@@ -152,7 +152,7 @@ export function TravelFeesEditor({
         />
       </div>
       {!hasPostal && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 surface-dark:border-amber-500/30 surface-dark:bg-amber-500/10 surface-dark:text-amber-200">
           Travel fees start from your business postal code. Add one in{" "}
           {onAddPostal ? (
             <button type="button" onClick={onAddPostal} className="font-medium underline">
@@ -168,7 +168,7 @@ export function TravelFeesEditor({
       )}
       {travel.enabled && (
         <div className="space-y-4">
-          <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950">
+          <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950 surface-dark:border-sky-500/30 surface-dark:bg-sky-500/10 surface-dark:text-sky-200">
             Distance is the straight-line distance between ZIP code centers, not driving distance.
             Real driving distance runs longer, so set your free radius and tier boundaries with that
             in mind. A 25 mile straight-line boundary is closer to about 31 miles by road.
@@ -300,7 +300,7 @@ export function TravelFeesEditor({
                 Add tier
               </Button>
               {tierError && (
-                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 surface-dark:border-amber-500/30 surface-dark:bg-amber-500/10 surface-dark:text-amber-200">
                   {tierError}
                 </p>
               )}

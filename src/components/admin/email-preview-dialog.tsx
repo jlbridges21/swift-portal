@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 
@@ -12,6 +12,11 @@ type EmailPreviewDraft = {
   businessName: string;
   portalName: string;
   footerText: string;
+  /** Optional trigger customization (defaults keep the original look). */
+  triggerLabel?: string;
+  triggerIcon?: ReactNode;
+  triggerClassName?: string;
+  showHint?: boolean;
 };
 
 /**
@@ -31,6 +36,10 @@ export function EmailPreviewDialog(draft: EmailPreviewDraft) {
     businessName,
     portalName,
     footerText,
+    triggerLabel = "Preview email",
+    triggerIcon,
+    triggerClassName,
+    showHint = true,
   } = draft;
 
   useEffect(() => {
@@ -73,12 +82,15 @@ export function EmailPreviewDialog(draft: EmailPreviewDraft) {
 
   return (
     <>
-      <Button type="button" variant="outline" onClick={() => setOpen(true)}>
-        Preview email
+      <Button type="button" variant="outline" className={triggerClassName} onClick={() => setOpen(true)}>
+        {triggerIcon}
+        {triggerLabel}
       </Button>
-      <p className="text-xs text-muted">
-        Shows a sample deliverables email with the logo and colors on this page. Nothing is sent.
-      </p>
+      {showHint ? (
+        <p className="text-xs text-muted">
+          Shows a sample deliverables email with the logo and colors on this page. Nothing is sent.
+        </p>
+      ) : null}
       <Modal
         open={open}
         onClose={() => setOpen(false)}

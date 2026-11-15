@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext } from "react";
-import { brandThemeCss, sanitizeCssColor, type SurfaceMode } from "@/lib/brand-color";
+import { createContext, useContext, useMemo, useState } from "react";
+import { brandThemeCss, sanitizeCssColor, surfaceTone, type SurfaceMode } from "@/lib/brand-color";
 import { PLATFORM_BUSINESS_DEFAULTS, type PortalBrand } from "@/lib/portal-brand";
 import { DEFAULT_PRELIMINARY_DISCLAIMER } from "@/lib/preliminary-disclaimer";
 import { PORTAL_LOGO_SIZE } from "@/lib/brand-logo-size";
@@ -39,6 +39,22 @@ export function usePortalBrand(): PortalBrand {
   return useContext(BrandContext);
 }
 
+/** Unsaved branding shown across the app while the owner edits Settings (null = saved look). */
+export type BrandPreview = { brand: PortalBrand; surfaceMode: SurfaceMode } | null;
+
+const BrandPreviewContext = createContext<((preview: BrandPreview) => void) | null>(null);
+
+/**
+ * Settings → Business Identity / Branding: show name, logo, colors and portal background
+ * everywhere (sidebar, buttons, page) as they're edited, before saving. Pass null to go back to
+ * the saved look. A no-op outside a BrandProvider.
+ */
+export function useSetBrandPreview(): (preview: BrandPreview) => void {
+  return useContext(BrandPreviewContext) ?? noop;
+}
+
+function noop() {}
+
 export function BrandProvider({
   brand,
   children,
@@ -49,15 +65,23 @@ export function BrandProvider({
   /** Client portal and share links pass the business setting. Every other surface stays light. */
   surfaceMode?: SurfaceMode;
 }) {
-  const primary = sanitizeCssColor(brand.primaryColor, PLATFORM_BUSINESS_DEFAULTS.brandPrimaryColor);
-  const accent = sanitizeCssColor(brand.accentColor, PLATFORM_BUSINESS_DEFAULTS.brandAccentColor);
+  const [preview, setPreview] = useState<BrandPreview>(null);
+  const shown = preview?.brand ?? brand;
+  const mode = preview?.surfaceMode ?? surfaceMode;
+  const primary = sanitizeCssColor(shown.primaryColor, PLATFORM_BUSINESS_DEFAULTS.brandPrimaryColor);
+  const accent = sanitizeCssColor(shown.accentColor, PLATFORM_BUSINESS_DEFAULTS.brandAccentColor);
+  const value = useMemo(() => ({ ...shown, primaryColor: primary, accentColor: accent }), [shown, primary, accent]);
+  const css = useMemo(() => brandThemeCss(primary, accent, mode), [primary, accent, mode]);
 
   return (
-    <BrandContext.Provider value={{ ...brand, primaryColor: primary, accentColor: accent }}>
-      <style dangerouslySetInnerHTML={{ __html: brandThemeCss(primary, accent, surfaceMode) }} />
-      <div data-surface={surfaceMode} className="contents">
-        {children}
-      </div>
-    </BrandContext.Provider>
+    <BrandPreviewContext.Provider value={setPreview}>
+      <BrandContext.Provider value={value}>
+        <style dangerouslySetInnerHTML={{ __html: css }} />
+        {/* data-surface is the tone (dark-only CSS keys off it); the chosen option rides alongside. */}
+        <div data-surface={surfaceTone(mode, primary)} data-surface-mode={mode} className="contents">
+          {children}
+        </div>
+      </BrandContext.Provider>
+    </BrandPreviewContext.Provider>
   );
 }

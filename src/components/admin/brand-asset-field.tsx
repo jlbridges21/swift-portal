@@ -99,6 +99,109 @@ async function parseApiResponse(res: Response): Promise<Record<string, unknown>>
   );
 }
 
+type UploadPhase = "idle" | "optimizing" | "uploading";
+
+/**
+ * Upload logic shared by BrandAssetField and the Settings logo tiles: validates the file
+ * (or optimizes it for kinds that allow it), uploads it and reports the new URL.
+ * Render `fileInput` somewhere in the tree and call `openPicker()` from a button.
+ */
+export function useBrandAssetUpload({
+  kind,
+  inputId,
+  onUrlChange,
+  onUploaded,
+  onLogoMeasured,
+  refreshOnUpload = false,
+}: {
+  kind: BrandAssetKind;
+  inputId: string;
+  onUrlChange: (url: string) => void;
+  onUploaded?: (url: string) => void;
+  onLogoMeasured?: (logoLuminance: number | null) => void;
+  refreshOnUpload?: boolean;
+}) {
+  const router = useRouter();
+  const ui = KIND_UI[kind];
+  const fileInputId = `${inputId}-file`;
+  const [phase, setPhase] = useState<UploadPhase>("idle");
+  const busy = phase !== "idle";
+
+  const fileInput = (
+    <input
+      id={fileInputId}
+      type="file"
+      accept={ui.accept}
+      className="hidden"
+      onChange={async (e) => {
+        let file = e.target.files?.[0];
+        e.target.value = "";
+        if (!file) return;
+        if (ui.optimize) {
+          // Type, 25MB original cap and decode errors are all reported by the optimizer.
+          setPhase("optimizing");
+          try {
+            file = (await optimizeImageForUpload(file)).file;
+          } catch (error) {
+            setPhase("idle");
+            toast.error(imageOptimizationErrorMessage(error));
+            return;
+          }
+        } else {
+          const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+          if (!ui.types.has(file.type) && !ui.extraExt.has(ext)) {
+            toast.error(
+              kind === "favicon"
+                ? "Favicon must be a PNG, ICO, or SVG file."
+                : `${ui.label} must be a PNG, JPEG, or WebP image.`
+            );
+            return;
+          }
+          if (file.size > MAX_BYTES) {
+            toast.error(`${ui.label} must be under 4MB.`);
+            return;
+          }
+        }
+        setPhase("uploading");
+        const form = new FormData();
+        form.append("file", file);
+        form.append("kind", kind);
+        try {
+          const res = await fetch("/api/admin/settings/logo", {
+            method: "POST",
+            credentials: "include",
+            body: form,
+          });
+          const data = await parseApiResponse(res);
+          const url = typeof data.url === "string" ? data.url : "";
+          if (!url) throw new Error("Upload failed");
+          onUrlChange(url);
+          if (kind === "logo" && onLogoMeasured) {
+            const measured = data.logoLuminance;
+            onLogoMeasured(typeof measured === "number" && Number.isFinite(measured) ? measured : null);
+          }
+          onUploaded?.(url);
+          toast.success(`${ui.label} uploaded`);
+          if (refreshOnUpload) router.refresh();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Upload failed");
+        } finally {
+          setPhase("idle");
+        }
+      }}
+    />
+  );
+
+  return {
+    phase,
+    busy,
+    label: ui.label,
+    hint: ui.hint,
+    fileInput,
+    openPicker: () => document.getElementById(fileInputId)?.click(),
+  };
+}
+
 /**
  * Upload / paste URL control for brand assets.
  *
@@ -125,12 +228,16 @@ export function BrandAssetField({
   /** Opt-in. Default false so draft forms keep unsaved state. */
   refreshOnUpload?: boolean;
 }) {
-  const router = useRouter();
   const ui = KIND_UI[kind];
-  const fileInputId = `${inputId}-file`;
   const showPreview = Boolean(value.trim());
-  const [phase, setPhase] = useState<"idle" | "optimizing" | "uploading">("idle");
-  const busy = phase !== "idle";
+  const { phase, busy, fileInput, openPicker } = useBrandAssetUpload({
+    kind,
+    inputId,
+    onUrlChange,
+    onUploaded,
+    onLogoMeasured,
+    refreshOnUpload,
+  });
 
   return (
     <div className="space-y-2 sm:col-span-2">
@@ -143,7 +250,7 @@ export function BrandAssetField({
           className="shrink-0"
           disabled={busy}
           aria-busy={busy}
-          onClick={() => document.getElementById(fileInputId)?.click()}
+          onClick={openPicker}
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           {phase === "optimizing"
@@ -152,68 +259,7 @@ export function BrandAssetField({
               ? "Uploading…"
               : `Upload ${ui.label.toLowerCase()}`}
         </Button>
-        <input
-          id={fileInputId}
-          type="file"
-          accept={ui.accept}
-          className="hidden"
-          onChange={async (e) => {
-            let file = e.target.files?.[0];
-            e.target.value = "";
-            if (!file) return;
-            if (ui.optimize) {
-              // Type, 25MB original cap and decode errors are all reported by the optimizer.
-              setPhase("optimizing");
-              try {
-                file = (await optimizeImageForUpload(file)).file;
-              } catch (error) {
-                setPhase("idle");
-                toast.error(imageOptimizationErrorMessage(error));
-                return;
-              }
-            } else {
-              const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-              if (!ui.types.has(file.type) && !ui.extraExt.has(ext)) {
-                toast.error(
-                  kind === "favicon"
-                    ? "Favicon must be a PNG, ICO, or SVG file."
-                    : `${ui.label} must be a PNG, JPEG, or WebP image.`
-                );
-                return;
-              }
-              if (file.size > MAX_BYTES) {
-                toast.error(`${ui.label} must be under 4MB.`);
-                return;
-              }
-            }
-            setPhase("uploading");
-            const form = new FormData();
-            form.append("file", file);
-            form.append("kind", kind);
-            try {
-              const res = await fetch("/api/admin/settings/logo", {
-                method: "POST",
-                credentials: "include",
-                body: form,
-              });
-              const data = await parseApiResponse(res);
-              const url = typeof data.url === "string" ? data.url : "";
-              if (!url) throw new Error("Upload failed");
-              onUrlChange(url);
-              if (kind === "logo" && onLogoMeasured) {
-                const measured = data.logoLuminance;
-                onLogoMeasured(typeof measured === "number" && Number.isFinite(measured) ? measured : null);
-              }
-              onUploaded?.(url);
-              toast.success(`${ui.label} uploaded`);
-              if (refreshOnUpload) router.refresh();
-            } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Upload failed");
-            } finally {
-              setPhase("idle");
-            }
-          }}
-        />
+        {fileInput}
       </div>
       {showPreview ? (
         <div className="flex flex-wrap items-start gap-3">
@@ -232,7 +278,7 @@ export function BrandAssetField({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8 px-2 text-xs text-red-700"
+            className="h-8 px-2 text-xs text-red-700 surface-dark:text-red-200"
             onClick={() => onUrlChange("")}
           >
             Remove image

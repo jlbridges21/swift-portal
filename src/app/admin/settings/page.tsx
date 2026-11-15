@@ -24,6 +24,7 @@ import { w9CountryDecision } from "@/lib/w9-country";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { siteServicesFromRows } from "@/lib/website/server";
 import { WebsiteDomainSetupRequiredError } from "@/lib/custom-domain";
+import { sectionForHash, type SettingsSectionId } from "@/lib/settings-nav";
 
 /** Only same-site project editor paths may be used as the "back to your website" link. */
 function safeReturnTo(raw: string | undefined): string | null {
@@ -93,13 +94,26 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
     }));
   }
 
+  // Setup steps still open → accent dot on their section in the Settings menu.
+  const attention: SettingsSectionId[] = [
+    ...new Set<SettingsSectionId>([
+      ...checklist.items
+        // Travel fees are a nice-to-have; the web address is checked from its live status below.
+        .filter((item) => !item.done && item.id !== "travel" && item.id !== "custom_domain")
+        .map((item) => sectionForHash(item.hash))
+        .filter((id): id is SettingsSectionId => Boolean(id) && (id !== "tax" || country.us)),
+      // Your own web address: until the portal address is connected (when the plan includes it).
+      ...(canUseCustomDomain && customDomainState.status !== "connected" ? (["custom_domain"] as const) : []),
+    ]),
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole="admin" />
       <main className="app-page mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 pb-12">
         <PageHeader
           title="Admin Settings"
-          description={`Manage global notification, email, business, and proposal settings for ${settings.business.portalName}.`}
+          description="Your business details, branding, payments and emails, all in one place."
         />
         <HashScrollHandler />
         {checklist.incomplete ? (
@@ -134,6 +148,7 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
           services={<ServicesSettingsCard />}
           showTax={country.us}
           w9Clients={w9Clients}
+          attention={attention}
         />
       </main>
     </div>

@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Download, Eye, FileText, Loader2, RefreshCw, Trash2, Upload } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Download, Eye, FileArchive, FileText, FileType, Loader2, RefreshCw, Trash2, Upload, type LucideIcon } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatFileSize } from "@/lib/brand";
 import { cn } from "@/lib/utils";
@@ -56,6 +55,22 @@ async function uploadDefaultDocument(file: File, replaceId?: string): Promise<De
   return document;
 }
 
+/** "PDF", "Word" or "ZIP" from the stored MIME type (falls back to the file extension). */
+function docTypeLabel(doc: DefaultProjectDocument): string {
+  const mime = doc.mime_type.toLowerCase();
+  if (mime === "application/pdf") return "PDF";
+  if (mime.includes("zip")) return "ZIP";
+  if (mime.includes("word") || mime === "application/msword") return "Word";
+  return doc.file_name.split(".").pop()?.toUpperCase() || "File";
+}
+
+function docIcon(doc: DefaultProjectDocument): LucideIcon {
+  const label = docTypeLabel(doc);
+  if (label === "ZIP") return FileArchive;
+  if (label === "Word") return FileType;
+  return FileText;
+}
+
 function IconButton({
   label,
   onClick,
@@ -77,8 +92,8 @@ function IconButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-slate-100 hover:text-foreground surface-dark:hover:bg-subtle disabled:opacity-50",
-        destructive && "hover:bg-red-50 hover:text-red-600"
+        "inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-subtle hover:text-foreground disabled:opacity-50 sm:h-8 sm:w-8",
+        destructive && "hover:bg-red-50 hover:text-red-600 surface-dark:hover:bg-red-500/15 surface-dark:hover:text-red-300"
       )}
     >
       {children}
@@ -192,57 +207,24 @@ export function DefaultDocumentsSettingsCard() {
   const disabled = migrationRequired;
 
   return (
-    <Card className="shadow-sm" id="settings-default-documents">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">Default documents</CardTitle>
-        <p className="text-sm text-muted">
-          Added to the Documents section of every new project — each project gets its own copy. Existing
-          projects aren&apos;t changed. Clients see them when the project&apos;s Documents section is visible.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <section
+      id="settings-default-documents"
+      className="scroll-mt-24 rounded-2xl border border-border bg-card p-5 sm:p-6"
+      aria-labelledby="settings-default-documents-title"
+    >
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <h3 id="settings-default-documents-title" className="text-base font-semibold text-heading">
+          Default documents
+        </h3>
+        <p className="text-[13px] text-muted">Every new project gets its own copy</p>
+      </div>
+
+      <div className="mt-4 space-y-2.5">
         {migrationRequired && (
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 surface-dark:border-amber-500/30 surface-dark:bg-amber-500/15 surface-dark:text-amber-300">
             Default documents need database migration v114 before they can be uploaded.
           </p>
         )}
-
-        <label
-          onDragOver={(e) => {
-            if (disabled) return;
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            if (disabled) return;
-            void addFiles(Array.from(e.dataTransfer.files));
-          }}
-          className={cn(
-            "flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border px-4 py-6 text-center transition-colors hover:bg-slate-50 surface-dark:hover:bg-subtle",
-            dragOver && "border-accent bg-accent-subtle",
-            disabled && "pointer-events-none opacity-60"
-          )}
-        >
-          <Upload className="h-5 w-5 text-muted" />
-          <span className="text-sm font-medium text-foreground">Drop files here or click to upload</span>
-          <span className="text-xs text-muted">PDF, Word (.doc, .docx) or ZIP · up to 25 MB each</span>
-          <input
-            ref={uploadInput}
-            type="file"
-            multiple
-            accept={DEFAULT_DOCUMENT_ACCEPT}
-            className="hidden"
-            disabled={disabled}
-            onChange={(e) => {
-              const files = Array.from(e.target.files ?? []);
-              e.target.value = "";
-              void addFiles(files);
-            }}
-          />
-        </label>
 
         <input
           ref={replaceInput}
@@ -263,54 +245,104 @@ export function DefaultDocumentsSettingsCard() {
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </div>
         ) : documents.length === 0 && uploading.length === 0 ? (
-          <p className="px-1 text-sm text-muted">No default documents yet.</p>
+          <p className="px-1 py-1 text-sm text-muted">
+            No default documents yet. Add a contract or guide and it&apos;s copied into the Documents section of each new project.
+          </p>
         ) : (
-          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
-            {documents.map((doc) => (
-              <div key={doc.id} className="flex items-center gap-3 px-4 py-3">
-                <FileText className="h-5 w-5 shrink-0 text-accent" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{doc.file_name}</p>
-                  <p className="text-xs text-muted">
-                    {doc.file_size ? formatFileSize(doc.file_size) : "—"} · Updated{" "}
-                    {new Date(doc.updated_at).toLocaleDateString()}
-                  </p>
-                </div>
-                {busyId === doc.id ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted" />
-                ) : (
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    <IconButton label={`View ${doc.file_name}`} onClick={() => void openDocument(doc, false)}>
-                      <Eye className="h-4 w-4" />
-                    </IconButton>
-                    <IconButton label={`Download ${doc.file_name}`} onClick={() => void openDocument(doc, true)}>
-                      <Download className="h-4 w-4" />
-                    </IconButton>
-                    <IconButton
-                      label={`Replace ${doc.file_name}`}
-                      onClick={() => {
-                        replaceTarget.current = doc;
-                        replaceInput.current?.click();
-                      }}
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </IconButton>
-                    <IconButton label={`Remove ${doc.file_name}`} destructive onClick={() => setConfirmRemove(doc)}>
-                      <Trash2 className="h-4 w-4" />
-                    </IconButton>
+          <>
+            {documents.map((doc) => {
+              const Icon = docIcon(doc);
+              return (
+                <div key={doc.id} className="flex items-center gap-3 rounded-xl border border-border px-3.5 py-3">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-subtle text-muted">
+                    <Icon className="h-[18px] w-[18px]" aria-hidden />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-heading">{doc.file_name}</p>
+                    <p className="truncate text-xs text-muted" title={`Updated ${new Date(doc.updated_at).toLocaleDateString()}`}>
+                      {docTypeLabel(doc)}
+                      {doc.file_size ? ` · ${formatFileSize(doc.file_size)}` : ""}
+                    </p>
                   </div>
-                )}
-              </div>
-            ))}
+                  {busyId === doc.id ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted" />
+                  ) : (
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <IconButton label={`View ${doc.file_name}`} onClick={() => void openDocument(doc, false)}>
+                        <Eye className="h-4 w-4" />
+                      </IconButton>
+                      <IconButton label={`Download ${doc.file_name}`} onClick={() => void openDocument(doc, true)}>
+                        <Download className="h-4 w-4" />
+                      </IconButton>
+                      <IconButton
+                        label={`Replace ${doc.file_name}`}
+                        onClick={() => {
+                          replaceTarget.current = doc;
+                          replaceInput.current?.click();
+                        }}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </IconButton>
+                      <IconButton label={`Remove ${doc.file_name}`} destructive onClick={() => setConfirmRemove(doc)}>
+                        <Trash2 className="h-4 w-4" />
+                      </IconButton>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             {uploading.map((name, i) => (
-              <div key={`uploading-${i}-${name}`} className="flex items-center gap-3 px-4 py-3">
-                <Loader2 className="h-5 w-5 shrink-0 animate-spin text-muted" />
+              <div key={`uploading-${i}-${name}`} className="flex items-center gap-3 rounded-xl border border-border px-3.5 py-3">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-subtle text-muted">
+                  <Loader2 className="h-[18px] w-[18px] animate-spin" aria-hidden />
+                </span>
                 <p className="min-w-0 flex-1 truncate text-sm text-muted">Uploading {name}…</p>
               </div>
             ))}
-          </div>
+          </>
         )}
-      </CardContent>
+
+        <label
+          onDragOver={(e) => {
+            if (disabled) return;
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            if (disabled) return;
+            void addFiles(Array.from(e.dataTransfer.files));
+          }}
+          className={cn(
+            "flex cursor-pointer items-center gap-3.5 rounded-xl border-[1.5px] border-dashed border-border px-4 py-4 transition-colors hover:bg-subtle",
+            dragOver && "border-accent bg-accent-subtle",
+            disabled && "pointer-events-none opacity-60"
+          )}
+        >
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-subtle text-accent">
+            <Upload className="h-[18px] w-[18px]" aria-hidden />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-heading">Drop files or click to upload</span>
+            <span className="block text-xs text-muted">PDF, Word or ZIP · up to 25 MB each</span>
+          </span>
+          <input
+            ref={uploadInput}
+            type="file"
+            multiple
+            accept={DEFAULT_DOCUMENT_ACCEPT}
+            className="hidden"
+            disabled={disabled}
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              void addFiles(files);
+            }}
+          />
+        </label>
+      </div>
 
       <ConfirmDialog
         open={confirmRemove !== null}
@@ -325,6 +357,6 @@ export function DefaultDocumentsSettingsCard() {
           {confirmRemove?.file_name} won&apos;t be added to new projects. Projects that already have a copy keep it.
         </p>
       </ConfirmDialog>
-    </Card>
+    </section>
   );
 }
