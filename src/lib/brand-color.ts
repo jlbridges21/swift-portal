@@ -448,11 +448,33 @@ export function brandContrastWarnings(primary: string, accent: string): BrandCon
   return warnings;
 }
 
-export type SurfaceMode = "light" | "dark";
+/** Portal background: light, dark, or the business's primary color ("brand"). */
+export type SurfaceMode = "light" | "dark" | "brand";
 
 /** Missing or unexpected values stay light, which is today's portal. */
 export function parseSurfaceMode(value: unknown): SurfaceMode {
-  return value === "dark" ? "dark" : "light";
+  return value === "dark" ? "dark" : value === "brand" ? "brand" : "light";
+}
+
+/**
+ * Whether a surface reads as light or dark (color-scheme, dark-only CSS, status bar). A primary
+ * color background is dark when white text suits it better than ink, light otherwise.
+ */
+export function surfaceTone(mode: SurfaceMode, primaryRaw: string): "light" | "dark" {
+  if (mode !== "brand") return mode;
+  const rgb = parseRgb(sanitizeCssColor(primaryRaw, "#0F172A")) ?? INK;
+  return brandSurfaceIsDark(rgb) ? "dark" : "light";
+}
+
+/** Browser/PWA chrome for a business surface: the page background and its color scheme. */
+export function surfaceChrome(business: {
+  brandPrimaryColor: string;
+  brandAccentColor: string;
+  surfaceMode?: unknown;
+}): { themeColor: string; colorScheme: "light" | "dark" } {
+  const mode = parseSurfaceMode(business.surfaceMode);
+  const t = deriveBrandTheme(business.brandPrimaryColor, business.brandAccentColor, mode);
+  return { themeColor: t.background, colorScheme: surfaceTone(mode, business.brandPrimaryColor) };
 }
 
 /**
@@ -535,7 +557,149 @@ export function deriveBrandTheme(
   surfaceMode: SurfaceMode = "light"
 ): BrandThemeVars {
   if (surfaceMode === "dark") return deriveDarkBrandTheme(primaryRaw, accentRaw);
+  if (surfaceMode === "brand") return deriveBrandSurfaceTheme(primaryRaw, accentRaw);
   return deriveLightBrandTheme(primaryRaw, accentRaw);
+}
+
+const NEAR_BLACK: Rgb = [6, 8, 14];
+
+/**
+ * Mid and dark primaries take white text (deepened if needed); only genuinely light ones
+ * (pastels, yellows) take ink. A saturated mid-tone looks better deepened than washed out.
+ */
+function brandSurfaceIsDark(primary: Rgb): boolean {
+  return relativeLuminance(primary) < 0.4;
+}
+
+/** White text on a dark primary page reaches this; ink on a light one reaches LIGHT_TARGET. */
+const BRAND_DARK_TARGET = 8;
+const BRAND_LIGHT_TARGET = 9;
+
+/**
+ * The page background for the "Primary color" option: the primary itself, moved only as far as
+ * needed for comfortable reading (deepened under white text, lightened under ink).
+ */
+export function brandSurfaceBackground(primaryRaw: string): string {
+  const rgb = parseRgb(sanitizeCssColor(primaryRaw, "#0F172A")) ?? INK;
+  return toCss(brandSurfaceFill(rgb));
+}
+
+function brandSurfaceFill(primary: Rgb): Rgb {
+  const dark = brandSurfaceIsDark(primary);
+  const text = dark ? WHITE : INK;
+  const toward = dark ? NEAR_BLACK : WHITE;
+  const target = dark ? BRAND_DARK_TARGET : BRAND_LIGHT_TARGET;
+  let current = primary;
+  for (let i = 0; i < 40; i++) {
+    if (contrastRatio(text, current) >= target) return current;
+    current = mix(current, toward, 0.08);
+  }
+  return toward;
+}
+
+function fitPrimaryOnBrandSurface(
+  primary: Rgb,
+  surfaces: Rgb[],
+  darkPage: boolean
+): { fill: Rgb; fg: { color: Rgb; css: string; usedDark: boolean } } {
+  const toward = darkPage ? WHITE : INK;
+  let current = darkPage ? mix(primary, WHITE, 0.55) : mix(primary, INK, 0.35);
+  for (let i = 0; i < 40; i++) {
+    const shapeOk = surfaces.every((sfc) => contrastRatio(current, sfc) >= UI_CONTRAST);
+    const label = contrastRatio(current, WHITE) >= contrastRatio(current, INK) ? WHITE : INK;
+    if (shapeOk && contrastRatio(current, label) >= TEXT_CONTRAST) {
+      return {
+        fill: current,
+        fg: label === WHITE ? { color: WHITE, css: "#ffffff", usedDark: false } : { color: INK, css: "#0F172A", usedDark: true },
+      };
+    }
+    current = mix(current, toward, 0.1);
+  }
+  return { fill: toward, fg: darkPage ? { color: INK, css: "#0F172A", usedDark: true } : { color: WHITE, css: "#ffffff", usedDark: false } };
+}
+
+/** True when the primary had to be deepened or lightened to keep text readable on it. */
+export function brandSurfaceAdjusted(primaryRaw: string): boolean {
+  const rgb = parseRgb(sanitizeCssColor(primaryRaw, "#0F172A")) ?? INK;
+  return !rgbClose(rgb, brandSurfaceFill(rgb), 6);
+}
+
+/**
+ * "Primary color" portal background. The page is the primary color; cards sit a step lighter
+ * (white-ish on light primaries, a soft lift on dark ones). Every ink is measured against the
+ * surfaces it sits on: heading and body ≥ 4.5:1 with margin, muted ≥ 4.5:1, accent text ≥ 4.5:1,
+ * buttons and borders ≥ 3:1.
+ */
+function deriveBrandSurfaceTheme(primaryRaw: string, accentRaw: string): BrandThemeVars {
+  const primarySafe = sanitizeCssColor(primaryRaw, "#0F172A");
+  const accentSafe = sanitizeCssColor(accentRaw, "#3B82F6");
+  const rawPrimary = parseRgb(primarySafe) ?? INK;
+  const accentChosen = parseRgb(accentSafe) ?? [59, 130, 246];
+  const dark = brandSurfaceIsDark(rawPrimary);
+
+  const background = brandSurfaceFill(rawPrimary);
+  const card = dark ? mix(background, WHITE, 0.07) : mix(background, WHITE, 0.62);
+  const subtle = dark ? mix(background, NEAR_BLACK, 0.22) : mix(background, INK, 0.05);
+  const border = dark ? mix(background, WHITE, 0.17) : mix(background, INK, 0.15);
+  // Every ink is checked against all three surfaces it can sit on.
+  const surfaces = [background, card, subtle];
+  const fitAll = (fg: Rgb, min: number) => {
+    let c = fg;
+    for (let i = 0; i < 40 && !surfaces.every((sfc) => contrastRatio(c, sfc) >= min); i++) {
+      c = mix(c, dark ? WHITE : INK, 0.12);
+    }
+    return c;
+  };
+
+  const heading = fitAll(dark ? mix(WHITE, background, 0.03) : mix(INK, background, 0.04), 7);
+  const foreground = fitAll(dark ? mix(WHITE, background, 0.14) : mix(INK, background, 0.16), 6);
+  let muted = dark ? mix(WHITE, background, 0.4) : mix(INK, background, 0.42);
+  muted = fitAll(muted, TEXT_CONTRAST + 0.1);
+
+  // Accent is link and nav text as well as button fill.
+  // Walk one way only (lighter on dark pages, deeper on light ones) so mid-luminance pages
+  // can't send it back and forth.
+  let accentUi = accentChosen;
+  for (let i = 0; i < 40 && !surfaces.every((sfc) => contrastRatio(accentUi, sfc) >= TEXT_CONTRAST); i++) {
+    accentUi = mix(accentUi, dark ? WHITE : INK, 0.1);
+  }
+  const accentFg = pickForeground(accentUi);
+
+  let accentSubtle = mix(card, accentUi, dark ? 0.2 : 0.14);
+  for (let i = 0; i < 16; i++) {
+    if (contrastRatio(accentUi, accentSubtle) >= TEXT_CONTRAST) break;
+    accentSubtle = mix(accentSubtle, dark ? NEAR_BLACK : WHITE, 0.25);
+  }
+
+  // Primary-filled shapes (buttons, chips) would vanish on a primary page, so they flip to a
+  // tint (dark pages) or a deep shade (light pages) of the same hue that stands out from it.
+  const fittedPrimary = fitPrimaryOnBrandSurface(rawPrimary, [background, card], dark);
+  const primaryRgb = fittedPrimary.fill;
+
+  const vars: BrandThemeVars = {
+    primary: toCss(primaryRgb),
+    primaryForeground: fittedPrimary.fg.css,
+    primaryHover: toCss(mix(primaryRgb, dark ? WHITE : INK, 0.12)),
+    primaryActive: toCss(mix(primaryRgb, dark ? NEAR_BLACK : INK, 0.18)),
+    accent: toCss(accentUi),
+    accentForeground: accentFg.css,
+    accentHover: toCss(mix(accentUi, dark ? WHITE : INK, 0.1)),
+    accentActive: toCss(mix(accentUi, dark ? NEAR_BLACK : INK, 0.18)),
+    accentSubtle: toCss(accentSubtle),
+    accentBorder: toCss(mix(border, accentUi, 0.45)),
+    ring: toCss(accentUi),
+    background: toCss(background),
+    card: toCss(card),
+    subtle: toCss(subtle),
+    border: toCss(border),
+    foreground: toCss(foreground),
+    muted: toCss(muted),
+    heading: toCss(heading),
+    backgroundForeground: toCss(ensureContrast(foreground, background, TEXT_CONTRAST)),
+    cardForeground: toCss(ensureContrast(foreground, card, TEXT_CONTRAST)),
+  };
+
+  return sanitizeTheme(vars);
 }
 
 function deriveLightBrandTheme(primaryRaw: string, accentRaw: string): BrandThemeVars {
@@ -718,7 +882,7 @@ export function brandThemeCss(
   surfaceMode: SurfaceMode = "light"
 ): string {
   const t = deriveBrandTheme(primary, accent, surfaceMode);
-  const scheme = surfaceMode === "dark" ? "dark" : "light";
+  const scheme = surfaceTone(surfaceMode, primary);
   return `:root {
   color-scheme: ${scheme};
   --color-primary: ${t.primary};

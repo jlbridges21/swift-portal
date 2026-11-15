@@ -5,6 +5,7 @@ import {
   assertSafeBrandColors,
   changedBrandColors,
   parseSurfaceMode,
+  type SurfaceMode,
 } from "@/lib/brand-color";
 import {
   assertEmailSenderPolicy,
@@ -112,7 +113,8 @@ export interface BusinessSettings {
   brandPrimaryColor: string;
   brandAccentColor: string;
   /** This business's admin portal, client portal, and shared project links. Platform and partner stay light. */
-  surfaceMode: "light" | "dark";
+  /** Portal background: light, dark, or the primary color. */
+  surfaceMode: SurfaceMode;
   /** Mean luminance of opaque logo pixels, 0–255. Null when the file could not be read. */
   logoLuminance: number | null;
   /** Logo URL the business dismissed the light-logo suggestion for. */

@@ -8,13 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, RotateCcw, Save } from "lucide-react";
+import { Building2, Info, Link2, Loader2, RotateCcw, Save, Undo2 } from "lucide-react";
 import { GoogleCalendarSettingsCard } from "@/components/admin/google-calendar-settings-card";
 import { cn } from "@/lib/utils";
 import { ColorField } from "@/components/ui/color-field";
 import { LogoSizeSlider } from "@/components/admin/logo-size-slider";
 import { PORTAL_LOGO_SIZE } from "@/lib/brand-logo-size";
 import { SettingsTabNav } from "@/components/admin/settings-tab-nav";
+import { settingsSectionIcon } from "@/components/admin/settings-section-icons";
+import { publishSettingsNav } from "@/components/admin/settings-nav-store";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
 import { EmailPreviewDialog } from "@/components/admin/email-preview-dialog";
@@ -29,10 +31,19 @@ import { BusinessWebsiteEditor } from "@/components/admin/business-website/busin
 import type { SiteServiceInput } from "@/lib/website/view";
 import { MarketingKitSettingsCard } from "@/components/admin/marketing-kit-settings-card";
 import type { CustomDomainPublicState } from "@/lib/custom-domain";
-import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
+import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
 import { BRAND } from "@/lib/brand";
-import { brandContrastWarnings, deriveBrandTheme, parseSurfaceMode, sanitizeCssColor } from "@/lib/brand-color";
+import {
+  brandContrastWarnings,
+  brandSurfaceAdjusted,
+  brandSurfaceBackground,
+  deriveBrandTheme,
+  parseSurfaceMode,
+  sanitizeCssColor,
+  surfaceTone,
+  type SurfaceMode,
+} from "@/lib/brand-color";
 import { logoLuminanceClass } from "@/lib/logo-luminance-class";
 import { sectionForHash, visibleSettingsSections, type SettingsSectionId } from "@/lib/settings-nav";
 import { readCleanHash } from "@/lib/url-hash";
@@ -40,7 +51,7 @@ import { TaxInformationSettings, type W9ClientOption } from "@/components/admin/
 import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
 import { TravelFeesSettingsCard } from "@/components/admin/travel-fees-card";
 import { DefaultDocumentsSettingsCard } from "@/components/admin/default-documents-settings-card";
-import { usePortalBrand } from "@/components/brand/brand-provider";
+import { usePortalBrand, useSetBrandPreview, type BrandPreview } from "@/components/brand/brand-provider";
 import { useInAdminAppShell } from "@/components/admin/app-shell/admin-app-shell-context";
 import type {
   AppSettings,
@@ -83,6 +94,8 @@ interface AdminSettingsClientProps {
   };
   showTax: boolean;
   w9Clients: W9ClientOption[];
+  /** Sections with an essential setup step still open (accent dot in the menu). */
+  attention?: SettingsSectionId[];
 }
 
 async function parseApiResponse(res: Response): Promise<Record<string, unknown>> {
@@ -216,7 +229,7 @@ function BrandSurfacePreview({
   portalName: string;
   businessName: string;
   logoUrl: string;
-  surfaceMode?: "light" | "dark";
+  surfaceMode?: SurfaceMode;
 }) {
   const theme = deriveBrandTheme(primary, accent, surfaceMode);
   return (
@@ -255,7 +268,7 @@ function BrandSurfacePreview({
             Project name
           </p>
           <p className="mt-1 text-sm" style={{ color: theme.foreground }}>
-            Body copy on the tinted page — never the raw brand fill.
+            Body text stays easy to read on every background.
           </p>
           <p className="mt-1 text-sm" style={{ color: theme.muted }}>
             Muted metadata stays readable.
@@ -286,11 +299,31 @@ function SettingsPanel({
       aria-labelledby={`settings-tab-${id}`}
       hidden={!selected}
       tabIndex={selected ? 0 : -1}
-      className={selected ? "outline-none" : "hidden"}
+      className={selected ? "outline-none [&_h2[data-settings-heading]+p]:pl-[52px]" : "hidden"}
     >
       {children}
     </div>
   );
+}
+
+/** Section title with its menu icon in a tile; a description <p> right after it is indented to match. */
+function SectionHeading({ id, children }: { id: SettingsSectionId; children: ReactNode }) {
+  const Icon = settingsSectionIcon(id);
+  return (
+    <h2 data-settings-heading="" className="relative flex min-h-9 items-center pl-[52px] text-lg font-semibold text-heading">
+      {Icon ? (
+        <span className="absolute left-0 top-0 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle text-accent">
+          <Icon className="h-5 w-5" aria-hidden />
+        </span>
+      ) : null}
+      {children}
+    </h2>
+  );
+}
+
+/** Label with a small info icon and a plain-language hint under the field. */
+function FieldHint({ children }: { children: ReactNode }) {
+  return <p className="text-xs leading-relaxed text-muted">{children}</p>;
 }
 
 export function AdminSettingsClient({
@@ -308,6 +341,7 @@ export function AdminSettingsClient({
   website,
   showTax,
   w9Clients,
+  attention = [],
 }: AdminSettingsClientProps) {
   const [classicLandingEditor, setClassicLandingEditor] = useState(false);
   const router = useRouter();
@@ -362,6 +396,50 @@ export function AdminSettingsClient({
   useEffect(() => {
     setDirty(JSON.stringify(settings) !== baseline);
   }, [settings, baseline]);
+
+  // Live preview: unsaved name, logo, colors and portal background show across the app as they
+  // are edited. Compared with what the server last sent (not the save baseline), so right after
+  // a save the preview holds until the refreshed page catches up, with no flash of the old look.
+  const setBrandPreview = useSetBrandPreview();
+  const shownSurface = parseSurfaceMode(settings.business.surfaceMode);
+  const brandNow = JSON.stringify([getPortalBrandFromSettings(settings), shownSurface]);
+  const brandFromServer = JSON.stringify([
+    getPortalBrandFromSettings(initialSettings),
+    parseSurfaceMode(initialSettings.business.surfaceMode),
+  ]);
+  const previewKey = brandNow === brandFromServer ? "" : brandNow;
+  useEffect(() => {
+    if (!previewKey) {
+      setBrandPreview(null);
+      return;
+    }
+    const [brand, surfaceMode] = JSON.parse(previewKey) as [
+      NonNullable<BrandPreview>["brand"],
+      SurfaceMode,
+    ];
+    setBrandPreview({ brand, surfaceMode });
+  }, [previewKey, setBrandPreview]);
+  useEffect(() => () => setBrandPreview(null), [setBrandPreview]);
+  // Unsaved branding (vs. the save baseline) → the save bar says it's a preview.
+  const brandUnsaved =
+    JSON.stringify([getPortalBrandFromSettings(settings), shownSurface]) !==
+    JSON.stringify([getPortalBrandFromSettings(savedSettings), parseSurfaceMode(savedSettings.business.surfaceMode)]);
+
+  // New interface: the shell's sidebar is the Settings menu; tell it what to show.
+  const selectRef = useRef<(id: SettingsSectionId) => void>(() => {});
+  const navSections = sections.map((s) => `${s.id}:${s.label}`).join("|");
+  const attentionKey = attention.join("|");
+  useEffect(() => {
+    if (!inAppShell) return;
+    publishSettingsNav({
+      sections: sections.map((s) => ({ id: s.id, label: s.label })),
+      active: section,
+      attention: attentionKey ? (attentionKey.split("|") as SettingsSectionId[]) : [],
+      select: (id) => selectRef.current(id),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inAppShell, navSections, section, attentionKey]);
+  useEffect(() => (inAppShell ? () => publishSettingsNav(null) : undefined), [inAppShell]);
 
   useEffect(() => {
     function onBeforeUnload(e: BeforeUnloadEvent) {
@@ -505,7 +583,11 @@ export function AdminSettingsClient({
     setSection(id);
     const hash = sections.find((s) => s.id === id)?.hashes[0];
     if (hash) window.history.replaceState(null, "", `#${hash}`);
+    window.scrollTo({ top: 0 });
   }
+  useEffect(() => {
+    selectRef.current = selectSection;
+  });
 
   // New interface: the Business Website editor lives at Sites → Business Website. Settings
   // links/hashes to it hand off there so there is only ever one place it is edited.
@@ -523,9 +605,33 @@ export function AdminSettingsClient({
 
   const saveFooter = (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <p className="text-sm text-muted">
-        {dirty ? "You have unsaved changes." : "All changes saved."}
+      <p className="flex items-center gap-2 text-sm text-muted">
+        <span
+          className={cn("h-2 w-2 shrink-0 rounded-full", dirty ? "bg-amber-500" : "bg-emerald-500")}
+          aria-hidden
+        />
+        {dirty ? (
+          <span>
+            <span className="font-semibold text-heading">You have unsaved changes.</span>
+            {brandUnsaved ? (
+              <span className="hidden sm:inline"> You&apos;re seeing a preview. Save to apply it for you and your clients.</span>
+            ) : null}
+          </span>
+        ) : (
+          "All changes saved."
+        )}
       </p>
+      <div className="flex items-center gap-2">
+      {dirty && !saving ? (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setSettings(JSON.parse(baseline) as AppSettings)}
+          className="min-h-11"
+        >
+          <Undo2 className="h-4 w-4" /> Discard
+        </Button>
+      ) : null}
       <Button
         variant="accent"
         onClick={() => saveSettings()}
@@ -542,6 +648,7 @@ export function AdminSettingsClient({
           </>
         )}
       </Button>
+      </div>
     </div>
   );
 
@@ -576,6 +683,7 @@ export function AdminSettingsClient({
             onChange={selectSection}
             accentColor={tabAccent}
             sections={sections}
+            attention={attention}
           />
         }
         shellFooter={saveFooter}
@@ -608,6 +716,7 @@ export function AdminSettingsClient({
                 onChange={selectSection}
                 accentColor={tabAccent}
                 sections={sections}
+                attention={attention}
               />
             </div>
           }
@@ -643,12 +752,15 @@ export function AdminSettingsClient({
           tax={settings.tax}
           onChange={patchTax}
           clients={w9Clients}
+          hideNavOnDesktop={inAppShell}
           nav={
             <SettingsTabNav
               active={section}
               onChange={selectSection}
               accentColor={tabAccent}
               sections={sections}
+              attention={attention}
+              mobileOnly={inAppShell}
             />
           }
           footer={saveFooter}
@@ -678,56 +790,89 @@ export function AdminSettingsClient({
 
   return (
     <div className="flex flex-col gap-6 md:flex-row md:items-start">
-      <aside className="w-full shrink-0 md:sticky md:top-20 md:w-56">
+      <aside className={cn("w-full shrink-0 md:sticky md:top-20 md:w-56", inAppShell && "md:hidden")}>
         <SettingsTabNav
           active={section}
           onChange={selectSection}
           accentColor={tabAccent}
           sections={sections}
+          attention={attention}
         />
       </aside>
 
-      <div className="min-w-0 flex-1 space-y-4">
+      <div className={cn("min-w-0 flex-1 space-y-4", inAppShell && "mx-auto w-full max-w-5xl")}>
         <SettingsPanel id="identity" active={section}>
           <div id="settings-business" tabIndex={-1} className="scroll-mt-24">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-heading">Business Identity</h2>
+                <SectionHeading id="identity">Business Identity</SectionHeading>
                 <p className="mt-1 text-sm text-muted">Name, portal title, legal copy, and public links.</p>
               </div>
-              <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setRestoreOpen(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 text-muted hover:text-heading"
+                onClick={() => setRestoreOpen(true)}
+              >
                 <RotateCcw className="h-4 w-4" /> Restore platform defaults
               </Button>
             </div>
             <Card className="shadow-sm">
-              <CardContent className="grid gap-4 sm:grid-cols-2 pt-6">
-                <div id="settings-business-name" tabIndex={-1} className="space-y-2 scroll-mt-24">
-                  <Label htmlFor="businessName">Business name</Label>
-                  <Input id="businessName" value={settings.business.businessName} onChange={(e) => patchBusiness({ businessName: e.target.value })} />
+              <CardContent className="pt-6">
+                <p className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted">
+                  <Building2 className="h-4 w-4" aria-hidden /> Names
+                </p>
+                <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+                  <div id="settings-business-name" tabIndex={-1} className="space-y-2 scroll-mt-24">
+                    <Label htmlFor="businessName">Business name</Label>
+                    <Input id="businessName" value={settings.business.businessName} onChange={(e) => patchBusiness({ businessName: e.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="portalName" className="inline-flex items-center gap-1.5">
+                      Portal name <Info className="h-3.5 w-3.5 text-muted" aria-hidden />
+                    </Label>
+                    <Input id="portalName" value={settings.business.portalName} onChange={(e) => patchBusiness({ portalName: e.target.value })} aria-describedby="portalName-hint" />
+                    <div id="portalName-hint">
+                      <FieldHint>The name of your client portal, used when clients sign in and get welcome messages.</FieldHint>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="adminDisplayName" className="inline-flex items-center gap-1.5">
+                      Admin display name <Info className="h-3.5 w-3.5 text-muted" aria-hidden />
+                    </Label>
+                    <Input id="adminDisplayName" value={settings.business.adminDisplayName} onChange={(e) => patchBusiness({ adminDisplayName: e.target.value })} aria-describedby="adminDisplayName-hint" />
+                    <div id="adminDisplayName-hint">
+                      <FieldHint>Shown to clients as the sender when you message them.</FieldHint>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="legalName" className="inline-flex items-center gap-1.5">
+                      Legal name (copyright) <Info className="h-3.5 w-3.5 text-muted" aria-hidden />
+                    </Label>
+                    <Input id="legalName" value={settings.business.legalName ?? ""} onChange={(e) => patchBusiness({ legalName: e.target.value })} aria-describedby="legalName-hint" />
+                    <div id="legalName-hint">
+                      <FieldHint>Used in the © copyright line at the bottom of your pages.</FieldHint>
+                    </div>
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="tagline">Tagline</Label>
+                    <Input id="tagline" value={settings.business.tagline ?? ""} onChange={(e) => patchBusiness({ tagline: e.target.value })} />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="portalName">Portal name</Label>
-                  <Input id="portalName" value={settings.business.portalName} onChange={(e) => patchBusiness({ portalName: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="adminDisplayName">Admin display name</Label>
-                  <Input id="adminDisplayName" value={settings.business.adminDisplayName} onChange={(e) => patchBusiness({ adminDisplayName: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="legalName">Legal name (copyright)</Label>
-                  <Input id="legalName" value={settings.business.legalName ?? ""} onChange={(e) => patchBusiness({ legalName: e.target.value })} />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="tagline">Tagline</Label>
-                  <Input id="tagline" value={settings.business.tagline ?? ""} onChange={(e) => patchBusiness({ tagline: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="termsUrl">Terms URL</Label>
-                  <Input id="termsUrl" value={settings.business.termsUrl ?? ""} onChange={(e) => patchBusiness({ termsUrl: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="privacyUrl">Privacy URL</Label>
-                  <Input id="privacyUrl" value={settings.business.privacyUrl ?? ""} onChange={(e) => patchBusiness({ privacyUrl: e.target.value })} />
+                <p className="mb-4 mt-7 flex items-center gap-2 border-t border-border pt-6 text-xs font-semibold uppercase tracking-wider text-muted">
+                  <Link2 className="h-4 w-4" aria-hidden /> Public links
+                  <span className="font-normal normal-case tracking-normal">· optional</span>
+                </p>
+                <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="termsUrl">Terms URL</Label>
+                    <Input id="termsUrl" value={settings.business.termsUrl ?? ""} placeholder="https://yourbusiness.com/terms" onChange={(e) => patchBusiness({ termsUrl: e.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="privacyUrl">Privacy URL</Label>
+                    <Input id="privacyUrl" value={settings.business.privacyUrl ?? ""} placeholder="https://yourbusiness.com/privacy" onChange={(e) => patchBusiness({ privacyUrl: e.target.value })} />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -735,7 +880,7 @@ export function AdminSettingsClient({
         </SettingsPanel>
 
         <SettingsPanel id="branding" active={section}>
-          <h2 className="text-lg font-semibold text-heading">Branding &amp; Colors</h2>
+          <SectionHeading id="branding">Branding &amp; Colors</SectionHeading>
           <p className="mt-1 mb-4 text-sm text-muted">Logo, favicon, and brand colors used across the portal.</p>
           <Card className="shadow-sm">
             <CardContent className="space-y-6 pt-6">
@@ -748,8 +893,9 @@ export function AdminSettingsClient({
                 surfaceMode={parseSurfaceMode(settings.business.surfaceMode)}
               />
               <p className="text-xs text-muted">
-                Header currently shows: {liveBrand.portalName} · {liveBrand.name}
-                {dirty ? " (save to apply changes)" : ""}
+                {brandUnsaved
+                  ? "Previewing your changes across the app. Save to apply them for you and your clients."
+                  : "Changes preview across the app as you make them. Nothing changes for clients until you save."}
               </p>
               <div id="settings-logo" tabIndex={-1} className="scroll-mt-24 space-y-2">
                 <BrandAssetField
@@ -798,7 +944,17 @@ export function AdminSettingsClient({
                     aria-labelledby="portal-background-label"
                     className="flex flex-wrap gap-2"
                   >
-                    {(["light", "dark"] as const).map((mode) => {
+                    {(
+                      [
+                        { mode: "light", label: "Light", swatch: "#F8FAFC" },
+                        { mode: "dark", label: "Dark", swatch: "#14181F" },
+                        {
+                          mode: "brand",
+                          label: "Primary color",
+                          swatch: brandSurfaceBackground(settings.business.brandPrimaryColor),
+                        },
+                      ] as const
+                    ).map(({ mode, label, swatch }) => {
                       const selected = parseSurfaceMode(settings.business.surfaceMode) === mode;
                       return (
                         <button
@@ -807,17 +963,32 @@ export function AdminSettingsClient({
                           role="radio"
                           aria-checked={selected}
                           onClick={() => patchBusiness({ surfaceMode: mode })}
-                          className={`min-h-11 rounded-lg border px-4 text-sm font-medium ${
+                          className={`inline-flex min-h-11 items-center gap-2.5 rounded-lg border px-4 text-sm font-medium ${
                             selected
                               ? "border-accent bg-accent-subtle text-heading"
                               : "border-border bg-card text-foreground hover:bg-subtle"
                           }`}
                         >
-                          {mode === "light" ? "Light" : "Dark"}
+                          <span
+                            className="h-4 w-4 shrink-0 rounded-full ring-1 ring-muted/60"
+                            style={{ background: swatch }}
+                            aria-hidden
+                          />
+                          {label}
                         </button>
                       );
                     })}
                   </div>
+                  {parseSurfaceMode(settings.business.surfaceMode) === "brand" ? (
+                    <p className="text-xs text-muted">
+                      Text switches between light and dark automatically so it stays readable on your color.
+                      {brandSurfaceAdjusted(settings.business.brandPrimaryColor)
+                        ? surfaceTone("brand", settings.business.brandPrimaryColor) === "dark"
+                          ? " Your color is deepened a little for the background so light text stays easy to read."
+                          : " Your color is lightened a little for the background so dark text stays easy to read."
+                        : ""}
+                    </p>
+                  ) : null}
                 </div>
                 <div id="settings-logo-size" tabIndex={-1} className="scroll-mt-24">
                   <LogoSizeSlider
@@ -915,7 +1086,7 @@ export function AdminSettingsClient({
         </SettingsPanel>
 
         <SettingsPanel id="contact" active={section}>
-          <h2 className="text-lg font-semibold text-heading">Contact Information</h2>
+          <SectionHeading id="contact">Contact Information</SectionHeading>
           <p className="mt-1 mb-4 text-sm text-muted">Email, phone, website, and mailing address.</p>
           <Card className="shadow-sm">
             <CardContent className="grid gap-4 sm:grid-cols-2 pt-6">
@@ -965,7 +1136,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="email" active={section}>
           <div id="settings-email" tabIndex={-1} className="scroll-mt-24">
-            <h2 className="text-lg font-semibold text-heading">Email</h2>
+            <SectionHeading id="email">Email</SectionHeading>
             <p className="mt-1 mb-4 text-sm text-muted">
               How client emails are sent from your portal — sender name, domain, and a quick delivery check.
             </p>
@@ -1111,7 +1282,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="custom_domain" active={section}>
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Use your own web address</h2>
+            <SectionHeading id="custom_domain">Use your own web address</SectionHeading>
             <p className="mt-1 text-sm text-muted">
               Up to three addresses, each optional and set up separately: your public{" "}
               <span className="font-medium text-heading">Business Website</span> (www.yourstudio.com), your{" "}
@@ -1142,7 +1313,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="marketing_kit" active={section}>
           <div id="settings-marketing-kit" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Marketing Kit</h2>
+            <SectionHeading id="marketing_kit">Marketing Kit</SectionHeading>
             <p className="mt-1 text-sm text-muted">
               Property websites and social media kits built automatically from each project. Include them free or sell them as
               add-ons — clients pay through your connected Stripe account. Override any project from its Marketing Kit card.
@@ -1156,7 +1327,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="automated_emails" active={section}>
           <div id="settings-automated-emails" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Automated Emails</h2>
+            <SectionHeading id="automated_emails">Automated Emails</SectionHeading>
             <p className="mt-1 text-sm text-muted">
               Edit the subject and body for emails your clients receive. Timing and channel toggles stay under
               Workflow Automation and Notifications.
@@ -1172,7 +1343,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="payments" active={section}>
           <div id="settings-payments" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Payments</h2>
+            <SectionHeading id="payments">Payments</SectionHeading>
             <p className="mt-1 mb-4 text-sm text-muted">Connect your Stripe account so clients pay you directly.</p>
             {payments}
             <Card className="shadow-sm" id="settings-card-fee">
@@ -1269,7 +1440,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="new_project_setup" active={section}>
           <div id="settings-new-project-setup" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">New project setup</h2>
+            <SectionHeading id="new_project_setup">New project setup</SectionHeading>
             <p className="mt-1 mb-4 text-sm text-muted">
               Defaults applied when a new project is created. Existing projects keep their own settings.
             </p>
@@ -1333,7 +1504,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="services" active={section}>
           <div id="settings-services" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Services</h2>
+            <SectionHeading id="services">Services</SectionHeading>
             <p className="mt-1 mb-4 text-sm text-muted">Catalog and preliminary estimate prices for this business.</p>
             <SettingsCollapsible
               id="settings-instant-preliminary"
@@ -1397,7 +1568,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="workflow" active={section}>
           <div id="settings-workflow" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Workflow Automation</h2>
+            <SectionHeading id="workflow">Workflow Automation</SectionHeading>
             <p className="mt-1 text-sm text-muted">Stage actions, reminders, and proposal defaults.</p>
             <WorkflowSettingsCard workflow={settings.workflow} onChange={patchWorkflow} />
             <Card className="shadow-sm">
@@ -1465,7 +1636,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="notifications" active={section}>
           <div id="settings-notifications" tabIndex={-1} className="scroll-mt-24">
-            <h2 className="text-lg font-semibold text-heading">Notifications</h2>
+            <SectionHeading id="notifications">Notifications</SectionHeading>
             <p className="mt-1 mb-2 text-sm text-muted">
               Toggle delivery channels per event. Activity still logs when notifications are off.
             </p>
@@ -1579,7 +1750,7 @@ export function AdminSettingsClient({
 
         <SettingsPanel id="integrations" active={section}>
           <div id="settings-integrations" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Integrations</h2>
+            <SectionHeading id="integrations">Integrations</SectionHeading>
             <p className="mt-1 text-sm text-muted">Google Calendar and GoHighLevel.</p>
             <GoogleCalendarSettingsCard />
             <Card className="shadow-sm">
@@ -1636,7 +1807,12 @@ export function AdminSettingsClient({
         )}
 
         {section !== "staff" ? (
-          <div className="sticky bottom-0 z-30 -mx-4 border-t border-border bg-card/95 px-4 py-4 backdrop-blur-md sm:-mx-6 sm:px-6 md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
+          <div
+            className={cn(
+              "sticky bottom-0 z-30 -mx-4 border-t border-border bg-card/95 px-4 py-4 backdrop-blur-md sm:-mx-6 sm:px-6 md:mx-0 md:rounded-2xl md:border md:px-5 md:py-3",
+              dirty ? "md:bottom-4 md:shadow-lg" : "md:static md:shadow-sm"
+            )}
+          >
             {saveFooter}
           </div>
         ) : null}

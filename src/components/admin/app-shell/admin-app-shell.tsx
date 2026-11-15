@@ -46,6 +46,7 @@ import type { StaffArea } from "@/lib/staff-access";
 import { AcademyNavLink } from "@/components/academy/academy-nav";
 import { HelpMenu } from "@/components/academy/help-menu";
 import { WatchHowPill } from "@/components/academy/watch-how";
+import { SettingsSidebar } from "@/components/admin/app-shell/settings-sidebar";
 
 type NavItem = {
   key: string;
@@ -230,7 +231,14 @@ export function AdminAppShell({
   return (
     <AdminAppShellContext.Provider value={true}>
       <AdminPageTitleContext.Provider value={titleStore}>
-      <div data-admin-app-shell="" className="flex min-h-[var(--app-height)] w-full bg-background">
+      <div
+        data-admin-app-shell=""
+        className={cn(
+          "flex min-h-[var(--app-height)] w-full bg-background",
+          // Settings: the sidebar is the Settings menu, a little wider so long section names fit.
+          !isStaff && prefix("/admin/settings")(pathname) && "lg:[--admin-sidebar-w:284px]!"
+        )}
+      >
         {/* Sidebar: icon rail on tablets, full on desktop. */}
         <aside
           aria-label="Main navigation"
@@ -309,6 +317,8 @@ function SidebarBody({
   const labelCls = full ? "truncate" : "hidden truncate lg:inline";
   const rowCls = full ? "px-3" : "justify-center px-0 lg:justify-start lg:px-3";
   const settingsActive = prefix(settingsHref)(pathname);
+  // Business settings: the Settings menu takes the main menu's place (Back returns to it).
+  const settingsMode = !isStaff && prefix("/admin/settings")(pathname);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -333,6 +343,9 @@ function SidebarBody({
         ) : null}
       </div>
 
+      {settingsMode ? (
+        <SettingsSidebar homeHref={homeHref} full={full} labelCls={labelCls} rowCls={rowCls} onNavigate={onClose} />
+      ) : (
       <nav aria-label="Primary" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
         <ul className="space-y-1">
           {navItems.map((item) => {
@@ -384,8 +397,11 @@ function SidebarBody({
           })}
         </ul>
       </nav>
+      )}
 
       <div className="shrink-0 border-t border-border px-3 py-3">
+        {settingsMode ? null : (
+        <>
         <div className="mb-1">
           <AcademyNavLink active={prefix("/admin/academy")(pathname)} full={full} rowCls={rowCls} labelCls={labelCls} />
         </div>
@@ -405,7 +421,9 @@ function SidebarBody({
           />
           <span className={labelCls}>{settingsLabel}</span>
         </Link>
-        <div className="mt-2">
+        </>
+        )}
+        <div className={settingsMode ? undefined : "mt-2"}>
           <ProfileMenu
             user={user}
             isStaff={isStaff}

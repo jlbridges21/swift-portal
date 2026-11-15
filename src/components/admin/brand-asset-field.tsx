@@ -232,7 +232,7 @@ export function BrandAssetField({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8 px-2 text-xs text-red-700"
+            className="h-8 px-2 text-xs text-red-700 surface-dark:text-red-200"
             onClick={() => onUrlChange("")}
           >
             Remove image

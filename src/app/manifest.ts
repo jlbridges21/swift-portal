@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getAppSettings } from "@/lib/app-settings";
-import { parseSurfaceMode } from "@/lib/brand-color";
+import { surfaceChrome } from "@/lib/brand-color";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
 import { appChromeThemeColor, pwaIconUrl, pwaIconVersion } from "@/lib/pwa/metadata";
 import { SITE, SITE_BACKGROUND_COLOR, SITE_ICONS, SITE_THEME_COLOR } from "@/lib/site-metadata";
@@ -53,8 +53,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
   if (!isActivePublicTenant(host)) return platformManifest();
   const { business } = await getAppSettings(host.businessId);
   const name = (business.businessName || business.portalName || SITE.name).trim();
-  const dark = parseSurfaceMode(business.surfaceMode) === "dark";
-  const surface = dark ? "#14181F" : "#F8FAFC";
+  const surface = surfaceChrome(business).themeColor;
   const version = pwaIconVersion(business.logoUrl, business.brandPrimaryColor);
   const onWebsiteDomain = host.source === "website_domain";
   return {
