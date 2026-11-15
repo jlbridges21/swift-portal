@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, CreditCard, ExternalLink, Landmark, Link2, Loader2, RefreshCw } from "lucide-react";
+import { Check, CreditCard, ExternalLink, Landmark, Link2, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 type ConnectStatus = "not_connected" | "pending" | "active" | "restricted" | "disabled";
 
@@ -21,18 +21,38 @@ interface ConnectState {
   achSettingsUrl?: string;
 }
 
-function statusLabel(status: ConnectStatus): string {
-  switch (status) {
+type PillTone = "good" | "warn" | "bad" | "neutral";
+
+function Pill({ tone, children }: { tone: PillTone; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold",
+        tone === "good" && "bg-emerald-50 text-emerald-700 surface-dark:bg-emerald-500/15 surface-dark:text-emerald-300",
+        tone === "warn" && "bg-amber-50 text-amber-800 surface-dark:bg-amber-500/15 surface-dark:text-amber-300",
+        tone === "bad" && "bg-red-50 text-red-700 surface-dark:bg-red-500/15 surface-dark:text-red-300",
+        tone === "neutral" && "bg-subtle text-muted"
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function statusPill(state: ConnectState): { tone: PillTone; label: string } {
+  if (state.isPlatform) return { tone: "good", label: "Platform account" };
+  if (!state.hasAccount) return { tone: "neutral", label: "Not connected" };
+  switch (state.status) {
     case "active":
-      return "Connected";
+      return { tone: "good", label: "Connected" };
     case "pending":
-      return "Onboarding in progress";
+      return { tone: "warn", label: "Setup in progress" };
     case "restricted":
-      return "Restricted — finish Stripe requirements";
+      return { tone: "warn", label: "Action needed" };
     case "disabled":
-      return "Disabled";
+      return { tone: "bad", label: "Disabled" };
     default:
-      return "Not connected";
+      return { tone: "neutral", label: "Not connected" };
   }
 }
 
@@ -95,6 +115,7 @@ export function StripeConnectCard() {
       const data = (await res.json()) as { url?: string; error?: string };
       if (!res.ok || !data.url) {
         toast.error(data.error || "Could not start Stripe onboarding.");
+        setStarting(false);
         return;
       }
       window.location.assign(data.url);
@@ -104,130 +125,189 @@ export function StripeConnectCard() {
     }
   }
 
-  const connectLabel =
-    state?.status === "not_connected" || !state?.hasAccount
-      ? "Connect Stripe"
-      : state.status === "active"
-        ? "Manage on Stripe"
-        : "Continue setup";
+  const ready = !loading || state !== null;
+  const canTakePayments = Boolean(state && (state.isPlatform || state.status === "active"));
+  const pill = state ? statusPill(state) : null;
+  const connectLabel = !state?.hasAccount || state.status === "not_connected" ? "Connect Stripe" : "Finish setup";
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <CreditCard className="h-5 w-5 text-accent" />
-          Stripe
-        </CardTitle>
-        <p className="text-sm text-muted">
-          Clients pay you directly through Stripe. ShootPortal takes 0% of client payments —
-          Stripe&apos;s processing fees apply (estimates for US domestic cards; international and
-          other card types may differ). You keep your own Stripe Dashboard for payouts, refunds,
-          and tax forms. ShootPortal emails a payment receipt from your business sender.
-          Stripe also emails one when “Successful payments” is on under Stripe Dashboard →
-          Settings → Customer emails. That switch is per Stripe account, so turn it off if
-          clients should get a single receipt from you. ShootPortal does not set a Stripe
-          receipt email address, so Stripe stays quiet unless that switch is on.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {loading || !state ? (
-          <div className="flex items-center gap-2 text-sm text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-start gap-4">
+            <span
+              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#635BFF] text-[22px] font-extrabold text-white"
+              aria-hidden
+            >
+              S
+            </span>
+            <div className="min-w-0">
+              <p className="flex flex-wrap items-center gap-2 text-base font-bold text-heading">
+                Stripe
+                {pill ? (
+                  <Pill tone={pill.tone}>
+                    {pill.tone === "good" ? <Check className="h-3.5 w-3.5" aria-hidden /> : null}
+                    {pill.label}
+                  </Pill>
+                ) : null}
+              </p>
+              <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                Clients pay you directly. ShootPortal takes 0%. Payouts, refunds and tax forms live in your Stripe Dashboard.
+              </p>
+              {state && !state.isPlatform && state.hasAccount && state.status !== "active" ? (
+                <p className="mt-1 text-[13px] text-muted">
+                  Charges {state.chargesEnabled ? "on" : "off"} · Payouts {state.payoutsEnabled ? "on" : "off"}. Finish
+                  Stripe&apos;s steps to accept payments.
+                </p>
+              ) : null}
+              {state?.isPlatform ? (
+                <p className="mt-1 text-[13px] text-muted">This business uses the platform Stripe account. Payments settle there.</p>
+              ) : null}
+            </div>
           </div>
-        ) : state.isPlatform ? (
-          <>
-            <p className="text-sm text-muted">
-              This business uses the platform Stripe account. Payments continue to settle here — no connected-account
-              onboarding.
-            </p>
-            <BankPaymentsPanel state={state} checking={checking} onCheck={checkBankPayments} />
-          </>
-        ) : (
-          <>
-            <p className="text-sm text-muted">
-              Status: <span className="font-medium text-heading">{statusLabel(state.status)}</span>
-            </p>
-            <p className="text-sm text-muted">
-              Charges {state.chargesEnabled ? "enabled" : "disabled"}
-              {" · "}
-              Payouts {state.payoutsEnabled ? "enabled" : "disabled"}
-            </p>
-            {state.status === "active" ? (
-              <a href={state.dashboardUrl} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="sm">
-                  <ExternalLink className="h-4 w-4" /> Manage on Stripe
-                </Button>
-              </a>
+          <div className="sm:ml-auto sm:shrink-0">
+            {!ready || !state ? (
+              <span className="inline-flex min-h-11 items-center gap-2 text-sm text-muted">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+              </span>
+            ) : canTakePayments ? (
+              state.dashboardUrl ? (
+                <a href={state.dashboardUrl} target="_blank" rel="noopener noreferrer" className="block">
+                  <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" tabIndex={-1}>
+                    <ExternalLink className="h-4 w-4" /> Stripe Dashboard
+                  </Button>
+                </a>
+              ) : null
             ) : (
-              <Button variant="accent" size="sm" disabled={starting} onClick={startOnboarding}>
+              <Button variant="accent" className="min-h-11 w-full sm:w-auto" disabled={starting} onClick={startOnboarding}>
                 {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
                 {starting ? "Redirecting…" : connectLabel}
               </Button>
             )}
-            {state.status === "active" ? <BankPaymentsPanel state={state} checking={checking} onCheck={checkBankPayments} /> : null}
-          </>
-        )}
-      </CardContent>
-    </Card>
+          </div>
+        </div>
+        <details className="group mt-3 sm:pl-16">
+          <summary className="cursor-pointer list-none text-[13px] font-semibold text-accent hover:underline">
+            About receipts
+          </summary>
+          <p className="mt-2 text-[13px] leading-relaxed text-muted">
+            ShootPortal emails a payment receipt from your business sender. Stripe also sends one when &ldquo;Successful
+            payments&rdquo; is on under Stripe Dashboard → Settings → Customer emails. Turn that off so clients get a single
+            receipt from you.
+          </p>
+        </details>
+      </div>
+
+      {state ? (
+        <WaysToPay state={state} canTakePayments={canTakePayments} checking={checking} onCheck={checkBankPayments} />
+      ) : null}
+    </div>
   );
 }
 
 /**
- * Bank (ACH) payments. On Standard Stripe accounts only the account owner can turn on
- * ACH Direct Debit, in their own Stripe Dashboard; ShootPortal then offers it to clients
- * automatically. Bank payments are paid out to the same bank account as card payments.
+ * Card is always on. Bank (ACH): on Standard Stripe accounts only the account owner can turn on
+ * ACH Direct Debit, in their own Stripe Dashboard; ShootPortal then offers it automatically.
  */
-function BankPaymentsPanel({ state, checking, onCheck }: { state: ConnectState; checking: boolean; onCheck: () => void }) {
-  const on = Boolean(state.achEnabled);
+function WaysToPay({
+  state,
+  canTakePayments,
+  checking,
+  onCheck,
+}: {
+  state: ConnectState;
+  canTakePayments: boolean;
+  checking: boolean;
+  onCheck: () => void;
+}) {
+  const achOn = Boolean(state.achEnabled);
+  const [showSteps, setShowSteps] = useState(false);
+
+  // Deep links to #settings-bank-payments open the setup steps.
+  useEffect(() => {
+    const sync = () => {
+      if (window.location.hash.endsWith("#settings-bank-payments")) setShowSteps(true);
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    window.addEventListener("portal:hash-target", sync);
+    return () => {
+      window.removeEventListener("hashchange", sync);
+      window.removeEventListener("portal:hash-target", sync);
+    };
+  }, []);
+
   return (
-    <div id="settings-bank-payments" className="scroll-mt-24 rounded-xl border border-border p-4">
-      <div className="flex items-start gap-3">
-        <Landmark className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-heading">
-            Bank transfers (ACH)
-            {on ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 surface-dark:bg-emerald-950/40 surface-dark:text-emerald-300">
-                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> On
-              </span>
+    <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+      <h3 className="text-base font-semibold text-heading">Ways clients can pay</h3>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="flex items-center gap-3 rounded-xl border border-border px-4 py-3.5">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-subtle text-accent" aria-hidden>
+            <CreditCard className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-heading">Card</p>
+            <p className="text-[13px] text-muted">Credit and debit cards</p>
+          </div>
+          {canTakePayments ? <Pill tone="good">Always on</Pill> : <Pill tone="neutral">Needs Stripe</Pill>}
+        </div>
+
+        <div id="settings-bank-payments" className="scroll-mt-24 rounded-xl border border-border px-4 py-3.5">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-subtle text-accent" aria-hidden>
+              <Landmark className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-heading">Bank transfer (ACH)</p>
+              <p className="text-[13px] text-muted">Settles in a few business days</p>
+            </div>
+            {!canTakePayments ? (
+              <Pill tone="neutral">Needs Stripe</Pill>
+            ) : achOn ? (
+              <Pill tone="good">
+                <Check className="h-3.5 w-3.5" aria-hidden /> On
+              </Pill>
             ) : (
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-muted surface-dark:bg-subtle">Off</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-10"
+                aria-expanded={showSteps}
+                aria-controls="settings-bank-payments-steps"
+                onClick={() => setShowSteps((v) => !v)}
+              >
+                Turn on
+              </Button>
             )}
-          </p>
-          {on ? (
-            <p className="mt-1 text-sm leading-relaxed text-muted">
-              Clients can choose <span className="font-medium text-heading">Bank account</span> when they pay. They connect their bank securely through
-              Stripe, the payment shows as processing for a few business days, and it&apos;s deposited to the same bank account as your card payouts.
-              Stripe charges 0.8% per bank payment (max $5).
-            </p>
-          ) : (
-            <>
-              <p className="mt-1 text-sm leading-relaxed text-muted">
-                Let clients pay straight from their bank account. Stripe charges 0.8% (max $5) instead of about 3% for cards, and the money is
-                deposited to the same bank account as your card payouts.
+          </div>
+          {canTakePayments && !achOn && showSteps ? (
+            <div id="settings-bank-payments-steps" className="mt-3 border-t border-border pt-3">
+              <p className="text-[13px] text-muted">
+                Bank payments are deposited to the same bank account as your card payouts. Turn them on in Stripe:
               </p>
-              <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-heading">
+              <ol className="mt-2 list-decimal space-y-1 pl-5 text-[13px] text-foreground">
                 <li>Open your Stripe payment method settings.</li>
                 <li>
-                  Find <span className="font-medium">ACH Direct Debit</span> and turn it on. Stripe may ask a few questions first.
+                  Turn on <span className="font-medium">ACH Direct Debit</span>. Stripe may ask a few questions.
                 </li>
-                <li>Come back here and click Check again.</li>
+                <li>Come back and click Check again.</li>
               </ol>
               <div className="mt-3 flex flex-wrap gap-2">
                 {state.achSettingsUrl ? (
                   <a href={state.achSettingsUrl} target="_blank" rel="noopener noreferrer">
-                    <Button variant="accent" size="sm">
+                    <Button type="button" variant="accent" size="sm" className="min-h-10">
                       <ExternalLink className="h-4 w-4" /> Open Stripe settings
                     </Button>
                   </a>
                 ) : null}
-                <Button variant="outline" size="sm" disabled={checking} onClick={onCheck}>
+                <Button type="button" variant="outline" size="sm" className="min-h-10" disabled={checking} onClick={onCheck}>
                   {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   {checking ? "Checking…" : "Check again"}
                 </Button>
               </div>
-            </>
-          )}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

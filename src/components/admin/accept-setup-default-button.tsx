@@ -21,11 +21,14 @@ const LABELS: Record<SetupAcceptDefaultKey, string> = {
  */
 export function AcceptSetupDefaultButton({
   acceptKey,
+  label,
   className,
   variant = "outline",
   size = "sm",
 }: {
   acceptKey: SetupAcceptDefaultKey;
+  /** Overrides the default button text. */
+  label?: string;
   className?: string;
   variant?: "outline" | "ghost";
   size?: "sm" | "default";
@@ -83,7 +86,7 @@ export function AcceptSetupDefaultButton({
       onClick={() => void accept()}
     >
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-      {LABELS[acceptKey]}
+      {label ?? LABELS[acceptKey]}
     </Button>
   );
 }

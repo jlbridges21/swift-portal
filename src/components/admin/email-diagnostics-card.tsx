@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Send } from "lucide-react";
 
-interface EmailDiagnostics {
+export interface EmailDiagnostics {
   sendingConfigured: boolean;
   webhookConfigured: boolean;
   senderMode: string;
@@ -18,7 +18,7 @@ interface EmailDiagnostics {
   resolvedReplyTo: string | null;
 }
 
-interface LastSend {
+export interface LastSend {
   sent: boolean;
   skipped?: boolean;
   skipReason?: string | null;
@@ -29,23 +29,24 @@ interface LastSend {
   at: string;
 }
 
-function senderModeLabel(mode: string): string {
+export function senderModeLabel(mode: string): string {
   if (mode === "custom_domain") return "Your domain";
   return "ShootPortal shared sending";
 }
 
-function domainStatusLabel(status: string): string {
+export function domainStatusLabel(status: string): string {
   if (status === "verified") return "Verified";
   if (status === "pending") return "Waiting on DNS";
   if (status === "failed") return "Needs attention";
+  if (status === "unverified") return "Not started";
   return status || "Not started";
 }
 
-export function EmailDiagnosticsCard() {
+/** Loads email sending status and the last test send, and sends test emails. */
+export function useEmailDiagnostics() {
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<EmailDiagnostics | null>(null);
   const [lastSend, setLastSend] = useState<LastSend | null>(null);
-  const [testTo, setTestTo] = useState("");
   const [sending, setSending] = useState(false);
 
   async function load() {
@@ -67,7 +68,7 @@ export function EmailDiagnosticsCard() {
     void load();
   }, []);
 
-  async function sendTest() {
+  async function sendTest(testTo: string) {
     setSending(true);
     try {
       const res = await fetch("/api/admin/email", {
@@ -87,6 +88,14 @@ export function EmailDiagnosticsCard() {
       setSending(false);
     }
   }
+
+  return { loading, config, lastSend, sending, sendTest, reload: load };
+}
+
+export function EmailDiagnosticsCard() {
+  const { loading, config, lastSend, sending, sendTest: send } = useEmailDiagnostics();
+  const [testTo, setTestTo] = useState("");
+  const sendTest = () => send(testTo);
 
   return (
     <Card className="shadow-sm">
