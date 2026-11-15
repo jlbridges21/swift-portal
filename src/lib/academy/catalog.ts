@@ -5,7 +5,7 @@
  * Generated from Explainer_Videos_v2 (upload log, chapter files, real durations).
  */
 
-export type AcademyModuleId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type AcademyModuleId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 export type AcademyLesson = {
   key: string;
@@ -13,7 +13,7 @@ export type AcademyLesson = {
   slug: string;
   title: string;
   description: string;
-  /** 1-7 for the course; 0 for the client guide (not part of the course). */
+  /** 1-8 for the course; 0 for the client guide (not part of the course). */
   module: AcademyModuleId | 0;
   youtubeId: string;
   durationSeconds: number;
@@ -31,6 +31,7 @@ export const ACADEMY_MODULES: { id: AcademyModuleId; title: string }[] = [
   { id: 5, title: "Marketing" },
   { id: 6, title: "Communication and team" },
   { id: 7, title: "Your account" },
+  { id: 8, title: "Partner program" },
 ];
 
 const ALL_LESSONS: AcademyLesson[] = [
@@ -361,6 +362,25 @@ const ALL_LESSONS: AcademyLesson[] = [
       { t: 28, title: "Choose your plan" },
       { t: 71, title: "Manage billing" },
       { t: 83, title: "Banners to watch for" },
+    ],
+  },
+  {
+    key: "V19",
+    slug: "partner-program",
+    title: "The Partner Program",
+    description: "Share your link and earn 30% of what every business you refer pays, for as long as they stay.",
+    module: 8,
+    youtubeId: "iCPKDdgw8fQ",
+    durationSeconds: 171,
+    tryHref: "/partner",
+    tryLabel: "Open the Partner Program",
+    chapters: [
+      { t: 0, title: "What it is" },
+      { t: 17, title: "What you can earn" },
+      { t: 44, title: "Apply" },
+      { t: 64, title: "Your link and landing page" },
+      { t: 104, title: "How referrals count" },
+      { t: 143, title: "Getting paid" },
     ],
   },
   {
