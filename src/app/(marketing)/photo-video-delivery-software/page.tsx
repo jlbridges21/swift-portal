@@ -168,7 +168,7 @@ export default async function PhotoVideoDeliverySoftwarePage() {
               "Show only the sections that apply to this client",
             ]}
             visual={<ProductPreview view="media" />}
-            caption="Product illustration: a project's photo grid (demo data)."
+            caption="Real ShootPortal screen: the media library with photos from every listing (sample client data)."
           />
         </Section>
 

@@ -332,7 +332,7 @@ export default async function PhotographyClientPortalPage() {
               </p>
               <figure className="mt-6">
                 <ProductPreview view="messages" />
-                <figcaption className="mt-3 text-center text-xs text-[#64748B]">Product illustration: a message thread on a project (demo data).</figcaption>
+                <figcaption className="mt-3 text-center text-xs text-[#64748B]">Real ShootPortal screen: a client conversation next to the project timeline (sample client data).</figcaption>
               </figure>
             </div>
             <div className="mk-reveal flex flex-col rounded-3xl border border-[#E2E8F0] bg-white p-6 sm:p-8">

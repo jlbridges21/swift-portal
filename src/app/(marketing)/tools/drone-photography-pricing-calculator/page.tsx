@@ -223,7 +223,7 @@ export default async function DronePricingCalculatorPage() {
             </div>
             <figure>
               <ShowcaseImage image={MEDIA.realEstate.twoSided} frame="dark" />
-              <figcaption className="mt-2 text-center text-xs text-slate-400">Real ShootPortal screens. Client details are blurred.</figcaption>
+              <figcaption className="mt-2 text-center text-xs text-slate-400">Real ShootPortal screens, shown with sample client data.</figcaption>
             </figure>
           </div>
         </section>

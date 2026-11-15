@@ -198,7 +198,7 @@ export default async function RealEstatePricingCalculatorPage() {
             </div>
             <figure>
               <ShowcaseImage image={MEDIA.booking.twoViews} frame="dark" />
-              <figcaption className="mt-2 text-center text-xs text-slate-400">Real ShootPortal screens. Client details are blurred.</figcaption>
+              <figcaption className="mt-2 text-center text-xs text-slate-400">Real ShootPortal screens, shown with sample client data.</figcaption>
             </figure>
           </div>
         </section>

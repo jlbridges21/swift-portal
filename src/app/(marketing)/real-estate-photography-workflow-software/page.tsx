@@ -203,7 +203,7 @@ export default async function RealEstatePhotographyWorkflowSoftwarePage() {
 
         <DemoShowcase
           title="The whole workflow, end to end"
-          intro="A 52-second tour of real ShootPortal screens: requests, proposal approval, the calendar with Google, the pipeline, video review, marking payments, share links, and your own brand and domain."
+          intro="A one-minute tour of real ShootPortal screens: requests, proposal approval, the calendar with Google, the pipeline, video review, marking payments, share links, and your own brand and domain."
           video={MEDIA.shared.tour}
           points={["Requests and approvals that move the job forward", "Video review and payments on the same project", "Everything under your own brand and domain"]}
           ctaId={cta("demo")}
@@ -240,7 +240,7 @@ export default async function RealEstatePhotographyWorkflowSoftwarePage() {
               }
               bullets={["Request received, shoot confirmed, ready for review, payment received, and more", "Messages with the agent stay on the listing"]}
               visual={<ProductPreview view="messages" />}
-              caption="Product illustration: a project message thread (demo data)."
+              caption="Real ShootPortal screen: a client conversation next to the project timeline (sample client data)."
             />
             <FeatureSpotlight
               eyebrow="Fewer tools to stitch together"

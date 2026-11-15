@@ -414,7 +414,7 @@ export const article: BlogArticle = {
             checking your inbox, your calendar, a cloud folder, and Stripe. And because the agent sees the same project
             in their branded portal, they can check the status themselves before they text.
           </p>
-          <Figure caption="Product illustration: the ShootPortal studio view with a project pipeline and client activity (demo data).">
+          <Figure caption="Real ShootPortal screen: the ShootPortal studio view with a project pipeline and client activity (sample client data).">
             <ProductPreview view="studio" />
           </Figure>
           <p>

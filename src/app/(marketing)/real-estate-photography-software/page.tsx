@@ -172,7 +172,7 @@ export default async function RealEstatePhotographySoftwarePage() {
                 <>A &quot;we received your request&quot; email goes out automatically</>,
               ]}
               visual={<ProductPreview view="projects" />}
-              caption="Product illustration: new requests arriving in the project pipeline (demo data)."
+              caption="Real ShootPortal screen: listing shoots moving through the project pipeline (sample client data)."
             />
             <FeatureSpotlight
               reverse

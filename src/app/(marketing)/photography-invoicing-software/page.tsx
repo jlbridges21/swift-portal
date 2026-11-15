@@ -129,7 +129,7 @@ export default async function PhotographyInvoicingSoftwarePage() {
               },
             ]}
           />
-          <LoopVideo video={MEDIA.invoicing.workflowLoop} frame="dark" className="mk-reveal mx-auto mt-12 max-w-4xl" />
+          <LoopVideo video={MEDIA.shared.checkout} frame="dark" className="mk-reveal mx-auto mt-12 max-w-4xl" />
         </Section>
 
         <DemoShowcase

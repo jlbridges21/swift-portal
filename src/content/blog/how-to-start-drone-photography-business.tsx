@@ -550,7 +550,7 @@ export const article: BlogArticle = {
             requests, contracts or e-signatures, or bookkeeping, so pair it with your flight-ops app, your own written
             terms, and your accounting tool. What it removes is the job of stitching the client side together yourself.
           </p>
-          <Figure caption="Product illustration: drone and photo jobs organized by stage in ShootPortal (demo data).">
+          <Figure caption="Real ShootPortal screen: drone and photo jobs organized by stage in ShootPortal (sample client data).">
             <ProductPreview view="projects" />
           </Figure>
           <h3>A first-week test before your first paying client</h3>

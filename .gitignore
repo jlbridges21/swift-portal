@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Navigation benchmark output (scripts/perf)
 /perf-results/
+
+# Marketing demo seed: fake client portal passwords
+scripts/marketing-demo/*.local.json

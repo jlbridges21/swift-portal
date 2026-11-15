@@ -538,7 +538,7 @@ export const article: BlogArticle = {
               where to start.
             </li>
           </ul>
-          <Figure caption="Product illustration: a ShootPortal client list showing lifetime revenue per client, useful when deciding who gets volume pricing (demo data).">
+          <Figure caption="Real ShootPortal screen: a ShootPortal client list showing lifetime revenue per client, useful when deciding who gets volume pricing (sample client data).">
             <ProductPreview view="clients" />
           </Figure>
           <p>

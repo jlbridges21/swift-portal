@@ -472,7 +472,7 @@ export const article: BlogArticle = {
             suits the seller, and the confirmed time pushes to your Google Calendar. The estimate, deposit, access
             notes, and every message stay on the one record, so nothing has to be re-entered.
           </p>
-          <Figure caption="Product illustration of the ShootPortal calendar: a month view with a confirmed shoot (demo data).">
+          <Figure caption="Real ShootPortal screen, the calendar: a month view with a confirmed shoot (sample client data).">
             <ProductPreview view="calendar" />
           </Figure>
           <p>

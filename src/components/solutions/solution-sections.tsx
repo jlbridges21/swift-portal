@@ -9,7 +9,7 @@ import type { BlogSlug } from "@/lib/blog/slugs";
 import type { BlogRenderContext } from "@/lib/blog/types";
 import { getSolutionPage, type SolutionKey } from "@/lib/solutions";
 import type { SolutionImageAsset, SolutionVideoAsset } from "@/lib/solution-media";
-import { DemoVideo, LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
+import { DemoVideo, InteractiveTour, LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
 import { cn } from "@/lib/utils";
 
 /**
@@ -614,7 +614,7 @@ export function ApproachCompare({
 }
 
 /** Caption used under real ShootPortal captures. */
-export const REAL_CAPTURE_NOTE = "Real ShootPortal screens from a live account. Client details are blurred.";
+export const REAL_CAPTURE_NOTE = "Real ShootPortal screens, shown with sample client data.";
 
 /** "See it in action": a click-to-play product demo with what to watch for and a CTA. */
 export function DemoShowcase({
@@ -641,7 +641,7 @@ export function DemoShowcase({
   return (
     <Section id={id} eyebrow={eyebrow} title={title} intro={intro} tone="dark">
       <div className="mx-auto max-w-5xl">
-        <DemoVideo video={video} />
+        {video.chapters?.length ? <InteractiveTour video={video} /> : <DemoVideo video={video} />}
         <ul className="mt-8 grid gap-3 sm:grid-cols-3">
           {points.map((pt, i) => (
             <li key={i} className="flex gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-relaxed text-slate-200">

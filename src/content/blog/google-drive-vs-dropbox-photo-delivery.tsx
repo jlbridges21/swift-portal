@@ -374,7 +374,7 @@ export const article: BlogArticle = {
             single-property websites or deliver to Zillow Showcase, which some real estate platforms do. Branding is your
             logo, colors, and your own subdomain or custom domain, not a full white-label.
           </p>
-          <Figure caption="Product illustration: a ShootPortal project's media view, with a job's photos organized for the client (demo data).">
+          <Figure caption="Real ShootPortal screen: the media library, with every listing's photos and video organized and searchable (sample client data).">
             <ProductPreview view="media" />
           </Figure>
           <p>

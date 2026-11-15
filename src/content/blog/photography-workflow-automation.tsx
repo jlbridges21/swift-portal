@@ -224,7 +224,7 @@ export const article: BlogArticle = {
             Whichever model you use, the confirmed time should land on the calendar you actually look at, and your
             existing commitments should be visible when you pick a slot.
           </p>
-          <Figure caption="Product illustration: a ShootPortal calendar with a confirmed shoot alongside other bookings (demo data).">
+          <Figure caption="Real ShootPortal screen: a ShootPortal calendar with a confirmed shoot alongside other bookings (sample client data).">
             <ProductPreview view="calendar" />
           </Figure>
           <h3>Project preparation</h3>
@@ -304,7 +304,7 @@ export const article: BlogArticle = {
             requested, payment received, and delivered. Everything else should be a real conversation, ideally kept on
             the project so you and the client can scroll back through decisions.
           </p>
-          <Figure caption="Product illustration: a project message thread between a business and its client in ShootPortal (demo data).">
+          <Figure caption="Real ShootPortal screen: a project message thread between a business and its client in ShootPortal (sample client data).">
             <ProductPreview view="messages" />
           </Figure>
         </>

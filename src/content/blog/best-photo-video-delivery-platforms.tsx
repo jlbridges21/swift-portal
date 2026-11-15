@@ -508,7 +508,7 @@ export const article: BlogArticle = {
             editable templates, reminder emails can nudge an outstanding review or payment, and the project can move to
             Delivered once it&apos;s paid. You still export from your editor and upload each version yourself.
           </p>
-          <Figure caption="Product illustration of the ShootPortal studio view: project board, client message, upload, and payment status (demo data).">
+          <Figure caption="Real ShootPortal screen, the studio view: project board, client message, upload, and payment status (sample client data).">
             <ProductPreview view="studio" />
           </Figure>
           <p>

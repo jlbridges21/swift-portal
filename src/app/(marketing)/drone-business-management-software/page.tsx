@@ -598,7 +598,7 @@ export default async function DroneBusinessManagementSoftwarePage() {
             <figure>
               <ProductPreview view="client-portal" />
               <figcaption className="mt-3 text-center text-xs text-[#64748B]">
-                Product illustration: a client&apos;s project steps, from estimate to shoot, media, payment, and files (demo data).
+                Real ShootPortal screen: a finished project in the client&apos;s portal, with Download All, the gallery and project status (sample client data).
               </figcaption>
             </figure>
             <ul className="space-y-4">

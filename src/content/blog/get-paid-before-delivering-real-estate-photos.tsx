@@ -313,7 +313,7 @@ export const article: BlogArticle = {
             place the agent is already looking at their photos. For more on organizing the delivery side, see{" "}
             <BlogLink slug="how-to-deliver-real-estate-photos">how to deliver real estate photos</BlogLink>.
           </p>
-          <Figure caption="Product illustration: a ShootPortal client portal where the client reviews media and pays the balance (demo data).">
+          <Figure caption="Real ShootPortal screen: a ShootPortal client portal where the client reviews media and pays the balance (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
         </>

@@ -612,7 +612,7 @@ export const article: BlogArticle = {
               </>
             }
           />
-          <Figure caption="Product illustration: a client's project moving from media review to payment and final files (demo data).">
+          <Figure caption="Real ShootPortal screen: a client's project moving from media review to payment and final files (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
           <h3>Who should run client review in ShootPortal</h3>

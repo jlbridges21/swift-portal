@@ -596,7 +596,7 @@ export const article: BlogArticle = {
             project to open. The estimate, shoot date, messages, files, and payment status are all on it, so &quot;did
             you get my note about the kitchen?&quot; and &quot;is this paid?&quot; are answered on the same page.
           </p>
-          <Figure caption="Product illustration of the ShootPortal client portal: a project moving through estimate, shoot, media, payment, and files (demo data).">
+          <Figure caption="Real ShootPortal screen, the client portal: a project moving through estimate, shoot, media, payment, and files (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
           <p>

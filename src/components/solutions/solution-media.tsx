@@ -288,3 +288,139 @@ export function DemoVideo({
     </figure>
   );
 }
+
+/**
+ * Interactive product tour: the tour video with clickable chapters. It starts muted when it
+ * scrolls into view (unless the visitor prefers reduced motion), the chapter for the current
+ * moment stays highlighted with its own progress bar, and any chapter jumps straight to that step.
+ * Nothing downloads until the player is near the viewport.
+ */
+export function InteractiveTour({ video, className }: { video: SolutionVideoAsset; className?: string }) {
+  const chapters = video.chapters ?? [];
+  const ref = useRef<HTMLVideoElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const reduced = usePrefersReducedMotion();
+  const [loaded, setLoaded] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [time, setTime] = useState(0);
+  const [dur, setDur] = useState(chapters.length ? chapters[chapters.length - 1].t + 6 : 60);
+  const autoTried = useRef(false);
+
+  // Attach the source once the player is close, autoplay muted the first time it is mostly visible.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const near = new IntersectionObserver(([e]) => { if (e.isIntersecting) setLoaded(true); }, { rootMargin: "300px 0px" });
+    const seen = new IntersectionObserver(
+      ([e]) => {
+        const v = ref.current;
+        if (!v) return;
+        if (!e.isIntersecting) { v.pause(); return; }
+        if (!autoTried.current && !reduced) { autoTried.current = true; void v.play().catch(() => {}); }
+      },
+      { threshold: 0.6 }
+    );
+    near.observe(el);
+    seen.observe(el);
+    return () => { near.disconnect(); seen.disconnect(); };
+  }, [reduced]);
+
+  useEffect(() => {
+    if (loaded) ref.current?.load();
+  }, [loaded]);
+
+  const active = chapters.reduce((acc, c, i) => (time >= c.t - 0.05 ? i : acc), 0);
+
+  function seek(i: number) {
+    const v = ref.current;
+    if (!v) return;
+    setLoaded(true);
+    const go = () => { v.currentTime = chapters[i].t + 0.05; void v.play().catch(() => {}); };
+    if (v.readyState >= 1) go();
+    else v.addEventListener("loadedmetadata", go, { once: true });
+  }
+  function toggle() {
+    const v = ref.current;
+    if (!v) return;
+    setLoaded(true);
+    if (v.paused) void v.play().catch(() => {});
+    else v.pause();
+  }
+
+  return (
+    <figure className={className}>
+      <div ref={wrapRef} className={cn("group relative", FRAMES.dark)}>
+        <video
+          ref={ref}
+          playsInline
+          muted
+          preload="none"
+          poster={video.poster}
+          aria-label={video.label}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
+          onLoadedMetadata={(e) => Number.isFinite(e.currentTarget.duration) && setDur(e.currentTarget.duration)}
+          onClick={toggle}
+          className="block aspect-video h-auto w-full cursor-pointer bg-[#0B1124]"
+        >
+          {loaded ? <source src={video.mp4} type="video/mp4" /> : null}
+        </video>
+        {!playing && time < 0.2 ? (
+          <button
+            type="button"
+            onClick={toggle}
+            className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/45 via-black/10 to-transparent focus-visible:outline-none"
+          >
+            <span className="sr-only">Play the product tour</span>
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/95 shadow-[0_20px_50px_-15px_rgba(79,70,229,0.9)] ring-8 ring-white/20 transition hover:scale-105 sm:h-20 sm:w-20">
+              <Play className="ml-1 h-7 w-7 fill-[#4F46E5] text-[#4F46E5] sm:h-8 sm:w-8" aria-hidden />
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={playing ? "Pause tour" : "Play tour"}
+            className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white opacity-90 backdrop-blur transition hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+          >
+            {playing ? <Pause className="h-4 w-4" aria-hidden /> : <Play className="ml-0.5 h-4 w-4" aria-hidden />}
+          </button>
+        )}
+        {video.duration ? (
+          <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">{video.duration}</span>
+        ) : null}
+      </div>
+      {chapters.length ? (
+        <nav aria-label="Tour chapters" className="mt-4 -mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+          <ol className="flex min-w-max gap-2 sm:grid sm:min-w-0 sm:grid-cols-9">
+            {chapters.map((c, i) => {
+              const end = chapters[i + 1]?.t ?? dur;
+              const pct = i < active ? 100 : i > active ? 0 : Math.min(100, Math.max(0, ((time - c.t) / Math.max(0.1, end - c.t)) * 100));
+              const on = i === active && (playing || time > 0.2);
+              return (
+                <li key={c.label}>
+                  <button
+                    type="button"
+                    onClick={() => seek(i)}
+                    aria-current={on ? "step" : undefined}
+                    className={cn(
+                      "relative w-full overflow-hidden rounded-xl border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A5B4FC]",
+                      on ? "border-[#A5B4FC]/60 bg-[#4F46E5]/25 text-white" : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/25 hover:text-white"
+                    )}
+                  >
+                    <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-[#A5B4FC]">{String(i + 1).padStart(2, "0")}</span>
+                    <span className="block whitespace-nowrap text-sm font-semibold">{c.label}</span>
+                    <span className="absolute inset-x-0 bottom-0 h-0.5 bg-white/10" aria-hidden>
+                      <span className="block h-full bg-[#A5B4FC]" style={{ width: `${pct}%` }} />
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+      ) : null}
+    </figure>
+  );
+}

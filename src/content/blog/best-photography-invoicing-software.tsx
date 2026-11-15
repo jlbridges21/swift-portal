@@ -807,7 +807,7 @@ export const article: BlogArticle = {
               own.
             </li>
           </ol>
-          <Figure caption="Product illustration: a client's view of a project moving from approved estimate to paid invoice and ready-to-download files (demo data).">
+          <Figure caption="Real ShootPortal screen: a client's view of a project moving from approved estimate to paid invoice and ready-to-download files (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
           <p>

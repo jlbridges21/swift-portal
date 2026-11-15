@@ -254,7 +254,7 @@ export const article: BlogArticle = {
             <BlogLink slug="how-to-send-large-video-files-to-clients">how to send large video files to clients</BlogLink>{" "}
             goes deeper.
           </p>
-          <Figure caption="Product illustration: a ShootPortal project's media view with one property's photos organized for the agent (demo data).">
+          <Figure caption="Real ShootPortal screen: the media library, with every listing's photos and video organized and searchable (sample client data).">
             <ProductPreview view="media" />
           </Figure>
         </>

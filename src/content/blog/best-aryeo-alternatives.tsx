@@ -571,7 +571,7 @@ export const article: BlogArticle = {
               final payment, with no manual check needed.
             </li>
           </ul>
-          <Figure caption="Product illustration: a ShootPortal client list with project counts, lifetime revenue, and outstanding balance per client (demo data).">
+          <Figure caption="Real ShootPortal screen: a ShootPortal client list with project counts, lifetime revenue, and outstanding balance per client (sample client data).">
             <ProductPreview view="clients" />
           </Figure>
           <BestFitPanel

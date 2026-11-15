@@ -159,9 +159,9 @@ export function PlatformLanding({
               webPageNode("/", "ShootPortal: Run Your Media Business in One Place", "Requests, estimates, scheduling, client portal, video review, payments, and delivery in one platform for photographers, videographers, and drone pilots."),
               videoNode(MEDIA.shared.tour, {
                 name: "ShootPortal product tour",
-                description: "A 52-second tour of real ShootPortal screens: client requests, proposal approval, calendar, pipeline, time-stamped video review, payments, share links, and branding.",
+                description: "A one-minute tour of real ShootPortal screens: client requests, proposal approval, calendar, pipeline, time-stamped video review, payments, share links, and branding.",
                 uploadDate: DEMO_VIDEO_UPLOAD_DATE,
-                duration: "PT52S",
+                duration: "PT61S",
               })
             )
           ),
@@ -217,7 +217,7 @@ export function PlatformLanding({
             />
             <ShowcaseImage image={MEDIA.business.hero} frame="dark" priority sizes="(min-width: 1024px) 1024px, 100vw" className="relative ring-1 ring-black/5" />
             <figcaption className="mt-3 text-center text-xs text-[#64748B]">
-              The ShootPortal Command Center with video review and payments. Real screens from a live account.
+              The ShootPortal Command Center with video review and payments. Real screens, shown with sample client data.
             </figcaption>
           </figure>
         </div>
@@ -246,7 +246,7 @@ export function PlatformLanding({
         id="product-demo"
         eyebrow="Product tour"
         title="See a real job go from request to paid"
-        intro="A 52-second tour of real ShootPortal screens: the client's request, proposal approval, your calendar, the pipeline, time-stamped video review, payments, share links, and your own brand and domain."
+        intro="A one-minute tour of real ShootPortal screens. Tap any step to jump to it: the client's request, proposal approval, your calendar, the pipeline, time-stamped video review, one-tap checkout, share links, and your own brand and domain."
         video={MEDIA.shared.tour}
         points={["Clients request and approve on your branded portal", "Video review, payments, and files on the same project", "Everything under your own brand and domain"]}
         ctaId="home:demo"
@@ -262,7 +262,7 @@ export function PlatformLanding({
               Every part of the job, on real screens.
             </h2>
             <p className="mt-3 text-base leading-relaxed text-[#475569]">
-              Pick an area. Each view is ShootPortal as it runs today, with client details blurred.
+              Pick an area. Each view is ShootPortal as it runs today, shown with sample client data.
             </p>
           </div>
           <div className="mt-10">
@@ -274,7 +274,7 @@ export function PlatformLanding({
                 { key: "calendar", title: "Scheduling", summary: "Shoots on your calendar, next to Google.", visual: <ShowcaseImage image={MEDIA.booking.calendar} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Propose a shoot time and the client accepts or counters. Shoots push to your Google Calendar, and your Google events show alongside them.</p> },
                 { key: "pipeline", title: "Projects", summary: "Every job on one board, from request to delivered.", visual: <ShowcaseImage image={MEDIA.workflow.stages} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Projects move through clear stages, and your client follows the same progress in their portal.</p> },
                 { key: "review", title: "Video review", summary: "Feedback pinned to the exact second.", visual: <ShowcaseImage image={MEDIA.videoReview.features} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Clients comment at a timestamp; you reply, resolve, and upload numbered versions.</p> },
-                { key: "payments", title: "Payments", summary: "Deposits and card payments on the project.", visual: <ShowcaseImage image={MEDIA.invoicing.clientView} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Request payment from the project. Clients pay by card through Stripe, straight to your own account, and see what&apos;s still owed.</p> },
+                { key: "payments", title: "Payments", summary: "Clients pay in one tap; files unlock.", visual: <LoopVideo video={MEDIA.shared.checkout} frame="dark" />, body: <p>Clients tap Pay Now and pay by card or wallet (or bank account, if you turn it on) in a checkout with your brand on it, straight to your own Stripe account. They get a receipt, and their downloads unlock.</p> },
                 { key: "delivery", title: "Delivery", summary: "Photos and video in a branded portal.", visual: <ShowcaseImage image={MEDIA.delivery.gallery} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Deliver photos, video, tours, and documents with full-size or 2048px downloads and ZIP files. Downloads can wait for payment.</p> },
               ]}
             />

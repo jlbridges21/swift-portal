@@ -537,7 +537,7 @@ export const article: BlogArticle = {
             status of each file, and whether the deposit and balance are paid. Clients see the same project from their
             side, in your branding:
           </p>
-          <Figure caption="Product illustration: a client's view of one ShootPortal project, from approved estimate to shoot, media, payment, and files (demo data).">
+          <Figure caption="Real ShootPortal screen: a client's view of one ShootPortal project, from approved estimate to shoot, media, payment, and files (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
           <BestFitPanel

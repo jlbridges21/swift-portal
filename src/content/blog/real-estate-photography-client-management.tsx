@@ -279,7 +279,7 @@ export const article: BlogArticle = {
             the project&apos;s message thread) so the request, your reply, and the fixed file are all in one place. A
             month later, when someone asks what was agreed, you&apos;ll have the answer.
           </p>
-          <Figure caption="Product illustration: ShootPortal's client list with project counts, lifetime revenue, and outstanding balances (demo data).">
+          <Figure caption="Real ShootPortal screen: ShootPortal's client list with project counts, lifetime revenue, and outstanding balances (sample client data).">
             <ProductPreview view="clients" />
           </Figure>
           <h3>Templates for repeat messages</h3>

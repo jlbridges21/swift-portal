@@ -591,7 +591,7 @@ export const article: BlogArticle = {
               the client when something needs their attention.
             </li>
           </ol>
-          <Figure caption="Product illustration of the ShootPortal client portal, showing a project moving from estimate to shoot, media, payment, and files (demo data).">
+          <Figure caption="Real ShootPortal screen, the client portal, showing a project moving from estimate to shoot, media, payment, and files (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
           <p>

@@ -345,7 +345,7 @@ export const article: BlogArticle = {
             In practice, that&apos;s the difference between asking &quot;where are we on this job?&quot; across four
             apps and opening one pipeline:
           </p>
-          <Figure caption="Product illustration: ShootPortal's project pipeline with jobs moving from request to delivered (demo data).">
+          <Figure caption="Real ShootPortal screen: ShootPortal's project pipeline with jobs moving from request to delivered (sample client data).">
             <ProductPreview view="projects" />
           </Figure>
         </>

@@ -382,7 +382,7 @@ export const article: BlogArticle = {
             still yours. ShootPortal doesn&apos;t send SMS or build property websites, so if your agents expect those,
             factor that in.
           </p>
-          <Figure caption="Product illustration: an agent's view of a listing in the ShootPortal client portal, moving from estimate to shoot, media, payment, and files (demo data).">
+          <Figure caption="Real ShootPortal screen: an agent's view of a listing in the ShootPortal client portal, moving from estimate to shoot, media, payment, and files (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
           <p>

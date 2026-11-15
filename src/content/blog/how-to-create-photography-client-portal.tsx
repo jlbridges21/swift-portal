@@ -398,7 +398,7 @@ export const article: BlogArticle = {
               },
             ]}
           />
-          <Figure caption="Product illustration: the client side of a ShootPortal portal, with status, estimate, media, and payment (demo data).">
+          <Figure caption="Real ShootPortal screen: the client side of a ShootPortal portal, with status, estimate, media, and payment (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
           <h3>What the portal does for you, and what it doesn&apos;t</h3>

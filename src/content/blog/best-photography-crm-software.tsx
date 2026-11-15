@@ -393,7 +393,7 @@ export const article: BlogArticle = {
             </p>
           </ToolCard>
 
-          <Figure caption="Product illustration of ShootPortal's client list, showing project counts, lifetime revenue, and outstanding balance per client (demo data).">
+          <Figure caption="Real ShootPortal screen: ShootPortal's client list, showing project counts, lifetime revenue, and outstanding balance per client (sample client data).">
             <ProductPreview view="clients" />
           </Figure>
 

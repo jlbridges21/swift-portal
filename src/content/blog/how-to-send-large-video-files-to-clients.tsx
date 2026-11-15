@@ -485,7 +485,7 @@ export const article: BlogArticle = {
               the seller or the agency editor.
             </li>
           </ol>
-          <Figure caption="Product illustration: a ShootPortal project's media view, where a job's deliverables live together (demo data).">
+          <Figure caption="Real ShootPortal screen: the media library, with every listing's photos and video organized and searchable (sample client data).">
             <ProductPreview view="media" />
           </Figure>
           <h3>Automatic, centralized, and still manual</h3>

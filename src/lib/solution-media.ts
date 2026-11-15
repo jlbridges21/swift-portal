@@ -1,8 +1,9 @@
 /**
- * Media for the Solutions landing pages: real ShootPortal captures (screens recorded
- * from a live account, personal data blurred) composed into device mockups, motion
- * graphics, and demo videos. Files live in public/solutions/<folder>/. Source index
- * with redaction notes: "Landing Page Assets/07-Source-Frames/SOURCE-INDEX.md".
+ * Media for the Solutions landing pages: real ShootPortal captures (the current app, filled
+ * with a demo business's sample clients and fictional addresses) composed into device mockups, motion
+ * graphics, and demo videos. Files live in public/solutions/<folder>/. Demo data comes from
+ * scripts/marketing-demo/ (Coastal Light Media); compositions live in the ShootPortal Video
+ * Remotion project (src/landing/v3map.ts maps every screen to its capture).
  *
  * Videos have no audio track, so loops autoplay muted. Every video has a poster.
  */
@@ -17,6 +18,8 @@ export type SolutionVideoAsset = {
   /** Demo videos: visible title and length. */
   title?: string;
   duration?: string;
+  /** Interactive tour: chapter start times in seconds. */
+  chapters?: { t: number; label: string }[];
 };
 
 const W = { width: 2400, height: 1350 };
@@ -25,18 +28,19 @@ const img = (folder: string, file: string, alt: string, size: { width: number; h
   ...size,
   alt,
 });
-const vid = (folder: string, file: string, label: string, opts: { webm?: boolean; title?: string; duration?: string } = {}): SolutionVideoAsset => ({
+const vid = (folder: string, file: string, label: string, opts: { webm?: boolean; title?: string; duration?: string; chapters?: { t: number; label: string }[] } = {}): SolutionVideoAsset => ({
   mp4: `/solutions/${folder}/${file}.mp4`,
   webm: opts.webm ? `/solutions/${folder}/${file}.webm` : undefined,
   poster: `/solutions/${folder}/${file}-poster.webp`,
   label,
   title: opts.title,
   duration: opts.duration,
+  chapters: opts.chapters,
 });
 
 export const MEDIA = {
   realEstate: {
-    heroDashboard: img("real-estate-software", "real-estate-hero-dashboard-transparent", "ShootPortal Command Center on a laptop and phone, showing new requests, quotes, upcoming shoots, editing, review, and awaiting payment", { width: 1902, height: 1170 }),
+    heroDashboard: img("real-estate-software", "real-estate-hero-dashboard-transparent", "ShootPortal Command Center on a laptop and phone, showing new requests, quotes, upcoming shoots, editing, review, and awaiting payment", { width: 1887, height: 1156 }),
     beforeAfter: img("real-estate-software", "real-estate-before-after", "Before: email threads, spreadsheets, file links, and invoices scattered across tools. With ShootPortal: one connected workflow with a client progress tracker"),
     mediaDelivery: img("real-estate-software", "real-estate-media-delivery", "ShootPortal media library on laptop and phone with aerial listing photos organized by project"),
     twoSided: img("real-estate-software", "real-estate-two-sided-experience", "Photographer view of an estimate with line items next to the agent's view of the official proposal with Approve and Request changes"),
@@ -52,17 +56,17 @@ export const MEDIA = {
     review: vid("drone-software", "drone-video-review", "Demo of a client leaving a time-stamped note on drone footage and the pilot replying and resolving it", { title: "Feedback on the exact frame", duration: "0:20" }),
   },
   portal: {
-    phones: img("client-portal", "client-portal-iphone-transparent", "A photographer's branded client portal on three phones: landing page, request form, and sign-in", { width: 1320, height: 1306 }),
-    responsive: img("client-portal", "client-portal-responsive-transparent", "The same branded client portal on laptop, tablet, and phone", { width: 2234, height: 1114 }),
+    phones: img("client-portal", "client-portal-iphone-transparent", "A photographer's branded client portal on three phones: landing page, request form, and sign-in", { width: 1305, height: 1299 }),
+    responsive: img("client-portal", "client-portal-responsive-transparent", "The same branded client portal on laptop, tablet, and phone", { width: 2219, height: 1099 }),
     twoSided: img("client-portal", "client-portal-two-sided", "Portal branding settings on a laptop next to the branded portal on the client's phone"),
     film: vid("client-portal", "client-portal-hero", "Walkthrough of a branded client portal: projects, progress, proposals, payments, and media", { webm: true }),
     journeyLoop: vid("client-portal", "client-journey-animation", "Animation of the client journey: project access, communication, invoice, and media review and delivery", { webm: true }),
     demo: vid("client-portal", "client-portal-delivery-demo", "Demo of what a client sees: branded portal, their projects, progress, media, and downloads", { title: "What your client sees", duration: "0:22" }),
   },
   crm: {
-    dashboard: img("crm", "crm-dashboard-hero", "ShootPortal client list with revenue, outstanding balance, active and delivered projects, and last activity (client details blurred)"),
+    dashboard: img("crm", "crm-dashboard-hero", "ShootPortal client list with revenue, outstanding balance, active and delivered projects, and last activity"),
     comparison: img("crm", "crm-comparison", "A standalone CRM with separate tools compared with ShootPortal, where clients connect to projects, estimates, payments, messages, and media"),
-    pipeline: img("crm", "crm-multiple-projects", "ShootPortal project pipeline with 11 active projects (client details blurred)"),
+    pipeline: img("crm", "crm-multiple-projects", "ShootPortal project pipeline with every active project, from new request to delivered"),
     agentLoop: vid("crm", "crm-client-project-animation", "Animation: one real estate agent connected to several property shoots, each with its estimate, messages, and deliverables", { webm: true }),
     clientLoop: vid("crm", "crm-organized-workflow", "Animation: a client record connected to projects, scheduling, estimates, communication, and delivery", { webm: true }),
     demo: vid("crm", "crm-client-management-demo", "Demo of client management: pipeline, estimates and proposals, deposits and payments, mark as paid, activity timeline, and moving projects between stages", { title: "Every client, connected to their projects", duration: "0:35" }),
@@ -76,7 +80,7 @@ export const MEDIA = {
     reviewDemo: vid("media-delivery", "media-video-review-demo", "Demo of time-stamped video comments, replies, and resolving notes", { title: "Clear feedback, faster revisions", duration: "0:23" }),
   },
   booking: {
-    hero: img("booking", "booking-hero-laptop-transparent", "ShootPortal shoot calendar on a laptop next to the Request a Shoot form on a phone", { width: 1922, height: 1170 }),
+    hero: img("booking", "booking-hero-laptop-transparent", "ShootPortal shoot calendar on a laptop next to the Request a Shoot form on a phone", { width: 1907, height: 1156 }),
     calendar: img("booking", "booking-calendar-showcase", "ShootPortal shoot calendar with month, week, day, and agenda views and Google calendars shown alongside"),
     twoViews: img("booking", "booking-client-photographer-view", "The client's request form on a phone and the photographer's shoot calendar on a laptop"),
     comparison: img("booking", "booking-tools-comparison", "A booking tool plus separate spreadsheets, texts, invoices, and links compared with ShootPortal booking that starts the workflow"),
@@ -112,9 +116,16 @@ export const MEDIA = {
   },
   shared: {
     allInOne: img("shared", "shootportal-all-in-one", "Your whole media business connected: client management, projects, estimates, scheduling, payments, media review, and delivery", { width: 1600, height: 1600 }),
-    desktopMobile: img("shared", "shootportal-desktop-mobile-transparent", "ShootPortal on a laptop and phone", { width: 1924, height: 1160 }),
+    desktopMobile: img("shared", "shootportal-desktop-mobile-transparent", "ShootPortal on a laptop and phone", { width: 1909, height: 1146 }),
     trialCard: img("shared", "shootportal-free-trial-cta", "Run your media business in one place. 14-day free trial, no credit card required"),
     cycleLoop: vid("shared", "shootportal-full-workflow", "Animation of ShootPortal's connected workflow cycle: request, estimate, schedule, shoot, review, pay, deliver", { webm: true }),
-    tour: vid("shared", "shootportal-complete-workflow", "Full product tour: client requests, proposal approval, calendar with Google, pipeline, video review, mark paid, share links, and your own brand and domain", { title: "The complete ShootPortal workflow", duration: "0:52" }),
+    tour: vid("shared", "shootportal-interactive-tour", "Product tour: a client requests a shoot and approves the proposal, the shoot lands on your calendar, the pipeline and media library, time-stamped video review, the client pays in one tap and downloads unlock, share links, and your own brand", {
+      title: "The complete ShootPortal workflow", duration: "1:01",
+      chapters: [
+        { t: 0, label: "Request" }, { t: 5.5, label: "Estimate" }, { t: 12.2, label: "Schedule" }, { t: 16.2, label: "Projects" }, { t: 23.8, label: "Media" },
+        { t: 27.8, label: "Review" }, { t: 32.2, label: "Pay" }, { t: 47.87, label: "Deliver" }, { t: 55.07, label: "Brand" },
+      ],
+    }),
+    checkout: vid("shared", "checkout-motion", "Animation: the client taps Pay Now, pays by card in the in-app checkout, sees Payment successful with a receipt, and their downloads unlock while you get notified", { webm: true }),
   },
 } as const;
