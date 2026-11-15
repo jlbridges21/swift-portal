@@ -12,11 +12,12 @@ import { AdminChromeProviders } from "@/components/admin/admin-chrome-providers"
 
 /**
  * Dev-only harness for the Academy UI with sample progress (no sign-in, no database).
- * /dev/academy-harness?view=course | lesson | done | shell
+ * /dev/academy-harness?view=course | lesson | done | shell  (&pill=V00 picks the shell's Watch how lesson)
  */
-export default async function AcademyHarness({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function AcademyHarness({ searchParams }: { searchParams: Promise<{ view?: string; pill?: string }> }) {
   if (process.env.NODE_ENV === "production") notFound();
-  const view = (await searchParams).view ?? "course";
+  const sp = await searchParams;
+  const view = sp.view ?? "course";
   const now = new Date().toISOString();
   const doneKeys = view === "done" ? ACADEMY_LESSONS.map((l) => l.key) : ["V00", "V01", "V02", "V03", "V04", "V05", "V06"];
   const sample: AcademyProgressState = {
@@ -37,7 +38,7 @@ export default async function AcademyHarness({ searchParams }: { searchParams: P
             shellUser={{ name: "Jordan Blake", avatarUrl: null, businessName: "Your Business" }}
           >
             <main className="space-y-4 p-6">
-              <WatchHowPill lessonKey="V07" />
+              <WatchHowPill lessonKey={sp.pill ?? "V07"} />
               <NextLessonCard />
             </main>
           </AdminChromeProviders>
