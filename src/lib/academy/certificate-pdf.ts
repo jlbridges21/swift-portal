@@ -44,8 +44,6 @@ export async function buildAcademyCertificatePdf(cert: AcademyCertificate, verif
   page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: INDIGO });
   page.drawRectangle({ x: 18, y: 18, width: W - 36, height: H - 36, color: NAVY });
   page.drawRectangle({ x: 24, y: 24, width: W - 48, height: H - 48, color: rgb(0.995, 0.995, 1) });
-  page.drawCircle({ x: 60, y: H - 60, size: 120, borderColor: rgb(0.93, 0.93, 0.99), borderWidth: 26, opacity: 0 });
-  page.drawCircle({ x: W - 60, y: 60, size: 120, borderColor: rgb(0.93, 0.93, 0.99), borderWidth: 26, opacity: 0 });
 
   // Wordmark
   const mark = "ShootPortal";
