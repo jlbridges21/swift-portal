@@ -12,6 +12,7 @@ import { loadDashboardAnalytics } from "@/lib/dashboard-analytics-server";
 import { loadBusinessStorageUsage, loadCommandCenterSummary } from "@/lib/command-center-server";
 import { getProjectHeroPosterUrlMap } from "@/lib/cover";
 import { getUiExperience } from "@/lib/ui-rollout-server";
+import { NextLessonCard } from "@/components/academy/next-lesson-card";
 import { ClassicDashboard } from "@/components/admin/classic/classic-dashboard";
 
 export default async function AdminDashboard() {
@@ -114,6 +115,9 @@ export default async function AdminDashboard() {
             <SetupChecklistCard items={checklist.items} incomplete={checklist.incomplete} linkToSettings />
           ) : null}
           <PushNotificationsCard />
+          <div className="mb-4 empty:hidden">
+            <NextLessonCard />
+          </div>
         </>
       }
     />

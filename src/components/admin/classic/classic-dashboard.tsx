@@ -13,6 +13,7 @@ import { ActivityFeed } from "@/components/admin/activity-feed";
 import { PushNotificationsCard } from "@/components/admin/push-notifications-card";
 import { AdminOpsDashboard } from "@/components/admin/admin-ops-dashboard";
 import { SetupChecklistCard } from "@/components/admin/setup-checklist-card";
+import { NextLessonCard } from "@/components/academy/next-lesson-card";
 import { fetchAdminDashboardData } from "@/lib/admin-dashboard";
 import { loadSetupChecklistSnapshot } from "@/lib/setup-checklist";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
@@ -94,6 +95,10 @@ export async function ClassicDashboard({ profile, tenant }: { profile: Profile; 
         ) : null}
 
         <PushNotificationsCard />
+
+        <div className="mb-6 empty:hidden">
+          <NextLessonCard />
+        </div>
 
         <AdminOpsDashboard data={dashboardData} />
 

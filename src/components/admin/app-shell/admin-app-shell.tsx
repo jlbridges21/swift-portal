@@ -43,6 +43,9 @@ import { cn } from "@/lib/utils";
 import { SitesTabs, isSitesPath } from "@/components/admin/sites/sites-tab-nav";
 import { UiRolloutBanner, useSwitchInterface, useUiRollout } from "@/components/admin/ui-rollout/ui-rollout";
 import type { StaffArea } from "@/lib/staff-access";
+import { AcademyNavLink } from "@/components/academy/academy-nav";
+import { HelpMenu } from "@/components/academy/help-menu";
+import { WatchHowPill } from "@/components/academy/watch-how";
 
 type NavItem = {
   key: string;
@@ -89,6 +92,8 @@ function routePageTitle(pathname: string, isStaff: boolean): ShellPageTitle {
   if (p.startsWith("/admin/sites")) return { title: "Sites", description: "Manage your business and property websites." };
   if (p.startsWith("/admin/settings")) return { title: "Settings", description: "Business settings" };
   if (p.startsWith("/admin/leads")) return { title: "Leads" };
+  if (p === "/admin/academy") return { title: "Academy", description: "Learn ShootPortal in short videos, then earn your certificate." };
+  if (p.startsWith("/admin/academy/")) return { title: "Academy", crumbs: [{ label: "Academy", href: "/admin/academy" }] };
   if (p.startsWith("/partner")) return { title: "Partner", description: "ShootPortal Partner Program" };
   if (p.startsWith("/staff/settings")) return { title: "Preferences" };
   return { title: isStaff ? "ShootPortal" : "Command Center" };
@@ -381,6 +386,9 @@ function SidebarBody({
       </nav>
 
       <div className="shrink-0 border-t border-border px-3 py-3">
+        <div className="mb-1">
+          <AcademyNavLink active={prefix("/admin/academy")(pathname)} full={full} rowCls={rowCls} labelCls={labelCls} />
+        </div>
         <Link
           href={settingsHref}
           aria-current={settingsActive ? "page" : undefined}
@@ -474,6 +482,7 @@ function TopBar({
           )}
           </div>
           <TopBarTitle page={pageTitle} homeHref={homeHref} />
+          <WatchHowPill className="hidden md:inline-flex" />
         </div>
 
         {/* Center slot (wide screens): Sites tabs. Narrower screens keep them in a row under the bar. */}
@@ -518,6 +527,8 @@ function TopBar({
           {refreshing ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
         </button>
         ) : null}
+
+        <HelpMenu className="shrink-0" />
 
         <div className="shrink-0">
           <NotificationBell />
