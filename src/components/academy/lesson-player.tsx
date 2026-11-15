@@ -59,15 +59,17 @@ export const LessonPlayer = forwardRef<
     autoplay?: boolean;
     onProgress: (percent: number, position: number, opts?: { keepalive?: boolean }) => void;
     onTime?: (seconds: number) => void;
+    /** Furthest point watched so far (seconds), every second while playing. */
+    onWatched?: (seconds: number) => void;
     onEnded?: () => void;
   }
->(function LessonPlayer({ lesson, initialFurthest, startAt, autoplay, onProgress, onTime, onEnded }, ref) {
+>(function LessonPlayer({ lesson, initialFurthest, startAt, autoplay, onProgress, onTime, onWatched, onEnded }, ref) {
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const furthest = useRef(initialFurthest);
   const lastSent = useRef(-1);
-  const cb = useRef({ onProgress, onTime, onEnded });
-  cb.current = { onProgress, onTime, onEnded };
+  const cb = useRef({ onProgress, onTime, onWatched, onEnded });
+  cb.current = { onProgress, onTime, onWatched, onEnded };
 
   useImperativeHandle(ref, () => ({
     seekTo: (s: number) => {
@@ -116,6 +118,7 @@ export const LessonPlayer = forwardRef<
             if (e.data === YT.PlayerState.PAUSED) send(true);
             if (e.data === YT.PlayerState.ENDED) {
               furthest.current = duration;
+              cb.current.onWatched?.(duration);
               send(true);
               cb.current.onEnded?.();
             }
@@ -129,7 +132,10 @@ export const LessonPlayer = forwardRef<
         cb.current.onTime?.(t);
         if (p.getPlayerState() !== YT.PlayerState.PLAYING) return;
         // Continuous viewing only: allow small jumps (buffering, 5-10 s skips), not leaps ahead.
-        if (t > furthest.current && t - furthest.current <= 12) furthest.current = t;
+        if (t > furthest.current && t - furthest.current <= 12) {
+          furthest.current = t;
+          cb.current.onWatched?.(t);
+        }
         if (Math.floor(t) % 10 === 0) send();
         if ((furthest.current / duration) * 100 >= 90 && lastSent.current < 90) send(true);
       }, 1000);

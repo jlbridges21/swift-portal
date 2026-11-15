@@ -20,6 +20,7 @@ import type { AcademyProgressState } from "@/lib/academy/server";
 import { useAcademy } from "@/components/academy/academy-progress";
 import { LessonPlayer, type LessonPlayerHandle } from "@/components/academy/lesson-player";
 import { LessonThumb } from "@/components/academy/lesson-thumb";
+import { ChapterList } from "@/components/academy/chapter-list";
 import { cn } from "@/lib/utils";
 
 const AUTOPLAY_KEY = "sp-academy-autoplay";
@@ -49,6 +50,7 @@ export function LessonView({
   const player = useRef<LessonPlayerHandle>(null);
   const saved = initial.lessons[lesson.key];
   const [now, setNow] = useState(saved?.position ?? 0);
+  const [liveWatched, setLiveWatched] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [autoNext, setAutoNext] = useState(true);
   useEffect(() => setAutoNext(readAutoplayPref()), []);
@@ -94,7 +96,6 @@ export function LessonView({
     if (!v) setCountdown(null);
   }
 
-  const currentChapter = [...lesson.chapters].reverse().find((c) => now >= c.t) ?? lesson.chapters[0];
 
   return (
     <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
@@ -124,6 +125,7 @@ export function LessonView({
             autoplay={autoplay}
             onProgress={onProgress}
             onTime={setNow}
+            onWatched={setLiveWatched}
             onEnded={onEnded}
           />
           {countdown !== null && nextLesson ? (
@@ -188,33 +190,12 @@ export function LessonView({
           <h3 className="flex items-center gap-2 px-2 pb-2 text-sm font-bold text-heading">
             <List className="h-4 w-4 text-muted" aria-hidden /> Chapters
           </h3>
-          <ol>
-            {lesson.chapters.map((c, i) => {
-              const nextT = lesson.chapters[i + 1]?.t ?? lesson.durationSeconds;
-              const on = currentChapter === c;
-              const passed = (pct / 100) * lesson.durationSeconds >= nextT - 1;
-              return (
-                <li key={c.t}>
-                  <button
-                    type="button"
-                    onClick={() => player.current?.seekTo(c.t)}
-                    className={cn(
-                      "flex w-full items-center gap-3.5 rounded-xl px-3 py-2.5 text-left text-sm transition-colors",
-                      on ? "bg-accent-subtle font-semibold text-heading" : "text-foreground hover:bg-subtle"
-                    )}
-                  >
-                    <span className="w-11 font-semibold text-accent tabular-nums">{formatDuration(c.t)}</span>
-                    <span className="min-w-0 flex-1">{c.title}</span>
-                    {on ? (
-                      <span className="text-xs font-semibold text-accent">You&apos;re here</span>
-                    ) : passed ? (
-                      <Check className="h-4 w-4 text-emerald-600" strokeWidth={3} aria-label="Watched" />
-                    ) : null}
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
+          <ChapterList
+            lesson={lesson}
+            now={now}
+            watchedSeconds={Math.max((pct / 100) * lesson.durationSeconds, liveWatched)}
+            onSeek={(t) => player.current?.seekTo(t)}
+          />
         </section>
       </div>
 

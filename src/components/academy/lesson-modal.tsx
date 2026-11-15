@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Check, GraduationCap, X } from "lucide-react";
+import { Check, GraduationCap, List, X } from "lucide-react";
 import { academyLessonHref, formatDuration, type AcademyLesson } from "@/lib/academy/catalog";
 import { useAcademy } from "@/components/academy/academy-progress";
-import { LessonPlayer } from "@/components/academy/lesson-player";
+import { LessonPlayer, type LessonPlayerHandle } from "@/components/academy/lesson-player";
+import { ChapterList } from "@/components/academy/chapter-list";
 
 /** Plays one lesson over the current page (from "Watch how" or the help menu). Progress counts. */
 export function LessonModal({ lesson, onClose }: { lesson: AcademyLesson; onClose: () => void }) {
@@ -13,6 +14,12 @@ export function LessonModal({ lesson, onClose }: { lesson: AcademyLesson; onClos
   const saved = a.lessons[lesson.key];
   const done = a.status(lesson.key) === "done";
   const report = a.report;
+  const player = useRef<LessonPlayerHandle>(null);
+  const startAt = saved && !saved.completedAt ? saved.position : 0;
+  const [now, setNow] = useState(startAt);
+  const savedSeconds = ((saved?.percent ?? 0) / 100) * lesson.durationSeconds;
+  const [liveWatched, setLiveWatched] = useState(0);
+  const watchedSeconds = Math.max(savedSeconds, liveWatched);
   const onProgress = useCallback(
     (percent: number, position: number, opts?: { keepalive?: boolean }) => report(lesson.key, percent, position, opts),
     [report, lesson.key]
@@ -34,7 +41,7 @@ export function LessonModal({ lesson, onClose }: { lesson: AcademyLesson; onClos
   return (
     <div className="fixed inset-0 z-[210] flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={lesson.title}>
       <button type="button" className="absolute inset-0 bg-slate-950/70" onClick={onClose} aria-label="Close" />
-      <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl bg-card shadow-2xl">
+      <div className="relative max-h-[calc(100dvh-24px)] w-full max-w-4xl overflow-y-auto overscroll-contain rounded-2xl bg-card shadow-2xl">
         <div className="flex items-center gap-3 px-4 py-3 sm:px-5">
           <div className="min-w-0 flex-1">
             <p className="truncate text-base font-bold text-heading">{lesson.title}</p>
@@ -64,12 +71,27 @@ export function LessonModal({ lesson, onClose }: { lesson: AcademyLesson; onClos
           </button>
         </div>
         <LessonPlayer
+          ref={player}
           lesson={lesson}
-          initialFurthest={((saved?.percent ?? 0) / 100) * lesson.durationSeconds}
-          startAt={saved && !saved.completedAt ? saved.position : 0}
+          initialFurthest={savedSeconds}
+          startAt={startAt}
           autoplay
           onProgress={onProgress}
+          onTime={setNow}
+          onWatched={setLiveWatched}
         />
+        <section className="px-2 pb-3 pt-3 sm:px-3">
+          <h3 className="flex items-center gap-2 px-3 pb-1.5 text-sm font-bold text-heading">
+            <List className="h-4 w-4 text-muted" aria-hidden /> Chapters
+          </h3>
+          <ChapterList
+            lesson={lesson}
+            now={now}
+            watchedSeconds={watchedSeconds}
+            onSeek={(t) => player.current?.seekTo(t)}
+            twoColumns
+          />
+        </section>
       </div>
     </div>
   );
