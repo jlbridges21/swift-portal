@@ -22,18 +22,20 @@ export function AcademyRing({ className }: { className?: string }) {
   const c = 2 * Math.PI * r;
   return (
     <span className={cn("relative inline-flex h-[26px] w-[26px] items-center justify-center", className)} title={`${a.completed} of ${a.total} lessons`}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="absolute inset-0 -rotate-90" aria-hidden>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} className="stroke-border" />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={`${(c * a.percent) / 100} ${c}`}
-          className="stroke-accent"
-        />
+      <svg viewBox={`0 0 ${size} ${size}`} className="absolute inset-0 block h-full w-full" aria-hidden>
+        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} className="stroke-border" />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${(c * a.percent) / 100} ${c}`}
+            className="stroke-accent"
+          />
+        </g>
       </svg>
       <span className="relative text-[8px] font-bold leading-none text-accent tabular-nums">
         {a.completed}/{a.total}

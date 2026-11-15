@@ -15,18 +15,22 @@ import { MenuDemo } from "./menu-demo";
  * Dev-only harness for the Academy UI with sample progress (no sign-in, no database).
  * /dev/academy-harness?view=course | lesson | done | shell | menu  (&pill=V00 picks the shell's Watch how lesson)
  */
-export default async function AcademyHarness({ searchParams }: { searchParams: Promise<{ view?: string; pill?: string; lesson?: string }> }) {
+export default async function AcademyHarness({ searchParams }: { searchParams: Promise<{ view?: string; pill?: string; lesson?: string; course?: string }> }) {
   if (process.env.NODE_ENV === "production") notFound();
   const sp = await searchParams;
   const view = sp.view ?? "course";
   const now = new Date().toISOString();
-  const doneKeys = view === "done" ? ACADEMY_LESSONS.map((l) => l.key) : ["V00", "V01", "V02", "V03", "V04", "V05", "V06"];
+  const allDone = view === "done" || view === "certified";
+  const doneKeys = allDone ? ACADEMY_LESSONS.map((l) => l.key) : ["V00", "V01", "V02", "V03", "V04", "V05", "V06"];
   const sample: AcademyProgressState = {
     setupRequired: false,
-    certificate: null,
+    certificate:
+      view === "certified"
+        ? { code: "SPA-TEST-0000", holderName: "Jordan Blake", businessName: "Your Business", issuedAt: now, lessonCount: ACADEMY_LESSONS.length }
+        : null,
     lessons: {
       ...Object.fromEntries(doneKeys.map((k) => [k, { percent: 100, position: 0, completedAt: now }])),
-      ...(view === "done" ? {} : { V07: { percent: 40, position: 71, completedAt: null } }),
+      ...(allDone ? {} : { V07: { percent: 40, position: 71, completedAt: null } }),
     },
   };
   if (view === "menu") return <MenuDemo />;
@@ -42,6 +46,9 @@ export default async function AcademyHarness({ searchParams }: { searchParams: P
             <main className="space-y-4 p-6">
               <WatchHowPill lessonKey={sp.pill ?? "V07"} />
               <NextLessonCard />
+              {sp.course ? (
+                <AcademyCourse initial={sample} holderName="Jordan Blake" businessName="Your Business" verifyOrigin="https://www.shootportal.app" isStaff={false} />
+              ) : null}
             </main>
           </AdminChromeProviders>
         </AdminCapabilitiesProvider>

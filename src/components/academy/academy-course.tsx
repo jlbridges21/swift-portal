@@ -47,23 +47,44 @@ function minutes(seconds: number): string {
   return `${m} min`;
 }
 
-function ProgressRing({ percent, size = 112, stroke = 7 }: { percent: number; size?: number; stroke?: number }) {
+/**
+ * Certificate badge: progress ring + filled disc in ONE svg (shared center by construction),
+ * icon centered over it. The rotation is an SVG attribute, not a CSS transform, and the box is
+ * sized from the same number, so nothing can drift apart at any zoom level or font size.
+ */
+function CertificateMedal({ percent, locked }: { percent: number; locked: boolean }) {
+  const size = 112;
+  const stroke = 7;
+  const mid = size / 2;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth={stroke} className="text-border" />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={`${(c * percent) / 100} ${c}`}
-        className="stroke-emerald-500 transition-[stroke-dasharray] duration-500"
-      />
-    </svg>
+    <div className="relative mx-auto shrink-0" style={{ width: size, height: size }}>
+      <svg viewBox={`0 0 ${size} ${size}`} className="absolute inset-0 block h-full w-full" aria-hidden>
+        <g transform={`rotate(-90 ${mid} ${mid})`}>
+          <circle cx={mid} cy={mid} r={r} fill="none" strokeWidth={stroke} style={{ stroke: "var(--color-border)" }} />
+          <circle
+            cx={mid}
+            cy={mid}
+            r={r}
+            fill="none"
+            strokeWidth={stroke}
+            strokeLinecap={percent >= 100 ? "butt" : "round"}
+            strokeDasharray={percent >= 100 ? undefined : `${(c * percent) / 100} ${c}`}
+            className="stroke-emerald-500 transition-[stroke-dasharray] duration-500"
+          />
+        </g>
+        <circle cx={mid} cy={mid} r={mid - 14} style={{ fill: "var(--color-accent)" }} />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-accent-foreground">
+        <Award className="h-9 w-9" strokeWidth={1.7} aria-hidden />
+      </span>
+      {locked ? (
+        <span className="absolute bottom-1 right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-card text-muted">
+          <Lock className="h-3.5 w-3.5" aria-hidden />
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -373,17 +394,7 @@ export function AcademyCourse({
       <aside className="flex w-full shrink-0 flex-col gap-4 xl:w-[320px]">
         <section className="relative overflow-hidden rounded-2xl border border-border bg-card p-5 text-center">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-accent-subtle to-transparent" aria-hidden />
-          <div className="relative mx-auto h-28 w-28">
-            <ProgressRing percent={a.certificate ? 100 : a.percent} />
-            <span className="absolute inset-[14px] flex items-center justify-center rounded-full bg-accent text-accent-foreground shadow-inner">
-              <Award className="h-9 w-9" strokeWidth={1.7} aria-hidden />
-            </span>
-            {!a.certificate ? (
-              <span className="absolute bottom-1 right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-card text-muted">
-                <Lock className="h-3.5 w-3.5" aria-hidden />
-              </span>
-            ) : null}
-          </div>
+          <CertificateMedal percent={a.certificate ? 100 : a.percent} locked={!a.certificate} />
           <h3 className="relative mt-3 text-base font-extrabold text-heading">ShootPortal Certified</h3>
           <p className="relative mt-1.5 text-sm leading-relaxed text-muted">
             {a.certificate
