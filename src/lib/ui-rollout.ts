@@ -3,8 +3,9 @@
  *
  * Phases (platform_ui_rollout.status + the clock):
  *   classic_only      before activation — everyone Classic, no banners. Super-admins may preview New.
- *   optional          days 1–14 — Classic by default, users opt in/out freely, banners + switcher.
- *   new_default       after transition_at (automatic) or forced by the super-admin — everyone New.
+ *   optional          New by default; anyone can switch to Classic (and back) from the account menu.
+ *                     No end date — Classic stays available until the super-admin changes the status.
+ *   new_default       forced by the super-admin — everyone New, no user-facing switch.
  *   classic_rollback  emergency rollback — everyone Classic, no banners.
  *
  * The interface is presentation only. Permissions are enforced by the same page/API guards in
@@ -15,13 +16,10 @@ export type UiInterface = "classic" | "new";
 export type RolloutStatus = "classic_only" | "optional" | "new_default" | "classic_rollback";
 export type RolloutBanner = "try_new" | "welcome_new";
 
-export const UI_ROLLOUT_DAYS = 14;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 export const ROLLOUT_STATUS_LABEL: Record<RolloutStatus, string> = {
   classic_only: "Classic Only",
-  optional: "Optional Rollout",
-  new_default: "New Interface Default",
+  optional: "New Default · Classic Available",
+  new_default: "New Only",
   classic_rollback: "Classic Rollback",
 };
 
@@ -53,16 +51,11 @@ export type UiExperience = {
   banner: RolloutBanner | null;
 };
 
-export function transitionAtFrom(activatedAt: Date): Date {
-  return new Date(activatedAt.getTime() + UI_ROLLOUT_DAYS * DAY_MS);
-}
-
-/** The phase in force right now. An optional rollout past its transition time is New Default. */
-export function effectivePhase(config: RolloutConfig, now: Date = new Date()): RolloutStatus {
-  if (config.status === "optional") {
-    const t = config.transitionAt ? Date.parse(config.transitionAt) : NaN;
-    if (Number.isFinite(t) && now.getTime() >= t) return "new_default";
-  }
+/**
+ * The phase in force right now. There is no automatic transition any more: `transition_at` is
+ * ignored, so the optional phase (New default, Classic available) lasts until changed by hand.
+ */
+export function effectivePhase(config: RolloutConfig, _now: Date = new Date()): RolloutStatus {
   return config.status;
 }
 
@@ -79,7 +72,8 @@ export function resolveUiExperience(
 
   switch (phase) {
     case "optional": {
-      const mode: UiInterface = pref.interface ?? "classic";
+      // New is the default for everyone (existing and new sign-ups); Classic only if chosen.
+      const mode: UiInterface = pref.interface ?? "new";
       const dismissed = mode === "classic" ? pref.tryNewBannerDismissed : pref.welcomeNewBannerDismissed;
       return {
         mode,

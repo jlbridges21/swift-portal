@@ -31,10 +31,6 @@ function parseAction(body: Record<string, unknown> | null): RolloutAction | null
     case "resume_optional":
     case "reset_classic":
       return { action: body.action };
-    case "delay":
-      return { action: "delay", days: Number(body.days) };
-    case "set_transition":
-      return typeof body.transitionAt === "string" ? { action: "set_transition", transitionAt: body.transitionAt } : null;
     default:
       return null;
   }
@@ -56,7 +52,7 @@ export async function POST(request: Request) {
       action: `ui_rollout.${action.action}`,
       targetType: "ui_rollout",
       targetId: "global",
-      metadata: { before, after, ...(action.action === "delay" ? { days: action.days } : {}) },
+      metadata: { before, after },
     });
     const config = await loadRolloutConfig();
     return NextResponse.json({ config: { ...config, ...after }, phase: effectivePhase({ ...config, ...after }) });

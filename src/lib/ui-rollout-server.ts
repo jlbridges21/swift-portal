@@ -6,7 +6,6 @@ import {
   EMPTY_USER_UI_PREFERENCE,
   effectivePhase,
   resolveUiExperience,
-  transitionAtFrom,
   type RolloutBanner,
   type RolloutConfig,
   type RolloutStatus,
@@ -106,7 +105,7 @@ export async function saveUserInterface(userId: string, next: UiInterface): Prom
     throw new Error(readErr.message);
   }
   const now = new Date().toISOString();
-  const previous = (existing?.interface as UiInterface | null) ?? "classic";
+  const previous = (existing?.interface as UiInterface | null) ?? "new";
   const changed = previous !== next;
   const row: Record<string, unknown> = {
     user_id: userId,
@@ -138,8 +137,6 @@ export async function dismissRolloutBanner(userId: string, banner: RolloutBanner
 
 export type RolloutAction =
   | { action: "activate" }
-  | { action: "delay"; days: number }
-  | { action: "set_transition"; transitionAt: string }
   | { action: "new_only" }
   | { action: "rollback" }
   | { action: "resume_optional" }
@@ -158,39 +155,19 @@ export async function applyRolloutAction(
 
   switch (input.action) {
     case "activate":
-      // Starts the 14-day clock now. Re-activating restarts it.
-      patch = { status: "optional", activated_at: now.toISOString(), transition_at: transitionAtFrom(now).toISOString() };
+      // New becomes the default; Classic stays available with no end date.
+      patch = { status: "optional", activated_at: now.toISOString(), transition_at: null };
       break;
-    case "delay": {
-      if (!Number.isInteger(input.days) || input.days < 1 || input.days > 90) throw new Error("Delay must be 1–90 days.");
-      // Delaying after the automatic switch reopens the optional period from now.
-      const base = Math.max(before.transitionAt ? Date.parse(before.transitionAt) : now.getTime(), now.getTime());
-      patch = {
-        status: "optional",
-        activated_at: before.activatedAt ?? now.toISOString(),
-        transition_at: new Date(base + input.days * 86_400_000).toISOString(),
-      };
-      break;
-    }
-    case "set_transition": {
-      const t = Date.parse(input.transitionAt);
-      if (!Number.isFinite(t) || t <= now.getTime()) throw new Error("Choose a transition time in the future.");
-      patch = { status: "optional", activated_at: before.activatedAt ?? now.toISOString(), transition_at: new Date(t).toISOString() };
-      break;
-    }
     case "new_only":
       patch = { ...cur, status: "new_default" };
       break;
     case "rollback":
       patch = { ...cur, status: "classic_rollback" };
       break;
-    case "resume_optional": {
-      // Back to the optional period; needs a future transition time.
-      const t = before.transitionAt ? Date.parse(before.transitionAt) : NaN;
-      if (!Number.isFinite(t) || t <= now.getTime()) throw new Error("Set a future transition date (use Delay) to resume the optional rollout.");
-      patch = { ...cur, status: "optional" };
+    case "resume_optional":
+      // Back to New default with Classic available.
+      patch = { status: "optional", activated_at: before.activatedAt ?? now.toISOString(), transition_at: null };
       break;
-    }
     case "reset_classic":
       patch = { status: "classic_only", activated_at: null, transition_at: null };
       break;
@@ -217,6 +194,7 @@ export type RolloutAnalytics = {
   eligibleUsers: number;
   preferNew: number;
   preferClassic: number;
+  explicitlyChoseNew: number;
   explicitlyChoseClassic: number;
   triedNew: number;
   switchedBack: number;
@@ -263,13 +241,13 @@ export async function loadRolloutAnalytics(): Promise<RolloutAnalytics | null> {
       if (!data || data.length < PAGE) break;
     }
 
-    let preferNew = 0;
+    let explicitlyChoseNew = 0;
     let explicitlyChoseClassic = 0;
     let triedNew = 0;
     let switchedBack = 0;
     for (const p of prefs) {
       if (!eligible.has(p.user_id)) continue;
-      if (p.interface === "new") preferNew++;
+      if (p.interface === "new") explicitlyChoseNew++;
       if (p.interface === "classic") explicitlyChoseClassic++;
       if (p.first_tried_new_at) triedNew++;
       if (p.first_switched_back_at) switchedBack++;
@@ -277,8 +255,10 @@ export async function loadRolloutAnalytics(): Promise<RolloutAnalytics | null> {
     const n = eligible.size;
     return {
       eligibleUsers: n,
-      preferNew,
-      preferClassic: n - preferNew,
+      // New is the default, so anyone who hasn't chosen Classic is on New.
+      preferNew: n - explicitlyChoseClassic,
+      preferClassic: explicitlyChoseClassic,
+      explicitlyChoseNew,
       explicitlyChoseClassic,
       triedNew,
       switchedBack,
@@ -298,8 +278,9 @@ export { effectivePhase };
 
 /**
  * Which client portal this business's clients get. Clients have no interface choice of their
- * own: they follow the business owner's New/Classic experience (the owner's saved choice during
- * the optional rollout; the platform default otherwise). Fails safe to Classic.
+ * own: they follow the business owner's New/Classic experience (the owner's saved choice while
+ * Classic is available — New unless they picked Classic; the platform default otherwise).
+ * Fails safe to Classic.
  */
 export const getClientPortalInterface = cache(async (businessId: string): Promise<UiInterface> => {
   try {

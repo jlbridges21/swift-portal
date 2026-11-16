@@ -61,13 +61,13 @@ const COPY: Record<RolloutBanner, { heading: string; body: string; cta: string; 
   },
   welcome_new: {
     heading: "🎉 Welcome to the New ShootPortal!",
-    body: "You're exploring our redesigned experience. Prefer the familiar layout? You can switch back anytime during the rollout.",
+    body: "You're on our redesigned experience. Prefer the familiar layout? You can switch to Classic anytime from your account menu.",
     cta: "Switch to Classic",
     to: "classic",
   },
 };
 
-/** Announcement banner shown under the app header during the optional rollout. */
+/** Announcement banner shown under the app header while Classic is still available. */
 export function UiRolloutBanner({ className }: { className?: string }) {
   const { banner } = useUiRollout();
   const switchTo = useSwitchInterface();
