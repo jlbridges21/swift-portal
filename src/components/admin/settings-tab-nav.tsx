@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef } from "react";
+import { Fragment, useRef } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
   SETTINGS_SECTIONS,
   type SettingsSectionId,
 } from "@/lib/settings-nav";
+import { SETTINGS_DIVIDER_AFTER, settingsSectionIcon } from "@/components/admin/settings-section-icons";
 
 export type SectionNavItem = {
   id: string;
@@ -28,6 +29,10 @@ type SettingsTabNavProps<T extends string = string> = {
    * Mobile select still uses onChange.
    */
   hrefFor?: (id: T) => string;
+  /** Sections with a setup step still open: an accent dot after the label. */
+  attention?: readonly string[];
+  /** Only the phone dropdown (the app shell's sidebar is the menu on larger screens). */
+  mobileOnly?: boolean;
 };
 
 export function SettingsTabNav<T extends string = SettingsSectionId>({
@@ -39,7 +44,11 @@ export function SettingsTabNav<T extends string = SettingsSectionId>({
   selectId = "settings-section-select",
   idPrefix = "settings",
   hrefFor,
+  attention = [],
+  mobileOnly = false,
 }: SettingsTabNavProps<T>) {
+  // Icons and dividers apply to the Settings sections; other lists (e.g. partners) render as before.
+  const withIcons = sections.some((s) => settingsSectionIcon(s.id));
   const tabRefs = useRef<Record<string, HTMLElement | null>>({});
   const ids = sections.map((s) => s.id as T);
 
@@ -71,7 +80,8 @@ export function SettingsTabNav<T extends string = SettingsSectionId>({
 
   function itemClass(selected: boolean) {
     return cn(
-      "rounded-lg px-3 py-2 text-left text-sm transition-colors block w-full",
+      "rounded-lg px-3 py-2 text-left text-sm transition-colors w-full",
+      withIcons ? "flex items-center gap-2.5" : "block",
       selected ? "font-semibold" : "text-muted hover:bg-subtle hover:text-foreground"
     );
   }
@@ -106,6 +116,7 @@ export function SettingsTabNav<T extends string = SettingsSectionId>({
         </select>
       </div>
 
+      {mobileOnly ? null : (
       <div
         role="tablist"
         aria-label={ariaLabel}
@@ -120,11 +131,30 @@ export function SettingsTabNav<T extends string = SettingsSectionId>({
           const setRef = (el: HTMLElement | null) => {
             tabRefs.current[section.id] = el;
           };
+          const Icon = withIcons ? settingsSectionIcon(section.id) : null;
+          const content = (
+            <>
+              {Icon ? (
+                <Icon className={cn("h-4 w-4 shrink-0", selected ? "text-accent" : "text-muted")} aria-hidden />
+              ) : null}
+              <span className="min-w-0 flex-1">{section.label}</span>
+              {attention.includes(section.id) ? (
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full bg-accent ring-[3px] ring-accent-subtle"
+                  aria-label="Needs setting up"
+                />
+              ) : null}
+            </>
+          );
+          const divider =
+            withIcons && SETTINGS_DIVIDER_AFTER.has(section.id) ? (
+              <div role="separator" aria-hidden className="mx-3 my-1.5 h-px bg-border" />
+            ) : null;
 
           if (hrefFor) {
             return (
+              <Fragment key={section.id}>
               <Link
-                key={section.id}
                 href={hrefFor(id)}
                 role="tab"
                 id={`${idPrefix}-tab-${section.id}`}
@@ -137,14 +167,16 @@ export function SettingsTabNav<T extends string = SettingsSectionId>({
                 onKeyDown={(e) => onKeyDown(e, id)}
                 onClick={() => onChange(id)}
               >
-                {section.label}
+                {content}
               </Link>
+              {divider}
+              </Fragment>
             );
           }
 
           return (
+            <Fragment key={section.id}>
             <button
-              key={section.id}
               type="button"
               role="tab"
               id={`${idPrefix}-tab-${section.id}`}
@@ -157,11 +189,14 @@ export function SettingsTabNav<T extends string = SettingsSectionId>({
               onClick={() => onChange(id)}
               onKeyDown={(e) => onKeyDown(e, id)}
             >
-              {section.label}
+              {content}
             </button>
+            {divider}
+            </Fragment>
           );
         })}
       </div>
+      )}
     </>
   );
 }

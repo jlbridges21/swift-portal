@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { deriveBrandTheme, parseSurfaceMode } from "@/lib/brand-color";
+import { deriveBrandTheme, parseSurfaceMode, surfaceTone } from "@/lib/brand-color";
 
 /** Business-branded Home Screen icon (see src/app/pwa/icon/route.ts). Host-aware: each portal gets its own. */
 export const PWA_ICON_PATH = "/pwa/icon";
@@ -44,5 +44,5 @@ export function appChromeThemeColor(business: { brandPrimaryColor: string; brand
 } {
   const mode = parseSurfaceMode(business.surfaceMode);
   const card = deriveBrandTheme(business.brandPrimaryColor, business.brandAccentColor, mode).card;
-  return { themeColor: card, colorScheme: mode === "dark" ? "dark" : "light" };
+  return { themeColor: card, colorScheme: surfaceTone(mode, business.brandPrimaryColor) };
 }

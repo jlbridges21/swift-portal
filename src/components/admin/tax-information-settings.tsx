@@ -34,12 +34,15 @@ export function TaxInformationSettings({
   clients,
   nav,
   footer,
+  hideNavOnDesktop = false,
 }: {
   tax: TaxInformationSettings;
   onChange: (patch: Partial<TaxInformationSettings>) => void;
   clients: W9ClientOption[];
   nav: ReactNode;
   footer?: ReactNode;
+  /** New interface: the app shell's sidebar is the Settings menu, so no second column. */
+  hideNavOnDesktop?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [signatureMode, setSignatureMode] = useState<SignatureMode>("typed");
@@ -264,6 +267,7 @@ export function TaxInformationSettings({
   return (
     <TaxEditorShell
       nav={nav}
+      hideNavOnDesktop={hideNavOnDesktop}
       form={form}
       preview={<W9PdfPreview tax={tax} signatureMode={signatureMode} typedName={typedName} />}
       footer={footer}
@@ -289,6 +293,7 @@ export function TaxInformationSettings({
 
 function TaxEditorShell({
   nav,
+  hideNavOnDesktop,
   form,
   preview,
   footer,
@@ -297,6 +302,7 @@ function TaxEditorShell({
   dialog,
 }: {
   nav: ReactNode;
+  hideNavOnDesktop?: boolean;
   form: ReactNode;
   preview: ReactNode;
   footer?: ReactNode;
@@ -329,7 +335,12 @@ function TaxEditorShell({
       className="flex min-w-0 flex-col lg:fixed lg:inset-x-0 lg:bottom-0 lg:top-[calc(4rem+var(--sat))] lg:z-40 lg:flex-row lg:overflow-hidden lg:bg-background"
       data-w9-editor-shell=""
     >
-      <aside className="min-w-0 shrink-0 lg:flex lg:w-56 lg:flex-col lg:overflow-y-scroll lg:border-r lg:border-border lg:bg-card lg:px-3 lg:py-4">
+      <aside
+        className={cn(
+          "min-w-0 shrink-0 lg:w-56 lg:flex-col lg:overflow-y-scroll lg:border-r lg:border-border lg:bg-card lg:px-3 lg:py-4",
+          hideNavOnDesktop ? "lg:hidden" : "lg:flex"
+        )}
+      >
         <div className="min-w-0">{nav}</div>
       </aside>
       <div className="flex min-w-0 flex-col lg:w-[28rem] lg:shrink-0 lg:overflow-hidden lg:border-r lg:border-border">

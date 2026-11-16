@@ -17,7 +17,7 @@ import {
 import { resolveProjectAccess } from "@/lib/project-access";
 import { PublicProjectPageClient } from "@/components/projects/public-project-page-client";
 import { BrandProvider } from "@/components/brand/brand-provider";
-import { parseSurfaceMode } from "@/lib/brand-color";
+import { parseSurfaceMode, surfaceChrome } from "@/lib/brand-color";
 
 interface PageProps {
   params: Promise<{ token: string }>;
@@ -29,11 +29,7 @@ export async function generateViewport({ params }: PageProps): Promise<Viewport>
   const ctx = await resolvePublicLinkProject(token, host.businessId);
   if (!ctx) return { themeColor: "#F8FAFC", colorScheme: "light" };
   const settings = await getAppSettings(ctx.businessId);
-  const dark = parseSurfaceMode(settings.business.surfaceMode) === "dark";
-  return {
-    themeColor: dark ? "#14181F" : "#F8FAFC",
-    colorScheme: dark ? "dark" : "light",
-  };
+  return surfaceChrome(settings.business);
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {

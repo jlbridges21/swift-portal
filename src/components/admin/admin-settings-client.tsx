@@ -2,272 +2,50 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+
 import { toast } from "sonner";
-import { Loader2, RotateCcw, Save } from "lucide-react";
-import { GoogleCalendarSettingsCard } from "@/components/admin/google-calendar-settings-card";
+import { Loader2, Save, Undo2 } from "lucide-react";
+
 import { cn } from "@/lib/utils";
-import { ColorField } from "@/components/ui/color-field";
-import { LogoSizeSlider } from "@/components/admin/logo-size-slider";
-import { PORTAL_LOGO_SIZE } from "@/lib/brand-logo-size";
+
 import { SettingsTabNav } from "@/components/admin/settings-tab-nav";
-import { BrandAssetField } from "@/components/admin/brand-asset-field";
-import { EmailDiagnosticsCard } from "@/components/admin/email-diagnostics-card";
-import { EmailPreviewDialog } from "@/components/admin/email-preview-dialog";
-import { AcceptSetupDefaultButton } from "@/components/admin/accept-setup-default-button";
-import { WorkflowSettingsCard } from "@/components/admin/workflow-settings-card";
-import { EmailTemplatesSettingsCard } from "@/components/admin/email-templates-settings-card";
+
+import { publishSettingsNav } from "@/components/admin/settings-nav-store";
+
 import { LandingPageSettingsCard } from "@/components/admin/landing-page-settings-card";
-import { CustomDomainSettingsCard } from "@/components/admin/custom-domain-settings-card";
-import { ListingDomainSection } from "@/components/admin/listing-domain-section";
-import { WebsiteDomainSection } from "@/components/admin/website-domain-section";
+
 import { BusinessWebsiteEditor } from "@/components/admin/business-website/business-website-editor";
-import type { SiteServiceInput } from "@/lib/website/view";
-import { MarketingKitSettingsCard } from "@/components/admin/marketing-kit-settings-card";
-import type { CustomDomainPublicState } from "@/lib/custom-domain";
-import { PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
+
+import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS } from "@/lib/portal-brand";
 import { PLATFORM_EMAIL_SENDER_DEFAULTS } from "@/lib/email-sender-policy";
-import { BRAND } from "@/lib/brand";
-import { brandContrastWarnings, deriveBrandTheme, parseSurfaceMode, sanitizeCssColor } from "@/lib/brand-color";
-import { logoLuminanceClass } from "@/lib/logo-luminance-class";
+
+import { brandContrastWarnings, parseSurfaceMode, sanitizeCssColor, type SurfaceMode } from "@/lib/brand-color";
+
 import { sectionForHash, visibleSettingsSections, type SettingsSectionId } from "@/lib/settings-nav";
 import { readCleanHash } from "@/lib/url-hash";
-import { TaxInformationSettings, type W9ClientOption } from "@/components/admin/tax-information-settings";
-import { SettingsCollapsible } from "@/components/admin/settings-collapsible";
-import { TravelFeesSettingsCard } from "@/components/admin/travel-fees-card";
-import { DefaultDocumentsSettingsCard } from "@/components/admin/default-documents-settings-card";
-import { usePortalBrand } from "@/components/brand/brand-provider";
+import { TaxInformationSettings } from "@/components/admin/tax-information-settings";
+
+import { usePortalBrand, useSetBrandPreview, type BrandPreview } from "@/components/brand/brand-provider";
 import { useInAdminAppShell } from "@/components/admin/app-shell/admin-app-shell-context";
-import type {
-  AppSettings,
-  NotificationChannelSettings,
-  NotificationEventKey,
-} from "@/lib/app-settings";
+import type { AppSettings, NotificationChannelSettings, NotificationEventKey } from "@/lib/app-settings";
 import type { LandingSettings } from "@/lib/landing-content";
 import type { ReactNode } from "react";
-
-interface NotificationEventDef {
-  key: NotificationEventKey;
-  label: string;
-  description: string;
-  audience: "admin" | "client" | "both";
-}
-
-interface AdminSettingsClientProps {
-  initialSettings: AppSettings;
-  notificationEvents: NotificationEventDef[];
-  payments: ReactNode;
-  services: ReactNode;
-  staff: ReactNode;
-  canCustomizeLanding: boolean;
-  canUseCustomDomain: boolean;
-  customDomainState: CustomDomainPublicState;
-  listingDomain: {
-    state: CustomDomainPublicState;
-    setupRequired: boolean;
-    suggestedRootDomain: string | null;
-    returnTo: string | null;
-  };
-  portalPreviewUrl: string;
-  serviceNames: string[];
-  /** Business Website: active services, live URL and the Business Website Address. */
-  website: {
-    services: SiteServiceInput[];
-    siteUrl: string;
-    domain: { domain: string | null; connected: boolean; setupRequired: boolean };
-    domainState: CustomDomainPublicState;
-  };
-  showTax: boolean;
-  w9Clients: W9ClientOption[];
-}
-
-async function parseApiResponse(res: Response): Promise<Record<string, unknown>> {
-  const contentType = res.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) {
-    let data: Record<string, unknown>;
-    try {
-      data = (await res.json()) as Record<string, unknown>;
-    } catch {
-      throw new Error(`Request failed with HTTP ${res.status}`);
-    }
-    if (!res.ok) {
-      const message = typeof data.error === "string" && data.error.trim() ? data.error : null;
-      throw new Error(message || `Request failed with HTTP ${res.status}`);
-    }
-    return data;
-  }
-
-  const text = (await res.text()).trim().replace(/\s+/g, " ").slice(0, 180);
-  throw new Error(
-    text
-      ? `Request failed with HTTP ${res.status}: ${text}`
-      : `Request failed with HTTP ${res.status}`
-  );
-}
-
-function DomainRecordsList({ refreshKey }: { refreshKey: string }) {
-  const [records, setRecords] = useState<{ name: string; type: string; value: string; record: string }[]>([]);
-
-  useEffect(() => {
-    fetch("/api/admin/email/domain", { credentials: "include" })
-      .then((r) => parseApiResponse(r))
-      .then((data) => {
-        if (Array.isArray(data.records)) {
-          setRecords(data.records as { name: string; type: string; value: string; record: string }[]);
-        }
-      })
-      .catch(() => undefined);
-  }, [refreshKey]);
-
-  if (records.length === 0) return null;
-
-  return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="bg-slate-50 surface-dark:bg-subtle text-left text-muted">
-            <th className="px-2 py-1.5">Type</th>
-            <th className="px-2 py-1.5">Name</th>
-            <th className="px-2 py-1.5">Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((row, i) => (
-            <tr key={`${row.name}-${i}`} className="border-t border-border">
-              <td className="px-2 py-1.5 font-mono">{row.type}</td>
-              <td className="px-2 py-1.5 font-mono">{row.name}</td>
-              <td className="px-2 py-1.5 font-mono break-all">{row.value}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function CompactToggle({
-  checked,
-  onChange,
-  id,
-  label,
-}: {
-  checked: boolean;
-  onChange: (value: boolean) => void;
-  id: string;
-  label: string;
-}) {
-  return (
-    <button
-      id={id}
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      title={label}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "relative mx-auto flex h-5 w-9 shrink-0 rounded-full transition-colors",
-        checked ? "bg-accent" : "bg-slate-200 surface-dark:bg-border"
-      )}
-    >
-      <span
-        className={cn(
-          "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white surface-dark:bg-card shadow transition-transform",
-          checked && "translate-x-4"
-        )}
-      />
-    </button>
-  );
-}
-
-function RowToggle({
-  checked,
-  onChange,
-  id,
-  label,
-}: {
-  checked: boolean;
-  onChange: (value: boolean) => void;
-  id: string;
-  label: string;
-}) {
-  return (
-    <label htmlFor={id} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-4 py-3 hover:bg-slate-50 surface-dark:hover:bg-subtle">
-      <span className="text-sm text-foreground">{label}</span>
-      <CompactToggle id={id} checked={checked} onChange={onChange} label={label} />
-    </label>
-  );
-}
-
-function BrandSurfacePreview({
-  primary,
-  accent,
-  portalName,
-  businessName,
-  logoUrl,
-  surfaceMode = "light",
-}: {
-  primary: string;
-  accent: string;
-  portalName: string;
-  businessName: string;
-  logoUrl: string;
-  surfaceMode?: "light" | "dark";
-}) {
-  const theme = deriveBrandTheme(primary, accent, surfaceMode);
-  return (
-    <div
-      id="settings-colors"
-      tabIndex={-1}
-      className="overflow-hidden rounded-xl border scroll-mt-24"
-      style={{ background: theme.background, borderColor: theme.border, color: theme.foreground }}
-    >
-        <div
-          className="flex items-center gap-3 border-b px-4 py-3"
-          style={{ background: theme.card, borderColor: theme.border }}
-        >
-          <div className="flex h-10 max-w-[120px] items-center justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={logoUrl} alt="" className="max-h-10 w-auto max-w-full object-contain object-left" />
-          </div>
-          <div className="min-w-0">
-            <p className="truncate font-semibold" style={{ color: theme.heading }}>
-              {portalName}
-            </p>
-            <p className="truncate text-[10px] font-medium uppercase tracking-wider" style={{ color: theme.muted }}>
-              {businessName}
-            </p>
-          </div>
-        <span
-          className="ml-auto rounded-lg px-3 py-1.5 text-sm font-medium"
-          style={{ background: theme.accent, color: theme.accentForeground }}
-        >
-          Save
-        </span>
-      </div>
-      <div className="p-4">
-        <div className="rounded-xl border p-4" style={{ background: theme.card, borderColor: theme.border }}>
-          <p className="font-semibold" style={{ color: theme.heading }}>
-            Project name
-          </p>
-          <p className="mt-1 text-sm" style={{ color: theme.foreground }}>
-            Body copy on the tinted page — never the raw brand fill.
-          </p>
-          <p className="mt-1 text-sm" style={{ color: theme.muted }}>
-            Muted metadata stays readable.
-          </p>
-          <p className="mt-2 text-sm font-medium" style={{ color: theme.accent }}>
-            View details
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { IdentityTab } from "@/components/admin/settings-tabs/identity-tab";
+import { BrandingTab } from "@/components/admin/settings-tabs/branding-tab";
+import { ContactTab } from "@/components/admin/settings-tabs/contact-tab";
+import { EmailSenderTab } from "@/components/admin/settings-tabs/email-sender-tab";
+import { WebAddressTab } from "@/components/admin/settings-tabs/web-address-tab";
+import { MarketingKitTab } from "@/components/admin/settings-tabs/marketing-kit-tab";
+import { AutomatedEmailsTab } from "@/components/admin/settings-tabs/automated-emails-tab";
+import { PaymentsTab } from "@/components/admin/settings-tabs/payments-tab";
+import { NewProjectSetupTab } from "@/components/admin/settings-tabs/new-project-setup-tab";
+import { ServicesTab } from "@/components/admin/settings-tabs/services-tab";
+import { WorkflowTab } from "@/components/admin/settings-tabs/workflow-tab";
+import { NotificationsTab } from "@/components/admin/settings-tabs/notifications-tab";
+import { IntegrationsTab } from "@/components/admin/settings-tabs/integrations-tab";
+import { parseApiResponse, SettingsTabProvider, type AdminSettingsClientProps, type SettingsTabCtx } from "@/components/admin/settings-tabs/shared";
 
 function SettingsPanel({
   id,
@@ -286,7 +64,7 @@ function SettingsPanel({
       aria-labelledby={`settings-tab-${id}`}
       hidden={!selected}
       tabIndex={selected ? 0 : -1}
-      className={selected ? "outline-none" : "hidden"}
+      className={selected ? "outline-none [&_h2[data-settings-heading]+p]:pl-[52px]" : "hidden"}
     >
       {children}
     </div>
@@ -308,6 +86,7 @@ export function AdminSettingsClient({
   website,
   showTax,
   w9Clients,
+  attention = [],
 }: AdminSettingsClientProps) {
   const [classicLandingEditor, setClassicLandingEditor] = useState(false);
   const router = useRouter();
@@ -362,6 +141,50 @@ export function AdminSettingsClient({
   useEffect(() => {
     setDirty(JSON.stringify(settings) !== baseline);
   }, [settings, baseline]);
+
+  // Live preview: unsaved name, logo, colors and portal background show across the app as they
+  // are edited. Compared with what the server last sent (not the save baseline), so right after
+  // a save the preview holds until the refreshed page catches up, with no flash of the old look.
+  const setBrandPreview = useSetBrandPreview();
+  const shownSurface = parseSurfaceMode(settings.business.surfaceMode);
+  const brandNow = JSON.stringify([getPortalBrandFromSettings(settings), shownSurface]);
+  const brandFromServer = JSON.stringify([
+    getPortalBrandFromSettings(initialSettings),
+    parseSurfaceMode(initialSettings.business.surfaceMode),
+  ]);
+  const previewKey = brandNow === brandFromServer ? "" : brandNow;
+  useEffect(() => {
+    if (!previewKey) {
+      setBrandPreview(null);
+      return;
+    }
+    const [brand, surfaceMode] = JSON.parse(previewKey) as [
+      NonNullable<BrandPreview>["brand"],
+      SurfaceMode,
+    ];
+    setBrandPreview({ brand, surfaceMode });
+  }, [previewKey, setBrandPreview]);
+  useEffect(() => () => setBrandPreview(null), [setBrandPreview]);
+  // Unsaved branding (vs. the save baseline) → the save bar says it's a preview.
+  const brandUnsaved =
+    JSON.stringify([getPortalBrandFromSettings(settings), shownSurface]) !==
+    JSON.stringify([getPortalBrandFromSettings(savedSettings), parseSurfaceMode(savedSettings.business.surfaceMode)]);
+
+  // New interface: the shell's sidebar is the Settings menu; tell it what to show.
+  const selectRef = useRef<(id: SettingsSectionId) => void>(() => {});
+  const navSections = sections.map((s) => `${s.id}:${s.label}`).join("|");
+  const attentionKey = attention.join("|");
+  useEffect(() => {
+    if (!inAppShell) return;
+    publishSettingsNav({
+      sections: sections.map((s) => ({ id: s.id, label: s.label })),
+      active: section,
+      attention: attentionKey ? (attentionKey.split("|") as SettingsSectionId[]) : [],
+      select: (id) => selectRef.current(id),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inAppShell, navSections, section, attentionKey]);
+  useEffect(() => (inAppShell ? () => publishSettingsNav(null) : undefined), [inAppShell]);
 
   useEffect(() => {
     function onBeforeUnload(e: BeforeUnloadEvent) {
@@ -505,7 +328,11 @@ export function AdminSettingsClient({
     setSection(id);
     const hash = sections.find((s) => s.id === id)?.hashes[0];
     if (hash) window.history.replaceState(null, "", `#${hash}`);
+    window.scrollTo({ top: 0 });
   }
+  useEffect(() => {
+    selectRef.current = selectSection;
+  });
 
   // New interface: the Business Website editor lives at Sites → Business Website. Settings
   // links/hashes to it hand off there so there is only ever one place it is edited.
@@ -523,9 +350,33 @@ export function AdminSettingsClient({
 
   const saveFooter = (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <p className="text-sm text-muted">
-        {dirty ? "You have unsaved changes." : "All changes saved."}
+      <p className="flex items-center gap-2 text-sm text-muted">
+        <span
+          className={cn("h-2 w-2 shrink-0 rounded-full", dirty ? "bg-amber-500" : "bg-emerald-500")}
+          aria-hidden
+        />
+        {dirty ? (
+          <span>
+            <span className="font-semibold text-heading">You have unsaved changes.</span>
+            {brandUnsaved ? (
+              <span className="hidden sm:inline"> You&apos;re seeing a preview. Save to apply it for you and your clients.</span>
+            ) : null}
+          </span>
+        ) : (
+          "All changes saved."
+        )}
       </p>
+      <div className="flex items-center gap-2">
+      {dirty && !saving ? (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setSettings(JSON.parse(baseline) as AppSettings)}
+          className="min-h-11"
+        >
+          <Undo2 className="h-4 w-4" /> Discard
+        </Button>
+      ) : null}
       <Button
         variant="accent"
         onClick={() => saveSettings()}
@@ -542,8 +393,18 @@ export function AdminSettingsClient({
           </>
         )}
       </Button>
+      </div>
     </div>
   );
+
+  const tabCtx: SettingsTabCtx = {
+    settings, setSettings, savedSettings, initialSettings, saving, dirty, brandUnsaved, requestFormDirty, travelDirty,
+    colorWarnings, liveBrand, tabAccent, inAppShell, setRestoreOpen, saveSettings, updateNotification,
+    patchEmail, patchBusiness, dismissLogoSuggestion, patchIntegrations, patchTravel, patchProposals, patchPayments,
+    patchVideoSharing, patchMediaSectionDefaults, patchWorkflow, patchLanding, patchWebsite, patchTax, selectSection,
+    notificationEvents, payments, services, staff, canCustomizeLanding, canUseCustomDomain, customDomainState,
+    listingDomain, portalPreviewUrl, serviceNames, website, showTax, w9Clients, router, attention,
+  };
 
   if (redirectToSites) {
     return (
@@ -576,6 +437,7 @@ export function AdminSettingsClient({
             onChange={selectSection}
             accentColor={tabAccent}
             sections={sections}
+            attention={attention}
           />
         }
         shellFooter={saveFooter}
@@ -608,6 +470,7 @@ export function AdminSettingsClient({
                 onChange={selectSection}
                 accentColor={tabAccent}
                 sections={sections}
+                attention={attention}
               />
             </div>
           }
@@ -643,12 +506,15 @@ export function AdminSettingsClient({
           tax={settings.tax}
           onChange={patchTax}
           clients={w9Clients}
+          hideNavOnDesktop={inAppShell}
           nav={
             <SettingsTabNav
               active={section}
               onChange={selectSection}
               accentColor={tabAccent}
               sections={sections}
+              attention={attention}
+              mobileOnly={inAppShell}
             />
           }
           footer={saveFooter}
@@ -677,938 +543,69 @@ export function AdminSettingsClient({
   }
 
   return (
+    <SettingsTabProvider value={tabCtx}>
     <div className="flex flex-col gap-6 md:flex-row md:items-start">
-      <aside className="w-full shrink-0 md:sticky md:top-20 md:w-56">
+      <aside className={cn("w-full shrink-0 md:sticky md:top-20 md:w-56", inAppShell && "md:hidden")}>
         <SettingsTabNav
           active={section}
           onChange={selectSection}
           accentColor={tabAccent}
           sections={sections}
+          attention={attention}
         />
       </aside>
 
-      <div className="min-w-0 flex-1 space-y-4">
+      <div className={cn("min-w-0 flex-1 space-y-4", inAppShell && "mx-auto w-full max-w-5xl")}>
         <SettingsPanel id="identity" active={section}>
-          <div id="settings-business" tabIndex={-1} className="scroll-mt-24">
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-heading">Business Identity</h2>
-                <p className="mt-1 text-sm text-muted">Name, portal title, legal copy, and public links.</p>
-              </div>
-              <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setRestoreOpen(true)}>
-                <RotateCcw className="h-4 w-4" /> Restore platform defaults
-              </Button>
-            </div>
-            <Card className="shadow-sm">
-              <CardContent className="grid gap-4 sm:grid-cols-2 pt-6">
-                <div id="settings-business-name" tabIndex={-1} className="space-y-2 scroll-mt-24">
-                  <Label htmlFor="businessName">Business name</Label>
-                  <Input id="businessName" value={settings.business.businessName} onChange={(e) => patchBusiness({ businessName: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="portalName">Portal name</Label>
-                  <Input id="portalName" value={settings.business.portalName} onChange={(e) => patchBusiness({ portalName: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="adminDisplayName">Admin display name</Label>
-                  <Input id="adminDisplayName" value={settings.business.adminDisplayName} onChange={(e) => patchBusiness({ adminDisplayName: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="legalName">Legal name (copyright)</Label>
-                  <Input id="legalName" value={settings.business.legalName ?? ""} onChange={(e) => patchBusiness({ legalName: e.target.value })} />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="tagline">Tagline</Label>
-                  <Input id="tagline" value={settings.business.tagline ?? ""} onChange={(e) => patchBusiness({ tagline: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="termsUrl">Terms URL</Label>
-                  <Input id="termsUrl" value={settings.business.termsUrl ?? ""} onChange={(e) => patchBusiness({ termsUrl: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="privacyUrl">Privacy URL</Label>
-                  <Input id="privacyUrl" value={settings.business.privacyUrl ?? ""} onChange={(e) => patchBusiness({ privacyUrl: e.target.value })} />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <IdentityTab />
         </SettingsPanel>
 
         <SettingsPanel id="branding" active={section}>
-          <h2 className="text-lg font-semibold text-heading">Branding &amp; Colors</h2>
-          <p className="mt-1 mb-4 text-sm text-muted">Logo, favicon, and brand colors used across the portal.</p>
-          <Card className="shadow-sm">
-            <CardContent className="space-y-6 pt-6">
-              <BrandSurfacePreview
-                primary={settings.business.brandPrimaryColor}
-                accent={settings.business.brandAccentColor}
-                portalName={settings.business.portalName}
-                businessName={settings.business.businessName}
-                logoUrl={settings.business.logoUrl}
-                surfaceMode={parseSurfaceMode(settings.business.surfaceMode)}
-              />
-              <p className="text-xs text-muted">
-                Header currently shows: {liveBrand.portalName} · {liveBrand.name}
-                {dirty ? " (save to apply changes)" : ""}
-              </p>
-              <div id="settings-logo" tabIndex={-1} className="scroll-mt-24 space-y-2">
-                <BrandAssetField
-                  kind="logo"
-                  inputId="logoUrl"
-                  value={settings.business.logoUrl}
-                  onUrlChange={(logoUrl) =>
-                    patchBusiness({
-                      logoUrl,
-                      emailLogoUrl: settings.business.emailLogoUrl || logoUrl,
-                    })
-                  }
-                  onLogoMeasured={(logoLuminance) => patchBusiness({ logoLuminance })}
-                />
-                <p className="text-xs text-muted">
-                  Prefer a transparent PNG. The logo sits directly on the portal nav, with no tile
-                  behind it. If your file has its own background, that background will show.
-                </p>
-                {logoLuminanceClass(settings.business.logoLuminance) === "light" &&
-                parseSurfaceMode(settings.business.surfaceMode) === "light" &&
-                settings.business.logoSuggestionDismissedFor !== settings.business.logoUrl ? (
-                  <div
-                    role="status"
-                    className="flex flex-col gap-3 rounded-lg border border-border bg-subtle px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <p className="text-sm text-foreground">
-                      This logo may be hard to see on a light background. Switch your client portal to a dark background?
-                    </p>
-                    <div className="flex shrink-0 gap-2">
-                      <Button type="button" size="sm" onClick={() => patchBusiness({ surfaceMode: "dark" })}>
-                        Switch to dark
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => void dismissLogoSuggestion()}>
-                        Keep light
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-                <div id="settings-portal-background" tabIndex={-1} className="scroll-mt-24 space-y-2">
-                  <Label id="portal-background-label">Portal background</Label>
-                  <p className="text-xs text-muted">
-                    This applies to your portal and your clients&apos; portal, including shared project links.
-                  </p>
-                  <div
-                    role="radiogroup"
-                    aria-labelledby="portal-background-label"
-                    className="flex flex-wrap gap-2"
-                  >
-                    {(["light", "dark"] as const).map((mode) => {
-                      const selected = parseSurfaceMode(settings.business.surfaceMode) === mode;
-                      return (
-                        <button
-                          key={mode}
-                          type="button"
-                          role="radio"
-                          aria-checked={selected}
-                          onClick={() => patchBusiness({ surfaceMode: mode })}
-                          className={`min-h-11 rounded-lg border px-4 text-sm font-medium ${
-                            selected
-                              ? "border-accent bg-accent-subtle text-heading"
-                              : "border-border bg-card text-foreground hover:bg-subtle"
-                          }`}
-                        >
-                          {mode === "light" ? "Light" : "Dark"}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div id="settings-logo-size" tabIndex={-1} className="scroll-mt-24">
-                  <LogoSizeSlider
-                    id="portalLogoSizePx"
-                    label="Portal nav logo size"
-                    value={settings.business.portalLogoSizePx ?? PORTAL_LOGO_SIZE.default}
-                    min={PORTAL_LOGO_SIZE.min}
-                    max={PORTAL_LOGO_SIZE.max}
-                    help={`Height for the desktop nav logo (${PORTAL_LOGO_SIZE.min}–${PORTAL_LOGO_SIZE.max}px). Mobile uses 80% of this size; large breakpoint uses 115% (capped at ${PORTAL_LOGO_SIZE.max}px). The classic landing page logo size is set separately under Business Website → Advanced.`}
-                    onChange={(portalLogoSizePx) => patchBusiness({ portalLogoSizePx })}
-                  />
-                </div>
-                {(() => {
-                  const logo = settings.business.logoUrl;
-                  const stillDefault =
-                    !logo ||
-                    logo === PLATFORM_BUSINESS_DEFAULTS.logoUrl ||
-                    logo === BRAND.logoUrl;
-                  if (settings.setupAcceptedDefaults?.logo) {
-                    return (
-                      <p className="text-xs text-muted">
-                        Using ShootPortal default logo until you upload your own.
-                      </p>
-                    );
-                  }
-                  if (!stillDefault) return null;
-                  return <AcceptSetupDefaultButton acceptKey="logo" />;
-                })()}
-              </div>
-              <div id="settings-email-logo" tabIndex={-1} className="scroll-mt-24 space-y-3">
-                <BrandAssetField
-                  kind="emailLogo"
-                  inputId="emailLogoUrl"
-                  value={settings.business.emailLogoUrl ?? ""}
-                  onUrlChange={(emailLogoUrl) => patchBusiness({ emailLogoUrl })}
-                />
-                <EmailPreviewDialog
-                  primaryColor={settings.business.brandPrimaryColor}
-                  accentColor={settings.business.brandAccentColor}
-                  emailLogoUrl={settings.business.emailLogoUrl ?? ""}
-                  logoUrl={settings.business.logoUrl ?? ""}
-                  businessName={settings.business.businessName}
-                  portalName={settings.business.portalName}
-                  footerText={settings.email.footerText}
-                />
-              </div>
-              <div id="settings-favicon" tabIndex={-1} className="scroll-mt-24">
-                <BrandAssetField
-                  kind="favicon"
-                  inputId="faviconUrl"
-                  value={settings.business.faviconUrl ?? ""}
-                  onUrlChange={(faviconUrl) => patchBusiness({ faviconUrl })}
-                />
-              </div>
-              <div className="space-y-3">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <ColorField
-                    id="brandPrimaryColor"
-                    label="Brand primary color"
-                    description="This color is the background of the email header. It is also the portal's dark color for headings, the project hero, and the main button."
-                    value={settings.business.brandPrimaryColor}
-                    fallback="#0F172A"
-                    onChange={(v) => patchBusiness({ brandPrimaryColor: v })}
-                    warning={colorWarnings.find((w) => w.field === "brandPrimaryColor")?.message}
-                  />
-                  <ColorField
-                    id="brandAccentColor"
-                    label="Brand accent color"
-                    description="In emails it fills the action button and the active step of the progress indicator, and it colors the footer link. In the portal it colors accent buttons, links, and focus rings."
-                    value={settings.business.brandAccentColor}
-                    fallback="#3B82F6"
-                    onChange={(v) => patchBusiness({ brandAccentColor: v })}
-                    warning={colorWarnings.find((w) => w.field === "brandAccentColor")?.message}
-                  />
-                </div>
-                {(() => {
-                  const stillDefault =
-                    settings.business.brandPrimaryColor ===
-                      PLATFORM_BUSINESS_DEFAULTS.brandPrimaryColor &&
-                    settings.business.brandAccentColor ===
-                      PLATFORM_BUSINESS_DEFAULTS.brandAccentColor;
-                  if (settings.setupAcceptedDefaults?.colors) {
-                    return (
-                      <p className="text-xs text-muted">
-                        Using ShootPortal default colors until you change them.
-                      </p>
-                    );
-                  }
-                  if (!stillDefault) return null;
-                  return <AcceptSetupDefaultButton acceptKey="colors" />;
-                })()}
-              </div>
-            </CardContent>
-          </Card>
+          <BrandingTab />
         </SettingsPanel>
 
         <SettingsPanel id="contact" active={section}>
-          <h2 className="text-lg font-semibold text-heading">Contact Information</h2>
-          <p className="mt-1 mb-4 text-sm text-muted">Email, phone, website, and mailing address.</p>
-          <Card className="shadow-sm">
-            <CardContent className="grid gap-4 sm:grid-cols-2 pt-6">
-              <div id="settings-contact" tabIndex={-1} className="space-y-2 scroll-mt-24">
-                <Label htmlFor="primaryContactEmail">Primary contact email</Label>
-                <Input id="primaryContactEmail" type="email" value={settings.business.primaryContactEmail} onChange={(e) => patchBusiness({ primaryContactEmail: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phoneNumber">Phone number</Label>
-                <Input id="phoneNumber" value={settings.business.phoneNumber} onChange={(e) => patchBusiness({ phoneNumber: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="websiteUrl">Website URL</Label>
-                <Input id="websiteUrl" value={settings.business.websiteUrl} onChange={(e) => patchBusiness({ websiteUrl: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="supportEmail">Support email</Label>
-                <Input id="supportEmail" type="email" value={settings.business.supportEmail ?? ""} onChange={(e) => patchBusiness({ supportEmail: e.target.value })} />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="addressLine1">Address line 1</Label>
-                <Input id="addressLine1" value={settings.business.addressLine1 ?? ""} onChange={(e) => patchBusiness({ addressLine1: e.target.value })} />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="addressLine2">Address line 2</Label>
-                <Input id="addressLine2" value={settings.business.addressLine2 ?? ""} onChange={(e) => patchBusiness({ addressLine2: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="city">City</Label>
-                <Input id="city" value={settings.business.city ?? ""} onChange={(e) => patchBusiness({ city: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="state">State</Label>
-                <Input id="state" value={settings.business.state ?? ""} onChange={(e) => patchBusiness({ state: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="postalCode">Postal code</Label>
-                <Input id="postalCode" value={settings.business.postalCode ?? ""} onChange={(e) => patchBusiness({ postalCode: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="country">Country</Label>
-                <Input id="country" value={settings.business.country ?? ""} onChange={(e) => patchBusiness({ country: e.target.value })} />
-              </div>
-            </CardContent>
-          </Card>
+          <ContactTab />
         </SettingsPanel>
 
         <SettingsPanel id="email" active={section}>
-          <div id="settings-email" tabIndex={-1} className="scroll-mt-24">
-            <h2 className="text-lg font-semibold text-heading">Email</h2>
-            <p className="mt-1 mb-4 text-sm text-muted">
-              How client emails are sent from your portal — sender name, domain, and a quick delivery check.
-            </p>
-            <Card className="shadow-sm">
-              <CardContent className="grid gap-4 sm:grid-cols-2 pt-6">
-                <div className="space-y-2 sm:col-span-2">
-                  <p className="text-sm font-medium text-heading">How mail is sent</p>
-                  <div className="flex flex-col gap-2">
-                    <label className="flex items-start gap-2 text-sm">
-                      <input
-                        type="radio"
-                        className="mt-1 size-4 shrink-0 accent-accent"
-                        checked={settings.email.senderMode !== "custom_domain"}
-                        onChange={() =>
-                          patchEmail({
-                            senderMode: "platform",
-                            senderEmail: "",
-                          })
-                        }
-                      />
-                      <span>
-                        Platform (default) — clients see this business name on the shared sending domain.
-                        Replies go to the contact address. No DNS setup.
-                      </span>
-                    </label>
-                    <label className="flex items-start gap-2 text-sm">
-                      <input
-                        type="radio"
-                        className="mt-1 size-4 shrink-0 accent-accent"
-                        checked={settings.email.senderMode === "custom_domain"}
-                        disabled={settings.email.domainVerificationStatus !== "verified"}
-                        onChange={() => {
-                          if (settings.email.domainVerificationStatus !== "verified") {
-                            toast.error("Verify a custom domain before switching sender mode");
-                            return;
-                          }
-                          patchEmail({ senderMode: "custom_domain" });
-                        }}
-                      />
-                      <span>
-                        Custom domain — only after DNS verification. Sender address must be on that domain.
-                      </span>
-                    </label>
-                  </div>
-                </div>
-                <div className="space-y-2" id="settings-from-name" tabIndex={-1}>
-                  <Label htmlFor="fromName">Default from name</Label>
-                  <Input
-                    id="fromName"
-                    value={settings.email.fromName}
-                    onChange={(e) => patchEmail({ fromName: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="senderEmail">Notification sender email</Label>
-                  <Input
-                    id="senderEmail"
-                    type="email"
-                    value={settings.email.senderEmail}
-                    disabled={settings.email.senderMode !== "custom_domain"}
-                    onChange={(e) => patchEmail({ senderEmail: e.target.value })}
-                  />
-                  <p className="text-xs text-muted leading-relaxed">
-                    Used only with a verified custom domain, and the address must be on that domain.
-                    Platform mode always sends from the shared mailbox.
-                  </p>
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="customDomain">Custom sending domain</Label>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      id="customDomain"
-                      value={settings.email.customDomain}
-                      onChange={(e) => patchEmail({ customDomain: e.target.value })}
-                      placeholder="mail.yourdomain.com"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="shrink-0"
-                      onClick={async () => {
-                        try {
-                          const res = await fetch("/api/admin/email/domain", {
-                            method: "POST",
-                            credentials: "include",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ domain: settings.email.customDomain }),
-                          });
-                          const data = await parseApiResponse(res);
-                          if (data.settings) setSettings(data.settings as AppSettings);
-                          toast.success("Add the DNS records below, then re-check verification");
-                        } catch (error) {
-                          toast.error(error instanceof Error ? error.message : "Domain setup failed");
-                        }
-                      }}
-                    >
-                      Start verification
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="shrink-0"
-                      onClick={async () => {
-                        try {
-                          const res = await fetch("/api/admin/email/domain/verify", {
-                            method: "POST",
-                            credentials: "include",
-                          });
-                          const data = await parseApiResponse(res);
-                          if (data.settings) setSettings(data.settings as AppSettings);
-                          toast.success(`Domain status: ${data.domainVerificationStatus}`);
-                        } catch (error) {
-                          toast.error(error instanceof Error ? error.message : "Re-check failed");
-                        }
-                      }}
-                    >
-                      Re-check DNS
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted">
-                    Status: {settings.email.domainVerificationStatus}
-                  </p>
-                  <DomainRecordsList refreshKey={`${settings.email.resendDomainId}:${settings.email.domainVerificationStatus}`} />
-                </div>
-                <div className="space-y-2 sm:col-span-2" id="settings-reply-to" tabIndex={-1}>
-                  <Label htmlFor="replyTo">Reply-to email</Label>
-                  <Input id="replyTo" type="email" value={settings.email.replyTo} onChange={(e) => patchEmail({ replyTo: e.target.value })} />
-                  <p className="text-xs text-muted">
-                    If empty, replies use the business primary contact email.
-                  </p>
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="footerText">Email footer text</Label>
-                  <Textarea id="footerText" rows={3} value={settings.email.footerText} onChange={(e) => patchEmail({ footerText: e.target.value })} />
-                </div>
-              </CardContent>
-            </Card>
-            <div className="mt-4">
-              <EmailDiagnosticsCard />
-            </div>
-          </div>
+          <EmailSenderTab />
         </SettingsPanel>
 
         <SettingsPanel id="custom_domain" active={section}>
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Use your own web address</h2>
-            <p className="mt-1 text-sm text-muted">
-              Up to three addresses, each optional and set up separately: your public{" "}
-              <span className="font-medium text-heading">Business Website</span> (www.yourstudio.com), your{" "}
-              <span className="font-medium text-heading">Client Portal</span> (portal.yourstudio.com) and your{" "}
-              <span className="font-medium text-heading">Property Websites</span> (listings.yourstudio.com). Everything keeps working on
-              your ShootPortal address too.
-            </p>
-            <WebsiteDomainSection
-              entitled={canUseCustomDomain}
-              initialState={website.domainState}
-              setupRequired={website.domain.setupRequired}
-              websiteLive={savedSettings.website.launched}
-            />
-          </div>
-          <div id="settings-custom-domain" tabIndex={-1} className="mt-8 scroll-mt-24 space-y-4 border-t border-border pt-6">
-            <h3 className="text-base font-semibold text-heading">Client Portal Address</h3>
-            <p className="-mt-2 text-sm text-muted">Used for clients signing in to your ShootPortal portal — projects, payments and media delivery.</p>
-            <CustomDomainSettingsCard entitled={canUseCustomDomain} initialState={customDomainState} />
-            <ListingDomainSection
-              entitled={canUseCustomDomain}
-              state={listingDomain.state}
-              setupRequired={listingDomain.setupRequired}
-              suggestedRootDomain={listingDomain.suggestedRootDomain}
-              returnTo={listingDomain.returnTo}
-            />
-          </div>
+          <WebAddressTab />
         </SettingsPanel>
 
         <SettingsPanel id="marketing_kit" active={section}>
-          <div id="settings-marketing-kit" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Marketing Kit</h2>
-            <p className="mt-1 text-sm text-muted">
-              Property websites and social media kits built automatically from each project. Include them free or sell them as
-              add-ons — clients pay through your connected Stripe account. Override any project from its Marketing Kit card.
-            </p>
-            <MarketingKitSettingsCard
-              value={settings.marketingKit}
-              onChange={(marketingKit) => setSettings((prev) => ({ ...prev, marketingKit }))}
-            />
-          </div>
+          <MarketingKitTab />
         </SettingsPanel>
 
         <SettingsPanel id="automated_emails" active={section}>
-          <div id="settings-automated-emails" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Automated Emails</h2>
-            <p className="mt-1 text-sm text-muted">
-              Edit the subject and body for emails your clients receive. Timing and channel toggles stay under
-              Workflow Automation and Notifications.
-            </p>
-            <EmailTemplatesSettingsCard
-              workflow={settings.workflow}
-              onChange={patchWorkflow}
-              portalName={settings.business.portalName}
-              businessName={settings.business.businessName}
-            />
-          </div>
+          <AutomatedEmailsTab />
         </SettingsPanel>
 
         <SettingsPanel id="payments" active={section}>
-          <div id="settings-payments" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Payments</h2>
-            <p className="mt-1 mb-4 text-sm text-muted">Connect your Stripe account so clients pay you directly.</p>
-            {payments}
-            <Card className="shadow-sm" id="settings-card-fee">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Card processing fee</CardTitle>
-                <p className="text-sm text-muted">
-                  Choose who pays Stripe&apos;s card fee. Bank (ACH) payments never carry it.
-                </p>
-              </CardHeader>
-              <CardContent className="overflow-hidden rounded-xl border border-border p-0">
-                <div className="px-4 py-3">
-                  <RowToggle
-                    id="passCardFeeToClient"
-                    label="Clients pay the card processing fee"
-                    checked={settings.workflow.payments.passCardFeeToClient}
-                    onChange={(v) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        workflow: { ...prev.workflow, payments: { ...prev.workflow.payments, passCardFeeToClient: v } },
-                      }))
-                    }
-                  />
-                  <p className="mt-2 px-4 text-xs leading-relaxed text-muted">
-                    When on, card checkouts add a &ldquo;Card processing fee&rdquo; line so you keep the full invoice amount (about 2.9% + 30¢,
-                    never more than 3%). For example, a $500 invoice costs a card-paying client $515. Clients see the fee before they pay
-                    and can avoid it by paying by bank. Surcharge rules vary: card networks don&apos;t allow them on debit cards and some
-                    states restrict them, so check what applies to your business before turning this on.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="shadow-sm" id="settings-download-gate">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Download access</CardTitle>
-                <p className="text-sm text-muted">
-                  Controls when clients with project access can download full-resolution files.
-                </p>
-              </CardHeader>
-              <CardContent className="overflow-hidden rounded-xl border border-border p-0">
-                <div className="divide-y divide-border">
-                  <div className="px-4 py-3">
-                    <RowToggle
-                      id="requireDeliveredForDownloads"
-                      label="Require projects to reach Delivered before clients can download media"
-                      checked={settings.payments.requireDeliveredForDownloads}
-                      onChange={(v) => patchPayments({ requireDeliveredForDownloads: v })}
-                    />
-                    <p className="mt-2 px-4 text-xs text-muted">
-                      When off, anyone with project access can download photos, videos, and documents at
-                      any status — including before they pay. Video review playback and previews are
-                      always available either way.
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="shadow-sm" id="settings-video-sharing">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Public video sharing</CardTitle>
-                <p className="text-sm text-muted">
-                  Any video can be shared publicly from its player with <strong>Share</strong> — a link anyone can
-                  watch and an embed code for websites. Only that one video becomes public; the project and its
-                  other media stay private.
-                </p>
-              </CardHeader>
-              <CardContent className="overflow-hidden rounded-xl border border-border p-0">
-                <div className="divide-y divide-border">
-                  <div className="px-4 py-3">
-                    <RowToggle
-                      id="allowClientPublicVideoSharing"
-                      label="Let clients publicly share and embed their delivered videos"
-                      checked={settings.videoSharing.allowClientPublicSharing}
-                      onChange={(v) => patchVideoSharing({ allowClientPublicSharing: v })}
-                    />
-                    <p className="mt-2 px-4 text-xs text-muted">
-                      Great for agents who want listing videos on their own websites. Clients can share once the
-                      project&apos;s downloads are unlocked. Turning this off also stops videos your clients already
-                      made public; videos you shared yourself keep working. You can turn off any video&apos;s public
-                      link from its Share button at any time.
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            {!settings.setupAcceptedDefaults?.stripe ? (
-              <AcceptSetupDefaultButton acceptKey="stripe" />
-            ) : (
-              <p className="text-xs text-muted">
-                You chose to connect payments later. Client invoices stay unavailable until Stripe is connected.
-              </p>
-            )}
-          </div>
+          <PaymentsTab />
         </SettingsPanel>
 
         <SettingsPanel id="new_project_setup" active={section}>
-          <div id="settings-new-project-setup" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">New project setup</h2>
-            <p className="mt-1 mb-4 text-sm text-muted">
-              Defaults applied when a new project is created. Existing projects keep their own settings.
-            </p>
-            <Card className="shadow-sm" id="settings-media-section-defaults">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Client media sections</CardTitle>
-                <p className="text-sm text-muted">
-                  Defaults for new projects only. Existing projects keep their own toggles.
-                </p>
-              </CardHeader>
-              <CardContent className="overflow-hidden rounded-xl border border-border p-0">
-                <div className="divide-y divide-border">
-                  <RowToggle
-                    id="mediaDefaultPhotos"
-                    label="Photo Gallery visible to clients by default"
-                    checked={settings.mediaSectionDefaults.photos}
-                    onChange={(v) => patchMediaSectionDefaults({ photos: v })}
-                  />
-                  <RowToggle
-                    id="mediaDefaultVideos"
-                    label="Video visible to clients by default"
-                    checked={settings.mediaSectionDefaults.videos}
-                    onChange={(v) => patchMediaSectionDefaults({ videos: v })}
-                  />
-                  <RowToggle
-                    id="mediaDefaultTours"
-                    label="360° Virtual Tours visible to clients by default"
-                    checked={settings.mediaSectionDefaults.tours}
-                    onChange={(v) => patchMediaSectionDefaults({ tours: v })}
-                  />
-                  <RowToggle
-                    id="mediaDefaultModels"
-                    label="3D Models visible to clients by default"
-                    checked={settings.mediaSectionDefaults.models}
-                    onChange={(v) => patchMediaSectionDefaults({ models: v })}
-                  />
-                  <RowToggle
-                    id="mediaDefaultDocuments"
-                    label="Documents visible to clients by default"
-                    checked={settings.mediaSectionDefaults.documents}
-                    onChange={(v) => patchMediaSectionDefaults({ documents: v })}
-                  />
-                  <RowToggle
-                    id="mediaDefaultEstimates"
-                    label="Estimates & Proposals visible to clients by default"
-                    checked={settings.mediaSectionDefaults.estimates}
-                    onChange={(v) => patchMediaSectionDefaults({ estimates: v })}
-                  />
-                  <RowToggle
-                    id="mediaDefaultPayments"
-                    label="Payments visible to clients by default"
-                    checked={settings.mediaSectionDefaults.payments}
-                    onChange={(v) => patchMediaSectionDefaults({ payments: v })}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-            <DefaultDocumentsSettingsCard />
-          </div>
+          <NewProjectSetupTab />
         </SettingsPanel>
 
         <SettingsPanel id="services" active={section}>
-          <div id="settings-services" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Services</h2>
-            <p className="mt-1 mb-4 text-sm text-muted">Catalog and preliminary estimate prices for this business.</p>
-            <SettingsCollapsible
-              id="settings-instant-preliminary"
-              title="Request form"
-              description="Controls whether new public and portal requests collect a service and create an instant preliminary estimate."
-              defaultOpen
-              storageKey="admin-settings-request-form"
-              dirty={requestFormDirty}
-            >
-              <Card className="shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Request form</CardTitle>
-                  <p className="text-sm text-muted">
-                    Controls whether new public and portal requests collect a service and create an
-                    instant preliminary estimate.
-                  </p>
-                </CardHeader>
-                <CardContent className="overflow-hidden rounded-xl border border-border p-0">
-                  <div className="divide-y divide-border">
-                    <div className="px-4 py-3">
-                      <RowToggle
-                        id="autoPreliminaryEstimate"
-                        label="Provide instant preliminary estimate"
-                        checked={settings.proposals.autoPreliminaryEstimate}
-                        onChange={(v) => patchProposals({ autoPreliminaryEstimate: v })}
-                      />
-                      <p className="mt-2 px-4 text-xs text-muted">
-                        When off, the request form becomes an inquiry (no service selection) and no
-                        preliminary estimate is created. You can still send official estimates
-                        manually.
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </SettingsCollapsible>
-            <SettingsCollapsible
-              id="settings-service-catalog"
-              title="Services"
-              description="Catalog and preliminary estimate prices for this business."
-              defaultOpen
-              storageKey="admin-settings-service-catalog"
-            >
-              {services}
-            </SettingsCollapsible>
-            <SettingsCollapsible
-              id="settings-travel-fees"
-              title="Travel fees"
-              description="Charge for jobs outside the straight-line ZIP service area."
-              storageKey="admin-settings-travel-fees"
-              dirty={travelDirty}
-            >
-              <TravelFeesSettingsCard
-                travel={settings.travel}
-                postalCode={settings.business.postalCode}
-                onChange={patchTravel}
-              />
-            </SettingsCollapsible>
-          </div>
+          <ServicesTab />
         </SettingsPanel>
 
         <SettingsPanel id="workflow" active={section}>
-          <div id="settings-workflow" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Workflow Automation</h2>
-            <p className="mt-1 text-sm text-muted">Stage actions, reminders, and proposal defaults.</p>
-            <WorkflowSettingsCard workflow={settings.workflow} onChange={patchWorkflow} />
-            <Card className="shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Proposal Settings</CardTitle>
-                <p className="text-sm text-muted">Affects new projects and proposals going forward.</p>
-              </CardHeader>
-              <CardContent className="overflow-hidden rounded-xl border border-border p-0">
-                <div className="divide-y divide-border">
-                  <RowToggle
-                    id="requireAdminReview"
-                    label="Require admin review before official proposal is sent"
-                    checked={settings.proposals.requireAdminReviewBeforeOfficial}
-                    onChange={(v) => patchProposals({ requireAdminReviewBeforeOfficial: v })}
-                  />
-                  <RowToggle
-                    id="showPreliminary"
-                    label="Show preliminary estimate to clients"
-                    checked={settings.proposals.showPreliminaryToClients}
-                    onChange={(v) => patchProposals({ showPreliminaryToClients: v })}
-                  />
-                  <RowToggle
-                    id="allowChanges"
-                    label="Allow clients to request proposal changes"
-                    checked={settings.proposals.allowClientProposalChanges}
-                    onChange={(v) => patchProposals({ allowClientProposalChanges: v })}
-                  />
-                </div>
-                <div className="grid gap-4 border-t border-border p-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="estimateExpiration">Default estimate expiration (days)</Label>
-                    <Input
-                      id="estimateExpiration"
-                      type="number"
-                      min={0}
-                      value={settings.proposals.defaultEstimateExpirationDays}
-                      onChange={(e) => patchProposals({ defaultEstimateExpirationDays: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="proposalExpiration">Default proposal expiration (days)</Label>
-                    <Input
-                      id="proposalExpiration"
-                      type="number"
-                      min={0}
-                      value={settings.proposals.defaultProposalExpirationDays}
-                      onChange={(e) => patchProposals({ defaultProposalExpirationDays: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="preliminaryDisclaimer">Preliminary estimate disclaimer</Label>
-                    <Textarea
-                      id="preliminaryDisclaimer"
-                      rows={4}
-                      value={settings.proposals.preliminaryDisclaimer}
-                      onChange={(e) => patchProposals({ preliminaryDisclaimer: e.target.value })}
-                    />
-                    <p className="text-xs text-muted">Use {"{{businessName}}"} — it is replaced when the estimate is shown.</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <WorkflowTab />
         </SettingsPanel>
 
         <SettingsPanel id="notifications" active={section}>
-          <div id="settings-notifications" tabIndex={-1} className="scroll-mt-24">
-            <h2 className="text-lg font-semibold text-heading">Notifications</h2>
-            <p className="mt-1 mb-2 text-sm text-muted">
-              Toggle delivery channels per event. Activity still logs when notifications are off.
-            </p>
-            <p className="mb-4 text-sm text-muted">
-              Push notifications are sent to your team (admins) only. Clients receive in-app and email
-              alerts — they are never sent push notifications.
-            </p>
-            <Card className="shadow-sm">
-              <CardContent className="p-0 sm:p-0">
-                <div className="hidden overflow-hidden md:block">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-subtle text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-                        <th className="px-4 py-3">Event</th>
-                        <th className="w-20 px-2 py-3 text-center">In-app</th>
-                        <th className="w-20 px-2 py-3 text-center">Email</th>
-                        <th className="w-20 px-2 py-3 text-center">Push</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {notificationEvents.map((event, index) => (
-                        <tr
-                          key={event.key}
-                          className={cn(
-                            "border-b border-border/70 last:border-0",
-                            index % 2 === 1 && "bg-subtle/40"
-                          )}
-                        >
-                          <td className="px-4 py-2.5">
-                            <p className="font-medium text-heading leading-snug">{event.label}</p>
-                            <p className="text-[11px] text-muted leading-snug mt-0.5">{event.description}</p>
-                          </td>
-                          <td className="px-2 py-2.5 text-center">
-                            <CompactToggle
-                              id={`${event.key}-inapp-d`}
-                              label={`${event.label} in-app`}
-                              checked={settings.notifications[event.key].inApp}
-                              onChange={(v) => updateNotification(event.key, "inApp", v)}
-                            />
-                          </td>
-                          <td className="px-2 py-2.5 text-center">
-                            <CompactToggle
-                              id={`${event.key}-email-d`}
-                              label={`${event.label} email`}
-                              checked={settings.notifications[event.key].email}
-                              onChange={(v) => updateNotification(event.key, "email", v)}
-                            />
-                          </td>
-                          <td className="px-2 py-2.5 text-center">
-                            {event.audience === "admin" || event.audience === "both" ? (
-                              <CompactToggle
-                                id={`${event.key}-push-d`}
-                                label={`${event.label} push`}
-                                checked={settings.notifications[event.key].push}
-                                onChange={(v) => updateNotification(event.key, "push", v)}
-                              />
-                            ) : (
-                              <span className="text-xs text-muted">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="divide-y divide-border md:hidden">
-                  {notificationEvents.map((event) => (
-                    <div key={`mobile-${event.key}`} className="px-4 py-3">
-                      <p className="text-sm font-medium text-heading">{event.label}</p>
-                      <p className="text-xs text-muted mt-0.5 mb-2">{event.description}</p>
-                      <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-medium text-muted">
-                        <div>
-                          <p className="mb-1">In-app</p>
-                          <CompactToggle
-                            id={`${event.key}-inapp-m`}
-                            label={`${event.label} in-app`}
-                            checked={settings.notifications[event.key].inApp}
-                            onChange={(v) => updateNotification(event.key, "inApp", v)}
-                          />
-                        </div>
-                        <div>
-                          <p className="mb-1">Email</p>
-                          <CompactToggle
-                            id={`${event.key}-email-m`}
-                            label={`${event.label} email`}
-                            checked={settings.notifications[event.key].email}
-                            onChange={(v) => updateNotification(event.key, "email", v)}
-                          />
-                        </div>
-                        <div>
-                          <p className="mb-1">Push</p>
-                          {event.audience === "admin" || event.audience === "both" ? (
-                            <CompactToggle
-                              id={`${event.key}-push-m`}
-                              label={`${event.label} push`}
-                              checked={settings.notifications[event.key].push}
-                              onChange={(v) => updateNotification(event.key, "push", v)}
-                            />
-                          ) : (
-                            <span className="text-xs">—</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <NotificationsTab />
         </SettingsPanel>
 
         <SettingsPanel id="integrations" active={section}>
-          <div id="settings-integrations" tabIndex={-1} className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-semibold text-heading">Integrations</h2>
-            <p className="mt-1 text-sm text-muted">Google Calendar and GoHighLevel.</p>
-            <GoogleCalendarSettingsCard />
-            <Card className="shadow-sm">
-              <CardContent className="space-y-4 pt-6">
-                <div className="space-y-2">
-                  <Label htmlFor="ghlWebhookUrl">GoHighLevel inbound webhook URL</Label>
-                  <Input
-                    id="ghlWebhookUrl"
-                    value={settings.integrations?.ghlWebhookUrl ?? ""}
-                    onChange={(e) => patchIntegrations({ ghlWebhookUrl: e.target.value })}
-                    placeholder="https://…"
-                  />
-                  <p className="text-xs text-muted">
-                    Paste your GoHighLevel inbound webhook URL to sync new project requests into GHL.
-                    Leave blank to skip.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ghlLeadSource">Lead source label in GoHighLevel</Label>
-                  <Input
-                    id="ghlLeadSource"
-                    value={settings.integrations?.ghlLeadSource ?? ""}
-                    onChange={(e) => patchIntegrations({ ghlLeadSource: e.target.value })}
-                    placeholder="ShootPortal"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <IntegrationsTab />
         </SettingsPanel>
 
         <SettingsPanel id="staff" active={section}>
@@ -1636,11 +633,17 @@ export function AdminSettingsClient({
         )}
 
         {section !== "staff" ? (
-          <div className="sticky bottom-0 z-30 -mx-4 border-t border-border bg-card/95 px-4 py-4 backdrop-blur-md sm:-mx-6 sm:px-6 md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
+          <div
+            className={cn(
+              "sticky bottom-0 z-30 -mx-4 border-t border-border bg-card/95 px-4 py-4 backdrop-blur-md sm:-mx-6 sm:px-6 md:mx-0 md:rounded-2xl md:border md:px-5 md:py-3 max-md:[body[data-admin-pwa-nav]:not([data-admin-pwa-nav-off])_&]:bottom-[calc(var(--admin-pwa-nav-height)+env(safe-area-inset-bottom,0px))]",
+              dirty ? "md:bottom-4 md:shadow-lg" : "md:static md:shadow-sm"
+            )}
+          >
             {saveFooter}
           </div>
         ) : null}
       </div>
     </div>
+    </SettingsTabProvider>
   );
 }

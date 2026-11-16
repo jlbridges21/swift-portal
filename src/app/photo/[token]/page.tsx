@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getAppSettings } from "@/lib/app-settings";
-import { parseSurfaceMode } from "@/lib/brand-color";
+import { surfaceChrome } from "@/lib/brand-color";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
 import { recordMediaShareView, resolveMediaShareToken } from "@/lib/media-shares";
 import {
@@ -29,8 +29,7 @@ export async function generateViewport(): Promise<Viewport> {
   const host = await getPublicHostContext();
   if (!isActivePublicTenant(host)) return { themeColor: "#F8FAFC", colorScheme: "light" };
   const settings = await getAppSettings(host.businessId);
-  const dark = parseSurfaceMode(settings.business.surfaceMode) === "dark";
-  return { themeColor: dark ? "#14181F" : "#F8FAFC", colorScheme: dark ? "dark" : "light" };
+  return surfaceChrome(settings.business);
 }
 
 /**
