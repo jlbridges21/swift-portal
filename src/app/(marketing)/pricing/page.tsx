@@ -172,7 +172,7 @@ export default async function PricingPage() {
             <WorkflowCoverageMap />
           </div>
           <p className="mx-auto mt-6 max-w-2xl text-center text-sm leading-relaxed text-[#64748B]">
-            Keep your editing software and your accounting software. ShootPortal runs the client side of the business around them.
+            Keep your accounting software, and your favorite editor if you like. ShootPortal edits photos too, and runs the client side of the business around it all.
           </p>
         </Section>
 

@@ -470,7 +470,7 @@ export const article: BlogArticle = {
           </Figure>
           <p>
             What it doesn&apos;t replace: your bookkeeping or accounting software, your contracts (there&apos;s no
-            e-signature), and your editing tools. It also doesn&apos;t offer client self-booking into open time slots,
+            e-signature), and your video editing software (photos can be edited right in ShootPortal). It also doesn&apos;t offer client self-booking into open time slots,
             property websites, or Zillow Showcase delivery, so weigh those if your agents expect them.{" "}
             {ctx.studioMonthly ? (
               <>

@@ -405,7 +405,7 @@ export function InteractiveTour({ video, className }: { video: SolutionVideoAsse
       </div>
       {chapters.length ? (
         <nav aria-label="Tour chapters" className="mt-4 -mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-          <ol className="flex min-w-max gap-2 sm:grid sm:min-w-0 sm:grid-cols-9">
+          <ol className="flex min-w-max gap-2 sm:grid sm:min-w-0" style={{ gridTemplateColumns: `repeat(${chapters.length}, minmax(0, 1fr))` }}>
             {chapters.map((c, i) => {
               const end = chapters[i + 1]?.t ?? dur;
               const pct = i < active ? 100 : i > active ? 0 : Math.min(100, Math.max(0, ((time - c.t) / Math.max(0.1, end - c.t)) * 100));

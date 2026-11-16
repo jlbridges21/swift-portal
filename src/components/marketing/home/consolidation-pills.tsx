@@ -7,6 +7,7 @@ import {
   FolderKanban,
   Images,
   Receipt,
+  SlidersHorizontal,
   Users,
 } from "lucide-react";
 import { useInViewOnce, usePrefersReducedMotion } from "./motion";
@@ -18,6 +19,7 @@ const ITEMS = [
   { label: "Scheduling", icon: CalendarClock },
   { label: "File delivery", icon: FolderKanban },
   { label: "Proofing", icon: Images },
+  { label: "Photo editing", icon: SlidersHorizontal },
   { label: "Invoicing", icon: Receipt },
   { label: "Payments", icon: CreditCard },
 ] as const;

@@ -44,7 +44,7 @@ import {
 } from "@/components/solutions/solution-sections";
 import { FeatureTabs } from "@/components/solutions/feature-tabs";
 import { FloatingChip } from "@/components/solutions/solution-visuals";
-import { ShowcaseImage } from "@/components/solutions/solution-media";
+import { LoopVideo, ShowcaseImage } from "@/components/solutions/solution-media";
 import { MEDIA } from "@/lib/solution-media";
 import { WorkflowCoverageMap } from "@/components/blog/conversion-parts";
 
@@ -197,6 +197,18 @@ export default async function PhotographyBusinessManagementSoftwarePage() {
                       video review software
                     </Link>
                     .
+                  </p>
+                ),
+              },
+              {
+                key: "editing",
+                title: "Photo editing",
+                summary: "Edit and finish photos inside the project.",
+                visual: <LoopVideo video={MEDIA.shared.editing} frame="dark" />,
+                body: (
+                  <p>
+                    Open any photo in the built-in editor: one-click Auto, exposure, tone, white balance, curves, crop, and HDR or black-and-white
+                    looks. Compare before and after, then save the edit back to the project as a new version.
                   </p>
                 ),
               },

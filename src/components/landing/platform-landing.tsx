@@ -183,8 +183,8 @@ export function PlatformLanding({
               Run your entire media business from one place.
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-[#475569] sm:text-lg sm:leading-relaxed">
-              Manage leads, projects, scheduling, client communication, media delivery, invoices,
-              and payments in one simple portal built for real estate media professionals.
+              Manage leads, projects, scheduling, client communication, photo editing, media delivery,
+              invoices, and payments in one simple portal built for real estate media professionals.
             </p>
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
               <Link href="/signup" className="inline-flex" data-sp-cta="home:hero">
@@ -273,6 +273,7 @@ export function PlatformLanding({
                 { key: "estimates", title: "Estimates & approvals", summary: "Send the proposal; the client approves online.", visual: <ShowcaseImage image={MEDIA.realEstate.twoSided} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Preliminary estimates can go out automatically. You send the official proposal and the client approves it or requests changes in their portal.</p> },
                 { key: "calendar", title: "Scheduling", summary: "Shoots on your calendar, next to Google.", visual: <ShowcaseImage image={MEDIA.booking.calendar} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Propose a shoot time and the client accepts or counters. Shoots push to your Google Calendar, and your Google events show alongside them.</p> },
                 { key: "pipeline", title: "Projects", summary: "Every job on one board, from request to delivered.", visual: <ShowcaseImage image={MEDIA.workflow.stages} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Projects move through clear stages, and your client follows the same progress in their portal.</p> },
+                { key: "editing", title: "Photo editing", summary: "Edit and finish photos without leaving the app.", visual: <LoopVideo video={MEDIA.shared.editing} frame="dark" />, body: <p>Open any photo from the project in the built-in editor: one-click Auto, exposure, highlights, shadows, white balance, curves, crop, and HDR or black-and-white looks. Compare before and after, then save the edit back to the project.</p> },
                 { key: "review", title: "Video review", summary: "Feedback pinned to the exact second.", visual: <ShowcaseImage image={MEDIA.videoReview.features} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Clients comment at a timestamp; you reply, resolve, and upload numbered versions.</p> },
                 { key: "payments", title: "Payments", summary: "Clients pay in one tap; files unlock.", visual: <LoopVideo video={MEDIA.shared.checkout} frame="dark" />, body: <p>Clients tap Pay Now and pay by card or wallet (or bank account, if you turn it on) in a checkout with your brand on it, straight to your own Stripe account. They get a receipt, and their downloads unlock.</p> },
                 { key: "delivery", title: "Delivery", summary: "Photos and video in a branded portal.", visual: <ShowcaseImage image={MEDIA.delivery.gallery} sizes="(min-width: 1024px) 640px, 100vw" />, body: <p>Deliver photos, video, tours, and documents with full-size or 2048px downloads and ZIP files. Downloads can wait for payment.</p> },

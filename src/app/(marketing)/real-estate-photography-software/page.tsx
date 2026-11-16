@@ -75,7 +75,7 @@ export default async function RealEstatePhotographySoftwarePage() {
             <>
               From the agent&apos;s request to the final MLS download, ShootPortal keeps your estimates, shoot times, client
               messages, payments, and photo and video delivery on one project, in a portal branded to your business. It runs the
-              business; keep using your favorite editor for the images.
+              business, and you can edit the photos right inside it or keep your favorite editor.
             </>
           }
           ctaId={cta("hero")}
@@ -109,13 +109,13 @@ export default async function RealEstatePhotographySoftwarePage() {
         </Section>
 
         <DemoShowcase
-          title="Watch a listing go from request to paid"
-          intro="A 37-second walkthrough of real ShootPortal screens: the agent's request, the automatic estimate, the shoot on your calendar, video feedback, and payment."
+          title="Watch a listing go from request to MLS download"
+          intro="A narrated one-minute walkthrough of the real app: the agent's request and instant estimate, the proposal, the shoot on your calendar, editing the listing photos, payment, and the final download. Tap any step to jump to it."
           video={MEDIA.realEstate.demo}
           points={[
-            "The agent requests a shoot on your branded portal",
-            "An automatic preliminary estimate based on the service",
-            "Clients comment on the exact second of the video, then pay through Stripe",
+            "The agent books your listing package on your branded portal",
+            "Edit the listing photos right inside ShootPortal",
+            "The agent pays by card, then downloads full-size or MLS-ready files",
           ]}
           ctaId={cta("demo")}
           trialDays={ctx.trialDays}
@@ -143,7 +143,7 @@ export default async function RealEstatePhotographySoftwarePage() {
         <Section
           id="workflow"
           eyebrow="The complete workflow"
-          title="Request → Estimate → Schedule → Shoot → Review → Pay → Deliver"
+          title="Request → Estimate → Schedule → Shoot → Edit → Review → Pay → Deliver"
           intro="These are the stages every listing moves through in ShootPortal, and the real features at each step."
           tone="cloud"
         >
@@ -237,6 +237,25 @@ export default async function RealEstatePhotographySoftwarePage() {
               visual={<CrmRecordDiagram />}
             />
             <FeatureSpotlight
+              eyebrow="Photo editing"
+              title="Edit listing photos without leaving ShootPortal"
+              body={
+                <p>
+                  Open any photo from the project in the built-in editor. Start with one-click Auto, then fine-tune exposure,
+                  highlights, shadows, whites, and white balance, or try the HDR and black-and-white looks. Flip to before and
+                  after to check your work, and save the edit back to the project as a new version the agent sees in the portal.
+                </p>
+              }
+              bullets={[
+                "Edit one photo or a batch, right from the project",
+                "Light, color, curves, crop, and presets in a pro-style editor",
+                "Edits save to the project; earlier versions stay in the history",
+              ]}
+              visual={<LoopVideo video={MEDIA.shared.editing} frame="dark" />}
+              caption="Real ShootPortal screen recording: a listing photo edited in the built-in editor (sample data)."
+            />
+            <FeatureSpotlight
+              reverse
               eyebrow="Payments"
               title="Get paid before the files leave your hands"
               body={
@@ -251,7 +270,6 @@ export default async function RealEstatePhotographySoftwarePage() {
               visual={<PaymentFlowDiagram />}
             />
             <FeatureSpotlight
-              reverse
               eyebrow="Photo & video delivery"
               title="One link per property, ready for the MLS"
               body={

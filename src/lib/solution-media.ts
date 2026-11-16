@@ -48,7 +48,13 @@ export const MEDIA = {
     mediaDelivery: img("real-estate-software", "real-estate-media-delivery", "ShootPortal media library on laptop and phone with aerial listing photos organized by project"),
     twoSided: img("real-estate-software", "real-estate-two-sided-experience", "Photographer view of an estimate with line items next to the agent's view of the official proposal with Approve and Request changes"),
     workflowLoop: vid("real-estate-software", "real-estate-workflow-animation", "Animation of the ShootPortal workflow: request, estimate, schedule, shoot, review, pay, deliver, with real screens at each step", { webm: true }),
-    demo: vid("real-estate-software", "real-estate-workflow-demo", "Demo: an agent requests a shoot, gets an automatic preliminary estimate, the shoot lands on the calendar, the client comments on video, and pays through Stripe", { title: "A listing from request to paid", duration: "0:37" }),
+    demo: vid("real-estate-software", "real-estate-product-video", "Narrated real estate walkthrough: an agent books a listing package and gets an instant estimate, you send the proposal and the agent approves it, you schedule the shoot, edit the listing photos in ShootPortal, the agent pays by card, and downloads unlock in full size or MLS sizes", {
+      title: "A listing from request to MLS download", duration: "0:57", hasAudio: true,
+      chapters: [
+        { t: 0, label: "Overview" }, { t: 9.4, label: "Request" }, { t: 16.13, label: "Proposal" }, { t: 21.4, label: "Schedule" },
+        { t: 27.43, label: "Edit" }, { t: 34.17, label: "Pay" }, { t: 43.17, label: "Deliver" },
+      ],
+    }),
   },
   drone: {
     dashboard: img("drone-software", "drone-dashboard-laptop", "ShootPortal Command Center on a laptop with time-stamped video comments on a phone"),
@@ -122,13 +128,14 @@ export const MEDIA = {
     desktopMobile: img("shared", "shootportal-desktop-mobile-transparent", "ShootPortal on a laptop and phone", { width: 1909, height: 1146 }),
     trialCard: img("shared", "shootportal-free-trial-cta", "Run your media business in one place. 14-day free trial, no credit card required"),
     cycleLoop: vid("shared", "shootportal-full-workflow", "Animation of ShootPortal's connected workflow cycle: request, estimate, schedule, shoot, review, pay, deliver", { webm: true }),
-    tour: vid("shared", "shootportal-product-video", "Narrated product video: a client books on the branded portal, the request lands in the Command Center, you send a proposal and the client approves it, you drag the shoot onto the calendar and move the job through the pipeline, the client leaves time-stamped video feedback, pays in one tap, downloads unlock, and everything carries your brand", {
-      title: "See how ShootPortal works", duration: "1:26", hasAudio: true,
+    tour: vid("shared", "shootportal-product-video", "Narrated product video: a client books on the branded portal, the request lands in the Command Center, you send a proposal and the client approves it, you drag the shoot onto the calendar and move the job through the pipeline, you edit a photo in the built-in editor, the client leaves time-stamped video feedback, pays in one tap, downloads unlock, and everything carries your brand", {
+      title: "See how ShootPortal works", duration: "1:36", hasAudio: true,
       chapters: [
         { t: 0, label: "Overview" }, { t: 10.57, label: "Request" }, { t: 23.87, label: "Proposal" }, { t: 36.2, label: "Schedule" }, { t: 42.77, label: "Pipeline" },
-        { t: 48.77, label: "Review" }, { t: 56.27, label: "Pay" }, { t: 67.77, label: "Deliver" }, { t: 73.27, label: "Brand" },
+        { t: 48.77, label: "Edit" }, { t: 58.6, label: "Review" }, { t: 66.1, label: "Pay" }, { t: 77.6, label: "Deliver" }, { t: 83.1, label: "Brand" },
       ],
     }),
+    editing: vid("shared", "photo-editing-loop", "Silent loop: a listing photo is opened from the project, edited in the built-in photo editor with one-click Auto and light adjustments, and compared before and after", { webm: true }),
     checkout: vid("shared", "checkout-motion", "Animation: the client taps Pay Now, pays by card in the in-app checkout, sees Payment successful with a receipt, and their downloads unlock while you get notified", { webm: true }),
   },
 } as const;

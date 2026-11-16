@@ -269,7 +269,7 @@ export default async function RealEstatePhotographyWorkflowSoftwarePage() {
           <FeatureCards
             columns={2}
             items={[
-              { icon: SlidersHorizontal, title: "Editing", body: "ShootPortal doesn't edit photos or video. Your editor or editing service stays in the workflow." },
+              { icon: SlidersHorizontal, title: "Editing", body: "Edit photos in ShootPortal's built-in editor, or keep your own editor or editing service. Video editing stays in your video editor." },
               { icon: ListChecks, title: "Proposing shoot times", body: "Clients don't self-book open slots; you or the client propose a time and the other accepts." },
               { icon: MessagesSquare, title: "Following up", body: "If an agent goes quiet on a proposal or payment, the nudge is still yours to send." },
               { icon: Workflow, title: "Custom stages", body: "The eight stages are fixed; you can control which ones advance automatically, but you can't add your own." },

@@ -12,6 +12,7 @@ import {
   PackageCheck,
   MessageSquareText,
   Sparkles,
+  SlidersHorizontal,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -166,12 +167,13 @@ const COVERAGE: { key: string; label: string; icon: LucideIcon; features: string
   { key: "estimate", label: "Estimate", icon: FileText, features: ["Preliminary estimate", "ZIP-distance travel fees", "Versioned estimate + PDF"] },
   { key: "schedule", label: "Schedule", icon: CalendarClock, features: ["Propose a shoot time", "Client accepts or counters", "Push to Google Calendar"] },
   { key: "shoot", label: "Shoot", icon: Camera, features: ["Brief, address, notes on the job", "Staff assigned to projects"] },
+  { key: "edit", label: "Edit", icon: SlidersHorizontal, features: ["Built-in photo editor", "Auto, exposure, tone, HDR and B&W", "Before/after, saved to the project"] },
   { key: "review", label: "Review", icon: MessageSquareText, features: ["Approve or request changes", "Time-stamped video comments", "Numbered versions"] },
   { key: "pay", label: "Pay", icon: CreditCard, features: ["Deposits on approval", "Card payments via your Stripe", "Receipts by email"] },
   { key: "deliver", label: "Deliver", icon: PackageCheck, features: ["Print or MLS-size downloads", "ZIP downloads", "Optional unlock after payment"] },
 ];
 
-/** Verified ShootPortal capabilities mapped onto the seven workflow stages. */
+/** Verified ShootPortal capabilities mapped onto the eight workflow stages. */
 export function WorkflowCoverageMap({ highlight = [] }: { highlight?: string[] }) {
   return (
     <div className="overflow-hidden rounded-3xl border border-[#E2E8F0] bg-gradient-to-b from-white to-[#F8FAFC] p-4 sm:p-6">
