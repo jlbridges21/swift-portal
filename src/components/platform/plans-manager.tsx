@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   ENFORCED_ENTITLEMENTS,
   FUTURE_ENTITLEMENTS,
+  INCLUDED_CAPABILITIES,
   ENTITLEMENT_LABELS,
   formatPlanPrice,
   type EntitlementKey,
@@ -241,6 +242,10 @@ export function PlansManager({
               </label>
             ))}
           </div>
+          <p className="mt-3 text-xs text-muted">
+            Included on every plan (not gated):{" "}
+            {INCLUDED_CAPABILITIES.map((key) => ENTITLEMENT_LABELS[key]).join(", ")}.
+          </p>
         </div>
       </div>
     );

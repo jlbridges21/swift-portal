@@ -282,7 +282,7 @@ export default async function PhotographyClientPortalPage() {
                 );
               })}
               <li className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-slate-300">
-                Honest note: this is a branded client portal, not a full white-label product. Your brand leads every screen your clients use.
+                White-label on every plan, with no upgrade to remove our name. Your brand leads every screen your clients use.
               </li>
             </ul>
             <figure>
@@ -588,8 +588,8 @@ export default async function PhotographyClientPortalPage() {
                 q: "Can I use my own domain and branding?",
                 a: (
                   <p>
-                    Yes. Add your logo and brand color, pick a light or dark theme, and use your yourname.shootportal.app address or connect a
-                    custom domain like portal.yourstudio.com. It&apos;s a branded portal rather than a full white-label product.
+                    Yes. Add your logo and brand colors and connect a custom domain like portal.yourstudio.com. ShootPortal is white-label on
+                    every plan: emails go out under your business name, the website credit can be switched off, and there&apos;s no upcharge.
                   </p>
                 ),
               },

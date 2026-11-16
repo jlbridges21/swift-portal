@@ -28,16 +28,6 @@ function WatchHeader({ logoUrl }: { logoUrl: string | null }) {
   );
 }
 
-function WatchFooter() {
-  return (
-    <footer className="px-4 py-6 text-center text-xs text-muted">
-      Video hosted with{" "}
-      <a href="https://www.shootportal.app" target="_blank" rel="noopener" className="font-medium hover:underline">
-        ShootPortal
-      </a>
-    </footer>
-  );
-}
 
 export function PublicVideoWatch({
   publicId,
@@ -88,7 +78,6 @@ export function PublicVideoWatch({
           <p className="mt-1 text-sm text-muted">Shared by {brand.name}</p>
         </div>
       </main>
-      <WatchFooter />
     </div>
   );
 }
@@ -109,7 +98,6 @@ export function PublicVideoWatchUnavailable({ rateLimitedSec }: { rateLimitedSec
           </p>
         </div>
       </main>
-      <WatchFooter />
     </div>
   );
 }

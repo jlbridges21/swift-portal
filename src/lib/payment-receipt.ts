@@ -228,12 +228,12 @@ export function composeReceipt(args: {
 
   if (kind === "stripe" && stripe && stripe.amountCents !== recordTotal) {
     notes.push(
-      `Stripe charged ${formatReceiptMoney(stripe.amountCents, currency)}, which differs from the ShootPortal payment record (${formatReceiptMoney(recordTotal, currency)}). The total shown is Stripe's charged amount.`
+      `Stripe charged ${formatReceiptMoney(stripe.amountCents, currency)}, which differs from the recorded payment (${formatReceiptMoney(recordTotal, currency)}). The total shown is Stripe's charged amount.`
     );
   }
   if (kind === "stripe" && !stripe) {
     notes.push(
-      "Payment details could not be confirmed with Stripe right now. Amounts shown come from the ShootPortal payment record created when the payment succeeded. Refund status could not be checked."
+      "Payment details could not be confirmed with Stripe right now. Amounts shown come from the payment record created when the payment succeeded. Refund status could not be checked."
     );
   } else if (kind === "stripe" && args.stripeSource === "saved") {
     notes.push(
@@ -242,7 +242,7 @@ export function composeReceipt(args: {
   }
   if (kind === "manual") {
     notes.push(
-      `This payment was recorded as paid by ${frozen.business.name || "the business"}. It was not processed through ShootPortal's Stripe checkout, so this is a payment acknowledgment rather than a Stripe-verified receipt.`
+      `This payment was recorded as paid by ${frozen.business.name || "the business"}. It was not processed through online card checkout, so this is a payment acknowledgment rather than a Stripe-verified receipt.`
     );
   }
   if (stripe?.disputed) notes.push("This payment is disputed with the card issuer.");
@@ -526,7 +526,7 @@ export async function buildPaymentReceipt(payment: Payment, businessId: string):
           unavailable: {
             code: "mismatch",
             title: "Receipt needs review",
-            message: "This payment's Stripe record doesn't match it, so ShootPortal won't show a receipt that could be wrong. Please contact the business.",
+            message: "This payment's Stripe record doesn't match it, so no receipt is shown that could be wrong. Please contact the business.",
           },
         };
       }

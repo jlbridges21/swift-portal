@@ -80,9 +80,10 @@ function fit(font: PDFFont, text: string, size: number, maxWidth: number): strin
 export async function buildPaymentReceiptPdf(receipt: PaymentReceipt, logo?: ReceiptLogo | null): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.setTitle(`${receipt.title} ${receipt.receiptNumber}`);
-  doc.setAuthor(receipt.business.name || "ShootPortal");
-  doc.setProducer("ShootPortal");
-  doc.setCreator("ShootPortal");
+  // White-label: the PDF's metadata names the business, never the platform.
+  doc.setAuthor(receipt.business.name || "Receipt");
+  doc.setProducer(receipt.business.name || "Receipt");
+  doc.setCreator(receipt.business.name || "Receipt");
   let page: PDFPage = doc.addPage([PAGE_W, PAGE_H]);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);

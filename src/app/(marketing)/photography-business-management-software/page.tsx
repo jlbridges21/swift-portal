@@ -373,8 +373,8 @@ export default async function PhotographyBusinessManagementSoftwarePage() {
                 q: "Can clients see my brand instead of ShootPortal's?",
                 a: (
                   <p>
-                    The client portal uses your logo, colors, and a light or dark theme at yourname.shootportal.app or your own domain. It&apos;s a branded
-                    portal rather than a fully white-label one.
+                    Yes. The client portal, emails, checkout, and websites use your logo and colors on your own domain, and ShootPortal is
+                    white-label on every plan at no extra cost.
                   </p>
                 ),
               },

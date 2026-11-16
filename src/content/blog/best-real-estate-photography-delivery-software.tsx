@@ -200,8 +200,9 @@ export const article: BlogArticle = {
           <h3>Branding and link types</h3>
           <p>
             Compare custom domains, logo and color control, and whether the platform offers both branded and unbranded
-            versions for the MLS. A handful of platforms advertise full white-label; others show their own name
-            somewhere on the page.
+            versions for the MLS. Some platforms show their own name on the page or charge extra to remove it.
+            ShootPortal is white-label on every plan: your brand and domains throughout, and the MLS-safe unbranded
+            property website, with no upcharge.
           </p>
           <h3>Payment workflows</h3>
           <p>
@@ -308,10 +309,10 @@ export const article: BlogArticle = {
               "Property website per listing (Modern, Luxury, or Coastal, with an unbranded MLS-safe version) plus Just Listed posts, Stories, and a print flyer",
               "Sell the marketing kit to the agent as a paid add-on, or include it to win the account",
               "Property history per address: past projects and revenue for the house when it relists",
+              "Full white-label at no extra cost: your logo, colors, and own domains on the portal, emails, checkout, and websites, with the ShootPortal credit switched off",
             ]}
             cons={[
               "Tours and 3D models are embedded from Matterport, Kuula, Polycam, and others rather than hosted, so you keep your existing tour tool",
-              "Your logo, colors, and custom domain throughout, with a branded portal rather than full white-label",
             ]}
           >
             <p>

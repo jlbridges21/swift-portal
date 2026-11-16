@@ -686,12 +686,13 @@ export const article: BlogArticle = {
     {
       question: "Is ShootPortal's client portal white-label?",
       answerText:
-        "ShootPortal is a branded portal: your logo, favicon, and brand colors across the portal, emails, checkout, and websites, on your own subdomain or a custom domain like portal.yourstudio.com, with emails that can send from your own domain.",
+        "Yes. ShootPortal is white-label on every plan at no extra cost: your logo, favicon, and brand colors across the portal, emails, checkout, and websites, on a custom domain like portal.yourstudio.com, with emails sent under your business name (and from your own domain if you connect it). The Powered by credit on websites can be switched off.",
       answer: (
         <p>
-          ShootPortal is a branded portal: your logo, favicon, and brand colors across the portal, emails, checkout, and
-          websites, on your own subdomain or a custom domain like <em>portal.yourstudio.com</em>, with emails that can
-          send from your own domain.
+          Yes. ShootPortal is white-label on every plan at no extra cost: your logo, favicon, and brand colors across the
+          portal, emails, checkout, and websites, on a custom domain like <em>portal.yourstudio.com</em>, with emails sent
+          under your business name (and from your own domain if you connect it). The Powered by credit on websites can be
+          switched off.
         </p>
       ),
     },

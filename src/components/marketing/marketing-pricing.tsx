@@ -12,7 +12,7 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Capabilities that exist in the product today — never list FUTURE_ENTITLEMENTS as shipping. */
+/** Capabilities that exist in the product today (incl. INCLUDED_CAPABILITIES) — never list FUTURE_ENTITLEMENTS as shipping. */
 const BASE_CAPABILITIES = [
   "Client project requests",
   "Preliminary & official estimates",
@@ -21,6 +21,8 @@ const BASE_CAPABILITIES = [
   "Photo & video delivery with review",
   "Stripe payments & Connect payouts (ShootPortal takes 0%)",
   "Branded client emails",
+  "Workflow automation & reminders",
+  "White-label client experience, no extra fee",
 ] as const;
 
 function limitLines(plan: PlanRow): string[] {

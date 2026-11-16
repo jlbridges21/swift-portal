@@ -57,7 +57,7 @@ export default function UpdatePasswordClient() {
     ? "Your invitation is accepted. Create a password so you can sign in again later."
     : isForced
       ? "A temporary password was used. You must set your own password before continuing."
-      : "Choose a password for your ShootPortal account on this portal.";
+      : "Choose a password for your account on this portal.";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
