@@ -104,13 +104,13 @@ export function ProposalPaymentLinkActions({
         setLocalPayment(payment);
         onPaymentCreated?.(payment);
         setShowModal(false);
-        toast.success("Payment link created.");
+        toast.success("Invoice created. The client can pay it from their project.");
         router.refresh();
       } else {
         toast.error(
           typeof (data as { error?: string }).error === "string"
             ? (data as { error: string }).error
-            : "Could not create payment link. Check Stripe settings."
+            : "Could not create the invoice. Check Stripe settings."
         );
       }
     } finally {
@@ -121,7 +121,7 @@ export function ProposalPaymentLinkActions({
   function copyLink() {
     if (!paymentUrl) return;
     navigator.clipboard.writeText(paymentUrl);
-    toast.success("Payment link copied");
+    toast.success("Invoice link copied");
   }
 
   if (displayPayment && paymentUrl && !canCreate) {
@@ -129,11 +129,11 @@ export function ProposalPaymentLinkActions({
       <div className="flex flex-wrap gap-2">
         <a href={paymentUrl} target="_blank" rel="noopener noreferrer">
           <Button variant="accent" size="sm" className="min-h-11">
-            <ExternalLink className="h-4 w-4" /> View Payment Link
+            <ExternalLink className="h-4 w-4" /> View Invoice
           </Button>
         </a>
         <Button variant="outline" size="sm" className="min-h-11" onClick={copyLink}>
-          <Copy className="h-4 w-4" /> Copy Payment Link
+          <Copy className="h-4 w-4" /> Copy Invoice Link
         </Button>
       </div>
     );
@@ -144,13 +144,13 @@ export function ProposalPaymentLinkActions({
   return (
     <>
       <Button variant="accent" size="sm" className="min-h-11" onClick={() => setShowModal(true)}>
-        <CreditCard className="h-4 w-4" /> Create Payment Link
+        <CreditCard className="h-4 w-4" /> Create Invoice
       </Button>
 
-      <Modal open={showModal} onClose={() => !creating && setShowModal(false)} title="Create Payment Link">
+      <Modal open={showModal} onClose={() => !creating && setShowModal(false)} title="Create Invoice">
         <div className="space-y-4">
           <div className="rounded-xl bg-slate-50 surface-dark:bg-subtle px-4 py-3 text-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted">Payment title</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">Invoice title</p>
             <p className="mt-1 font-medium text-heading break-words">{linkTitle}</p>
             <p className="mt-3 text-2xl font-bold text-heading">{formatCurrency(chargeCents)}</p>
           </div>
@@ -176,7 +176,7 @@ export function ProposalPaymentLinkActions({
               disabled={creating || !linkDescription.trim()}
               onClick={createPaymentLink}
             >
-              {creating ? "Creating…" : "Create Payment Link"}
+              {creating ? "Creating…" : "Create Invoice"}
             </Button>
           </div>
         </div>

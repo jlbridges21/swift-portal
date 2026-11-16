@@ -210,7 +210,7 @@ function categoryChips(id: CategoryId, w: AppSettings["workflow"]): Chip[] {
 }
 
 const CATEGORIES: { id: CategoryId; title: string; description: string; icon: ComponentType<{ className?: string }> }[] = [
-  { id: "payments", title: "Payments", description: "Payment links, deposits, receipts", icon: CreditCard },
+  { id: "payments", title: "Payments", description: "Invoices, deposits, receipts", icon: CreditCard },
   { id: "proposals", title: "Proposals", description: "Versions and expiration", icon: FileSignature },
   { id: "scheduling", title: "Scheduling", description: "Shoot times and reschedules", icon: CalendarClock },
   { id: "deliverables", title: "Deliverables", description: "Review, approval and reminders", icon: ImagePlay },
@@ -291,8 +291,8 @@ export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCar
         return (
           <>
             <RowList>
-              <RowToggle id="pay-link" label="Move to Awaiting Payment when payment link is created" checked={workflow.payments.autoMoveOnPaymentLink} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoMoveOnPaymentLink: v } })} />
-              <RowToggle id="pay-on-approval" label="Create a payment link when the client approves the proposal" checked={workflow.payments.autoCreatePaymentLinkOnApproval} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoCreatePaymentLinkOnApproval: v } })} />
+              <RowToggle id="pay-link" label="Move to Awaiting Payment when an invoice is created" checked={workflow.payments.autoMoveOnPaymentLink} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoMoveOnPaymentLink: v } })} />
+              <RowToggle id="pay-on-approval" label="Create the invoice automatically when the client approves the proposal" checked={workflow.payments.autoCreatePaymentLinkOnApproval} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoCreatePaymentLinkOnApproval: v } })} />
               <RowToggle id="pay-stripe" label="Move to Delivered after successful Stripe payment" checked={workflow.payments.autoMoveOnStripePaid} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoMoveOnStripePaid: v } })} />
               <RowToggle id="pay-unlock" label="Unlock downloads after payment" checked={workflow.payments.autoUnlockDownloads} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoUnlockDownloads: v } })} />
               <RowToggle id="pay-receipt" label="Email the client a receipt after payment" checked={workflow.payments.autoSendReceipt} onChange={(v) => onChange({ ...workflow, payments: { ...workflow.payments, autoSendReceipt: v } })} />

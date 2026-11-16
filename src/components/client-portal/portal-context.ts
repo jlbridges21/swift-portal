@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { ProjectPageClientProps } from "@/components/projects/project-page-client";
 import type { ClientFavoritesController } from "@/components/projects/use-client-favorites";
 import type { VideoGridEntry } from "@/components/projects/video-grid";
-import type { MediaAsset, Revision } from "@/lib/types";
+import type { MediaAsset, Payment, ProjectQuote, Revision } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import type { PortalFinancialState } from "@/components/client-portal/portal-financial-state";
 
@@ -45,6 +45,11 @@ export type PortalCtx = Required<
   >
 > & {
   marketingKit: ProjectPageClientProps["marketingKit"];
+  /** The business makes payment available as soon as a proposal is approved. */
+  payOnApproval: boolean;
+  /** Show a proposal / payment the client just changed before the refreshed page data lands. */
+  upsertQuote: (quote: ProjectQuote) => void;
+  upsertPayment: (payment: Payment) => void;
   revisions: Revision[];
   setRevisions: (updater: (prev: Revision[]) => Revision[]) => void;
   isPreview: boolean;

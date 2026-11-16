@@ -197,6 +197,9 @@ async function ProjectContent({
   const showEstimates = revealHiddenSections || mediaSections.estimates;
   const showPayments = revealHiddenSections || mediaSections.payments;
   const visiblePayments = showPayments ? payments : [];
+  // A proposal the client may approve (or just approved) is about to have an invoice to pay.
+  const proposalAwaitingPayment =
+    showPayments && quotes.some((q) => q.quote_kind !== "preliminary" && (q.status === "sent" || q.status === "approved"));
   const photos = visibleMedia.filter((m) => m.media_type === "photo");
   const videos = visibleMedia.filter((m) => m.media_type === "video");
   // Public video sharing: the assigned client may share delivered videos when the business
@@ -272,8 +275,10 @@ async function ProjectContent({
         depositPercent={appSettings.workflow.payments.depositPercent}
         depositAmountCents={appSettings.workflow.payments.depositAmountCents}
         allowClientPayInFull={appSettings.workflow.payments.allowClientPayInFull}
+        payOnApproval={appSettings.workflow.payments.autoCreatePaymentLinkOnApproval}
         paymentOptions={{
-          bankAvailable: canViewFinancials && visiblePayments.some((p) => p.status === "pending" || p.status === "sent") ? await isBankPaymentAvailable(tenant.businessId) : false,
+          // An open proposal counts too: approving it opens checkout without a reload.
+          bankAvailable: canViewFinancials && (visiblePayments.some((p) => p.status === "pending" || p.status === "sent") || proposalAwaitingPayment) ? await isBankPaymentAvailable(tenant.businessId) : false,
           passCardFee: appSettings.workflow.payments.passCardFeeToClient,
         }}
         assetReviews={canViewFinancials ? assetReviews : []}

@@ -232,7 +232,7 @@ function DepositControls({
   const name = useId();
   return (
     <fieldset className="space-y-2">
-      <legend className="text-sm font-medium text-heading">Deposit due on approval</legend>
+      <legend className="text-sm font-medium text-heading">Payment due on approval</legend>
       <label className="flex items-center gap-2 text-sm">
         <input
           type="radio"
@@ -291,6 +291,16 @@ function DepositControls({
           />
         </div>
       )}
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="radio"
+          name={name}
+          className="size-4 shrink-0 accent-accent"
+          checked={form.deposit_mode === "later"}
+          onChange={() => setForm((f) => ({ ...f, deposit_mode: "later" }))}
+        />
+        Nothing yet — invoice later
+      </label>
     </fieldset>
   );
 }

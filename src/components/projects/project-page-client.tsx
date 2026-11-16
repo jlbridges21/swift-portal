@@ -95,6 +95,8 @@ export interface ProjectPageClientProps {
   depositPercent?: number;
   depositAmountCents?: number;
   allowClientPayInFull?: boolean;
+  /** Payment automation: approving a proposal makes its invoice payable at once. */
+  payOnApproval?: boolean;
   paymentOptions?: ClientPaymentOptions;
   /** Marketing Kit offer (assigned client / admin preview only). */
   marketingKit?: KitSummary | null;

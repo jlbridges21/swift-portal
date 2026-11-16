@@ -8,22 +8,16 @@ import { setProjectStatus, setProjectStatusForward } from "@/lib/status-automati
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { notifyAdmins } from "@/lib/notifications";
-import { logWorkflowAudit, logWorkflowSkipped } from "@/lib/workflow";
 import { archivePreviousOfficialQuotes } from "@/lib/quote-archive";
 import { canAccessProjectAsAssignedClientOrAdmin } from "@/lib/project-access";
 import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
-import { createPaymentLink } from "@/lib/create-payment-link";
+import { ensureApprovalPayment } from "@/lib/approval-payment";
 import {
-  canCreatePaymentFromQuote,
-  depositPaymentDescription,
   depositTermColumns,
   parseExplicitDepositTerms,
-  paymentLinkTitle,
-  resolveDepositCharge,
-  resolveQuoteDepositTerms,
+  quoteCollectsPaymentOnApproval,
 } from "@/lib/payment-quote";
 import type { PaymentAutomationSettings } from "@/lib/workflow-settings";
-import { StripeConnectNotReadyError } from "@/lib/stripe-connect";
 import { withManualTravelLine } from "@/lib/travel-fee";
 import type { AppSettings } from "@/lib/app-settings";
 import type { ProjectQuote } from "@/lib/types";
@@ -37,6 +31,9 @@ import {
 } from "@/lib/proposal-delivery";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const LATER_TERMS_UNAVAILABLE =
+  "\"Nothing yet — invoice later\" isn't available on this account yet. Choose another payment option.";
 
 const PDF_FAILED_MESSAGE =
   "The proposal PDF couldn't be generated, so nothing was sent. Try again in a moment.";
@@ -230,9 +227,9 @@ export async function POST(request: Request) {
     (sum: number, item: { amount_cents: number }) => sum + (item.amount_cents || 0),
     0
   );
-  const requireReview = appSettings.proposals.requireAdminReviewBeforeOfficial;
-  const willSend = Boolean(send) && !requireReview;
-  const status = willSend ? "sent" : send ? "draft" : "draft";
+  // Clicking Send is the business's review: an explicit send always sends.
+  const willSend = Boolean(send);
+  const status = willSend ? "sent" : "draft";
   const expiresAt = willSend
     ? addProposalExpiration(new Date(), appSettings.proposals.defaultProposalExpirationDays)
     : null;
@@ -299,6 +296,7 @@ export async function POST(request: Request) {
       const { data: existing } = await db.from("project_quotes").select("*").eq("id", requestedId).maybeSingle();
       if (existing) return NextResponse.json({ ...existing, delivery: null, duplicate_request: true });
     }
+    if (error.code === "23514") return NextResponse.json({ error: LATER_TERMS_UNAVAILABLE }, { status: 400 });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -370,7 +368,7 @@ export async function PATCH(request: Request) {
   if (action === "send" && (isOwnerAdmin(profile) || staffCan(profile, "money.create_send_estimates"))) {
     if (quote.quote_kind === "preliminary") {
       return NextResponse.json(
-        { error: "Use Convert to Official Proposal for preliminary estimates." },
+        { error: "Use Send Estimate on the preliminary estimate to send it as the official proposal." },
         { status: 400 }
       );
     }
@@ -501,8 +499,27 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Only preliminary estimates can be converted." }, { status: 400 });
     }
 
+    // "Send Estimate": the business reviewed (and possibly edited) the preliminary estimate.
+    // Its click is the review, so this always sends the official proposal — never a draft
+    // that needs a second Send. The editor picks official_id up front so a double click or
+    // retry finds the proposal it already sent instead of sending a second one.
+    const requestedOfficialId =
+      typeof body.official_id === "string" && UUID_RE.test(body.official_id) ? body.official_id : null;
+    if (requestedOfficialId) {
+      const { data: already } = await db
+        .from("project_quotes")
+        .select("*")
+        .eq("id", requestedOfficialId)
+        .maybeSingle();
+      if (already) {
+        if (already.project_id !== quote.project_id) {
+          return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+        return NextResponse.json({ ...already, delivery: null, duplicate_request: true });
+      }
+    }
+
     const appSettings = await getAppSettings(businessId);
-    const requireReview = appSettings.proposals.requireAdminReviewBeforeOfficial;
     const proposalExpiresAt = addProposalExpiration(
       new Date(),
       appSettings.proposals.defaultProposalExpirationDays
@@ -517,22 +534,7 @@ export async function PATCH(request: Request) {
       (sum: number, item: { amount_cents: number }) => sum + (item.amount_cents || 0),
       0
     );
-
-    if (line_items?.length || title || description !== undefined || notes !== undefined) {
-      await db
-        .from("project_quotes")
-        .update({
-          title: title || quote.title,
-          description: description ?? quote.description,
-          line_items: finalLineItems,
-          total_cents,
-          notes: notes ?? quote.notes,
-          expires_at: expires_at ?? quote.expires_at,
-        })
-        .eq("id", id);
-    }
-
-    const officialId = crypto.randomUUID();
+    const officialId = requestedOfficialId ?? crypto.randomUUID();
     const convertedAt = new Date().toISOString();
     const officialRow = {
       id: officialId,
@@ -544,39 +546,44 @@ export async function PATCH(request: Request) {
       line_items: finalLineItems,
       total_cents,
       notes: notes ?? quote.notes,
-      expires_at: expires_at ?? proposalExpiresAt ?? quote.expires_at,
-      status: requireReview ? "draft" : "sent",
-      quote_kind: "official",
-      sent_at: null as string | null,
+      expires_at: expires_at || proposalExpiresAt || quote.expires_at,
+      status: "sent" as const,
+      quote_kind: "official" as const,
+      sent_at: convertedAt,
       created_by: profile.id,
       travel_one_way_miles:
         manualTravel.oneWayMiles !== undefined
           ? manualTravel.oneWayMiles
           : (quote.travel_one_way_miles ?? null),
-      ...depositColumnsForQuote(body, appSettings.workflow.payments),
-      ...(requireReview ? {} : { created_at: convertedAt }),
+      ...depositColumnsForQuote(
+        parseExplicitDepositTerms(body)
+          ? body
+          : quote.deposit_mode != null
+            ? {
+                deposit_mode: quote.deposit_mode,
+                deposit_percent: quote.deposit_percent,
+                deposit_amount_cents: quote.deposit_amount_cents,
+              }
+            : {},
+        appSettings.workflow.payments
+      ),
+      created_at: convertedAt,
     };
-    if (!requireReview) officialRow.sent_at = convertedAt;
 
-    let convertPdf: { pdf: PreparedPdf; projectName: string } | null = null;
-    if (!requireReview) {
-      const result = await prepareSendPdf(
-        businessId,
-        {
-          ...officialRow,
-          business_id: businessId,
-          approved_at: null,
-          changes_feedback: null,
-          created_at: convertedAt,
-          updated_at: convertedAt,
-        } as ProjectQuote,
-        appSettings,
-        safeTimeZone(body.time_zone)
-      );
-      if (!result.ok) {
-        return NextResponse.json({ error: PDF_FAILED_MESSAGE, code: "pdf_failed" }, { status: 500 });
-      }
-      convertPdf = result;
+    const convertPdf = await prepareSendPdf(
+      businessId,
+      {
+        ...officialRow,
+        business_id: businessId,
+        approved_at: null,
+        changes_feedback: null,
+        updated_at: convertedAt,
+      } as ProjectQuote,
+      appSettings,
+      safeTimeZone(body.time_zone)
+    );
+    if (!convertPdf.ok) {
+      return NextResponse.json({ error: PDF_FAILED_MESSAGE, code: "pdf_failed" }, { status: 500 });
     }
 
     const { data: official, error: officialError } = await db
@@ -586,48 +593,57 @@ export async function PATCH(request: Request) {
       .single();
 
     if (officialError) {
+      if (officialError.code === "23505" && requestedOfficialId) {
+        const { data: existing } = await db.from("project_quotes").select("*").eq("id", requestedOfficialId).maybeSingle();
+        if (existing) return NextResponse.json({ ...existing, delivery: null, duplicate_request: true });
+      }
+      if (officialError.code === "23514") {
+        return NextResponse.json({ error: LATER_TERMS_UNAVAILABLE }, { status: 400 });
+      }
       return NextResponse.json({ error: officialError.message }, { status: 500 });
+    }
+
+    // Keep the preliminary estimate in step with what was sent (history, and the editor).
+    if (line_items?.length || title || description !== undefined || notes !== undefined) {
+      await db
+        .from("project_quotes")
+        .update({
+          description: description ?? quote.description,
+          line_items: finalLineItems,
+          total_cents,
+          notes: notes ?? quote.notes,
+        })
+        .eq("id", id);
     }
 
     await archivePreviousOfficialQuotes(businessId, quote.project_id, official.id);
 
-    let convertDelivery: ProposalDelivery | null = null;
-    if (!requireReview) {
-      await setProjectStatusForward({
-        projectId: quote.project_id,
-        status: "quote_sent",
-        userId: profile.id,
-        activityType: "quote_sent",
-        activityDescription: `Official proposal sent: ${official.title}`,
-        notifyClient: false,
-        skipIfSame: true,
-      });
+    await setProjectStatusForward({
+      projectId: quote.project_id,
+      status: "quote_sent",
+      userId: profile.id,
+      activityType: "quote_sent",
+      activityDescription: `Official proposal sent: ${official.title}`,
+      notifyClient: false,
+      skipIfSame: true,
+    });
 
-      await logProjectActivity("official_proposal_sent", "📄 Official Proposal sent", {
-        businessId,
-        projectId: quote.project_id,
-        userId: profile.id,
-        metadata: { quoteId: official.id, preliminaryQuoteId: id },
-      });
+    await logProjectActivity("official_proposal_sent", "📄 Official Proposal sent", {
+      businessId,
+      projectId: quote.project_id,
+      userId: profile.id,
+      idempotencyKey: idempotencyKey("quote", official.id, "send"),
+      metadata: { quoteId: official.id, preliminaryQuoteId: id },
+    });
 
-      if (convertPdf) {
-        convertDelivery = await deliverProposal({
-          businessId,
-          quote: official as ProjectQuote,
-          appSettings,
-          pdf: convertPdf.pdf,
-          projectName: convertPdf.projectName,
-          title: "Your official proposal is ready",
-        });
-      }
-    } else {
-      await logProjectActivity("quote_sent", `Official proposal draft created: ${official.title}`, {
-        businessId,
-        projectId: quote.project_id,
-        userId: profile.id,
-        metadata: { quoteId: official.id, preliminaryQuoteId: id, requiresReview: true },
-      });
-    }
+    const convertDelivery = await deliverProposal({
+      businessId,
+      quote: official as ProjectQuote,
+      appSettings,
+      pdf: convertPdf.pdf,
+      projectName: convertPdf.projectName,
+      title: "Your official proposal is ready",
+    });
 
     return NextResponse.json({ ...official, delivery: convertDelivery });
   }
@@ -639,27 +655,51 @@ export async function PATCH(request: Request) {
         { status: 400 }
       );
     }
-    if (quote.status === "approved") {
-      return NextResponse.json(quote);
+    if (quote.status !== "sent" && quote.status !== "approved") {
+      return NextResponse.json(
+        { error: "This proposal is no longer open for approval. Refresh to see the latest proposal." },
+        { status: 409 }
+      );
     }
+    const appSettings = await getAppSettings(businessId);
+
+    // Already approved (double click, refresh, retry, or "Pay Now" later): approve nothing
+    // again, just make sure the approval invoice is there. Never creates a second one.
+    if (quote.status === "approved") {
+      const approval_payment = await ensureApprovalPayment({
+        businessId,
+        quote: quote as ProjectQuote,
+        appSettings,
+        actorUserId: profile.id,
+        fresh: false,
+      });
+      return NextResponse.json({ ...quote, approval_payment });
+    }
+
+    // Conditional on "sent", so two concurrent approvals cannot both run the approval steps.
     const { data: updated } = await db
       .from("project_quotes")
       .update({ status: "approved", approved_at: new Date().toISOString() })
       .eq("id", id)
-      .neq("status", "approved")
+      .eq("status", "sent")
       .select()
       .maybeSingle();
 
     if (!updated) {
       const { data: current } = await db.from("project_quotes").select("*").eq("id", id).maybeSingle();
-      return NextResponse.json(current ?? quote);
+      const row = (current ?? quote) as ProjectQuote;
+      const approval_payment =
+        row.status === "approved"
+          ? await ensureApprovalPayment({ businessId, quote: row, appSettings, actorUserId: profile.id, fresh: false })
+          : null;
+      return NextResponse.json({ ...row, approval_payment });
     }
 
-    const appSettings = await getAppSettings(businessId);
-    const approvedQuote = { ...quote, ...updated, status: "approved" as const };
-    const willAutoPay =
-      appSettings.workflow.payments.autoCreatePaymentLinkOnApproval &&
-      canCreatePaymentFromQuote(approvedQuote);
+    const approvedQuote = { ...quote, ...updated, status: "approved" as const } as ProjectQuote;
+    const willAutoPay = quoteCollectsPaymentOnApproval(approvedQuote, {
+      autoCreateOnApproval: appSettings.workflow.payments.autoCreatePaymentLinkOnApproval,
+      business: appSettings.workflow.payments,
+    });
 
     await setProjectStatus({
       projectId: quote.project_id,
@@ -671,85 +711,25 @@ export async function PATCH(request: Request) {
       skipWorkflowAudit: willAutoPay,
     });
 
-    let stripeNotReady = false;
-    if (willAutoPay) {
-      try {
-        const { data: project } = await db
-          .from("projects")
-          .select("id, client_id, project_name, property_address, service_type")
-          .eq("id", quote.project_id)
-          .maybeSingle();
-        if (!project?.client_id) {
-          await logWorkflowSkipped(
-            quote.project_id,
-            "Payment link was not created after approval because the project has no client.",
-            idempotencyKey("workflow", "approval-payment-skipped", id)
-          );
-        } else {
-          const { data: client } = await db
-            .from("clients")
-            .select("name")
-            .eq("id", project.client_id)
-            .maybeSingle();
-          const charge = resolveDepositCharge(
-            approvedQuote.total_cents,
-            resolveQuoteDepositTerms(approvedQuote, appSettings.workflow.payments)
-          );
-          if (charge.fallback) {
-            console.warn("[payment] deposit fell back to the full quote total", {
-              businessId,
-              quoteId: id,
-              reason: charge.fallback,
-            });
-            await logWorkflowAudit(quote.project_id, charge.fallback, {
-              userId: profile.id,
-              idempotencyKey: idempotencyKey("workflow", "deposit-fallback", id),
-            });
-          }
-          const title = paymentLinkTitle(
-            client?.name || "Client",
-            project.property_address || "",
-            project.service_type || "Service"
-          );
-          const description = charge.isDeposit
-            ? depositPaymentDescription(charge.amountCents, approvedQuote.total_cents)
-            : title;
-          await createPaymentLink({
-            businessId,
-            projectId: quote.project_id,
-            clientId: project.client_id,
-            quoteId: id,
-            amount: charge.amountCents,
-            description,
-            actorUserId: profile.id,
-            origin: "approval",
-            followUpToApproval: true,
-            quoteTotalCents: approvedQuote.total_cents,
-            isDeposit: charge.isDeposit,
-          });
-        }
-      } catch (err) {
-        if (err instanceof StripeConnectNotReadyError) {
-          stripeNotReady = true;
-          await logWorkflowSkipped(
-            quote.project_id,
-            "Payment link was not created after approval because Stripe is not connected. Connect Stripe to let clients pay immediately when they approve.",
-            idempotencyKey("workflow", "approval-payment-stripe", id)
-          );
-        } else {
-          console.error("[payment] auto-create after approval failed", err);
-          await logWorkflowSkipped(
-            quote.project_id,
-            "Payment link was not created after approval. The proposal is still approved, and the payment can be created manually.",
-            idempotencyKey("workflow", "approval-payment-failed", id)
-          );
-        }
-      }
-    }
+    const approval_payment = await ensureApprovalPayment({
+      businessId,
+      quote: approvedQuote,
+      appSettings,
+      actorUserId: profile.id,
+      fresh: true,
+    });
 
-    const adminBody = stripeNotReady
-      ? `The client approved the proposal for "${quote.title}". Connect Stripe to let clients pay immediately when they approve.`
-      : `The client approved the proposal for "${quote.title}".`;
+    let adminBody = `The client approved the proposal for "${quote.title}".`;
+    if (approval_payment.status === "ready") {
+      adminBody += " Their invoice was created automatically and they can pay now.";
+    } else if (approval_payment.status === "unavailable") {
+      adminBody +=
+        approval_payment.reason === "stripe_not_ready"
+          ? " Connect Stripe to let clients pay immediately when they approve."
+          : approval_payment.reason === "no_client"
+            ? " No invoice was created because the project has no client."
+            : " The invoice couldn't be created automatically. Create it from the project's Payments tab.";
+    }
 
     await notifyAdmins({
       businessId,
@@ -761,7 +741,7 @@ export async function PATCH(request: Request) {
       projectId: quote.project_id,
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({ ...updated, approval_payment });
   }
 
   if (action === "request_changes" && profile.role === "client") {
@@ -841,6 +821,7 @@ export async function PATCH(request: Request) {
       .select()
       .single();
 
+    if (error?.code === "23514") return NextResponse.json({ error: LATER_TERMS_UNAVAILABLE }, { status: 400 });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(updated);
   }

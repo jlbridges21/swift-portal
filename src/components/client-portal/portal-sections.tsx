@@ -373,6 +373,13 @@ export function EstimatePayTab({ ctx }: { ctx: PortalCtx }) {
               depositMode={ctx.depositMode}
               depositPercent={ctx.depositPercent}
               depositAmountCents={ctx.depositAmountCents}
+              payments={ctx.payments}
+              payOnApproval={ctx.payOnApproval}
+              allowClientPayInFull={ctx.allowClientPayInFull}
+              paymentsVisible={ctx.show.payments}
+              downloadsLocked={!ctx.clientDownloadsUnlocked}
+              onQuoteChange={ctx.upsertQuote}
+              onPaymentChange={ctx.upsertPayment}
             />
           </div>
         ) : null}

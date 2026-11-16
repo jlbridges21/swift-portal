@@ -45,7 +45,8 @@ export function ProposalCard({ quote, kind, isAdmin, actions, className, deposit
   const isPreliminary = kind === "preliminary";
   const needsReview = !isAdmin && kind === "official" && quote.status === "sent";
   const paymentTerms =
-    kind === "official" && quote.total_cents > 0
+    // The business also sees the terms on a preliminary estimate: Send Estimate sends them as-is.
+    (kind === "official" || isAdmin) && quote.total_cents > 0
       ? quotePaymentTermsText(
           quote.total_cents,
           resolveQuoteDepositTerms(

@@ -135,7 +135,7 @@ export function PricingPaymentWorkflow({
           summary={
             latestPayment
               ? `${latestPayment.description} · ${paymentSummaryLabel(payments, payQuote)}`
-              : "Create a payment link after approval"
+              : "The invoice is ready when the client approves"
           }
         >
           {outstanding && (
@@ -150,7 +150,7 @@ export function PricingPaymentWorkflow({
           )}
           <Button variant="outline" size="sm" className="min-h-10" onClick={onScrollToPayments} asChild>
             <a href="#payments">
-              <CreditCard className="h-4 w-4" /> {payments.length ? "Manage Payments" : "Create Payment"}
+              <CreditCard className="h-4 w-4" /> {payments.length ? "Manage Payments" : "Create Invoice"}
             </a>
           </Button>
           {latestPayment?.project_id && (

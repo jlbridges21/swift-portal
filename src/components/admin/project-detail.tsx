@@ -1312,14 +1312,14 @@ export function AdminProjectDetail({
         setPaymentList((prev) => [payment, ...prev]);
         setForm((f) => ({ ...f, status: "awaiting_payment" }));
         setShowPaymentForm(false);
-        toast.success("Payment link created");
+        toast.success("Invoice created");
         router.refresh();
       } else {
         const data = await res.json().catch(() => ({}));
         toast.error(
           typeof (data as { error?: string }).error === "string"
             ? (data as { error: string }).error
-            : "Could not create payment link. Check Stripe settings."
+            : "Could not create the invoice. Check Stripe settings."
         );
       }
     } finally {
@@ -1328,14 +1328,14 @@ export function AdminProjectDetail({
   }
 
   async function deletePayment(paymentId: string) {
-    if (!confirm("Delete this payment link? This cannot be undone.")) return;
+    if (!confirm("Delete this invoice? This cannot be undone.")) return;
     const res = await fetch(`/api/payments/${paymentId}`, {
       method: "DELETE",
       credentials: "include",
     });
     if (res.ok) {
       setPaymentList((prev) => prev.filter((p) => p.id !== paymentId));
-      toast.success("Payment link deleted");
+      toast.success("Invoice deleted");
       router.refresh();
     } else {
       toast.error("Failed to delete");
@@ -1660,7 +1660,7 @@ export function AdminProjectDetail({
                 <Input name="description" required placeholder="Description" />
                 <Input name="due_date" type="date" />
                 <Button type="submit" variant="accent" size="sm" disabled={creatingPayment}>
-                  {creatingPayment ? "Creating…" : "Create Payment Link"}
+                  {creatingPayment ? "Creating…" : "Create Invoice"}
                 </Button>
               </form>
   );
@@ -1683,7 +1683,7 @@ export function AdminProjectDetail({
               </div>
             ))}
             {paymentList.length === 0 && (
-              <p className="text-sm text-muted text-center py-4">No payment links yet</p>
+              <p className="text-sm text-muted text-center py-4">No invoices yet</p>
             )}
     </>
   );
@@ -2650,10 +2650,10 @@ export function AdminProjectDetail({
                 <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <h2 className="flex items-center gap-2 text-base font-semibold text-heading">
-                      <CreditCard className="h-5 w-5 text-accent" /> Invoices & payment links
+                      <CreditCard className="h-5 w-5 text-accent" /> Invoices
                     </h2>
                     <Button variant="outline" size="sm" className="h-9" onClick={() => setShowPaymentForm(!showPaymentForm)}>
-                      <Plus className="h-4 w-4" /> Create Payment
+                      <Plus className="h-4 w-4" /> Create Invoice
                     </Button>
                   </div>
                   {showPaymentForm && paymentForm}
@@ -3231,7 +3231,7 @@ export function AdminProjectDetail({
               size="sm"
               onClick={() => setShowPaymentForm(!showPaymentForm)}
             >
-              Create Payment
+              Create Invoice
             </Button>
           </CardHeader>
           <CardContent>

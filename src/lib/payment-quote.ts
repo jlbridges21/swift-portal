@@ -56,7 +56,7 @@ export function parseExplicitDepositTerms(body: {
   deposit_amount_cents?: unknown;
 }): DepositTerms | null {
   const mode = body.deposit_mode;
-  if (mode !== "none" && mode !== "percent" && mode !== "amount") return null;
+  if (mode !== "none" && mode !== "percent" && mode !== "amount" && mode !== "later") return null;
   const percent = typeof body.deposit_percent === "number" ? body.deposit_percent : Number(body.deposit_percent);
   const amount = typeof body.deposit_amount_cents === "number" ? body.deposit_amount_cents : Number(body.deposit_amount_cents);
   return {
@@ -69,6 +69,9 @@ export function parseExplicitDepositTerms(body: {
 /** Same resolver as the charge, so the proposal text cannot disagree with the payment. */
 export function quotePaymentTermsText(totalCents: number, terms: DepositTerms): string {
   const total = formatCurrency(totalCents);
+  if (terms.depositMode === "later") {
+    return `Total ${total}. No payment is due on approval. You'll receive an invoice when payment is due.`;
+  }
   const charge = resolveDepositCharge(totalCents, terms);
   if (!charge.isDeposit) {
     return `Total ${total}. Full amount due on approval.`;
@@ -83,6 +86,48 @@ export function quotePaymentTermsText(totalCents: number, terms: DepositTerms): 
 
 export function isOpenPaymentStatus(status: string): boolean {
   return status === "pending" || status === "sent" || status === "draft";
+}
+
+/**
+ * An existing row that stands in for a proposal's approval invoice, so approving (or
+ * retrying Pay Now) never creates another. Cancelled, failed and expired rows can't be
+ * paid, so they don't block a fresh invoice.
+ */
+export function blocksApprovalPayment(status: string): boolean {
+  return status !== "cancelled" && status !== "failed" && status !== "expired";
+}
+
+/**
+ * Of the rows for one proposal (oldest first), the one that wins over `mineId` when two
+ * requests created a payment at once, or null when `mineId` is the earliest. approval:
+ * any row that could still be paid (or was) competes. manual: only open rows compete.
+ */
+export function earlierCompetingPaymentRow<T extends Pick<Payment, "id" | "status">>(
+  rowsOldestFirst: T[],
+  mineId: string,
+  origin: "approval" | "manual"
+): T | null {
+  const competing = rowsOldestFirst.filter((p) =>
+    p.id === mineId || (origin === "approval" ? blocksApprovalPayment(p.status) : isOpenPaymentStatus(p.status))
+  );
+  const first = competing[0];
+  return first && first.id !== mineId ? first : null;
+}
+
+/**
+ * What an approved proposal's existing invoices mean for approving again (double click,
+ * refresh, Pay Now retry). Null when there is none and one may be created.
+ */
+export function existingApprovalPaymentState<T extends Pick<Payment, "status">>(
+  rowsOldestFirst: T[]
+): { status: "ready"; payment: T } | { status: "covered" } | { status: "not_required" } | null {
+  const existing = rowsOldestFirst.filter((p) => blocksApprovalPayment(p.status));
+  if (!existing.length) return null;
+  const open = existing.find((p) => p.status === "pending" || p.status === "sent");
+  if (open) return { status: "ready", payment: open };
+  if (existing.some((p) => isPaymentCovered(p.status))) return { status: "covered" };
+  // Only drafts: the business is preparing the invoice by hand. Leave it to them.
+  return { status: "not_required" };
 }
 
 export function paymentsForQuote(payments: Payment[], quoteId: string): Payment[] {
@@ -112,6 +157,22 @@ export function getPaymentForQuote(payments: Payment[], quoteId: string): Paymen
   return payments.find((p) => p.quote_id === quoteId) ?? null;
 }
 
+/**
+ * True when approving this proposal should make a payment available right away:
+ * the business collects on approval and the proposal's terms are not "pay later".
+ * One rule shared by the approval route and the client portal, so the portal never
+ * waits for a payment the server will not create (or hides one it will).
+ */
+export function quoteCollectsPaymentOnApproval(
+  quote: Pick<ProjectQuote, "quote_kind" | "title" | "total_cents"> & QuoteDepositColumns,
+  options: { autoCreateOnApproval: boolean; business: DepositTerms }
+): boolean {
+  if (!options.autoCreateOnApproval) return false;
+  if (quote.quote_kind === "preliminary" || quote.title.startsWith("Preliminary Estimate")) return false;
+  if (quote.total_cents <= 0) return false;
+  return resolveQuoteDepositTerms(quote, options.business).depositMode !== "later";
+}
+
 export function canCreatePaymentFromQuote(quote: ProjectQuote): boolean {
   if (quote.quote_kind === "preliminary") return false;
   if (quote.title.startsWith("Preliminary Estimate")) return false;
@@ -127,7 +188,8 @@ export function resolveDepositCharge(
   totalCents: number,
   settings: Pick<PaymentAutomationSettings, "depositMode" | "depositPercent" | "depositAmountCents">
 ): { amountCents: number; isDeposit: boolean; fallback: string | null } {
-  if (totalCents <= 0 || settings.depositMode === "none") {
+  // "later" bills nothing on approval; a later invoice is for the full total.
+  if (totalCents <= 0 || settings.depositMode === "none" || settings.depositMode === "later") {
     return { amountCents: Math.max(0, totalCents), isDeposit: false, fallback: null };
   }
 

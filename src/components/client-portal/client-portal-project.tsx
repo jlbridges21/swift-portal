@@ -9,6 +9,7 @@ import {
 import { toast } from "sonner";
 import type { ProjectPageClientProps } from "@/components/projects/project-page-client";
 import { PaymentOptionsProvider } from "@/components/projects/payments-section";
+import { useLiveFinancials } from "@/components/projects/use-live-financials";
 import { useClientFavorites } from "@/components/projects/use-client-favorites";
 import { useProjectZipDownload } from "@/components/projects/project-zip-download";
 import { videosToGridEntries } from "@/components/projects/video-grid";
@@ -62,11 +63,11 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
     documents,
     tours,
     models,
-    payments,
+    payments: serverPayments,
     revisions: initialRevisions,
     shootProposals,
     activities,
-    quotes,
+    quotes: serverQuotes,
     assetReviews,
     mediaFolders = [],
     videoReviews = [],
@@ -83,6 +84,7 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
     depositPercent = 50,
     depositAmountCents = 0,
     allowClientPayInFull = false,
+    payOnApproval = true,
     paymentOptions = { bankAvailable: false, passCardFee: false },
     marketingKit = null,
     clientFavoriteIds = null,
@@ -90,6 +92,8 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
     tourEmbedUrls,
   } = props;
 
+  // Approving a proposal updates the summary, nav and Payments at once (no reload needed).
+  const { quotes, payments, upsertQuote, upsertPayment } = useLiveFinancials(serverQuotes, serverPayments);
   const searchParams = useSearchParams();
   const requestedTab = parsePortalTab(searchParams.get("tab"));
   const [revisions, setRevisionsState] = useState(initialRevisions);
@@ -329,6 +333,9 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
     depositAmountCents,
     allowClientPayInFull,
     allowClientProposalChanges,
+    payOnApproval,
+    upsertQuote,
+    upsertPayment,
     marketingKit,
     revisions,
     setRevisions,

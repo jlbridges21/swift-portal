@@ -528,7 +528,7 @@ function AddOnCard({
             {note.text}
           </p>
           {!canManageOffers ? (
-            <p className="text-[11px] text-muted">Pricing and unlocks need the “send payment links” permission.</p>
+            <p className="text-[11px] text-muted">Pricing and unlocks need the “Create & send invoices” permission.</p>
           ) : null}
         </div>
       </div>

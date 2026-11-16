@@ -20,13 +20,21 @@ import {
   isPreliminaryQuote,
   ARCHIVED_QUOTE_NOTE,
 } from "@/lib/quote-display";
-import { quotePaymentTermsText } from "@/lib/payment-quote";
+import {
+  clientPayChoice,
+  paidCentsForQuote,
+  quoteCollectsPaymentOnApproval,
+  quotePaymentTermsText,
+  resolveQuoteDepositTerms,
+} from "@/lib/payment-quote";
+import { CheckoutChoiceButtons, isOutstandingPayment } from "@/components/projects/payments-section";
+import type { ApprovalPaymentResult } from "@/lib/approval-payment";
 import { formatCurrency } from "@/lib/utils";
 import type { DepositMode } from "@/lib/workflow-settings";
 import { withManualTravelLine, type TravelSettings } from "@/lib/travel-fee";
 import {
   FileText, Plus, Trash2, Send, Check, MessageSquare,
-  Copy, Pencil, AlertTriangle,
+  Copy, Pencil, AlertTriangle, CheckCircle2, CreditCard, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ProposalPaymentLinkActions } from "@/components/admin/proposal-payment-link-actions";
@@ -82,9 +90,28 @@ interface QuoteSectionProps {
    * server will set when the proposal is sent.
    */
   proposalExpiration?: { autoSetOnSend: boolean; defaultDays: number };
+  /**
+   * Client: the business makes payment available as soon as a proposal is approved
+   * (Payment automation setting). The proposal's own terms can still say "invoice later".
+   */
+  payOnApproval?: boolean;
+  /** Client: deposit proposals may be paid in full instead. */
+  allowClientPayInFull?: boolean;
+  /** Client: payments are visible on this project, so payment can be offered in the proposal. */
+  paymentsVisible?: boolean;
+  /** Client: downloads are still locked (checkout announces the unlock after paying). */
+  downloadsLocked?: boolean;
+  /** Client: a proposal changed here (approved). Lets the page update without a reload. */
+  onQuoteChange?: (quote: ProjectQuote) => void;
+  /** Client: the approval invoice, as soon as the server returns it. */
+  onPaymentChange?: (payment: Payment) => void;
 }
 
-type QuoteResponse = ProjectQuote & { delivery?: ProposalDelivery | null; duplicate_request?: boolean };
+type QuoteResponse = ProjectQuote & {
+  delivery?: ProposalDelivery | null;
+  duplicate_request?: boolean;
+  approval_payment?: ApprovalPaymentResult | null;
+};
 
 function browserTimeZone(): string | undefined {
   try {
@@ -112,7 +139,7 @@ function defaultExpiry(days: number): string | null {
 
 /** Strip delivery fields before the row goes into state. */
 function quoteRow(response: QuoteResponse): ProjectQuote {
-  const { delivery: _delivery, duplicate_request: _duplicate, ...row } = response;
+  const { delivery: _delivery, duplicate_request: _duplicate, approval_payment: _payment, ...row } = response;
   return row;
 }
 
@@ -147,6 +174,12 @@ export function QuoteSection({
   historyOpen = false,
   onHistoryOpenChange,
   proposalExpiration,
+  payOnApproval = true,
+  allowClientPayInFull = false,
+  paymentsVisible = false,
+  downloadsLocked = false,
+  onQuoteChange,
+  onPaymentChange,
 }: QuoteSectionProps) {
   const router = useRouter();
   const brand = usePortalBrand();
@@ -158,6 +191,17 @@ export function QuoteSection({
   const [requestingChanges, setRequestingChanges] = useState(false);
   const [showChangeForm, setShowChangeForm] = useState(false);
   const [converting, setConverting] = useState(false);
+  /** Client: approval invoice id whose checkout should open on its own (right after approving). */
+  const [autoCheckoutId, setAutoCheckoutId] = useState<string | null>(null);
+  /** Client: approval saved but payment couldn't be opened; shown beside Pay Now. */
+  const [payNotice, setPayNotice] = useState<string | null>(null);
+  /** Client: approval invoice the server returned, until the page's payment list includes it. */
+  const [approvalPayment, setApprovalPayment] = useState<Payment | null>(null);
+  /**
+   * Id the official proposal is sent with from a preliminary estimate. Kept until a send
+   * succeeds, so a double click or retry finds the proposal already sent.
+   */
+  const [officialSendId, setOfficialSendId] = useState<string>(() => newQuoteId());
   const [oneWayMiles, setOneWayMiles] = useState("");
   const manualTravel = Boolean(travel?.enabled && travel.distanceMode === "manual");
   const [changeFeedback, setChangeFeedback] = useState("");
@@ -489,7 +533,8 @@ export function QuoteSection({
       });
       if (!updateRes.ok) {
         setLoading(false);
-        toast.error("Failed to update draft");
+        const data = await updateRes.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || "Failed to update draft");
         return;
       }
       if (send) {
@@ -536,7 +581,7 @@ export function QuoteSection({
         onStatusChange?.("quote_sent");
         reportDelivery(data, "send");
       } else {
-        toast.success(send ? "Draft saved — admin review is required before sending" : "Quote saved");
+        toast.success("Draft saved");
       }
       setShowForm(false);
       setDraftId(null);
@@ -548,34 +593,48 @@ export function QuoteSection({
     }
   }
 
-  async function quickConvertToOfficial(quote: ProjectQuote) {
+  function nextOfficialSendId(): string {
+    return officialSendId;
+  }
+
+  /** The official proposal is out: show it, and start fresh for the next send. */
+  function finishEstimateSend(data: QuoteResponse) {
+    setOfficialSendId(newQuoteId());
+    const official = quoteRow(data);
+    setQuotes((prev) => withSentQuote(prev, official));
+    if (official.status === "sent") onStatusChange?.("quote_sent");
+    if (data.duplicate_request) toast.info("This estimate was already sent. Nothing was sent again.");
+    else reportDelivery(data, "send");
+  }
+
+  /** Send Estimate from the preliminary card: sends it as reviewed, as the official proposal. */
+  async function sendPreliminaryEstimate(quote: ProjectQuote) {
+    if (converting) return;
     setConverting(true);
     const res = await fetch("/api/quotes", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ id: quote.id, action: "convert_to_official", time_zone: browserTimeZone() }),
+      body: JSON.stringify({
+        id: quote.id,
+        action: "convert_to_official",
+        official_id: nextOfficialSendId(),
+        time_zone: browserTimeZone(),
+      }),
     });
     setConverting(false);
     if (res.ok) {
-      const data = (await res.json()) as QuoteResponse;
-      const official = quoteRow(data);
-      setQuotes((prev) => withSentQuote(prev, official));
-      if (official.status === "sent") {
-        onStatusChange?.("quote_sent");
-        reportDelivery(data, "send");
-      } else {
-        toast.success("Official proposal drafted — review and send when ready");
-      }
+      finishEstimateSend((await res.json()) as QuoteResponse);
       router.refresh();
     } else {
       const data = await res.json().catch(() => ({}));
-      toast.error((data as { error?: string }).error || "Failed to convert estimate");
+      toast.error((data as { error?: string }).error || "The estimate couldn't be sent. Try again.");
     }
   }
 
-  async function convertToOfficial() {
-    if (!preliminaryQuote) return;
+  /** Send Estimate from the editor: the business's edits become the official proposal. */
+  async function sendEditedEstimate() {
+    if (!preliminaryQuote || converting) return;
     setConverting(true);
     const res = await fetch("/api/quotes", {
       method: "PATCH",
@@ -584,6 +643,7 @@ export function QuoteSection({
       body: JSON.stringify({
         id: preliminaryQuote.id,
         action: "convert_to_official",
+        official_id: nextOfficialSendId(),
         title: form.title || undefined,
         description: form.description || undefined,
         notes: form.notes || undefined,
@@ -608,21 +668,13 @@ export function QuoteSection({
     });
     setConverting(false);
     if (res.ok) {
-      const data = (await res.json()) as QuoteResponse;
-      const official = quoteRow(data);
-      setQuotes((prev) => withSentQuote(prev, official));
-      if (official.status === "sent") {
-        onStatusChange?.("quote_sent");
-        reportDelivery(data, "send");
-      } else {
-        toast.success("Official proposal drafted — review and send when ready");
-      }
+      finishEstimateSend((await res.json()) as QuoteResponse);
       setShowForm(false);
       setEditingId(null);
       router.refresh();
     } else {
       const data = await res.json().catch(() => ({}));
-      toast.error(data.error || "Failed to convert estimate");
+      toast.error(data.error || "The estimate couldn't be sent. Try again.");
     }
   }
 
@@ -653,17 +705,36 @@ export function QuoteSection({
     if (res.ok) {
       const updated = await res.json();
       setQuotes((prev) => prev.map((q) => (q.id === updated.id ? updated : q)));
-      // Still preliminary: nothing is converted and the client is not notified.
-      toast.success("Preliminary estimate saved");
+      // Still preliminary: nothing is sent and the client is not notified.
+      toast.success("Preliminary estimate saved. Nothing was sent.");
       setShowForm(false);
       setEditingId(null);
       router.refresh();
     } else {
-      toast.error("Failed to save estimate");
+      const data = await res.json().catch(() => ({}));
+      toast.error((data as { error?: string }).error || "Failed to save estimate");
     }
   }
 
-  async function quoteAction(id: string, action: string, feedback?: string) {
+  /** Client: what approving did about payment, and the next step on screen. */
+  function applyApprovalPayment(result: ApprovalPaymentResult | null | undefined, wasRetry: boolean) {
+    if (!result) return;
+    if (result.status === "ready") {
+      setPayNotice(null);
+      setApprovalPayment(result.payment);
+      onPaymentChange?.(result.payment);
+      // Opens the embedded checkout as soon as the payment buttons render.
+      setAutoCheckoutId(result.payment.id);
+      toast.success(wasRetry ? "Your invoice is ready." : "Proposal approved. Your invoice is ready to pay.");
+    } else if (result.status === "unavailable") {
+      setPayNotice(result.message);
+      toast.warning(wasRetry ? result.message : `Proposal approved. ${result.message}`);
+    } else if (!wasRetry) {
+      toast.success("Proposal approved!");
+    }
+  }
+
+  async function quoteAction(id: string, action: string, feedback?: string, options: { payRetry?: boolean } = {}) {
     if (action === "approve" && approving) return;
     if (action === "request_changes" && requestingChanges) return;
     if (action === "approve") setApproving(true);
@@ -675,13 +746,14 @@ export function QuoteSection({
         credentials: "include",
         body: JSON.stringify({ id, action, feedback }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as QuoteResponse & { error?: string };
       if (res.ok) {
-        const updated = data;
+        const updated = quoteRow(data);
         setQuotes((prev) => prev.map((q) => (q.id === id ? updated : q)));
+        onQuoteChange?.(updated);
         if (action === "approve") {
-          onStatusChange?.("proposal_approved");
-          toast.success("Proposal approved!");
+          if (!options.payRetry) onStatusChange?.("proposal_approved");
+          applyApprovalPayment(data.approval_payment, Boolean(options.payRetry));
         } else {
           setShowChangeForm(false);
           setChangeFeedback("");
@@ -689,8 +761,11 @@ export function QuoteSection({
         }
         router.refresh();
       } else {
-        toast.error((data as { error?: string }).error || "Something went wrong. Please try again.");
+        toast.error(data.error || "Something went wrong. Please try again.");
       }
+    } catch {
+      // Network drop: the approval may or may not have landed. Retrying is safe (idempotent).
+      toast.error("We couldn't reach the server. Check your connection and try again.");
     } finally {
       setApproving(false);
       setRequestingChanges(false);
@@ -707,11 +782,11 @@ export function QuoteSection({
             variant="accent"
             size="sm"
             disabled={converting || loading}
-            onClick={() => quickConvertToOfficial(quote)}
+            onClick={() => sendPreliminaryEstimate(quote)}
           >
-            <Send className="h-4 w-4" /> {converting ? "Converting…" : "Convert to Official Estimate"}
+            <Send className="h-4 w-4" /> {converting ? "Sending…" : "Send Estimate"}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => openEditForm(quote)}>
+          <Button variant="outline" size="sm" disabled={converting} onClick={() => openEditForm(quote)}>
             <Pencil className="h-4 w-4" /> Edit Estimate
           </Button>
         </>
@@ -736,7 +811,7 @@ export function QuoteSection({
               if (sent) router.refresh();
             }}
           >
-            <Send className="h-4 w-4" /> {loading ? "Sending…" : "Send"}
+            <Send className="h-4 w-4" /> {loading ? "Sending…" : "Send Estimate"}
           </Button>
         </>
       );
@@ -804,7 +879,8 @@ export function QuoteSection({
               className="min-h-11"
               onClick={() => quoteAction(quote.id, "approve")}
             >
-              <Check className="h-4 w-4" /> {approving ? "Approving…" : "Approve Proposal"}
+              {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{" "}
+              {approving ? "Approving…" : collectsOnApproval(quote) ? "Approve & Continue" : "Approve Proposal"}
             </Button>
             {allowClientProposalChanges && !showChangeForm && (
               <Button
@@ -859,12 +935,117 @@ export function QuoteSection({
     }
     if (quote.status === "approved") {
       return (
-        <DownloadEstimatePdfButton
-          input={estimateFields(quote)}
-          logoUrl={brand.logoUrl}
-          className="min-h-11"
-          preferStoredCopy
-        />
+        <div className="flex w-full flex-col gap-3">
+          {renderApprovedPayment(quote)}
+          <div className="flex flex-wrap gap-2">
+            <DownloadEstimatePdfButton
+              input={estimateFields(quote)}
+              logoUrl={brand.logoUrl}
+              className="min-h-11"
+              preferStoredCopy
+            />
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }
+
+  function collectsOnApproval(quote: ProjectQuote): boolean {
+    return quoteCollectsPaymentOnApproval(quote, {
+      autoCreateOnApproval: payOnApproval,
+      business: depositFallback,
+    });
+  }
+
+  /**
+   * Client, approved proposal: the way to pay, right here. The approval invoice comes
+   * from the page's payments, or straight from the approve response before the page has it.
+   */
+  function renderApprovedPayment(quote: ProjectQuote) {
+    if (!paymentsVisible) return null;
+    const known = payments.some((p) => p.id === approvalPayment?.id);
+    const all = approvalPayment && approvalPayment.quote_id === quote.id && !known ? [approvalPayment, ...payments] : payments;
+    const forQuote = all.filter((p) => p.quote_id === quote.id);
+    const open = forQuote.find((p) => isOutstandingPayment(p.status));
+    if (open) {
+      const paidCents = paidCentsForQuote(all, quote.id);
+      const choice = clientPayChoice({
+        terms: resolveQuoteDepositTerms(quote, depositFallback),
+        allowClientPayInFull,
+        payment: open,
+        quoteTotalCents: quote.total_cents,
+        paidCents,
+      });
+      const isDeposit = open.amount < quote.total_cents && paidCents === 0;
+      return (
+        <div className="flex flex-col gap-3 rounded-xl border border-accent/25 bg-accent-subtle/60 p-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-semibold text-heading">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Proposal approved
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              {isDeposit
+                ? `Deposit of ${formatCurrency(open.amount)} due now. Remaining balance ${formatCurrency(quote.total_cents - open.amount)}.`
+                : `${formatCurrency(open.amount)} due now.`}
+            </p>
+          </div>
+          {previewMode ? (
+            <Button variant="accent" className="min-h-11" disabled>
+              <CreditCard className="h-4 w-4" /> Pay Now
+            </Button>
+          ) : (
+            <CheckoutChoiceButtons
+              payment={open}
+              choice={choice}
+              downloadsLocked={downloadsLocked}
+              autoStart={autoCheckoutId === open.id}
+              onAutoStarted={() => setAutoCheckoutId(null)}
+            />
+          )}
+        </div>
+      );
+    }
+    // Approved, payment expected, but no invoice yet (Stripe hiccup, closed tab mid-approval):
+    // Pay Now asks the server to make it available. Idempotent — never a second invoice.
+    if (forQuote.length === 0 && collectsOnApproval(quote)) {
+      return (
+        <div className="flex flex-col gap-3 rounded-xl border border-accent/25 bg-accent-subtle/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-semibold text-heading">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Proposal approved
+            </p>
+            <p className="mt-1 text-sm text-muted">{payNotice ?? "Your payment is ready when you are."}</p>
+          </div>
+          <Button
+            variant="accent"
+            className="min-h-11 px-6"
+            disabled={previewMode || approving}
+            onClick={() => quoteAction(quote.id, "approve", undefined, { payRetry: true })}
+          >
+            {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}{" "}
+            {approving ? "Opening checkout…" : "Pay Now"}
+          </Button>
+        </div>
+      );
+    }
+    const coveredCents = paidCentsForQuote(all, quote.id);
+    if (coveredCents > 0) {
+      const balance = Math.max(0, quote.total_cents - coveredCents);
+      return (
+        <p className="flex items-center gap-2 text-sm text-muted">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          {balance > 0
+            ? `${formatCurrency(coveredCents)} paid · ${formatCurrency(balance)} remaining balance. Your next invoice will appear here when it's due.`
+            : `Paid in full · ${formatCurrency(coveredCents)}.`}
+        </p>
+      );
+    }
+    if (forQuote.length === 0 && !collectsOnApproval(quote)) {
+      return (
+        <p className="flex items-center gap-2 text-sm text-muted">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Approved. No payment is due right now — {brand.name} will send an invoice when it is.
+        </p>
       );
     }
     return null;
@@ -904,9 +1085,9 @@ export function QuoteSection({
     if (editingPreliminary) {
       return (
         <EstimateEditor
-          heading="Edit preliminary estimate"
+          heading="Review estimate"
           badge={<Badge>Preliminary</Badge>}
-          intro="Saving keeps this a preliminary estimate. Nothing is sent and the client is not notified."
+          intro="Adjust pricing, scope and payment terms. Send Estimate sends it to the client as the official proposal for approval. Save Without Sending keeps it preliminary and notifies no one."
           form={form}
           setForm={setForm}
           paymentTerms={formTerms}
@@ -914,11 +1095,11 @@ export function QuoteSection({
           logoUrl={brand.logoUrl}
           actions={
             <>
-              <Button variant="accent" disabled={loading || converting || !form.title} onClick={savePreliminaryEdits}>
-                {loading ? "Saving…" : "Save Estimate"}
+              <Button variant="accent" disabled={converting || loading || !form.title} onClick={sendEditedEstimate}>
+                <Send className="h-4 w-4" /> {converting ? "Sending…" : "Send Estimate"}
               </Button>
-              <Button variant="outline" disabled={converting || loading || !form.title} onClick={convertToOfficial}>
-                <Send className="h-4 w-4" /> {converting ? "Converting…" : "Convert to Official Proposal"}
+              <Button variant="outline" disabled={loading || converting || !form.title} onClick={savePreliminaryEdits}>
+                {loading ? "Saving…" : "Save Without Sending"}
               </Button>
               <Button variant="outline" onClick={closeForm}>
                 Cancel
@@ -940,7 +1121,7 @@ export function QuoteSection({
         actions={
           <>
             <Button variant="accent" disabled={loading || !form.title} onClick={() => submitQuote(true)}>
-              <Send className="h-4 w-4" /> {loading ? "Sending…" : "Send to Client"}
+              <Send className="h-4 w-4" /> {loading ? "Sending…" : "Send Estimate"}
             </Button>
             {editingId && (
               <Button variant="outline" disabled={loading || !form.title} onClick={() => submitQuote(false)}>

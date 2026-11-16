@@ -36,7 +36,11 @@ export interface StageAutomationSettings {
   requireManualApproval: boolean;
 }
 
-export type DepositMode = "none" | "percent" | "amount";
+/**
+ * Proposal payment terms. "later" (no payment due on approval) exists only on a
+ * proposal; the business-wide default is always one of the other three.
+ */
+export type DepositMode = "none" | "percent" | "amount" | "later";
 
 export interface PaymentAutomationSettings {
   autoMoveOnPaymentLink: boolean;

@@ -274,8 +274,8 @@ export const STAFF_PERMISSION_META: StaffPermissionMeta[] = [
   },
   {
     key: "money.send_payment_links",
-    label: "Send payment links",
-    description: "Send Stripe payment links to clients.",
+    label: "Create & send invoices",
+    description: "Create invoices clients pay through Stripe.",
     group: "money",
     default: false,
   },

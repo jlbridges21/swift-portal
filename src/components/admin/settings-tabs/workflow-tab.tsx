@@ -95,13 +95,7 @@ export function WorkflowTab() {
         </div>
 
         <div className="mt-2 divide-y divide-border">
-          <ToggleRow
-            id="requireAdminReview"
-            label="Review official proposals before they're sent"
-            hint="You approve each one first."
-            checked={proposals.requireAdminReviewBeforeOfficial}
-            onChange={(v) => patchProposals({ requireAdminReviewBeforeOfficial: v })}
-          />
+          {/* Every official proposal is reviewed: it is sent only when someone clicks Send Estimate. */}
           <ToggleRow
             id="showPreliminary"
             label="Show the preliminary estimate to clients"

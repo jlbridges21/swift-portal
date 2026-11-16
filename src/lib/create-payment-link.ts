@@ -11,6 +11,8 @@ import { buildStripePaymentMetadata } from "@/lib/stripe-metadata";
 import { idempotencyKey } from "@/lib/idempotency";
 import { hasPayLinkSecret, payLinkPath, signPayLinkToken } from "@/lib/pay-link";
 import {
+  blocksApprovalPayment,
+  earlierCompetingPaymentRow,
   isOpenPaymentStatus,
   paidCentsForQuote,
   quoteOutstandingBalanceCents,
@@ -75,7 +77,7 @@ function approvalNotice(input: CreatePaymentLinkInput, payUrl: string): { title:
 export async function createPaymentLink(input: CreatePaymentLinkInput): Promise<CreatePaymentLinkResult> {
   if (input.projectId && !input.clientId) {
     // Orphaned project (its client was deleted) — nobody to bill until a client is added.
-    throw new PaymentLinkError("Add a client to this project before sending a payment link.", 400);
+    throw new PaymentLinkError("Add a client to this project before creating an invoice.", 400);
   }
   if (!input.projectId || !input.clientId || !input.amount || !input.description) {
     throw new PaymentLinkError("Missing required fields", 400);
@@ -113,7 +115,7 @@ export async function createPaymentLink(input: CreatePaymentLinkInput): Promise<
     const existing = (existingRows ?? []) as Payment[];
     const open = existing.filter((p) => isOpenPaymentStatus(p.status));
     if (input.origin === "approval") {
-      const live = existing.filter((p) => p.status !== "cancelled");
+      const live = existing.filter((p) => blocksApprovalPayment(p.status));
       if (live.length) return { payment: live[0], created: false };
     } else if (open.length) {
       return { payment: open[0], created: false };
@@ -161,6 +163,17 @@ export async function createPaymentLink(input: CreatePaymentLinkInput): Promise<
 
   if (insertError || !paymentRow) {
     throw new PaymentLinkError(insertError?.message || "Failed to create payment", 500);
+  }
+
+  if (input.quoteId) {
+    // Two requests can pass the pre-check at once (double click, retry, two tabs). Both rows
+    // now exist, so both requests see the same set; only the earliest survives. This runs
+    // before Stripe is called, so the losing request leaves nothing behind in Stripe.
+    const earlier = await earlierCompetingPayment(db, input.quoteId, input.origin, paymentRow as Payment);
+    if (earlier) {
+      await db.from("payments").delete().eq("id", paymentRow.id);
+      return { payment: earlier, created: false };
+    }
   }
 
   const productDescription = input.productDescription?.trim().slice(0, 500) || undefined;
@@ -277,7 +290,7 @@ export async function createPaymentLink(input: CreatePaymentLinkInput): Promise<
       status: "awaiting_payment",
       activityType: "invoice_sent",
       activityDescription: input.followUpToApproval
-        ? `Payment link created after proposal approval for ${amountStr}`
+        ? `Invoice created after proposal approval for ${amountStr}`
         : `Invoice sent for ${amountStr}`,
       skipIfSame: true,
       skipWorkflowAudit: Boolean(input.followUpToApproval),
@@ -304,7 +317,7 @@ export async function createPaymentLink(input: CreatePaymentLinkInput): Promise<
   }
 
   if (!input.followUpToApproval) {
-    await logProjectActivity("invoice_sent", `Payment link created for ${amountStr}`, {
+    await logProjectActivity("invoice_sent", `Invoice created for ${amountStr}`, {
       businessId: input.businessId,
       projectId: input.projectId,
       userId: input.actorUserId ?? null,
@@ -314,6 +327,28 @@ export async function createPaymentLink(input: CreatePaymentLinkInput): Promise<
   }
 
   return { payment: payment as Payment, created: true };
+}
+
+type TenantDb = Awaited<ReturnType<typeof createTenantServiceClient>>;
+
+/**
+ * The row that wins over `mine` for this quote, or null when `mine` is the earliest.
+ * approval: any row that could still be paid (or was) competes. manual: only open rows compete.
+ */
+async function earlierCompetingPayment(
+  db: TenantDb,
+  quoteId: string,
+  origin: CreatePaymentLinkInput["origin"],
+  mine: Payment
+): Promise<Payment | null> {
+  const { data, error } = await db
+    .from("payments")
+    .select("*")
+    .eq("quote_id", quoteId)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
+  if (error || !data) return null;
+  return earlierCompetingPaymentRow(data as Payment[], mine.id, origin);
 }
 
 async function resolvePortalOrigin(businessId: string): Promise<string> {

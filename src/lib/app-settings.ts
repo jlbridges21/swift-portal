@@ -136,6 +136,10 @@ export interface BusinessSettings {
 
 export interface ProposalSettings {
   autoPreliminaryEstimate: boolean;
+  /**
+   * @deprecated No longer read. Official proposals are always sent by an explicit
+   * Send Estimate click, which is the review. Kept so stored settings still parse.
+   */
   requireAdminReviewBeforeOfficial: boolean;
   showPreliminaryToClients: boolean;
   defaultEstimateExpirationDays: number;

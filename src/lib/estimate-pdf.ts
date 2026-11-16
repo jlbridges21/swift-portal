@@ -112,8 +112,9 @@ export function estimateAddressLines(business: {
 }
 
 /**
- * The sentence the client already sees, when the resolved terms are a deposit.
- * Null when approval charges the full total, so the PDF does not invent wording.
+ * The sentence the client already sees, when the resolved terms are a deposit or
+ * "no payment due on approval". Null when approval charges the full total, so the
+ * PDF does not invent wording.
  */
 export function estimateDepositLine(
   totalCents: number,
@@ -121,6 +122,7 @@ export function estimateDepositLine(
   business: DepositTerms
 ): string | null {
   const terms = resolveQuoteDepositTerms(quote, business);
+  if (terms.depositMode === "later") return totalCents > 0 ? quotePaymentTermsText(totalCents, terms) : null;
   if (!resolveDepositCharge(totalCents, terms).isDeposit) return null;
   return quotePaymentTermsText(totalCents, terms);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useId, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Payment, ProjectQuote } from "@/lib/types";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
@@ -138,11 +138,19 @@ export function CheckoutChoiceButtons({
   payment,
   choice,
   downloadsLocked = false,
+  autoStart = false,
+  onAutoStarted,
 }: {
   payment: Pick<Payment, "id" | "amount">;
   choice: { depositCents: number; totalCents: number; rowIsFull: boolean; offerPayInFull: boolean } | null;
   /** Client downloads are still locked — the success screen announces the unlock when the server confirms it. */
   downloadsLocked?: boolean;
+  /**
+   * Open the embedded checkout on mount (right after the client approves a proposal).
+   * Only when there is one way to pay; a deposit-or-full choice waits for the client's pick.
+   */
+  autoStart?: boolean;
+  onAutoStarted?: () => void;
 }) {
   const { passCardFee } = useContext(PaymentOptionsContext);
   const [pending, setPending] = useState<"full" | "deposit" | "default" | null>(null);
@@ -189,6 +197,16 @@ export function CheckoutChoiceButtons({
       buttons.push({ key: "full", text: fullText, cents: choice.totalCents, primary: false });
     }
   }
+
+  const autoStarted = useRef(false);
+  const onlyButton = buttons.length === 1 ? buttons[0].key : null;
+  useEffect(() => {
+    if (!autoStart || autoStarted.current) return;
+    autoStarted.current = true;
+    onAutoStarted?.();
+    if (onlyButton) start(onlyButton);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per mount, on the first autoStart
+  }, [autoStart, onlyButton]);
 
   return (
     <div className="flex w-full flex-col gap-3 sm:w-80">
@@ -298,7 +316,7 @@ export function PaymentsSection({
         <EmptyState
           icon={CreditCard}
           title="No payment requested yet"
-          description={`No payment has been requested yet. Once your project is approved, ${brand.name} will send your secure payment link here. You'll be able to pay online${downloadsUnlocked ? "." : " and immediately unlock your high-resolution downloads."}`}
+          description={`No payment has been requested yet. When payment is due, your invoice from ${brand.name} will appear here. You'll be able to pay online${downloadsUnlocked ? "." : " and immediately unlock your high-resolution downloads."}`}
         />
       ) : (
       <div className="space-y-6">

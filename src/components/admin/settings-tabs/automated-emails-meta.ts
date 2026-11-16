@@ -70,7 +70,7 @@ const WHEN_SENT: Partial<Record<MessageTemplateKey, string>> = {
   shoot_confirmed: "Sent when a shoot date is confirmed or scheduled.",
   shoot_time_declined: "Sent when you decline a client's suggested time or withdraw yours.",
   deliverables_ready: "Sent when media or a tour is ready for the client to review.",
-  payment_request: "Sent when a payment link is created for the client.",
+  payment_request: "Sent when an invoice is created for the client.",
   payment_received: "Sent to the client after a successful payment.",
   project_completed: "Sent when the project is marked delivered.",
 };

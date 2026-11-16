@@ -99,7 +99,7 @@ export function AdminPaymentActions({
           <>
             <a href={link} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" size="sm" className="min-h-11">
-                Open Payment Link
+                View Invoice
               </Button>
             </a>
             <Button
@@ -108,10 +108,10 @@ export function AdminPaymentActions({
               className="min-h-11"
               onClick={() => {
                 navigator.clipboard.writeText(link);
-                toast.success("Payment link copied");
+                toast.success("Invoice link copied");
               }}
             >
-              Copy Link
+              Copy Invoice Link
             </Button>
           </>
         )}
