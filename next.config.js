@@ -2,6 +2,11 @@
 const nextConfig = {
   // Marketing Kit exports render with the same font files the live preview loads
   // (public/marketing-fonts). Make sure they ship with the export function.
+  // Server code reads fonts/icons from public/ via dynamic paths, so the tracer would bundle all of
+  // public/ into functions. Marketing media is served statically and never read on the server.
+  outputFileTracingExcludes: {
+    "*": ["./public/solutions/**/*"],
+  },
   outputFileTracingIncludes: {
     "/api/marketing/[projectId]/export": ["./public/marketing-fonts/**/*"],
     // Official proposal PDFs render on the server with the same Inter files the editor preview loads.
