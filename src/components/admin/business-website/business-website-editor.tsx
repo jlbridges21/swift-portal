@@ -238,8 +238,8 @@ export function BusinessWebsiteEditor({
   const goToDomain = () => {
     // Settings page: switch section in place. Elsewhere (Sites → Business Website): open the
     // domain section in Settings (the browser's unsaved-changes prompt still applies).
-    if (window.location.pathname === "/admin/settings") window.location.hash = "settings-website-domain";
-    else window.location.assign("/admin/settings#settings-website-domain");
+    if (window.location.pathname === "/admin/settings") window.location.hash = "settings-custom-domain";
+    else window.location.assign("/admin/settings#settings-custom-domain");
   };
 
   const form = (

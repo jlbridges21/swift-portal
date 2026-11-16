@@ -138,8 +138,12 @@ export function visibleSettingsSections(includeTax: boolean): SettingsSection[] 
 export function sectionForHash(hash: string): SettingsSectionId | null {
   const normalized = hash.replace(/^#/, "").trim();
   if (!normalized) return null;
+  // Exact matches win over prefix matches: "settings-website-domain" belongs to the domain
+  // section, even though the Business Website section claims "settings-website-*" deep links.
+  const exact = SETTINGS_SECTIONS.find((section) => section.hashes.includes(normalized));
+  if (exact) return exact.id;
   for (const section of SETTINGS_SECTIONS) {
-    if (section.hashes.some((h) => normalized === h || normalized.startsWith(`${h}-`))) {
+    if (section.hashes.some((h) => normalized.startsWith(`${h}-`))) {
       return section.id;
     }
   }
