@@ -15,9 +15,6 @@ export function ShareAccessInterstitial({
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#F8FAFC] px-4">
       <Card className="w-full max-w-md border-slate-200 shadow-sm">
         <CardHeader className="text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#4F46E5]">
-            ShootPortal
-          </p>
           <CardTitle className="mt-2 text-slate-900">Open shared project</CardTitle>
           <CardDescription className="text-slate-600">
             Click Continue to sign in and view the project. This link works on any device until it

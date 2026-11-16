@@ -242,10 +242,11 @@ export const article: BlogArticle = {
             HoneyBook removes &quot;Powered by HoneyBook&quot; from Essentials up.
           </p>
           <p>
-            ShootPortal gives you a branded client portal with your logo, email logo, favicon, and brand colors, at your
-            own subdomain on shootportal.app or a custom domain like portal.yourstudio.com. The same branding carries to
-            your emails (which can send from your own domain), your checkout, your business website, and the property
-            websites you build for listings. To the client, it all looks like one studio.
+            ShootPortal is white-label on every plan, with no upgrade tier to remove its name. Your logo, email logo,
+            favicon, and brand colors run through the portal at your own domain (like portal.yourstudio.com), your
+            emails (sent under your business name, and from your own domain if you connect it), your checkout, your
+            business website, and the property websites you build for listings. The small &quot;Powered by&quot; credit
+            on websites is a switch you can turn off. To the client, it all looks like your studio built it.
           </p>
           <Figure caption="Real ShootPortal screen: Branding and Colors settings. Upload your logo and pick your colors once, and the portal, emails, checkout, and websites all match.">
             <AppScreen view="branding" />
@@ -337,7 +338,7 @@ export const article: BlogArticle = {
             ]}
             highlightColumn={undefined}
             rows={[
-              ["ShootPortal", ctx.studioMonthly ? `${ctx.studioMonthly}/mo, every feature` : "Flat monthly subscription", "One-click email links; pay links need no login", <Yes key="a" />, <Yes key="b">Photos, video, tours, 3D</Yes>, <Yes key="b2">Per item + time-stamped video</Yes>, "Branded + custom domain"],
+              ["ShootPortal", ctx.studioMonthly ? `${ctx.studioMonthly}/mo, every feature` : "Flat monthly subscription", "One-click email links; pay links need no login", <Yes key="a" />, <Yes key="b">Photos, video, tours, 3D</Yes>, <Yes key="b2">Per item + time-stamped video</Yes>, <Yes key="wl">Included on every plan</Yes>],
               ["HoneyBook", "$29/mo billed yearly", "Not required by default", <Yes key="d" />, <No key="e">Files only</No>, <No key="e2" />, <No key="f">Badge removed on Essentials+</No>],
               ["Dubsado", "$335/yr", "Login (off by default)", <Yes key="g" />, <No key="h" />, <No key="h2" />, "Not verified"],
               ["Studio Ninja", "$16/mo", "Not verified", <Yes key="i" />, <No key="j" />, <No key="j2">In a separate gallery tool</No>, "Not verified"],
@@ -397,11 +398,11 @@ export const article: BlogArticle = {
               "Photos, video, 360 tours, 3D models, and documents in one place, with hearts for favorites",
               "Approve or flag each deliverable; time-stamped, frame-pinned video comments with numbered versions, replacing Frame.io or Dropbox Replay",
               "Pay by card, Apple Pay, Google Pay, or bank (ACH) straight to your Stripe; ShootPortal takes 0%",
+              "Fully white-label on every plan: your logo, colors, and own domains, with no upgrade needed to remove ShootPortal's name",
               "Download single files or a ZIP in Print or MLS size, unlocked automatically on payment",
               "Property websites and social media kits the agent can preview and buy right from their project",
             ]}
             cons={[
-              "Branded with your logo, colors, and domains rather than a fully white-label product",
               "Client updates go out as branded emails (with open and click tracking) rather than texts",
             ]}
           >
@@ -790,12 +791,13 @@ export const article: BlogArticle = {
     {
       question: "Is ShootPortal's client portal white-labeled?",
       answerText:
-        "It's a branded portal. Your logo, favicon, and brand colors appear on the portal, emails, checkout, and websites, the portal can live on your own domain like portal.yourstudio.com, and emails can send from your own domain.",
+        "Yes, on every plan and at no extra cost. Your logo, favicon, and brand colors appear on the portal, emails, checkout, and websites; the portal lives on your own domain like portal.yourstudio.com; emails go out under your business name and can send from your own domain; and the Powered by credit on websites can be switched off. Unlike tools that charge more to remove their badge, ShootPortal doesn't upsell white-labeling.",
       answer: (
         <p>
-          It&apos;s a branded portal. Your logo, favicon, and brand colors appear on the portal, emails, checkout, and
-          websites, the portal can live on your own domain like portal.yourstudio.com, and emails can send from your
-          own domain.
+          Yes, on every plan and at no extra cost. Your logo, favicon, and brand colors appear on the portal, emails,
+          checkout, and websites; the portal lives on your own domain like portal.yourstudio.com; emails go out under
+          your business name and can send from your own domain; and the Powered by credit on websites can be switched
+          off. Unlike tools that charge more to remove their badge, ShootPortal doesn&apos;t upsell white-labeling.
         </p>
       ),
     },

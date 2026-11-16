@@ -117,7 +117,7 @@ assert.match(saved.notes[0], /verified with Stripe on Feb 3, 2026/);
 // 7. Stripe amount differs from the record: Stripe wins, and the receipt says so.
 const mismatch = composeReceipt({ payment: stripePayment, frozen, stripe: { ...facts, amountCents: 19000 }, stripeSource: "live", stripeVerifiedAt: null });
 assert.equal(mismatch.totalCents, 19000);
-assert.match(mismatch.notes[0], /differs from the ShootPortal payment record/);
+assert.match(mismatch.notes[0], /differs from the recorded payment/);
 
 // 8. Manual payments are acknowledgments, not Stripe receipts, and carry no card fee.
 const manualRow = { ...stripePayment, payment_method_type: "manual" as const, card_last4: null, client_fee_cents: 0 };
@@ -129,7 +129,7 @@ assert.equal(manual.kind, "manual");
 assert.equal(manual.title, "Payment Acknowledgment");
 assert.equal(manual.methodLabel, "Recorded by the business");
 assert.equal(manual.verification.source, "manual");
-assert.match(manual.notes[0], /not processed through ShootPortal's Stripe checkout/);
+assert.match(manual.notes[0], /not processed through online card checkout/);
 
 // 9. ACH and Marketing Kit labels.
 assert.equal(receiptMethodLabel({ kind: "stripe", methodType: "us_bank_account", bankName: "STRIPE TEST BANK", last4: "6789" }), "Bank transfer (ACH) · STRIPE TEST BANK ending 6789");

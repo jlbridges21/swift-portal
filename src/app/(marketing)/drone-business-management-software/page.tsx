@@ -603,7 +603,7 @@ export default async function DroneBusinessManagementSoftwarePage() {
             </figure>
             <ul className="space-y-4">
               {[
-                { icon: Palette, title: "Branded, not anonymous", body: "Your logo and colors on every page and email. It's a branded portal, not a fully white-labeled one." },
+                { icon: Palette, title: "White-label, every plan", body: "Your logo, colors, and domain on every page and email. No upgrade tier to remove our name." },
                 { icon: Globe, title: "Your domain", body: "Connect portal.yourcompany.com with DNS verification, and send email from your own domain." },
                 { icon: Check, title: "A landing page and request form", body: "Show your services and showreel, and take requests that land as new projects." },
               ].map((b) => {

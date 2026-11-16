@@ -316,7 +316,7 @@ export default async function RealEstatePhotographySoftwarePage() {
             />
           </div>
           <p className="mt-8 text-center text-sm text-[#64748B]">
-            ShootPortal is a branded portal, not fully white-label. Learn more on the{" "}
+            ShootPortal is white-label on every plan, at no extra cost. Learn more on the{" "}
             <Link href="/photography-client-portal" className="font-medium text-[#4F46E5] underline underline-offset-2">
               photography client portal
             </Link>{" "}

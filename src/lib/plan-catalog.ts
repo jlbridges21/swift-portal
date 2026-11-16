@@ -8,17 +8,29 @@ export const ENFORCED_ENTITLEMENTS = [
 
 export type EnforcedEntitlement = (typeof ENFORCED_ENTITLEMENTS)[number];
 
-export const FUTURE_ENTITLEMENTS = [
-  "custom_stages",
+/**
+ * Shipped to every business on every plan, not gated and not an upsell:
+ * - automations: Settings → Workflow Automation (stage notifications, auto-advance, payment automations, reminders).
+ * - remove_platform_branding / white_label: the client experience carries only the business's brand
+ *   (logo, colors, custom domains, business-named emails, Powered-by credits that can be switched off).
+ * Re-evaluated 2026-11-16; previously listed as future entitlements.
+ */
+export const INCLUDED_CAPABILITIES = [
   "automations",
   "remove_platform_branding",
   "white_label",
+] as const;
+
+export type IncludedCapability = (typeof INCLUDED_CAPABILITIES)[number];
+
+export const FUTURE_ENTITLEMENTS = [
+  "custom_stages",
   "advanced_reporting",
   "priority_support",
 ] as const;
 
 export type FutureEntitlement = (typeof FUTURE_ENTITLEMENTS)[number];
-export type EntitlementKey = EnforcedEntitlement | FutureEntitlement;
+export type EntitlementKey = EnforcedEntitlement | FutureEntitlement | IncludedCapability;
 
 export const ENTITLEMENT_LABELS: Record<EntitlementKey, string> = {
   custom_branding: "Custom branding",
