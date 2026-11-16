@@ -22,6 +22,7 @@ import {
   vercelGetDomainConfig,
   vercelGetProjectDomain,
   vercelRemoveProjectDomain,
+  vercelSetProjectDomainRedirect,
   vercelVerifyProjectDomain,
   /**
    * Documented Vercel public fallbacks only — never show these as if they were
@@ -547,6 +548,14 @@ async function registerAlternate(primary: string, alternate: string): Promise<St
   if (existing.ok) {
     out.challenges = existing.data.verification ?? [];
     out.verified = existing.data.verified === true;
+    // Already on the project (added by hand or a previous setup): point it at the main address.
+    if (existing.data.redirect !== primary) {
+      const pointed = await vercelSetProjectDomainRedirect(alternate, primary, 308);
+      if (!pointed.ok) {
+        out.error = pointed.error.message || "Could not set up the redirect domain.";
+        return out;
+      }
+    }
   } else {
     const added = await vercelAddProjectDomain(alternate, { redirect: primary, redirectStatusCode: 308 });
     if (!added.ok) {
@@ -649,6 +658,15 @@ export async function claimCustomDomain(options: {
     if (existing.ok) {
       challenges = existing.data.verification ?? [];
       vercelVerified = existing.data.verified === true;
+      // The connected address must serve the site itself. If it was attached earlier with a
+      // redirect (Vercel's dashboard adds "www → apex" by default), visitors would be sent
+      // elsewhere, or loop forever against our own apex → www redirect.
+      if (existing.data.redirect) {
+        const cleared = await vercelSetProjectDomainRedirect(domain, null);
+        if (!cleared.ok) {
+          throw new Error(cleared.error.message || "Could not remove an old redirect on this address.");
+        }
+      }
     } else {
       const added = await vercelAddProjectDomain(domain);
       if (!added.ok) {

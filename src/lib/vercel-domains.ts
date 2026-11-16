@@ -25,6 +25,9 @@ export type VercelProjectDomain = {
   projectId: string;
   verified: boolean;
   verification?: VercelDomainVerification[];
+  /** When set, Vercel answers every request on this domain with a redirect to this host. */
+  redirect?: string | null;
+  redirectStatusCode?: number | null;
   createdAt?: number;
   updatedAt?: number;
 };
@@ -176,6 +179,22 @@ export async function vercelGetProjectDomain(
   return vercelFetch<VercelProjectDomain>(
     "GET",
     `/v9/projects/${encodeURIComponent(projectId())}/domains/${encodeURIComponent(domain)}${teamQuery()}`
+  );
+}
+
+/**
+ * Set or clear the project-level redirect on a domain already attached to this project.
+ * Pass `redirect: null` to make the domain serve the app directly.
+ */
+export async function vercelSetProjectDomainRedirect(
+  domain: string,
+  redirect: string | null,
+  redirectStatusCode: 301 | 302 | 307 | 308 = 308
+): Promise<{ ok: true; data: VercelProjectDomain } | { ok: false; error: VercelApiError }> {
+  return vercelFetch<VercelProjectDomain>(
+    "PATCH",
+    `/v9/projects/${encodeURIComponent(projectId())}/domains/${encodeURIComponent(domain)}${teamQuery()}`,
+    redirect ? { redirect, redirectStatusCode } : { redirect: null, redirectStatusCode: null }
   );
 }
 
