@@ -8,6 +8,7 @@ import {
   ClipboardList,
   CreditCard,
   FileText,
+  Megaphone,
   Minus,
   PackageCheck,
   MessageSquareText,
@@ -163,7 +164,7 @@ export function BestFitPanel({
 }
 
 const COVERAGE: { key: string; label: string; icon: LucideIcon; features: string[] }[] = [
-  { key: "request", label: "Request", icon: ClipboardList, features: ["Branded request form", "Service catalog", "Client record created"] },
+  { key: "request", label: "Request", icon: ClipboardList, features: ["Your business website", "Branded request form", "Client record created"] },
   { key: "estimate", label: "Estimate", icon: FileText, features: ["Preliminary estimate", "ZIP-distance travel fees", "Versioned estimate + PDF"] },
   { key: "schedule", label: "Schedule", icon: CalendarClock, features: ["Propose a shoot time", "Client accepts or counters", "Push to Google Calendar"] },
   { key: "shoot", label: "Shoot", icon: Camera, features: ["Brief, address, notes on the job", "Staff assigned to projects"] },
@@ -171,13 +172,14 @@ const COVERAGE: { key: string; label: string; icon: LucideIcon; features: string
   { key: "review", label: "Review", icon: MessageSquareText, features: ["Approve or request changes", "Time-stamped video comments", "Numbered versions"] },
   { key: "pay", label: "Pay", icon: CreditCard, features: ["Deposits on approval", "Card payments via your Stripe", "Receipts by email"] },
   { key: "deliver", label: "Deliver", icon: PackageCheck, features: ["Print or MLS-size downloads", "ZIP downloads", "Optional unlock after payment"] },
+  { key: "market", label: "Market", icon: Megaphone, features: ["Property website per listing", "Social posts, Stories, flyers", "Sell it as an add-on"] },
 ];
 
-/** Verified ShootPortal capabilities mapped onto the eight workflow stages. */
+/** Verified ShootPortal capabilities mapped onto the nine workflow stages (request through listing marketing). */
 export function WorkflowCoverageMap({ highlight = [] }: { highlight?: string[] }) {
   return (
     <div className="overflow-hidden rounded-3xl border border-[#E2E8F0] bg-gradient-to-b from-white to-[#F8FAFC] p-4 sm:p-6">
-      <ol className="mk-plain-list grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <ol className="mk-plain-list grid gap-3 sm:grid-cols-3">
         {COVERAGE.map((s) => {
           const on = highlight.length === 0 || highlight.includes(s.key);
           const Icon = s.icon;

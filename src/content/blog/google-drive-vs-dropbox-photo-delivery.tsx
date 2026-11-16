@@ -5,6 +5,7 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   No,
   PickGrid,
   SiteLink,
@@ -12,19 +13,21 @@ import {
 } from "@/components/blog/article-parts";
 import { BeforeAfter } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
-import { BestFitPanel, TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
+import { BestFitPanel, ProductCallout, TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, AppScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "google-drive-vs-dropbox-photo-delivery",
   title: "Google Drive vs. Dropbox vs. Dedicated Photo Delivery Software: What's Best for Photographers?",
-  seoTitle: "Google Drive vs Dropbox vs Photo Delivery Software (2026)",
+  seoTitle: "Google Drive Alternative for Photographers (vs Dropbox)",
   description:
-    "Need a Google Drive alternative for photographers? Compare Drive, Dropbox, and dedicated photo delivery software on price, branding, payments, and client experience.",
+    "Need a Google Drive alternative for photographers? Compare Drive, Dropbox, and photo delivery software on price, branding, payments, and client experience.",
   excerpt:
     "Drive and Dropbox are cheap, reliable storage. Dedicated delivery software is built for the client handoff. Here's how they compare on price, sharing controls, branding, and payments, and when to use both.",
   category: "software-comparisons",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   disclosure: true,
   primaryKeyword: "Google Drive alternative for photographers",
@@ -34,8 +37,11 @@ export const article: BlogArticle = {
     "photo delivery software",
     "best way to deliver photos to clients",
     "client photo delivery",
+    "photo editing for real estate",
+    "Dropbox Replay alternative",
+    "real estate photography website",
   ],
-  readingMinutes: 12,
+  readingMinutes: 13,
   cover: {
     variant: "folders",
     tint: "indigo",
@@ -55,16 +61,13 @@ export const article: BlogArticle = {
         accounts.
       </>,
       <>
-        <strong>For the client handoff</strong>, dedicated delivery software wins: your branding, download sizes,
-        proofing or approvals, and payment in the same place.
+        <strong>For the client handoff</strong>, dedicated delivery software wins. For real estate, drone, and video
+        work, our pick is ShootPortal (our product): your branding, Print and MLS downloads, approvals, video review,
+        and payment on one project, with downloads that unlock when the client pays.
       </>,
       <>
-        <strong>Most working photographers use both</strong>: cloud storage as the archive, a delivery tool as the
-        storefront.
-      </>,
-      <>
-        <strong>Pick the delivery tool by niche</strong>: galleries for portrait and wedding, real estate platforms for
-        listings, an integrated portal if you want projects, delivery, and payments together.
+        <strong>Keep Drive or Dropbox as the archive</strong> and let ShootPortal be the storefront. You don&apos;t need
+        Dropbox Replay for video feedback or a separate editing round-trip: both are built in.
       </>,
     ],
   },
@@ -74,7 +77,8 @@ export const article: BlogArticle = {
         Nearly every photographer starts delivering through a shared Google Drive or Dropbox folder. It&apos;s already
         paid for, clients know how to open a link, and it works. The question usually comes later, around the time you
         notice you&apos;re sending the same &quot;here&apos;s the link, let me know once you&apos;ve paid&quot; email
-        for the fortieth time, or a client says they can&apos;t find the folder from last month.
+        for the fortieth time, or a client says they can&apos;t find the folder from last month. That&apos;s when the
+        search for a Google Drive alternative for photographers usually starts.
       </p>
       <p>
         This comparison looks at three options honestly: <strong>Google Drive</strong>, <strong>Dropbox</strong>, and{" "}
@@ -82,7 +86,8 @@ export const article: BlogArticle = {
         company&apos;s own pages, point out where those pages contradict each other, and end with a recommendation by
         business size. If you&apos;re specifically searching for a Google Drive alternative for photographers, the short
         version is that you probably don&apos;t need to replace Drive. You need to stop asking it to be your client
-        experience.
+        experience. For real estate photographers, drone pilots, and videographers, that client experience is what
+        ShootPortal is built for: one branded link where the client approves, pays, and downloads.
       </p>
     </>
   ),
@@ -308,7 +313,7 @@ export const article: BlogArticle = {
     },
     {
       id: "dedicated-delivery",
-      title: "Dedicated photo delivery software: three kinds",
+      title: "The best Google Drive alternative for photographers: dedicated delivery software",
       tocLabel: "Dedicated delivery",
       body: (ctx) => (
         <>
@@ -352,7 +357,7 @@ export const article: BlogArticle = {
             messages, and payment. ShootPortal is our product in this category. Each project holds photos in folders,
             video files, YouTube embeds, Kuula 360 tours, 3D model embeds such as Matterport, and documents. Clients
             download photos as &quot;Print&quot; (original full-resolution) or &quot;MLS&quot; (2048 px on the long edge),
-            one at a time or as a ZIP, and approve or reject each deliverable with written feedback. Payment requests go
+            one at a time or as a ZIP, and approve or request changes on each deliverable with written feedback. Payment requests go
             through your own Stripe account, and an optional setting keeps downloads locked until the final payment while
             clients can still view the work.{" "}
             {ctx.studioMonthly ? (
@@ -369,11 +374,16 @@ export const article: BlogArticle = {
             )}
           </p>
           <p>
-            The honest limits: ShootPortal has no print store, favorites, or gallery e-commerce, so portrait and wedding
-            photographers who sell prints will be better served by a gallery platform. It doesn&apos;t build
-            single-property websites or deliver to Zillow Showcase, which some real estate platforms do. Branding is your
-            logo, colors, and your own subdomain or custom domain, not a full white-label.
+            It goes past the handoff, too. Clients can heart their favorite photos. A built-in photo editor lets you fix
+            a frame and save it straight back to the gallery the client is viewing. Video gets time-stamped comments
+            pinned to the frame and numbered versions, with no Dropbox Replay add-on. And for listings, ShootPortal
+            builds a property website and a social and print marketing kit from the delivered photos, which you can
+            include or sell to the agent. Your logo, colors, and custom domain carry through the portal, emails, and
+            checkout.
           </p>
+          <Figure caption="Real ShootPortal screens: on the left, your branding settings with logo and brand colors; on the right, the finished gallery your client sees under that brand, instead of a generic Drive folder.">
+            <TwoSidedScreens business="branding" client="portal-gallery" />
+          </Figure>
           <Figure caption="Real ShootPortal screen: the media library, with every listing's photos and video organized and searchable (sample client data).">
             <ProductPreview view="media" />
           </Figure>
@@ -402,21 +412,23 @@ export const article: BlogArticle = {
             rows={[
               ["Cost of storage per TB", <Yes key="a">Low</Yes>, <Yes key="b">Low</Yes>, "Usually higher; you pay for the client experience", "Flat subscription; not priced as a storage plan"],
               ["Archive and backup", <Yes key="c">Excellent</Yes>, <Yes key="d">Excellent</Yes>, <No key="e">Not the purpose; keep a separate archive</No>, <No key="e2">Keep Drive or Dropbox as the archive</No>],
-              ["Your branding", <No key="f" />, "Higher plans; limited", <Yes key="g">Logo, colors, often custom domain</Yes>, <Yes key="g2">Logo, color, theme, custom domain (not white-label)</Yes>],
+              ["Your branding", <No key="f" />, "Higher plans; limited", <Yes key="g">Logo, colors, often custom domain</Yes>, <Yes key="g2">Logo, colors, custom domain on portal, emails, and checkout</Yes>],
               ["Web and print download sizes", <No key="h">Export each yourself</No>, <No key="i">Export each yourself</No>, <Yes key="j">Common</Yes>, <Yes key="j2">Print (original) or MLS (2048 px), single or ZIP</Yes>],
-              ["Client proofing or approvals", <No key="k" />, <No key="l" />, <Yes key="m">Favorites (galleries) or approve/reject (portals)</Yes>, <Yes key="m2">Approve or reject each item with feedback</Yes>],
+              ["Client proofing or approvals", <No key="k" />, <No key="l" />, <Yes key="m">Favorites (galleries) or approve/reject (portals)</Yes>, <Yes key="m2">Favorites, plus approve or request changes on each item</Yes>],
               ["Payment tied to downloads", <No key="n" />, <No key="o" />, "Many platforms; check each", <Yes key="o2">Optional unlock after final payment</Yes>],
-              ["Print store", <No key="p" />, <No key="q" />, "Gallery platforms, yes; portals and RE tools vary", <No key="q2" />],
-              ["Video alongside photos", "Files only", "Files; Replay add-on for review", "Varies; check video limits per plan", <Yes key="q3">Video files plus time-stamped review</Yes>],
+              ["Print store", <No key="p" />, <No key="q" />, "Gallery platforms, yes; portals and RE tools vary", <No key="q2">Paid project delivery instead</No>],
+              ["Built-in photo editing", <No key="p3" />, <No key="p4" />, "Rare", <Yes key="p5">Auto, light, color, HDR, healing; saves to the gallery</Yes>],
+              ["Video alongside photos", "Files only", "Files; Replay add-on for review", "Varies; check video limits per plan", <Yes key="q3">Time-stamped review and versions, included</Yes>],
               ["Estimate, schedule, and messages with the delivery", <No key="q4" />, <No key="q5" />, "Integrated portals only", <Yes key="q6">Same project</Yes>],
               ["Client history in one place", <No key="r">Folders and inbox links</No>, <No key="s">Folders and inbox links</No>, <Yes key="t">Client login or gallery list</Yes>, <Yes key="t2">Client login with every project</Yes>],
-              ["Learning curve for clients", "Familiar", "Familiar", "New, but built for them", "Client sign-in; share links for others"],
+              ["Property website and marketing kit", <No key="u1" />, <No key="u2" />, "Some real estate platforms", <Yes key="u3">Built from the photos; include or sell</Yes>],
+              ["Learning curve for clients", "Familiar", "Familiar", "New, but built for them", "One branded link, nothing to install"],
             ]}
             note="Category-level comparison based on Google and Dropbox documentation and vendor pages checked 2026-10-15. Features vary by product and plan. The ShootPortal column describes our own product."
           />
           <p>
-            Drive and Dropbox win the first two rows outright, and that&apos;s not a small thing. Everything below them is
-            where a dedicated tool earns its higher price.
+            Drive and Dropbox win the first two rows outright, which is why they make a great archive. Everything below
+            them is the client experience, and that&apos;s where ShootPortal earns its place.
           </p>
         </>
       ),
@@ -450,9 +462,18 @@ export const article: BlogArticle = {
           <h3>Video</h3>
           <p>
             If you deliver video, the gap widens. Drive and Dropbox will hold the file, but feedback on a cut happens in
-            email unless you add a review tool such as Dropbox Replay. We cover the options and the file-size math in{" "}
+            email, or you pay for the Dropbox Replay add-on on top of your plan. We cover the options and the file-size
+            math in{" "}
             <BlogLink slug="how-to-send-large-video-files-to-clients">how to send large video files to clients</BlogLink>.
           </p>
+          <ProductCallout title="Video review built in, instead of a Replay add-on">
+            <p>
+              In ShootPortal, the client watches the cut on the same project as the photos, pins comments to a moment and
+              a spot on the frame, and approves or requests changes. You reply in threads, resolve notes, and upload the
+              next cut as a numbered version. It&apos;s included in the plan, with no per-user add-on, and the invoice and
+              final download are on the same page.
+            </p>
+          </ProductCallout>
         </>
       ),
     },
@@ -460,7 +481,7 @@ export const article: BlogArticle = {
       id: "storage-to-workflow",
       title: "From a shared folder to a client workflow",
       tocLabel: "Storage to workflow",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             Here&apos;s the part a storage-versus-storage comparison misses. A Drive or Dropbox link only covers the last
@@ -470,12 +491,13 @@ export const article: BlogArticle = {
             around it that cost you time.
           </p>
           <p>
-            Moving from storage to a client workflow means those steps share one record. In ShootPortal, the request,
-            the estimate, the proposed shoot time, the messages, the files, and the payment status all sit on the same
-            project. When a client asks &quot;where are we?&quot;, you open one page, and so can they.
+            Moving from storage to a client workflow means those steps share one record. In ShootPortal, the request
+            from your website, the proposal, the proposed shoot time, the messages, the edits, the files, and the payment
+            status all sit on the same project. When a client asks &quot;where are we?&quot;, you open one page, and so
+            can they.
           </p>
           <Figure caption="ShootPortal's verified features at each stage of a job.">
-            <WorkflowCoverageMap highlight={["review", "pay", "deliver"]} />
+            <WorkflowCoverageMap highlight={["edit", "review", "pay", "deliver"]} />
           </Figure>
           <p>
             The highlighted stages are the ones that replace what a shared folder does today. To be specific about what
@@ -491,11 +513,19 @@ export const article: BlogArticle = {
               sit with the files, and every past job is in the client&apos;s login instead of an old email.
             </li>
             <li>
-              <strong>Still manual:</strong> editing, uploading the finals, choosing which media sections the client
-              sees, and keeping your archive in Drive or Dropbox. If someone without an account needs the files, such
-              as an agent&apos;s assistant, you create a share link (view-only, or an email invite with an expiry).
+              <strong>Edited in place:</strong> touch-ups happen in the built-in photo editor (one-click Auto, exposure,
+              white balance, curves, HDR and B&amp;W looks, healing, lens corrections), with adjustments copied across a
+              set. Save to Project and the gallery, downloads, and shares update instantly, while originals are kept.
+            </li>
+            <li>
+              <strong>Your part:</strong> uploading the finals, choosing which media sections the client sees, and
+              keeping your RAW archive in Drive or Dropbox. If someone else needs the files, such as an agent&apos;s
+              assistant, send an &quot;Anyone with the link&quot; project link or an email share with an expiry.
             </li>
           </ul>
+          <Figure caption="Real ShootPortal screen: the built-in photo editor adjusting exposure, highlights, and shadows on a listing interior. No export and re-upload round-trip; the client's gallery updates when you save.">
+            <AppScreen view="photo-editor" />
+          </Figure>
           <BestFitPanel
             heading="When it's time to move delivery out of Drive or Dropbox"
             fits={[
@@ -516,11 +546,11 @@ export const article: BlogArticle = {
                 why: "Video with time-stamped comments, Kuula 360 tours, and Matterport or other 3D embeds sit beside the photos on one project.",
               },
             ]}
-            notFor={[
-              "You deliver a few jobs a month and clients pay reliably; a well-organized Drive folder is fine.",
-              "You sell prints or need favorites and a gallery store; a gallery platform fits better.",
-              "You want the cheapest possible storage per terabyte; that's still Drive or Dropbox.",
-            ]}
+          />
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Keep Drive for backups. Give clients something better than a folder."
+            body="Send your next job through a ShootPortal project: your logo, Print and MLS downloads, video feedback on the frame, and downloads that unlock when the client pays."
           />
           <p>
             Here&apos;s what that looks like in practice:{" "}
@@ -566,17 +596,15 @@ export const article: BlogArticle = {
             per credit, and gallery platforms may take a commission on store sales on lower tiers. Check each pricing page
             for the model, not just the headline price.
           </p>
-          <TrialCard
-            trialDays={ctx.trialDays}
-            title="Keep your Drive. Upgrade the handoff."
-            body={
-              <>
-                Leave your archive where it is and send your next delivery through a ShootPortal project instead: your
-                logo and colors, Print and MLS downloads, approvals, and payment in one place. The guided setup walks
-                you through branding and connecting your own Stripe account.
-              </>
-            }
-          />
+          <p>
+            ShootPortal is one flat plan{ctx.studioMonthly ? <> ({ctx.studioMonthly}/month)</> : null} with no
+            per-listing fees and 0% of client payments. Payments go straight to your Stripe by card, Apple Pay, Google
+            Pay, or optional bank transfer, and downloads unlock on their own. Because the same plan also covers your
+            business website, booking requests, proposals, video review, the photo editor, and listing marketing you can
+            sell, the comparison isn&apos;t really against a $9.99 storage plan. It&apos;s against the stack of apps
+            around it.
+          </p>
+          <AllInOnePlatform />
         </>
       ),
     },
@@ -584,33 +612,33 @@ export const article: BlogArticle = {
       id: "recommendations",
       title: "Recommendations by business size",
       tocLabel: "Recommendations",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
-            There&apos;s no single right answer, but there is a common pattern: storage stays cheap and generic, delivery
-            gets more specialized as volume grows.
+            The pattern that works: storage stays cheap and generic, and the client handoff moves to a platform built
+            for it. For real estate, drone, and video businesses, that&apos;s ShootPortal.
           </p>
           <PickGrid
             items={[
               {
-                who: "Just starting, a few clients a month",
-                pick: "Google Drive or Dropbox",
-                why: "Use what you already pay for. Organize folders carefully, block downloads manually until paid if needed, and invest the savings in gear or marketing.",
+                who: "Real estate, steady weekly volume",
+                pick: "ShootPortal + cloud archive",
+                why: "Print and MLS downloads, payment tied to download, and a property website and marketing kit you can sell. Keep RAW files in Drive or Dropbox.",
+              },
+              {
+                who: "Drone, video, or mixed media",
+                pick: "ShootPortal + cloud archive",
+                why: "Photos, video with time-stamped review, tours, and payment in one project beat a stack of separate links. Use Drive or Dropbox for masters.",
+              },
+              {
+                who: "Just starting out",
+                pick: "ShootPortal from the first job",
+                why: "A business website, a request form, and branded delivery make a new business look established, on one flat plan.",
               },
               {
                 who: "Portrait, wedding, or events",
                 pick: "A client gallery platform + cloud backup",
-                why: "Galleries handle favorites, print sales, and polished presentation. Keep RAW files and archives in Drive or Dropbox.",
-              },
-              {
-                who: "Real estate, steady weekly volume",
-                pick: "A real estate delivery platform or integrated portal",
-                why: "Property-based delivery, MLS sizes, and payment tied to download matter at volume. Compare marketing extras like property websites against an all-in-one workflow.",
-              },
-              {
-                who: "Drone, video, or mixed media",
-                pick: "An integrated client portal + cloud archive",
-                why: "Photos, video, tours, review comments, and payment in one project beat a stack of separate links. Use Drive or Dropbox for masters and archives.",
+                why: "Galleries are built around print sales. Keep RAW files and archives in Drive or Dropbox.",
               },
             ]}
           />
@@ -618,17 +646,28 @@ export const article: BlogArticle = {
             caption="Decision matrix: what to use for storage and delivery by business size"
             columns={["Business stage", "Storage / archive", "Client delivery", "Why"]}
             rows={[
-              ["Hobby or first clients", "Drive or Dropbox", "Same, via shared links", "Lowest cost; volume doesn't justify more yet"],
-              ["Solo, growing (weekly jobs)", "Drive or Dropbox", "Dedicated delivery tool", "Branding and payment-linked downloads start saving time"],
-              ["Established solo or small team", "Drive/Dropbox business plan or local NAS", "Delivery platform or integrated portal", "Team access, client history, and fewer follow-ups"],
-              ["Multi-shooter studio", "Business cloud plan with admin controls", "Platform with team permissions", "Consistency across shooters and clients"],
+              ["First paying clients", "Drive or Dropbox", "ShootPortal", "Look professional from day one; website, booking, and delivery in one plan"],
+              ["Solo, growing (weekly jobs)", "Drive or Dropbox", "ShootPortal", "Branding and payment-linked downloads start saving hours every week"],
+              ["Established solo or small team", "Drive/Dropbox business plan or local NAS", "ShootPortal", "Client history, staff accounts, automation, and fewer follow-ups"],
+              ["Multi-shooter studio", "Business cloud plan with admin controls", "ShootPortal", "Unlimited staff accounts with granular permissions, assigned per project"],
             ]}
             note="Editorial guidance, not a ranking. Match it to your niche and budget."
           />
           <p>
-            If you&apos;re leaning toward an integrated portal, you can see how projects, delivery, and payment fit together
-            on <SiteLink href="/how-it-works">how ShootPortal works</SiteLink>.
+            If you&apos;re ready to move delivery out of a shared folder, see how projects, delivery, and payment fit
+            together on <SiteLink href="/how-it-works">how ShootPortal works</SiteLink>.
           </p>
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Keep your Drive. Upgrade the handoff."
+            body={
+              <>
+                Leave your archive where it is and send your next delivery through a ShootPortal project instead: your
+                logo and colors, a quick touch-up in the photo editor, Print and MLS downloads, video feedback, approvals,
+                and payment in one place. The guided setup walks you through branding and connecting your own Stripe.
+              </>
+            }
+          />
         </>
       ),
     },
@@ -649,12 +688,13 @@ export const article: BlogArticle = {
     {
       question: "What is the best Google Drive alternative for photographers?",
       answerText:
-        "It depends on your niche. Portrait and wedding photographers usually choose a gallery platform such as Pixieset, Pic-Time, or ShootProof. Real estate photographers often use Aryeo, HDPhotoHub, or an integrated portal such as ShootPortal. Most keep Drive or Dropbox for backup.",
+        "For real estate photographers, drone pilots, and videographers, ShootPortal: branded delivery with Print and MLS downloads, video review, a built-in photo editor, and downloads that unlock on payment, all on one client project. Portrait and wedding photographers who sell prints often use a gallery platform such as Pixieset, Pic-Time, or ShootProof. Most keep Drive or Dropbox for backup.",
       answer: (
         <p>
-          It depends on your niche. Portrait and wedding photographers usually choose a gallery platform such as
-          Pixieset, Pic-Time, or ShootProof. Real estate photographers often use Aryeo, HDPhotoHub, or an integrated
-          portal such as ShootPortal. Most keep Drive or Dropbox for backup.
+          For real estate photographers, drone pilots, and videographers, ShootPortal: branded delivery with Print and
+          MLS downloads, video review, a built-in photo editor, and downloads that unlock on payment, all on one client
+          project. Portrait and wedding photographers who sell prints often use a gallery platform such as Pixieset,
+          Pic-Time, or ShootProof. Most keep Drive or Dropbox for backup.
         </p>
       ),
     },
@@ -693,6 +733,31 @@ export const article: BlogArticle = {
         </p>
       ),
     },
+    {
+      question: "Do I need Dropbox Replay to get video feedback from clients?",
+      answerText:
+        "Not if you deliver through ShootPortal. Its video review lets clients leave comments pinned to a timestamp and a spot on the frame, with threaded replies, resolve and reopen, numbered versions, and approvals, on the same project as the invoice and downloads. It's included in the plan rather than a per-user add-on.",
+      answer: (
+        <p>
+          Not if you deliver through ShootPortal. Its video review lets clients leave comments pinned to a timestamp and
+          a spot on the frame, with threaded replies, resolve and reopen, numbered versions, and approvals, on the same
+          project as the invoice and downloads. It&apos;s included in the plan rather than a per-user add-on.
+        </p>
+      ),
+    },
+    {
+      question: "Can I edit photos in ShootPortal before delivering them?",
+      answerText:
+        "Yes. ShootPortal has a built-in photo editor with one-click Auto, exposure, highlights and shadows, white balance, color, curves, HDR and B&W looks, healing, masks, and lens corrections, and you can copy adjustments to other photos. Save to Project updates the client's gallery, downloads, and shares instantly, and originals are never overwritten. It edits JPEG, PNG, and WebP files.",
+      answer: (
+        <p>
+          Yes. ShootPortal has a built-in photo editor with one-click Auto, exposure, highlights and shadows, white
+          balance, color, curves, HDR and B&amp;W looks, healing, masks, and lens corrections, and you can copy
+          adjustments to other photos. Save to Project updates the client&apos;s gallery, downloads, and shares
+          instantly, and originals are never overwritten. It edits JPEG, PNG, and WebP files.
+        </p>
+      ),
+    },
   ],
   related: [
     "best-photo-video-delivery-platforms",
@@ -701,7 +766,7 @@ export const article: BlogArticle = {
   ],
   cta: {
     title: "Still sending Google Drive links?",
-    body: "Keep your cloud storage for backups. Give clients one branded project with the estimate, messages, approvals, payment, and downloads together.",
+    body: "Keep your cloud storage for backups. Give clients one branded project with the proposal, edits, video review, payment, and downloads that unlock when they pay.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how delivery works",
   },

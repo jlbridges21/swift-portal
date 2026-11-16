@@ -5,6 +5,7 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   No,
   Yes,
@@ -14,18 +15,20 @@ import { DeliveryPathDiagram } from "@/components/blog/diagrams";
 import { DocumentCard } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
 import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, AppScreen, PhoneScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "how-to-deliver-real-estate-photos",
   title: "How to Deliver Real Estate Photos to Realtors: The Complete Guide",
   seoTitle: "How to Deliver Real Estate Photos to Clients (2026 Guide)",
   description:
-    "How to deliver real estate photos to clients: delivery methods compared, folder and file naming, MLS vs print sizes, video and tours, revisions, and payment.",
+    "How to deliver real estate photos to clients: delivery methods, file naming, MLS vs print sizes, video, revisions, payment, and property websites.",
   excerpt:
     "A practical, step-by-step process for handing listing photos, video, and tours to agents: how to organize files by property, which delivery method to use, and how to tie delivery to payment.",
   category: "media-delivery",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   primaryKeyword: "how to deliver real estate photos to clients",
   secondaryKeywords: [
     "deliver real estate photos to realtors",
@@ -33,8 +36,11 @@ export const article: BlogArticle = {
     "MLS photo size",
     "real estate photo file naming",
     "send listing photos to agent",
+    "property website for listings",
+    "photo editing for real estate",
+    "real estate marketing kit",
   ],
-  readingMinutes: 13,
+  readingMinutes: 15,
   cover: {
     variant: "delivery",
     tint: "teal",
@@ -60,8 +66,9 @@ export const article: BlogArticle = {
         <strong>Decide how payment and download connect</strong> before the first job, and put the rule in writing.
       </>,
       <>
-        <strong>Shared folders work at low volume.</strong> A branded delivery page or client portal starts paying off
-        once you deliver several listings a week.
+        <strong>Deliver more than photos.</strong> ShootPortal (our product) gives each listing one branded link with
+        Print and MLS downloads, video review, and downloads that unlock on payment, then turns the photos into a property
+        website and social posts you can sell to the agent.
       </>,
     ],
   },
@@ -80,7 +87,9 @@ export const article: BlogArticle = {
         <BlogLink slug="best-real-estate-photography-delivery-software">
           real estate photography delivery software comparison
         </BlogLink>{" "}
-        covers the platforms side by side. Here, the focus is the process, which you need no matter what you use.
+        covers the platforms side by side. Here, the focus is the process, which you need no matter what you use, with
+        a look at how ShootPortal runs the whole handoff (edit, deliver, review, get paid, and market the listing) from
+        one project per property.
       </p>
     </>
   ),
@@ -257,6 +266,9 @@ export const article: BlogArticle = {
           <Figure caption="Real ShootPortal screen: the media library, with every listing's photos and video organized and searchable (sample client data).">
             <ProductPreview view="media" />
           </Figure>
+          <Figure caption="Real ShootPortal screen: what the agent sees on their phone when a listing is finished. One link per property, with Download All for the full set.">
+            <PhoneScreen view="phone-portal-finished" />
+          </Figure>
         </>
       ),
     },
@@ -328,8 +340,8 @@ export const article: BlogArticle = {
               Ask agents to reference the file number or leave notes on the specific image.
             </li>
             <li>
-              <strong>Replace, don&apos;t add.</strong> When you fix an image, replace the original in the delivery so
-              the agent never uploads the old version by mistake.
+              <strong>Replace, don&apos;t add.</strong> When you fix an image, replace it in the delivery so the agent
+              never uploads the old version by mistake.
             </li>
             <li>
               <strong>Close the loop.</strong> Tell the agent when the revision is up, and keep the request and the
@@ -338,10 +350,23 @@ export const article: BlogArticle = {
           </ul>
           <p>
             Dedicated delivery tools help here because feedback stays attached to the files. In ShootPortal, clients
-            can approve or reject each deliverable with written feedback and submit a revision request, and videos get
-            time-stamped comments across numbered versions. Photo feedback is written per item rather than pinned to a
-            spot on the image.
+            approve or flag each deliverable with written feedback and submit a revision request. Video gets full
+            review: comments pinned to a timestamp and a point on the frame, threaded replies, Resolved and Unresolved
+            notes, and numbered versions (V1, V2, Latest). It replaces Dropbox Replay or Frame.io for client feedback,
+            on the same project as the delivery and the invoice.
           </p>
+          <ProductCallout title="Fix the photo where the agent sees it">
+            <p>
+              ShootPortal has a built-in photo editor, so a &quot;the kitchen looks dark&quot; note doesn&apos;t mean
+              reopening your editing app, exporting, and re-uploading. Adjust exposure, highlights and shadows, white
+              balance, or curves, remove a spot, straighten verticals with geometry corrections, or apply one-click Auto.
+              Save to Project updates the gallery and downloads instantly, and the original is kept in version history
+              if you want it back.
+            </p>
+          </ProductCallout>
+          <Figure caption="Real ShootPortal screen: the built-in photo editor adjusting an interior listing photo. Saving updates the agent's gallery and downloads right away.">
+            <AppScreen view="photo-editor" />
+          </Figure>
         </>
       ),
     },
@@ -349,7 +374,7 @@ export const article: BlogArticle = {
       id: "payment-and-delivery",
       title: "Connecting delivery to payment",
       tocLabel: "Payment",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             Most real estate photographers have, at some point, delivered a full listing and then spent two weeks
@@ -383,8 +408,14 @@ export const article: BlogArticle = {
             <BlogLink slug="get-paid-before-delivering-real-estate-photos">
               how to get paid before delivering real estate photos
             </BlogLink>
-            .
+            . The pay link opens without a login, agents can pay by card, Apple Pay, or Google Pay, and ShootPortal takes
+            0% of the payment.
           </p>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="One link per listing, paid before it downloads"
+            body="Upload once, let agents preview and comment, and have Print and MLS downloads unlock on their own when the balance is paid. Your brand on every screen."
+          />
         </>
       ),
     },
@@ -454,6 +485,9 @@ export const article: BlogArticle = {
               <p>Good luck with the listing,<br />[Your name], [Business name]</p>
             </DocumentCard>
           </Figure>
+          <Figure caption="Real ShootPortal screen: the agent's finished listing gallery in your branded client portal, with favorites, Print and MLS downloads, and every media type in one place.">
+            <AppScreen view="portal-gallery" />
+          </Figure>
           <p>A few more details that separate a professional delivery from a shared folder:</p>
           <ul>
             <li>
@@ -474,6 +508,47 @@ export const article: BlogArticle = {
               <BlogLink slug="how-to-create-photography-client-portal">how to create a photography client portal</BlogLink>.
             </li>
           </ul>
+        </>
+      ),
+    },
+    {
+      id: "deliver-more-than-photos",
+      title: "Deliver more than photos: property websites and social media kits",
+      tocLabel: "Deliver more than photos",
+      body: () => (
+        <>
+          <p>
+            The moment you deliver is the moment the agent starts marketing the listing. They need a page to share, a
+            Just Listed post, a Story, and often a printed flyer for the open house. Most of them build those from your
+            photos anyway, in Canva or a listing-site tool. If you hand them over with the delivery, you save the agent
+            an evening and give yourself a reason to be the photographer they rebook.
+          </p>
+          <ul>
+            <li>
+              <strong>A property website for the listing.</strong> In ShootPortal it&apos;s built automatically from the
+              delivered photos and project details, in Modern, Luxury, or Coastal designs, with key facts, gallery,
+              video, floor plans, the virtual tour, open house times, and the agent&apos;s contact card. It lives at
+              listings.yourstudio.com, switches status from For Sale to Pending to Sold, and has an unbranded MLS-safe
+              version.
+            </li>
+            <li>
+              <strong>A social media kit.</strong> Five square posts (Just Listed, Open House, Just Sold, Highlights,
+              Coming Soon), three Stories, an Instagram carousel of up to 10 slides, and a print-ready flyer with a QR code
+              to the property site, downloadable as PNG, PDF, or a ZIP.
+            </li>
+            <li>
+              <strong>Sell it or include it.</strong> Set each product as Included or Paid (defaults $49 for the website
+              and $29 for the kit, which you change). The agent sees a preview and pays through your Stripe or adds it to
+              the invoice. Their headshot, brokerage logo, and colors are saved and reused on every listing.
+            </li>
+          </ul>
+          <Figure caption="Real ShootPortal screens: the social media kit generated from the delivered listing photos (left), and the property website the agent shares, on a phone (right).">
+            <TwoSidedScreens business="social-kit" client="phone-property-website" clientLabel="What buyers see" />
+          </Figure>
+          <p>
+            An optional &quot;Photography by&quot; credit on the property website puts your business in front of every
+            buyer and agent who opens the link, which is free advertising on every listing you shoot.
+          </p>
         </>
       ),
     },
@@ -512,8 +587,7 @@ export const article: BlogArticle = {
           <p>
             The connected alternative is to treat each property as one job record that carries everything: the order,
             the shoot time, the messages, the media, the revision notes, and the payment status. The delivery link is
-            then just the client&apos;s view of that record. Whatever software you choose, that&apos;s the model worth
-            aiming for.
+            then just the client&apos;s view of that record. That&apos;s exactly how ShootPortal is built.
           </p>
         </>
       ),
@@ -547,8 +621,9 @@ export const article: BlogArticle = {
             </li>
             <li>
               <strong>Feedback is attached to the item.</strong> The agent approves each deliverable or requests changes
-              with a written note, and video gets time-stamped comments on numbered versions. You fix the file in the
-              same project, so the request and the fix stay together.
+              with a written note, and video gets time-stamped comments on numbered versions. You fix the photo in the
+              built-in editor or upload a new video version in the same project, so the request and the fix stay
+              together.
             </li>
             <li>
               <strong>Others get access without accounts.</strong> A share link or email invite covers the assistant,
@@ -559,37 +634,43 @@ export const article: BlogArticle = {
               the agent can view everything right away, and downloads unlock once the final payment is made through your
               own Stripe account.
             </li>
+            <li>
+              <strong>The listing marketing is one click away.</strong> The property website and social media kit are
+              built from the same project&apos;s photos, ready to include or sell.
+            </li>
           </ol>
           <h3>What&apos;s automatic, what&apos;s centralized, and what&apos;s still on you</h3>
           <ul>
             <li>
               <strong>Automatic:</strong> the MLS-size version of each photo, ZIP downloads, the download unlock after
-              final payment (when enabled), email notifications from your editable templates, and some project stage
-              changes. You can also choose to move a project to Delivered once it&apos;s paid.
+              final payment (when enabled), branded Deliverables and Payment emails from your editable templates,
+              reminders, and stage changes such as moving a project to Delivered once it&apos;s paid.
             </li>
             <li>
               <strong>Centralized:</strong> the order, shoot time, messages, media, revision notes, payment status, and
               the property&apos;s history on the agent&apos;s client record.
             </li>
             <li>
-              <strong>Still manual:</strong> culling, editing, and exporting (ShootPortal doesn&apos;t edit photos),
-              checking your MLS&apos;s specific photo rules, uploading the finals, and deciding when a revision counts as
-              new work.
+              <strong>Your call:</strong> culling and your main edit (in your usual editor or ShootPortal&apos;s built-in
+              one), checking your MLS&apos;s specific photo rules, uploading the finals, and deciding when a revision
+              counts as new work.
             </li>
           </ul>
           <p>
-            The portal carries your logo, brand color, and either a yourstudio.shootportal.app address or your
-            own custom domain. It doesn&apos;t build single-property websites, provide branded and unbranded MLS tour
-            links, or deliver to Zillow Showcase, so if agents in your market expect those, look at the platforms in
-            our <BlogLink slug="best-real-estate-photography-delivery-software">delivery software comparison</BlogLink>.
+            The portal carries your logo, brand color, and either a yourstudio.shootportal.app address or your own
+            custom domain, and agents need nothing but the link: no app to install. To see how it compares with other
+            tools, read our{" "}
+            <BlogLink slug="best-real-estate-photography-delivery-software">delivery software comparison</BlogLink>.
           </p>
+          <AllInOnePlatform intro="Delivery is one step. The same subscription runs your website, booking, proposals, scheduling, photo editing, video review, payments, and the property websites and social kits you sell to agents." />
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Deliver your next listing from one branded link"
+            title="Deliver your next listing from one branded link, and sell the marketing with it"
             body={
               <>
                 Set up your portal, create a project for a property you&apos;ve already shot, upload the set, and open it
-                on your phone the way an agent would. If it beats your current folder link, send it on the next job.
+                on your phone the way an agent would. Then generate the property website and social kit from the same
+                photos and see what you could add to the invoice.
               </>
             }
             secondaryHref="/how-it-works"
@@ -616,6 +697,7 @@ export const article: BlogArticle = {
             <li>Upload everything to one place per property; add tour links and floor plans.</li>
             <li>Set download access and payment rules for this client.</li>
             <li>Open the delivery yourself on a phone before the agent does.</li>
+            <li>Offer the property website and social kit, included or as a paid add-on.</li>
             <li>Send the notification with your template.</li>
             <li>Log revisions against the delivery and replace files rather than adding duplicates.</li>
           </ol>
@@ -626,6 +708,7 @@ export const article: BlogArticle = {
               <>Check each MLS&apos;s photo rules; don&apos;t assume one size fits every market.</>,
               <>Deliver photos, video, and tours behind one link per property.</>,
               <>Set a payment rule (such as pay before download) and let the system enforce it.</>,
+              <>Deliver more than photos: a property website and social kit turn the handoff into a paid add-on.</>,
               <>Consistent turnaround and a clear notification matter more than design flourishes.</>,
             ]}
           />
@@ -637,12 +720,13 @@ export const article: BlogArticle = {
     {
       question: "What is the best way to deliver real estate photos to clients?",
       answerText:
-        "Deliver everything for a listing (MLS and full-resolution photos, video, tours, and floor plans) from one link per property, ideally a branded delivery page or client portal. Shared Google Drive or Dropbox folders work at low volume but don't tie delivery to payment or your branding.",
+        "Deliver everything for a listing (MLS and full-resolution photos, video, tours, and floor plans) from one link per property in a branded client portal. ShootPortal does this with Print and MLS downloads, video review, and downloads that unlock on payment. Shared Google Drive or Dropbox folders don't tie delivery to payment or carry your branding.",
       answer: (
         <p>
-          Deliver everything for a listing (MLS and full-resolution photos, video, tours, and floor plans) from one
-          link per property, ideally a branded delivery page or client portal. Shared Google Drive or Dropbox folders
-          work at low volume, but they don&apos;t tie delivery to payment or carry your branding.
+          Deliver everything for a listing (MLS and full-resolution photos, video, tours, and floor plans) from one link
+          per property in a branded client portal. ShootPortal does this with Print and MLS downloads, video review, and
+          downloads that unlock on payment. Shared Google Drive or Dropbox folders don&apos;t tie delivery to payment or
+          carry your branding.
         </p>
       ),
     },
@@ -693,6 +777,31 @@ export const article: BlogArticle = {
         </p>
       ),
     },
+    {
+      question: "Can I deliver a property website with the listing photos?",
+      answerText:
+        "Yes. ShootPortal builds a single-property website from the delivered photos and project details, in Modern, Luxury, or Coastal designs, with an unbranded MLS-safe version. It comes with a social media kit of posts, Stories, a carousel, and a print flyer. You can include them or sell them to the agent; the defaults are $49 and $29.",
+      answer: (
+        <p>
+          Yes. ShootPortal builds a single-property website from the delivered photos and project details, in Modern,
+          Luxury, or Coastal designs, with an unbranded MLS-safe version. It comes with a social media kit of posts,
+          Stories, a carousel, and a print flyer. You can include them or sell them to the agent; the defaults are $49 and
+          $29.
+        </p>
+      ),
+    },
+    {
+      question: "Can I edit real estate photos in my delivery platform?",
+      answerText:
+        "In ShootPortal, yes. The built-in photo editor covers one-click Auto, exposure, highlights and shadows, white balance, curves, crop, HDR and black-and-white looks, spot removal, and geometry and lens corrections. Save to Project updates the agent's gallery and downloads instantly, and originals are never overwritten.",
+      answer: (
+        <p>
+          In ShootPortal, yes. The built-in photo editor covers one-click Auto, exposure, highlights and shadows, white
+          balance, curves, crop, HDR and black-and-white looks, spot removal, and geometry and lens corrections. Save to
+          Project updates the agent&apos;s gallery and downloads instantly, and originals are never overwritten.
+        </p>
+      ),
+    },
   ],
   related: [
     "best-real-estate-photography-delivery-software",
@@ -701,7 +810,7 @@ export const article: BlogArticle = {
   ],
   cta: {
     title: "Give every listing one link the agent can't lose",
-    body: "One project per property: photos with Print and MLS downloads, video, tours, and floor plans, plus approvals, share links for assistants, and optional unlock-after-payment through your own Stripe account.",
+    body: "One branded project per property: edited photos with Print and MLS downloads, video review, tours, and floor plans, downloads that unlock on payment, and a property website and social kit you can sell to the agent.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how delivery works",
   },

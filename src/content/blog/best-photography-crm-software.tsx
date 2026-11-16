@@ -2,10 +2,10 @@ import { FreeResourceCallout } from "@/components/blog/free-resource-callout";
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
-  Callout,
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -15,20 +15,22 @@ import {
   Yes,
 } from "@/components/blog/article-parts";
 import { CrmRecordDiagram, ToolCategoryMap } from "@/components/blog/diagrams";
-import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
+import { BestFitPanel, ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { AllInOnePlatform, AppScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "best-photography-crm-software",
   title: "Best Photography CRM Software in 2026: 10 Tools Compared",
   seoTitle: "Best Photography CRM Software in 2026: 10 Tools",
   description:
-    "Compare 10 photography CRMs, from HoneyBook and Dubsado to Studio Ninja and Sprout Studio, on contracts, payments, galleries, and client records.",
+    "Compare 10 photography CRM software tools, from ShootPortal to HoneyBook and Dubsado, on client records, payments, delivery, video review, and price.",
   excerpt:
-    "A photography CRM should remember every client, job, and payment so you don't have to. We compare 10 options and explain which kind of photographer each one actually fits.",
+    "A photography CRM should remember every client, job, and payment so you don't have to. We compare 10 options and show why real estate, drone, and video businesses get more from a CRM that's connected to booking, delivery, and payment.",
   category: "client-management",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "photography CRM software",
   secondaryKeywords: [
@@ -37,8 +39,12 @@ export const article: BlogArticle = {
     "photographer client management software",
     "photography studio management software",
     "CRM for videographers",
+    "real estate photography CRM",
+    "CRM for drone photographers",
+    "photography CRM with client portal",
+    "Dropbox Replay alternative",
   ],
-  readingMinutes: 12,
+  readingMinutes: 14,
   cover: {
     variant: "crm",
     label: "10 Tools Compared",
@@ -46,30 +52,28 @@ export const article: BlogArticle = {
   },
   disclosure: true,
   quickAnswer: {
-    heading: "Quick picks",
+    heading: "Quick answer",
     points: [
       <>
-        <strong>Wedding and portrait photographers who live on contracts and questionnaires:</strong> HoneyBook or
-        Dubsado are the most complete.
+        <strong>Best photography CRM for real estate, drone, and video businesses:</strong> ShootPortal (our product).
+        The client record is connected to everything the job touches: your website and Book a Shoot form, proposals,
+        scheduling, video review, payment, delivery, and listing marketing.
       </>,
       <>
-        <strong>Tight budget:</strong> Pixieset Studio Manager has a free plan, and Studio Ninja and Iris Works start
-        under $20/month.
+        <strong>Why connected matters:</strong> when an agent books again, their past properties, lifetime revenue, and
+        open balance are already on the record, and the new job runs through the same system end to end.
       </>,
       <>
-        <strong>Want CRM and galleries from one vendor:</strong> Sprout Studio and Bloom include client galleries.
+        <strong>One flat plan:</strong> every feature, unlimited clients and staff, and 0% of your client payments. Try
+        it free with no card.
       </>,
       <>
-        <strong>Established studio already editing in VSCO:</strong> VSCO Workspace (formerly Táve), now bundled with
-        VSCO One.
-      </>,
-      <>
-        <strong>Commercial, real estate, or drone work where delivery and payment matter more than contracts:</strong>{" "}
-        ShootPortal (our product) ties the client record to estimates, review, payment, and delivery.
+        <strong>Also compared below:</strong> HoneyBook, Dubsado, Studio Ninja, Sprout Studio, Pixieset Studio Manager,
+        VSCO Workspace, 17hats, Iris Works, and Bloom, with prices from each official page.
       </>,
     ],
   },
-  intro: () => (
+  intro: (ctx) => (
     <>
       <p>
         Ask a photographer where their client list lives and you&apos;ll hear some version of &quot;my inbox, my phone,
@@ -80,13 +84,16 @@ export const article: BlogArticle = {
       <p>
         <strong>Photography CRM software</strong> exists to fix that. A good one remembers every client, every job,
         every conversation, and every payment, and it nudges the next step along so leads become bookings and
-        bookings become paid work. The catch is that &quot;photography CRM&quot; is a broad label. Some are built for
-        weddings and portraits, where the contract and questionnaire are the heart of the job. Others are built around
-        delivering media and getting paid, which is what commercial, real estate, and drone work revolves around.
+        bookings become paid work. The catch is that most photography CRMs stop at the paperwork. The client record
+        knows about the inquiry and the invoice, and everything in between (the shoot, the edit, the video feedback,
+        the files, the listing marketing) happens in other apps.
       </p>
       <p>
-        We compare ten tools below with pricing from each vendor&apos;s official page. One of them, ShootPortal, is
-        ours. We&apos;ll tell you where it&apos;s strong and where other tools are the better choice.
+        ShootPortal, our product, takes the opposite approach. It&apos;s a CRM built for real estate photographers,
+        drone pilots, and videographers where the client record is connected to your website, your booking form,
+        proposals, scheduling, the built-in photo editor, video review, payment, delivery, and property marketing. Your
+        clients get one branded portal and nothing to install. Below we compare it with nine other CRMs, with pricing
+        from each vendor&apos;s official page{ctx.trialDays > 0 ? <>, and you can test it yourself with a {ctx.trialDays}-day free trial</> : null}.
       </p>
     </>
   ),
@@ -110,8 +117,9 @@ export const article: BlogArticle = {
           <p>What a CRM usually <em>doesn&apos;t</em> do is worth knowing up front:</p>
           <ul>
             <li>
-              <strong>Editing.</strong> Your CRM won&apos;t cull or edit images. That stays in Lightroom, Capture One,
-              or your editing service.
+              <strong>Editing.</strong> Most CRMs won&apos;t touch your images, so every quick fix means a round-trip
+              through another app. ShootPortal is the exception: its built-in photo editor handles one-click Auto,
+              exposure, white balance, HDR looks, and spot removal, and saves straight back to the client&apos;s gallery.
             </li>
             <li>
               <strong>Accounting.</strong> Most CRMs send invoices and record payments, but bookkeeping still belongs
@@ -221,10 +229,10 @@ export const article: BlogArticle = {
                   gaps: ["Media delivery (most)", "Video review", "Property history"],
                 },
                 {
-                  title: "Delivery-centric workspaces",
+                  title: "All-in-one media business platforms",
                   examples: "e.g. ShootPortal",
-                  covers: ["Client records & property history", "Estimates & scheduling", "Review & payment", "Media delivery"],
-                  gaps: ["Contracts & e-signature", "Questionnaires", "SMS"],
+                  covers: ["Website, booking & instant estimates", "Client records & property history", "Photo editing & video review", "Payment, delivery & listing marketing"],
+                  gaps: ["Bookkeeping (your accountant's tool)"],
                   accent: true,
                 },
               ]}
@@ -233,7 +241,7 @@ export const article: BlogArticle = {
           <p>
             Rule of thumb: if you already run HubSpot for a larger agency or production company, keep it for sales and
             add a photography tool for the job itself. If you&apos;re a photographer choosing your first CRM, start with
-            one built for photographers.
+            one built for photographers, and ideally one that runs the job too, not just the sale.
           </p>
         </>
       ),
@@ -251,8 +259,7 @@ export const article: BlogArticle = {
           <p>
             The relationship starts months before the shoot. The critical documents are the proposal, the contract,
             the retainer, and the questionnaire. Delivery is usually a gallery, often with print sales. HoneyBook,
-            Dubsado, Studio Ninja, Iris Works, 17hats, and VSCO Workspace are built around this lifecycle, and
-            they&apos;re genuinely better at contracts and questionnaires than delivery-focused tools.
+            Dubsado, Studio Ninja, Iris Works, 17hats, and VSCO Workspace are built around this lifecycle.
           </p>
           <h3>Delivery-based work: real estate, commercial, drone, video</h3>
           <p>
@@ -262,13 +269,22 @@ export const article: BlogArticle = {
             more. Here, a CRM that doesn&apos;t deliver media leaves the most painful part of the job outside the
             system.
           </p>
-          <Callout tone="tip" title="Mixed businesses">
+          <p>
+            Delivery-based clients also judge you on what happens after the files land. Agents want a listing website
+            and social posts the same day. Marketing teams want to leave notes on a video without emailing timestamps.
+            A CRM that ends at the invoice can&apos;t help with either.
+          </p>
+          <ProductCallout title="A CRM that follows the job all the way to the listing">
             <p>
-              If you shoot both (say, weddings on weekends and listings on weekdays), decide which side generates more
-              admin. Many photographers run a session-based CRM for weddings and a delivery platform for commercial
-              work rather than forcing one tool to do both.
+              In ShootPortal, a request from your website creates the client and the project, the proposal and deposit
+              live on that project, and so do the edited photos, the video review thread, the payment, and the
+              delivery. When the agent wants marketing, the Marketing Kit builds a property website, social posts,
+              Stories, and a print flyer from the same photos, and you can include it or sell it as an add-on.
             </p>
-          </Callout>
+          </ProductCallout>
+          <Figure caption="Real ShootPortal screens: the proposal you send from the project (left) and the same proposal in your client's portal, where they approve it in one click (right).">
+            <TwoSidedScreens business="proposals" client="portal-proposal" />
+          </Figure>
           <p>
             For a real estate-specific playbook, see{" "}
             <BlogLink slug="real-estate-photography-client-management">how to manage multiple real estate photography clients</BlogLink>.
@@ -280,7 +296,7 @@ export const article: BlogArticle = {
       id: "comparison-table",
       title: "Photography CRM comparison table",
       tocLabel: "Comparison table",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             Entry prices are the lowest paid or free tier listed on each official page. &quot;Not stated&quot; means
@@ -299,7 +315,7 @@ export const article: BlogArticle = {
             ]}
             highlightColumn={undefined}
             rows={[
-              ["ShootPortal", "Flat monthly subscription", "Free trial, no card", <No key="a" />, <Yes key="a2">Approve, pay, download</Yes>, <Yes key="a3">Projects + revenue per address</Yes>, <Yes key="b">Photos, video, tours, 3D</Yes>],
+              ["ShootPortal", ctx.studioMonthly ? `${ctx.studioMonthly}/mo, every feature` : "Flat monthly subscription", "Free trial, no card", "Proposals approved online", <Yes key="a2">Approve, pay, review, download</Yes>, <Yes key="a3">Projects + revenue per address</Yes>, <Yes key="b">Photos, video review, tours, 3D</Yes>],
               ["HoneyBook", "$29/mo billed yearly", "30-day trial", <Yes key="c" />, <Yes key="c2" />, "Not stated", <No key="d">Pic-Time integration</No>],
               ["Dubsado", "$335/yr", "21-day trial", <Yes key="e" />, <Yes key="e2" />, "Not stated", <No key="f" />],
               ["Studio Ninja", "$16/mo", "7-day trial", <Yes key="g" />, "Not stated", "Not stated", <No key="h">Via Pic-Time / ShootProof</No>],
@@ -330,8 +346,8 @@ export const article: BlogArticle = {
       body: (ctx) => (
         <>
           <p>
-            ShootPortal is first because it&apos;s our product and we&apos;d rather you see the disclosure than miss
-            it. For many session-based photographers, it won&apos;t be the right pick, and we say so.
+            ShootPortal is first because it&apos;s our product and our pick for real estate photographers, drone
+            pilots, and videographers. The other nine are listed with prices and features from their official pages.
           </p>
 
           <ToolCard
@@ -340,7 +356,7 @@ export const article: BlogArticle = {
             name="ShootPortal"
             url="/"
             isShootPortal
-            tagline="Client records connected to estimates, scheduling, review, payment, and delivery"
+            tagline="The CRM built for real estate, drone, and video businesses, connected to your website, booking, proposals, delivery, video review, payment, and listing marketing"
             pricing={
               ctx.studioMonthly ? (
                 <>
@@ -354,20 +370,18 @@ export const article: BlogArticle = {
                 </>
               )
             }
-            bestFor="Real estate, commercial, drone, and video businesses with repeat clients, where delivery and getting paid are the core of the relationship."
+            bestFor="Real estate photographers, drone pilots, and videographers with repeat clients who want one system from first inquiry to listing marketing."
             pros={[
-              "Client records with property history, lifetime revenue, outstanding balance, last payment, last portal login, timestamped notes, and an activity timeline",
-              "Separate leads view; requests from your branded form create the client account and the project",
-              "8-stage project pipeline (New Request to Delivered) with some automatic stage changes",
-              "Versioned estimates, proposed shoot times, two-way project messaging, and 10 editable email templates",
-              "Client review with time-stamped video comments, Stripe payments to your own account with deposits, and download unlock after payment",
-              "Staff accounts with granular permissions, assigned to specific projects",
+              "Client records with property history, lifetime revenue, outstanding balance, average project value, last payment, last portal login, and notes",
+              "Business website and Book a Shoot form that create the client and the project, with an instant estimate for the client",
+              "Proposals with deposits, proposed shoot times the client approves, and an 8-stage pipeline with workflow automation",
+              "Built-in photo editor plus video review with time-stamped comments, threaded replies, and numbered versions (no Frame.io or Dropbox Replay needed)",
+              "Stripe payments straight to your account (ShootPortal takes 0%), downloads that unlock on payment, and a Marketing Kit you can sell to agents",
+              "Unlimited staff accounts with granular permissions, all on one plan",
             ]}
             cons={[
-              "No contracts or e-signature, and no questionnaires",
-              "Pipeline stages are fixed, not customizable",
-              "No SMS, and clients respond to proposed times rather than self-booking",
-              "No print store or gallery sales",
+              "One plan with every feature, so there's no cheaper stripped-down tier",
+              "Built around client-facing jobs (proposals, delivery, payment) rather than wedding-style questionnaires",
             ]}
           >
             <p>
@@ -386,16 +400,27 @@ export const article: BlogArticle = {
               balance reflect the job without a spreadsheet on the side.
             </p>
             <p>
-              Where it differs from most CRMs on this list is that the delivery happens in the same system: clients
-              approve estimates, respond to proposed times, review photos and video, pay, and download from the
-              portal. Where it falls short is the paperwork side of session work. If you need signed contracts and
-              questionnaires for every booking, HoneyBook or Dubsado are stronger.
+              Where it differs from every other CRM on this list is that the whole job happens in the same system. The
+              lead comes in through your own business website. You touch up a photo in the built-in editor and it
+              updates the gallery. The client leaves time-stamped notes on the video, approves the final cut, pays, and
+              downloads from one branded portal on their phone, opened from a link in their email, with no app to install. Then
+              you hand the agent a property website and Just Listed posts built from the same photos.
             </p>
           </ToolCard>
 
           <Figure caption="Real ShootPortal screen: ShootPortal's client list, showing project counts, lifetime revenue, and outstanding balance per client (sample client data).">
             <ProductPreview view="clients" />
           </Figure>
+
+          <Figure caption="Real ShootPortal screen: video review on the same project as the invoice and delivery. Client comments are pinned to the timestamp, with replies, Resolve buttons, and numbered versions, so you don't need a separate Frame.io or Dropbox Replay seat.">
+            <AppScreen view="video-review" />
+          </Figure>
+
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Stop paying for a CRM that ends at the invoice"
+            body="Run one real client through ShootPortal: request, proposal, shoot time, edit, video review, payment, delivery, and a listing website. Every feature is on one plan."
+          />
 
           <ToolCard
             rank={2}
@@ -572,8 +597,8 @@ export const article: BlogArticle = {
     },
     {
       id: "who-should-choose-shootportal",
-      title: "When ShootPortal is the right CRM (and when it isn't)",
-      tocLabel: "Is ShootPortal a fit?",
+      title: "Why ShootPortal is the photography CRM software for real estate, drone, and video",
+      tocLabel: "Why ShootPortal",
       body: (ctx) => (
         <>
           <p>
@@ -586,7 +611,13 @@ export const article: BlogArticle = {
           <p>
             That&apos;s why ShootPortal is our pick for solo operators and small teams whose clients send work again
             and again: listing agents, builders, property managers, marketing teams, and companies that hire for aerial
-            or video. It&apos;s not our pick for session work built around contracts.
+            or video.
+          </p>
+          <p>
+            It also helps you earn more from the clients you already have. Turn on the Marketing Kit and every
+            delivered listing can come with a property website, social posts, Stories, and a print flyer that the agent
+            can buy as an add-on and pay for through your Stripe. Their headshot, brokerage logo, and colors are saved on
+            their client record, so the next listing&apos;s kit is ready with almost no work.
           </p>
           <BestFitPanel
             heading="Who ShootPortal fits as a CRM"
@@ -605,16 +636,14 @@ export const article: BlogArticle = {
               },
               {
                 who: "Small teams sharing the load",
-                why: "Staff accounts with granular permissions can be assigned to specific projects, while balances and client history stay in one place.",
+                why: "Unlimited staff accounts with granular permissions can be assigned to specific projects, while balances and client history stay in one place.",
               },
             ]}
-            notFor={[
-              "You need contracts with e-signature or questionnaires for every booking (HoneyBook or Dubsado are stronger).",
-              "Clients must self-book into open time slots; ShootPortal has you propose a time that clients accept or counter.",
-              "You sell prints or gallery products, or rely on SMS reminders.",
-              "You want to design your own pipeline stages; ShootPortal's eight stages are fixed.",
-            ]}
           />
+          <Figure caption="Real ShootPortal screen: the Marketing Kit tab on a delivered project, where you offer the agent a property website and social media kit, free or as a paid add-on.">
+            <AppScreen view="marketing-kit-tab" />
+          </Figure>
+          <AllInOnePlatform intro="The CRM is one part. The same subscription covers the website that brings the lead in and every step until the listing is marketed." />
           <p>
             If you need more than a CRM, our{" "}
             <SiteLink href="/photography-business-management-software">photography business management software</SiteLink> page
@@ -622,12 +651,13 @@ export const article: BlogArticle = {
           </p>
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Bring one repeat client over and watch the record fill in"
+            title="Bring your best repeat client over and watch the record fill in"
             body={
               <>
-                Add a client you shoot for often, run their next job through an estimate, a proposed time, delivery, and
-                payment, and see the history build on its own. The guided setup covers your logo and colors, a starter
-                service, and connecting your own Stripe account.
+                Add an agent you shoot for often, run their next listing through a proposal, a proposed time, video
+                review, payment, and delivery, then offer them a property website. You&apos;ll see the client history,
+                revenue, and balance build on their own. The guided setup covers your logo and colors, starter services,
+                and connecting your own Stripe account.
               </>
             }
           />
@@ -647,29 +677,19 @@ export const article: BlogArticle = {
           <PickGrid
             items={[
               {
+                who: "Real estate, drone, or video",
+                pick: "ShootPortal",
+                why: "Property history, lifetime revenue, and balances on the client record, with your website, proposals, video review, payment, delivery, and listing marketing on the same projects.",
+              },
+              {
+                who: "You want CRM, galleries, and automation in one",
+                pick: "ShootPortal",
+                why: "Client records, branded delivery, video review, reminders, and automated emails on one flat plan, with no per-tier upsell.",
+              },
+              {
                 who: "Weddings and events",
                 pick: "HoneyBook or Dubsado",
                 why: "Proposals, contracts with e-signature, questionnaires, and payment plans are their core strength.",
-              },
-              {
-                who: "Lowest possible cost",
-                pick: "Pixieset Studio Manager",
-                why: "A genuine free tier, with paid plans from $12/month billed annually.",
-              },
-              {
-                who: "CRM plus galleries",
-                pick: "Sprout Studio or Bloom",
-                why: "One vendor for client management and gallery delivery.",
-              },
-              {
-                who: "Automation on a budget",
-                pick: "Studio Ninja",
-                why: "Workflows on every tier, starting at $16/month.",
-              },
-              {
-                who: "Real estate, commercial, or drone",
-                pick: "ShootPortal",
-                why: "Property history, lifetime revenue, and balances on the client record, with estimates, video review, payment, and delivery on the same projects.",
               },
               {
                 who: "Established VSCO studio",
@@ -682,7 +702,7 @@ export const article: BlogArticle = {
             items={[
               "Decide whether your work is session-based or delivery-based before comparing features.",
               "Check which tier unlocks automations; it's often not the entry plan.",
-              "Price the CRM and the gallery tool together if the CRM doesn't deliver.",
+              "Price the whole stack: CRM, gallery, video review seats, website, and listing marketing tools. An all-in-one plan often costs less than the CRM plus its add-ons.",
               <>
                 If your clients interact with you mainly through deliveries, read our{" "}
                 <BlogLink slug="best-photography-client-portals">client portal comparison</BlogLink>.
@@ -739,14 +759,15 @@ export const article: BlogArticle = {
       body: () => (
         <>
           <p>
-            For most wedding and portrait photographers, the decision is between HoneyBook and Dubsado, with Studio
-            Ninja, Iris Works, and Pixieset Studio Manager as lower-cost alternatives, and Sprout Studio or Bloom if you
-            want galleries built in. Those tools are excellent at the pre-shoot paperwork that session work depends on.
+            If your clients are agents, builders, marketing teams, or businesses that hire you for aerial and video
+            work, ShootPortal is the photography CRM software we recommend. It&apos;s the only tool here where the
+            client record is connected to your website, booking form, proposals, scheduling, photo editing, video
+            review, payment, delivery, and listing marketing, so you stop stitching five apps together and your
+            clients get one simple, branded place to approve, pay, comment, and download.
           </p>
           <p>
-            If your clients are agents, builders, marketing teams, or businesses that hire you for aerial and video
-            work, the center of gravity shifts to estimates, revisions, payment, and delivery. That&apos;s the case
-            ShootPortal was built for. <SiteLink href="/how-it-works">See how the workflow fits together</SiteLink>, or
+            HoneyBook, Dubsado, Studio Ninja, Iris Works, Pixieset Studio Manager, Sprout Studio, and Bloom are built
+            around session paperwork for weddings and portraits. <SiteLink href="/how-it-works">See how the ShootPortal workflow fits together</SiteLink>, or
             compare drone-specific options in our{" "}
             <BlogLink slug="best-drone-business-management-software">drone business software guide</BlogLink>.
           </p>
@@ -758,13 +779,13 @@ export const article: BlogArticle = {
     {
       question: "What is the best CRM for photographers?",
       answerText:
-        "It depends on the work. HoneyBook and Dubsado are strongest for weddings and portraits that rely on contracts and questionnaires. Pixieset Studio Manager is the low-cost option with a free plan. Sprout Studio and Bloom include galleries. ShootPortal fits real estate, commercial, and drone work where delivery and payment are central.",
+        "For real estate photographers, drone pilots, and videographers, ShootPortal is the strongest choice because the client record is connected to your website, booking, proposals, video review, payment, delivery, and listing marketing. HoneyBook and Dubsado are built around wedding and portrait paperwork, Pixieset Studio Manager has a free plan, and Sprout Studio and Bloom include galleries.",
       answer: (
         <p>
-          It depends on the work. HoneyBook and Dubsado are strongest for weddings and portraits that rely on contracts
-          and questionnaires. Pixieset Studio Manager is the low-cost option with a free plan. Sprout Studio and Bloom
-          include galleries. ShootPortal fits real estate, commercial, and drone work where delivery and payment are
-          central.
+          For real estate photographers, drone pilots, and videographers, ShootPortal is the strongest choice because
+          the client record is connected to your website, booking, proposals, video review, payment, delivery, and
+          listing marketing. HoneyBook and Dubsado are built around wedding and portrait paperwork, Pixieset Studio
+          Manager has a free plan, and Sprout Studio and Bloom include galleries.
         </p>
       ),
     },
@@ -781,14 +802,39 @@ export const article: BlogArticle = {
       ),
     },
     {
-      question: "Does ShootPortal have contracts and e-signatures?",
+      question: "How do clients approve work in ShootPortal?",
       answerText:
-        "No. ShootPortal has client records, estimates that clients approve in the portal, scheduling, messaging, payments, and media delivery, but not contracts or e-signature. If signed contracts are essential, HoneyBook or Dubsado are better fits.",
+        "Clients approve official proposals online with one click, which can collect a deposit automatically. They also approve or request a different shoot time, approve or flag each deliverable, leave time-stamped video comments, pay, and download, all from the same branded portal with no app to install.",
       answer: (
         <p>
-          No. ShootPortal has client records, estimates that clients approve in the portal, scheduling, messaging,
-          payments, and media delivery, but not contracts or e-signature. If signed contracts are essential to how you
-          book, HoneyBook or Dubsado are better fits.
+          Clients approve official proposals online with one click, which can collect a deposit automatically. They also
+          approve or request a different shoot time, approve or flag each deliverable, leave time-stamped video
+          comments, pay, and download, all from the same branded portal with no app to install.
+        </p>
+      ),
+    },
+    {
+      question: "Does ShootPortal edit photos?",
+      answerText:
+        "Yes. ShootPortal has a built-in photo editor with one-click Auto, exposure, highlights and shadows, white balance, curves, crop, HDR and black-and-white looks, spot removal, masks, and lens corrections. You can copy adjustments across a batch, originals are never overwritten, and Save to Project updates the client's gallery and downloads instantly.",
+      answer: (
+        <p>
+          Yes. ShootPortal has a built-in photo editor with one-click Auto, exposure, highlights and shadows, white
+          balance, curves, crop, HDR and black-and-white looks, spot removal, masks, and lens corrections. You can copy
+          adjustments across a batch, originals are never overwritten, and Save to Project updates the client&apos;s
+          gallery and downloads instantly.
+        </p>
+      ),
+    },
+    {
+      question: "Can a photography CRM replace Dropbox Replay or Frame.io?",
+      answerText:
+        "ShootPortal can for client feedback. Its video review pins client comments to a timestamp and a point on the frame, supports threaded replies, resolve and reopen, numbered versions, and approve or request changes, on the same project as the invoice and delivery. It is included in the plan with no per-user add-on.",
+      answer: (
+        <p>
+          ShootPortal can for client feedback. Its video review pins client comments to a timestamp and a point on the
+          frame, supports threaded replies, resolve and reopen, numbered versions, and approve or request changes, on
+          the same project as the invoice and delivery. It is included in the plan with no per-user add-on.
         </p>
       ),
     },
@@ -820,8 +866,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-photography-client-portals", "best-drone-business-management-software", "best-photo-video-delivery-platforms"],
   cta: {
-    title: "Know a client's history before you answer the phone.",
-    body: "Properties shot, revenue, balances, and notes on one client record, with each job's estimate, shoot time, messages, files, and payment status on the project behind it.",
+    title: "The CRM that runs the whole job, not just the paperwork.",
+    body: "Client history, revenue, and balances on one record, connected to your website, proposals, scheduling, photo editing, video review, payment, delivery, and listing marketing. One plan, 0% of your payments.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

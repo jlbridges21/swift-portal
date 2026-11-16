@@ -6,6 +6,7 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   SiteLink,
   Steps,
@@ -13,7 +14,8 @@ import {
 import { WorkflowDiagram } from "@/components/blog/diagrams";
 import { ChecklistCard, RoadmapDiagram } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
-import { TrialCard, TrialPlan } from "@/components/blog/conversion-parts";
+import { ProductCallout, TrialCard, TrialPlan } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, PhoneScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "how-to-start-drone-photography-business",
@@ -22,10 +24,11 @@ export const article: BlogArticle = {
   description:
     "How to start a drone photography business in 2026: Part 107 steps, registration, Remote ID, insurance, equipment, business setup, pricing, and finding clients.",
   excerpt:
-    "A practical, step-by-step path from FAA Part 107 certification to your first paying clients, with a startup checklist, a 90-day plan, and the systems that keep a drone business organized.",
+    "A practical, step-by-step path from FAA Part 107 certification to your first paying clients, with a startup checklist, a 90-day plan, and how to launch with a website, booking, payments, delivery, and video review from day one.",
   category: "drone-business",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "how to start a drone photography business",
   secondaryKeywords: [
@@ -34,8 +37,12 @@ export const article: BlogArticle = {
     "Part 107 business",
     "commercial drone pilot business",
     "drone business startup checklist",
+    "drone photography website",
+    "drone business software",
+    "drone video review for clients",
+    "Dropbox Replay alternative",
   ],
-  readingMinutes: 14,
+  readingMinutes: 15,
   cover: {
     variant: "checklist",
     tint: "indigo",
@@ -47,7 +54,12 @@ export const article: BlogArticle = {
     heading: "The short answer",
     points: [
       <>
-        <strong>Get legal first.</strong> Flying for business means FAA Part 107: pass the UAG knowledge test, get
+        <strong>Launch with the business side already built.</strong> A new drone business needs a website,
+        booking, pricing, invoicing, delivery, and video review. ShootPortal gives you all of it, under your own brand,
+        for one subscription from day one.
+      </>,
+      <>
+        <strong>Get legal before you fly for pay.</strong> Flying for business means FAA Part 107: pass the UAG knowledge test, get
         your Remote Pilot Certificate, and register every drone you fly commercially ($5 each, valid 3 years).
       </>,
       <>
@@ -63,8 +75,8 @@ export const article: BlogArticle = {
         which the FAA doesn&apos;t require but many commercial clients ask for.
       </>,
       <>
-        <strong>Build systems early.</strong> A repeatable path from request to estimate, flight, delivery, and
-        payment is what lets a solo pilot take on more jobs without dropping balls.
+        <strong>Build systems early.</strong> A repeatable path from request to estimate, flight, video review,
+        payment, and delivery is what lets a solo pilot take on more jobs without dropping balls.
       </>,
     ],
   },
@@ -81,6 +93,13 @@ export const article: BlogArticle = {
         actually need to do things. We cover the FAA requirements with links to the official sources, what equipment
         matters, how to set up the business side, where the first clients usually come from, and how to build a
         workflow you won&apos;t have to rebuild when you get busy.
+      </p>
+      <p>
+        One shortcut up front: you don&apos;t need to stitch together a website builder, a booking form, an invoicing
+        app, a file-sharing service, and a video review tool. ShootPortal, built by a working Part 107 pilot, gives a
+        new drone business a professional website with a Book a Shoot button, instant estimates, online payments,
+        branded delivery, and frame-accurate video review on one subscription, so you look established from your first
+        job.
       </p>
       <Callout tone="note" title="Not legal or tax advice">
         <p>
@@ -387,7 +406,7 @@ export const article: BlogArticle = {
                   items: [
                     "Portfolio for one or two niches",
                     "Service list with clear pricing",
-                    "Request form or booking path",
+                    "Business website with a Book a Shoot form",
                     "Estimate, payment, and delivery process",
                     "Simple written terms",
                   ],
@@ -403,7 +422,7 @@ export const article: BlogArticle = {
       id: "portfolio-pricing",
       title: "Step 5: Build a portfolio and set your prices",
       tocLabel: "Portfolio and pricing",
-      body: () => (
+      body: (ctx) => (
         <>
           <h3>A portfolio that matches what clients buy</h3>
           <p>
@@ -414,9 +433,27 @@ export const article: BlogArticle = {
           </p>
           <p>
             Early on, shoot your own spec work: a friend&apos;s property, a local business that agrees to it, a public
-            landmark where flying is permitted. Always check airspace and get permission from property owners. Present
-            the work on a simple page where the client can see it, understand what you offer, and request a job.
+            landmark where flying is permitted. Always check airspace and get permission from property owners. Then
+            present the work on a website where the client can see it, understand what you offer, and request a job in
+            one click.
           </p>
+          <h3>Your drone photography website</h3>
+          <p>
+            Clients check your website before they reply to your email. It doesn&apos;t need to be elaborate, but it
+            does need to look professional, load your aerial video well, list your services, and make booking obvious.
+          </p>
+          <Figure caption="Real ShootPortal screens: the Sites editor on your side (template, logo, accent color, live preview), and the published business website your clients see, with your portfolio and a Book a Shoot button.">
+            <TwoSidedScreens business="website-editor" client="business-website" />
+          </Figure>
+          <ProductCallout title="A business website is included, not another subscription">
+            <p>
+              ShootPortal&apos;s website builder gives you Modern, Luxury, and Minimal templates, a hero photo or video
+              (including YouTube), a portfolio of projects with up to 60 media each, featured services, an About
+              section, pasted-in testimonials, social links, and SEO settings. Publish on your own domain or on
+              yourstudio.shootportal.app. Website inquiries land in a leads inbox, and Book a Shoot goes straight to
+              your request form.
+            </p>
+          </ProductCallout>
           <h3>Pricing</h3>
           <p>
             Pricing is where new pilots most often undercut themselves, usually by forgetting the hours after the
@@ -432,6 +469,17 @@ export const article: BlogArticle = {
             cost-plus worksheet you can use for your own numbers.
           </p>
           <FreeResourceCallout tool="drone-pricing" />
+          <p>
+            Once you have numbers, put them in a service catalog so every quote starts the same way. In ShootPortal you
+            start from service templates with &quot;starting at&quot; prices and set an automatic travel fee by ZIP
+            distance (tiers, or a free radius plus a per-mile rate). Clients see a preliminary estimate the moment they
+            submit a request.
+          </p>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Look established from your first job"
+            body="Publish a drone business website, add your services and travel rule, and get paid online through your own Stripe account. One subscription, no card needed to start."
+          />
         </>
       ),
     },
@@ -460,7 +508,13 @@ export const article: BlogArticle = {
             </li>
             <li>
               <strong>Set up a Google Business Profile.</strong> A service-area profile helps local clients find you
-              when they search, and gives happy clients a place to leave reviews.
+              when they search, and gives happy clients a place to leave reviews. Point it at your website so a search
+              turns into a Book a Shoot request.
+            </li>
+            <li>
+              <strong>Give agents a reason to come back.</strong> For real estate work, offering a property website and
+              ready-made Just Listed posts with the aerials makes the agent look good to their seller, which is how one
+              job becomes a standing order.
             </li>
           </ul>
           <p>
@@ -484,6 +538,15 @@ export const article: BlogArticle = {
           <Figure caption="Conceptual diagram: the request-to-delivery workflow every drone job should follow.">
             <WorkflowDiagram />
           </Figure>
+          <h3>Requests and booking</h3>
+          <p>
+            Every inquiry should land in the same place with the same details: site address, what needs capturing,
+            preferred date, and notes. A branded request form does that, and replying &quot;here&apos;s my booking
+            link&quot; to every text or DM keeps it that way.
+          </p>
+          <Figure caption="Real ShootPortal screens: your service catalog with aerial, video, and twilight services and starting prices, and the branded Book a Shoot form clients fill in. No account needed; the client and project are created automatically.">
+            <TwoSidedScreens business="services" client="request-form" />
+          </Figure>
           <h3>Client communication</h3>
           <p>
             Drone jobs have more moving parts than they look. Weather moves dates, airspace authorization needs lead
@@ -505,6 +568,22 @@ export const article: BlogArticle = {
             <BlogLink slug="how-to-send-large-video-files-to-clients">how to send large video files to clients</BlogLink>{" "}
             compares the options.
           </p>
+          <h3>Video review without Dropbox Replay or Frame.io</h3>
+          <p>
+            Video clients will want changes, and feedback by email (&quot;around 40 seconds, the pan feels fast&quot;)
+            is slow to act on. Many pilots add a review tool such as Dropbox Replay or Frame.io for this, which is one
+            more subscription and one more link for the client. A better setup keeps review on the same job as the
+            invoice and the delivery.
+          </p>
+          <Figure caption="Real ShootPortal screen: video review on the client's phone. They watch the film, pin comments to the exact moment (and a point on the frame), and approve or request changes, with no app to install.">
+            <PhoneScreen view="phone-video-review" />
+          </Figure>
+          <p>
+            In ShootPortal, clients leave time-stamped comments, you reply in threads, mark notes resolved or reopen
+            them, and upload V2 as a numbered version. Comment notifications are batched, so a long review doesn&apos;t
+            flood your inbox. It&apos;s included in the plan, with no per-user add-on. Finished films can also go out
+            on a public watch page or an embeddable player for the client&apos;s own website.
+          </p>
           <h3>One system or five tools?</h3>
           <p>
             Most new pilots assemble the business side from whatever is free: an email inbox for requests, a document
@@ -523,33 +602,49 @@ export const article: BlogArticle = {
               ["Delivery", "Cloud folder link", "Large video files, expired links, and no record of approval", "Files, review comments, and approvals stay with the job"],
               ["Payment", "Payment app or invoice", "Hard to tell which delivered jobs are unpaid", "Deposit and balance status visible on the same job"],
             ]}
-            note='Either approach can work. The question is how many places you have to check to answer "where is this job?"'
+            note='The question is how many places you have to check to answer "where is this job?"'
           />
           <p>
             Our comparison of{" "}
             <BlogLink slug="best-drone-business-management-software">drone business management software</BlogLink>{" "}
-            separates flight-operations tools (logs, airspace, compliance) from client-facing business tools. You will
-            likely want one of each, and it helps to know which is which before you buy.
+            separates flight-operations tools (logs, airspace, compliance) from client-facing business tools. Your
+            flight-ops app keeps your logs and airspace checks; the business platform is where you win, run, and get
+            paid for the job.
           </p>
-          <h3>Where ShootPortal fits for a new drone business</h3>
+          <h3>Why ShootPortal is the easiest way to launch a drone business</h3>
           <p>
-            ShootPortal (our product) is on the client-facing side, and it was built by the owner of a Part 107 drone
-            photography business. Each job is a project that moves through stages from new request to delivered. A
-            client requests a flight through your branded form, gets an estimate (including a travel fee calculated
+            ShootPortal (our product) runs the whole business side, and it was built by the owner of a Part 107 drone
+            photography business. It starts with your website: clients find your portfolio and click Book a Shoot. Each
+            job is then a project that moves through stages from new request to delivered. A client requests a flight
+            through your branded form, gets an estimate (including a travel fee calculated
             from ZIP-to-ZIP distance, which matters when sites are spread across a county), and approves it in their
             portal. You propose a shoot time, and they accept it or counter-propose, which is useful when weather moves
-            the date. They review stills and video with time-stamped comments, pay through Stripe straight to your
-            account, and download from a portal with your logo and colors. For mapping and modeling clients, you can
-            embed 3D models from tools like DroneDeploy and Pix4D alongside photos and video. If you also shoot
+            the date. They review stills and video with time-stamped comments, pay by card, Apple Pay, Google Pay, or
+            bank transfer straight to your Stripe account, and download full-size or MLS-size files from a portal with
+            your logo and colors. ShootPortal takes 0% of those payments. For mapping and modeling clients, you can
+            embed 3D model and tour links alongside photos and video. If you also shoot
             ground-level photo or video work, our{" "}
             <SiteLink href="/photography-business-management-software">photography business management software</SiteLink>{" "}
             page covers the same workflow for any client-commissioned shoot.
           </p>
           <p>
-            Be clear about what it doesn&apos;t replace. It doesn&apos;t do flight logging, airspace checks or LAANC
-            requests, contracts or e-signatures, or bookkeeping, so pair it with your flight-ops app, your own written
-            terms, and your accounting tool. What it removes is the job of stitching the client side together yourself.
+            The client never installs an app or remembers a password for a portal they use twice a year: everything
+            arrives as a link in a branded email. You get less admin and faster payment, because the estimate, the
+            approval, the video notes, the balance, and the download all live on one page.{" "}
+            {ctx.studioMonthly ? (
+              <>
+                It&apos;s one plan with every feature, {ctx.studioMonthly}/month
+                {ctx.studioAnnual ? <> or {ctx.studioAnnual}/month billed annually</> : null}, with no per-project or
+                per-delivery fees.
+              </>
+            ) : (
+              <>
+                See <SiteLink href="/pricing">current pricing</SiteLink>: one plan with every feature, and no per-project
+                or per-delivery fees.
+              </>
+            )}
           </p>
+          <AllInOnePlatform intro="Everything a new drone business needs on the client side, from the first website visit to the final download, on one subscription." />
           <Figure caption="Real ShootPortal screen: drone and photo jobs organized by stage in ShootPortal (sample client data).">
             <ProductPreview view="projects" />
           </Figure>
@@ -562,7 +657,7 @@ export const article: BlogArticle = {
             steps={[
               {
                 title: "Create your business",
-                body: "Sign up with Google or a five-field form and choose your portal address.",
+                body: "Sign up with Google or a five-field form, choose your portal address, and publish your business website.",
               },
               {
                 title: "Add your first services",
@@ -580,11 +675,11 @@ export const article: BlogArticle = {
           />
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Set up your drone business's client side before you need it"
+            title="Launch your drone business with everything in place"
             body={
               <>
-                Requests, estimates with travel fees, scheduling, video review, payments, and delivery on one project
-                per job. Your flight-ops app stays where it is.
+                A professional website, a Book a Shoot form, instant estimates with travel fees, scheduling, video
+                review, online payments, and branded delivery, ready before your first paying client.
               </>
             }
           />
@@ -597,7 +692,7 @@ export const article: BlogArticle = {
     },
     {
       id: "first-90-days",
-      title: "Your first 90 days, and how to scale from there",
+      title: "Your first 90 days: how to start a drone photography business and scale it",
       tocLabel: "First 90 days and scaling",
       body: () => (
         <>
@@ -621,7 +716,7 @@ export const article: BlogArticle = {
                 {
                   title: "Build proof",
                   when: "Weeks 5–9",
-                  items: ["Shoot spec projects", "Publish a focused portfolio", "Set up Google Business Profile", "Build request-to-delivery workflow"],
+                  items: ["Shoot spec projects", "Publish your website and portfolio", "Set up Google Business Profile", "Build request-to-delivery workflow"],
                 },
                 {
                   title: "Find clients",
@@ -637,7 +732,8 @@ export const article: BlogArticle = {
             Then you outsource editing or bring in a second pilot for overflow. Then you add a specialty, like
             inspection or mapping, once you&apos;ve trained for it. Each of those steps is much easier if every job
             already follows the same documented workflow, and if team members can be given access to the specific jobs
-            they work on.
+            they work on. ShootPortal includes unlimited staff accounts with permission presets (for example, an
+            Editor who never sees the money), so adding a second pilot or editor doesn&apos;t change your plan.
           </p>
           <p>
             You can see how a complete request-to-delivery workflow fits together on our{" "}
@@ -649,6 +745,7 @@ export const article: BlogArticle = {
               "Insurance isn't federally required, but many commercial clients will ask for proof of coverage.",
               "Start with one or two niches; mapping and inspection need extra training and software.",
               "Price from your real costs and time, including everything after the flight.",
+              "Launch with a website, booking, payments, delivery, and video review in one system instead of five apps.",
               "Set up a repeatable request-to-delivery workflow before volume forces you to.",
             ]}
           />
@@ -717,11 +814,37 @@ export const article: BlogArticle = {
         </p>
       ),
     },
+    {
+      question: "Do I need a website to start a drone photography business?",
+      answerText:
+        "Yes, most clients check your website before they hire you. It should show a focused portfolio, list your services, and make booking easy. ShootPortal includes a business website builder with a portfolio, services, testimonials, and a Book a Shoot button that feeds your request form, on your own domain, in the same subscription as booking, payments, and delivery.",
+      answer: (
+        <p>
+          Yes, most clients check your website before they hire you. It should show a focused portfolio, list your
+          services, and make booking easy. ShootPortal includes a business website builder with a portfolio, services,
+          testimonials, and a Book a Shoot button that feeds your request form, on your own domain, in the same
+          subscription as booking, payments, and delivery.
+        </p>
+      ),
+    },
+    {
+      question: "How should a drone business collect video feedback from clients?",
+      answerText:
+        "Use a review tool that pins comments to the exact moment in the video instead of collecting notes by email. ShootPortal's video review works like a Dropbox Replay or Frame.io replacement for client feedback: time-stamped comments, threaded replies, resolve and reopen, numbered versions, and approve or request changes, on the same project as the invoice and delivery, with no per-user add-on.",
+      answer: (
+        <p>
+          Use a review tool that pins comments to the exact moment in the video instead of collecting notes by email.
+          ShootPortal&apos;s video review works like a Dropbox Replay or Frame.io replacement for client feedback:
+          time-stamped comments, threaded replies, resolve and reopen, numbered versions, and approve or request
+          changes, on the same project as the invoice and delivery, with no per-user add-on.
+        </p>
+      ),
+    },
   ],
   related: ["best-drone-business-management-software", "drone-photography-pricing-guide", "how-to-send-large-video-files-to-clients"],
   cta: {
-    title: "Fly the job. Let one system run everything around it.",
-    body: "Requests, estimates with ZIP-based travel fees, shoot-time proposals, video review, payments, and delivery on one project per job, in a client portal with your logo and colors.",
+    title: "Fly the job. Let one system run the business around it.",
+    body: "Your website, Book a Shoot form, instant estimates with ZIP-based travel fees, shoot-time proposals, video review, payments, and delivery on one project per job, all under your brand. One subscription from day one.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

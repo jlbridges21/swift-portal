@@ -5,6 +5,7 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -13,20 +14,22 @@ import {
   Yes,
 } from "@/components/blog/article-parts";
 import { BookingFlowDiagram } from "@/components/blog/diagrams";
-import { BestFitPanel, TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
+import { BestFitPanel, ProductCallout, TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { AllInOnePlatform, AppScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "best-real-estate-photography-booking-software",
   title: "Best Real Estate Photography Booking and Scheduling Software in 2026",
   seoTitle: "Real Estate Photography Booking Software (2026)",
   description:
-    "Generic schedulers vs. real estate ordering platforms vs. request-and-estimate workflows: compare booking, add-ons, travel fees, deposits, and calendar sync.",
+    "Compare real estate photography booking software: ShootPortal, Aryeo, HDPhotoHub, Tonomo, Acuity, and more on booking, travel fees, deposits, and calendar.",
   excerpt:
-    "Acuity, Calendly, Square Appointments, Setmore, Aryeo, HDPhotoHub, Spiro, Tonomo and ShootPortal, compared on how agents book, how you price, and how shoots land on your calendar.",
+    "ShootPortal, Aryeo, HDPhotoHub, Spiro, Tonomo, Acuity, Calendly, Square Appointments, and Setmore, compared on how agents book, how you price, and how shoots land on your calendar.",
   category: "business-automation",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "real estate photography booking software",
   secondaryKeywords: [
@@ -34,8 +37,11 @@ export const article: BlogArticle = {
     "real estate photography ordering system",
     "photography booking deposits",
     "real estate photographer travel fees",
+    "real estate photography website",
+    "photography booking form",
+    "instant photography estimate",
   ],
-  readingMinutes: 12,
+  readingMinutes: 13,
   cover: {
     variant: "calendar",
     label: "2026 Guide",
@@ -46,26 +52,26 @@ export const article: BlogArticle = {
     heading: "Quick answer",
     points: [
       <>
-        <strong>Agents order standard packages and want an instant time slot?</strong> A real estate ordering platform:
-        Aryeo, HDPhotoHub, Spiro, or Tonomo.
+        <strong>Best real estate photography booking software for most solo operators and small teams:</strong>{" "}
+        ShootPortal (our product). Booking starts on your own business website with a Book a Shoot form, and the client
+        sees an instant estimate, including travel fees by ZIP distance, the moment they submit.
       </>,
       <>
-        <strong>Several photographers to dispatch?</strong> Tonomo and Spiro assign by skill and service area; Tonomo
-        and HDPhotoHub calculate drive time.
+        <strong>You stay in control of the calendar.</strong> Instead of letting agents grab any open slot, you propose
+        a time that fits your route, the weather, and the sun, and the client approves it in one tap.
       </>,
       <>
-        <strong>Just need a booking page on a budget?</strong> Calendly, Acuity, Setmore, or Square Appointments work,
-        but don&apos;t understand property addresses, packages, or travel fees.
+        <strong>The booking becomes the whole job.</strong> The same project carries the proposal, deposit, shoot,
+        edit, video review, payment, delivery, and listing marketing, with nothing re-entered.
       </>,
       <>
-        <strong>Custom quotes, aerials, and weather-dependent shoots?</strong> ShootPortal (our product) uses a request,
-        estimate, and proposed-time flow instead of self-booking, with ZIP-based travel fees and deposits, and the
-        booking becomes the same project you later deliver and get paid on.
+        <strong>Also compared:</strong> real estate ordering platforms (Aryeo, HDPhotoHub, Spiro, Tonomo) and generic
+        schedulers (Acuity, Calendly, Square Appointments, Setmore), with prices from official pages.
       </>,
       <>Whatever you pick, deposits and a calendar that shows conflicts prevent most scheduling pain.</>,
     ],
   },
-  intro: () => (
+  intro: (ctx) => (
     <>
       <p>
         Ask a real estate photographer what eats their day and the answer is rarely the shooting. It&apos;s the six
@@ -77,7 +83,12 @@ export const article: BlogArticle = {
         <strong>Real estate photography booking software</strong> is meant to absorb that. But the market splits into
         three very different approaches: general-purpose appointment schedulers, real estate ordering platforms with
         self-booking storefronts, and request-and-estimate workflows where you confirm the price and propose the time.
-        Each fits a different kind of business.
+      </p>
+      <p>
+        ShootPortal, our product, takes the third approach and starts it earlier: on your own business website. An
+        agent clicks Book a Shoot, picks services from your catalog, and sees a preliminary estimate immediately. You
+        send the official proposal, propose a time that fits your day, and the agent approves both from one branded
+        portal{ctx.trialDays > 0 ? <>. You can try it free for {ctx.trialDays} days</> : null}.
       </p>
       <p>
         This guide is about the front half of the job, from the first request to a confirmed shoot on your calendar.
@@ -120,6 +131,11 @@ export const article: BlogArticle = {
             self-booking can promise a slot that the weather later cancels, so aerial-heavy businesses often prefer to
             confirm times themselves.
           </p>
+          <h3>Leads that never reach a booking form</h3>
+          <p>
+            Many agents find you through your website. If the site is a separate builder with a contact form, every
+            inquiry becomes an email you retype into your booking tool, and the agent waits hours to learn the price.
+          </p>
           <h3>Drive time between shoots</h3>
           <p>
             Two listings 40 minutes apart can&apos;t be booked back to back. Dedicated platforms handle this with drive-
@@ -149,8 +165,8 @@ export const article: BlogArticle = {
           </p>
           <h3>Appointment coordination</h3>
           <p>
-            Some systems let clients pick an open slot. Others let you propose a time and the client confirms. Teams
-            also need assignment rules so the right photographer gets the job.
+            Some systems let clients pick an open slot. Others let you propose a time and the client confirms. Either
+            way, the confirmation should be one tap for the client and land on your calendar automatically.
           </p>
           <h3>Calendar management</h3>
           <p>
@@ -181,17 +197,24 @@ export const article: BlogArticle = {
           </p>
           <p>
             <strong>Request and propose</strong> means the client submits what they need and when they&apos;d like it,
-            you confirm the price (often with an estimate), and you propose a time the client accepts or counters. It
-            adds a step, but you never get boxed into a slot that doesn&apos;t work: a windy afternoon for an aerial, a
-            twilight booked at noon, or a shoot 90 minutes from your last one.
+            sees the price, and you propose a time the client approves or counters. You never get boxed into a slot
+            that doesn&apos;t work: a windy afternoon for an aerial, a twilight booked at noon, or a shoot 90 minutes
+            from your last one. You plan your own route, cluster shoots by area, and protect your drive time.
           </p>
-          <Callout tone="tip" title="Many businesses need both">
+          <Callout tone="tip" title="Speed comes from the estimate, not the slot">
             <p>
-              Listing-only businesses with fixed packages tend to prefer self-booking. Businesses that mix listings with
-              commercial, construction, or inspection work usually want to review requests first. Choose based on where
-              most of your revenue comes from.
+              What agents really want at midnight is to know the job is in and what it costs. With an instant estimate
+              on submit, the agent gets that answer right away, and you still decide when and where your day goes.
             </p>
           </Callout>
+          <ProductCallout title="Request and propose, without the back-and-forth">
+            <p>
+              In ShootPortal, the agent&apos;s request creates the client and the project, and they see a preliminary
+              estimate built from your catalog and ZIP-distance travel fees as soon as they submit. You propose a time
+              with your Google events visible for conflicts; they tap Approve Time or request a different one, and the
+              shoot pushes to your Google Calendar.
+            </p>
+          </ProductCallout>
         </>
       ),
     },
@@ -199,7 +222,7 @@ export const article: BlogArticle = {
       id: "comparison-table",
       title: "Real estate photography booking software comparison",
       tocLabel: "Comparison table",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             The three groups side by side. &quot;Not stated&quot; means we couldn&apos;t confirm it on the vendor&apos;s
@@ -219,7 +242,7 @@ export const article: BlogArticle = {
               "Starting price",
             ]}
             rows={[
-              ["ShootPortal", "Request + estimate", <No key="a">You propose; client accepts or counters</No>, <Yes key="b">Service catalog</Yes>, <Yes key="c">ZIP-to-ZIP distance</Yes>, <Yes key="c1">Preliminary + versioned estimate</Yes>, <Yes key="d">% or flat</Yes>, <Yes key="d1">Same project: review, pay, download</Yes>, <SiteLink key="e" href="/pricing">See pricing</SiteLink>],
+              ["ShootPortal", "Website + request + estimate", "You propose; client approves in one tap", <Yes key="b">Service catalog</Yes>, <Yes key="c">ZIP-to-ZIP distance</Yes>, <Yes key="c1">Instant estimate + official proposal</Yes>, <Yes key="d">% or flat</Yes>, <Yes key="d1">Same project: review, pay, download, marketing</Yes>, ctx.studioMonthly ? `${ctx.studioMonthly}/mo, every feature` : <SiteLink key="e" href="/pricing">See pricing</SiteLink>],
               ["Aryeo", "RE ordering", <Yes key="f" />, <Yes key="g" />, <Yes key="h">%, flat, or metered</Yes>, "Price at checkout", <Yes key="i" />, <Yes key="i1">Delivery platform</Yes>, "Free Lite; Pro $49/mo"],
               ["HDPhotoHub", "RE ordering", <Yes key="j">Smart Scheduling</Yes>, <Yes key="k">Cart + add-ons</Yes>, "Not stated", "Price at checkout", <Yes key="l" />, <Yes key="l1">Pay to Download</Yes>, "$5–$10 per delivery"],
               ["Spiro", "RE ordering", <Yes key="m">Automated scheduling</Yes>, <Yes key="n" />, <Yes key="o">Optional trip fees</Yes>, "Price at checkout", "Not stated", <Yes key="o1">Delivery included</Yes>, "$5 per job"],
@@ -248,6 +271,41 @@ export const article: BlogArticle = {
       tocLabel: "Tools reviewed",
       body: (ctx) => (
         <>
+          <h3>Our pick: website-to-delivery booking</h3>
+          <ToolCard
+            id="booking-shootportal"
+            name="ShootPortal"
+            url="/"
+            isShootPortal
+            tagline="Booking that starts on your own website and carries one project through to payment, delivery, and listing marketing"
+            pricing={
+              ctx.studioMonthly ? (
+                <>
+                  Studio plan: {ctx.studioMonthly}/month
+                  {ctx.studioAnnual ? <> or {ctx.studioAnnual}/month billed annually</> : null}. Stripe&apos;s standard
+                  processing fees apply. {ctx.trialDays > 0 ? <>{ctx.trialDays}-day free trial, no card.</> : null}
+                </>
+              ) : (
+                <>
+                  Flat monthly subscription. See <SiteLink href="/pricing">current pricing</SiteLink>.
+                </>
+              )
+            }
+            bestFor="Real estate photographers, drone pilots, and videographers, solo or with a small team, who want bookings, pricing, and the rest of the job in one system."
+            pros={[
+              "Business website builder with a Book a Shoot form: services, brokerage, preferred date, and notes, with no account needed",
+              "Instant preliminary estimate on submit, with travel fees from ZIP distance (tiers or free radius plus per-mile)",
+              "Official proposals with line items, versions, PDF, expiry, reminders, and one-click Approve Proposal",
+              "You propose the time with your Google events visible; the client taps Approve Time, and the shoot pushes to Google Calendar",
+              "Deposits on approval (percentage or fixed) into your own Stripe; ShootPortal takes 0%",
+              "The same project then handles editing, video review, payment, Print or MLS downloads, and the Marketing Kit",
+            ]}
+            cons={[
+              "Times are proposed by you rather than picked from open slots, which keeps your route and drive time in your hands",
+              "Calendar sync is one-way to Google, with your Google events shown read-only for conflict checks",
+            ]}
+          />
+
           <h3>Generic appointment schedulers</h3>
           <p>
             These are inexpensive and polished, and agents already know them. They were built for haircuts, meetings,
@@ -384,51 +442,14 @@ export const article: BlogArticle = {
             pros={["Auto-assignment, drive-time, and travel-fee calculation", "Pricing rules by square footage and VIP pricing", "Google Calendar two-way sync"]}
             cons={["Highest entry price here", "No free trial, demo only"]}
           />
-
-          <h3>Request-and-estimate workflow</h3>
-          <ToolCard
-            id="booking-shootportal"
-            name="ShootPortal"
-            url="/"
-            isShootPortal
-            tagline="Request, estimate, proposed time, and deposit on one project that carries through to delivery"
-            pricing={
-              ctx.studioMonthly ? (
-                <>
-                  Studio plan: {ctx.studioMonthly}/month
-                  {ctx.studioAnnual ? <> or {ctx.studioAnnual}/month billed annually</> : null}. Stripe&apos;s standard
-                  processing fees apply. {ctx.trialDays > 0 ? <>{ctx.trialDays}-day free trial, no card.</> : null}
-                </>
-              ) : (
-                <>
-                  Flat monthly subscription. See <SiteLink href="/pricing">current pricing</SiteLink>.
-                </>
-              )
-            }
-            bestFor="Solo operators and small teams whose jobs vary in scope or depend on the weather, including aerial, twilight, and commercial work. Our pick for that profile, not for high-volume self-booking."
-            pros={[
-              "Request form with your service catalog, property address, preferred date, and notes; the client gets a request-received email",
-              "Automatic preliminary estimates with travel fees from ZIP-to-ZIP distance, or switch the form to a plain inquiry and hide pricing",
-              "Versioned official estimates with expiry dates and a PDF the client can forward",
-              "Client accepts, declines, or counter-proposes the time you suggest; your Google events show on the calendar so you can spot conflicts",
-              "Deposits on approval, as a percentage or flat amount, into your own Stripe account",
-              "After the shoot, the same project handles review, the balance, and MLS or Print downloads",
-            ]}
-            cons={[
-              "Clients can't instantly book an open slot themselves",
-              "No auto-assignment or drive-time routing for teams",
-              "Google Calendar shows your events read-only; it isn't full two-way sync",
-              "No SMS reminders",
-            ]}
-          />
         </>
       ),
     },
     {
       id: "shootportal-booking",
-      title: "How booking works in ShootPortal",
+      title: "How booking works in ShootPortal's real estate photography booking software",
       tocLabel: "ShootPortal booking flow",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             ShootPortal was built by a drone business owner, and its booking flow reflects that: most jobs need a price
@@ -438,26 +459,30 @@ export const article: BlogArticle = {
           <Figure caption="Conceptual diagram: ShootPortal's request, estimate, and proposed-time booking flow.">
             <BookingFlowDiagram />
           </Figure>
+          <Figure caption="Real ShootPortal screens: your business website with its Book a Shoot button (left), and the branded request form on an agent's phone (right). No app and no account needed to book.">
+            <TwoSidedScreens business="business-website" client="phone-request-form" businessLabel="What the public sees" clientLabel="What your client sees" />
+          </Figure>
           <ol>
             <li>
-              <strong>Request.</strong> From your branded portal, the client enters contact details and the property
-              address, picks a service from your catalog, adds a preferred date and notes (lockbox, occupancy, gate
-              codes), and creates an account. If you&apos;d rather not show automatic pricing, the form can work as a
-              simple inquiry.
+              <strong>Book a Shoot on your website.</strong> The agent lands on your ShootPortal business website (on
+              your own domain or yourstudio.shootportal.app) and clicks Book a Shoot. The branded form asks for name,
+              email, phone, brokerage, services from your catalog, preferred date, and notes (lockbox, occupancy, gate
+              codes). No account needed: submitting it creates their client account and the project.
             </li>
             <li>
-              <strong>Preliminary estimate.</strong> ShootPortal can generate one automatically, adding a travel fee
-              based on straight-line distance between ZIP codes, using mileage tiers or a free radius plus a per-mile
-              rate with a cap.
+              <strong>Instant estimate.</strong> The moment they submit, the agent sees a preliminary estimate built from
+              your catalog prices plus a travel fee based on ZIP-code distance, using mileage tiers or a free radius plus
+              a per-mile rate.
             </li>
             <li>
-              <strong>Official estimate.</strong> You adjust line items and send it. The client approves or requests
-              changes in the portal, and can download a PDF. Estimates are versioned and can expire.
+              <strong>Official proposal.</strong> You adjust line items and send it. The agent clicks Approve Proposal
+              or requests changes in the portal, and can download a PDF. Proposals are versioned, can expire, and send
+              reminders on their own.
             </li>
             <li>
-              <strong>Proposed time.</strong> You propose a shoot time; the client accepts, declines, or suggests
-              another. Your own Google Calendar events appear read-only on the ShootPortal calendar, so you can spot
-              conflicts before proposing.
+              <strong>Proposed time.</strong> You propose a shoot time that fits your route; the agent taps Approve Time
+              or requests a different one. Your own Google Calendar events appear read-only on the ShootPortal calendar,
+              so you can spot conflicts before proposing.
             </li>
             <li>
               <strong>Deposit and calendar.</strong> Optionally collect a deposit on approval. Confirmed shoots push to
@@ -472,39 +497,46 @@ export const article: BlogArticle = {
             suits the seller, and the confirmed time pushes to your Google Calendar. The estimate, deposit, access
             notes, and every message stay on the one record, so nothing has to be re-entered.
           </p>
+          <Figure caption="Real ShootPortal client screen: the instant preliminary estimate an agent sees right after requesting a shoot, built from your prices and travel fees.">
+            <AppScreen view="portal-estimate" />
+          </Figure>
+          <Figure caption="Real ShootPortal client screen: a proposed shoot time with Approve Time and Request a Different Time. One tap confirms it, and the shoot lands on your Google Calendar.">
+            <AppScreen view="portal-shoot-time" />
+          </Figure>
           <Figure caption="Real ShootPortal screen, the calendar: a month view with a confirmed shoot (sample client data).">
             <ProductPreview view="calendar" />
           </Figure>
           <p>
-            What&apos;s automated versus manual: the preliminary estimate, the travel fee, the request-received email,
-            and reminder emails for pending proposals and scheduling happen without you. Choosing the time, and when to
-            move it, stays your decision.
+            What&apos;s automated: the client account and project, the instant estimate, the travel fee, the branded
+            emails, the deposit on approval, and reminders at 24 hours, 3 days, or 7 days for pending proposals and
+            scheduling. What stays yours: choosing the time, and when to move it.
           </p>
-          <h3>When proposed times are a strength, and when they aren&apos;t</h3>
+          <h3>Why proposed times work better for location shoots</h3>
           <p>
-            Proposing times works well for custom jobs, aerials, twilights, and anything weather-dependent, because you
-            only commit to slots you can actually deliver. It suits clients who order a few times a month and value a
-            confirmed price.
+            Proposing times means you only commit to slots you can actually deliver. You can group Tuesday&apos;s
+            listings on the north side of town, put the twilight at sunset, and hold the aerial for the calm morning.
+            Agents get the price instantly and a confirmed time with one tap, and you never wake up to a calendar
+            someone else filled with back-to-back shoots 40 minutes apart.
           </p>
-          <p>
-            It&apos;s a real drawback for high-volume agents who book several listings a week and expect to grab a slot
-            at midnight without waiting for you. If that describes most of your client base, a self-booking platform
-            like HDPhotoHub, Aryeo, or Tonomo will feel faster to them.
-          </p>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Let your website take the booking"
+            body="Publish your ShootPortal website, turn on Book a Shoot with your services and travel fees, and send one test request. You'll see the instant estimate, the proposal, and the one-tap time approval from your client's side."
+          />
         </>
       ),
     },
     {
       id: "request-and-propose-fit",
-      title: "Who the request-and-propose model is right for",
-      tocLabel: "Is ShootPortal a fit?",
+      title: "Who ShootPortal's booking is built for",
+      tocLabel: "Who it's built for",
       body: (ctx) => (
         <>
           <p>
-            We&apos;ll be direct: if your agents order the same three packages every week and want to grab a slot at
-            midnight, a self-booking storefront will serve them better than ShootPortal. Where ShootPortal earns its
-            place is the work that doesn&apos;t fit a fixed slot, and the businesses that want the booking to keep going
-            after the calendar entry: into the shoot, the review, the payment, and the delivery.
+            ShootPortal is built for real estate photographers, drone pilots, and videographers who want the booking to
+            keep going after the calendar entry: into the shoot, the edit, the video review, the payment, the delivery,
+            and the listing&apos;s marketing. Agents get a fast, simple way to book from your website and see the price
+            right away; you get a calendar you actually planned.
           </p>
           <BestFitPanel
             heading="When ShootPortal is the right booking fit"
@@ -523,13 +555,16 @@ export const article: BlogArticle = {
               },
               {
                 who: "Businesses losing money to cancellations",
-                why: "Request a deposit when the estimate is approved, as a percentage or flat amount, paid into your own Stripe account.",
+                why: "Request a deposit when the proposal is approved, as a percentage or flat amount, paid into your own Stripe account.",
               },
-            ]}
-            notFor={[
-              "Most of your revenue is high-volume agents who expect instant self-booking (HDPhotoHub, Aryeo, or Tonomo fit better).",
-              "You dispatch several photographers and need auto-assignment or drive-time routing (Tonomo or Spiro).",
-              "You need full two-way calendar sync, SMS reminders, or promo codes at checkout.",
+              {
+                who: "Photographers who want more per listing",
+                why: "After delivery, offer the agent a property website and social media kit from the same project, included free or sold as a paid add-on.",
+              },
+              {
+                who: "Businesses tired of a separate website",
+                why: "Your business website, portfolio, services, and Book a Shoot form live in the same platform as the bookings they create.",
+              },
             ]}
           />
           <p>
@@ -538,8 +573,8 @@ export const article: BlogArticle = {
           </p>
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Run your next request through it"
-            body="Add your services and travel-fee rule, connect Stripe for deposits, then send one real estimate and propose the shoot time. See whether one record beats the text thread."
+            title="Run your next booking through it"
+            body="Add your services and travel-fee rule, publish your website's Book a Shoot form, connect Stripe for deposits, then send one real proposal and propose the shoot time. See whether one record beats the text thread."
           />
         </>
       ),
@@ -576,13 +611,19 @@ export const article: BlogArticle = {
             </li>
           </ul>
           <p>
-            Every real estate ordering platform above links booking to delivery to some degree. Generic schedulers
-            don&apos;t, which is usually why photographers move off them. In ShootPortal, the booking is the first few
-            stages of a project that runs all the way to the download:
+            Generic schedulers don&apos;t connect booking to anything after it, which is usually why photographers move
+            off them. In ShootPortal, the booking is the first few stages of a project that runs all the way from your
+            website to the listing&apos;s marketing:
           </p>
           <Figure caption="ShootPortal's verified features at each stage of a job.">
             <WorkflowCoverageMap highlight={["request", "estimate", "schedule", "pay"]} />
           </Figure>
+          <p>
+            That includes the parts most booking tools hand off: fixing a photo in the built-in editor, collecting
+            time-stamped feedback on the listing video (no Dropbox Replay or Frame.io needed), and offering the agent a
+            property website and Just Listed posts once the photos are delivered.
+          </p>
+          <AllInOnePlatform intro="Booking is where the job starts. One subscription covers the website that brings the agent in and every step until the listing is marketed." />
           <p>
             Booking is usually the first thing people automate. Our guide to{" "}
             <BlogLink slug="real-estate-photography-automation">automating a real estate photography business</BlogLink>{" "}
@@ -600,29 +641,14 @@ export const article: BlogArticle = {
           <PickGrid
             items={[
               {
-                who: "Brand new, a few fixed packages",
-                pick: "Acuity or Setmore",
-                why: "Cheap self-booking with payments; outgrow it when travel fees and delivery matter.",
-              },
-              {
-                who: "High-volume agents, standard packages",
-                pick: "HDPhotoHub or Aryeo",
-                why: "Self-booking storefronts with add-ons, and scheduling that accounts for travel.",
-              },
-              {
-                who: "Three or more photographers",
-                pick: "Tonomo or Spiro",
-                why: "Assignment by skill and service area; Tonomo adds drive-time calculation.",
-              },
-              {
-                who: "Already on Square",
-                pick: "Square Appointments",
-                why: "Deposits and booking in the same system as your payments.",
-              },
-              {
-                who: "Custom quotes, aerials, mixed work",
+                who: "Real estate, drone, and video businesses",
                 pick: "ShootPortal",
-                why: "Request, estimate with travel fees, proposed time, and deposit in one portal.",
+                why: "Website booking with an instant estimate and travel fees, proposed times you control, deposits, and the same project through delivery and listing marketing.",
+              },
+              {
+                who: "Brand new, a few fixed packages",
+                pick: "ShootPortal",
+                why: "Start your service catalog from a template, publish your website with Book a Shoot, and take deposits from your first job.",
               },
               {
                 who: "Discovery calls before big jobs",
@@ -633,7 +659,8 @@ export const article: BlogArticle = {
           />
           <KeyTakeaways
             items={[
-              "Decide self-booking vs. request-and-propose first; it narrows the field more than any feature.",
+              "Decide self-booking vs. request-and-propose first; proposing times keeps your route, the weather, and your drive time under your control.",
+              "Start the booking on your own website, with an instant estimate, so leads don't wait for a reply to learn the price.",
               "Generic schedulers are cheap but don't understand properties, add-ons, or travel fees.",
               "Collect access notes in the booking form so they travel with the job.",
               "Deposits at booking prevent more headaches than reminder emails.",
@@ -652,14 +679,15 @@ export const article: BlogArticle = {
       body: () => (
         <>
           <p>
-            The right real estate photography booking software depends on who your clients are and how predictable
-            your work is. Fixed packages and high-volume agents point to a self-booking ordering platform. Teams point
-            to dispatch tools like Tonomo or Spiro. A tight budget points to Acuity or Setmore for now.
+            The best real estate photography booking software doesn&apos;t stop at the calendar. Generic schedulers book
+            a time slot and nothing else. Ordering platforms add a storefront. ShootPortal starts with your own business
+            website, gives agents an instant price, lets you set a schedule you can actually keep, and then runs the
+            same job through editing, video review, payment, delivery, and listing marketing.
           </p>
           <p>
-            If your jobs vary, your aerials depend on the weather, and you&apos;d rather confirm a price and a time than
-            discover the details on site, <SiteLink href="/how-it-works">see ShootPortal&apos;s booking flow</SiteLink>{" "}
-            and run your next request through it.
+            For real estate photographers, drone pilots, and videographers, that&apos;s the setup we recommend.{" "}
+            <SiteLink href="/how-it-works">See ShootPortal&apos;s booking flow</SiteLink> and run your next request
+            through it.
           </p>
         </>
       ),
@@ -669,12 +697,13 @@ export const article: BlogArticle = {
     {
       question: "What is the best booking software for real estate photographers?",
       answerText:
-        "For self-booking with packages and add-ons, HDPhotoHub, Aryeo, Spiro, and Tonomo are built for real estate media. For custom quotes and weather-dependent work, ShootPortal's request-and-estimate flow fits better. Generic tools like Acuity work for very simple setups.",
+        "For most solo real estate photographers and small teams, ShootPortal: booking starts on your own business website with an instant estimate and travel fees, you propose times that fit your route, and the same project runs through payment, delivery, and listing marketing. HDPhotoHub, Aryeo, Spiro, and Tonomo are self-booking ordering platforms, and generic tools like Acuity work for very simple setups.",
       answer: (
         <p>
-          For self-booking with packages and add-ons, HDPhotoHub, Aryeo, Spiro, and Tonomo are built for real estate
-          media. For custom quotes and weather-dependent work, ShootPortal&apos;s request-and-estimate flow fits better.
-          Generic tools like Acuity work for very simple setups.
+          For most solo real estate photographers and small teams, ShootPortal: booking starts on your own business
+          website with an instant estimate and travel fees, you propose times that fit your route, and the same project
+          runs through payment, delivery, and listing marketing. HDPhotoHub, Aryeo, Spiro, and Tonomo are self-booking
+          ordering platforms, and generic tools like Acuity work for very simple setups.
         </p>
       ),
     },
@@ -714,22 +743,35 @@ export const article: BlogArticle = {
       ),
     },
     {
-      question: "Can clients book a time slot themselves in ShootPortal?",
+      question: "How do clients schedule a shoot in ShootPortal?",
       answerText:
-        "No. Clients submit a request with a preferred date, and you propose a shoot time they can accept, decline, or counter. Confirmed shoots push to your Google Calendar, and your Google events display read-only in ShootPortal.",
+        "Clients submit a Book a Shoot request with a preferred date and see an instant estimate. You then propose a shoot time that fits your route and the weather, and they approve it in one tap or request a different time. Confirmed shoots push to your Google Calendar, and your Google events display read-only in ShootPortal so you can see conflicts.",
       answer: (
         <p>
-          No. Clients submit a request with a preferred date, and you propose a shoot time they can accept, decline, or
-          counter. Confirmed shoots push to your Google Calendar, and your Google events display read-only in
-          ShootPortal so you can see conflicts.
+          Clients submit a Book a Shoot request with a preferred date and see an instant estimate. You then propose a
+          shoot time that fits your route and the weather, and they approve it in one tap or request a different time.
+          Confirmed shoots push to your Google Calendar, and your Google events display read-only in ShootPortal so you
+          can see conflicts.
+        </p>
+      ),
+    },
+    {
+      question: "Can agents book a real estate photography shoot from my website?",
+      answerText:
+        "Yes, with ShootPortal. Its business website builder includes a Book a Shoot form where agents pick services from your catalog, add the date and notes, and submit without creating an account. The request creates the client and project automatically and shows the agent a preliminary estimate with travel fees right away.",
+      answer: (
+        <p>
+          Yes, with ShootPortal. Its business website builder includes a Book a Shoot form where agents pick services
+          from your catalog, add the date and notes, and submit without creating an account. The request creates the
+          client and project automatically and shows the agent a preliminary estimate with travel fees right away.
         </p>
       ),
     },
   ],
   related: ["best-real-estate-photography-software", "best-real-estate-photography-delivery-software", "best-photography-crm-software"],
   cta: {
-    title: "Book the shoot you can actually deliver.",
-    body: "A branded request form with your services, automatic estimates with travel fees, proposed shoot times clients accept or counter, deposits through your own Stripe account, and the same project carrying through to delivery.",
+    title: "Book from your website. Schedule on your terms.",
+    body: "A Book a Shoot form on your own website, instant estimates with travel fees, proposed times agents approve in one tap, deposits to your own Stripe, and one project that runs through delivery and listing marketing.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

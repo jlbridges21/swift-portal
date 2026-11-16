@@ -5,6 +5,7 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   No,
   SiteLink,
@@ -14,18 +15,20 @@ import { DeliveryPathDiagram, VideoReviewDiagram } from "@/components/blog/diagr
 import { FileSizeChart } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
 import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, PhoneScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "how-to-send-large-video-files-to-clients",
   title: "Best Ways to Send Large Video Files to Clients Without Losing Quality",
   seoTitle: "How to Send Large Video Files to Clients (2026 Guide)",
   description:
-    "How to send large video files to clients: why 4K footage outgrows email, masters vs delivery files, Drive, Dropbox, WeTransfer and MASV limits, and review links.",
+    "How to send large video files to clients: why 4K outgrows email, masters vs delivery files, Drive, Dropbox, WeTransfer and MASV limits, and client review.",
   excerpt:
     "Bitrate math, real sending limits, and a decision table for videographers and drone pilots who need to get big video files to clients intact, reviewed, and paid for.",
   category: "media-delivery",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   disclosure: true,
   primaryKeyword: "how to send large video files to clients",
@@ -35,6 +38,9 @@ export const article: BlogArticle = {
     "best way to share video files with clients",
     "video file transfer for videographers",
     "deliver drone footage to clients",
+    "client video review",
+    "Dropbox Replay alternative",
+    "real estate video delivery",
   ],
   readingMinutes: 14,
   cover: {
@@ -55,16 +61,17 @@ export const article: BlogArticle = {
         well-exported H.264 or H.265 file is what most clients actually play and post.
       </>,
       <>
-        <strong>For one-off handoffs</strong>, a cloud link or transfer service (Google Drive, Dropbox Transfer,
-        WeTransfer, MASV) is fine. Check the size cap and expiry first.
+        <strong>For client work, use one branded project instead of three links.</strong> ShootPortal (our product)
+        takes the upload, the time-stamped review, the numbered versions, the approval, the payment, and the final
+        download on the same page, with downloads that can unlock when the client pays.
       </>,
       <>
-        <strong>For client feedback</strong>, use a review link with time-stamped comments and numbered versions
-        instead of email threads.
+        <strong>For client feedback</strong>, skip the email thread and the separate Dropbox Replay or Frame.io
+        subscription: ShootPortal&apos;s comments pin to the moment and the spot on the frame, included in the plan.
       </>,
       <>
-        <strong>For finals</strong>, put the file, the approval, and the payment status in one place, and decide
-        whether downloads wait for the final invoice.
+        <strong>For a one-off raw handoff to an editor</strong>, a cloud link or transfer service (Google Drive, Dropbox
+        Transfer, WeTransfer, MASV) is fine. Check the size cap and expiry first.
       </>,
     ],
   },
@@ -74,14 +81,17 @@ export const article: BlogArticle = {
         Photographers can get away with a zipped folder. Videographers and drone pilots can&apos;t. A two-minute listing
         film, a construction progress reel, or a raw aerial pull for an editor is measured in gigabytes, and the client
         on the other end usually wants three things: to watch it without downloading anything, to tell you what to
-        change, and eventually to get a clean file they can post or hand to someone else.
+        change, and eventually to get a clean file they can post or hand to someone else. Knowing how to send large
+        video files to clients means handling all three.
       </p>
       <p>
         This guide covers <strong>how to send large video files to clients</strong> without crushing the quality or
         sending people on a scavenger hunt through expired links. We&apos;ll do the file-size math with real camera
         bitrates, list the actual limits of the common sending options (with sources), and separate the three jobs that
         often get lumped together: <em>transferring</em> a file, <em>reviewing</em> a cut, and <em>delivering</em> the
-        final. If you deliver listing photos as well, our guide to{" "}
+        final. For client work, our recommendation is to run all three on one project in{" "}
+        <SiteLink href="/photo-video-delivery-software">ShootPortal</SiteLink>, so the client watches, comments,
+        approves, pays, and downloads from a single branded link. If you deliver listing photos as well, our guide to{" "}
         <BlogLink slug="how-to-deliver-real-estate-photos">delivering real estate photos</BlogLink> covers the stills
         side.
       </p>
@@ -290,13 +300,15 @@ export const article: BlogArticle = {
               ["Dropbox Transfer", "2 GB to 250 GB by plan", "7 days on Basic/Plus; custom on higher plans", <No key="d">Replay is a separate add-on</No>, "One-off handoffs"],
               ["WeTransfer Free", "3 GB, 10 transfers per 30 days", "3 days", <No key="e" />, "Small, quick sends"],
               ["MASV", "Pay per GB ($0.25/GB PAYG)", "Free storage 5 days", <No key="f" />, "Very large masters to post houses"],
-              ["Review platforms (Frame.io, Vimeo, Dropbox Replay)", "Large; see each vendor", "Configurable on paid plans", <Yes key="g" />, "Client feedback and approvals"],
+              ["Review platforms (Frame.io, Vimeo, Dropbox Replay)", "Large; see each vendor", "Configurable on paid plans", <Yes key="g" />, "Editor and team feedback"],
+              ["ShootPortal client project", "Per-file limit not published; resumable uploads", "No expiry on the client's project; share links can expire", <Yes key="h">Pinned to the frame, numbered versions</Yes>, "Client review, approval, payment, and final delivery"],
             ]}
             note="Limits from each provider's help or pricing pages, checked 2026-10-15. Plans and limits change; confirm before relying on a number."
           />
           <p>
-            None of the pure transfer tools above help with the next part of the job: getting clear feedback on a cut
-            and recording who approved what. That&apos;s where review platforms come in. For a broader look at storage and
+            None of the pure transfer tools above help with the next part of the job: getting clear feedback on a cut,
+            recording who approved what, and getting paid. That&apos;s where review and client delivery come in. For a
+            broader look at storage and
             sharing services side by side, see{" "}
             <BlogLink slug="google-drive-vs-dropbox-photo-delivery">Google Drive vs. Dropbox vs. dedicated delivery software</BlogLink>.
           </p>
@@ -340,15 +352,24 @@ export const article: BlogArticle = {
             </li>
           </ul>
           <p>
-            These are excellent tools, particularly for teams already living in Premiere or Resolve. We compare them
-            alongside Wipster, Filestage, and others in{" "}
-            <BlogLink slug="best-video-review-approval-software">the best video review and approval software</BlogLink>.
-            The trade-off for a small video or drone business is that review lives in one tool, delivery in another,
-            and invoicing in a third, and the client has to keep track of all three. If you&apos;d rather keep them
-            together, see how our{" "}
-            <SiteLink href="/video-review-approval-software">video review and approval software</SiteLink> ties client
-            feedback, versions, and approval to the project.
+            These tools are built for post-production teams, and each is another subscription priced per user or
+            member. For a small video or drone business delivering to clients, the bigger problem is that review lives in
+            one tool, delivery in another, and invoicing in a third, and the client has to keep track of all three.
           </p>
+          <h3>The client-facing option: review on the project</h3>
+          <p>
+            ShootPortal replaces Dropbox Replay or Frame.io for client feedback. The client opens the cut from a
+            one-click email link into your branded portal, pins comments to a timestamp and a spot on the frame, and
+            sees your threaded replies and resolved notes. New cuts become numbered versions (V1, V2 · Latest), and the
+            client approves or requests changes on the same page where the invoice and the final download live. Video
+            review is included in the plan, with no per-user add-on. See how our{" "}
+            <SiteLink href="/video-review-approval-software">video review and approval software</SiteLink> works, or
+            compare every option in{" "}
+            <BlogLink slug="best-video-review-approval-software">the best video review and approval software</BlogLink>.
+          </p>
+          <Figure caption="Real ShootPortal screen: a client reviewing a listing film on their phone and leaving a time-stamped comment, with no app to install and no Dropbox or Frame.io account.">
+            <PhoneScreen view="phone-video-review" />
+          </Figure>
         </>
       ),
     },
@@ -389,8 +410,8 @@ export const article: BlogArticle = {
               In ShootPortal, the client reviews the cut inside their project. They pause, click, and leave a
               time-stamped comment that can be pinned to a spot on the frame. You reply in a thread and mark it
               resolved when it&apos;s fixed. Upload the next cut and it becomes v3, with v2&apos;s comments still attached
-              to v2. It&apos;s built for client review, not as a replacement for a post-production suite with NLE
-              integrations; if your editors need those, Frame.io or Dropbox Replay is the better fit internally.
+              to v2. The client approves the version or requests changes, and live updates mean you see new notes as
+              they arrive, without ten separate emails.
             </p>
           </ProductCallout>
         </>
@@ -434,6 +455,14 @@ export const article: BlogArticle = {
           <Figure caption="Conceptual diagram: upload, client review, optional payment step, then download. Illustrative only.">
             <DeliveryPathDiagram showPaywall />
           </Figure>
+          <ProductCallout title="Watch now, download when paid, share anywhere">
+            <p>
+              In ShootPortal, the approved video stays on the client&apos;s project for good. Turn on the download lock
+              and the client can watch and share it right away while the file unlocks automatically when they pay. For
+              everyone else, email shares can expire, and a public watch page or an embeddable player puts the film on
+              the agent&apos;s or brand&apos;s own website without sending the file at all.
+            </p>
+          </ProductCallout>
         </>
       ),
     },
@@ -471,12 +500,13 @@ export const article: BlogArticle = {
               separately, and you resolve or reopen comments as you work through them.
             </li>
             <li>
-              <strong>Get the approval on record.</strong> The client approves the deliverable, or rejects it with
-              written feedback and a revision request, in the same place.
+              <strong>Get the approval on record.</strong> The client approves the deliverable, or requests changes
+              with written feedback, in the same place.
             </li>
             <li>
-              <strong>Request payment from the project.</strong> The client pays through Stripe Checkout, and the money
-              goes to your own connected Stripe account. A receipt goes out by email.
+              <strong>Request payment from the project.</strong> The client pays by card, Apple Pay, Google Pay, or
+              optional bank payment, and the money goes to your own connected Stripe account. ShootPortal takes no cut,
+              and a receipt goes out by email.
             </li>
             <li>
               <strong>Deliver the final.</strong> The approved file is already in the project. With &quot;unlock
@@ -488,38 +518,39 @@ export const article: BlogArticle = {
           <Figure caption="Real ShootPortal screen: the media library, with every listing's photos and video organized and searchable (sample client data).">
             <ProductPreview view="media" />
           </Figure>
-          <h3>Automatic, centralized, and still manual</h3>
+          <Figure caption="Real ShootPortal screens: on the left, the workflow automation that unlocks downloads, moves the project, and sends the receipt when a payment lands; on the right, what the client sees: media ready, deliverables to approve, and a Pay Now button.">
+            <TwoSidedScreens business="automation" client="portal-pay" />
+          </Figure>
+          <h3>What runs on its own, and what you still do</h3>
           <ul>
             <li>
               <strong>Automatic:</strong> resuming interrupted uploads, version numbering, batched comment
-              notifications, emailed receipts, the download unlock after final payment (if you enable it), and some
-              project stage changes, including an optional move to Delivered once paid.
+              notifications, branded emails at each step, reminders for an outstanding review or payment, emailed
+              receipts, the download unlock after final payment (if you enable it), and project stage changes, including
+              an optional move to Delivered once paid.
             </li>
             <li>
               <strong>Centralized:</strong> every version, comment thread, approval, message, payment status, and final
               file for the job, on the client&apos;s record.
             </li>
             <li>
-              <strong>Still manual:</strong> editing and exporting (do it in your NLE), choosing which export to upload,
-              sending the payment request, and handing masters to anyone who needs them. ShootPortal plays and delivers
-              the file you upload, so upload the delivery export clients should watch, and keep masters for those
-              who&apos;ve asked for them. It&apos;s not a bulk transfer service for raw footage to an editor; use a
-              transfer tool for that.
+              <strong>Your part:</strong> editing and exporting in your NLE, and choosing which export to upload.
+              Upload the delivery export clients should watch, and add masters for clients who&apos;ve asked for them.
+              For a one-off raw-footage handoff to an outside editor, a transfer link is fine; anything client-facing
+              belongs on the project.
             </li>
           </ul>
-          <TrialCard
+          <InlineCta
             trialDays={ctx.trialDays}
-            title="Send your next cut through one project"
-            body={
-              <>
-                Upload a real cut, open the review link as your client, leave a pinned comment, post v2, and see what the
-                approve-pay-download step looks like from their side, before you change anything in your current
-                workflow.
-              </>
-            }
-            secondaryHref="/how-it-works"
-            secondaryLabel="See how review and delivery work"
+            title="Stop sending three links for one video"
+            body="Upload your next cut to a ShootPortal project. Your client comments on the frame, approves V2, pays, and downloads from one branded page, with no Replay or Frame.io seat to pay for."
           />
+          <p>
+            Video is one part of the job. The same plan runs your business website and request form, proposals,
+            scheduling, a built-in photo editor for the stills, and, for listings, a property website and marketing kit
+            built from your photos.
+          </p>
+          <AllInOnePlatform />
           <p>
             See the whole review-and-delivery loop on our{" "}
             <SiteLink href="/photo-video-delivery-software">video delivery platform</SiteLink> page.
@@ -569,9 +600,9 @@ export const article: BlogArticle = {
     },
     {
       id: "which-method",
-      title: "Which method should you use? A decision table",
+      title: "How to send large video files to clients: a decision table",
       tocLabel: "Decision table",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>Match the method to the job, not the other way around:</p>
           <ComparisonTable
@@ -581,9 +612,9 @@ export const article: BlogArticle = {
               ["Send a 20-second preview clip", "Email or a quick cloud link", "Small enough; low ceremony"],
               ["Hand raw footage to an editor once", "Dropbox Transfer, WeTransfer (paid), or MASV", "Built for one-off large sends; check plan caps"],
               ["Send a 50+ GB ProRes master to an agency", "MASV or a high-tier Dropbox Transfer", "Pay-per-GB or 100 GB+ caps; no ongoing storage needed"],
-              ["Collect feedback from a small client team", "A review link with time-stamped comments", "Notes land on the exact frame and version"],
-              ["Run a post team with NLE integrations", "Frame.io or Dropbox Replay", "Deep editing-app integrations and review tooling"],
-              ["Deliver finals tied to payment and a client record", "A client portal or delivery platform", "Approval, download access, and payment in one place"],
+              ["Collect feedback from a client", "ShootPortal video review", "Notes land on the exact frame and version, included in the plan"],
+              ["Deliver finals tied to payment and a client record", "A ShootPortal client project", "Approval, download access, and payment in one branded place"],
+              ["Put the film on an agent's or brand's website", "ShootPortal's embeddable player or public watch page", "No file to send; plays on their site"],
               ["Archive everything long-term", "Storage you control (Drive, Dropbox, or local drives)", "Delivery links expire; archives shouldn't"],
             ]}
             note="General guidance. Check each provider's current limits and plan features before choosing."
@@ -602,8 +633,20 @@ export const article: BlogArticle = {
               <>Send most clients a delivery file (H.264/H.265 MP4); send masters only when they&apos;re part of the job.</>,
               <>Transfer services are for one-off handoffs; check size caps and expiry by plan.</>,
               <>Use time-stamped review and numbered versions instead of email threads for revisions.</>,
-              <>Keep finals, approvals, and payment status together, and keep your own archive.</>,
+              <>Keep finals, approvals, and payment status on one client project, and keep your own archive.</>,
             ]}
+          />
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Send your next cut through one project"
+            body={
+              <>
+                Upload a real cut, open it as your client, leave a pinned comment, post V2, and see the approve, pay, and
+                download steps from their side. One link replaces the review add-on, the invoice, and the transfer.
+              </>
+            }
+            secondaryHref="/how-it-works"
+            secondaryLabel="See how review and delivery work"
           />
         </>
       ),
@@ -613,12 +656,25 @@ export const article: BlogArticle = {
     {
       question: "What is the best way to send large video files to clients?",
       answerText:
-        "Use a link instead of an attachment. For one-off handoffs, Google Drive, Dropbox Transfer, WeTransfer, or MASV work, depending on file size. For client feedback and final delivery, a review link or client portal with time-stamped comments, versions, and controlled downloads is more professional.",
+        "Use a link instead of an attachment. For client work, a client portal such as ShootPortal keeps the video, time-stamped comments, numbered versions, approval, payment, and controlled downloads on one branded project. For one-off raw handoffs, Google Drive, Dropbox Transfer, WeTransfer, or MASV work, depending on file size.",
       answer: (
         <p>
-          Use a link instead of an attachment. For one-off handoffs, Google Drive, Dropbox Transfer, WeTransfer, or MASV
-          work, depending on file size. For client feedback and final delivery, a review link or client portal with
-          time-stamped comments, numbered versions, and controlled downloads is more professional.
+          Use a link instead of an attachment. For client work, a client portal such as ShootPortal keeps the video,
+          time-stamped comments, numbered versions, approval, payment, and controlled downloads on one branded project.
+          For one-off raw handoffs, Google Drive, Dropbox Transfer, WeTransfer, or MASV work, depending on file size.
+        </p>
+      ),
+    },
+    {
+      question: "How do I get client feedback on a video without Dropbox Replay or Frame.io?",
+      answerText:
+        "Upload the cut to the client's project in ShootPortal. The client opens it from an email link, leaves comments pinned to a timestamp and a spot on the frame, and approves or requests changes. You reply in threads, resolve notes, and upload new cuts as numbered versions. Video review is included in the plan, so there's no per-user add-on.",
+      answer: (
+        <p>
+          Upload the cut to the client&apos;s project in ShootPortal. The client opens it from an email link, leaves
+          comments pinned to a timestamp and a spot on the frame, and approves or requests changes. You reply in threads,
+          resolve notes, and upload new cuts as numbered versions. Video review is included in the plan, so there&apos;s
+          no per-user add-on.
         </p>
       ),
     },
@@ -676,8 +732,8 @@ export const article: BlogArticle = {
     "google-drive-vs-dropbox-photo-delivery",
   ],
   cta: {
-    title: "Keep the cut, the comments, and the final in one place",
-    body: "Resumable uploads, time-stamped comments pinned to the frame, numbered versions, approvals, and payment through your own Stripe account, with downloads that can unlock after the final payment.",
+    title: "One link for the cut, the comments, the payment, and the final.",
+    body: "Resumable uploads, time-stamped comments pinned to the frame, numbered versions, approvals, and payment to your own Stripe, with downloads that unlock when the client pays. No review add-on needed.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how review works",
   },

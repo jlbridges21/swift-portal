@@ -6,12 +6,14 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   SiteLink,
   Steps,
 } from "@/components/blog/article-parts";
 import { CostBreakdown, SampleEstimate } from "@/components/blog/business-diagrams";
-import { TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
+import { ProductCallout, TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, AppScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 import { JobPriceCalculator } from "@/components/blog/job-price-calculator";
 
 const THUMBTACK_AERIAL = "https://www.thumbtack.com/p/aerial-photography-prices";
@@ -34,14 +36,18 @@ export const article: BlogArticle = {
   category: "pricing-payments",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "drone photography pricing",
   secondaryKeywords: [
     "drone photography rates",
     "aerial photography prices",
     "how much to charge for drone photography",
+    "real estate drone photography pricing",
+    "drone video review and approval",
+    "Dropbox Replay alternative",
   ],
-  readingMinutes: 16,
+  readingMinutes: 17,
   cover: {
     variant: "drone",
     tint: "amber",
@@ -69,8 +75,9 @@ export const article: BlogArticle = {
         across your whole service area.
       </>,
       <>
-        <strong>Your market sets the final number.</strong> Location, scope, competition, and your own costs matter more
-        than any national average.
+        <strong>Protect the margin after you set the rate.</strong> ShootPortal (our product) quotes every job from your
+        rate card with travel calculated automatically, takes the deposit on approval, keeps video revisions to
+        time-stamped comments on the frame, and lets you sell listing marketing on real estate aerial jobs.
       </>,
     ],
   },
@@ -88,6 +95,11 @@ export const article: BlogArticle = {
         places where sources disagree. It also says plainly where <em>no</em> reliable public number exists. Then it
         shows how to build your own rates from your costs: equipment, insurance, editing time, and travel. That way your
         price holds up whether the job is a single listing or a monthly construction contract.
+      </p>
+      <p>
+        Finally, it covers the part that decides whether the rate actually turns into profit: quoting consistently,
+        getting paid before delivery, keeping video revisions short, and selling more on each real estate job. That&apos;s
+        where ShootPortal, the platform built by a Part 107 drone business owner, does the work for you.
       </p>
       <Callout tone="note" title="How to read the numbers in this guide">
         <p>
@@ -281,6 +293,16 @@ export const article: BlogArticle = {
             <BlogLink slug="real-estate-photography-pricing-guide">real estate photography pricing guide</BlogLink>{" "}
             covers packaging aerials into listing packages.
           </p>
+          <p>
+            There&apos;s a second way to raise the value of a listing job without flying longer: sell the marketing the
+            agent builds from your aerials anyway. In ShootPortal, the delivered photos and video become a property
+            website for the listing and a social media kit (Just Listed and Open House posts, Stories, a carousel, and a
+            print flyer). You set each as included or paid, with defaults of $49 for the website and $29 for the kit, and
+            the agent adds it to the invoice or checks out through your Stripe.
+          </p>
+          <Figure caption="Real ShootPortal screen: the property website editor, with Modern, Luxury, and Coastal designs and a live preview built from the listing's delivered media. Sell it to the agent or include it.">
+            <AppScreen view="property-website-editor" />
+          </Figure>
           <h3>Commercial property</h3>
           <p>
             Commercial clients (brokers, owners, developers) usually need more angles, more coordination, sometimes
@@ -296,6 +318,23 @@ export const article: BlogArticle = {
             scope varies. Price the capture and the edit separately in your head, even if the client sees one number.
             Spell out the length of the final cut, music licensing, and how many revision rounds are included.
           </p>
+          <p>
+            Revisions are where video margin leaks. A note like &quot;can we cut the part where it flies over the
+            road?&quot; by text means scrubbing the timeline to find it, then another round when you guessed wrong. Each
+            round you don&apos;t charge for comes straight out of your hourly rate.
+          </p>
+          <ProductCallout title="Video review that keeps revision rounds short">
+            <p>
+              ShootPortal replaces Dropbox Replay or Frame.io for client feedback. Clients leave comments pinned to the
+              exact timestamp, and to a point on the frame with Add mark. You reply in a thread, mark each note
+              Resolved, upload V2 as a numbered version, and the client approves or requests changes, all on the same
+              project as the quote, the invoice, and the delivery. It&apos;s included in the plan, with no per-user
+              add-on.
+            </p>
+          </ProductCallout>
+          <Figure caption="Real ShootPortal screens: your video review with time-stamped comments, replies, and Resolve buttons (left), and the client leaving a comment on their phone (right). No separate review tool to pay for.">
+            <TwoSidedScreens business="video-review" client="phone-video-review" />
+          </Figure>
           <h3>Construction projects and recurring clients</h3>
           <p>
             Progress documentation rewards consistency: same angles, same altitude, same schedule. Price each visit
@@ -417,6 +456,12 @@ export const article: BlogArticle = {
             authorization, scheduling, uploading, and chasing payment. Track your actual hours for a few weeks before
             you trust your estimates.
           </p>
+          <p>
+            Some of that time is easy to win back. ShootPortal&apos;s built-in photo editor handles quick stills fixes
+            (one-click Auto, exposure, highlights and shadows, white balance, HDR looks, crop, and lens and geometry
+            corrections) and copies the same adjustments across a set of up to 200 photos. Save to Project updates the
+            client&apos;s gallery directly, so there&apos;s no export and re-upload step.
+          </p>
           <Figure caption="Example numbers for illustration — not market rates. A conceptual breakdown of where a single drone job's price goes.">
             <CostBreakdown
               totalLabel="Example drone job price"
@@ -438,7 +483,7 @@ export const article: BlogArticle = {
       id: "build-your-rate",
       title: "Build your rate with cost-plus pricing",
       tocLabel: "Cost-plus worksheet",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             Market ranges tell you whether a price is plausible. Cost-plus tells you whether it&apos;s sustainable. Use
@@ -492,6 +537,11 @@ export const article: BlogArticle = {
             delivery take a bigger share of the price than travel. That share is real time, and it repeats on every
             job. It&apos;s also the one cost you can shrink without lowering your rate or your quality.
           </p>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Shrink the admin line, not your rate"
+            body="ShootPortal turns your rate card into instant quotes with travel included, collects the deposit on approval, and runs video revisions and delivery on the same project."
+          />
           <FreeResourceCallout tool="drone-pricing" note="Run these steps with your own hours, travel, overhead, and margin, and see the price update as you go." />
         </>
       ),
@@ -602,44 +652,56 @@ export const article: BlogArticle = {
             </li>
             <li>
               <strong>Scope is written down and versioned.</strong> For commercial or custom work, send an official
-              estimate with an expiry date. If the client adds a flight or a second deliverable, issue a new version
-              instead of editing an email thread. Clients approve or request changes in their portal and can download
-              the estimate as a PDF.
+              proposal with an expiry date. If the client adds a flight or a second deliverable, issue a new version
+              instead of editing an email thread. Clients click Approve Proposal or request changes in their portal and
+              can download it as a PDF.
             </li>
             <li>
-              <strong>The deposit is part of the approval.</strong> Request a percentage or fixed deposit when the
-              estimate is approved, then the balance later, with payments going through Stripe directly to your own
-              account. If you want, downloads stay locked until the final payment, while the client can still view the
-              media.
+              <strong>The deposit is part of the approval.</strong> The payment is created the moment the client
+              approves, with a percentage or fixed deposit, then the balance later. Clients pay from a link that opens
+              without a login, by card, Apple Pay, Google Pay, or optional ACH. Money goes straight to your own Stripe
+              account, and ShootPortal takes 0% of it. Downloads can stay locked until the final payment while the client
+              still views the media.
+            </li>
+            <li>
+              <strong>The flight day is agreed, not assumed.</strong> Propose a shoot time and the client approves it or
+              asks for a different one. Confirmed shoots push to your Google Calendar, and your own events show for
+              conflict checks.
+            </li>
+            <li>
+              <strong>Revisions stay on the frame.</strong> Aerial video goes through time-stamped review and numbered
+              versions on the same project, so a revision round is a list of resolved notes, not a phone call.
             </li>
           </ul>
+          <Figure caption="Real ShootPortal screens: a scheduled aerial shoot with services and client details (left), and the client approving the proposed shoot time or asking for another (right).">
+            <TwoSidedScreens business="project-scheduled" client="portal-shoot-time" />
+          </Figure>
           <Figure caption="ShootPortal's verified features at each stage of a job.">
-            <WorkflowCoverageMap highlight={["request", "estimate", "pay"]} />
+            <WorkflowCoverageMap highlight={["request", "estimate", "schedule", "review", "pay", "market"]} />
           </Figure>
           <h3>What&apos;s automated, what&apos;s centralized, and what stays with you</h3>
           <p>
-            <strong>Automated:</strong> the preliminary estimate and its travel fee, reminder emails for open
-            proposals and payments, and some stage changes, such as moving a project to Delivered after payment if you
-            turn that on. <strong>Centralized:</strong> the estimate versions, the deposit and balance status, the
+            <strong>Automated:</strong> the preliminary estimate and its travel fee, the payment created on approval,
+            reminder emails for open proposals, scheduling, review, and payments, unlocking downloads on payment, and
+            stage changes such as moving a project to Delivered once it&apos;s paid. <strong>Centralized:</strong> the estimate versions, the deposit and balance status, the
             client&apos;s messages, and the delivered files all sit on one project, so &quot;did they approve the
             revised quote?&quot; takes one click to answer. <strong>Still yours:</strong> deciding the price, scoping
             custom jobs, and anything to do with the flight itself.
           </p>
           <p>
-            What it won&apos;t do: ShootPortal doesn&apos;t generate contracts or collect e-signatures, and it
-            doesn&apos;t log flights or handle airspace authorization, so keep your flight-ops app and your own written
-            terms. For a broader look at the options, see the comparison of{" "}
+            For a broader look at the options, see the comparison of{" "}
             <BlogLink slug="best-drone-business-management-software">drone business management software</BlogLink>.
             The full request-to-delivery flow is on the <SiteLink href="/how-it-works">how it works</SiteLink> page.
           </p>
+          <AllInOnePlatform intro="Pricing is the start. One subscription runs your website, request form, proposals, scheduling, editing, video review, payments, delivery, and listing marketing, so you're not paying for five tools to protect one rate." />
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Load your drone rate card and quote a real job"
+            title="Load your drone rate card and quote a real job today"
             body={
               <>
-                Add your services from a starter template, set your travel rule, and send yourself an estimate with a
-                deposit to see exactly what a client sees. If it doesn&apos;t save you time on the next quote, you
-                haven&apos;t paid anything.
+                Add your services from a starter template, set your travel rule, and send yourself a proposal with a
+                deposit to see exactly what a client sees: the instant estimate, Approve Proposal, a no-login pay link,
+                and video review on the same project. No card needed to start.
               </>
             }
             secondaryHref="/pricing"
@@ -704,6 +766,7 @@ export const article: BlogArticle = {
               </>,
               <>Quote travel by distance and show it on its own line.</>,
               <>Where no reliable public number exists, cost-plus is your best guide.</>,
+              <>Protect the margin: deposits on approval, short video revision rounds, and listing marketing add-ons on real estate aerials.</>,
             ]}
           />
         </>
@@ -772,6 +835,31 @@ export const article: BlogArticle = {
         </p>
       ),
     },
+    {
+      question: "How can drone pilots earn more on real estate jobs without flying longer?",
+      answerText:
+        "Sell listing marketing built from the aerials you already delivered. In ShootPortal, the photos and video become a property website and a social media kit with posts, Stories, a carousel, and a print flyer. You set each as included or paid (defaults $49 and $29), and the agent adds it to the invoice.",
+      answer: (
+        <p>
+          Sell listing marketing built from the aerials you already delivered. In ShootPortal, the photos and video become
+          a property website and a social media kit with posts, Stories, a carousel, and a print flyer. You set each as
+          included or paid (defaults $49 and $29), and the agent adds it to the invoice.
+        </p>
+      ),
+    },
+    {
+      question: "How do I keep drone video revisions from eating my margin?",
+      answerText:
+        "State how many revision rounds are included, then collect feedback in one place. ShootPortal's video review lets clients pin comments to a timestamp and a point on the frame, with threaded replies, resolve and reopen, and numbered versions, replacing Dropbox Replay or Frame.io for client feedback at no extra per-user cost.",
+      answer: (
+        <p>
+          State how many revision rounds are included, then collect feedback in one place. ShootPortal&apos;s video
+          review lets clients pin comments to a timestamp and a point on the frame, with threaded replies, resolve and
+          reopen, and numbered versions, replacing Dropbox Replay or Frame.io for client feedback at no extra per-user
+          cost.
+        </p>
+      ),
+    },
   ],
   related: [
     "best-drone-business-management-software",
@@ -779,8 +867,8 @@ export const article: BlogArticle = {
     "real-estate-photography-pricing-guide",
   ],
   cta: {
-    title: "Quote every flight the same way, and get paid for it.",
-    body: "Turn your rate card into a service catalog, let ZIP-distance travel fees calculate themselves, and send versioned estimates with a deposit due on approval. Delivery and the balance live on the same project.",
+    title: "Quote every flight the same way, and keep the margin you priced in.",
+    body: "Turn your rate card into instant estimates with ZIP-distance travel fees, take the deposit on approval, run video revisions with time-stamped comments, and sell listing marketing on real estate jobs. ShootPortal takes 0% of your payments.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

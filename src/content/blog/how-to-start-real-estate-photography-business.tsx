@@ -6,23 +6,26 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   SiteLink,
 } from "@/components/blog/article-parts";
 import { ProjectBoardDiagram, RoadmapDiagram, ServiceMenu } from "@/components/blog/business-diagrams";
-import { TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
+import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, ScreenTrio, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "how-to-start-real-estate-photography-business",
   title: "How to Start and Grow a Real Estate Photography Business in 2026",
   seoTitle: "How to Start a Real Estate Photography Business (2026)",
   description:
-    "How to start a real estate photography business: equipment, shooting and editing techniques, packages and pricing, finding agents, delivery, and scaling up.",
+    "How to start a real estate photography business: equipment, editing, packages, a website, finding agents, delivery, listing marketing, and scaling up.",
   excerpt:
-    "From your first wide-angle lens to a team with editors and a second shooter: what to buy, how to shoot and edit listings, how to package your services, and how to run the business as it grows.",
+    "From your first wide-angle lens to a team with editors and a second shooter: what to buy, how to shoot and edit listings, how to package your services, how to launch with a website and booking in one weekend, and how to sell listing marketing from day one.",
   category: "real-estate-photography",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   primaryKeyword: "how to start a real estate photography business",
   secondaryKeywords: [
     "real estate photography business",
@@ -30,8 +33,12 @@ export const article: BlogArticle = {
     "real estate photography equipment",
     "real estate photography packages",
     "grow a real estate photography business",
+    "real estate photography website",
+    "real estate marketing kit",
+    "property website for listings",
+    "photo editing for real estate",
   ],
-  readingMinutes: 10,
+  readingMinutes: 12,
   cover: {
     variant: "roadmap",
     tint: "rose",
@@ -42,6 +49,11 @@ export const article: BlogArticle = {
     heading: "The short answer",
     points: [
       <>
+        <strong>Launch the business side in one weekend:</strong> ShootPortal gives you a professional website,
+        booking, payments, delivery, photo editing, and listing marketing on one subscription, so you look established
+        from your first listing.
+      </>,
+      <>
         <strong>Start lean on gear:</strong> a camera that brackets, a wide-angle lens, a sturdy tripod, and a
         flash or bracketing workflow cover most listings.
       </>,
@@ -50,12 +62,12 @@ export const article: BlogArticle = {
         on every listing are what agents pay for.
       </>,
       <>
-        <strong>Package your services</strong> into a few clear tiers with add-ons like drone, twilight, video, and
-        floor plans.
+        <strong>Package your services</strong> into a few clear tiers with add-ons like drone, twilight, video, floor
+        plans, and a listing marketing kit (property website, social posts, and flyers) you can sell to agents.
       </>,
       <>
-        <strong>Win agents in person, keep them with service.</strong> Fast turnaround and easy delivery drive repeat
-        bookings.
+        <strong>Win agents in person, keep them with service.</strong> Fast turnaround, easy delivery, and marketing
+        that makes the agent look good drive repeat bookings.
       </>,
       <>
         <strong>Systematize early.</strong> Scheduling, payment, delivery, and team access are what limit growth, not
@@ -79,6 +91,12 @@ export const article: BlogArticle = {
         our separate guide on{" "}
         <BlogLink slug="how-to-start-drone-photography-business">starting a drone photography business</BlogLink>{" "}
         covers FAA Part 107 and drone-specific setup.
+      </p>
+      <p>
+        The good news for a new business: the operations side no longer takes months to assemble. With ShootPortal you
+        can launch with a professional website, a Book a Shoot form, online payments, branded delivery, a built-in photo
+        editor, and listing marketing in one weekend, and agents get one simple link for every listing, with nothing to
+        install.
       </p>
     </>
   ),
@@ -118,6 +136,11 @@ export const article: BlogArticle = {
             <li>
               <strong>Room to add services.</strong> Aerials, video, twilight, floor plans, and 3D tours let you grow
               revenue per listing.
+            </li>
+            <li>
+              <strong>A second product after delivery.</strong> Agents still have to market the listing. A property
+              website, Just Listed posts, and a flyer built from your photos are something you can sell them on every
+              job.
             </li>
           </ul>
           <p>
@@ -226,6 +249,14 @@ export const article: BlogArticle = {
             ]}
             note="Many photographers edit in-house while they develop a consistent style, then outsource once volume grows and they can write clear editing instructions."
           />
+          <ProductCallout title="Finish edits where the listing already lives">
+            <p>
+              However you produce your base images, ShootPortal&apos;s built-in photo editor handles the finishing pass
+              on uploaded JPEGs: one-click Auto, exposure, highlights and shadows, white balance, curves, HDR and B&amp;W
+              looks, spot healing, and lens corrections. Copy one photo&apos;s adjustments to the rest of the set, then
+              Save to Project and the gallery and downloads update instantly. Originals are never overwritten.
+            </p>
+          </ProductCallout>
           <FreeResourceCallout resource="real-estate-photography-shot-list" />
         </>
       ),
@@ -234,7 +265,7 @@ export const article: BlogArticle = {
       id: "portfolio-packages",
       title: "Portfolio, packages, and pricing",
       tocLabel: "Portfolio and packages",
-      body: () => (
+      body: (ctx) => (
         <>
           <h3>Build your first portfolio</h3>
           <p>
@@ -242,6 +273,14 @@ export const article: BlogArticle = {
             rental between tenants, or a listing for a new agent who agrees to let you shoot it. Aim for 20 to 30 strong
             images that show bright interiors, straight lines, attractive exteriors, and a consistent edit. Shoot homes
             similar to the ones your target agents list.
+          </p>
+          <h3>Put it on a real estate photography website</h3>
+          <p>
+            Agents will look you up before they reply. A website with your portfolio, your packages, and a clear Book a
+            Shoot button turns that look into a request. In ShootPortal, the website builder is part of the same plan:
+            pick a Modern, Luxury, or Minimal template, add portfolio projects and featured services, and publish on your
+            own domain. Book a Shoot opens your branded request form, which creates the agent&apos;s account and the
+            project and shows them a preliminary estimate the moment they submit.
           </p>
           <h3>Package your services</h3>
           <p>
@@ -277,6 +316,8 @@ export const article: BlogArticle = {
                 { name: "Real twilight shoot", price: "$150" },
                 { name: "Listing video", price: "$250" },
                 { name: "Floor plan", price: "$75" },
+                { name: "Property website", price: "$49" },
+                { name: "Social media kit", price: "$29" },
               ]}
             />
           </Figure>
@@ -288,6 +329,29 @@ export const article: BlogArticle = {
             compares published sources and walks through building prices from your own costs.
           </p>
           <FreeResourceCallout tool="real-estate-pricing" />
+          <h3>Sell listing marketing from day one</h3>
+          <p>
+            Most new photographers stop at the photos. Offering the marketing that uses them is an easy upsell, and it
+            costs you almost no extra time when the software builds it for you. In ShootPortal, every delivered listing
+            can come with a single-property website (Modern, Luxury, or Coastal design, with status from Coming Soon to
+            Sold) and a social media kit: five square posts such as Just Listed and Open House, three Stories, an
+            Instagram carousel, and a print-ready flyer with a QR code to the property site.
+          </p>
+          <Figure caption="Real ShootPortal screens: the Social Media Kit, a print-ready flyer, and the property website, all generated from the listing photos you delivered. Include them free or sell them to the agent as an add-on.">
+            <ScreenTrio views={["social-kit", "listing-flyer", "property-website"]} />
+          </Figure>
+          <p>
+            You decide whether each product is included or paid (the defaults are $49 for the website and $29 for the
+            social kit, and you can set a bundle or change prices per project). The agent sees a preview, adds it to
+            the cart, and pays through your own Stripe account, or it goes on the invoice. Their headshot, brokerage
+            logo, and colors are saved and reused on the next listing, and an optional &quot;Photography by&quot;
+            credit on the site advertises your business to every buyer who views it.
+          </p>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Launch your listing business this weekend"
+            body="Publish your website, load your packages, connect Stripe, and turn on the marketing kit so your first agent sees a real business, and a reason to book you again."
+          />
         </>
       ),
     },
@@ -340,10 +404,14 @@ export const article: BlogArticle = {
             package, and preferred dates. Confirm in writing and put every shoot on the calendar you actually check.
             Plan routes so you&apos;re not crossing town between back-to-back shoots.
           </p>
+          <Figure caption="Real ShootPortal screens: the scheduled listing on your side, and the proposed shoot time in the agent's portal with Approve Time and Request a Different Time. One click confirms it, and the shoot pushes to your Google Calendar.">
+            <TwoSidedScreens business="project-scheduled" client="portal-shoot-time" />
+          </Figure>
           <h3>Invoicing and payment</h3>
           <p>
             Decide your payment policy before your first job: pay at booking, pay before download, or invoice on terms
-            for established agents. Online card payment removes most of the chasing. Our guide on{" "}
+            for established agents. Online payment removes most of the chasing, especially when downloads unlock
+            automatically once the agent pays. Our guide on{" "}
             <BlogLink slug="get-paid-before-delivering-real-estate-photos">getting paid before delivering</BlogLink>{" "}
             covers the options and how to word them.
           </p>
@@ -404,7 +472,9 @@ export const article: BlogArticle = {
           <p>
             As people join, decide what each person can see and do. An editor needs access to the media for their
             assigned listings, not your client list or revenue. A second shooter needs schedules and access notes, not
-            payment settings. Give everyone access only to the jobs and tools they need.
+            payment settings. Give everyone access only to the jobs and tools they need. In ShootPortal, staff accounts
+            are unlimited, with about 25 granular permissions and presets such as Editor, Coordinator, and Full access
+            except money.
           </p>
           <h3>Automate the routine hand-offs</h3>
           <p>
@@ -418,7 +488,7 @@ export const article: BlogArticle = {
     },
     {
       id: "software",
-      title: "Choosing software to manage the workflow",
+      title: "How to start a real estate photography business on one system",
       tocLabel: "Software and workflow",
       body: (ctx) => (
         <>
@@ -438,11 +508,15 @@ export const article: BlogArticle = {
             set up a single workflow at two listings a week than to migrate one at fifteen.
           </p>
           <p>
-            ShootPortal (our product) is one way to do that, built around the workflow in this guide. Every listing is
-            one project, and the request, estimate, shoot time, messages, files, and payment status all live on it, so
-            you answer an agent&apos;s &quot;where are we?&quot; by opening one page:
+            ShootPortal (our product) was built for exactly that, around the workflow in this guide. Every listing is
+            one project, and the request, estimate, shoot time, messages, edits, files, payment status, and listing
+            marketing all live on it, so you answer an agent&apos;s &quot;where are we?&quot; by opening one page:
           </p>
           <ul>
+            <li>
+              <strong>Website.</strong> A professional site with your portfolio, services, testimonials, and a Book a
+              Shoot button, on your own domain.
+            </li>
             <li>
               <strong>Requests and estimates.</strong> Agents request shoots from your branded form and pick a package
               from your service catalog. ShootPortal can generate a preliminary estimate with a ZIP-distance travel
@@ -450,33 +524,41 @@ export const article: BlogArticle = {
             </li>
             <li>
               <strong>Scheduling.</strong> You propose a shoot time, and the agent accepts or counter-proposes in their
-              portal. Shoots can push to your Google Calendar. (Agents don&apos;t self-book into open slots.)
+              portal. Shoots push to your Google Calendar.
             </li>
             <li>
-              <strong>Payments.</strong> Deposits on approval or pay in full, by card through Stripe straight to your
-              own account, with email receipts. You can require payment before downloads unlock.
+              <strong>Editing and review.</strong> A built-in photo editor for finishing passes, and video review with
+              time-stamped comments and numbered versions, so you don&apos;t need Dropbox Replay or Frame.io for
+              listing films.
+            </li>
+            <li>
+              <strong>Payments.</strong> Deposits on approval or pay in full, by card, Apple Pay, Google Pay, or bank
+              transfer straight to your own Stripe account, with email receipts. ShootPortal takes 0% of payments, and
+              downloads can unlock automatically once the agent pays.
             </li>
             <li>
               <strong>Delivery.</strong> MLS-sized or full-resolution files, single or ZIP, plus video, 360 tours, and
               3D embeds, in a portal with your logo, colors, and your own domain if you add one.
             </li>
             <li>
+              <strong>Listing marketing.</strong> A property website and social media kit for every listing, included
+              free or sold to the agent as an add-on.
+            </li>
+            <li>
               <strong>Growing a team.</strong> Staff accounts have granular permissions and can be assigned to specific
               projects, which suits a second shooter or editor.
             </li>
           </ul>
-          <Figure caption="ShootPortal's verified features at each stage of a job.">
-            <WorkflowCoverageMap />
-          </Figure>
+          <AllInOnePlatform intro="Everything a new real estate photography business needs, from the website that wins the first agent to the marketing kit that keeps them, on one subscription." />
           <p>
-            What it doesn&apos;t replace: your bookkeeping or accounting software, your contracts (there&apos;s no
-            e-signature), and your video editing software (photos can be edited right in ShootPortal). It also doesn&apos;t offer client self-booking into open time slots,
-            property websites, or Zillow Showcase delivery, so weigh those if your agents expect them.{" "}
+            For the agent, it&apos;s simple: one branded link per listing to approve the shoot time, pay, download MLS or
+            print sizes, and grab their marketing, with no app and no password to remember. For you, it&apos;s fewer
+            texts, faster payment, and a business that looks established from the first job.{" "}
             {ctx.studioMonthly ? (
               <>
-                The Studio plan is {ctx.studioMonthly}/month
-                {ctx.studioAnnual ? <> or {ctx.studioAnnual}/month billed annually</> : null}, with Stripe&apos;s
-                standard processing fees on client payments.
+                The Studio plan is one plan with every feature, {ctx.studioMonthly}/month
+                {ctx.studioAnnual ? <> or {ctx.studioAnnual}/month billed annually</> : null}, with no per-listing fees and
+                Stripe&apos;s standard processing fees on client payments.
               </>
             ) : (
               <>
@@ -495,7 +577,8 @@ export const article: BlogArticle = {
             body={
               <>
                 The guided setup walks you through your logo and colors, a starter service menu, and connecting Stripe.
-                Then run your next portfolio shoot through it as a real listing, from request to download.
+                Publish your website, then run your next portfolio shoot through it as a real listing, from request to
+                download to a ready-made property website.
               </>
             }
             secondaryHref="/pricing"
@@ -510,6 +593,7 @@ export const article: BlogArticle = {
               "Straight verticals, natural light, and a consistent edit are what agents pay for.",
               "Offer two or three clear packages plus add-ons; price from your costs and local market.",
               "Win agents in person, then keep them with reliable, fast, organized delivery.",
+              "Launch with a website and sell listing marketing from day one; it makes agents look good and adds revenue per listing.",
               "Document your style and set up permissions before adding shooters or editors.",
             ]}
           />
@@ -578,11 +662,37 @@ export const article: BlogArticle = {
         </p>
       ),
     },
+    {
+      question: "Do I need a website to start a real estate photography business?",
+      answerText:
+        "Yes. Agents look you up before they reply, so you need a site with your portfolio, packages, and an easy way to book. ShootPortal includes a business website builder with portfolio, services, and a Book a Shoot button that feeds your branded request form, on your own domain, in the same plan as booking, payments, and delivery.",
+      answer: (
+        <p>
+          Yes. Agents look you up before they reply, so you need a site with your portfolio, packages, and an easy way
+          to book. ShootPortal includes a business website builder with portfolio, services, and a Book a Shoot button
+          that feeds your branded request form, on your own domain, in the same plan as booking, payments, and
+          delivery.
+        </p>
+      ),
+    },
+    {
+      question: "Can real estate photographers sell property websites and social media posts to agents?",
+      answerText:
+        "Yes. In ShootPortal, each delivered listing can come with a property website and a social media kit (Just Listed and Open House posts, Stories, an Instagram carousel, and a print flyer) built from your photos. You choose whether each is included free or paid, the agent pays through your Stripe or adds it to the invoice, and an optional Photography by credit advertises your business.",
+      answer: (
+        <p>
+          Yes. In ShootPortal, each delivered listing can come with a property website and a social media kit (Just
+          Listed and Open House posts, Stories, an Instagram carousel, and a print flyer) built from your photos. You
+          choose whether each is included free or paid, the agent pays through your Stripe or adds it to the invoice,
+          and an optional &quot;Photography by&quot; credit advertises your business.
+        </p>
+      ),
+    },
   ],
   related: ["best-real-estate-photography-software", "how-to-get-real-estate-photography-clients", "real-estate-photography-pricing-guide"],
   cta: {
-    title: "Start your listing business with one system, not five.",
-    body: "Agent requests, estimates, shoot scheduling, payments, and MLS-ready delivery on one project per listing, in a client portal with your logo, colors, and domain.",
+    title: "Launch your real estate photography business in one weekend",
+    body: "A professional website, agent booking, estimates, scheduling, photo editing, payments, MLS-ready delivery, and a listing marketing kit you can sell, on one project per listing under your own brand.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

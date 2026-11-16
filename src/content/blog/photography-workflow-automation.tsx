@@ -6,24 +6,27 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   SiteLink,
 } from "@/components/blog/article-parts";
 import { ToolSprawlDiagram, WorkflowDiagram } from "@/components/blog/diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
-import { TrialCard } from "@/components/blog/conversion-parts";
+import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, AppScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "photography-workflow-automation",
   title: "How to Build an Automated Photography Workflow From Booking to Final Delivery",
   seoTitle: "Photography Workflow Automation: Booking to Delivery",
   description:
-    "A stage-by-stage guide to photography workflow automation for drone, commercial, video, and real estate work, with a reusable trigger-and-action template.",
+    "A stage-by-stage guide to photography workflow automation for drone, video, and real estate work, from booking to editing, review, payment, and delivery.",
   excerpt:
     "Map every stage of a shoot, from first inquiry to follow-up, decide what triggers each step, and turn it into a reusable workflow template you can run on any job.",
   category: "business-automation",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "photography workflow automation",
   secondaryKeywords: [
@@ -31,8 +34,12 @@ export const article: BlogArticle = {
     "photography business workflow",
     "photography client workflow template",
     "drone photography workflow",
+    "video review and approval workflow",
+    "Dropbox Replay alternative",
+    "photo editing workflow",
+    "all-in-one photography business software",
   ],
-  readingMinutes: 11,
+  readingMinutes: 12,
   cover: {
     variant: "automation",
     tint: "amber",
@@ -43,6 +50,11 @@ export const article: BlogArticle = {
   quickAnswer: {
     heading: "The short answer",
     points: [
+      <>
+        <strong>Run the whole workflow on one platform:</strong> ShootPortal takes a job from your website and request
+        form through estimate, scheduling, photo editing, video review, payment, delivery, and listing marketing on one
+        branded project, with the hand-offs automated.
+      </>,
       <>
         <strong>Treat your workflow as stages,</strong> each with a trigger (what starts it), an action (what
         happens), and an owner (you, the client, or the system).
@@ -56,8 +68,8 @@ export const article: BlogArticle = {
         commercial adds usage terms; video adds revision rounds.
       </>,
       <>
-        <strong>Follow-up is the most neglected stage.</strong> Review requests and re-booking nudges are worth doing
-        by hand if your tools don&apos;t automate them.
+        <strong>Follow-up is the most neglected stage.</strong> A personal check-in and a review request after
+        delivery bring the next booking; make them a deliberate step.
       </>,
       <>
         <strong>Use the template table below</strong> to write your own workflow before you shop for software.
@@ -77,6 +89,13 @@ export const article: BlogArticle = {
         letting software handle the stages that follow a predictable rule. It doesn&apos;t matter whether you shoot
         listings, construction progress, product launches, or brand videos. The shape is the same: someone asks, you
         quote, you schedule, you prepare, you shoot, you edit and revise, you get paid, you deliver, and you follow up.
+      </p>
+      <p>
+        The simplest way to automate it is to stop splitting it across apps. ShootPortal runs every one of those stages
+        on a single project under your brand: a website and request form that create the job, an instant estimate, a
+        one-click proposal approval, a built-in photo editor, frame-accurate video review that replaces Dropbox Replay
+        or Frame.io, online payment, and downloads that unlock when the client pays. Your client gets one link and never
+        installs anything.
       </p>
       <p>
         This guide walks through each of those stages for any niche, shows what to automate in each, and ends with a
@@ -164,6 +183,14 @@ export const article: BlogArticle = {
             That one automated email removes the anxiety that makes clients send the same inquiry to three other
             photographers while they wait for you.
           </p>
+          <ProductCallout title="Your website and request form are the front door">
+            <p>
+              ShootPortal includes a business website builder with your portfolio, services, and a Book a Shoot button,
+              on your own domain. The branded request form collects contact details, company, services from your
+              catalog, a preferred date, and notes, with no account needed. Each submission creates the client and the
+              project automatically, and the client sees a preliminary estimate the moment they submit.
+            </p>
+          </ProductCallout>
         </>
       ),
     },
@@ -171,7 +198,7 @@ export const article: BlogArticle = {
       id: "estimates",
       title: "Stage 3: Estimates and proposals",
       tocLabel: "Estimates and proposals",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             Pricing is where many photographers hesitate to automate, because custom work deserves a custom quote.
@@ -200,6 +227,14 @@ export const article: BlogArticle = {
             surprising amount of lost work is simply quotes nobody followed up on. For drone-specific quoting and
             pricing, see our <BlogLink slug="drone-photography-pricing-guide">drone photography pricing guide</BlogLink>.
           </p>
+          <Figure caption="Real ShootPortal screens: the official proposal on your side, and the client's portal with line items, deposit terms, and an Approve Proposal button. Approval creates the deposit payment automatically.">
+            <TwoSidedScreens business="proposals" client="portal-proposal" />
+          </Figure>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Turn approvals into deposits without a single follow-up email"
+            body="In ShootPortal, the client approves your proposal online, the deposit request is created on the spot, and reminders go out if they stall. Try it on your next quote."
+          />
           <FreeResourceCallout tool="quote-builder" note="Build a clean quote with optional add-ons and a deposit, and download it as a PDF." />
         </>
       ),
@@ -263,6 +298,20 @@ export const article: BlogArticle = {
             afterwards. When the shoot is done, the project should move to the next stage so the client knows editing
             has started, without you writing &quot;we&apos;re all wrapped, files coming soon&quot; each time.
           </p>
+          <h3>Keep editing inside the workflow</h3>
+          <p>
+            Editing usually means exporting from one app, fixing in another, and re-uploading to a third. Every round
+            trip is a chance to deliver the wrong version. Doing routine corrections where the job already lives cuts
+            that out.
+          </p>
+          <Figure caption="Real ShootPortal screen: the built-in photo editor with one-click Auto, exposure, highlights, shadows, white balance, curves, and HDR or B&amp;W looks. Save to Project updates the gallery, downloads, and shares instantly, and the original is never overwritten.">
+            <AppScreen view="photo-editor" />
+          </Figure>
+          <p>
+            ShootPortal&apos;s editor works on JPEG, PNG, and WebP files you&apos;ve uploaded to the project, with
+            before/after, crop and lens corrections, spot healing, and masks. Copy adjustments from one photo to the rest
+            of the set in batch sessions of up to 200 photos. Clients only ever see the saved result.
+          </p>
           <h3>Make revisions structured</h3>
           <p>
             Revisions are where projects stall, especially video. Feedback that arrives as a long email (&quot;at about
@@ -275,10 +324,16 @@ export const article: BlogArticle = {
             </li>
             <li>Your revision allowance is stated in the estimate, so extra rounds are a scope conversation, not a surprise.</li>
           </ul>
+          <Figure caption="Real ShootPortal screens: video review on your side, with time-stamped comments, replies, and Resolve buttons on version 2, and the same film on the client's phone. No Dropbox Replay or Frame.io seat needed.">
+            <TwoSidedScreens business="video-review" client="phone-video-review" />
+          </Figure>
           <p>
-            If video review is a big part of your work, our{" "}
-            <BlogLink slug="best-video-review-approval-software">video review and approval software comparison</BlogLink>{" "}
-            compares dedicated tools such as Frame.io and Vimeo review with all-in-one options.
+            In ShootPortal, video review lives on the same project as the proposal, the invoice, and the delivery.
+            Clients pin comments to a timestamp and, if they like, to a point on the frame. You reply in threads, mark
+            notes resolved (or reopen them), and upload V2 when it&apos;s ready. Clients approve or request changes on
+            each deliverable, and comment notifications are batched so nobody&apos;s inbox floods. It&apos;s included in
+            the subscription, with no per-user add-on. For a wider look at the category, see our{" "}
+            <BlogLink slug="best-video-review-approval-software">video review and approval software comparison</BlogLink>.
           </p>
         </>
       ),
@@ -324,6 +379,13 @@ export const article: BlogArticle = {
             work. Clients should be able to download single files or everything at once, and share with colleagues who
             don&apos;t have an account.
           </p>
+          <h3>Listing marketing (for real estate work)</h3>
+          <p>
+            For listings, delivery is not the end of the agent&apos;s job: they still need to market the property. In
+            ShootPortal, a single-property website and a social media kit (Just Listed and Open House posts, Stories, an
+            Instagram carousel, and a print flyer) are built from the photos you just delivered. You can include them
+            free or sell them to the agent as a paid add-on, which turns one more stage of the workflow into revenue.
+          </p>
           <h3>Follow-up</h3>
           <p>
             Follow-up is the stage most workflows forget, and it&apos;s where repeat business comes from. After
@@ -333,9 +395,9 @@ export const article: BlogArticle = {
             their next busy period.
           </p>
           <p>
-            Many all-in-one tools, including ShootPortal, don&apos;t automate review requests or re-booking campaigns.
-            That&apos;s fine: a recurring calendar reminder and a saved email draft are enough. The point is to make it a
-            stage in your workflow so it happens every time.
+            Follow-up lands better when it&apos;s personal, so treat it as a deliberate stage: a recurring calendar
+            reminder and a saved email draft are enough. In ShootPortal, the client&apos;s record shows every past
+            project, their lifetime revenue, and their last payment, so you know who to call first.
           </p>
         </>
       ),
@@ -367,6 +429,7 @@ export const article: BlogArticle = {
               ["9. Revisions", "Changes requested", "Edit; upload new version", "Review tool", "You"],
               ["10. Payment", "Media approved or ready", "Request balance; send receipt when paid", "Payments", "System"],
               ["11. Delivery", "Balance paid", "Unlock downloads; mark delivered", "Delivery / portal", "System"],
+              ["11a. Listing marketing", "Listing media delivered", "Offer property website and social posts; include or sell", "Marketing kit", "System + you"],
               ["12. Follow-up", "A few days after delivery", "Check in; ask for a review; note next booking window", "Calendar reminder + email", "You"],
             ]}
             note="Template, not a prescription. Swap triggers to match your payment policy (for example, pay in full upfront) and your niche."
@@ -385,24 +448,24 @@ export const article: BlogArticle = {
     },
     {
       id: "choosing-software",
-      title: "Choosing integrated software, and putting it together",
+      title: "Choosing photography workflow automation software, and putting it together",
       tocLabel: "Choosing software",
       body: (ctx) => (
         <>
           <p>
             Once your template is written, compare tools against it row by row. You have two broad options. You can keep
             specialist tools for each stage and connect them with an automation service, or you can move most rows into
-            one integrated platform. Specialist stacks are flexible but every connection is a place to fail. Integrated
-            platforms are simpler but you accept their choices.
+            one integrated platform. Specialist stacks are flexible, but every connection is a place to fail, and every
+            stage is another subscription. An integrated platform is simpler to run and cheaper to own, and it gives
+            your client one place to approve, pay, comment, and download.
           </p>
           <p>
             Which category fits depends on your niche. Drone operators should read our{" "}
             <BlogLink slug="best-drone-business-management-software">drone business management software guide</BlogLink>,
             which separates flight-ops tools from client and delivery tools. Listing-focused businesses should start with
             the <BlogLink slug="best-real-estate-photography-software">real estate photography software comparison</BlogLink>.
-            If contracts and lead nurturing are your priority, the{" "}
-            <BlogLink slug="best-photography-crm-software">photography CRM comparison</BlogLink> is the better starting
-            point.
+            If you&apos;re weighing general CRMs too, the{" "}
+            <BlogLink slug="best-photography-crm-software">photography CRM comparison</BlogLink> lays them out.
           </p>
           <h3>Running the template in ShootPortal, stage by stage</h3>
           <p>
@@ -422,7 +485,8 @@ export const article: BlogArticle = {
             columns={["Stage", "Automated", "Centralized on the project", "Still manual"]}
             rows={[
               ["1. Lead intake", "Client record created from the request form; request acknowledgment email", "Contact details, address, chosen service, preferred date, notes", "Moving DMs and phone inquiries to the form link"],
-              ["2. Inquiry reply", "—", "Two-way messages on the project", "Answering questions; confirming scope"],
+              ["1. Lead intake (cont.)", "Leads from your ShootPortal business website land in your leads inbox", "Website inquiries, services, and portfolio in one place", "Publishing the site once"],
+              ["2. Inquiry reply", "—", "Two-way messages on the project, with saved templates", "Answering questions; confirming scope"],
               ["3. Estimate", "Preliminary estimate from your service catalog, with a ZIP-to-ZIP travel fee", "Official estimate with versions, expiry, and PDF", "Reviewing and sending the official estimate"],
               ["3a. Estimate reminder", "Reminder emails for proposals", "—", "Deciding when to call instead"],
               ["4. Deposit", "Deposit request on approval (percentage or fixed), if configured", "Payment status on the project", "Choosing your deposit policy"],
@@ -430,12 +494,14 @@ export const article: BlogArticle = {
               ["6. Preparation", "—", "Address and request notes on the project", "Shot list, gear, weather, airspace, LAANC"],
               ["7. Session", "—", "—", "Shooting; updating the project when you're done"],
               ["8. Review", "Review reminder emails; batched notifications for video comments", "Per-item approve or reject with feedback; time-stamped video comments; numbered versions", "Uploading media; your own final check"],
-              ["9. Revisions", "—", "Revision requests and comment threads, resolved or reopened", "Editing and uploading the new version"],
-              ["10. Payment", "Email receipts; payment reminder emails", "Stripe Checkout payments to your own Stripe account; balances on the client record", "Requesting the balance from the project; marking offline payments paid"],
+              ["8a. Editing", "—", "Built-in photo editor; Save to Project updates the gallery, downloads, and shares; originals kept", "Your creative edits"],
+              ["9. Revisions", "Live comment updates; batched notifications", "Revision requests and comment threads, resolved or reopened; V1, V2 versions", "Editing and uploading the new version"],
+              ["10. Payment", "Email receipts; payment reminder emails; project moves when paid, if enabled", "Card, Apple Pay, Google Pay, or ACH payments straight to your own Stripe account; balances on the client record", "Requesting the balance from the project; marking offline payments paid"],
               ["11. Delivery", "Unlock downloads after payment and move to Delivered, if enabled", "Print and MLS-size downloads, ZIPs, video, 360 tours, 3D embeds, share links", "Choosing which media sections the client sees"],
+              ["11a. Listing marketing", "Property website and social kit built from the delivered photos", "Agent branding saved per client; offer included or paid", "Turning the offer on; choosing prices"],
               ["12. Follow-up", "—", "Client history and lifetime revenue on the record", "Check-ins, review requests, and re-booking"],
             ]}
-            note="Based on ShootPortal's current features as of October 15, 2026. “If enabled” and “if configured” items are settings you choose. Some pipeline stage changes also happen automatically as clients approve, pay, or respond."
+            note="Based on ShootPortal's current features as of November 16, 2026. “If enabled” and “if configured” items are settings you choose. Some pipeline stage changes also happen automatically as clients approve, pay, or respond."
           />
           <p>
             Read the table column by column and the pattern is clear. The automated column handles the predictable
@@ -443,9 +509,9 @@ export const article: BlogArticle = {
             the bigger day-to-day win: the estimate, the shoot time, the messages, the files, and the payment status
             all sit on the same project, so &quot;where are we on this job?&quot; is answered by opening one page, by you
             or by the client in their portal. The manual column is the creative and judgment work no tool should take
-            from you, plus follow-up, which ShootPortal doesn&apos;t automate. It also has no contracts or e-signature, so
-            keep your own contract process alongside it.
+            from you, and the personal follow-up that wins the next job.
           </p>
+          <AllInOnePlatform intro="Every row of the template above, on one subscription: website, booking, proposals, scheduling, photo editing, video review, payments, delivery, listing marketing, and the automation that ties them together." />
           <p>
             If you shoot real estate, our{" "}
             <SiteLink href="/real-estate-photography-workflow-software">real estate photography workflow software</SiteLink> page
@@ -453,12 +519,12 @@ export const article: BlogArticle = {
           </p>
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Run one job through your new template"
+            title="Run your next job through every stage on one project"
             body={
               <>
                 Load your services during the guided setup, connect your own Stripe account, and send the request link to
-                your next client. You&apos;ll see rows 1 through 11 happen on a single project, and find out quickly which
-                of your old steps you no longer need.
+                your next client. You&apos;ll see request, estimate, scheduling, editing, video review, payment, and
+                delivery happen on a single project, and find out quickly how many apps you can cancel.
               </>
             }
             secondaryHref="/#product-demo"
@@ -518,34 +584,48 @@ export const article: BlogArticle = {
       ),
     },
     {
-      question: "Can I automate review requests after delivery?",
+      question: "How should I handle review requests after delivery?",
       answerText:
-        "Some CRMs offer automated follow-up sequences. ShootPortal does not automate review requests or re-booking, so a recurring calendar reminder and a saved email template are a simple way to make follow-up a consistent stage.",
+        "Treat follow-up as a deliberate, personal stage: a check-in a few days after delivery and a saved review-request email, triggered by a recurring calendar reminder. In ShootPortal, each client record shows past projects, lifetime revenue, and last payment, so you can see who to follow up with first.",
       answer: (
         <p>
-          Some CRMs offer automated follow-up sequences. ShootPortal doesn&apos;t automate review requests or
-          re-booking, so a recurring calendar reminder and a saved email template are a simple way to make follow-up a
-          consistent stage.
+          Treat follow-up as a deliberate, personal stage: a check-in a few days after delivery and a saved
+          review-request email, triggered by a recurring calendar reminder. In ShootPortal, each client record shows past
+          projects, lifetime revenue, and last payment, so you can see who to follow up with first.
         </p>
       ),
     },
     {
       question: "Do I need one platform or several tools?",
       answerText:
-        "Either can work. Several specialist tools connected with an automation service are flexible but fragile. One integrated platform is simpler to run. Compare tools against your written workflow template, row by row, before deciding.",
+        "For most photographers, drone pilots, and videographers, one platform is simpler and cheaper. Specialist tools connected with an automation service are flexible but fragile. ShootPortal covers website, booking, estimates, scheduling, editing, video review, payments, delivery, and listing marketing on one subscription. Compare it against your written workflow template, row by row.",
       answer: (
         <p>
-          Either can work. Specialist tools connected with an automation service are flexible but fragile; one
-          integrated platform is simpler to run. Compare tools against your written workflow template, row by row,
-          before deciding.
+          For most photographers, drone pilots, and videographers, one platform is simpler and cheaper. Specialist
+          tools connected with an automation service are flexible but fragile. ShootPortal covers website, booking,
+          estimates, scheduling, editing, video review, payments, delivery, and listing marketing on one subscription.
+          Compare it against your written workflow template, row by row.
+        </p>
+      ),
+    },
+    {
+      question: "What's a good Dropbox Replay or Frame.io alternative for client video feedback?",
+      answerText:
+        "If your goal is client feedback rather than editor plugins, ShootPortal's video review handles it on the same project as the invoice and delivery: comments pinned to a timestamp and a point on the frame, threaded replies, resolve and reopen, numbered versions, and approve or request changes. It's included in the plan with no per-user add-on.",
+      answer: (
+        <p>
+          If your goal is client feedback rather than editor plugins, ShootPortal&apos;s video review handles it on the
+          same project as the invoice and delivery: comments pinned to a timestamp and a point on the frame, threaded
+          replies, resolve and reopen, numbered versions, and approve or request changes. It&apos;s included in the plan
+          with no per-user add-on.
         </p>
       ),
     },
   ],
   related: ["best-drone-business-management-software", "real-estate-photography-automation", "best-video-review-approval-software"],
   cta: {
-    title: "Turn your workflow template into a system that runs",
-    body: "Request, estimate, schedule, review, payment, and delivery on one project for any kind of shoot, with acknowledgments, reminders, receipts, and download unlocks handled for you. The creative work and the judgment calls stay yours.",
+    title: "Turn your workflow template into one system that runs itself",
+    body: "Website, request, estimate, scheduling, photo editing, video review, payment, delivery, and listing marketing on one branded project, with acknowledgments, reminders, receipts, and download unlocks handled for you. Your clients only need a link.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

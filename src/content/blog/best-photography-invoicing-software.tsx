@@ -6,6 +6,7 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -16,19 +17,21 @@ import {
 import { ToolCategoryMap } from "@/components/blog/diagrams";
 import { PaymentFlowDiagram } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
-import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
+import { BestFitPanel, ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, AppScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "best-photography-invoicing-software",
   title: "Best Photography Invoicing and Payment Software in 2026",
   seoTitle: "Best Photography Invoicing Software & Payment Tools (2026)",
   description:
-    "Compare photography invoicing software on deposits, card and ACH fees, estimates, and client portals: QuickBooks, FreshBooks, Wave, Stripe, HoneyBook, and more.",
+    "Photography invoicing software compared on deposits, card and ACH fees, and pay links: ShootPortal, QuickBooks, FreshBooks, Wave, Stripe, HoneyBook, more.",
   excerpt:
-    "Ten invoicing and payment tools photographers actually use, compared on published card and ACH fees, deposits, estimates, and how well each one connects payment to the job and the delivery.",
+    "Ten invoicing and payment tools photographers use, compared on published card and ACH fees, deposits, and estimates, and on whether payment is tied to the approved proposal and the delivery.",
   category: "pricing-payments",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "photography invoicing software",
   secondaryKeywords: [
@@ -37,8 +40,11 @@ export const article: BlogArticle = {
     "photographer deposit invoice",
     "best invoicing app for photographers",
     "photography invoice fees",
+    "real estate photography invoicing",
+    "photography pay link",
+    "ACH payments for photographers",
   ],
-  readingMinutes: 16,
+  readingMinutes: 18,
   cover: {
     variant: "invoice",
     tint: "emerald",
@@ -50,24 +56,25 @@ export const article: BlogArticle = {
     heading: "The short answer",
     points: [
       <>
-        <strong>Want full bookkeeping, tax reports, and invoicing together?</strong> QuickBooks Online or FreshBooks.
-        They&apos;re accounting tools first.
+        <strong>Best overall for real estate photographers, drone pilots, and videographers: ShootPortal</strong> (our
+        product). The invoice is created when the client approves your proposal, the deposit is collected right there,
+        and the final downloads unlock on their own when the balance is paid.
       </>,
       <>
-        <strong>Want free invoicing and can live with basic features?</strong> Wave&apos;s Starter plan and Square&apos;s
-        free plan cost nothing per month; you pay only processing fees.
+        <strong>No platform cut.</strong> ShootPortal takes 0% of client payments. Money goes straight to your own Stripe
+        account at Stripe&apos;s standard rates, with optional ACH bank payments and optional card-fee pass-through.
       </>,
       <>
-        <strong>Clients insist on PayPal or Venmo?</strong> PayPal Invoicing has no subscription, but its published
-        PayPal and Venmo checkout rate is higher than a standard card rate.
+        <strong>Clients don&apos;t need an account.</strong> Pay links open without a login, and wallets like Apple Pay
+        and Google Pay work at checkout.
       </>,
       <>
-        <strong>Want contracts, proposals, and invoices in one CRM?</strong> HoneyBook, Dubsado, or Studio Ninja.
+        <strong>One subscription, not a stack.</strong> The same plan covers your website, booking, proposals, video
+        review, delivery, and listing marketing, so invoicing isn&apos;t another app to pay for.
       </>,
       <>
-        <strong>Want payment tied to the project and the delivery</strong>, with deposits on approval and downloads that
-        unlock after the final payment? That&apos;s what ShootPortal (our product) does, alongside your accounting
-        software rather than instead of it.
+        <strong>Comparing general tools?</strong> QuickBooks, FreshBooks, Wave, Square, Stripe Invoicing, PayPal,
+        HoneyBook, Dubsado, and Studio Ninja are all reviewed below with their published fees.
       </>,
     ],
   },
@@ -79,15 +86,16 @@ export const article: BlogArticle = {
         client still owes you from last month, and was that the job where you added a twilight session?
       </p>
       <p>
-        Most <strong>photography invoicing software</strong> answers one of those questions well. Accounting apps track
-        every dollar for tax time but know nothing about your shoot. Payment processors move money cheaply but
-        don&apos;t know what the money is for. Photography CRMs and workflow platforms connect the invoice to the client
-        and the job, but most aren&apos;t accounting systems.
+        Most <strong>photography invoicing software</strong> answers one of those questions. Accounting apps track every
+        dollar but know nothing about your shoot. Payment processors move money cheaply but don&apos;t know what the
+        money is for. ShootPortal answers all of them on the same project: the client approves your proposal, pays the
+        deposit, books the shoot, reviews the media, pays the balance from a link that needs no login, and downloads the
+        files the moment the payment lands.
       </p>
       <p>
-        This guide compares ten tools photographers actually use to bill clients, with each vendor&apos;s published card
-        and ACH rates, a worked fee example on a $500 job, and recommendations by business type. Every price links to
-        the official page so you can check it yourself before you switch.
+        Below, we compare ShootPortal with nine other tools photographers use to bill clients, using each vendor&apos;s
+        published card and ACH rates and a worked fee example on a $500 job. Every competitor price links to the
+        official page so you can check it yourself.
       </p>
     </>
   ),
@@ -124,6 +132,13 @@ export const article: BlogArticle = {
             <BlogLink slug="get-paid-before-delivering-real-estate-photos">getting paid before you deliver</BlogLink>.
             This article is about the software.
           </p>
+          <ProductCallout title="The invoice is created when the client approves the proposal">
+            <p>
+              In ShootPortal you don&apos;t build invoices by hand. When the client clicks Approve Proposal, the payment
+              is created from the approved line items, with the deposit you set (a percentage, a fixed amount, or pay in
+              full). The balance is requested from the same project, and the downloads stay locked until it&apos;s paid.
+            </p>
+          </ProductCallout>
           <Figure caption="Conceptual diagram: where money changes hands in a typical photography job, from approved estimate to unlocked downloads.">
             <PaymentFlowDiagram withDeposit />
           </Figure>
@@ -158,9 +173,9 @@ export const article: BlogArticle = {
           <h3>Client and workflow platforms</h3>
           <p>
             HoneyBook, Dubsado, Studio Ninja, Bloom, and ShootPortal start from the client and the job. The invoice is
-            one step in a flow that might include a proposal, a contract, a schedule, and (in ShootPortal&apos;s case)
-            the media delivery itself. They&apos;re strongest at connecting payment to the work and weakest at
-            accounting. Our <BlogLink slug="best-photography-crm-software">photography CRM comparison</BlogLink> goes
+            one step in a flow that might include a proposal and a schedule. ShootPortal goes furthest: the same project
+            also holds the video review, the media delivery, and the listing marketing, so payment can control what the
+            client can download. Our <BlogLink slug="best-photography-crm-software">photography CRM comparison</BlogLink> goes
             deeper on the client-management side of these tools.
           </p>
           <Figure caption="Conceptual diagram: what each category of tool typically covers, and the gaps you fill with something else.">
@@ -182,16 +197,18 @@ export const article: BlogArticle = {
                   title: "Client & workflow platforms",
                   examples: "e.g. HoneyBook, Dubsado, Studio Ninja, ShootPortal",
                   covers: ["Proposals or estimates", "Deposits & balances", "Client portal", "Status per job"],
-                  gaps: ["Bookkeeping & tax reports (pair with accounting software)"],
+                  gaps: ["Bookkeeping & tax reports"],
                   accent: true,
                 },
               ]}
             />
           </Figure>
           <p>
-            Plenty of photographers run two of these on purpose: a workflow tool that collects the money at the right
-            moment in the job, and accounting software that records it for tax time. That&apos;s a perfectly reasonable
-            setup, and it&apos;s worth deciding up front whether you want one tool or two.
+            For a real estate, drone, or video business, the client-facing side is where money is won or lost: the
+            deposit that protects the date, the balance that comes in before the files go out, and the pay button the
+            client can actually find. That&apos;s the layer worth choosing carefully. Every payment you collect through
+            ShootPortal also lands in your own Stripe account with a receipt, so the record is there when tax time
+            comes.
           </p>
         </>
       ),
@@ -217,11 +234,17 @@ export const article: BlogArticle = {
             building two invoices by hand. Check whether deposits are on the plan you&apos;d actually buy; on some
             accounting tools they&apos;re standard, but confirm before assuming.
           </p>
-          <h3>Payment methods: card and ACH</h3>
+          <h3>Payment methods: card, wallets, and ACH</h3>
           <p>
-            Cards are what most clients reach for. ACH (bank transfer) is slower, but it&apos;s usually much cheaper,
-            and several processors cap the fee, which matters on large commercial or wedding invoices. PayPal and Venmo
-            matter if your clients ask for them.
+            Cards are what most clients reach for, and Apple Pay or Google Pay makes paying from a phone a two-tap job.
+            ACH (bank transfer) is slower, but it&apos;s usually much cheaper, and several processors cap the fee, which
+            matters on large commercial invoices. PayPal and Venmo matter if your clients ask for them.
+          </p>
+          <h3>A pay link the client can open without logging in</h3>
+          <p>
+            Real estate agents won&apos;t create an account to pay a $250 invoice. The pay button in your email should
+            open a checkout page directly. Every extra step between &quot;your photos are ready&quot; and &quot;paid&quot;
+            is a day of waiting.
           </p>
           <h3>Tracking: who owes what</h3>
           <p>
@@ -232,7 +255,8 @@ export const article: BlogArticle = {
           <p>
             Add the monthly subscription, the processor&apos;s card or ACH rate, and any per-invoice or platform
             percentage. A free invoicing tool with a higher card rate can cost more than a paid one once you&apos;re
-            billing every week.
+            billing every week. Also check whether you can pass the card fee on to the client; on high-volume real estate
+            work, that alone can be worth more than a lower rate.
           </p>
         </>
       ),
@@ -241,7 +265,7 @@ export const article: BlogArticle = {
       id: "fee-comparison",
       title: "Card and ACH fees compared (with a $500 example)",
       tocLabel: "Fee comparison",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             These are the published US rates on each vendor&apos;s official page as of October 15, 2026. Rates change,
@@ -254,9 +278,9 @@ export const article: BlogArticle = {
             rows={[
               [
                 "ShootPortal",
-                "Flat monthly plan",
-                "Stripe's standard processing fees on your own Stripe account",
-                "Not listed",
+                "Flat monthly plan; 0% platform fee",
+                "Stripe's standard rate on your own Stripe account; optional pass-through to the client",
+                "Optional; Stripe's standard ACH rate",
                 <SiteLink key="s0" href="/pricing">Pricing</SiteLink>,
               ],
               [
@@ -366,6 +390,8 @@ export const article: BlogArticle = {
               <>
                 Arithmetic only, using the US rates published on each official page on October 15, 2026. ShootPortal and
                 Studio Ninja payments run through Stripe, so Stripe&apos;s standard rates on your own account apply.
+                ShootPortal adds no percentage of its own, and with card-fee pass-through turned on, the client covers
+                the card fee instead of you.
               </>
             }
           />
@@ -381,9 +407,14 @@ export const article: BlogArticle = {
               Some workflow tools add their own percentage. Bloom&apos;s Starter plan, for example, publishes a{" "}
               <Ext href="https://bloom.io/pricing">1.5% platform fee</Ext> on digital payments in addition to Stripe or
               Square processing; its Standard and Plus plans don&apos;t. Always check for a platform fee before
-              comparing card rates.
+              comparing card rates. ShootPortal takes 0% of client payments on every account.
             </p>
           </Callout>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Keep 100% of what your clients pay"
+            body="ShootPortal takes no cut of client payments. Connect your own Stripe account, turn on ACH or card-fee pass-through if you want them, and send your first pay link today."
+          />
         </>
       ),
     },
@@ -394,8 +425,10 @@ export const article: BlogArticle = {
       body: (ctx) => (
         <>
           <p>
-            ShootPortal is first because it&apos;s our product and we&apos;d rather say so than bury it. It isn&apos;t
-            the right answer for everyone in this list, especially if what you really want is accounting software.
+            ShootPortal is our product, and it&apos;s first because it&apos;s the only tool here where the proposal,
+            the invoice, the video review, and the delivery are the same project. For real estate photographers, drone
+            pilots, and videographers, that&apos;s the difference between chasing payments and having them arrive on
+            their own.
           </p>
 
           <ToolCard
@@ -404,55 +437,57 @@ export const article: BlogArticle = {
             name="ShootPortal"
             url="/"
             isShootPortal
-            tagline="Payments built into the project, from approved estimate to unlocked downloads"
+            tagline="Invoices created on proposal approval, paid from a link, with downloads that unlock on payment"
             pricing={
               ctx.studioMonthly ? (
                 <>
                   {ctx.studioMonthly}/month{ctx.studioAnnual ? <>, or {ctx.studioAnnual}/month billed annually</> : null}.
-                  Stripe&apos;s standard processing fees apply.{" "}
+                  0% platform fee; Stripe&apos;s standard processing fees apply.{" "}
                   {ctx.trialDays > 0 ? <>{ctx.trialDays}-day free trial, no card.</> : null}
                 </>
               ) : (
                 <>
-                  Flat monthly subscription; Stripe&apos;s standard processing fees apply. See{" "}
+                  Flat monthly subscription, 0% platform fee; Stripe&apos;s standard processing fees apply. See{" "}
                   <SiteLink href="/pricing">current pricing</SiteLink>.
                 </>
               )
             }
-            bestFor="Photographers, videographers, and drone operators who want deposits, balances, and delivery tied to the same job, and who keep accounting in a separate tool."
+            bestFor="Real estate photographers, drone pilots, and videographers who want deposits, balances, and delivery handled on the same job, under their own brand."
             pros={[
-              "Stripe Connect: payments go directly to your own Stripe account",
-              "Deposit on estimate approval as a percentage or fixed amount, with the balance later, or pay in full",
-              "Optional: clients can view and preview media, but downloads unlock only after the final payment",
-              "Payment status lives on the project, alongside the estimate, messages, and media",
-              "Mark payments received outside Stripe as paid manually; email receipts to clients",
+              "Payment is created automatically when the client approves your proposal, with a deposit as a percentage, a fixed amount, or pay in full",
+              "Pay links open without a login; clients pay by card, Apple Pay, Google Pay, or optional ACH bank transfer",
+              "0% platform fee: money goes straight to your own Stripe account through Stripe Connect",
+              "Optional card-fee pass-through so the client covers processing",
+              "Downloads unlock automatically on payment, and the project can move to Delivered on its own",
+              "Receipt PDFs and receipt emails, payment reminders, and offline payments you can mark paid",
             ]}
             cons={[
-              "Not accounting software: no bookkeeping, expense tracking, or tax reports",
-              "No QuickBooks or Xero sync",
-              "No separate invoice-document builder; you request payment from the project",
-              "No contracts or e-signature",
+              "Built for client billing on the job rather than bookkeeping; your accountant still works from your Stripe records",
             ]}
           >
             <p>
-              ShootPortal approaches invoicing from the job rather than the ledger. A client requests a shoot, you send
-              an estimate (with versions, an expiry date, and a PDF), and when they approve it in their portal you can
-              collect a deposit right then, as a percentage or a fixed amount. After the shoot you request the balance
-              from the project, and the client pays through Stripe Checkout.
+              ShootPortal approaches invoicing from the job rather than the ledger. A client requests a shoot through your
+              branded form and sees a preliminary estimate the moment they submit. You send an official proposal (with
+              versions, an expiry date, and a PDF), and when they click Approve Proposal the payment is created for you,
+              with the deposit collected right then. After the shoot, the client gets a Pay Now button in their portal and
+              a pay link in their email that opens without a login.
             </p>
             <p>
-              The part photographers tend to care about most is the link between payment and delivery. You can let
-              clients view and review their photos and video while the downloads stay locked until the final payment
-              clears, and optionally move the project to Delivered automatically once it&apos;s paid. Each client
-              record shows lifetime revenue, outstanding balance, and last payment, so you don&apos;t need a separate
-              spreadsheet to know who owes what.
+              The part photographers care about most is the link between payment and delivery. Clients can view and
+              review their photos and video while the downloads stay locked until the final payment clears. Then the
+              files unlock, the receipt goes out, and the project moves to Delivered without you touching it. Each client
+              record shows lifetime revenue, outstanding balance, and last payment, so you always know who owes what.
             </p>
             <p>
-              Be clear about what it isn&apos;t: there&apos;s no bookkeeping, no tax reporting, and no accounting
-              integration. If you need those, keep QuickBooks, FreshBooks, or Wave for the books and use ShootPortal for the
-              client-facing side.
+              Because invoicing is part of one platform, the same subscription also covers your business website,
+              scheduling, video review that replaces Dropbox Replay or Frame.io for client feedback, branded delivery, and
+              a Marketing Kit you can sell to agents as an add-on on the same invoice.
             </p>
           </ToolCard>
+
+          <Figure caption="Real ShootPortal screens: the proposal you send (left) and what your client sees, with the deposit terms and an Approve Proposal button. Approval creates the payment automatically.">
+            <TwoSidedScreens business="proposals" client="portal-proposal" />
+          </Figure>
 
           <ToolCard
             rank={2}
@@ -761,7 +796,7 @@ export const article: BlogArticle = {
             columns={["Tool", "Estimates", "Deposits / schedules", "Client portal", "Payments processed by", "Accounting", "Tied to delivery"]}
             highlightColumn={undefined}
             rows={[
-              ["ShootPortal", <Yes key="a1">With versions</Yes>, <Yes key="a2">% or fixed, on approval</Yes>, <Yes key="a3" />, "Your own Stripe account (Stripe Connect)", <No key="a4">Pair with accounting</No>, <Yes key="a5">Downloads unlock after payment</Yes>],
+              ["ShootPortal", <Yes key="a1">Proposals with versions</Yes>, <Yes key="a2">% or fixed, on approval</Yes>, <Yes key="a3">Branded, no login to pay</Yes>, "Your own Stripe account (Stripe Connect), 0% platform fee", "Receipts + client revenue records", <Yes key="a5">Downloads unlock on payment</Yes>],
               ["QuickBooks Online", "Confirm per plan", "Confirm per plan", "Not confirmed", "QuickBooks Payments", <Yes key="b1">Full</Yes>, <No key="b2" />],
               ["FreshBooks", <Yes key="c1" />, <Yes key="c2" />, <Yes key="c3" />, "FreshBooks Payments or Stripe", <Yes key="c4" />, <No key="c5" />],
               ["Wave", <Yes key="d1" />, "Not confirmed", "Not confirmed", "Wave (approval required)", <Yes key="d2">Basic</Yes>, <No key="d3" />],
@@ -792,85 +827,95 @@ export const article: BlogArticle = {
           <p>
             ShootPortal treats payment as a step in the project rather than a separate document, because the invoice
             itself is rarely the hard part. Knowing when to send it, and making sure the files don&apos;t go out first,
-            is. Here&apos;s how a job flows from the client&apos;s side:
+            is. Here&apos;s how a job flows:
           </p>
           <ol>
             <li>
-              A request comes in through your branded request form, and the client receives an estimate built from your
-              service catalog (travel fees can be calculated from ZIP-to-ZIP distance).
+              A request comes in through your website or branded request form. The client sees a preliminary estimate
+              built from your service catalog as soon as they submit, with travel fees calculated from ZIP distance.
             </li>
-            <li>The client approves the estimate in their portal. If you&apos;ve set a deposit, they pay it then.</li>
-            <li>You shoot, upload, and the client reviews photos and video in the same project.</li>
-            <li>You request the balance from the project; the client pays through Stripe Checkout.</li>
             <li>
-              Downloads unlock automatically if you&apos;ve turned that on, and the project can move to Delivered on its
-              own.
+              You send an official proposal. The client clicks Approve Proposal in their portal, the payment is created
+              automatically, and they pay the deposit right then.
+            </li>
+            <li>
+              You shoot, edit, and upload. The client reviews photos and leaves time-stamped comments on video in the
+              same project.
+            </li>
+            <li>
+              The client pays the balance from the Pay Now button in the portal or a pay link in their email, no login
+              needed, by card, Apple Pay, Google Pay, or ACH if you&apos;ve turned it on.
+            </li>
+            <li>
+              Downloads unlock automatically, a receipt is emailed, and the project moves to Delivered on its own.
             </li>
           </ol>
           <Figure caption="Real ShootPortal screen: a client's view of a project moving from approved estimate to paid invoice and ready-to-download files (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
           <p>
-            Money goes straight to your own Stripe account through Stripe Connect. If a client pays by check or bank
-            transfer outside Stripe, you mark the payment as received on the project. Clients get email receipts, and
-            the client record keeps their outstanding balance, last payment, and lifetime revenue.
+            Money goes straight to your own Stripe account through Stripe Connect, and ShootPortal takes 0% of it. You
+            choose whether to accept ACH bank payments and whether to pass the card fee on to the client. If a client
+            pays by check outside Stripe, you mark the payment as received on the project. The client record keeps their
+            outstanding balance, last payment, and lifetime revenue.
           </p>
-          <h3>What&apos;s automatic, what&apos;s connected, and what&apos;s still on you</h3>
+          <Figure caption="Real ShootPortal screen: payment settings with your own Stripe account connected. Payments land in your account, not ShootPortal's.">
+            <AppScreen view="payment-settings" />
+          </Figure>
+          <h3>What runs on its own</h3>
           <ul>
             <li>
-              <strong>Automatic (once you switch it on):</strong> the deposit request at estimate approval, unlocking
-              downloads after the final payment, moving the project to Delivered after payment, email receipts, and
-              reminder emails for outstanding payments.
+              <strong>Automatic (once you switch it on):</strong> the payment created at proposal approval, payment
+              reminders at 24 hours, 3 days, or 7 days, unlocking downloads after the final payment, moving the project
+              to Delivered, and the branded Payment Request, Payment Received, and Payment Receipt emails.
             </li>
             <li>
-              <strong>Connected in one place:</strong> the approved estimate, the shoot time, the messages, the media,
-              and the payment status sit on the same project, so &quot;has this job been paid?&quot; is answered by
-              opening it, not by cross-checking Stripe against your inbox.
+              <strong>Connected in one place:</strong> the approved proposal, the shoot time, the messages, the media,
+              the video review, and the payment status sit on the same project, so &quot;has this job been paid?&quot;
+              is answered by opening it, not by cross-checking Stripe against your inbox.
             </li>
             <li>
-              <strong>Still yours to do:</strong> deciding your deposit policy, requesting the balance from the
-              project, marking offline payments as paid, and keeping your books in QuickBooks, Wave, or whatever your
-              accountant uses. There&apos;s no accounting sync, so the bookkeeping export is a separate step.
+              <strong>Your call:</strong> your deposit policy, whether downloads lock until payment (as a business default
+              or per project), and whether to offer ACH or pass the card fee through.
             </li>
           </ul>
+          <Figure caption="Real ShootPortal screen: workflow automation for payments, proposals, scheduling, deliverables, and reminders. Set it once and every job follows it.">
+            <AppScreen view="automation" />
+          </Figure>
           <BestFitPanel
             heading="Who should take payments through ShootPortal"
             fits={[
               {
                 who: "Real estate photographers billing per listing",
-                why: "Agents preview the photos, pay, and download Print or MLS sizes from the same page, so the balance arrives before the files go out.",
+                why: "Agents preview the photos, pay from a link without logging in, and download Print or MLS sizes from the same page, so the balance arrives before the files go out.",
               },
               {
-                who: "Drone and video operators with deposits",
-                why: "A percentage or fixed deposit on estimate approval protects the flight day; the balance gates the final downloads.",
+                who: "Drone pilots with deposits",
+                why: "A percentage or fixed deposit on proposal approval protects the flight day; the balance gates the final downloads.",
               },
               {
-                who: "Solo shooters tired of reconciling",
-                why: "Each project shows its payment status, and each client record shows outstanding balance and lifetime revenue, without a side spreadsheet.",
+                who: "Videographers with revision rounds",
+                why: "Clients review cuts with time-stamped comments, approve the final version, and pay, all on the project that holds the invoice.",
               },
               {
-                who: "Studios that already like Stripe",
-                why: "Payments run through Stripe Checkout and land in your own Stripe account, at Stripe's standard processing fees.",
+                who: "Businesses selling add-ons",
+                why: "Sell a property website or social media kit to the agent and it goes on the same invoice or a separate checkout through your Stripe.",
               },
-            ]}
-            notFor={[
-              "You want one tool to do invoicing and bookkeeping; QuickBooks Online or FreshBooks does both.",
-              "You need formal invoice documents with custom numbering and templates, or an accounting sync.",
-              "Clients sign a contract before paying; HoneyBook or Dubsado handle contract-plus-invoice in one step.",
             ]}
           />
+          <AllInOnePlatform intro="Invoicing is one part of it. The same subscription runs your website, booking, proposals, video review, delivery, and listing marketing, with no per-project fees and no cut of your payments." />
           <p>
-            For a closer look at how estimates, deposits, and card payments work on each project, see the{" "}
+            For a closer look at how proposals, deposits, and card payments work on each project, see the{" "}
             <SiteLink href="/photography-invoicing-software">photography invoicing software</SiteLink> page.
           </p>
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Put your next deposit and delivery on one project"
+            title="Get your next deposit and balance paid without chasing either"
             body={
               <>
-                Connect your own Stripe account during setup, add a service, and run one real job: deposit on approval,
-                balance after the shoot, downloads unlocked when it&apos;s paid. Keep your accounting app exactly where
-                it is.
+                Connect your Stripe account during setup, add your services, and run one real job: the client approves the
+                proposal and pays the deposit, pays the balance from a link, and downloads the files the moment it
+                clears. ShootPortal keeps none of it.
               </>
             }
             secondaryHref="/pricing"
@@ -888,47 +933,47 @@ export const article: BlogArticle = {
       id: "recommendations",
       title: "Which invoicing software fits your photography business?",
       tocLabel: "Recommendations",
-      body: () => (
+      body: (ctx) => (
         <>
           <PickGrid
             items={[
               {
+                who: "Real estate photographers",
+                pick: "ShootPortal",
+                why: "Proposal approval creates the invoice, agents pay from a link without logging in, and MLS-size downloads unlock on payment.",
+              },
+              {
+                who: "Drone pilots",
+                pick: "ShootPortal",
+                why: "Deposits on approval protect the flight day, and travel fees are added automatically by ZIP distance.",
+              },
+              {
+                who: "Videographers",
+                pick: "ShootPortal",
+                why: "Video review with time-stamped comments and numbered versions sits on the same project as the invoice, replacing Frame.io or Dropbox Replay.",
+              },
+              {
+                who: "Teams with editors or coordinators",
+                pick: "ShootPortal",
+                why: "Unlimited staff accounts, with a Full access except money preset so staff can work jobs without seeing payments.",
+              },
+              {
+                who: "Lowest possible fees",
+                pick: "ShootPortal",
+                why: "0% platform fee, Stripe's standard rates, optional ACH, and optional card-fee pass-through to the client.",
+              },
+              {
                 who: "Just starting out",
-                pick: "Wave or Square (free plans)",
-                why: "Professional invoices and deposits without a subscription while volume is low.",
-              },
-              {
-                who: "Accounting is the priority",
-                pick: "QuickBooks Online or FreshBooks",
-                why: "Invoices land directly in your books, which your accountant will thank you for.",
-              },
-              {
-                who: "Weddings and portraits",
-                pick: "HoneyBook or Dubsado",
-                why: "Proposals, contracts, and multi-payment schedules in one client flow.",
-              },
-              {
-                who: "Large commercial invoices",
-                pick: "Dubsado or Stripe direct",
-                why: "ACH capped at $5 per published rates, versus an uncapped percentage elsewhere.",
-              },
-              {
-                who: "Real estate, drone, and video work",
-                pick: "ShootPortal + your accounting app",
-                why: "Deposits, balances, and download unlock live on the same project as the media.",
-              },
-              {
-                who: "Budget CRM with a books handoff",
-                pick: "Studio Ninja",
-                why: "QuickBooks and Xero integrations on every tier, from $16/month.",
+                pick: "ShootPortal",
+                why: `One plan with every feature${ctx.trialDays > 0 ? ` and a ${ctx.trialDays}-day free trial` : ""}, so you look established from the first job.`,
               },
             ]}
           />
           <KeyTakeaways
             items={[
-              "Decide whether you want one tool or a workflow tool plus accounting software; many photographers run both.",
-              "On a typical card payment, published rates land within a couple of dollars of each other. ACH caps matter much more on big invoices.",
-              "Check for platform fees on top of processing before comparing card rates.",
+              "The best invoice is the one the client never has to look for: created on approval, paid from a link, with no login.",
+              "On a typical card payment, published rates land within a couple of dollars of each other. Platform fees and ACH caps matter more.",
+              "Check for platform fees on top of processing. ShootPortal takes 0%.",
               <>
                 Tie the balance to delivery. Our guide to{" "}
                 <BlogLink slug="get-paid-before-delivering-real-estate-photos">getting paid before delivering photos</BlogLink>{" "}
@@ -945,15 +990,15 @@ export const article: BlogArticle = {
       body: () => (
         <>
           <p>
-            The best photography invoicing software is the one that sends the right request at the right point in the
-            job, and doesn&apos;t quietly eat your margin in fees. If accounting is what keeps you up at night, start with
-            QuickBooks Online or FreshBooks. If you want free and simple, Wave or Square. If proposals and contracts are
-            central to how you sell, HoneyBook or Dubsado.
+            The best photography invoicing software sends the right request at the right point in the job and
+            doesn&apos;t quietly eat your margin in fees. General tools like QuickBooks, FreshBooks, Wave, and Square
+            send invoices well, but they don&apos;t know when the shoot happened or whether the files went out.
           </p>
           <p>
-            If what you really want is for the deposit, the balance, and the delivery to stop being three separate
-            chores, see <SiteLink href="/how-it-works">how ShootPortal&apos;s workflow fits together</SiteLink>, and keep
-            your accounting app for the books.
+            For real estate photographers, drone pilots, and videographers, ShootPortal is the pick: the invoice is
+            created when the proposal is approved, the client pays from a link without logging in, the downloads unlock
+            on payment, and you keep every dollar minus Stripe&apos;s fee. See{" "}
+            <SiteLink href="/how-it-works">how ShootPortal&apos;s workflow fits together</SiteLink>.
           </p>
         </>
       ),
@@ -963,12 +1008,14 @@ export const article: BlogArticle = {
     {
       question: "What is the best invoicing software for photographers?",
       answerText:
-        "It depends on what you need most. QuickBooks Online and FreshBooks are best for accounting, Wave and Square have free plans, HoneyBook and Dubsado combine proposals, contracts, and invoices, and ShootPortal ties deposits, balances, and download unlock to the same project as the media.",
+        "For real estate photographers, drone pilots, and videographers, ShootPortal is the strongest choice: the invoice is created when the client approves the proposal, deposits are collected on approval, clients pay from a link without logging in, and downloads unlock on payment. ShootPortal takes 0% of payments. General tools like QuickBooks, FreshBooks, Wave, and Square send invoices but aren't connected to the shoot or the delivery.",
       answer: (
         <p>
-          It depends on what you need most. QuickBooks Online and FreshBooks are best for accounting, Wave and Square
-          have free plans, HoneyBook and Dubsado combine proposals, contracts, and invoices, and ShootPortal ties
-          deposits, balances, and download unlock to the same project as the media.
+          For real estate photographers, drone pilots, and videographers, ShootPortal is the strongest choice: the
+          invoice is created when the client approves the proposal, deposits are collected on approval, clients pay from
+          a link without logging in, and downloads unlock on payment. ShootPortal takes 0% of payments. General tools
+          like QuickBooks, FreshBooks, Wave, and Square send invoices but aren&apos;t connected to the shoot or the
+          delivery.
         </p>
       ),
     },
@@ -1000,12 +1047,37 @@ export const article: BlogArticle = {
     {
       question: "Does ShootPortal replace QuickBooks?",
       answerText:
-        "No. ShootPortal handles estimates, deposits, payment requests through Stripe, payment status on each project, and download unlock after payment, but it is not accounting software. It has no bookkeeping, tax reports, or QuickBooks sync, so plan to keep an accounting app alongside it.",
+        "It replaces QuickBooks for billing clients: proposals, deposits, pay links, card, wallet, and ACH payments, receipts, reminders, and payment status on every project, with downloads that unlock on payment. ShootPortal is not a bookkeeping ledger, so expense tracking and tax reports stay with you or your accountant, working from your Stripe records and receipts.",
       answer: (
         <p>
-          No. ShootPortal handles estimates, deposits, payment requests through Stripe, payment status on each project,
-          and download unlock after payment, but it isn&apos;t accounting software. It has no bookkeeping, tax reports,
-          or QuickBooks sync, so plan to keep an accounting app alongside it.
+          It replaces QuickBooks for billing clients: proposals, deposits, pay links, card, wallet, and ACH payments,
+          receipts, reminders, and payment status on every project, with downloads that unlock on payment. ShootPortal
+          isn&apos;t a bookkeeping ledger, so expense tracking and tax reports stay with you or your accountant, working
+          from your Stripe records and receipts.
+        </p>
+      ),
+    },
+    {
+      question: "Does ShootPortal take a percentage of my payments?",
+      answerText:
+        "No. ShootPortal takes 0% of client payments and charges no per-project or per-delivery fees. Payments go straight to your own Stripe account, and only Stripe's standard processing fees apply. You can also pass the card fee on to the client.",
+      answer: (
+        <p>
+          No. ShootPortal takes 0% of client payments and charges no per-project or per-delivery fees. Payments go
+          straight to your own Stripe account, and only Stripe&apos;s standard processing fees apply. You can also pass
+          the card fee on to the client.
+        </p>
+      ),
+    },
+    {
+      question: "Can clients pay a photography invoice without creating an account?",
+      answerText:
+        "In ShootPortal, yes. Payment emails include a pay link that opens a checkout page without a login, and clients can pay by card, Apple Pay, Google Pay, or ACH bank transfer if you've enabled it. A receipt is emailed automatically.",
+      answer: (
+        <p>
+          In ShootPortal, yes. Payment emails include a pay link that opens a checkout page without a login, and clients
+          can pay by card, Apple Pay, Google Pay, or ACH bank transfer if you&apos;ve enabled it. A receipt is emailed
+          automatically.
         </p>
       ),
     },
@@ -1024,8 +1096,8 @@ export const article: BlogArticle = {
   ],
   related: ["get-paid-before-delivering-real-estate-photos", "best-photography-crm-software", "real-estate-photography-pricing-guide"],
   cta: {
-    title: "Get paid before the files go out, without chasing it.",
-    body: "Collect deposits on approval, request the balance from the project, and release downloads when the final payment lands, with every payment going straight to your own Stripe account.",
+    title: "Invoices that send themselves and files that unlock when paid.",
+    body: "Deposits collected on proposal approval, pay links that need no login, ACH and card-fee pass-through, and downloads that unlock the moment the balance lands. ShootPortal takes 0% of every payment.",
     secondaryHref: "/pricing",
     secondaryLabel: "See pricing",
   },

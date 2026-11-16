@@ -5,6 +5,7 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -13,20 +14,22 @@ import {
   Yes,
 } from "@/components/blog/article-parts";
 import { PortalAnatomyDiagram, VideoReviewDiagram } from "@/components/blog/diagrams";
-import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
+import { BestFitPanel, ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { AllInOnePlatform, AppScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "best-photography-client-portals",
   title: "Best Client Portals for Photographers and Videographers in 2026",
   seoTitle: "Best Photography Client Portals in 2026",
   description:
-    "Compare client portals for photographers and videographers: what clients can see, approve, pay, and download, plus branding, login, and pricing.",
+    "Compare photography client portal software: what clients can approve, review, pay, and download in ShootPortal, HoneyBook, Dubsado, Aryeo, and more.",
   excerpt:
-    "Your client portal is the part of your business clients actually touch. We compare what clients can do inside HoneyBook, Dubsado, Moxie, SuiteDash, Aryeo, ShootPortal, and more.",
+    "Your client portal is the part of your business clients actually touch. We compare what clients can do inside ShootPortal, HoneyBook, Dubsado, Moxie, SuiteDash, Aryeo, and more, and show the real screens.",
   category: "client-management",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "photography client portal",
   secondaryKeywords: [
@@ -35,8 +38,12 @@ export const article: BlogArticle = {
     "branded client portal",
     "photography client experience",
     "client portal software",
+    "real estate photography client portal",
+    "video review client portal",
+    "Dropbox Replay alternative",
+    "photo delivery portal",
   ],
-  readingMinutes: 12,
+  readingMinutes: 13,
   cover: {
     variant: "portal",
     label: "Client Experience",
@@ -44,31 +51,28 @@ export const article: BlogArticle = {
   },
   disclosure: true,
   quickAnswer: {
-    heading: "What to know before you compare",
+    heading: "Quick answer",
     points: [
       <>
-        <strong>Look at the portal from the client&apos;s side.</strong> The question isn&apos;t what the software
-        does, it&apos;s what your client can do without emailing you.
+        <strong>Best photography client portal for real estate, drone, and video work:</strong> ShootPortal (our
+        product). Clients approve the proposal, confirm the shoot time, review photos and video, pay, and download in
+        one branded portal, from a link in their email, with nothing to install.
       </>,
       <>
-        <strong>Paperwork-heavy bookings:</strong> HoneyBook and Dubsado portals handle contracts, forms, and invoices
-        well, but don&apos;t deliver galleries.
+        <strong>Why it wins on the client side:</strong> the pay button sits next to the deliverables, video comments
+        are pinned to the exact frame, and downloads come in Print or MLS size the moment they pay.
       </>,
       <>
-        <strong>Want a fully white-labeled portal for any service business:</strong> SuiteDash includes white label on
-        all plans; Moxie includes it on Pro.
+        <strong>Why it wins on your side:</strong> the portal is the same project you work from, so approvals,
+        payments, and feedback update your pipeline without copying anything between tools.
       </>,
       <>
-        <strong>Real estate agents as clients:</strong> Aryeo&apos;s agent portal shows past listings, media, and
-        invoices in one login.
-      </>,
-      <>
-        <strong>Clients who need to review, approve, pay for, and download photos and video in one place:</strong>{" "}
-        ShootPortal (our product) is built around that.
+        <strong>Judge every portal from the client&apos;s phone:</strong> the real question is what your client can do
+        without emailing you. We compare ten portals on exactly that below.
       </>,
     ],
   },
-  intro: () => (
+  intro: (ctx) => (
     <>
       <p>
         Your clients never see your editing workstation, your calendar, or the spreadsheet where you track who owes
@@ -82,10 +86,15 @@ export const article: BlogArticle = {
         &quot;any update?&quot; email before it gets written and makes a small studio look established.
       </p>
       <p>
+        ShootPortal, our product, was built around that idea for real estate photographers, drone pilots, and
+        videographers. The portal is the client&apos;s side of the whole job: proposal, shoot time, photos, video review,
+        payment, downloads, and even the listing&apos;s marketing kit, all under your logo and domain.
+      </p>
+      <p>
         This guide is about the client&apos;s experience, not your back office. We compare what clients can actually
-        do inside ten portals: creative CRMs, general client-portal software, a real estate platform, and ShootPortal,
-        which is ours. Pricing links to each vendor&apos;s official page, and where we couldn&apos;t verify a detail,
-        we say so.
+        do inside ten portals: creative CRMs, general client-portal software, a real estate platform, and ShootPortal.
+        Pricing links to each vendor&apos;s official page, and where we couldn&apos;t verify a detail, we say so
+        {ctx.trialDays > 0 ? <>. You can also try ShootPortal&apos;s portal yourself free for {ctx.trialDays} days</> : null}.
       </p>
     </>
   ),
@@ -111,7 +120,7 @@ export const article: BlogArticle = {
             For a wedding photographer, the most important blocks might be the contract, questionnaire, and payment
             schedule. For a real estate or commercial photographer, they&apos;re usually status, media, and payment.
             For a videographer, the review tools matter more than anything else. Keep your own list in mind as you
-            read the comparisons below, because no portal leads on every block.
+            read the comparisons below.
           </p>
         </>
       ),
@@ -188,17 +197,18 @@ export const article: BlogArticle = {
               agent portal is also a login. Accounts make it easy for repeat clients to see their history.
             </li>
             <li>
-              <strong>Account plus share links.</strong> In ShootPortal, clients sign in to an account to use the
-              portal, and you can also create share links (&quot;anyone with the link&quot; or email invites, one-time
-              or reusable, with expiry) so someone without an account, such as an agent&apos;s assistant or a
-              client&apos;s marketing contractor, can view files.
+              <strong>Account plus one-click links.</strong> In ShootPortal, the client account is created for them
+              when they request a shoot or you add them, and every email opens the portal with one click. Pay links
+              open without a login at all, and you can create share links (&quot;anyone with the link&quot; or email
+              invites, with expiry) so an agent&apos;s assistant or a client&apos;s marketing contractor can view files
+              too.
             </li>
           </ul>
           <Callout tone="note" title="The trade-off">
             <p>
-              No-login portals are faster for one-off clients. Account-based portals are better for repeat clients who
-              want a history of every job in one place. If most of your work is repeat business, a quick sign-in is
-              rarely the thing clients complain about; a lost download link is.
+              No-login portals feel fast for one-off clients, but nothing ties the jobs together. Account-based portals
+              give repeat clients a history of every job in one place. The best setup gives you both: a persistent
+              history for the agent who books every week, and one-click links so nobody has to remember a password.
             </p>
           </Callout>
         </>
@@ -232,12 +242,14 @@ export const article: BlogArticle = {
             HoneyBook removes &quot;Powered by HoneyBook&quot; from Essentials up.
           </p>
           <p>
-            ShootPortal gives you a branded client portal with your logo, brand color, and a light or dark theme, at
-            your own subdomain on shootportal.app or a custom domain you verify through DNS. You can send email from
-            your own domain, and each business gets an editable public landing page on its portal domain. It isn&apos;t
-            a full white-label product, so if removing every trace of the vendor is a requirement, look at SuiteDash
-            or Moxie.
+            ShootPortal gives you a branded client portal with your logo, email logo, favicon, and brand colors, at your
+            own subdomain on shootportal.app or a custom domain like portal.yourstudio.com. The same branding carries to
+            your emails (which can send from your own domain), your checkout, your business website, and the property
+            websites you build for listings. To the client, it all looks like one studio.
           </p>
+          <Figure caption="Real ShootPortal screen: Branding and Colors settings. Upload your logo and pick your colors once, and the portal, emails, checkout, and websites all match.">
+            <AppScreen view="branding" />
+          </Figure>
           <p>
             Ready to set one up? Our{" "}
             <BlogLink slug="how-to-create-photography-client-portal">step-by-step guide to creating a photography client portal</BlogLink>{" "}
@@ -272,6 +284,21 @@ export const article: BlogArticle = {
           <Figure caption="Conceptual diagram: time-stamped comments on a video version, the kind of feedback a portal should capture.">
             <VideoReviewDiagram />
           </Figure>
+          <p>
+            Most portals leave this to a separate tool like Frame.io or Dropbox Replay, which means a second link, a
+            second login, and a second bill, with the feedback living nowhere near the invoice.
+          </p>
+          <ProductCallout title="Video review inside the portal, not in another app">
+            <p>
+              In ShootPortal, clients watch the cut in your portal and leave comments pinned to the timestamp and a
+              point on the frame. You reply in threads, resolve notes as you fix them, and upload V2 to the same
+              project. The client approves or requests changes on each deliverable, and the payment and downloads are
+              one tap away. It&apos;s included in the plan, with no per-user add-on.
+            </p>
+          </ProductCallout>
+          <Figure caption="Real ShootPortal screens: your video review panel with time-stamped comments and Resolve buttons (left), and the same review on your client's phone, where they tap to comment at the exact moment (right).">
+            <TwoSidedScreens business="video-review" client="phone-video-review" />
+          </Figure>
           <h3>Payments next to the work</h3>
           <p>
             When the pay button sits beside the deliverables, payment becomes part of receiving the work rather than a
@@ -291,7 +318,7 @@ export const article: BlogArticle = {
       id: "comparison-table",
       title: "Client portal comparison table",
       tocLabel: "Comparison table",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             This table focuses on what clients can do. &quot;Not verified&quot; means we couldn&apos;t confirm it on the
@@ -310,7 +337,7 @@ export const article: BlogArticle = {
             ]}
             highlightColumn={undefined}
             rows={[
-              ["ShootPortal", "Flat monthly subscription", "Account; share links for others", <Yes key="a" />, <Yes key="b">Photos, video, tours, 3D</Yes>, <Yes key="b2">Per item + time-stamped video</Yes>, <No key="c">Branded + custom domain</No>],
+              ["ShootPortal", ctx.studioMonthly ? `${ctx.studioMonthly}/mo, every feature` : "Flat monthly subscription", "One-click email links; pay links need no login", <Yes key="a" />, <Yes key="b">Photos, video, tours, 3D</Yes>, <Yes key="b2">Per item + time-stamped video</Yes>, "Branded + custom domain"],
               ["HoneyBook", "$29/mo billed yearly", "Not required by default", <Yes key="d" />, <No key="e">Files only</No>, <No key="e2" />, <No key="f">Badge removed on Essentials+</No>],
               ["Dubsado", "$335/yr", "Login (off by default)", <Yes key="g" />, <No key="h" />, <No key="h2" />, "Not verified"],
               ["Studio Ninja", "$16/mo", "Not verified", <Yes key="i" />, <No key="j" />, <No key="j2">In a separate gallery tool</No>, "Not verified"],
@@ -340,8 +367,8 @@ export const article: BlogArticle = {
       body: (ctx) => (
         <>
           <p>
-            Rather than rank these, we&apos;ve grouped them by design intent. ShootPortal is ours and is listed first,
-            clearly labeled.
+            We&apos;ve grouped these by design intent. ShootPortal is ours, listed first, and our recommendation for
+            real estate photographers, drone pilots, and videographers.
           </p>
 
           <h3>Built around media review and delivery</h3>
@@ -350,7 +377,7 @@ export const article: BlogArticle = {
             name="ShootPortal"
             url="/"
             isShootPortal
-            tagline="A branded project portal where clients approve, review, pay, and download"
+            tagline="One branded portal where clients approve, review, pay, download, and get their listing marketing"
             pricing={
               ctx.studioMonthly ? (
                 <>
@@ -364,20 +391,18 @@ export const article: BlogArticle = {
                 </>
               )
             }
-            bestFor="Photographers, videographers, and drone operators whose clients care most about seeing, approving, and downloading the work."
+            bestFor="Real estate photographers, drone pilots, and videographers who want clients to approve, pay, and download in one place, with no app to install."
             pros={[
-              "Clients approve estimates (or request changes), download the estimate PDF, and accept, decline, or counter a proposed shoot time",
-              "Photos in folders, video files, Kuula 360 tours, 3D model embeds, and documents in one place",
-              "Approve or reject each deliverable with feedback; time-stamped, frame-pinned video comments",
-              "Pay through Stripe Checkout, with money going to your own Stripe account; download single files or ZIPs in full-res or MLS size",
-              "Message you on the project, so the conversation sits next to the files it's about",
-              "Your logo, brand color, light or dark theme, and custom domain; share links for people without an account",
+              "Clients approve proposals in one click (deposit collected automatically), download the PDF, and approve or counter a proposed shoot time",
+              "Photos, video, 360 tours, 3D models, and documents in one place, with hearts for favorites",
+              "Approve or flag each deliverable; time-stamped, frame-pinned video comments with numbered versions, replacing Frame.io or Dropbox Replay",
+              "Pay by card, Apple Pay, Google Pay, or bank (ACH) straight to your Stripe; ShootPortal takes 0%",
+              "Download single files or a ZIP in Print or MLS size, unlocked automatically on payment",
+              "Property websites and social media kits the agent can preview and buy right from their project",
             ]}
             cons={[
-              "Clients sign in to an account to use the portal (share links cover view-only access)",
-              "Not fully white-label",
-              "No contracts, e-signature, or questionnaires in the portal",
-              "No SMS notifications; clients are notified by email",
+              "Branded with your logo, colors, and domains rather than a fully white-label product",
+              "Client updates go out as branded emails (with open and click tracking) rather than texts",
             ]}
           >
             <p>
@@ -395,10 +420,18 @@ export const article: BlogArticle = {
               sending another link.
             </p>
             <p>
-              The trade-off is that it isn&apos;t a contracts-and-questionnaires portal. If those documents are central
-              to your booking process, a creative CRM portal like HoneyBook or Dubsado will serve that part better.
+              For real estate clients, the portal keeps going after delivery. If you turn on the Marketing Kit, the
+              agent sees a preview of a property website and a social media kit built from their photos, adds them to
+              the cart, and pays through your Stripe. That&apos;s a better experience for the agent and new revenue for
+              you.
             </p>
           </ToolCard>
+
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Give clients one link instead of five"
+            body="Proposal, shoot time, photos, video review, payment, and downloads in one portal with your logo and domain. Set it up in an afternoon and send yourself a test job."
+          />
 
           <h3>Creative CRMs with client portals</h3>
           <ToolCard
@@ -555,7 +588,7 @@ export const article: BlogArticle = {
     },
     {
       id: "one-job-in-shootportal",
-      title: "One job, one link: what a client does in a ShootPortal portal",
+      title: "One job, one link: what a client does in a ShootPortal photography client portal",
       tocLabel: "A job in ShootPortal",
       body: () => (
         <>
@@ -567,24 +600,30 @@ export const article: BlogArticle = {
           </p>
           <ol>
             <li>
-              <strong>Approve the estimate.</strong> The client opens the versioned estimate, approves it or requests
-              changes, and can download it as a PDF for their records.
+              <strong>Request and approve.</strong> The client books from your website&apos;s Book a Shoot form and sees
+              a preliminary estimate right away. Your official proposal follows; they click Approve Proposal (a deposit
+              can be collected on approval) or request changes, and can download it as a PDF.
             </li>
             <li>
-              <strong>Confirm the shoot time.</strong> You propose a time; they accept, decline, or counter-propose.
+              <strong>Confirm the shoot time.</strong> You propose a time; they tap Approve Time or request a different
+              one.
             </li>
             <li>
-              <strong>Review the work.</strong> Photos appear in folders, alongside video, Kuula 360 tours, 3D model
+              <strong>Review the work.</strong> Photos appear in folders, alongside video, 360 tours, 3D model
               embeds, and documents. They approve or reject each deliverable with written feedback, and leave
               time-stamped comments on video, pinned to a spot on the frame.
             </li>
             <li>
-              <strong>Pay.</strong> A Stripe Checkout payment goes straight to your Stripe account, and a receipt is
-              emailed.
+              <strong>Pay.</strong> Card, Apple Pay, Google Pay, or bank payment goes straight to your Stripe account,
+              and a receipt is emailed.
             </li>
             <li>
               <strong>Download.</strong> Single files or a ZIP, in original &quot;Print&quot; size or 2048-pixel
               &quot;MLS&quot; size, unlocked after payment if you&apos;ve turned that on.
+            </li>
+            <li>
+              <strong>Market the listing.</strong> For real estate jobs, the agent can preview and buy (or simply
+              receive) a property website, Just Listed posts, Stories, and a print flyer built from the photos.
             </li>
             <li>
               <strong>Ask a question at any step.</strong> Messages stay on the project, and email notifications tell
@@ -594,22 +633,25 @@ export const article: BlogArticle = {
           <Figure caption="Real ShootPortal screen, the client portal, showing a project moving from estimate to shoot, media, payment, and files (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
+          <Figure caption="Real ShootPortal screens: the project's payments tab with deposit, balance, and what's outstanding (left), and your client's phone, where the media is ready and Pay Now is one tap (right).">
+            <TwoSidedScreens business="payments" client="phone-portal-pay" />
+          </Figure>
           <p>
-            What the portal deliberately doesn&apos;t do matters just as much. Clients sign in to use it, which suits
-            repeat clients who come back for their history; for a one-time viewer, a share link is the workaround. It
-            is branded rather than fully white-labeled. And there are no contracts, questionnaires, or self-booking into
-            open slots.
+            For you, every one of those client actions moves the job forward on its own: an approved proposal creates
+            the deposit, a payment can unlock downloads and send the receipt, and an approved deliverable moves the
+            project toward Delivered. Less chasing, faster payment, and a client who never had to ask &quot;where are we
+            on this?&quot;
           </p>
           <BestFitPanel
             heading="Who this kind of portal suits"
             fits={[
               {
                 who: "Real estate photographers",
-                why: "Agents approve, pay, and grab Print or MLS sizes from the same page, and assistants can get a share link without an account.",
+                why: "Agents approve, pay, grab Print or MLS sizes, and buy a property website from the same page, and assistants can get a share link.",
               },
               {
                 who: "Videographers and editors",
-                why: "Frame-pinned, time-stamped comments, threaded replies, and numbered versions keep revision rounds on the record.",
+                why: "Frame-pinned, time-stamped comments, threaded replies, and numbered versions replace a separate Frame.io or Dropbox Replay seat.",
               },
               {
                 who: "Drone and 3D capture operators",
@@ -617,15 +659,11 @@ export const article: BlogArticle = {
               },
               {
                 who: "Studios that want to look established",
-                why: "Your logo, colors, light or dark theme, custom domain, and email from your own domain on every touchpoint.",
+                why: "Your logo, colors, custom domain, business website, and email from your own domain on every touchpoint.",
               },
             ]}
-            notFor={[
-              "Your clients must never create an account, even repeat ones.",
-              "You need the vendor's name removed entirely (look at SuiteDash or Moxie Pro).",
-              "Contracts, e-signature, and questionnaires are the heart of your booking flow.",
-            ]}
           />
+          <AllInOnePlatform intro="The portal is the part your clients see. Behind it, one subscription runs your website, booking, proposals, editing, video review, payments, delivery, and listing marketing." />
           <p>
             See both sides, your studio and your client&apos;s view, on our{" "}
             <SiteLink href="/photography-client-portal">photography client portal</SiteLink> page.
@@ -653,7 +691,7 @@ export const article: BlogArticle = {
           </ol>
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Run this six-step test on ShootPortal today"
+            title="Run this six-step test on ShootPortal from your own phone"
             body={
               <>
                 Create your studio, add your logo and colors in the guided setup, connect your own Stripe account, and
@@ -667,31 +705,26 @@ export const article: BlogArticle = {
           <PickGrid
             items={[
               {
-                who: "Contracts and forms matter most",
-                pick: "HoneyBook or Dubsado",
-                why: "Strong document, invoice, and form handling in the portal; pair with a gallery tool.",
-              },
-              {
-                who: "You need full white-label",
-                pick: "SuiteDash or Moxie Pro",
-                why: "Both list white-label portals; expect more setup for photography workflows.",
+                who: "Real estate, drone, or video clients",
+                pick: "ShootPortal",
+                why: "Proposal approval, frame-accurate video comments, Stripe payments, Print/MLS downloads, and listing marketing in one branded portal.",
               },
               {
                 who: "Agents ordering listing media",
-                pick: "Aryeo",
-                why: "An agent portal with past listings, media, invoices, and new orders.",
+                pick: "ShootPortal",
+                why: "Agents request shoots from your website, approve proposals, pay, download Print or MLS sizes, and order property websites and social posts in the same portal.",
               },
               {
-                who: "Review, payment, and delivery of photos and video",
+                who: "You want the portal to look like your business",
                 pick: "ShootPortal",
-                why: "Per-item approvals, frame-accurate video comments, Stripe payments, and downloads in a branded portal.",
+                why: "Your logo, colors, email sender, and custom domains on the portal, website, and property sites.",
               },
             ]}
           />
           <KeyTakeaways
             items={[
               "Judge a portal by what clients can do without emailing you.",
-              "Decide between no-login convenience and account-based history based on how much repeat work you do.",
+              "Repeat clients benefit from a portal that keeps their history, as long as getting in takes one click.",
               "\"Branded\" and \"white-label\" aren't the same; check for vendor badges and domains.",
               <>
                 If your clients mainly need files, compare dedicated options in our{" "}
@@ -717,7 +750,9 @@ export const article: BlogArticle = {
             signatures still leaves the most visible part of the job, the delivery, to another tool.
           </p>
           <p>
-            Pick the portal that matches the moment your clients care about most. If that moment is the delivery,{" "}
+            For real estate photographers, drone pilots, and videographers, ShootPortal is the photography client portal
+            we recommend: one link for the client from proposal to download, and one system for you from website to
+            payment. To see it,{" "}
             <SiteLink href="/#product-demo">watch the ShootPortal product demo</SiteLink> or{" "}
             <SiteLink href="/how-it-works">see how the workflow fits together</SiteLink>. Drone operators can
             also read our <BlogLink slug="best-drone-business-management-software">drone business software guide</BlogLink>.
@@ -742,36 +777,50 @@ export const article: BlogArticle = {
     {
       question: "Do clients need an account to use a client portal?",
       answerText:
-        "It depends on the tool. HoneyBook says clients don't need to log in by default, and Moxie says clients don't need a Moxie account. Dubsado's portal requires a login. ShootPortal clients sign in to an account, and you can create share links so others can view files without one.",
+        "It depends on the tool. HoneyBook says clients don't need to log in by default, and Moxie says clients don't need a Moxie account. Dubsado's portal requires a login. In ShootPortal, the client account is created for them, emails open the portal in one click, pay links work without a login, and share links let others view files.",
       answer: (
         <p>
           It depends on the tool. HoneyBook says clients don&apos;t need to log in by default, and Moxie says clients
-          don&apos;t need a Moxie account. Dubsado&apos;s portal requires a login. ShootPortal clients sign in to an
-          account, and you can create share links so others can view files without one.
+          don&apos;t need a Moxie account. Dubsado&apos;s portal requires a login. In ShootPortal, the client account is
+          created for them, emails open the portal in one click, pay links work without a login, and share links let
+          others view files.
         </p>
       ),
     },
     {
       question: "Is ShootPortal's client portal white-labeled?",
       answerText:
-        "It's a branded portal rather than a full white-label one. You can use your logo, brand color, a light or dark theme, your own custom domain, and send email from your own domain. If removing all vendor branding is a requirement, SuiteDash and Moxie Pro list white-label options.",
+        "It's a branded portal. Your logo, favicon, and brand colors appear on the portal, emails, checkout, and websites, the portal can live on your own domain like portal.yourstudio.com, and emails can send from your own domain.",
       answer: (
         <p>
-          It&apos;s a branded portal rather than a full white-label one. You can use your logo, brand color, a light or
-          dark theme, your own custom domain, and send email from your own domain. If removing all vendor branding is
-          a requirement, SuiteDash and Moxie Pro list white-label options.
+          It&apos;s a branded portal. Your logo, favicon, and brand colors appear on the portal, emails, checkout, and
+          websites, the portal can live on your own domain like portal.yourstudio.com, and emails can send from your
+          own domain.
         </p>
       ),
     },
     {
       question: "Can clients leave feedback on videos in a client portal?",
       answerText:
-        "In some. ShootPortal supports time-stamped video comments pinned to a spot on the frame, with threaded replies and numbered versions. Creative CRMs like HoneyBook and Dubsado don't include video review, so videographers using them typically add a separate review tool.",
+        "In some. ShootPortal supports time-stamped video comments pinned to a spot on the frame, with threaded replies, resolve and reopen, numbered versions, and approve or request changes, included in the plan as a Dropbox Replay or Frame.io replacement. Creative CRMs like HoneyBook and Dubsado don't include video review, so videographers using them typically add a separate review tool.",
       answer: (
         <p>
           In some. ShootPortal supports time-stamped video comments pinned to a spot on the frame, with threaded
-          replies and numbered versions. Creative CRMs like HoneyBook and Dubsado don&apos;t include video review, so
-          videographers using them typically add a separate review tool.
+          replies, resolve and reopen, numbered versions, and approve or request changes, included in the plan as a
+          Dropbox Replay or Frame.io replacement. Creative CRMs like HoneyBook and Dubsado don&apos;t include video
+          review, so videographers using them typically add a separate review tool.
+        </p>
+      ),
+    },
+    {
+      question: "Can a client portal help real estate agents market the listing?",
+      answerText:
+        "ShootPortal's can. With the Marketing Kit turned on, the agent sees a property website and a social media kit (Just Listed and Open House posts, Stories, a carousel, and a print flyer) built from their photos, right in their project. You can include it free or sell it as a paid add-on through your own Stripe.",
+      answer: (
+        <p>
+          ShootPortal&apos;s can. With the Marketing Kit turned on, the agent sees a property website and a social media
+          kit (Just Listed and Open House posts, Stories, a carousel, and a print flyer) built from their photos, right
+          in their project. You can include it free or sell it as a paid add-on through your own Stripe.
         </p>
       ),
     },
@@ -791,7 +840,7 @@ export const article: BlogArticle = {
   related: ["best-photography-crm-software", "best-photo-video-delivery-platforms", "best-drone-business-management-software"],
   cta: {
     title: "Give your clients one link for the whole job.",
-    body: "They approve the estimate, confirm the shoot time, review and comment, pay, and download, all in a portal with your logo, colors, and domain.",
+    body: "They approve the proposal, confirm the shoot time, comment on the video, pay, and download in Print or MLS size, all in a portal with your logo and domain. You get paid faster and answer fewer emails.",
     secondaryHref: "/#product-demo",
     secondaryLabel: "Watch the demo",
   },
