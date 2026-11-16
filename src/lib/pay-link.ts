@@ -13,12 +13,16 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SIGNATURE_HEX_LENGTH = 32;
 
+/** Configured secrets in signing order: the first signs, any of them verifies. */
+function candidateSecrets(): string[] {
+  const all = [process.env.PAY_LINK_SECRET, process.env.PLATFORM_SESSION_SECRET, process.env.CRON_SECRET]
+    .map((s) => s?.trim() || "")
+    .filter(Boolean);
+  return [...new Set(all)];
+}
+
 function signingSecret(): string {
-  const secret =
-    process.env.PAY_LINK_SECRET?.trim() ||
-    process.env.PLATFORM_SESSION_SECRET?.trim() ||
-    process.env.CRON_SECRET?.trim() ||
-    "";
+  const secret = candidateSecrets()[0];
   if (!secret) {
     throw new Error("PAY_LINK_SECRET (or PLATFORM_SESSION_SECRET) is required to sign pay links.");
   }
@@ -57,15 +61,14 @@ export function parsePayLinkToken(token: string | null | undefined): { paymentId
 export function verifyPayLinkToken(token: string, businessId: string | null | undefined): boolean {
   const parsed = parsePayLinkToken(token);
   if (!parsed || !businessId) return false;
-  let expected: string;
-  try {
-    expected = signature(parsed.paymentId, businessId);
-  } catch {
-    return false;
-  }
+  // Any configured secret verifies, so a link stays valid when it was signed by a deployment
+  // whose first secret differs (a Preview without PAY_LINK_SECRET, which falls back to
+  // PLATFORM_SESSION_SECRET) or by this one before PAY_LINK_SECRET was set or rotated.
   const a = Buffer.from(parsed.sig, "utf8");
-  const b = Buffer.from(expected, "utf8");
-  return a.length === b.length && timingSafeEqual(a, b);
+  return candidateSecrets().some((secret) => {
+    const b = Buffer.from(signature(parsed.paymentId, businessId, secret), "utf8");
+    return a.length === b.length && timingSafeEqual(a, b);
+  });
 }
 
 export function payLinkPath(token: string): string {

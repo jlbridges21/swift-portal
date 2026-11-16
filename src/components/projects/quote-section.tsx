@@ -20,14 +20,7 @@ import {
   isPreliminaryQuote,
   ARCHIVED_QUOTE_NOTE,
 } from "@/lib/quote-display";
-import {
-  clientPayChoice,
-  paidCentsForQuote,
-  quoteCollectsPaymentOnApproval,
-  quotePaymentTermsText,
-  resolveQuoteDepositTerms,
-} from "@/lib/payment-quote";
-import { CheckoutChoiceButtons, isOutstandingPayment } from "@/components/projects/payments-section";
+import { quoteCollectsPaymentOnApproval, quotePaymentTermsText } from "@/lib/payment-quote";
 import type { ApprovalPaymentResult } from "@/lib/approval-payment";
 import { formatCurrency } from "@/lib/utils";
 import type { DepositMode } from "@/lib/workflow-settings";
@@ -95,12 +88,8 @@ interface QuoteSectionProps {
    * (Payment automation setting). The proposal's own terms can still say "invoice later".
    */
   payOnApproval?: boolean;
-  /** Client: deposit proposals may be paid in full instead. */
-  allowClientPayInFull?: boolean;
-  /** Client: payments are visible on this project, so payment can be offered in the proposal. */
+  /** Client: payments are visible on this project (the approval invoice can be retried here). */
   paymentsVisible?: boolean;
-  /** Client: downloads are still locked (checkout announces the unlock after paying). */
-  downloadsLocked?: boolean;
   /** Client: a proposal changed here (approved). Lets the page update without a reload. */
   onQuoteChange?: (quote: ProjectQuote) => void;
   /** Client: the approval invoice, as soon as the server returns it. */
@@ -175,9 +164,7 @@ export function QuoteSection({
   onHistoryOpenChange,
   proposalExpiration,
   payOnApproval = true,
-  allowClientPayInFull = false,
   paymentsVisible = false,
-  downloadsLocked = false,
   onQuoteChange,
   onPaymentChange,
 }: QuoteSectionProps) {
@@ -191,8 +178,6 @@ export function QuoteSection({
   const [requestingChanges, setRequestingChanges] = useState(false);
   const [showChangeForm, setShowChangeForm] = useState(false);
   const [converting, setConverting] = useState(false);
-  /** Client: approval invoice id whose checkout should open on its own (right after approving). */
-  const [autoCheckoutId, setAutoCheckoutId] = useState<string | null>(null);
   /** Client: approval saved but payment couldn't be opened; shown beside Pay Now. */
   const [payNotice, setPayNotice] = useState<string | null>(null);
   /** Client: approval invoice the server returned, until the page's payment list includes it. */
@@ -231,6 +216,54 @@ export function QuoteSection({
   }, [initialQuotes]);
 
   const asAdmin = isAdmin && !previewMode;
+
+  // Business: a sent proposal is waiting on the client. Check its status quietly (every 20s
+  // while this tab is visible, and when the tab regains focus) and refresh the page data when
+  // the client approves or asks for changes, so the approval and its invoice show up without a
+  // manual reload. One small indexed read; stops as soon as nothing is awaiting the client.
+  const awaitingClientKey = asAdmin
+    ? quotes
+        .filter((q) => q.status === "sent" && !isPreliminaryQuote(q))
+        .map((q) => q.id)
+        .join(",")
+    : "";
+  useEffect(() => {
+    if (!awaitingClientKey) return;
+    const waiting = new Set(awaitingClientKey.split(","));
+    let inFlight = false;
+    let done = false;
+    async function check() {
+      if (done || inFlight || document.visibilityState !== "visible") return;
+      inFlight = true;
+      try {
+        const res = await fetch(`/api/quotes?project_id=${encodeURIComponent(projectId)}`, {
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const rows = (await res.json()) as ProjectQuote[];
+        if (rows.some((r) => waiting.has(r.id) && r.status !== "sent")) {
+          done = true;
+          router.refresh();
+        }
+      } catch {
+        // Offline or navigating away: try again on the next tick.
+      } finally {
+        inFlight = false;
+      }
+    }
+    const timer = window.setInterval(check, 20_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [awaitingClientKey, projectId, router]);
   const activeDisplay = getProjectActiveQuote(quotes, asAdmin ? "admin" : "client");
   const preliminaryQuote = getLatestPreliminaryQuote(quotes);
 
@@ -716,6 +749,20 @@ export function QuoteSection({
     }
   }
 
+  /**
+   * Client: bring the one place to pay into view (the Payment due panel, else the Payments
+   * list) and outline it briefly, so the next step is obvious without a reload or a pop-up.
+   */
+  function revealPayment() {
+    window.setTimeout(() => {
+      const target = document.getElementById("pay-now") ?? document.getElementById("payments");
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.classList.add("ring-2", "ring-accent", "ring-offset-2");
+      window.setTimeout(() => target.classList.remove("ring-2", "ring-accent", "ring-offset-2"), 2400);
+    }, 150);
+  }
+
   /** Client: what approving did about payment, and the next step on screen. */
   function applyApprovalPayment(result: ApprovalPaymentResult | null | undefined, wasRetry: boolean) {
     if (!result) return;
@@ -723,9 +770,8 @@ export function QuoteSection({
       setPayNotice(null);
       setApprovalPayment(result.payment);
       onPaymentChange?.(result.payment);
-      // Opens the embedded checkout as soon as the payment buttons render.
-      setAutoCheckoutId(result.payment.id);
-      toast.success(wasRetry ? "Your invoice is ready." : "Proposal approved. Your invoice is ready to pay.");
+      revealPayment();
+      toast.success(wasRetry ? "Your payment is ready." : "Proposal approved. Your payment is ready.");
     } else if (result.status === "unavailable") {
       setPayNotice(result.message);
       toast.warning(wasRetry ? result.message : `Proposal approved. ${result.message}`);
@@ -959,96 +1005,35 @@ export function QuoteSection({
   }
 
   /**
-   * Client, approved proposal: the way to pay, right here. The approval invoice comes
-   * from the page's payments, or straight from the approve response before the page has it.
+   * Client, approved proposal. Paying happens in one place (the Payment due panel at the top
+   * of Estimate & Pay, or the Payments list), never a second set of pay buttons here. The one
+   * exception: payment was expected but no invoice exists yet (Stripe hiccup, tab closed
+   * mid-approval). Pay Now asks the server to make it available. Idempotent — never a second invoice.
    */
   function renderApprovedPayment(quote: ProjectQuote) {
     if (!paymentsVisible) return null;
     const known = payments.some((p) => p.id === approvalPayment?.id);
     const all = approvalPayment && approvalPayment.quote_id === quote.id && !known ? [approvalPayment, ...payments] : payments;
-    const forQuote = all.filter((p) => p.quote_id === quote.id);
-    const open = forQuote.find((p) => isOutstandingPayment(p.status));
-    if (open) {
-      const paidCents = paidCentsForQuote(all, quote.id);
-      const choice = clientPayChoice({
-        terms: resolveQuoteDepositTerms(quote, depositFallback),
-        allowClientPayInFull,
-        payment: open,
-        quoteTotalCents: quote.total_cents,
-        paidCents,
-      });
-      const isDeposit = open.amount < quote.total_cents && paidCents === 0;
-      return (
-        <div className="flex flex-col gap-3 rounded-xl border border-accent/25 bg-accent-subtle/60 p-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 text-sm font-semibold text-heading">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Proposal approved
-            </p>
-            <p className="mt-1 text-sm text-muted">
-              {isDeposit
-                ? `Deposit of ${formatCurrency(open.amount)} due now. Remaining balance ${formatCurrency(quote.total_cents - open.amount)}.`
-                : `${formatCurrency(open.amount)} due now.`}
-            </p>
-          </div>
-          {previewMode ? (
-            <Button variant="accent" className="min-h-11" disabled>
-              <CreditCard className="h-4 w-4" /> Pay Now
-            </Button>
-          ) : (
-            <CheckoutChoiceButtons
-              payment={open}
-              choice={choice}
-              downloadsLocked={downloadsLocked}
-              autoStart={autoCheckoutId === open.id}
-              onAutoStarted={() => setAutoCheckoutId(null)}
-            />
-          )}
+    if (all.some((p) => p.quote_id === quote.id) || !collectsOnApproval(quote)) return null;
+    return (
+      <div className="flex flex-col gap-3 rounded-xl border border-accent/25 bg-accent-subtle/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-semibold text-heading">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Proposal approved
+          </p>
+          <p className="mt-1 text-sm text-muted">{payNotice ?? "Your payment is ready when you are."}</p>
         </div>
-      );
-    }
-    // Approved, payment expected, but no invoice yet (Stripe hiccup, closed tab mid-approval):
-    // Pay Now asks the server to make it available. Idempotent — never a second invoice.
-    if (forQuote.length === 0 && collectsOnApproval(quote)) {
-      return (
-        <div className="flex flex-col gap-3 rounded-xl border border-accent/25 bg-accent-subtle/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 text-sm font-semibold text-heading">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Proposal approved
-            </p>
-            <p className="mt-1 text-sm text-muted">{payNotice ?? "Your payment is ready when you are."}</p>
-          </div>
-          <Button
-            variant="accent"
-            className="min-h-11 px-6"
-            disabled={previewMode || approving}
-            onClick={() => quoteAction(quote.id, "approve", undefined, { payRetry: true })}
-          >
-            {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}{" "}
-            {approving ? "Opening checkout…" : "Pay Now"}
-          </Button>
-        </div>
-      );
-    }
-    const coveredCents = paidCentsForQuote(all, quote.id);
-    if (coveredCents > 0) {
-      const balance = Math.max(0, quote.total_cents - coveredCents);
-      return (
-        <p className="flex items-center gap-2 text-sm text-muted">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          {balance > 0
-            ? `${formatCurrency(coveredCents)} paid · ${formatCurrency(balance)} remaining balance. Your next invoice will appear here when it's due.`
-            : `Paid in full · ${formatCurrency(coveredCents)}.`}
-        </p>
-      );
-    }
-    if (forQuote.length === 0 && !collectsOnApproval(quote)) {
-      return (
-        <p className="flex items-center gap-2 text-sm text-muted">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Approved. No payment is due right now — {brand.name} will send an invoice when it is.
-        </p>
-      );
-    }
-    return null;
+        <Button
+          variant="accent"
+          className="min-h-11 px-6"
+          disabled={previewMode || approving}
+          onClick={() => quoteAction(quote.id, "approve", undefined, { payRetry: true })}
+        >
+          {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}{" "}
+          {approving ? "Preparing payment…" : "Pay Now"}
+        </Button>
+      </div>
+    );
   }
 
   function closeForm() {

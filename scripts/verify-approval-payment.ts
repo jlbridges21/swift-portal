@@ -19,6 +19,7 @@ import {
   resolveQuoteDepositTerms,
   type DepositTerms,
 } from "../src/lib/payment-quote";
+import { signPayLinkToken, verifyPayLinkToken } from "../src/lib/pay-link";
 import type { Payment, ProjectQuote } from "../src/lib/types";
 
 let passed = 0;
@@ -157,6 +158,30 @@ check("manual balance invoice after a paid deposit is allowed", () => {
 });
 check("manual invoice yields to an open approval invoice", () => {
   assert.equal(earlierCompetingPaymentRow([pay("auto", "sent"), pay("man", "pending")], "man", "manual")?.id, "auto");
+});
+
+// ── Invoice links (View Invoice / Copy Invoice Link) ────────────────────────
+check("invoice link signed by a Preview (no PAY_LINK_SECRET) opens on Production", () => {
+  const pid = "22222222-2222-4222-8222-222222222222";
+  const bid = "44444444-4444-4444-8444-444444444444";
+  const saved = { pay: process.env.PAY_LINK_SECRET, plat: process.env.PLATFORM_SESSION_SECRET, cron: process.env.CRON_SECRET };
+  try {
+    delete process.env.CRON_SECRET;
+    delete process.env.PAY_LINK_SECRET;
+    process.env.PLATFORM_SESSION_SECRET = "shared-session-secret";
+    const previewToken = signPayLinkToken(pid, bid);
+    process.env.PAY_LINK_SECRET = "production-pay-secret";
+    assert.equal(verifyPayLinkToken(previewToken, bid), true);
+    assert.equal(verifyPayLinkToken(signPayLinkToken(pid, bid), bid), true);
+    assert.equal(verifyPayLinkToken(previewToken, "55555555-5555-4555-8555-555555555555"), false, "bound to its business");
+    process.env.PLATFORM_SESSION_SECRET = "rotated";
+    assert.equal(verifyPayLinkToken(previewToken, bid), false, "unknown secret is rejected");
+  } finally {
+    for (const [k, v] of [["PAY_LINK_SECRET", saved.pay], ["PLATFORM_SESSION_SECRET", saved.plat], ["CRON_SECRET", saved.cron]] as const) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
 });
 
 console.log(`\nAll ${passed} approval payment checks passed.`);

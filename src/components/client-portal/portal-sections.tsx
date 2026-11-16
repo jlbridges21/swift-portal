@@ -11,7 +11,7 @@ import { VideoGrid } from "@/components/projects/video-grid";
 import { TourCard } from "@/components/projects/tour-card";
 import { Model3dCard } from "@/components/projects/model-3d-card";
 import { QuoteSection } from "@/components/projects/quote-section";
-import { PaymentsSection } from "@/components/projects/payments-section";
+import { PayChoices, PaymentsSection } from "@/components/projects/payments-section";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { PortalCard, ThumbTile, useThumbUrls } from "@/components/client-portal/portal-ui";
@@ -24,6 +24,7 @@ import { PRODUCT_LABEL, type MarketingProduct } from "@/lib/marketing/model";
 import { formatCents } from "@/lib/marketing/offers";
 import { getQuotePriceDisplay } from "@/lib/quote-display";
 import { paymentReceiptHref } from "@/lib/payment-status";
+import { paidCentsForQuote } from "@/lib/payment-quote";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import type { MediaAsset } from "@/lib/types";
 
@@ -375,9 +376,7 @@ export function EstimatePayTab({ ctx }: { ctx: PortalCtx }) {
               depositAmountCents={ctx.depositAmountCents}
               payments={ctx.payments}
               payOnApproval={ctx.payOnApproval}
-              allowClientPayInFull={ctx.allowClientPayInFull}
               paymentsVisible={ctx.show.payments}
-              downloadsLocked={!ctx.clientDownloadsUnlocked}
               onQuoteChange={ctx.upsertQuote}
               onPaymentChange={ctx.upsertPayment}
             />
@@ -398,11 +397,149 @@ export function EstimatePayTab({ ctx }: { ctx: PortalCtx }) {
               downloadsUnlocked={ctx.clientDownloadsUnlocked}
               optionalPaymentIds={ctx.financial.optionalCharges.map((c) => c.payment.id)}
               optionalPaymentLabels={Object.fromEntries(ctx.financial.optionalCharges.map((c) => [c.payment.id, c.label]))}
+              payElsewhereIds={ctx.financial.kind === "due" ? ctx.financial.openPayments.map((p) => p.id) : undefined}
             />
           </div>
         ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * The one place to pay on Estimate & Pay. What is due, what it is for, how it fits the
+ * proposal total, and the card / bank choice with a single Pay button. The proposal below
+ * shows only that it is approved; Payments lists this invoice as "Awaiting payment"
+ * without a second set of pay buttons.
+ */
+function PaymentDuePanel({ ctx }: { ctx: PortalCtx }) {
+  const f = ctx.financial;
+  const media = ctx.hasAnyMedia;
+  const terms = { depositMode: ctx.depositMode, depositPercent: ctx.depositPercent, depositAmountCents: ctx.depositAmountCents };
+  const many = f.openPayments.length > 1;
+  const first = f.openPayments[0];
+  const quote = first?.quote_id ? ctx.quotes.find((q) => q.id === first.quote_id) : undefined;
+  const approved = quote?.status === "approved";
+
+  // Proposal breakdown for a single invoice tied to a proposal: total, paid toward it, due now, left after.
+  const breakdown = (() => {
+    if (many || !first || !quote || quote.total_cents <= 0) return null;
+    const paid = paidCentsForQuote(ctx.payments, quote.id);
+    const after = Math.max(0, quote.total_cents - paid - first.amount);
+    return [
+      { label: "Proposal total", value: formatCurrency(quote.total_cents) },
+      paid > 0 ? { label: "Paid so far", value: `− ${formatCurrency(paid)}` } : null,
+      { label: after > 0 ? "Due now (deposit)" : "Due now", value: formatCurrency(first.amount), strong: true },
+      after > 0 ? { label: "Remaining balance, invoiced later", value: formatCurrency(after) } : null,
+    ].filter(Boolean) as { label: string; value: string; strong?: boolean }[];
+  })();
+
+  return (
+    <section
+      id="pay-now"
+      className="scroll-mt-24 rounded-2xl border border-red-200 bg-gradient-to-r from-red-50 to-white p-5 shadow-sm transition-shadow surface-dark:from-card surface-dark:to-card sm:p-6"
+    >
+      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+        <div className="flex min-w-0 flex-1 items-start gap-4">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+            <CreditCard className="h-6 w-6" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-red-700">Payment due</p>
+              {approved ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Proposal approved
+                </span>
+              ) : null}
+            </div>
+            <p className="text-3xl font-bold tracking-tight text-heading">{formatCurrency(f.dueCents)}</p>
+            {!many && first ? (
+              <p className="text-sm text-muted">
+                {/* With the breakdown below, name the proposal; its invoice text would repeat the numbers. */}
+                {breakdown && quote ? quote.title : first.description}
+                {first.due_date ? ` · Due ${formatDate(first.due_date)}` : ""}
+              </p>
+            ) : (
+              <p className="text-sm text-muted">{f.openPayments.length} payments are due. Pay each one below.</p>
+            )}
+            {breakdown ? (
+              <dl className="mt-4 max-w-sm space-y-1.5 border-t border-red-100 pt-3 text-sm surface-dark:border-border">
+                {breakdown.map((row) => (
+                  <div key={row.label} className="flex justify-between gap-4">
+                    <dt className={row.strong ? "font-semibold text-heading" : "text-muted"}>{row.label}</dt>
+                    <dd className={cn("tabular-nums", row.strong ? "font-semibold text-heading" : "text-muted")}>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+          </div>
+        </div>
+
+        {!many && first ? (
+          <div className="w-full md:w-80 md:shrink-0">
+            {ctx.isPreview ? (
+              <Button variant="accent" className="min-h-11 w-full" disabled>
+                Pay {formatCurrency(first.amount)}
+              </Button>
+            ) : (
+              <PayChoices
+                payment={first}
+                quote={quote}
+                paidCents={quote ? paidCentsForQuote(ctx.payments, quote.id) : 0}
+                {...terms}
+                allowClientPayInFull={ctx.allowClientPayInFull}
+                downloadsLocked={!ctx.clientDownloadsUnlocked}
+              />
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {many ? (
+        <div className="mt-5 divide-y divide-red-100 rounded-xl border border-red-100 bg-card surface-dark:divide-border surface-dark:border-border">
+          {f.openPayments.map((p) => {
+            const q = p.quote_id ? ctx.quotes.find((x) => x.id === p.quote_id) : undefined;
+            return (
+              <div key={p.id} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                  <p className="text-lg font-bold text-heading">{formatCurrency(p.amount)}</p>
+                  <p className="text-sm text-muted">
+                    {p.description}
+                    {p.due_date ? ` · Due ${formatDate(p.due_date)}` : ""}
+                  </p>
+                </div>
+                {ctx.isPreview ? null : (
+                  <PayChoices
+                    payment={p}
+                    quote={q}
+                    paidCents={q ? paidCentsForQuote(ctx.payments, q.id) : 0}
+                    {...terms}
+                    allowClientPayInFull={ctx.allowClientPayInFull}
+                    downloadsLocked={!ctx.clientDownloadsUnlocked}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {(media && !ctx.clientDownloadsUnlocked) || f.optionalDueCents > 0 ? (
+        <div className="mt-4 space-y-1.5 text-sm text-muted">
+          {media && !ctx.clientDownloadsUnlocked ? (
+            <p className="flex items-start gap-2">
+              <Lock className="mt-0.5 h-4 w-4 shrink-0" /> Your high-resolution downloads unlock as soon as this payment is complete.
+            </p>
+          ) : null}
+          {f.optionalDueCents > 0 ? (
+            <p>
+              Also open: {formatCurrency(f.optionalDueCents)} in optional Marketing Kit add-ons ({f.optionalCharges.map((c) => c.label).join(", ")}) — not required for your project. Find them under Payments.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -474,35 +611,7 @@ function FinancialSummary({ ctx }: { ctx: PortalCtx }) {
     );
   }
 
-  if (f.kind === "due") {
-    const first = f.openPayments[0];
-    return (
-      <SummaryPanel
-        tone="red"
-        icon={CreditCard}
-        eyebrow="Payment due"
-        amount={formatCurrency(f.dueCents)}
-        lines={[
-          f.openPayments.length > 1 ? `${f.openPayments.length} open payments` : first?.description || null,
-          first?.due_date ? `Due ${formatDate(first.due_date)}` : null,
-          f.coveredCents > 0 ? `${formatCurrency(f.coveredCents)} already paid` : null,
-          f.optionalDueCents > 0
-            ? `Also open: ${formatCurrency(f.optionalDueCents)} in optional Marketing Kit add-ons (${f.optionalCharges.map((c) => c.label).join(", ")}) — not required for your project.`
-            : null,
-          media && !ctx.clientDownloadsUnlocked ? "Downloads unlock once your payment is complete." : null,
-        ]}
-        action={
-          <Button
-            variant="accent"
-            className="min-h-11 w-full sm:w-auto"
-            onClick={() => document.getElementById("payments")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-          >
-            Pay Now — {formatCurrency(f.dueCents)}
-          </Button>
-        }
-      />
-    );
-  }
+  if (f.kind === "due") return <PaymentDuePanel ctx={ctx} />;
 
   if (f.kind === "checkout") {
     return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useId, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Payment, ProjectQuote } from "@/lib/types";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
@@ -105,6 +105,11 @@ interface PaymentsSectionProps {
   optionalPaymentIds?: string[];
   /** Short item labels for optional payments ("Property Website", …), keyed by payment id. */
   optionalPaymentLabels?: Record<string, string>;
+  /**
+   * Open payments whose Pay button is shown elsewhere on the page (the client portal's
+   * Payment due panel). Listed here as status rows without a second set of pay buttons.
+   */
+  payElsewhereIds?: string[];
 }
 
 function quoteForPayment(quotes: ProjectQuote[], payment: Payment): ProjectQuote | undefined {
@@ -138,19 +143,11 @@ export function CheckoutChoiceButtons({
   payment,
   choice,
   downloadsLocked = false,
-  autoStart = false,
-  onAutoStarted,
 }: {
   payment: Pick<Payment, "id" | "amount">;
   choice: { depositCents: number; totalCents: number; rowIsFull: boolean; offerPayInFull: boolean } | null;
   /** Client downloads are still locked — the success screen announces the unlock when the server confirms it. */
   downloadsLocked?: boolean;
-  /**
-   * Open the embedded checkout on mount (right after the client approves a proposal).
-   * Only when there is one way to pay; a deposit-or-full choice waits for the client's pick.
-   */
-  autoStart?: boolean;
-  onAutoStarted?: () => void;
 }) {
   const { passCardFee } = useContext(PaymentOptionsContext);
   const [pending, setPending] = useState<"full" | "deposit" | "default" | null>(null);
@@ -198,16 +195,6 @@ export function CheckoutChoiceButtons({
     }
   }
 
-  const autoStarted = useRef(false);
-  const onlyButton = buttons.length === 1 ? buttons[0].key : null;
-  useEffect(() => {
-    if (!autoStart || autoStarted.current) return;
-    autoStarted.current = true;
-    onAutoStarted?.();
-    if (onlyButton) start(onlyButton);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per mount, on the first autoStart
-  }, [autoStart, onlyButton]);
-
   return (
     <div className="flex w-full flex-col gap-3 sm:w-80">
       <EmbeddedCheckoutModal
@@ -249,7 +236,8 @@ export function CheckoutChoiceButtons({
   );
 }
 
-function PayChoices({
+/** Card / bank choice and Pay button(s) for one open payment, with its proposal's deposit options. */
+export function PayChoices({
   payment,
   quote,
   paidCents,
@@ -293,11 +281,14 @@ export function PaymentsSection({
   downloadsUnlocked = false,
   optionalPaymentIds,
   optionalPaymentLabels = {},
+  payElsewhereIds,
 }: PaymentsSectionProps) {
   const brand = usePortalBrand();
   const optionalIds = new Set(optionalPaymentIds ?? []);
   const outstandingAll = payments.filter((p) => isOutstandingPayment(p.status));
-  const outstanding = outstandingAll.filter((p) => !optionalIds.has(p.id));
+  const paidElsewhere = new Set(payElsewhereIds ?? []);
+  const outstanding = outstandingAll.filter((p) => !optionalIds.has(p.id) && !paidElsewhere.has(p.id));
+  const awaiting = outstandingAll.filter((p) => !optionalIds.has(p.id) && paidElsewhere.has(p.id));
   const optionalOutstanding = outstandingAll.filter((p) => optionalIds.has(p.id));
   const processing = payments.filter((p) => p.status === "processing");
   const paid = payments.filter((p) => p.status === "paid");
@@ -320,6 +311,34 @@ export function PaymentsSection({
         />
       ) : (
       <div className="space-y-6">
+        {awaiting.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">Awaiting payment</h3>
+            <Card className="shadow-sm overflow-hidden">
+              <div className="divide-y divide-border">
+                {awaiting.map((p) => (
+                  <div key={p.id} className="flex items-start justify-between gap-3 p-4">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50">
+                        <CreditCard className="h-4 w-4 text-red-600" aria-hidden />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-heading">{formatCurrency(p.amount)}</p>
+                        <p className="text-sm text-muted">{p.description}</p>
+                        <p className="text-xs text-muted mt-0.5">
+                          Requested {formatDate(p.created_at)}
+                          {p.due_date ? ` · Due ${formatDate(p.due_date)}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="danger" className="shrink-0">Due</Badge>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        )}
+
         {outstanding.length > 0 && (
           <div>
             <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">Outstanding</h3>
