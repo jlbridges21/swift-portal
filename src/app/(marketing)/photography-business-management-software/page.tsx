@@ -309,13 +309,13 @@ export default async function PhotographyBusinessManagementSoftwarePage() {
               "Client records, messages, and project history",
               "Deposits and card payments through your Stripe",
               "Video review, approvals, and branded delivery",
+              "A built-in photo editor, your business website, and listing marketing kits",
             ]}
             doesNot={[
               "Contracts and e-signatures",
               "Client questionnaires and self-booking into open slots",
-              "Print sales, online stores, and gallery favorites",
+              "Print sales and online stores",
               "Accounting, sales tax, and QuickBooks or Xero sync",
-              "Photo editing or retouching",
             ]}
           />
           <p className="mx-auto mt-8 max-w-3xl text-center text-sm leading-relaxed text-[#64748B]">

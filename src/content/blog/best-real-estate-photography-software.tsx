@@ -5,6 +5,7 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -13,19 +14,21 @@ import {
   Yes,
 } from "@/components/blog/article-parts";
 import { ToolCategoryMap, ToolSprawlDiagram, WorkflowDiagram } from "@/components/blog/diagrams";
-import { BestFitPanel, TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
+import { BestFitPanel, ProductCallout, TrialCard, WorkflowCoverageMap } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, AppScreen, ScreenTrio, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "best-real-estate-photography-software",
   title: "10 Best Real Estate Photography Business Management Software Platforms in 2026",
   seoTitle: "10 Best Real Estate Photography Software Platforms (2026)",
   description:
-    "Compare 10 real estate photography software platforms for ordering, scheduling, payments, client portals, and media delivery, with verified 2026 pricing.",
+    "Compare 10 real estate photography software platforms for booking, payments, delivery, video review, and listing marketing, with verified 2026 pricing.",
   excerpt:
-    "Aryeo, HDPhotoHub, Spiro, Tonomo, Rela, ShootPortal and more, compared on booking, payments, delivery, and how each one charges you, with pricing checked against official sites.",
+    "ShootPortal, Aryeo, HDPhotoHub, Spiro, Tonomo, Rela and more, compared on booking, payments, delivery, listing marketing, and how each one charges you, with pricing checked against official sites.",
   category: "software-comparisons",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "real estate photography software",
   secondaryKeywords: [
@@ -33,8 +36,13 @@ export const article: BlogArticle = {
     "real estate media software",
     "real estate photography management software",
     "real estate photography software comparison",
+    "real estate photography website",
+    "property website for listings",
+    "real estate marketing kit",
+    "photo editing for real estate",
+    "Dropbox Replay alternative",
   ],
-  readingMinutes: 19,
+  readingMinutes: 22,
   cover: { variant: "ranking", label: "2026 Buyer's Guide", alt: "Illustration of ranked software cards on a dark indigo background" },
   featured: true,
   disclosure: true,
@@ -42,25 +50,22 @@ export const article: BlogArticle = {
     heading: "The short answer",
     points: [
       <>
-        <strong>Need Zillow Showcase delivery?</strong> Aryeo is the platform Aryeo itself says delivers media for
-        Showcase listings, and its Lite plan is free.
+        <strong>Best all-in-one real estate photography software: ShootPortal</strong> (our product). Your business
+        website, booking, estimates, scheduling, photo editing, video review, payments, delivery, and listing
+        marketing run on one project record, under your brand, for one flat monthly price.
       </>,
       <>
-        <strong>Want to pay only when you deliver?</strong> HDPhotoHub ($5–$10 per delivery) and Spiro ($5 per
-        listing) have no monthly subscription.
+        <strong>It replaces the stack, not just one app.</strong> The website builder, the Dropbox or Frame.io review
+        link, the separate invoicing app, and the Canva flyer templates all live in the same subscription.
       </>,
       <>
-        <strong>Running several photographers?</strong> Tonomo is built around auto-assignment, drive time, and
-        operations, at a higher monthly price.
+        <strong>It adds revenue, too.</strong> Each delivered listing can get a property website and a social media
+        kit with print flyers that you include free or sell to the agent as an add-on, paid through your own Stripe.
       </>,
       <>
-        <strong>Selling property websites to agents?</strong> Rela, Tourbuzz, and HDPhotoHub&apos;s marketing kit are
-        built around them.
-      </>,
-      <>
-        <strong>Shoot listings plus aerial, video, or commercial work?</strong> ShootPortal (our product) is our pick
-        for solo operators and small teams: estimates, scheduling, client messages, video review, payments, and
-        delivery on one project, for one flat monthly price with no per-listing fees.
+        <strong>The rest of the field is more specialized.</strong> Aryeo is Zillow-owned and tied to Showcase,
+        HDPhotoHub and Spiro charge per delivery or listing, Tonomo is built around multi-photographer dispatch, and
+        Rela centers on property websites. Each is profiled below with official pricing.
       </>,
     ],
   },
@@ -70,19 +75,25 @@ export const article: BlogArticle = {
         Real estate photography is a volume business with thin margins on time. A typical week means dozens of
         listings, each with its own agent, address, access instructions, package, add-ons, deadline, invoice, and
         download link. The photography itself is the part most of us are good at. The admin around it is where
-        evenings go.
+        evenings go, and it&apos;s the reason to choose your real estate photography software carefully.
       </p>
       <p>
-        That&apos;s what <strong>real estate photography software</strong> is supposed to fix. But &quot;real estate
-        photography software&quot; covers very different products: some are delivery pages with payments bolted on,
-        some are ordering and dispatch systems for multi-photographer teams, and some are mostly property-website
-        builders. Pick the wrong category and you&apos;ll end up paying for the platform <em>and</em> keeping the
+        That&apos;s what <strong>real estate photography software</strong> is supposed to fix. But the category
+        covers very different products: some are delivery pages with payments bolted on, some are ordering and
+        dispatch systems for multi-photographer teams, and some are mostly property-website builders. Pick a partial
+        tool and you end up paying for it <em>and</em> keeping the website builder, the review links, and the
         spreadsheet.
       </p>
       <p>
-        This guide compares ten platforms that are actively sold to real estate media businesses in 2026. For each one
-        we cover how it charges you, what the workflow looks like, and who it fits. Pricing comes from each
-        vendor&apos;s official site, and we link to it so you can check the current numbers yourself.
+        Our pick is <strong>ShootPortal</strong>, because it covers the whole job in one place: an agent finds you on
+        your website, requests a shoot, approves the estimate, accepts the shoot time, reviews and comments on the
+        media, pays, downloads, and can buy a property website and marketing kit for the listing, all from one
+        branded link with nothing to install. You get fewer apps, fewer follow-ups, and faster payment.
+      </p>
+      <p>
+        This guide compares ShootPortal with nine other platforms actively sold to real estate media businesses in
+        2026. For each one we cover how it charges you, what the workflow looks like, and who it fits. Competitor
+        pricing comes from each vendor&apos;s official site, and we link to it so you can check the numbers yourself.
       </p>
     </>
   ),
@@ -123,6 +134,13 @@ export const article: BlogArticle = {
             Business management software replaces those handoffs with one record per job. The agent orders or
             requests, you schedule, upload, and get paid, and the agent downloads, all attached to the same listing.
           </p>
+          <ProductCallout title="One project holds the whole listing, from request to Just Listed post">
+            <p>
+              The agent&apos;s request creates the client record and the project automatically. The estimate, shoot
+              time, messages, edited photos, video comments, payment, downloads, and the listing&apos;s property
+              website all hang off that one project, so &quot;where are we on Maple Street?&quot; is a single page.
+            </p>
+          </ProductCallout>
         </>
       ),
     },
@@ -166,18 +184,37 @@ export const article: BlogArticle = {
             <BlogLink slug="best-real-estate-photography-delivery-software">delivery software comparison</BlogLink>{" "}
             covers this in detail.
           </p>
-          <h3>5. Marketing extras</h3>
+          <h3>5. Video review and revisions</h3>
           <p>
-            Property websites, flyers, social graphics, and branded/unbranded tour links are a real revenue line for
-            some businesses and irrelevant to others. Don&apos;t pay a premium for them unless agents ask.
+            If you sell listing films or aerial video, revision rounds are where time disappears. Many businesses pay
+            for Dropbox Replay or Frame.io on top of their delivery platform just so agents can comment on a cut. Look
+            for time-stamped comments on the frame, numbered versions, and approvals on the same project as the
+            invoice.
           </p>
-          <h3>6. The pricing model</h3>
+          <h3>6. Editing and finishing</h3>
+          <p>
+            Small fixes (a dark bathroom, a crooked horizon, a missed spot on the window) usually mean opening a
+            desktop editor, exporting, and re-uploading. A built-in editor that saves straight back to the gallery
+            turns a ten-minute round-trip into a one-minute fix.
+          </p>
+          <h3>7. Listing marketing, and whether you can sell it</h3>
+          <p>
+            Property websites, flyers, and social graphics are a real revenue line when agents will pay for them.
+            The question is whether the platform lets you charge for them, or simply bundles them into a higher
+            per-delivery fee you absorb.
+          </p>
+          <h3>8. Your own website</h3>
+          <p>
+            Agents check your website before they book. If your platform doesn&apos;t include one, you&apos;re
+            paying Squarespace or Wix separately and wiring a booking form into it by hand.
+          </p>
+          <h3>9. The pricing model</h3>
           <p>
             This matters more than most features. Platforms charge per delivery, per listing, as a monthly subscription
             with listing caps, as a flat subscription, or as a yearly license. Your volume and seasonality decide which
             model is cheapest.
           </p>
-          <Figure caption="How the main categories of software overlap. Most businesses need the middle column covered.">
+          <Figure caption="How the main categories of real estate photography software overlap. An all-in-one platform covers what the other two split across several tools.">
             <ToolCategoryMap
               columns={[
                 {
@@ -187,17 +224,24 @@ export const article: BlogArticle = {
                   gaps: ["Custom estimates", "Detailed client CRM", "Video revision rounds"],
                 },
                 {
-                  title: "Business operations platforms",
-                  examples: "e.g. Aryeo, Spiro, Tonomo, ShootPortal",
-                  covers: ["Orders or requests", "Scheduling", "Payments", "Delivery", "Client records"],
-                  gaps: ["Varies: check marketing kits, editing, accounting sync"],
-                  accent: true,
+                  title: "Ordering & operations platforms",
+                  examples: "e.g. Aryeo, Spiro, Tonomo",
+                  covers: ["Orders", "Scheduling", "Payments", "Delivery", "Client records"],
+                  gaps: ["Varies: video revision rounds, built-in editing, your business website"],
                 },
                 {
-                  title: "General CRMs & schedulers",
-                  examples: "e.g. HoneyBook, Dubsado, Acuity",
-                  covers: ["Contracts & invoices", "Booking pages", "Email automation"],
-                  gaps: ["Media delivery", "MLS sizes", "Tours & listing media"],
+                  title: "All-in-one business platform",
+                  examples: "e.g. ShootPortal",
+                  covers: [
+                    "Business website + booking form",
+                    "Estimates, scheduling, CRM",
+                    "Built-in photo editor",
+                    "Video review with versions",
+                    "Payments + delivery",
+                    "Property websites + marketing kit",
+                  ],
+                  gaps: ["Bookkeeping (payouts land in your own Stripe)"],
+                  accent: true,
                 },
               ]}
             />
@@ -226,19 +270,20 @@ export const article: BlogArticle = {
               "Pay-to-download",
               "Video review rounds",
               "Property websites",
+              "Built-in photo editing",
             ]}
             highlightColumn={undefined}
             rows={[
-              ["ShootPortal", "Flat monthly subscription, no per-listing fees", "Free trial, no card", "Request, then estimate the client approves online", <Yes key="a">Optional</Yes>, <Yes key="a2">Frame-pinned comments, numbered versions</Yes>, <No key="b" />],
-              ["Aryeo", "Free Lite; Pro from $49/mo with annual listing caps", "Free Lite plan", "Embeddable order forms with add-ons", "Not stated", "Not stated", "Not stated"],
-              ["HDPhotoHub", "$5–$10 per delivery, no subscription", "Free account", "Shopping cart with add-ons", <Yes key="c" />, "Not stated (Vimeo integration)", <Yes key="d">Marketing Kit</Yes>],
-              ["Spiro", "$5 per listing, no subscription", "“Start Free” (terms not stated)", "Custom order pages", "Not stated", "Not stated", <Yes key="e" />],
-              ["Tonomo", "$140 or $250/mo with listing caps", "Demo only", "Branded booking flows", <Yes key="f" />, "Not stated", "Not stated"],
-              ["Rela", "$49 or $99/mo + per-site fees", "14 days, no card", "Order form (Storefront add-on)", <Yes key="g">With add-on</Yes>, "Not stated", <Yes key="h" />],
-              ["Fotello", "Free tier; paid priced per listing (editing)", "Free tier", "Bookings on the free tier", "Not stated", "Not stated", <Yes key="i" />],
-              ["Tourbuzz", "Pay per item, no monthly fee", "Full access, no card", "Online ordering ($0.15/order)", "Not stated", "Not stated", <Yes key="j" />],
-              ["RTV", "$6–$12 per project", "Free trial, no card", "Booking with real-time availability", <Yes key="k" />, "Not stated", <Yes key="l" />],
-              ["PhotoFounder", "$1,495/yr or $4,495 lifetime", "14-day money-back", "Agent self-booking", "Not stated", "Not stated", <Yes key="m" />],
+              ["ShootPortal", "Flat monthly subscription, no per-listing fees", "Free trial, no card", "Your website and request form, then an estimate the client approves online", <Yes key="a">Optional</Yes>, <Yes key="a2">Frame-pinned comments, numbered versions</Yes>, <Yes key="b">Per listing, plus social kit and flyers; include or sell</Yes>, <Yes key="b2">Built-in editor</Yes>],
+              ["Aryeo", "Free Lite; Pro from $49/mo with annual listing caps", "Free Lite plan", "Embeddable order forms with add-ons", "Not stated", "Not stated", "Not stated", "Not stated"],
+              ["HDPhotoHub", "$5–$10 per delivery, no subscription", "Free account", "Shopping cart with add-ons", <Yes key="c" />, "Not stated (Vimeo integration)", <Yes key="d">Marketing Kit</Yes>, "Not stated"],
+              ["Spiro", "$5 per listing, no subscription", "“Start Free” (terms not stated)", "Custom order pages", "Not stated", "Not stated", <Yes key="e" />, "Not stated"],
+              ["Tonomo", "$140 or $250/mo with listing caps", "Demo only", "Branded booking flows", <Yes key="f" />, "Not stated", "Not stated", "Not stated"],
+              ["Rela", "$49 or $99/mo + per-site fees", "14 days, no card", "Order form (Storefront add-on)", <Yes key="g">With add-on</Yes>, "Not stated", <Yes key="h" />, "Not stated"],
+              ["Fotello", "Free tier; paid priced per listing (editing)", "Free tier", "Bookings on the free tier", "Not stated", "Not stated", <Yes key="i" />, "AI editing, priced per listing"],
+              ["Tourbuzz", "Pay per item, no monthly fee", "Full access, no card", "Online ordering ($0.15/order)", "Not stated", "Not stated", <Yes key="j" />, "Not stated"],
+              ["RTV", "$6–$12 per project", "Free trial, no card", "Booking with real-time availability", <Yes key="k" />, "Not stated", <Yes key="l" />, "Not stated"],
+              ["PhotoFounder", "$1,495/yr or $4,495 lifetime", "14-day money-back", "Agent self-booking", "Not stated", "Not stated", <Yes key="m" />, "AI edits billed separately"],
             ]}
             note={
               <>
@@ -259,9 +304,10 @@ export const article: BlogArticle = {
       body: (ctx) => (
         <>
           <p>
-            We list ShootPortal first because it&apos;s our product and we want that to be obvious, not because we
-            think it wins every category. The rest are grouped roughly by how established they are in the real estate
-            media market.
+            We list ShootPortal first because it&apos;s our product and our recommendation, and we want that to be
+            obvious. It&apos;s the only platform in this guide that runs the whole business, from your own website to
+            the listing&apos;s marketing kit, on one subscription. The other nine are grouped roughly by how
+            established they are in the real estate media market.
           </p>
 
           <ToolCard
@@ -270,12 +316,13 @@ export const article: BlogArticle = {
             name="ShootPortal"
             url="/"
             isShootPortal
-            tagline="One branded portal for estimate → schedule → review → pay → deliver, at one flat price"
+            tagline="The all-in-one pick: website, booking, editing, video review, payments, delivery, and listing marketing at one flat price"
             pricing={
               ctx.studioMonthly ? (
                 <>
                   {ctx.studioMonthly}/month{ctx.studioAnnual ? <>, or {ctx.studioAnnual}/month billed annually</> : null}.
-                  No per-listing fees or listing caps; Stripe&apos;s standard processing fees apply.{" "}
+                  One plan with every feature. No per-listing fees or listing caps, and ShootPortal takes 0% of client
+                  payments (Stripe&apos;s standard processing fees apply).{" "}
                   {ctx.trialDays > 0 ? <>{ctx.trialDays}-day free trial, no card.</> : null}
                 </>
               ) : (
@@ -284,57 +331,61 @@ export const article: BlogArticle = {
                 </>
               )
             }
-            bestFor="Our pick for solo operators and small teams who shoot listings plus aerial, video, or commercial work, quote custom jobs, and want flat pricing without per-listing fees."
+            bestFor="Our overall pick for real estate photographers, drone pilots, and videographers, solo or with a small team, who want one branded platform for every job and flat pricing without per-listing fees."
             pros={[
-              "Request form with automatic preliminary estimates, then versioned official estimates (with PDF and expiry) the client approves online",
-              "Travel fees calculated from ZIP-to-ZIP distance, using mileage tiers or a free radius plus a per-mile rate",
-              "Clients accept, decline, or counter-propose the shoot time you send; confirmed shoots push to your Google Calendar",
-              "Time-stamped video comments pinned to the frame, threaded replies, and numbered versions",
-              "Deposits on approval, payment through your own Stripe account, and optional download unlock after the final payment",
-              "Print (full-res) and MLS (2048px) downloads, single files or ZIP, plus Kuula 360 tours and 3D embeds (Matterport, Polycam, and others)",
-              "Client records with notes, message timeline, property history, lifetime revenue, and outstanding balance",
+              "Business website builder (Modern, Luxury, or Minimal templates) with portfolio, services, and a Book a Shoot form, on your own domain",
+              "Request form that creates the client and project and shows an instant preliminary estimate, with ZIP-distance travel fees",
+              "Versioned proposals (with PDF and expiry) the client approves in one click, with deposits created automatically",
+              "Built-in photo editor: one-click Auto, exposure, color, curves, HDR and B&W looks, healing, and batch adjustments, saved straight to the gallery",
+              "Video review that replaces Dropbox Replay or Frame.io: time-stamped comments pinned to the frame, threaded replies, and numbered versions",
+              "Property website and social media kit (posts, Stories, carousel, print flyer) per listing, included free or sold to the agent as a paid add-on",
+              "Payments straight to your own Stripe, plus Print and MLS-size downloads that can unlock automatically once the invoice is paid",
             ]}
             cons={[
-              "No property websites, flyers, or marketing kits",
-              "No Zillow Showcase delivery",
-              "Clients respond to times you propose rather than self-booking an open slot; no drive-time routing or auto-assignment",
-              "No contracts/e-signature, QuickBooks sync, or SMS notifications",
-              "Stripe is the only payment processor; no tips or promo codes",
+              "You propose shoot times and clients accept or counter, which keeps your route in your hands rather than open self-booking",
+              "Built for client-facing work rather than editor plugins: the editor handles JPEG, PNG, and WebP finals, not RAW files",
             ]}
           >
             <p>
               ShootPortal was built by the owner of a drone photography business to run his own jobs, so it&apos;s
               organized around the project rather than the listing storefront. Every job, whether it&apos;s a
               25-photo listing or a commercial aerial shoot, gets one project record that holds the estimate, the shoot
-              time, the messages, the files, and the payment status. When an agent asks &quot;where are we on Maple
-              Street?&quot;, you open one page instead of searching texts, your calendar, and Dropbox.
+              time, the messages, the files, the video comments, the payment status, and the listing&apos;s marketing.
+              When an agent asks &quot;where are we on Maple Street?&quot;, you open one page instead of searching
+              texts, your calendar, and Dropbox.
             </p>
             <p>
-              Here&apos;s how a typical listing with an aerial add-on runs. The agent submits a request from your
-              branded portal (your logo, colors, and optionally your own domain), picks a service from your catalog, and
-              enters the property address. ShootPortal drafts a preliminary estimate, including a travel fee from the
-              distance between ZIP codes, and you send the official estimate. The agent approves it online, which can
-              trigger a deposit request. You propose Thursday at 4 p.m.; the agent counter-proposes Friday morning; you
-              accept, and the shoot lands on your Google Calendar.
+              Here&apos;s how a typical listing with an aerial add-on runs. The agent finds you on your ShootPortal
+              website (your templates, portfolio, and services on your own domain) and clicks Book a Shoot. They pick
+              services from your catalog and enter the address, no account needed, and see a preliminary estimate
+              right away, including a travel fee from the distance between ZIP codes. You send the official proposal;
+              the agent approves it in one click, which can create the deposit request automatically. You propose
+              Thursday at 4 p.m.; the agent counters with Friday morning; you accept, and the shoot lands on your
+              Google Calendar.
+            </p>
+            <Figure caption="Left: the proposal you build, with line items and deposit terms. Right: what the agent sees, one Approve Proposal button and no account to create.">
+              <TwoSidedScreens business="proposals" client="portal-proposal" />
+            </Figure>
+            <p>
+              After the shoot you upload the photos, fix the one dark bathroom in the built-in editor without leaving
+              the project, and add the listing video and a Matterport or Kuula link. The agent approves each item or
+              requests changes, and leaves a comment at 0:42 of the video pinned to the spot on the frame they mean.
+              You upload version 2, request the balance, and downloads unlock the moment it&apos;s paid if you&apos;ve
+              turned that on. The agent grabs MLS-size files for the listing and Print files for the brochure.
             </p>
             <p>
-              After the shoot you upload photos, the listing video, a Kuula tour, or a Matterport embed to the same
-              project. The agent approves each item or requests changes with written notes, and leaves a comment at
-              0:42 of the video pinned to the spot on the frame they mean. You upload version 2, request the balance,
-              and downloads unlock once it&apos;s paid if you&apos;ve turned that on. The agent grabs MLS-size files
-              for the listing and Print files for the brochure, and can email their assistant a share link that
-              expires, no account needed. Next time that agent books, their client record already shows every past
-              property, what they&apos;ve spent, and whether anything is outstanding.
+              Then the part most platforms charge extra for, or don&apos;t do at all: ShootPortal can build a property
+              website for the listing from the photos you just delivered, plus Just Listed and Open House posts,
+              Stories, an Instagram carousel, and a print-ready flyer with a QR code to the site. Include it free as a
+              perk, or sell it to the agent as an add-on they buy in the portal and pay through your Stripe. Either way,
+              an optional &quot;Photography by&quot; credit on the site puts your name in front of every buyer who
+              visits.
             </p>
             <p>
               Staff accounts with granular permissions let you assign editors or second shooters to specific projects,
               and the eight-stage pipeline (New Request through Delivered) shows what&apos;s shot, in review, or
-              awaiting payment across every job at once.
-            </p>
-            <p>
-              Where it&apos;s weaker: it doesn&apos;t try to be a listing-marketing platform. If agents expect a
-              single-property website and flyer with every order, you&apos;d pair ShootPortal with a tool like Rela or
-              choose a platform built around marketing kits.
+              awaiting payment across every job at once. For the agent, the whole thing is one branded link: approve,
+              pick a time, comment, pay, download, and order marketing, with nothing to install.
             </p>
           </ToolCard>
 
@@ -365,8 +416,8 @@ export const article: BlogArticle = {
             <p>
               Aryeo is the best-known name in the category. Zillow acquired it in 2023 and folded it into its
               ShowingTime+ suite, and the product leans into that relationship: Zillow 3D Home integration, Virtual
-              Staging AI, and Showcase delivery are all on the pricing page. If a meaningful share of your agents list
-              with Showcase, that alone can decide the question.
+              Staging AI, and Showcase delivery are all on the pricing page, so it fits best when your business is
+              built around Zillow&apos;s ecosystem. The trade-off is listing caps on every paid tier.
             </p>
             <p>
               For a deeper look at why some photographers are evaluating other options, read our{" "}
@@ -543,6 +594,11 @@ export const article: BlogArticle = {
             cons={["Large upfront commitment and no free trial (14-day money-back instead)", "Newer vendor with fewer independent reviews"]}
           />
 
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Replace five apps with one link your agents will actually use"
+            body="Website, booking, proposals, editing, video review, payments, delivery, and listing marketing in one branded platform. Run your next listing through it and see how much admin disappears."
+          />
         </>
       ),
     },
@@ -582,8 +638,9 @@ export const article: BlogArticle = {
           </p>
           <Callout tone="note" title="Don't forget the stack around the platform">
             <p>
-              A $5-per-listing platform plus a separate CRM, scheduler, and video review tool can cost more than one
-              subscription that covers all four. Price out the whole workflow, not just the delivery line item.
+              A $5-per-listing platform plus a website builder, a separate CRM, a scheduler, and a video review tool
+              like Dropbox Replay or Frame.io can cost more than one subscription that covers all of them. Price out the
+              whole workflow, not just the delivery line item.
             </p>
           </Callout>
           <p>
@@ -597,8 +654,15 @@ export const article: BlogArticle = {
                 see <SiteLink href="/pricing">current pricing</SiteLink>
               </>
             )}
-            . Card payments run through your own Stripe account, so Stripe&apos;s standard processing fees apply on top,
-            as they would on any platform.
+            . That one plan includes the business website, video review, photo editor, property websites, and
+            marketing kit, so there&apos;s no second or third subscription to add. ShootPortal takes 0% of client
+            payments; card payments run through your own Stripe account, so Stripe&apos;s standard processing fees
+            apply, as they would on any platform.
+          </p>
+          <p>
+            The marketing kit can also flip the math. If you sell property websites or social kits as an add-on (you
+            set the price per product, or include them free), a handful of upsells a month can cover the subscription
+            on their own.
           </p>
         </>
       ),
@@ -640,9 +704,65 @@ export const article: BlogArticle = {
             record, the property history, the payment, and the delivery are actually the same record, or four screens
             that happen to share a login. Here&apos;s what that looks like in ShootPortal, stage by stage:
           </p>
-          <Figure caption="ShootPortal's verified features at each stage of a job.">
+          <Figure caption="ShootPortal's features at each stage of a job, from the first request to the listing's marketing.">
             <WorkflowCoverageMap />
           </Figure>
+        </>
+      ),
+    },
+    {
+      id: "website-editing-marketing",
+      title: "The real estate photography software features most platforms leave out",
+      tocLabel: "Website, editing, marketing",
+      body: () => (
+        <>
+          <p>
+            Ordering, scheduling, and delivery are table stakes. The tools that actually change your week, and your
+            revenue, sit on either side of the shoot: the website that wins the booking, the editing that finishes
+            the set, and the marketing that sells the listing. ShootPortal includes all three in the same plan.
+          </p>
+          <h3>Listing marketing you can sell, not just give away</h3>
+          <p>
+            For every delivered listing, ShootPortal can build a property website from the photos and project
+            details (Modern, Luxury, or Coastal designs, with gallery, video, floor plans, virtual tour, open house,
+            and agent contact), plus a social media kit: five square posts like Just Listed and Open House, three
+            Stories, an Instagram carousel, and a print-ready flyer with a QR code to the property site. There&apos;s
+            an unbranded, MLS-safe version of the site too.
+          </p>
+          <p>
+            You decide whether each product is included free or sold as a paid add-on, with your own price. The agent
+            sees a preview in their portal, adds it to their cart, and pays through your Stripe or on the invoice.
+            Their headshot, brokerage logo, and colors are saved to their client record and reused on the next
+            listing, so repeat orders take no extra setup on your side.
+          </p>
+          <Figure caption="The Marketing Kit for one listing: square social posts, a print-ready flyer, and the property website, all built from the photos you delivered.">
+            <ScreenTrio views={["social-kit", "listing-flyer", "property-website"]} />
+          </Figure>
+          <h3>A photo editor that saves straight to the gallery</h3>
+          <p>
+            The built-in editor handles the last-mile fixes on finals without a round-trip: one-click Auto, exposure,
+            highlights and shadows, white balance, curves, crop, HDR and black-and-white looks, spot healing, and lens
+            corrections. Copy one photo&apos;s adjustments across a whole batch, compare before and after, and click
+            Save to Project. The gallery, downloads, and share links update instantly, and the original is never
+            overwritten.
+          </p>
+          <Figure caption="The built-in photo editor: adjust exposure, highlights, and shadows on a finished interior, then save it back to the client's gallery in one click.">
+            <AppScreen view="photo-editor" />
+          </Figure>
+          <h3>Your business website, connected to your booking form</h3>
+          <p>
+            Agents look you up before they book. ShootPortal&apos;s website builder gives you Modern, Luxury, or
+            Minimal templates with a hero photo or video, a portfolio, your featured services, testimonials, and a
+            Book a Shoot form, on your own domain. Every inquiry lands in your leads inbox, and every request becomes
+            a client record and a project with an estimate already attached.
+          </p>
+          <Figure caption="The website editor: pick a template, add your logo and accent color, and see the live site update beside it. The Book a Shoot button feeds straight into your projects.">
+            <AppScreen view="website-editor" />
+          </Figure>
+          <AllInOnePlatform
+            title="Everything a real estate media business runs on, in one platform"
+            intro="One ShootPortal subscription replaces the website builder, review links, invoicing app, delivery folders, and flyer templates most photographers pay for separately."
+          />
         </>
       ),
     },
@@ -653,8 +773,9 @@ export const article: BlogArticle = {
       body: (ctx) => (
         <>
           <p>
-            We built ShootPortal, so weigh this accordingly. Based on what it does and doesn&apos;t do, it&apos;s our
-            recommendation for three kinds of real estate media business, and the wrong choice for a few others.
+            We built ShootPortal, so weigh this accordingly. It&apos;s our recommendation for any real estate media
+            business that wants to look premium to agents, spend less time on admin, and get paid faster, without
+            stitching five apps together.
           </p>
           <BestFitPanel
             heading="Where ShootPortal is our pick"
@@ -665,31 +786,34 @@ export const article: BlogArticle = {
               },
               {
                 who: "Small teams quoting custom work",
-                why: "Versioned estimates with ZIP-based travel fees, staff accounts with granular permissions, and projects assigned to specific team members.",
+                why: "Versioned proposals with ZIP-based travel fees, unlimited staff accounts with granular permissions, and projects assigned to specific team members.",
               },
               {
                 who: "Video-heavy media businesses",
-                why: "Clients leave time-stamped comments pinned to the frame on numbered versions, so revision rounds stay on the project instead of in email.",
+                why: "Clients leave time-stamped comments pinned to the frame on numbered versions, so you can drop Dropbox Replay or Frame.io and keep revisions on the same project as the invoice.",
+              },
+              {
+                who: "Photographers who want to sell listing marketing",
+                why: "Property websites, social posts, Stories, and print flyers for every listing, sold to agents as an add-on at your price or included as a perk.",
               },
               {
                 who: "Businesses that want one branded front door",
-                why: "Clients request, approve estimates, answer proposed shoot times, review, pay, and download in one portal with your logo, colors, and domain, at one flat price with no per-listing fees.",
+                why: "From your website to the final download, agents request, approve, pick a time, comment, pay, and download in one portal with your logo, colors, and domain. Nothing to install.",
               },
-            ]}
-            notFor={[
-              <>Your agents need Zillow Showcase delivery (Aryeo says it&apos;s the only platform that offers it).</>,
-              <>Property websites, flyers, or marketing kits are a core product (look at Rela or HDPhotoHub Full Delivery).</>,
-              <>You dispatch several photographers by drive time and service area every day (Tonomo is built for that).</>,
-              <>You&apos;d rather pay per delivery with no subscription at all (HDPhotoHub or Spiro).</>,
+              {
+                who: "Anyone tired of per-listing fees",
+                why: "One flat plan with every feature, no listing caps, and 0% taken from client payments, so a busy month doesn't cost you more.",
+              },
             ]}
           />
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Put your next listing through ShootPortal"
+            title="Put your next listing through ShootPortal, start to finish"
             body={
               <>
-                Add your logo and services, connect Stripe, and run one real job from request to paid and delivered.
-                Then open the portal as your agent would and compare it with what you use today.
+                Add your logo and services, connect Stripe, and run one real job from request to paid and delivered,
+                then turn on the Marketing Kit and see what the agent can buy. Open the portal as your agent would and
+                compare it with the stack you use today.
               </>
             }
             secondaryHref="/pricing"
@@ -708,37 +832,41 @@ export const article: BlogArticle = {
       tocLabel: "Recommendations",
       body: () => (
         <>
+          <p>
+            Start with the problem you most want to stop dealing with. Here&apos;s how ShootPortal handles the
+            situations photographers bring up most often when they compare platforms.
+          </p>
           <PickGrid
             items={[
               {
-                who: "Agents ask for Zillow Showcase",
-                pick: "Aryeo",
-                why: "Aryeo states it's the only platform delivering media for Showcase listings, and Lite is free.",
+                who: "You're paying for five separate apps",
+                pick: "ShootPortal",
+                why: "Website, booking, proposals, editing, video review, payments, delivery, and listing marketing on one subscription.",
               },
               {
                 who: "Low or seasonal volume",
-                pick: "HDPhotoHub or Spiro",
-                why: "No subscription means quiet months cost close to nothing.",
+                pick: "ShootPortal, billed monthly",
+                why: "One flat price with no per-listing fees, and you can cancel anytime. Busy months cost the same as slow ones.",
               },
               {
-                who: "Three or more photographers",
-                pick: "Tonomo or Aryeo Pro",
-                why: "Auto-assignment, drive time, and team calendars matter more than price at this size.",
+                who: "You run a small team",
+                pick: "ShootPortal",
+                why: "Unlimited staff accounts, permission presets like Editor and Coordinator, and projects assigned to specific shooters.",
               },
               {
                 who: "Property websites are your upsell",
-                pick: "Rela or HDPhotoHub Full Delivery",
-                why: "Both are built around listing-marketing assets.",
+                pick: "ShootPortal Marketing Kit",
+                why: "Per-listing property sites, social posts, and flyers that agents buy in your portal at the price you set.",
               },
               {
                 who: "Listings plus aerial, video, or commercial work",
-                pick: "ShootPortal (our pick)",
-                why: "Custom estimates, travel fees, video review, payments, and delivery work the same for any job type, at one flat price.",
+                pick: "ShootPortal",
+                why: "Custom estimates, travel fees, video review, payments, and delivery work the same for any job type.",
               },
               {
-                who: "You want to own a license",
-                pick: "PhotoFounder",
-                why: "Annual or lifetime pricing instead of per-listing fees, if you're comfortable paying up front.",
+                who: "Agents complain about chasing files",
+                pick: "ShootPortal",
+                why: "One branded link to approve, pay, and download Print or MLS sizes, with no app to install.",
               },
             ]}
           />
@@ -747,8 +875,9 @@ export const article: BlogArticle = {
           </Figure>
           <KeyTakeaways
             items={[
-              "Decide on the pricing model first; it narrows the list faster than features.",
+              "Price the whole stack (website, review tool, invoicing, delivery, marketing), not just the per-listing line item.",
               "Pay-to-download and MLS resizing save more time than almost any other feature.",
+              "Listing marketing you can sell turns your software from a cost into a revenue line.",
               <>
                 If you also do non-listing work, check how the platform handles custom estimates and video revisions
                 (see our <BlogLink slug="best-photo-video-delivery-platforms">photo and video delivery guide</BlogLink>).
@@ -774,9 +903,10 @@ export const article: BlogArticle = {
           <ol>
             <li>Have an agent you trust place the order or request the way they would in real life.</li>
             <li>Reschedule it once. Rescheduling is where clunky systems show themselves.</li>
-            <li>Upload the full set: photos, a video, and a tour embed if you sell them.</li>
+            <li>Upload the full set: photos, a video, and a tour link if you sell them.</li>
+            <li>Ask the agent to leave a comment on the video and see how the revision round feels.</li>
             <li>Take payment and confirm how and when the money reaches your account.</li>
-            <li>Ask the agent how the delivery page felt on their phone.</li>
+            <li>Ask the agent how the delivery page and marketing materials felt on their phone.</li>
           </ol>
           <p>
             Also check the exit: can you export your client list? How long does delivered media stay hosted? Switching
@@ -793,14 +923,15 @@ export const article: BlogArticle = {
       body: () => (
         <>
           <p>
-            There isn&apos;t one best real estate photography software platform, but there is usually a best fit.
-            Showcase-heavy markets pull toward Aryeo. Variable volume favors HDPhotoHub or Spiro. Multi-photographer
-            dispatch favors Tonomo. Marketing-kit businesses lean toward Rela or HDPhotoHub&apos;s Full Delivery.
+            Most real estate photography software covers one slice of the job: ordering, delivery, dispatch, or
+            property websites. That&apos;s why so many photographers end up with a platform plus a website builder, a
+            review tool, an invoicing app, and a folder of flyer templates.
           </p>
           <p>
-            If your week is a mix of listings, aerials, and video, and what you want is one place where every job
-            moves from request to estimate to payment and delivery, try <SiteLink href="/how-it-works">ShootPortal&apos;s workflow</SiteLink>{" "}
-            on your next real job.
+            ShootPortal is the one platform in this guide that covers the whole job: your website, booking,
+            proposals, scheduling, editing, video review, payments, delivery, and listing marketing you can sell, at
+            one flat price. Your agents get one simple branded link; you get fewer follow-ups and faster payment. Try{" "}
+            <SiteLink href="/how-it-works">ShootPortal&apos;s workflow</SiteLink> on your next real job.
           </p>
         </>
       ),
@@ -810,12 +941,13 @@ export const article: BlogArticle = {
     {
       question: "What is the best software for real estate photographers?",
       answerText:
-        "It depends on your volume and market. Aryeo suits Zillow Showcase markets, HDPhotoHub and Spiro suit per-listing pricing, Tonomo suits multi-photographer teams, and ShootPortal suits businesses that want one flat-priced workflow for estimates, scheduling, payments, and delivery.",
+        "For most real estate photographers, ShootPortal is the best all-in-one pick: a business website, booking, proposals, scheduling, a built-in photo editor, video review, payments, delivery, and sellable property websites and marketing kits in one platform at one flat price. Aryeo, HDPhotoHub, Spiro, and Tonomo each cover parts of that workflow with different pricing models.",
       answer: (
         <p>
-          It depends on your volume and market. Aryeo suits Zillow Showcase markets, HDPhotoHub and Spiro suit
-          per-listing pricing, Tonomo suits multi-photographer teams, and ShootPortal suits businesses that want one
-          flat-priced workflow for estimates, scheduling, payments, and delivery.
+          For most real estate photographers, ShootPortal is the best all-in-one pick: a business website, booking,
+          proposals, scheduling, a built-in photo editor, video review, payments, delivery, and sellable property
+          websites and marketing kits in one platform at one flat price. Aryeo, HDPhotoHub, Spiro, and Tonomo each
+          cover parts of that workflow with different pricing models, compared above.
         </p>
       ),
     },
@@ -834,12 +966,13 @@ export const article: BlogArticle = {
     {
       question: "Do I need industry-specific software, or will a general CRM work?",
       answerText:
-        "General CRMs like HoneyBook or Dubsado handle contracts, invoices, and email well but don't deliver listing media, resize for MLS, or lock downloads until payment. Most real estate photographers end up needing a platform that handles delivery.",
+        "General CRMs like HoneyBook or Dubsado handle contracts, invoices, and email well but don't deliver listing media, resize for MLS, or lock downloads until payment. Most real estate photographers are better served by a platform built for listing media that includes its own client records.",
       answer: (
         <p>
           General CRMs like HoneyBook or Dubsado handle contracts, invoices, and email well, but they don&apos;t
           deliver listing media, resize photos for MLS, or lock downloads until payment. Most real estate photographers
-          need a platform that handles delivery, either alone or alongside a CRM. Our{" "}
+          are better served by a platform built for listing media that includes its own client records, so the CRM
+          and the delivery are the same thing. Our{" "}
           <BlogLink slug="best-photography-crm-software">photography CRM guide</BlogLink> covers the trade-offs.
         </p>
       ),
@@ -847,31 +980,57 @@ export const article: BlogArticle = {
     {
       question: "Is per-listing pricing cheaper than a subscription?",
       answerText:
-        "At low volume, usually yes. As volume grows, a flat subscription without listing caps typically becomes cheaper per job. Add up a full year at your expected volume to compare.",
+        "At low volume, sometimes. As volume grows, a flat subscription without listing caps typically becomes cheaper per job, especially when it replaces a website builder, a review tool, and an invoicing app. Add up a full year at your expected volume, including every tool in your stack, to compare.",
       answer: (
         <p>
-          At low volume, usually yes. As volume grows, a flat subscription without listing caps typically becomes
-          cheaper per job. Add up a full year at your expected volume, including any add-ons, to compare fairly.
+          At low volume, sometimes. As volume grows, a flat subscription without listing caps typically becomes
+          cheaper per job, especially when it replaces a website builder, a review tool, and an invoicing app. Add up
+          a full year at your expected volume, including every tool in your stack, to compare fairly.
         </p>
       ),
     },
     {
-      question: "Does ShootPortal deliver to Zillow Showcase or build property websites?",
+      question: "Does ShootPortal build property websites and marketing materials?",
       answerText:
-        "No. ShootPortal focuses on requests, estimates, scheduling, client communication, video review, payments, and media delivery. It does not deliver to Zillow Showcase or create property websites.",
+        "Yes. ShootPortal's Marketing Kit builds a property website for each listing from the delivered photos (Modern, Luxury, or Coastal designs, with an unbranded MLS-safe version), plus social posts, Stories, an Instagram carousel, and a print-ready flyer with a QR code. You can include it free or sell it to the agent as a paid add-on through your own Stripe.",
       answer: (
         <p>
-          No. ShootPortal focuses on requests, estimates, scheduling, client communication, video review, payments, and
-          media delivery. It doesn&apos;t deliver to Zillow Showcase or create property websites, so if those are
-          central to your business, weigh Aryeo, HDPhotoHub, or Rela.
+          Yes. ShootPortal&apos;s Marketing Kit builds a property website for each listing from the delivered photos
+          (Modern, Luxury, or Coastal designs, with an unbranded MLS-safe version), plus social posts, Stories, an
+          Instagram carousel, and a print-ready flyer with a QR code. You can include it free or sell it to the agent
+          as a paid add-on through your own Stripe.
+        </p>
+      ),
+    },
+    {
+      question: "Can real estate photography software replace Dropbox Replay or Frame.io?",
+      answerText:
+        "ShootPortal can for client feedback. Agents leave time-stamped comments pinned to a point on the frame, you reply in threads and resolve notes, upload numbered versions, and the client approves or requests changes, all on the same project as the invoice and delivery, included in the plan with no per-user add-on.",
+      answer: (
+        <p>
+          ShootPortal can for client feedback. Agents leave time-stamped comments pinned to a point on the frame, you
+          reply in threads and resolve notes, upload numbered versions, and the client approves or requests changes,
+          all on the same project as the invoice and delivery, included in the plan with no per-user add-on.
+        </p>
+      ),
+    },
+    {
+      question: "Does ShootPortal include a website for my photography business?",
+      answerText:
+        "Yes. The Sites builder includes Modern, Luxury, and Minimal templates with a portfolio, services, testimonials, and a Book a Shoot form, on your own domain or a free yourstudio.shootportal.app address. Inquiries land in a leads inbox and requests become projects automatically.",
+      answer: (
+        <p>
+          Yes. The Sites builder includes Modern, Luxury, and Minimal templates with a portfolio, services,
+          testimonials, and a Book a Shoot form, on your own domain or a free yourstudio.shootportal.app address.
+          Inquiries land in a leads inbox and requests become projects automatically.
         </p>
       ),
     },
   ],
   related: ["best-aryeo-alternatives", "shootportal-vs-aryeo-vs-hdphotohub", "best-real-estate-photography-delivery-software"],
   cta: {
-    title: "Run your real estate media business in one place.",
-    body: "Agent requests, estimates, shoot times, revisions, payments, and downloads on one project record, in a client portal with your logo, colors, and domain. No per-listing fees.",
+    title: "Run your whole real estate media business from one link.",
+    body: "Your website, agent requests, proposals, shoot times, editing, video review, payments, downloads, and sellable listing marketing, all under your brand. One flat price, no per-listing fees.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

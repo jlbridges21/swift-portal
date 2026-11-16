@@ -5,32 +5,39 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   SiteLink,
 } from "@/components/blog/article-parts";
 import { DocumentCard, FunnelDiagram } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
-import { TrialCard } from "@/components/blog/conversion-parts";
+import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, AppScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "how-to-get-real-estate-photography-clients",
   title: "How to Get More Real Estate Photography Clients: 15 Strategies That Work",
   seoTitle: "How to Get Real Estate Photography Clients: 15 Strategies",
   description:
-    "How to get real estate photography clients: 15 practical strategies for your portfolio, agent networking, outreach, Google Business Profile, and retention.",
+    "How to get real estate photography clients: 15 strategies for your website, agent outreach, Google Business Profile, listing marketing, and retention.",
   excerpt:
-    "Fifteen practical ways to win listing agents and keep them booking, from office presentations and personal outreach to Google Business Profile, reviews, and a delivery experience agents remember.",
+    "Fifteen practical ways to win listing agents and keep them booking, from a website with a Book a Shoot button and office presentations to property websites that credit your work and a marketing kit agents love.",
   category: "real-estate-photography",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   primaryKeyword: "how to get real estate photography clients",
   secondaryKeywords: [
     "real estate photography marketing",
     "find real estate agents to photograph for",
     "real estate photographer outreach email",
     "grow real estate photography business",
+    "real estate photography website",
+    "property website for listings",
+    "real estate marketing kit",
+    "real estate photographer referrals",
   ],
-  readingMinutes: 11,
+  readingMinutes: 13,
   cover: {
     variant: "funnel",
     tint: "indigo",
@@ -40,6 +47,11 @@ export const article: BlogArticle = {
   quickAnswer: {
     heading: "The short answer",
     points: [
+      <>
+        <strong>Give agents a professional business to hire and a reason to stay:</strong> ShootPortal gives you a
+        website with your portfolio and a Book a Shoot button, property websites that credit your photography to every
+        buyer, and a marketing kit that makes agents look good to their sellers.
+      </>,
       <>
         <strong>Agents hire on trust and convenience.</strong> A focused portfolio and an easy booking path get you
         considered; reliability and fast delivery get you rebooked.
@@ -58,7 +70,8 @@ export const article: BlogArticle = {
       </>,
       <>
         <strong>Retention is the cheapest growth.</strong> Every repeat booking and referral is a client you
-        didn&apos;t have to find from scratch.
+        didn&apos;t have to find from scratch, and agents rebook the photographer who makes their listings easy to
+        market.
       </>,
     ],
   },
@@ -74,6 +87,12 @@ export const article: BlogArticle = {
         This guide covers <strong>how to get real estate photography clients</strong> with 15 practical strategies,
         grouped by where they sit in the client journey: getting noticed, getting the first booking, and turning one
         booking into a long-term account. None of them are shortcuts. All of them compound.
+      </p>
+      <p>
+        Several of them get much easier with the right platform behind you. ShootPortal gives you a real estate
+        photography website that turns visits into bookings, a single link per listing where agents approve, pay, and
+        download, and a property website and social media kit for every listing, which you can include or sell. Each
+        one either brings in a new agent or gives the current one a reason to come back.
       </p>
       <p>
         If you&apos;re still setting up the business itself, start with our guide on{" "}
@@ -113,10 +132,10 @@ export const article: BlogArticle = {
             caption="Real estate photography customer journey: what the agent needs at each stage and what you can do"
             columns={["Stage", "What the agent needs", "What you can do", "Strategies"]}
             rows={[
-              ["Aware", "To know you exist and shoot listings like theirs", "Show up in person and in local search", "#3–#6, #9, #11"],
-              ["Interested", "Proof of quality and a clear offer", "Focused portfolio, visible packages, reviews", "#1, #2, #10"],
-              ["First booking", "Low risk and low effort to try", "Personal outreach, simple booking, clear pricing", "#7, #8"],
-              ["Repeat client", "Reliability and fast, easy delivery", "Consistent turnaround, organized delivery", "#12, #13"],
+              ["Aware", "To know you exist and shoot listings like theirs", "Show up in person, in local search, and on property websites that credit you", "#3–#6, #9, #11"],
+              ["Interested", "Proof of quality and a clear offer", "A website with your portfolio, visible packages, and reviews", "#1, #2, #10"],
+              ["First booking", "Low risk and low effort to try", "Personal outreach, a Book a Shoot button, clear pricing", "#2, #7, #8"],
+              ["Repeat client", "Reliability, fast delivery, and marketing that makes them look good", "Consistent turnaround, organized delivery, a listing marketing kit", "#12, #13"],
               ["Advocate", "A reason and an easy way to recommend you", "Ask for referrals; serve teammates well", "#14, #15"],
             ]}
           />
@@ -127,7 +146,7 @@ export const article: BlogArticle = {
       id: "foundations",
       title: "Strategies 1–2: Get your foundations right",
       tocLabel: "Foundations",
-      body: () => (
+      body: (ctx) => (
         <>
           <h3>1. Build a portfolio that looks like the agent&apos;s listings</h3>
           <p>
@@ -141,7 +160,7 @@ export const article: BlogArticle = {
             consistent edit. If you offer drone, video, or floor plans, show one strong example of each, clearly
             labelled.
           </p>
-          <h3>2. Make it easy to understand what you offer and book you</h3>
+          <h3>2. Put it on a website that makes booking you easy</h3>
           <p>
             A professional presentation is mostly about removing friction. An agent who finds you should be able to
             see your packages, a starting price or clear price range, your service area, and a way to request a shoot,
@@ -150,6 +169,23 @@ export const article: BlogArticle = {
             <BlogLink slug="real-estate-photography-pricing-guide">real estate photography pricing guide</BlogLink>{" "}
             covers how to structure them.
           </p>
+          <Figure caption="Real ShootPortal screen: a real estate media business website built in ShootPortal, with the portfolio, services, and a Book a Shoot button that opens your branded request form.">
+            <AppScreen view="business-website" />
+          </Figure>
+          <ProductCallout title="Your website and your booking form are one system">
+            <p>
+              ShootPortal&apos;s website builder (Modern, Luxury, or Minimal templates) shows your portfolio projects,
+              up to nine featured services, testimonials you paste in, and your social links, on your own domain. Book a
+              Shoot opens a branded request form where the agent enters their brokerage, picks services from your
+              catalog, and sees a preliminary estimate the moment they submit. No account needed, and the client and
+              project are created for you.
+            </p>
+          </ProductCallout>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Look like the established choice to every agent who checks you out"
+            body="Publish a portfolio website with a Book a Shoot button, then let every listing you deliver advertise you with a property website that credits your photography."
+          />
         </>
       ),
     },
@@ -298,6 +334,26 @@ export const article: BlogArticle = {
             when they&apos;re happy for you to do so, which puts your work in front of their audience too. Consistency
             matters more than volume; a steady stream of strong work keeps you top of mind.
           </p>
+          <p>
+            Better still, put your photos in the agent&apos;s own feed. When you hand the agent ready-made Just Listed,
+            Open House, and Just Sold posts built from your images, they post your work to their audience for you.
+          </p>
+          <h3>Let every listing advertise you</h3>
+          <p>
+            A single-property website for each listing gives the agent a polished link to share with buyers, and it can
+            carry a &quot;Photography by&quot; credit with your business name. Every buyer, seller, and agent who opens
+            that link sees who shot the home. It&apos;s free advertising, placed in front of exactly the people who hire
+            real estate photographers.
+          </p>
+          <Figure caption="Real ShootPortal screens: the property website editor on your side (Modern, Luxury, and Coastal designs), and the finished listing site on a buyer's phone, built automatically from the photos you delivered.">
+            <TwoSidedScreens business="property-website-editor" client="phone-property-website" />
+          </Figure>
+          <p>
+            In ShootPortal, property websites are built from the delivered photos and project details, with sections
+            for key facts, the gallery, video, floor plans, a virtual tour, open house times, and the agent&apos;s
+            contact card. Status updates from Coming Soon to Sold, there&apos;s an unbranded MLS-safe version, and view
+            tracking shows the agent how much attention their listing is getting.
+          </p>
         </>
       ),
     },
@@ -323,10 +379,20 @@ export const article: BlogArticle = {
           </p>
           <p>
             A branded client portal brings that together. Instead of a cloud folder link and a separate payment link,
-            the agent sees their listings, media, messages, and payment in one place. Our guide on{" "}
+            the agent sees their listings, media, messages, and payment in one place, with no app to install. Our guide on{" "}
             <BlogLink slug="how-to-deliver-real-estate-photos">how to deliver real estate photos</BlogLink> walks
             through delivery options and how to organize them.
           </p>
+          <h3>Make the agent look good to their seller</h3>
+          <p>
+            The agent&apos;s real client is the seller, and sellers judge agents on how hard they market the home. A
+            photographer who delivers the photos plus a property website, social posts, and a print flyer is helping
+            the agent win their next listing, and agents remember who did that. It&apos;s retention and referrals in
+            one, and it can be paid: offer the kit free to your best accounts and sell it as an add-on to everyone else.
+          </p>
+          <Figure caption="Real ShootPortal screen: the Marketing Kit tab on a listing project, offering the agent a Property Website and Social Media Kit, each set to included or paid. A new revenue stream on work you've already done.">
+            <AppScreen view="marketing-kit-tab" />
+          </Figure>
           <h3>13. Make rebooking effortless</h3>
           <p>
             Repeat bookings happen when the second job is easier than the first. Remember each agent&apos;s
@@ -371,17 +437,23 @@ export const article: BlogArticle = {
               download without an account.
             </li>
             <li>
-              <strong>Payment doesn&apos;t become a conversation.</strong> The agent pays by card through Stripe in
-              the same portal, and you can set downloads to unlock once the balance is paid.
+              <strong>Payment doesn&apos;t become a conversation.</strong> The agent pays by card, Apple Pay, Google
+              Pay, or bank transfer in the same portal, straight to your Stripe account, and downloads can unlock
+              automatically once the balance is paid.
+            </li>
+            <li>
+              <strong>Their marketing is ready when the photos are.</strong> The property website and social kit reuse
+              the agent&apos;s saved headshot, brokerage logo, and colors, so every listing looks on-brand for them
+              without a single extra request.
             </li>
           </ul>
           <p>
             To be clear about what each part does: reminder emails, receipts, and some stage changes happen
             automatically. The client record, messages, files, and payment status are centralized on the agent and
             the listing. The relationship itself (the check-in call, the referral ask, the office presentation) is
-            still yours. ShootPortal doesn&apos;t send SMS or build property websites, so if your agents expect those,
-            factor that in.
+            still yours, and now you have more time for it.
           </p>
+          <AllInOnePlatform intro="From the website that wins the agent to the marketing kit that keeps them, everything a real estate photography business needs is on one subscription." />
           <Figure caption="Real ShootPortal screen: an agent's view of a listing in the ShootPortal client portal, moving from estimate to shoot, media, payment, and files (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
@@ -392,11 +464,12 @@ export const article: BlogArticle = {
           </p>
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Make the second booking easier than the first"
+            title="Win more agents, and give them every reason to rebook"
             body={
               <>
-                Put your packages on a branded request form, keep each agent&apos;s notes and property history on their
-                record, and deliver MLS-ready files they can grab from a phone. Try it on your next listing.
+                Publish a portfolio website with a Book a Shoot button, keep each agent&apos;s notes and property history
+                on their record, deliver MLS-ready files they can grab from a phone, and hand them a property website
+                and social posts that credit your work. Try it on your next listing.
               </>
             }
           />
@@ -410,7 +483,7 @@ export const article: BlogArticle = {
     },
     {
       id: "putting-it-together",
-      title: "Putting the 15 strategies to work",
+      title: "How to get real estate photography clients: putting the 15 strategies to work",
       tocLabel: "Putting it together",
       body: () => (
         <>
@@ -431,7 +504,9 @@ export const article: BlogArticle = {
               "Focus on active listing agents and meet them in person where you can.",
               "Keep outreach short, specific, and free of promises you can't guarantee.",
               "Set up a service-area Google Business Profile and ask for reviews without incentives.",
-              "Fast, organized delivery and easy rebooking turn first jobs into long-term clients.",
+              "A website with a Book a Shoot button turns interest into first bookings.",
+              "Property websites with your credit advertise you to every buyer and agent who views the listing.",
+              "Fast, organized delivery, easy rebooking, and marketing that makes agents look good turn first jobs into long-term clients.",
             ]}
           />
         </>
@@ -489,20 +564,46 @@ export const article: BlogArticle = {
     {
       question: "What makes agents keep booking the same photographer?",
       answerText:
-        "Reliability, fast turnaround, and easy delivery. Agents rebook photographers who show up on time, deliver MLS-ready and full-resolution files quickly in one place, remember their preferences, and make payment simple.",
+        "Reliability, fast turnaround, and easy delivery. Agents rebook photographers who show up on time, deliver MLS-ready and full-resolution files quickly in one place, remember their preferences, make payment simple, and help them market the listing with ready-made posts and a property website.",
       answer: (
         <p>
           Reliability, fast turnaround, and easy delivery. Agents rebook photographers who show up on time, deliver
-          MLS-ready and full-resolution files quickly in one place, remember their preferences, and make payment
-          simple.
+          MLS-ready and full-resolution files quickly in one place, remember their preferences, make payment simple,
+          and help them market the listing with ready-made posts and a property website.
+        </p>
+      ),
+    },
+    {
+      question: "Do property websites help real estate photographers get more clients?",
+      answerText:
+        "They can. A property website gives the agent a polished link to share, and an optional Photography by credit shows your business to every buyer, seller, and agent who views it. In ShootPortal, property websites are built from the photos you deliver, and you can include them free or sell them to the agent as an add-on.",
+      answer: (
+        <p>
+          They can. A property website gives the agent a polished link to share, and an optional &quot;Photography
+          by&quot; credit shows your business to every buyer, seller, and agent who views it. In ShootPortal, property
+          websites are built from the photos you deliver, and you can include them free or sell them to the agent as
+          an add-on.
+        </p>
+      ),
+    },
+    {
+      question: "What should a real estate photography website include?",
+      answerText:
+        "A focused portfolio of listings like the ones your target agents have, clear packages with starting prices, your service area, testimonials, and an obvious way to book. ShootPortal's website builder includes portfolio, services, testimonials, and a Book a Shoot button that opens a branded request form with an instant estimate.",
+      answer: (
+        <p>
+          A focused portfolio of listings like the ones your target agents have, clear packages with starting prices,
+          your service area, testimonials, and an obvious way to book. ShootPortal&apos;s website builder includes
+          portfolio, services, testimonials, and a Book a Shoot button that opens a branded request form with an
+          instant estimate.
         </p>
       ),
     },
   ],
   related: ["best-photography-crm-software", "real-estate-photography-client-management", "how-to-start-real-estate-photography-business"],
   cta: {
-    title: "You won the agent. Now give them a reason to rebook.",
-    body: "A branded request form, estimates agents approve online, agent records with notes and property history, and fast MLS-ready delivery with payment in the same portal.",
+    title: "Win the agent with your website. Keep them with your marketing kit.",
+    body: "A portfolio website with Book a Shoot, estimates agents approve online, fast MLS-ready delivery with payment in the same portal, and property websites and social posts that credit your work and make agents look good.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

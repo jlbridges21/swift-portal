@@ -5,6 +5,7 @@ import {
   Callout,
   ComparisonTable,
   Figure,
+  InlineCta,
   KeyTakeaways,
   SiteLink,
   Steps,
@@ -12,19 +13,21 @@ import {
 import { PortalAnatomyDiagram } from "@/components/blog/diagrams";
 import { BeforeAfter } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
-import { TrialCard, TrialPlan } from "@/components/blog/conversion-parts";
+import { ProductCallout, TrialCard, TrialPlan } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, ScreenTrio, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "how-to-create-photography-client-portal",
   title: "How to Create a Professional Client Portal for Your Photography Business",
   seoTitle: "How to Create a Client Portal for Your Photography Business",
   description:
-    "A step-by-step guide to building a client portal for your photography business: what to include, branding and domains, DIY options vs. dedicated software.",
+    "How to build a client portal for your photography business: what to include, branding and domains, DIY vs. software, and what your client sees.",
   excerpt:
-    "What clients actually expect from a portal, how to plan and brand one, the honest pros and cons of a DIY setup, and a step-by-step walkthrough for building it with dedicated software.",
+    "What clients expect from a portal, how to plan and brand one, why DIY setups break down, and a step-by-step ShootPortal walkthrough with real screens of exactly what your client sees.",
   category: "client-management",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   primaryKeyword: "client portal for photography business",
   secondaryKeywords: [
     "photography client portal",
@@ -32,8 +35,12 @@ export const article: BlogArticle = {
     "branded client portal",
     "client portal custom domain",
     "DIY client portal",
+    "real estate photography client portal",
+    "client portal with online payments",
+    "photography business website",
+    "video review for clients",
   ],
-  readingMinutes: 12,
+  readingMinutes: 13,
   cover: {
     variant: "portal",
     tint: "teal",
@@ -44,20 +51,21 @@ export const article: BlogArticle = {
     heading: "The short answer",
     points: [
       <>
-        <strong>A client portal is one branded place</strong> where each client sees their project status, approves
-        quotes, picks up media, messages you, and pays.
+        <strong>A client portal is one branded place</strong> where each client approves the proposal, confirms the
+        shoot time, reviews photos and video, pays, and downloads.
       </>,
       <>
-        <strong>Plan the contents before the tool.</strong> Decide which of six building blocks (status, estimate,
-        schedule, media, messages, payments) your clients actually need.
+        <strong>The fastest way to build one:</strong> ShootPortal (our product) creates a portal for every client and
+        project automatically, under your logo and domain, and keeps it current as the job moves.
+      </>,
+      <>
+        <strong>For your client, it&apos;s simple:</strong> every email opens the right page in one click, every action
+        is one big button (Approve Proposal, Approve Time, Pay Now, Download All), and it works on any phone with
+        nothing to install.
       </>,
       <>
         <strong>A DIY portal</strong> built from shared folders, a page builder, and payment links is cheap but has to
-        be maintained by hand for every client.
-      </>,
-      <>
-        <strong>Dedicated software</strong> creates the portal automatically for each client and project, so it stays
-        current without extra work.
+        be updated by hand for every client, and it breaks the moment you forget.
       </>,
       <>
         <strong>Brand it properly:</strong> your logo, colors, and a custom domain do more for perceived
@@ -76,10 +84,11 @@ export const article: BlogArticle = {
       <p>
         A <strong>client portal for your photography business</strong> pulls those pieces into one branded space. This
         guide walks through how to build one: what to include, how to brand it, how far a do-it-yourself setup can take
-        you, and how to set one up with dedicated software. If you&apos;re already at the point of comparing products,
-        our roundup of the{" "}
+        you, and how to set one up in ShootPortal, the platform we build for real estate photographers, drone pilots,
+        and videographers. We&apos;ll show the real screens your client sees at each step, because the client&apos;s
+        experience is the whole point. If you&apos;re still comparing products, our roundup of the{" "}
         <BlogLink slug="best-photography-client-portals">best client portals for photographers</BlogLink> covers the
-        options side by side. This article is about the build.
+        options side by side.
       </p>
     </>
   ),
@@ -119,6 +128,11 @@ export const article: BlogArticle = {
             Notice what&apos;s missing: clients rarely ask for features. They ask for clarity. A portal that answers
             these six questions for every project is more professional than one with a dozen tabs nobody opens.
           </p>
+          <p>
+            They also expect it to be easy. Your client is an agent between showings or a marketing manager between
+            meetings, usually on a phone. If they have to install an app, create a password, or hunt for the right link,
+            they&apos;ll text you instead, and the portal has failed.
+          </p>
         </>
       ),
     },
@@ -146,7 +160,7 @@ export const article: BlogArticle = {
             </li>
             <li>
               <strong>Video-heavy work</strong> needs a review step with feedback attached to the right moment in the
-              cut.
+              cut, ideally inside the portal rather than in a separate Frame.io or Dropbox Replay link.
             </li>
             <li>
               <strong>Custom-quoted work</strong> (aerial surveys, commercial shoots) needs estimates the client can
@@ -229,6 +243,14 @@ export const article: BlogArticle = {
             balance is due, and whether downloads wait for payment. Writing these rules into the portal itself means
             you never have to negotiate them by email.
           </p>
+          <ProductCallout title="Payment rules that enforce themselves">
+            <p>
+              In ShootPortal, a deposit (none, a percentage, or a fixed amount) is created the moment the client
+              approves the proposal. Clients pay by card, Apple Pay, Google Pay, or bank transfer, straight to your own
+              Stripe account, and ShootPortal takes 0%. Downloads can stay locked until the balance is paid, then unlock
+              and send the receipt automatically.
+            </p>
+          </ProductCallout>
           <h3>Project status</h3>
           <p>
             Use a small number of stages with names a client understands. &quot;Shoot complete&quot; and &quot;Ready
@@ -336,8 +358,8 @@ export const article: BlogArticle = {
                 title: "Follow the guided setup",
                 body: (
                   <>
-                    Onboarding walks you through your business identity, branding, services, payments, and your landing
-                    page, then finishes. Any step can be skipped and completed later from settings, so you don&apos;t
+                    Onboarding walks you through your business identity, branding, services, payments, and your
+                    website, then finishes. Any step can be skipped and completed later from settings, so you don&apos;t
                     need every answer on day one.
                   </>
                 ),
@@ -346,7 +368,8 @@ export const article: BlogArticle = {
                 title: "Brand it",
                 body: (
                   <>
-                    Upload your logo, set your brand color, and choose a light or dark portal theme.
+                    Upload your logo, email logo, and favicon, and set your brand colors. They carry through the portal,
+                    every automated email, checkout, and your websites.
                   </>
                 ),
               },
@@ -369,12 +392,13 @@ export const article: BlogArticle = {
                 ),
               },
               {
-                title: "Publish your landing page and request form",
+                title: "Publish your business website and Book a Shoot form",
                 body: (
                   <>
-                    Each business gets an editable public page on its portal domain with your services and a request
-                    form. A client&apos;s request (details, property address, service, preferred date) creates their
-                    portal account and a new project.
+                    Build your business website in the Sites editor (Modern, Luxury, or Minimal templates, with your
+                    portfolio, services, and contact page) and turn on the Book a Shoot form. A client&apos;s request
+                    (contact details, brokerage, services, preferred date, notes) needs no account: it creates their
+                    portal account and a new project, and shows them a preliminary estimate the moment they submit.
                   </>
                 ),
               },
@@ -391,7 +415,7 @@ export const article: BlogArticle = {
                 title: "Walk through it as a client",
                 body: (
                   <>
-                    Submit a test request, approve the estimate, accept a proposed time, and check the delivery on your
+                    Submit a test request, approve the proposal, approve a proposed time, pay, and download on your
                     phone before your first real client does.
                   </>
                 ),
@@ -401,30 +425,25 @@ export const article: BlogArticle = {
           <Figure caption="Real ShootPortal screen: the client side of a ShootPortal portal, with status, estimate, media, and payment (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
-          <h3>What the portal does for you, and what it doesn&apos;t</h3>
+          <h3>What the portal does for you</h3>
           <ul>
             <li>
-              <strong>Automatic once set up:</strong> a client account and project from each request, preliminary
-              estimates from your catalog (if you turn them on), email notifications from editable templates, some
-              stage changes as work moves forward, payment receipts, and an optional download unlock after final
-              payment.
+              <strong>Automatic once set up:</strong> a client account and project from each request, an instant
+              preliminary estimate from your catalog (with travel fees by ZIP distance), branded emails at every step,
+              reminders for proposals, scheduling, review, and payment, stage changes as work moves forward, payment
+              receipts, and an optional download unlock after payment.
             </li>
             <li>
-              <strong>Centralized:</strong> the estimate, shoot time, messages, media, approvals, and payment status for
-              each project, and every project on one client record with lifetime revenue and outstanding balance.
+              <strong>Centralized:</strong> the proposal, shoot time, messages, media, video review, approvals, and
+              payment status for each project, and every project on one client record with lifetime revenue and
+              outstanding balance.
             </li>
             <li>
-              <strong>Still yours to do:</strong> sending the official estimate, proposing shoot times (clients accept,
-              decline, or counter; they don&apos;t book open slots themselves), uploading finals, and following up on
-              anything unusual.
+              <strong>Kept in your hands:</strong> you send the official proposal and propose the shoot time, so pricing
+              and your route stay under your control. You can touch up any photo in the built-in editor before it goes
+              out, and Save to Project updates the client&apos;s gallery instantly.
             </li>
           </ul>
-          <p>
-            Some honest limits worth knowing: ShootPortal is a branded portal (your logo, colors, and domain), not a
-            fully white-labeled one, and there&apos;s no built-in e-signature for contracts. If those are essential,
-            weigh them against the tools in our{" "}
-            <BlogLink slug="best-photography-crm-software">photography CRM comparison</BlogLink>.
-          </p>
           <TrialCard
             trialDays={ctx.trialDays}
             title="Set up your portal and run one real client through it"
@@ -452,6 +471,62 @@ export const article: BlogArticle = {
       ),
     },
     {
+      id: "what-your-client-sees",
+      title: "What your client sees in a ShootPortal client portal for a photography business",
+      tocLabel: "What your client sees",
+      body: (ctx) => (
+        <>
+          <p>
+            Here&apos;s the part that matters most: the client&apos;s side. Every step below opens from a link in a
+            branded email, on a phone or a laptop, with no app to download. Each screen asks the client for one thing,
+            with one obvious button.
+          </p>
+          <Figure
+            wide
+            caption="Real ShootPortal client screens: the official proposal with line items and deposit terms and an Approve Proposal button (left), a proposed shoot time with Approve Time or Request a Different Time (center), and finished media with Pay Now (right)."
+          >
+            <ScreenTrio views={["portal-proposal", "portal-shoot-time", "portal-pay"]} />
+          </Figure>
+          <ol>
+            <li>
+              <strong>Approve the proposal.</strong> Line items, the total, and the deposit terms on one page. One click
+              approves it and creates the deposit payment; or the client requests changes and you send a new version.
+            </li>
+            <li>
+              <strong>Approve the shoot time.</strong> You propose a time; they tap Approve Time or suggest a different
+              one. The confirmed shoot lands on your Google Calendar.
+            </li>
+            <li>
+              <strong>Follow progress without asking.</strong> The portal shows the same pipeline you work from, in
+              plain language: scheduled, shoot complete, ready for review, delivered.
+            </li>
+            <li>
+              <strong>Review and comment.</strong> Photos come in folders, with hearts for favorites. Video plays in the
+              portal, and comments pin to the timestamp and a point on the frame, with numbered versions as you revise.
+              No Frame.io or Dropbox Replay link, and no extra cost.
+            </li>
+            <li>
+              <strong>Pay and download.</strong> Pay Now opens a checkout with card, Apple Pay, Google Pay, or bank
+              payment. Downloads unlock right away, in Print or MLS size, one at a time or with Download All.
+            </li>
+          </ol>
+          <Figure caption="Real ShootPortal screens: the project's Media tab where you organize the finals (left), and the finished project on your client's phone with Download All (right).">
+            <TwoSidedScreens business="project-media" client="phone-portal-finished" />
+          </Figure>
+          <p>
+            For real estate clients there&apos;s one more step that agents love. With the Marketing Kit turned on, the
+            agent can preview a property website and a social media kit (Just Listed posts, Stories, a carousel, and a
+            print flyer) built from their photos, and buy it or receive it free, right from the same project.
+          </p>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="See your portal through your client's eyes"
+            body="Set up your branding, send yourself a test proposal, and approve, pay, and download on your own phone. The guided setup handles branding, services, and Stripe first."
+          />
+        </>
+      ),
+    },
+    {
       id: "multiple-clients",
       title: "Managing many clients in one portal",
       tocLabel: "Many clients",
@@ -469,17 +544,21 @@ export const article: BlogArticle = {
             <li>
               <strong>Share links for the people around your client.</strong> Agents have assistants; businesses have
               marketing teams. Link-based or invite-based access keeps them out of your client&apos;s account. In
-              ShootPortal, you can share with &quot;anyone with the link&quot; or by email invite, one-time or reusable,
-              with an expiry.
+              ShootPortal, you can share with &quot;anyone with the link&quot; or by email invite, with an expiry.
             </li>
             <li>
               <strong>Use the portal&apos;s data on your side too.</strong> The same record that powers the client
               portal should tell you lifetime revenue, outstanding balance, and when the client last logged in.
             </li>
             <li>
+              <strong>Save what repeats.</strong> For agents, ShootPortal saves their headshot, brokerage logo, and
+              colors on the client record, so every new listing&apos;s property website and social posts come out
+              already branded for them.
+            </li>
+            <li>
               <strong>Give staff access by role.</strong> If you have editors or second shooters, they need access to
-              their projects, not your whole business. ShootPortal supports staff accounts with granular permissions and
-              assignment to specific projects.
+              their projects, not your whole business. ShootPortal includes unlimited staff accounts with granular
+              permissions (presets like Editor or Coordinator) and assignment to specific projects.
             </li>
           </ul>
           <p>
@@ -507,16 +586,17 @@ export const article: BlogArticle = {
             caption="Example client journey through a photography client portal"
             columns={["Moment", "What the client sees", "What the client does"]}
             rows={[
-              ["Request", "Your branded landing page and service catalog", "Submits a request with address, service, and preferred date"],
-              ["Estimate", "Line items, total, and expiry date", "Approves, or requests changes"],
+              ["Request", "Your business website and Book a Shoot form", "Submits a request and sees a preliminary estimate instantly"],
+              ["Proposal", "Line items, total, deposit terms, and expiry date", "Clicks Approve Proposal, or requests changes"],
               ["Deposit", "Amount due on approval", "Pays by card"],
-              ["Scheduling", "Your proposed shoot time", "Accepts, declines, or suggests another time"],
+              ["Scheduling", "Your proposed shoot time", "Taps Approve Time or suggests another time"],
               ["Shoot and editing", "Plain-language status updates", "Nothing; no need to ask for updates"],
-              ["Review", "Photos in folders and the video draft", "Approves items, leaves notes, comments on the video timeline"],
+              ["Review", "Photos in folders and the video draft (V1, V2)", "Approves items, leaves notes, comments pinned to the video frame"],
               ["Final payment", "Remaining balance", "Pays online; downloads unlock if you use that option"],
               ["Delivery", "All final media", "Downloads files or a ZIP; shares a link with their team"],
+              ["Marketing (optional)", "Property website and social kit preview", "Adds it to the cart, or receives it free"],
             ]}
-            note="Illustrative journey. The exact steps depend on the tool and how you configure it."
+            note="Illustrative journey based on ShootPortal. The exact steps depend on how you configure it."
           />
           <p>
             The client never has to search their inbox for a link or ask what&apos;s next, and you never have to
@@ -545,6 +625,7 @@ export const article: BlogArticle = {
             If you&apos;re trying a dedicated tool, evaluate it on a real job rather than a feature list. A simple plan:
           </p>
           <TrialPlan />
+          <AllInOnePlatform intro="The portal is the client's view of one connected system: your website brings the request in, and the same subscription runs proposals, scheduling, editing, video review, payment, delivery, and listing marketing." />
           <p>
             To see the full flow
             before you build anything, take a look at{" "}
@@ -605,22 +686,48 @@ export const article: BlogArticle = {
     {
       question: "Is ShootPortal's client portal white-label?",
       answerText:
-        "ShootPortal is a branded portal: your logo, brand color, light or dark theme, and your own subdomain or custom domain. It is not marketed as fully white-label.",
+        "ShootPortal is a branded portal: your logo, favicon, and brand colors across the portal, emails, checkout, and websites, on your own subdomain or a custom domain like portal.yourstudio.com, with emails that can send from your own domain.",
       answer: (
         <p>
-          ShootPortal is a branded portal: your logo, brand color, light or dark theme, and your own subdomain or custom
-          domain. It isn&apos;t marketed as fully white-label.
+          ShootPortal is a branded portal: your logo, favicon, and brand colors across the portal, emails, checkout, and
+          websites, on your own subdomain or a custom domain like <em>portal.yourstudio.com</em>, with emails that can
+          send from your own domain.
         </p>
       ),
     },
     {
       question: "Do clients need an account to use a photography portal?",
       answerText:
-        "It depends on the tool. In ShootPortal, clients sign in to their portal, and you can share media with people who don't have an account using view links or email invites.",
+        "It depends on the tool. In ShootPortal, the client's account is created automatically when they request a shoot or you add them, and every email opens their portal in one click. Pay links open without logging in, and you can share media with people who don't have an account using view links or email invites.",
       answer: (
         <p>
-          It depends on the tool. In ShootPortal, clients sign in to their portal, and you can share media with people
-          who don&apos;t have an account using view links or email invites.
+          It depends on the tool. In ShootPortal, the client&apos;s account is created automatically when they request a
+          shoot or you add them, and every email opens their portal in one click. Pay links open without logging in,
+          and you can share media with people who don&apos;t have an account using view links or email invites.
+        </p>
+      ),
+    },
+    {
+      question: "Do clients need to download an app to use the portal?",
+      answerText:
+        "Not with ShootPortal. The portal runs in any phone or desktop browser. Clients approve proposals and shoot times, comment on videos, pay with card, Apple Pay, or Google Pay, and download files without installing anything.",
+      answer: (
+        <p>
+          Not with ShootPortal. The portal runs in any phone or desktop browser. Clients approve proposals and shoot
+          times, comment on videos, pay with card, Apple Pay, or Google Pay, and download files without installing
+          anything.
+        </p>
+      ),
+    },
+    {
+      question: "Can my client portal connect to my photography business website?",
+      answerText:
+        "Yes. ShootPortal includes a business website builder with Modern, Luxury, and Minimal templates, your portfolio and services, and a Book a Shoot form. A request from the website creates the client's portal account and project automatically and shows them an instant estimate.",
+      answer: (
+        <p>
+          Yes. ShootPortal includes a business website builder with Modern, Luxury, and Minimal templates, your
+          portfolio and services, and a Book a Shoot form. A request from the website creates the client&apos;s portal
+          account and project automatically and shows them an instant estimate.
         </p>
       ),
     },
@@ -628,7 +735,7 @@ export const article: BlogArticle = {
   related: ["best-photography-client-portals", "how-to-deliver-real-estate-photos", "best-photography-crm-software"],
   cta: {
     title: "Build a branded client portal your clients will actually use",
-    body: "Pick your portal address, add your logo and services, connect your own Stripe account, and give every client one page for their estimate, shoot time, files, and payments.",
+    body: "Every client gets one page to approve the proposal, confirm the shoot time, comment on the video, pay, and download, with nothing to install. You get fewer emails and faster payment.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See the client portal",
   },

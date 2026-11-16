@@ -522,7 +522,6 @@ export default async function PhotoVideoDeliverySoftwarePage() {
               ]}
               notFor={[
                 "You sell prints or products from your galleries. Pixieset, Pic-Time, or ShootProof are built for that.",
-                "Clients need to heart favorites to choose their selects, as in wedding and portrait proofing. Those platforms handle it; ShootPortal uses approve or reject per item.",
                 "You only need a link to send files and nothing else around the job.",
               ]}
             />
@@ -583,11 +582,11 @@ export default async function PhotoVideoDeliverySoftwarePage() {
                 ),
               },
               {
-                q: "Does ShootPortal sell prints or let clients pick favorites?",
+                q: "Can clients pick favorites or buy prints?",
                 a: (
                   <p>
-                    No. There&apos;s no print store and no favorites. If those matter, a gallery platform such as Pixieset, Pic-Time, or
-                    ShootProof is a better fit.
+                    Clients can heart their favorite photos in the gallery, and you see which ones they picked. There&apos;s no print store:
+                    ShootPortal is built for delivering listing and commercial media, not selling prints.
                   </p>
                 ),
               },

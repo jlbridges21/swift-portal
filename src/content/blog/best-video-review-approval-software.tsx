@@ -1,10 +1,10 @@
 import type { BlogArticle } from "@/lib/blog/types";
 import {
   BlogLink,
-  Callout,
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -16,29 +16,35 @@ import {
 import { VideoReviewDiagram } from "@/components/blog/diagrams";
 import { BeforeAfter } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
-import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
+import { BestFitPanel, ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, AppScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "best-video-review-approval-software",
   title: "Best Video Review and Approval Software for Videographers in 2026",
   seoTitle: "Best Video Review Software for Videographers (2026)",
   description:
-    "Compare video review software for client feedback: time-stamped comments, on-frame markup, versions, approvals, and pricing for Frame.io and its alternatives.",
+    "Video review software compared: Frame.io, Dropbox Replay, Vimeo, and more, plus the all-in-one pick for real estate and drone videographers.",
   excerpt:
-    "Frame.io, Vimeo, Dropbox Replay, Wipster, Krock.io, Filestage, Ziflow, MediaSilo, and ShootPortal compared on how clients leave feedback, how versions and approvals work, and what each one costs.",
+    "ShootPortal, Frame.io, Vimeo, Dropbox Replay, Wipster, Krock.io, Filestage, Ziflow, and MediaSilo compared on client feedback, versions, approvals, and price, and why videographers who deliver to clients are replacing Replay and Frame.io with review built into the project.",
   category: "software-comparisons",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "video review software",
   secondaryKeywords: [
     "video approval software",
     "Frame.io alternatives",
+    "Frame.io alternative",
+    "Dropbox Replay alternative",
     "client video feedback tool",
     "time-stamped video comments",
     "video review and approval",
+    "real estate video review",
+    "video review for drone videographers",
   ],
-  readingMinutes: 13,
+  readingMinutes: 14,
   cover: {
     variant: "review",
     tint: "indigo",
@@ -50,44 +56,45 @@ export const article: BlogArticle = {
     heading: "The short answer",
     points: [
       <>
-        <strong>Editing in Premiere, Resolve, or Final Cut all day?</strong> Frame.io, Dropbox Replay, or Krock.io.
-        Their editor integrations are the reason to pick them.
+        <strong>Real estate, drone, or brand videographer delivering to clients?</strong> ShootPortal (our product).
+        Clients comment on the frame, approve each version, pay, and download on one project in your branded portal.
+        Video review is included in the plan, with no per-user add-on.
       </>,
       <>
-        <strong>Already pay for Vimeo or Dropbox?</strong> Vimeo&apos;s review tools and the Dropbox Replay add-on
-        may cover client feedback without another subscription.
+        <strong>Paying for Dropbox Replay or Frame.io just to collect client notes?</strong> ShootPortal replaces that
+        subscription and the separate invoice and transfer link that go with it.
       </>,
       <>
-        <strong>Agency or brand team with staged sign-off?</strong> Filestage or Ziflow, priced for teams.
+        <strong>Want clients to stop sending notes by text?</strong> Time-stamped comments pinned to a spot on the
+        frame, threaded replies, resolve and reopen, and numbered versions work from a phone, with no app to install.
       </>,
       <>
-        <strong>Solo or small team on a budget?</strong> Krock.io and Wipster have low entry prices, and Frame.io has a
-        free plan for small projects.
-      </>,
-      <>
-        <strong>Want feedback, approval, payment, and delivery on the same client project?</strong> ShootPortal (our
-        product) builds video review into the business workflow, without editor integrations.
+        <strong>Comparing the dedicated review suites?</strong> Frame.io, Dropbox Replay, Vimeo, Wipster, Krock.io,
+        Filestage, Ziflow, and MediaSilo are all covered below with official pricing.
       </>,
     ],
   },
-  intro: () => (
+  intro: (ctx) => (
     <>
       <p>
         Every videographer has received the email: &quot;Loved it! A few small things. At the part with the kitchen,
         can it be shorter? And the music near the end?&quot; Which kitchen shot? Which version? Shorter by how much?
         Revision rounds rarely go long because clients are difficult. They go long because the feedback has no
-        address.
+        address. Good video review software gives it one.
       </p>
       <p>
-        <strong>Video review software</strong> fixes that by pinning each comment to a moment, and often a spot, in a
+        <strong>Video review software</strong> fixes that by pinning each comment to a moment, and a spot, in a
         specific version of the video. The client clicks where the problem is and types; you see exactly what they saw.
         Approval becomes a button rather than a vague &quot;looks good&quot; buried in a text thread.
       </p>
       <p>
-        This guide compares nine tools videographers use for client review and approval in 2026: dedicated
-        post-production review platforms, review features inside hosting and storage tools you may already pay for, and
-        ShootPortal, which puts review inside the same project as the estimate, invoice, and delivery. Pricing comes
-        from each vendor&apos;s official page, linked so you can check it.
+        For videographers who deliver straight to clients, our pick is ShootPortal. It puts that review inside the same
+        project as the proposal, the invoice, and the final download, so one client link replaces a Dropbox Replay or
+        Frame.io review link, a separate invoice, and a transfer link.{" "}
+        {ctx.studioMonthly ? <>It&apos;s part of one {ctx.studioMonthly}/month plan, not a per-user add-on. </> : null}
+        Below we compare it with eight other tools, from post-production suites to the review features inside hosting
+        and storage you may already pay for. Competitor pricing comes from each vendor&apos;s official page, linked so
+        you can check it.
       </p>
     </>
   ),
@@ -109,7 +116,7 @@ export const article: BlogArticle = {
             </li>
             <li>
               <strong>Version confusion.</strong> The client comments on v1 after you&apos;ve sent v2, or forwards an
-              old link to their boss. Now two sets of notes contradict each other.
+              old link to their broker. Now two sets of notes contradict each other.
             </li>
             <li>
               <strong>Feedback in five places.</strong> Some notes arrive by email, some by text, one in a voice memo.
@@ -141,6 +148,14 @@ export const article: BlogArticle = {
               ]}
             />
           </Figure>
+          <ProductCallout title="Every note on the frame, every round on the project">
+            <p>
+              Clients open the video from a one-click link in their email, pause, click the spot that needs work, and
+              type. Each comment carries its timestamp and version, sits in one list you can reply to and resolve, and
+              stays on the project next to the proposal and invoice. Notifications are batched, so ten comments
+              don&apos;t mean ten emails.
+            </p>
+          </ProductCallout>
           <p>
             Large files make it worse. If you&apos;re still working out how to get a 20 GB master to a client at all,
             start with our guide to{" "}
@@ -164,9 +179,9 @@ export const article: BlogArticle = {
           </p>
           <h3>On-frame markup and pins</h3>
           <p>
-            Some tools let reviewers draw on the frame: circle the sign that needs blurring, arrow the logo that&apos;s
-            off-center. Others let them pin a comment to a point on the image. Drawing is more expressive; a pin is
-            usually enough to say &quot;this, here.&quot;
+            Some tools let reviewers draw on the frame; others let them pin a comment to a point on the image. For
+            client feedback, a pin is usually all that&apos;s needed to say &quot;this, here&quot;: the sign to blur,
+            the logo that&apos;s off-center, the room that runs too long.
           </p>
           <Figure caption="Conceptual diagram: comments pinned to moments in the timeline and to a spot on the frame, on version 2 of a video.">
             <VideoReviewDiagram />
@@ -174,20 +189,22 @@ export const article: BlogArticle = {
           <h3>Versions</h3>
           <p>
             When you upload a new cut, the tool should keep it as the next version of the same video, with earlier
-            comments still visible. Some go further with side-by-side or overlay comparison so the client can see
-            exactly what changed.
+            comments still visible, so nobody comments on an old file by mistake.
           </p>
           <h3>Approvals</h3>
           <p>
             An explicit &quot;approved&quot; or &quot;changes requested&quot; status gives both sides a clear record. On
-            agency tools this can be staged across several decision-makers; on simpler tools it&apos;s one button.
+            agency tools this can be staged across several decision-makers; for most client work it&apos;s one button.
           </p>
           <h3>Reviewer access</h3>
           <p>
-            Clients don&apos;t want another account. Most tools let reviewers comment from a link. Some require a
-            free reviewer account to comment or approve, and portal-based tools ask clients to sign in once and keep
-            everything there.
+            Clients don&apos;t want another app. Most tools let reviewers comment from a link. Some require a free
+            reviewer account, and portal-based tools like ShootPortal send a one-click link into the client&apos;s own
+            branded portal, where the video, the invoice, and the downloads all live.
           </p>
+          <Figure caption="Real ShootPortal screens: on the left, your view of version 2 of a listing film with time-stamped client comments, replies, and Resolve buttons; on the right, the agent leaving a comment from their phone, with nothing to install.">
+            <TwoSidedScreens business="video-review" client="phone-video-review" />
+          </Figure>
         </>
       ),
     },
@@ -195,11 +212,12 @@ export const article: BlogArticle = {
       id: "comparison-table",
       title: "Video review software comparison table",
       tocLabel: "Comparison table",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
-            Here&apos;s how the nine tools compare on the features that decide most purchases. &quot;Not stated&quot;
-            means we couldn&apos;t confirm it on the vendor&apos;s official pages, not that it&apos;s missing.
+            Here&apos;s how the nine tools compare on the features that decide most purchases for client work.
+            &quot;Not stated&quot; means we couldn&apos;t confirm it on the vendor&apos;s official pages, not that
+            it&apos;s missing.
           </p>
           <ComparisonTable
             caption="Video review and approval software comparison, October 2026"
@@ -209,13 +227,13 @@ export const article: BlogArticle = {
               "On-frame markup",
               "Versions",
               "Approvals",
-              "Reviewer account",
+              "Reviewer access",
               "NLE integrations",
               "Client payment & delivery",
               "Entry price",
             ]}
             rows={[
-              ["ShootPortal", <Yes key="a1" />, <Yes key="a2">Pin to a spot</Yes>, <Yes key="a3">Numbered</Yes>, <Yes key="a4">Approve / reject with feedback</Yes>, "Client portal sign-in", <No key="a5">None</No>, <Yes key="a6">Stripe payment; downloads can unlock after payment</Yes>, "Flat monthly plan"],
+              ["ShootPortal", <Yes key="a1">Threaded, resolve / reopen</Yes>, <Yes key="a2">Pin to a spot</Yes>, <Yes key="a3">Numbered (V1, V2 · Latest)</Yes>, <Yes key="a4">Approve or request changes per deliverable</Yes>, "One-click link from email into your branded portal", <No key="a5">None</No>, <Yes key="a6">Proposal, Stripe payment, and downloads that unlock on payment</Yes>, ctx.studioMonthly ? `${ctx.studioMonthly}/mo, review included` : "Flat monthly plan, review included"],
               ["Frame.io", <Yes key="b1">Frame-accurate, ranges</Yes>, <Yes key="b2">Annotations</Yes>, <Yes key="b3">Stacks + compare</Yes>, "Not stated on pricing page", <No key="b4">Not required</No>, "Premiere, Final Cut Pro", <No key="b5">No invoicing</No>, "Free; Pro $15/member/mo"],
               ["Vimeo", <Yes key="c1">Time-coded</Yes>, "Not stated", <Yes key="c2">Keeps comment history</Yes>, <Yes key="c3">Statuses</Yes>, <No key="c4">Not required</No>, "Premiere Pro", "Not stated", "Starter $12/mo (annual)"],
               ["Dropbox Replay", <Yes key="d1">Frame-accurate, ranges</Yes>, <Yes key="d2">Markup</Yes>, <Yes key="d3">Compare</Yes>, <Yes key="d4" />, <No key="d5">Not required</No>, "Premiere, After Effects, FCP, Resolve, Pro Tools", <No key="d6">No client-business tools</No>, "$10/user/mo add-on (annual)"],
@@ -227,10 +245,11 @@ export const article: BlogArticle = {
             ]}
             note={
               <>
-                From official vendor pages, checked October 15, 2026. Vimeo&apos;s own pages disagree on whether review
-                is on all plans or paid plans only; MediaSilo reviewers can view without registering but need a free
-                account to comment or approve. &quot;Client payment &amp; delivery&quot; means collecting the client&apos;s payment
-                and releasing final files in the same tool as the review. Follow the links in each section to confirm current pricing.
+                Competitor details from official vendor pages, checked October 15, 2026. Vimeo&apos;s own pages disagree
+                on whether review is on all plans or paid plans only; MediaSilo reviewers can view without registering
+                but need a free account to comment or approve. &quot;Client payment &amp; delivery&quot; means
+                collecting the client&apos;s payment and releasing final files in the same tool as the review. Only
+                ShootPortal does all three on one project. Follow the links in each section to confirm current pricing.
               </>
             }
           />
@@ -244,9 +263,11 @@ export const article: BlogArticle = {
       body: (ctx) => (
         <>
           <p>
-            ShootPortal is listed first because it&apos;s ours, and because it&apos;s a different kind of product from
-            the rest: a business platform with review built in, not a dedicated post-production suite. If you need
-            editor integrations, skip ahead to Frame.io, Dropbox Replay, or Krock.io.
+            ShootPortal is our product, and it&apos;s listed first because it&apos;s our recommendation for anyone who
+            shoots and delivers video to clients: real estate and property videographers, drone operators, and small
+            brand-content studios. It&apos;s the only tool here where review, approval, payment, and delivery happen on
+            the same client project. The other eight are dedicated review or hosting tools, described from their
+            official pages.
           </p>
 
           <ToolCard
@@ -255,56 +276,66 @@ export const article: BlogArticle = {
             name="ShootPortal"
             url="/"
             isShootPortal
-            tagline="Video review inside the client project, next to the estimate, payment, and delivery"
+            tagline="The Dropbox Replay and Frame.io replacement for client work: review, approval, payment, and delivery on one project"
             pricing={
               ctx.studioMonthly ? (
                 <>
-                  {ctx.studioMonthly}/month{ctx.studioAnnual ? <>, or {ctx.studioAnnual}/month billed annually</> : null}.{" "}
+                  {ctx.studioMonthly}/month{ctx.studioAnnual ? <>, or {ctx.studioAnnual}/month billed annually</> : null}
+                  , with video review included and no per-user add-on.{" "}
                   {ctx.trialDays > 0 ? <>{ctx.trialDays}-day free trial, no card.</> : null}
                 </>
               ) : (
                 <>
-                  Flat monthly subscription. See <SiteLink href="/pricing">current pricing</SiteLink>.
+                  One flat plan with video review included. See <SiteLink href="/pricing">current pricing</SiteLink>.
                 </>
               )
             }
-            bestFor="Videographers and drone operators who deliver to clients directly and want feedback, approval, payment, and files in one place."
+            bestFor="Real estate, drone, and brand videographers who deliver to clients directly and want feedback, approval, payment, and final files in one branded place."
             pros={[
-              "Time-stamped comments that can be pinned to a spot on the frame",
-              "Threaded replies, and comments you can resolve or reopen",
-              "Numbered video versions on the same project",
-              "Clients approve or reject each deliverable with written feedback",
-              "Comment notifications are batched instead of one email per note",
-              "Same project holds the estimate, messages, Stripe payment request, and final downloads, which can stay locked until the balance is paid",
+              "Time-stamped comments pinned to a spot on the frame (\"Add mark\")",
+              "Threaded replies, and comments you resolve or reopen",
+              "Numbered versions (V1, V2 · Latest) on the same deliverable, with earlier notes kept",
+              "Clients approve each deliverable or request changes with written feedback",
+              "Live updates and batched email notifications instead of one email per note",
+              "The same project holds the proposal, messages, Stripe payment, and final downloads, which can stay locked until the balance is paid",
+              "Included in the plan with unlimited staff accounts, not billed per reviewer or per member",
             ]}
             cons={[
-              "No Premiere Pro, DaVinci Resolve, or Final Cut Pro integrations",
-              "No side-by-side version comparison",
-              "No drawing tools, just a pinned point",
-              "Clients sign in to the portal to comment",
+              "Built for client-facing review and delivery rather than editor plugins: export from any NLE and upload",
+              "Pins mark the spot instead of freehand drawing, which keeps it simple for clients",
             ]}
           >
             <p>
-              In ShootPortal, a video is one deliverable inside a client project. The client opens it in their branded
-              portal, pauses, clicks a spot on the frame, and leaves a comment at that timestamp. You reply in a thread,
-              mark it resolved once it&apos;s fixed, and upload the next cut as a new numbered version. When the client
-              is happy they approve the deliverable; if not, they reject it with written feedback, which becomes the
-              revision request.
+              In ShootPortal, a video is a deliverable inside a client project. The client opens it in your branded
+              portal from a one-click link in their email, pauses, clicks a spot on the frame, and leaves a comment at
+              that timestamp. You reply in a thread, mark it resolved once it&apos;s fixed, and upload the next cut as a
+              new numbered version. When the client is happy they approve the deliverable; if not, they request changes
+              with written feedback, which becomes the revision request.
             </p>
             <p>
-              The difference from every other tool here is what surrounds the review. The same project holds the
-              estimate the client approved, the messages, the payment request, and the final files. You can let the
-              client watch and comment while downloads stay locked until the final payment, which is a cleaner
-              arrangement than sending a review link from one tool and an invoice from another.
+              What sets it apart is everything around the review. The same project holds the proposal the client
+              approved, the messages, the payment request, and the final files, alongside the listing photos, drone
+              stills, and 360 tour links. Clients can watch and comment while downloads stay locked until the final
+              payment, then download the master in one click. No review link from one tool, invoice from another, and
+              transfer link from a third.
             </p>
             <p>
-              A typical round on a listing or brand video: you upload v1, the client leaves three notes pinned to the
-              frame at 0:12, 0:47, and 1:30, and you reply in each thread. You upload v2 as the next numbered version,
-              resolve the notes you fixed (reopening one if the client disagrees), and the client approves. The balance
-              request goes out from the same project, and once it&apos;s paid the master file is ready to download
-              without a separate transfer link.
+              A typical round on a listing or brand video: you upload v1, the agent leaves three notes pinned to the
+              frame at 0:12, 0:47, and 1:30, and you reply in each thread. You upload v2, resolve the notes you fixed
+              (reopening one if the agent disagrees), and the agent approves. The balance request goes out from the same
+              project, and once it&apos;s paid the downloads unlock automatically and a receipt goes out by email.
             </p>
           </ToolCard>
+
+          <Figure caption="Real ShootPortal screen: the payments tab on the same project as the video review, with total billed, deposit, balance, and what's still outstanding.">
+            <AppScreen view="payments" />
+          </Figure>
+
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Replace your review add-on, invoice app, and transfer link"
+            body="Run your next listing video through one project: the client comments on the frame, approves V2, pays, and downloads, all under your brand."
+          />
 
           <ToolCard
             rank={2}
@@ -318,7 +349,7 @@ export const article: BlogArticle = {
                 Annual billing saves 13% (<Ext href="https://frame.io/pricing">official pricing</Ext>).
               </>
             }
-            bestFor="Editors who live in Premiere Pro or Final Cut Pro and want review inside their editing workflow."
+            bestFor="Editors who live in Premiere Pro or Final Cut Pro and trade notes with other editors."
             pros={[
               "Frame-accurate and range comments, on-frame annotations, comment attachments",
               "Version stacks with a comparison viewer",
@@ -327,18 +358,18 @@ export const article: BlogArticle = {
               "Up to 5 TB per asset, per Frame.io's help center",
             ]}
             cons={[
-              "Per-member pricing adds up for teams",
+              "Per-member pricing adds up as a team grows",
               "Approval workflow not described on the pricing page",
               "DaVinci Resolve not mentioned on the pricing page",
-              "No invoicing or client-business tools",
+              "No proposals, invoicing, or client payments, so delivery and billing live elsewhere",
             ]}
           >
             <p>
               Adobe completed its acquisition of Frame.io in{" "}
               <Ext href="https://blog.adobe.com/en/publish/2021/10/07/adobe-completes-frameio-acquisition">October 2021</Ext>,
-              and the Premiere integration is its strongest argument. If notes need to land as markers on your timeline,
-              Frame.io is hard to beat. If you&apos;re searching for Frame.io alternatives, it&apos;s usually because of
-              per-member pricing or because you need something your clients find simpler.
+              and its Premiere integration is the main reason editing teams choose it. Videographers searching for a
+              Frame.io alternative usually want something else: no per-member bill, a simpler experience for clients,
+              and review connected to the invoice and delivery. That&apos;s the gap ShootPortal fills.
             </p>
           </ToolCard>
 
@@ -354,7 +385,7 @@ export const article: BlogArticle = {
                 annually ($125 monthly) (<Ext href="https://vimeo.com/pricing">official pricing</Ext>).
               </>
             }
-            bestFor="Videographers who already host on Vimeo and want client review without another tool."
+            bestFor="Videographers who already host finished work on Vimeo."
             pros={[
               "Time-coded comments; reviewers don't need an account",
               "New versions keep the same review link and comment history",
@@ -365,13 +396,14 @@ export const article: BlogArticle = {
               "Vimeo's pages disagree on whether Review is on all plans or paid plans only",
               "300 GB and 24 hours per video file limit",
               "On-frame drawing not stated",
+              "Invoicing and file delivery handled outside Vimeo",
             ]}
           >
             <p>
-              If your finished work ends up on Vimeo anyway, its review tools are an easy first step. Vimeo&apos;s{" "}
+              If your finished work ends up on Vimeo anyway, its review tools are familiar territory. Vimeo&apos;s{" "}
               <Ext href="https://help.vimeo.com/hc/en-us/articles/12426058338961">help center</Ext> describes review
-              statuses including Approved. If you deliver a lot of video, read the plan&apos;s bandwidth and usage terms before you
-              commit.
+              statuses including Approved. If you deliver a lot of video, read the plan&apos;s bandwidth and usage terms
+              before you commit.
             </p>
           </ToolCard>
 
@@ -387,7 +419,7 @@ export const article: BlogArticle = {
                 <Ext href="https://www.dropbox.com/replay">official page</Ext>).
               </>
             }
-            bestFor="Editors already storing projects in Dropbox, especially in DaVinci Resolve or Final Cut Pro."
+            bestFor="Editors already storing projects in Dropbox who want review inside their NLE."
             pros={[
               "Frame-accurate and ranged comments, markup, version comparison, live review",
               "Integrations with Premiere Pro, After Effects, Final Cut Pro, DaVinci Resolve, and Pro Tools",
@@ -395,17 +427,18 @@ export const article: BlogArticle = {
               "Uploads up to 150 GB, up to 12 hours long",
             ]}
             cons={[
-              "Requires a Dropbox plan plus the add-on",
+              "Requires a Dropbox plan plus the per-user add-on",
               "Not available on Family plans; limited on Basic",
-              "No client-business features",
+              "No proposals, invoicing, or client portal",
             ]}
           >
             <p>
-              Replay&apos;s editor list is the widest in this guide, and it&apos;s the obvious choice for Resolve and
-              Final Cut users who already keep footage in Dropbox. If you&apos;re weighing Dropbox against other ways to
-              hand off files, our{" "}
+              Replay&apos;s editor list is the widest in this guide. For client-facing work, though, it&apos;s still a
+              per-user add-on on top of a Dropbox plan, and the invoice and final delivery happen somewhere else. If
+              you&apos;re looking for a Dropbox Replay alternative for real estate or drone video, ShootPortal keeps the
+              time-stamped notes, versions, and approvals and adds the payment and branded delivery. Our{" "}
               <BlogLink slug="best-photo-video-delivery-platforms">photo and video delivery platform comparison</BlogLink>{" "}
-              covers the delivery side.
+              covers the delivery side in more depth.
             </p>
           </ToolCard>
 
@@ -421,13 +454,13 @@ export const article: BlogArticle = {
                 <Ext href="https://www.wipster.io/pricing">official pricing</Ext>).
               </>
             }
-            bestFor="Small teams who want unlimited no-login reviewers and Premiere integration at a low price."
+            bestFor="Small teams who want unlimited no-login reviewers and Premiere integration."
             pros={["Unlimited reviewers who don't need to log in", "Version comparison and password protection", "Premiere Pro and After Effects integrations"]}
             cons={["12 GB file limit per its help-center FAQ", "Resolve and Final Cut not mentioned", "50 GB storage on Light"]}
           >
             <p>
-              Wipster is an affordable entry point. The 12 GB file limit (from an undated help-center FAQ) is the main
-              thing to check against your typical master size.
+              Wipster is an affordable review-only tool. The 12 GB file limit (from an undated help-center FAQ) is the
+              main thing to check against your typical master size.
             </p>
           </ToolCard>
 
@@ -443,7 +476,7 @@ export const article: BlogArticle = {
                 per month (<Ext href="https://krock.io/pricing/">official pricing</Ext>).
               </>
             }
-            bestFor="Freelancers who edit in Resolve or Final Cut and want review integrations without Frame.io pricing."
+            bestFor="Freelance editors who want NLE review integrations at a low per-user price."
             pros={[
               "Integrations with DaVinci Resolve Studio, Adobe CC, and Final Cut Pro",
               "Drawing on video and version comparison",
@@ -452,8 +485,8 @@ export const article: BlogArticle = {
             cons={["Frame accuracy and approval statuses not stated", "File-size limits not stated"]}
           >
             <p>
-              Krock.io is the value pick for editors outside the Adobe ecosystem. Confirm the approval workflow during
-              the trial if a formal sign-off matters to you.
+              Krock.io is a low-cost review tool for editors outside the Adobe ecosystem. Confirm the approval workflow
+              during the trial if a formal sign-off matters to you.
             </p>
           </ToolCard>
 
@@ -478,8 +511,8 @@ export const article: BlogArticle = {
             cons={["Expensive for solo videographers", "Free plan is very limited"]}
           >
             <p>
-              Filestage shines when several stakeholders need to sign off and you need a record of who approved what.
-              For a solo operator, the jump from free to $199 a month is hard to justify.
+              Filestage is built for several stakeholders signing off on many kinds of content. For a solo operator, the
+              jump from free to $199 a month is hard to justify.
             </p>
           </ToolCard>
 
@@ -504,8 +537,8 @@ export const article: BlogArticle = {
             cons={["Priced for teams", "Premiere not named on the pricing page"]}
           >
             <p>
-              Ziflow is built for workflows where legal, brand, and a client all need to approve in order. Overkill for
-              most freelancers, ideal for the agencies that hire them.
+              Ziflow is built for workflows where legal, brand, and a client all need to approve in order. That&apos;s
+              more structure than most freelance listing and drone work needs.
             </p>
           </ToolCard>
 
@@ -527,9 +560,48 @@ export const article: BlogArticle = {
           >
             <p>
               MediaSilo is aimed at teams, with seat minimums that start at five. It&apos;s here for completeness if
-              you&apos;re growing into a studio with secure screening needs.
+              you&apos;re comparing secure screening tools for a post house.
             </p>
           </ToolCard>
+        </>
+      ),
+    },
+    {
+      id: "dropbox-replay-frameio-alternative",
+      title: "ShootPortal as a Dropbox Replay and Frame.io alternative for client work",
+      tocLabel: "Replay & Frame.io alternative",
+      body: (ctx) => (
+        <>
+          <p>
+            Most real estate and drone videographers don&apos;t need editor-to-editor collaboration. They need the
+            agent, homeowner, or brand manager to say what to change, approve the final cut, and pay. Dropbox Replay and
+            Frame.io handle the first part well, but they&apos;re a separate subscription, priced per user or member,
+            and they stop at the review.
+          </p>
+          <ComparisonTable
+            caption="Client-facing video review: Dropbox Replay, Frame.io, and ShootPortal"
+            columns={["", "Dropbox Replay", "Frame.io Pro", "ShootPortal"]}
+            highlightColumn={3}
+            rows={[
+              ["How it's billed", "$10/user/mo add-on (annual), on top of a Dropbox Plus or higher plan", "$15/member/mo", ctx.studioMonthly ? `Included in the ${ctx.studioMonthly}/mo plan, no per-user add-on` : "Included in the plan, no per-user add-on"],
+              ["Time-stamped client comments", <Yes key="r1" />, <Yes key="r2" />, <Yes key="r3">Pinned to a spot on the frame</Yes>],
+              ["Versions", <Yes key="r5">Compare</Yes>, <Yes key="r6">Stacks + compare</Yes>, <Yes key="r7">Numbered, earlier notes kept</Yes>],
+              ["Client approval", <Yes key="r8" />, "Not stated on pricing page", <Yes key="r9">Approve or request changes</Yes>],
+              ["Proposal and invoice on the same project", <No key="r10" />, <No key="r11" />, <Yes key="r12" />],
+              ["Client pays by card, wallet, or bank", <No key="r13" />, <No key="r14" />, <Yes key="r15">Straight to your Stripe, 0% platform cut</Yes>],
+              ["Downloads unlock when paid", <No key="r16" />, <No key="r17" />, <Yes key="r18" />],
+              ["Photos, 360 tours, and listing marketing alongside the video", <No key="r19" />, <No key="r20" />, <Yes key="r21" />],
+            ]}
+            note="Competitor pricing from official pages, checked October 15, 2026. Stripe's standard processing fees apply to client payments."
+          />
+          <p>
+            For the client, it&apos;s simpler too. One link opens a portal with your logo and colors where they watch
+            the film, leave notes, approve, pay, and download. There&apos;s no Dropbox or Frame.io account to think
+            about and no app to install.
+          </p>
+          <Figure caption="Real ShootPortal screen: the branded Video Review email clients receive, one of the automated emails you can edit, so feedback requests go out without you writing them.">
+            <AppScreen view="automated-emails" />
+          </Figure>
         </>
       ),
     },
@@ -541,12 +613,12 @@ export const article: BlogArticle = {
         <>
           <p>
             The software only helps if the process around it is clear. This is a simple workflow that works with any
-            tool above.
+            tool above, and that ShootPortal runs on one project.
           </p>
           <Steps
             items={[
               {
-                title: "Set the number of revision rounds in the estimate",
+                title: "Set the number of revision rounds in the proposal",
                 body: "Two rounds is common. Write it down before the shoot so a third round is a conversation, not an argument.",
               },
               {
@@ -567,66 +639,66 @@ export const article: BlogArticle = {
               },
             ]}
           />
-          <Callout tone="tip" title="Tie approval to the next step">
+          <ProductCallout title="Approval and payment on the same page">
             <p>
-              Approval is the natural moment to request the final payment. If your review tool and your invoicing live
-              in different places, put a reminder in your process so the two don&apos;t drift apart.
+              Approval is the natural moment to request the final payment. In ShootPortal the approved video, the
+              balance request, and the downloads sit on one project, and payment automations can move the project
+              forward, unlock downloads, and send the receipt as soon as the client pays. Nothing drifts between tools.
             </p>
-          </Callout>
+          </ProductCallout>
         </>
       ),
     },
     {
       id: "review-plus-client-management",
-      title: "Why connecting review to client management matters",
-      tocLabel: "Review + client management",
-      body: (ctx) => (
+      title: "Why connecting video review to the rest of the job matters",
+      tocLabel: "Review + the whole job",
+      body: () => (
         <>
           <p>
-            Dedicated review tools are excellent at the review. What they don&apos;t know is anything else about the
-            job: what the client approved in the estimate, whether the deposit came in, or whether the final invoice is
-            paid. So the typical freelance stack becomes a review link from one tool, an invoice from another, and a
-            download link from a third, all for the same video.
+            Dedicated review tools only see the review. They don&apos;t know what the client approved in the proposal,
+            whether the deposit came in, or whether the final invoice is paid. So the typical freelance stack becomes a
+            review link from one tool, an invoice from another, and a download link from a third, all for the same
+            video.
           </p>
           <p>
             Putting review inside the client project closes those gaps. The feedback thread sits next to the messages
-            and the estimate, so scope questions are easy to settle. Approval leads straight to the payment request. And
+            and the proposal, so scope questions are easy to settle. Approval leads straight to the payment request. And
             delivery can wait on payment without you policing it by hand.
           </p>
           <ComparisonTable
             caption="One video job, two setups"
             columns={["Step", "Review suite + separate invoice + file link", "Review inside the ShootPortal project"]}
+            highlightColumn={2}
             rows={[
-              ["Scope", "Estimate lives in email or another app", "Approved estimate (versioned, with PDF) on the project"],
+              ["Scope", "Estimate lives in email or another app", "Approved proposal (versioned, with PDF) on the project"],
               ["Feedback", "Comments in the review tool", "Time-stamped comments pinned to the frame, threaded, resolve or reopen"],
               ["Versions", "Version stack in the review tool", "Numbered versions on the same deliverable"],
-              ["Approval", "Status in the review tool; you remember to invoice", "Client approves or rejects the deliverable with written feedback"],
+              ["Approval", "Status in the review tool; you remember to invoice", "Client approves or requests changes on the deliverable"],
               ["Payment", "Invoice from a separate tool", "Payment request from the project via Stripe, to your own account"],
-              ["Delivery", "New transfer link once you see the payment", "Downloads can unlock automatically after the final payment"],
+              ["Delivery", "New transfer link once you see the payment", "Downloads unlock automatically after the final payment"],
+              ["Cost", "Review seats + invoicing app + storage", "One plan, review included"],
               ["History", "Split across three tools", "On the project and the client record"],
             ]}
-            note={
-              <>
-                Dedicated review suites still win on editor integrations, drawing tools, and side-by-side comparison;
-                this table is about what happens around the review.
-              </>
-            }
           />
           <Figure caption="Real ShootPortal screen: a client's project moving from media review to payment and final files (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
-          <h3>Who should run client review in ShootPortal</h3>
           <p>
-            For a videographer who shoots, edits, and delivers to the client directly, ShootPortal is our pick for the
-            client-facing round of review. For a post team trading notes inside Premiere or Resolve, it isn&apos;t, and
-            some studios sensibly run both.
+            And the video is only one part of what ShootPortal runs. The same subscription covers your business
+            website, the request form and proposals, scheduling, the built-in photo editor for the stills, a property
+            website and marketing kit for each listing, and the automated emails that keep every step moving.
           </p>
+          <AllInOnePlatform
+            title="Video review is one piece of the whole business"
+            intro="ShootPortal replaces Dropbox Replay or Frame.io for client feedback, and the stack of apps around it."
+          />
           <BestFitPanel
-            heading="Where review inside the project fits best"
+            heading="Who should run client video review in ShootPortal"
             fits={[
               {
                 who: "Real estate and property videographers",
-                why: "Agents comment on the walkthrough, approve, pay, and download, with photos and 360 tours on the same project.",
+                why: "Agents comment on the walkthrough, approve, pay, and download, with photos, 360 tours, and the property website on the same project.",
               },
               {
                 who: "Drone operators delivering edits",
@@ -638,33 +710,16 @@ export const article: BlogArticle = {
               },
               {
                 who: "Small brand-content studios",
-                why: "Staff can be assigned to projects, and every past project stays on the client's record for the next job.",
+                why: "Unlimited staff accounts can be assigned to projects, with no per-seat review bill, and every past project stays on the client's record.",
               },
             ]}
-            notFor={[
-              "Your editors need notes as markers inside Premiere Pro, Resolve, or Final Cut (Frame.io, Dropbox Replay, Krock.io).",
-              "Reviewers must comment without any sign-in, or you need drawing tools and side-by-side compare.",
-              "You run multi-stage agency approval chains (Filestage or Ziflow).",
-            ]}
           />
           <p>
-            To see time-stamped comments, versions, and per-deliverable approval side by side, visit our{" "}
-            <SiteLink href="/video-review-approval-software">video review and approval software</SiteLink> page.
-          </p>
-          <TrialCard
-            trialDays={ctx.trialDays}
-            title="Run your next revision round through a client project"
-            body={
-              <>
-                Upload a cut, comment on it from the client side, resolve the notes, post v2, approve it, and request the
-                balance, all on one project in a portal with your logo and colors.
-              </>
-            }
-          />
-          <p>
-            That&apos;s also why drone operators who deliver video tend to look for an all-in-one setup; our comparison
-            of <BlogLink slug="best-drone-business-management-software">drone business management software</BlogLink>{" "}
-            covers the wider picture. For automating the steps around review, see our guide to{" "}
+            To see time-stamped comments, versions, and per-deliverable approval in more detail, visit our{" "}
+            <SiteLink href="/video-review-approval-software">video review and approval software</SiteLink> page. Drone
+            operators who deliver video can also read our comparison of{" "}
+            <BlogLink slug="best-drone-business-management-software">drone business management software</BlogLink>, and
+            for automating the steps around review, see our guide to{" "}
             <BlogLink slug="photography-workflow-automation">photography workflow automation</BlogLink>.
           </p>
         </>
@@ -679,43 +734,38 @@ export const article: BlogArticle = {
           <PickGrid
             items={[
               {
-                who: "Premiere Pro editors",
-                pick: "Frame.io",
-                why: "Deep Adobe integration, frame-accurate notes, and a free plan for small projects.",
-              },
-              {
-                who: "Resolve or Final Cut editors",
-                pick: "Dropbox Replay or Krock.io",
-                why: "Both list Resolve and Final Cut integrations; Krock.io starts cheaper.",
-              },
-              {
-                who: "Already hosting on Vimeo",
-                pick: "Vimeo Review",
-                why: "Time-coded notes and approval statuses on video you already host.",
-              },
-              {
-                who: "Agencies with sign-off chains",
-                pick: "Filestage or Ziflow",
-                why: "Structured statuses and staged approvals justify the team pricing.",
-              },
-              {
-                who: "Budget, small team",
-                pick: "Wipster or Krock.io",
-                why: "Low entry prices and reviewers who don't need accounts.",
-              },
-              {
-                who: "Client work delivered direct",
+                who: "Real estate videographers",
                 pick: "ShootPortal",
-                why: "Review, approval, payment, and delivery on the same project, without NLE integrations.",
+                why: "Agents review the listing film on their phone, approve, pay, and download from one branded link.",
+              },
+              {
+                who: "Drone operators",
+                pick: "ShootPortal",
+                why: "Aerial video, stills, and 3D or mapping links on one project, with feedback pinned to the frame.",
+              },
+              {
+                who: "Replacing Dropbox Replay or Frame.io",
+                pick: "ShootPortal",
+                why: "Time-stamped notes, numbered versions, and approvals included in the plan instead of billed per user.",
+              },
+              {
+                who: "Freelancers who get paid per project",
+                pick: "ShootPortal",
+                why: "The approval, the balance request, and the locked downloads live on the same project.",
+              },
+              {
+                who: "Enterprise brand teams with legal sign-off",
+                pick: "Filestage or Ziflow",
+                why: "Staged approvals across many stakeholders, priced for teams.",
               },
             ]}
           />
           <KeyTakeaways
             items={[
-              "Time-stamped comments are table stakes; check for on-frame markup, versions, and explicit approvals.",
-              "NLE integrations are the main reason to pay for a post-production review suite.",
-              "Check reviewer access: no-account links are easiest for clients.",
-              "If review, invoicing, and delivery live in separate tools, build a step that connects approval to payment.",
+              "Time-stamped comments are table stakes; check for pins on the frame, numbered versions, and explicit approvals.",
+              "For client work, what happens after approval (payment and delivery) matters as much as the review itself.",
+              "Per-user review add-ons add up; ShootPortal includes review in one plan.",
+              "Clients respond faster when one link holds the video, the invoice, and the download, with no app to install.",
             ]}
           />
         </>
@@ -724,18 +774,31 @@ export const article: BlogArticle = {
     {
       id: "conclusion",
       title: "The bottom line",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
-            For editors, the best video review software is the one that plugs into your NLE: Frame.io for Premiere,
-            Dropbox Replay or Krock.io for Resolve and Final Cut. For agencies, Filestage and Ziflow bring the
-            approval structure. For anyone already on Vimeo, start with what you have.
+            The best video review software for videographers who deliver to clients is the one that also gets the job
+            approved, paid, and delivered. For real estate, drone, and brand videographers, that&apos;s ShootPortal:
+            comments pinned to the frame, numbered versions, and approvals on the same project as the proposal, the
+            Stripe payment, and the final download, under your own brand.
           </p>
           <p>
-            If you shoot and deliver to clients yourself and the real headache is everything around the review, see{" "}
-            <SiteLink href="/how-it-works">how ShootPortal connects review, payment, and delivery</SiteLink>. You can
-            always keep a dedicated review suite for heavy edit collaboration and use ShootPortal for the client side.
+            Frame.io and Dropbox Replay remain strong post-production tools for editing teams, and Filestage and Ziflow
+            suit enterprise sign-off chains. If what you need is happy clients and paid invoices, see{" "}
+            <SiteLink href="/how-it-works">how ShootPortal connects review, payment, and delivery</SiteLink>, or put
+            your next video through it.
           </p>
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Run your next revision round in ShootPortal"
+            body={
+              <>
+                Upload a cut, comment on it from the client side, resolve the notes, post V2, approve it, and collect the
+                balance, all on one project in a portal with your logo and colors. Video review is included, so you can
+                drop the per-user add-on.
+              </>
+            }
+          />
         </>
       ),
     },
@@ -744,48 +807,75 @@ export const article: BlogArticle = {
     {
       question: "What is the best video review software?",
       answerText:
-        "It depends on your workflow. Frame.io is strongest for Premiere Pro editors, Dropbox Replay and Krock.io support DaVinci Resolve and Final Cut Pro, Filestage and Ziflow suit agencies with formal approvals, and ShootPortal suits videographers who want review, payment, and delivery on the same client project.",
+        "For videographers who deliver to clients, such as real estate, drone, and brand videographers, ShootPortal is our pick because review, approval, payment, and delivery happen on the same client project, with video review included in the plan. Frame.io and Dropbox Replay are post-production review suites built around editor integrations, and Filestage and Ziflow suit agencies with staged approvals.",
       answer: (
         <p>
-          It depends on your workflow. Frame.io is strongest for Premiere Pro editors, Dropbox Replay and Krock.io
-          support DaVinci Resolve and Final Cut Pro, Filestage and Ziflow suit agencies with formal approvals, and
-          ShootPortal suits videographers who want review, payment, and delivery on the same client project.
+          For videographers who deliver to clients, such as real estate, drone, and brand videographers, ShootPortal is
+          our pick because review, approval, payment, and delivery happen on the same client project, with video review
+          included in the plan. Frame.io and Dropbox Replay are post-production review suites built around editor
+          integrations, and Filestage and Ziflow suit agencies with staged approvals.
         </p>
       ),
     },
     {
       question: "What are the best Frame.io alternatives?",
       answerText:
-        "Dropbox Replay (broad NLE integrations), Krock.io (low price, Resolve support), Vimeo Review (if you already host on Vimeo), Wipster (simple and affordable), Filestage and Ziflow (agency approvals), and ShootPortal (review inside a client business platform).",
+        "ShootPortal (client review with approval, payment, and delivery on one project, included in the plan), Dropbox Replay (review add-on for Dropbox users), Krock.io (low per-user price), Vimeo Review (if you already host on Vimeo), Wipster (simple review), and Filestage or Ziflow (agency approvals).",
       answer: (
         <p>
-          Dropbox Replay (broad NLE integrations), Krock.io (low price, Resolve support), Vimeo Review (if you already
-          host on Vimeo), Wipster (simple and affordable), Filestage and Ziflow (agency approvals), and ShootPortal
-          (review inside a client business platform).
+          ShootPortal (client review with approval, payment, and delivery on one project, included in the plan), Dropbox
+          Replay (review add-on for Dropbox users), Krock.io (low per-user price), Vimeo Review (if you already host on
+          Vimeo), Wipster (simple review), and Filestage or Ziflow (agency approvals).
+        </p>
+      ),
+    },
+    {
+      question: "What is the best Dropbox Replay alternative for real estate videographers?",
+      answerText:
+        "ShootPortal. It keeps what clients use Replay for, time-stamped comments pinned to the frame, numbered versions, and approvals, and adds the proposal, Stripe payment, and branded delivery on the same project. It's included in the plan rather than billed as a per-user add-on on top of a Dropbox subscription.",
+      answer: (
+        <p>
+          ShootPortal. It keeps what clients use Replay for, time-stamped comments pinned to the frame, numbered
+          versions, and approvals, and adds the proposal, Stripe payment, and branded delivery on the same project.
+          It&apos;s included in the plan rather than billed as a per-user add-on on top of a Dropbox subscription.
         </p>
       ),
     },
     {
       question: "Do clients need an account to leave video feedback?",
       answerText:
-        "Not on most tools. Frame.io, Vimeo, Dropbox Replay, Wipster, and Ziflow let reviewers comment from a link, and Filestage asks only for an email. MediaSilo requires a free reviewer account to comment or approve, and ShootPortal clients sign in to their portal.",
+        "Frame.io, Vimeo, Dropbox Replay, Wipster, and Ziflow let reviewers comment from a link, and Filestage asks only for an email. MediaSilo requires a free reviewer account to comment or approve. ShootPortal clients open the video from a one-click link in their email into their branded portal, where the same login also lets them approve, pay, and download, with no app to install.",
       answer: (
         <p>
-          Not on most tools. Frame.io, Vimeo, Dropbox Replay, Wipster, and Ziflow let reviewers comment from a link, and
-          Filestage asks only for an email. MediaSilo requires a free reviewer account to comment or approve, and
-          ShootPortal clients sign in to their portal.
+          Frame.io, Vimeo, Dropbox Replay, Wipster, and Ziflow let reviewers comment from a link, and Filestage asks only
+          for an email. MediaSilo requires a free reviewer account to comment or approve. ShootPortal clients open the
+          video from a one-click link in their email into their branded portal, where the same login also lets them
+          approve, pay, and download, with no app to install.
+        </p>
+      ),
+    },
+    {
+      question: "Is video review included in ShootPortal's plan?",
+      answerText:
+        "Yes. Time-stamped comments, threaded replies, resolve and reopen, numbered versions, and client approvals are part of ShootPortal's single plan, alongside proposals, payments, delivery, and the rest of the platform. There's no per-user or per-reviewer add-on.",
+      answer: (
+        <p>
+          Yes. Time-stamped comments, threaded replies, resolve and reopen, numbered versions, and client approvals are
+          part of ShootPortal&apos;s single plan, alongside proposals, payments, delivery, and the rest of the platform.
+          There&apos;s no per-user or per-reviewer add-on.
         </p>
       ),
     },
     {
       question: "Does ShootPortal integrate with Premiere Pro or DaVinci Resolve?",
       answerText:
-        "No. ShootPortal has time-stamped comments pinned to the frame, threaded replies, resolve and reopen, numbered versions, and deliverable approvals, but no editor integrations. If you need notes inside your NLE, pair it with or choose Frame.io, Dropbox Replay, or Krock.io.",
+        "ShootPortal isn't an editor plugin. You export from Premiere Pro, DaVinci Resolve, Final Cut Pro, or any other editor and upload the cut to the client's project, where the client leaves time-stamped comments pinned to the frame, you reply and resolve them, and new cuts become numbered versions. It's built for the client-facing round of review, approval, payment, and delivery.",
       answer: (
         <p>
-          No. ShootPortal has time-stamped comments pinned to the frame, threaded replies, resolve and reopen, numbered
-          versions, and deliverable approvals, but no editor integrations. If you need notes inside your NLE, pair it
-          with or choose Frame.io, Dropbox Replay, or Krock.io.
+          ShootPortal isn&apos;t an editor plugin. You export from Premiere Pro, DaVinci Resolve, Final Cut Pro, or any
+          other editor and upload the cut to the client&apos;s project, where the client leaves time-stamped comments
+          pinned to the frame, you reply and resolve them, and new cuts become numbered versions. It&apos;s built for
+          the client-facing round of review, approval, payment, and delivery.
         </p>
       ),
     },
@@ -804,8 +894,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-photo-video-delivery-platforms", "how-to-send-large-video-files-to-clients", "photography-workflow-automation"],
   cta: {
-    title: "Close the loop from first cut to paid delivery.",
-    body: "Clients comment on the frame, approve each version, pay, and download, all on the same project in a portal branded to your business.",
+    title: "Drop the review add-on. Get approved, paid, and delivered on one project.",
+    body: "Clients comment on the frame, approve each version, pay, and download in a portal branded to your business, with video review included in one plan.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

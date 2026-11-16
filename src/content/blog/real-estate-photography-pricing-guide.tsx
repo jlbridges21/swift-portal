@@ -6,12 +6,14 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   SiteLink,
 } from "@/components/blog/article-parts";
 import { SampleEstimate, ServiceMenu } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
 import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, AppScreen, ScreenTrio, TwoSidedScreens } from "@/components/blog/app-screen";
 
 const THUMBTACK_RE = "https://www.thumbtack.com/p/real-estate-photography-prices";
 const THUMBTACK_PHOTO = "https://www.thumbtack.com/p/photographer-prices";
@@ -27,12 +29,13 @@ export const article: BlogArticle = {
   title: "Real Estate Photography Pricing Guide 2026: What to Charge for Photos, Video, and Drone Services",
   seoTitle: "Real Estate Photography Pricing Guide 2026",
   description:
-    "Real estate photography pricing for 2026: sourced price ranges, square-footage tiers, good-better-best packages, add-ons, travel fees, and when to raise rates.",
+    "Real estate photography pricing for 2026: sourced rates, square-footage tiers, packages, add-ons like listing websites and social kits, and travel fees.",
   excerpt:
-    "Most listing photographers price by copying the competition. This guide covers what agents actually pay and order, then shows how to build packages and add-ons that are profitable on every listing.",
+    "Most listing photographers price by copying the competition. This guide covers what agents actually pay and order, how to build profitable packages and add-ons, and a new add-on line: listing marketing.",
   category: "pricing-payments",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "real estate photography pricing",
   secondaryKeywords: [
@@ -40,8 +43,11 @@ export const article: BlogArticle = {
     "real estate photography packages",
     "how much to charge for real estate photography",
     "real estate photography price list",
+    "real estate marketing kit",
+    "property website for listings",
+    "real estate photography add-ons",
   ],
-  readingMinutes: 14,
+  readingMinutes: 16,
   cover: {
     variant: "pricetag",
     tint: "indigo",
@@ -54,7 +60,7 @@ export const article: BlogArticle = {
       <>
         <strong>Published figures mostly fall between about $150 and $310 per listing shoot.</strong> Thumbtack&apos;s 2025 guides
         report $286–$305 on average, HomeGuide (2024) says $150–$300, and older HomeJab data (2017–2021) averaged
-        $229.
+        $229. Your market, home sizes, and costs decide the final number.
       </>,
       <>
         <strong>Price base packages by square footage</strong> so a small condo and a large home don&apos;t cost the
@@ -65,31 +71,37 @@ export const article: BlogArticle = {
         the margin is, and agents increasingly order them.
       </>,
       <>
-        <strong>For add-ons without reliable public prices</strong> (twilight, floor plans, virtual staging, residential
-        3D tours), price from your time and vendor costs plus margin.
+        <strong>Add listing marketing as a new revenue line.</strong> With ShootPortal (our product), you can sell the
+        agent a property website and a social media kit built from the photos you already delivered, at prices you set
+        (defaults $49 and $29).
       </>,
       <>
-        <strong>Your market decides the final number.</strong> Location, listing prices, competition, and your own
-        costs matter more than any national figure.
+        <strong>Quote the same way every time.</strong> ShootPortal turns your package menu into a request form, so
+        agents see an instant estimate with the travel fee already calculated.
       </>,
     ],
   },
   intro: () => (
     <>
       <p>
-        Real estate photography has a pricing problem that other niches don&apos;t: the client is a repeat buyer who
+        <strong>Real estate photography pricing</strong> has a problem that other niches don&apos;t: the client is a repeat buyer who
         orders the same thing dozens of times a year and remembers exactly what they paid last time. That makes
         agents price-sensitive, but it also makes them loyal once a photographer is reliable, fast, and easy to book.
         Your pricing has to work for both sides of that relationship.
       </p>
       <p>
-        This guide is for photographers selling to listing agents. It covers what published data says about{" "}
-        <strong>real estate photography pricing</strong> (and how old that data is), how to structure packages by
+        This guide is for photographers selling to listing agents. It covers what published data says about listing
+        photography rates (and how old that data is), how to structure packages by
         square footage or photo count, what to charge for drone, video, and 3D add-ons, and how to make sure each
         package is profitable once editing and driving are counted. If drone work is your main business rather than an
         add-on, the companion{" "}
         <BlogLink slug="drone-photography-pricing-guide">drone photography pricing guide</BlogLink> covers commercial,
         inspection, and mapping rates in more depth.
+      </p>
+      <p>
+        It also covers the add-on most pricing guides miss: listing marketing. Agents already pay for property websites,
+        Just Listed posts, and flyers somewhere. In ShootPortal, you can build those from the delivered photos and sell
+        them on the same invoice, which raises your average order without another shoot.
       </p>
       <Callout tone="note" title="About the numbers">
         <p>
@@ -265,6 +277,8 @@ export const article: BlogArticle = {
                 { name: "Floor plan", price: "Quoted by sq ft" },
                 { name: "Virtual twilight (per image)", price: "$35" },
                 { name: "On-site twilight shoot", price: "$225" },
+                { name: "Property website", price: "$49" },
+                { name: "Social media kit (posts, Stories, flyer)", price: "$29" },
                 { name: "Rush delivery", price: "$50" },
                 { name: "Travel beyond home zone", price: "By ZIP distance" },
               ]}
@@ -286,6 +300,13 @@ export const article: BlogArticle = {
             video by the finished product (a short social clip versus a full walkthrough) and estimate your editing
             hours honestly before you commit to a price.
           </p>
+          <p>
+            Revision rounds are where video margin disappears. Vague feedback by text (&quot;can you change the part
+            near the kitchen?&quot;) turns into an extra edit and a re-export. In ShootPortal, agents leave comments
+            pinned to the exact timestamp and frame, you reply in a thread, mark each note resolved, and upload V2 to
+            the same project. It replaces Dropbox Replay or Frame.io for client feedback, so you&apos;re not paying for a
+            separate review tool to protect a $150 add-on.
+          </p>
           <h3>360 and 3D tours</h3>
           <p>
             There&apos;s no consumer-guide price for residential 3D tours. The only figures we found come from
@@ -294,6 +315,60 @@ export const article: BlogArticle = {
             capture time, your platform&apos;s hosting or processing cost, and margin, and scale it by square footage
             the same way you price photos.
           </p>
+        </>
+      ),
+    },
+    {
+      id: "listing-marketing-addon",
+      title: "A new real estate photography add-on: listing marketing",
+      tocLabel: "Listing marketing add-on",
+      body: (ctx) => (
+        <>
+          <p>
+            Agents spend time (or money) on every listing turning your photos into marketing: a single-property website
+            for the listing, Just Listed and Open House posts, Stories, and a printed flyer. If you deliver those
+            alongside the photos, you&apos;re selling something the agent already needs, built from work you&apos;ve
+            already done.
+          </p>
+          <h3>What you can sell</h3>
+          <ul>
+            <li>
+              <strong>Property website:</strong> a listing site built automatically from the delivered photos and
+              project details, in Modern, Luxury, or Coastal designs, with key facts, gallery, video, floor plans,
+              virtual tour, open house, and agent contact. Status updates from For Sale to Pending to Sold, and an
+              unbranded MLS-safe version is available.
+            </li>
+            <li>
+              <strong>Social media kit:</strong> five square posts (Just Listed, Open House, Just Sold, Highlights,
+              Coming Soon), three Stories, an Instagram carousel of up to 10 slides, and a print-ready Letter flyer with a
+              QR code to the property site.
+            </li>
+          </ul>
+          <h3>How to price it</h3>
+          <p>
+            In ShootPortal, each product is either Included (free, as a reason to book you) or Paid. The defaults are $49
+            for the property website and $29 for the social media kit, with an optional bundle and per-project overrides.
+            Those are starting points you change, not market rates. Because the kit is generated from photos you already
+            edited, your cost is a few minutes of review, so almost all of the price is margin.
+          </p>
+          <p>
+            A simple approach: include the kit in your top package to make it the obvious choice, and sell it as an
+            add-on on Essentials and Listing Plus. Agents see a preview, add it to the cart, and pay through your Stripe
+            or add it to the invoice. Their headshot, brokerage logo, and colors are saved per client and reused on every
+            listing, and an optional &quot;Photography by&quot; credit on the site puts your name in front of buyers and
+            other agents.
+          </p>
+          <Figure caption="Real ShootPortal screen: the Marketing Kit tab on a listing project, offering the agent a property website and social media kit at prices you set.">
+            <AppScreen view="marketing-kit-tab" />
+          </Figure>
+          <Figure caption="Real ShootPortal screens: a Just Listed post, a print-ready flyer, and a property website, all generated from the delivered listing photos.">
+            <ScreenTrio views={["social-kit", "listing-flyer", "property-website"]} />
+          </Figure>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Earn more per listing without another shoot"
+            body="Turn on the Marketing Kit, set your prices, and offer every agent a property website and social posts built from the photos you just delivered."
+          />
         </>
       ),
     },
@@ -336,6 +411,13 @@ export const article: BlogArticle = {
             frees evenings and makes turnaround more predictable. To compare them, get current quotes from a few
             editing services for your typical shoot and set them against your in-house time cost. Whichever you choose,
             make sure that cost appears in every package price.
+          </p>
+          <p>
+            If you edit in-house, a built-in editor shortens the loop. ShootPortal&apos;s photo editor handles one-click
+            Auto, exposure, highlights and shadows, white balance, curves, crop, HDR and black-and-white looks, spot
+            removal, and lens corrections. You can copy adjustments across a set of up to 200 photos, originals are never
+            overwritten, and Save to Project updates the agent&apos;s gallery and downloads instantly, with no export and
+            re-upload.
           </p>
         </>
       ),
@@ -413,7 +495,8 @@ export const article: BlogArticle = {
             One more line belongs in that math: the admin around each listing. Answering the &quot;how much for a
             3,200 sq ft with drone?&quot; text, working out the travel fee, sending a payment link, and re-sending the
             download link to the agent&apos;s assistant can add up to a meaningful slice of an entry-level package. If
-            your margin looks thin, cutting that time is often easier than winning a price increase.
+            your margin looks thin, cutting that time is often easier than winning a price increase. So is adding a
+            high-margin line like the listing marketing kit above, which costs you almost no extra time per job.
           </p>
           <FreeResourceCallout tool="real-estate-pricing" note="Check the profit on your packages and add-ons with your own numbers, then download a price list by square footage." />
         </>
@@ -462,25 +545,30 @@ export const article: BlogArticle = {
               at&quot; label, an includes list, and line items. Mark Listing Plus as recommended, hide pricing on
               commercial or luxury work you quote individually, and start from the built-in starter templates if you
               don&apos;t have a menu yet. When an agent picks a package on your request form and enters the address,
-              ShootPortal can generate a preliminary estimate with a travel fee from ZIP-to-ZIP distance, using your
-              mileage tiers or a free radius plus a capped per-mile rate.
+              the agent sees a preliminary estimate the moment they submit, with a travel fee from ZIP distance, using
+              your mileage tiers or a free radius plus a per-mile rate. No back-and-forth texts, and no account for the
+              agent to create.
             </p>
             <p>
-              For custom jobs, send an official estimate with an expiry date and issue new versions as the scope
-              changes. The agent approves in their portal (or downloads the PDF for their records), a deposit can be
-              requested on approval, and downloads can stay locked until the balance is paid. The quote, the payment,
-              and the photos all sit on the same listing project.
+              For custom jobs, send an official proposal with an expiry date and issue new versions as the scope
+              changes. The agent clicks Approve Proposal in their portal (or downloads the PDF for their records), the
+              deposit is collected on approval, and downloads can stay locked until the balance is paid. The quote, the
+              payment, the photos, and the listing marketing all sit on the same project.
             </p>
           </ProductCallout>
+          <Figure caption="Real ShootPortal screens: your services catalog with starting prices (left), and the instant estimate the agent sees right after requesting a shoot (right).">
+            <TwoSidedScreens business="services" client="portal-estimate" />
+          </Figure>
           <p>
-            It&apos;s not an all-in-one listing marketing platform. ShootPortal doesn&apos;t build property websites,
-            flyers, or Zillow Showcase deliveries, and it doesn&apos;t support pay-at-closing. If those matter in your
-            market, compare options in the guide to{" "}
+            The same platform runs the rest of the listing: your business website with a Book a Shoot button,
+            scheduling, the photo editor, video review, branded delivery in Print or MLS sizes, and the property website
+            and social kit you sell on top. Compare it with other tools in the guide to{" "}
             <BlogLink slug="best-real-estate-photography-software">real estate photography software</BlogLink>. For
-            getting paid on approved estimates, see the{" "}
+            getting paid on approved proposals, see the{" "}
             <BlogLink slug="best-photography-invoicing-software">photography invoicing software comparison</BlogLink>.
             The <SiteLink href="/how-it-works">how it works</SiteLink> page shows the full request-to-delivery flow.
           </p>
+          <AllInOnePlatform intro="Your price list is only the start. One subscription runs the website agents find you on, the request form, proposals, scheduling, editing, video review, payments, delivery, and the listing marketing you sell as an add-on." />
           <p>
             Once your prices are set, collecting them is the next step; our{" "}
             <SiteLink href="/photography-invoicing-software">photography invoicing software</SiteLink> page shows how an approved
@@ -488,11 +576,12 @@ export const article: BlogArticle = {
           </p>
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Build your package menu once, then let agents request from it"
+            title="Put your price list to work: instant estimates and a new add-on line"
             body={
               <>
                 The guided setup starts you on a service template. Swap in your own tiers and add-ons, set your travel
-                rule, and request a test shoot from your own form to see the estimate an agent would get.
+                rule, turn on the Marketing Kit at your prices, and request a test shoot from your own form to see the
+                estimate an agent would get.
               </>
             }
             secondaryHref="/pricing"
@@ -554,6 +643,7 @@ export const article: BlogArticle = {
               <>Tier base packages by square footage and keep the photo count tied to each tier.</>,
               <>Build three packages around what agents order most: video, aerial, and 3D.</>,
               <>Price twilight, floor plans, and staging from your own costs where no benchmark exists.</>,
+              <>Sell listing marketing (a property website and social kit) as a high-margin add-on built from photos you already delivered.</>,
               <>Test every package against cost-plus, and raise prices with notice when the numbers say so.</>,
             ]}
           />
@@ -620,6 +710,31 @@ export const article: BlogArticle = {
         </p>
       ),
     },
+    {
+      question: "Can real estate photographers charge for property websites and social media posts?",
+      answerText:
+        "Yes. A property website and a social media kit (Just Listed posts, Stories, a carousel, and a print flyer) are natural add-ons because they're built from photos you already delivered. In ShootPortal you set each as included or paid; the defaults are $49 for the website and $29 for the social kit, and you can change them per project.",
+      answer: (
+        <p>
+          Yes. A property website and a social media kit (Just Listed posts, Stories, a carousel, and a print flyer) are
+          natural add-ons because they&apos;re built from photos you already delivered. In ShootPortal you set each as
+          included or paid; the defaults are $49 for the website and $29 for the social kit, and you can change them per
+          project.
+        </p>
+      ),
+    },
+    {
+      question: "How do I give agents an instant real estate photography quote?",
+      answerText:
+        "Publish your packages and add-ons as a service catalog and let agents order from a request form. In ShootPortal, the agent sees a preliminary estimate as soon as they submit, built from your catalog prices with a travel fee calculated from ZIP distance. You then send the official proposal for approval.",
+      answer: (
+        <p>
+          Publish your packages and add-ons as a service catalog and let agents order from a request form. In
+          ShootPortal, the agent sees a preliminary estimate as soon as they submit, built from your catalog prices with a
+          travel fee calculated from ZIP distance. You then send the official proposal for approval.
+        </p>
+      ),
+    },
   ],
   related: [
     "best-real-estate-photography-software",
@@ -627,8 +742,8 @@ export const article: BlogArticle = {
     "how-to-start-real-estate-photography-business",
   ],
   cta: {
-    title: "Make every listing quote consistent, approved, and paid.",
-    body: "Publish your packages as a service catalog, let agents get a preliminary estimate with the travel fee already included, and collect deposits and balances on the same project you deliver from.",
+    title: "Quote every listing the same way, and earn more on each one.",
+    body: "Publish your packages as a service catalog, give agents an instant estimate with the travel fee included, collect the deposit on approval, and sell a property website and social kit on the same invoice.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how it works",
   },

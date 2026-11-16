@@ -6,6 +6,7 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   SiteLink,
   Steps,
@@ -14,18 +15,20 @@ import { WorkflowDiagram } from "@/components/blog/diagrams";
 import { BeforeAfter } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
 import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, AppScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "real-estate-photography-automation",
   title: "How to Automate Your Real Estate Photography Business: Booking, Payments, and Delivery",
   seoTitle: "Real Estate Photography Automation: A Practical Guide",
   description:
-    "Automate the repetitive parts of a real estate photography business: agent inquiries, estimates, booking, payments, and delivery, without losing the personal touch.",
+    "Real estate photography automation for booking, estimates, branded emails, reminders, payments, and pay-to-unlock delivery, with the personal touch intact.",
   excerpt:
-    "Agents order the same packages week after week. Here's how to turn that repetition into a workflow that quotes, schedules, collects, and delivers with far less typing.",
+    "Agents order the same packages week after week. Here's how to turn that repetition into one branded workflow that quotes, schedules, reminds, collects, and delivers with far less typing.",
   category: "business-automation",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "real estate photography automation",
   secondaryKeywords: [
@@ -33,8 +36,11 @@ export const article: BlogArticle = {
     "real estate photography workflow",
     "real estate photography booking automation",
     "automated listing media delivery",
+    "automated client emails for photographers",
+    "unlock photo downloads after payment",
+    "property website for listings",
   ],
-  readingMinutes: 12,
+  readingMinutes: 13,
   cover: {
     variant: "automation",
     tint: "indigo",
@@ -45,6 +51,11 @@ export const article: BlogArticle = {
   quickAnswer: {
     heading: "The short answer",
     points: [
+      <>
+        <strong>Use one platform that automates the whole listing:</strong> ShootPortal sends branded emails at every
+        step, calculates preliminary estimates with travel fees, sends reminders, requests deposits, and unlocks
+        downloads the moment the agent pays.
+      </>,
       <>
         <strong>Automate the repeatable admin:</strong> inquiry acknowledgments, preliminary estimates, travel fees,
         status updates, payment requests, receipts, and download access.
@@ -58,8 +69,8 @@ export const article: BlogArticle = {
         payment rule make every later automation simple.
       </>,
       <>
-        <strong>Pick one system of record.</strong> A real estate media platform or an all-in-one workspace beats a
-        chain of apps held together with Zapier for most solo operators and small teams.
+        <strong>Pick one system of record.</strong> An all-in-one platform that covers your website, booking,
+        payments, video review, delivery, and listing marketing beats a chain of apps held together with Zapier.
       </>,
       <>
         <strong>Roll it out one stage at a time</strong>, test each step on a real listing, and keep a human
@@ -82,6 +93,12 @@ export const article: BlogArticle = {
         do for you, consistently and at 10pm without complaint.
       </p>
       <p>
+        That&apos;s the job ShootPortal was built for. It runs the whole listing on one branded project: the agent books
+        through your request form, sees an instant estimate, approves, gets reminded when they forget, pays online, and
+        downloads files that unlock automatically once the balance is paid. Every email along the way goes out under
+        your name and logo, and the agent never installs an app or makes an account they have to remember.
+      </p>
+      <p>
         This guide is specifically about real estate media businesses: agent orders, recurring clients, and listing
         turnaround. We&apos;ll cover which tasks to automate, which ones to keep personal, how to build the repeatable
         pieces first, how to choose software honestly, and how to avoid building a fragile machine you&apos;re afraid to
@@ -100,7 +117,7 @@ export const article: BlogArticle = {
         <>
           <p>
             Before automating anything, it helps to name the repetitive work. For most real estate photographers it
-            falls into seven buckets, and each one is triggered by the same events every time:
+            falls into eight buckets, and each one is triggered by the same events every time:
           </p>
           <ul>
             <li>
@@ -129,6 +146,10 @@ export const article: BlogArticle = {
             <li>
               <strong>Delivery.</strong> You export MLS and print sizes, upload, share a link, and answer
               &quot;which folder is the MLS one?&quot;
+            </li>
+            <li>
+              <strong>Listing marketing.</strong> The agent asks for a Just Listed post, a flyer, or a single-property
+              website, and you either build it in Canva or tell them you don&apos;t do that.
             </li>
           </ul>
           <p>
@@ -271,7 +292,7 @@ export const article: BlogArticle = {
       id: "agent-order-loop",
       title: "Automating the agent order-to-delivery loop",
       tocLabel: "The order-to-delivery loop",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             Here&apos;s what one listing looks like when the rules above are running in software, step by step.
@@ -295,15 +316,22 @@ export const article: BlogArticle = {
               suggests another time, and the confirmed shoot lands on your calendar.
             </li>
             <li>
-              <strong>You shoot and edit.</strong> This is the only part no software does for you.
+              <strong>You shoot and edit.</strong> The creative work is yours. Software can still shorten it: quick
+              exposure, white balance, and HDR-look fixes can happen in a built-in editor that saves straight back to
+              the project instead of a round trip through another app.
             </li>
             <li>
               <strong>You upload the media.</strong> The agent is notified, can preview everything, and can request
-              changes on specific items.
+              changes on specific items. For the listing video, they leave time-stamped comments right on the frame
+              instead of a numbered list in an email.
             </li>
             <li>
               <strong>Payment is requested,</strong> the agent pays online, a receipt goes out automatically, downloads
               unlock, and the project moves to Delivered.
+            </li>
+            <li>
+              <strong>The listing gets marketed.</strong> A property website and social posts built from the photos you
+              just delivered are offered to the agent, included free or sold as an add-on.
             </li>
           </ol>
           <p>
@@ -318,6 +346,11 @@ export const article: BlogArticle = {
               email.
             </p>
           </ProductCallout>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Stop sending &quot;just checking in on that invoice&quot;"
+            body="ShootPortal sends your branded payment reminders, collects the deposit on approval, and unlocks downloads the moment the agent pays. Set the rules once and run your next listing through it."
+          />
           <Figure caption="Illustrative comparison of a busy listing week handled manually versus with an automated workflow. Not measured data; your mileage will vary.">
             <BeforeAfter
               beforeTitle="Manual week"
@@ -370,6 +403,7 @@ export const article: BlogArticle = {
               <ul className="mk-plain-list mt-3 space-y-2 text-sm leading-snug text-[#334155]">
                 <li>Preliminary estimate from the agent&apos;s chosen service, plus a ZIP-to-ZIP travel fee</li>
                 <li>&quot;We received your request&quot; acknowledgment email</li>
+                <li>Branded emails at every step (proposal, shoot time, deliverables, payment request, receipt), each with an editable subject and body</li>
                 <li>Some stage changes as the agent approves, pays, or responds</li>
                 <li>Deposit request when an estimate is approved (if configured)</li>
                 <li>Move to Delivered after payment (if enabled)</li>
@@ -378,6 +412,7 @@ export const article: BlogArticle = {
                 <li>Reminder emails for proposals, scheduling, review, and payment</li>
                 <li>Confirmed shoots pushed to your Google Calendar</li>
                 <li>Batched notifications for video comments</li>
+                <li>Per-stage email, in-app, and push notifications for you and your team</li>
               </ul>
             </div>
             <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5">
@@ -388,6 +423,9 @@ export const article: BlogArticle = {
                 <li>The listing project and its stage in the pipeline</li>
                 <li>Messages with the agent, on the project</li>
                 <li>Uploaded photos, video, tours, and documents</li>
+                <li>Photo edits from the built-in editor, saved straight to the gallery</li>
+                <li>Video review comments, replies, and versions</li>
+                <li>The listing&apos;s property website and social media kit</li>
                 <li>The estimate, its versions, and its PDF</li>
                 <li>Payment status and outstanding balance</li>
                 <li>Your calendar, with Google events shown read-only</li>
@@ -399,7 +437,7 @@ export const article: BlogArticle = {
               <ul className="mk-plain-list mt-3 space-y-2 text-sm leading-snug text-[#334155]">
                 <li>Proposing the shoot time (the agent accepts, declines, or counters)</li>
                 <li>Reviewing and sending the official estimate</li>
-                <li>Shooting and editing</li>
+                <li>Shooting, and your creative editing calls</li>
                 <li>Uploading the finals</li>
                 <li>Your final check before the agent sees anything</li>
                 <li>Follow-ups and review requests after delivery</li>
@@ -414,15 +452,32 @@ export const article: BlogArticle = {
             checking your inbox, your calendar, a cloud folder, and Stripe. And because the agent sees the same project
             in their branded portal, they can check the status themselves before they text.
           </p>
+          <Figure caption="Real ShootPortal screen: Workflow Automation settings. Choose once whether a payment moves the project, unlocks downloads, and sends a receipt, and when reminders go out for proposals, scheduling, review, and payment (24 hours, 3 days, or 7 days).">
+            <AppScreen view="automation" />
+          </Figure>
+          <p>
+            The payment automations are the ones agents notice first. When the balance is paid, the project can move to
+            Delivered, the downloads unlock, and the receipt goes out, without you checking Stripe and sending a link.
+            The reminders handle the awkward part: a polite nudge about an unapproved proposal, an unanswered shoot time,
+            or an unpaid balance, sent on the schedule you pick.
+          </p>
+          <Figure caption="Real ShootPortal screen: Automated Emails. Every client email, from Proposal and Shoot Time to Deliverables, Payment Request, and Payment Receipt, carries your logo and has an editable subject and body, with open and click tracking.">
+            <AppScreen view="automated-emails" />
+          </Figure>
+          <p>
+            Those emails are written once, in your voice, and sent under your brand. You can send them from your own
+            domain, and open and click tracking tells you whether the agent actually saw the payment request before you
+            follow up.
+          </p>
+          <Figure caption="Real ShootPortal screens: the project's Payments tab on your side (billed, paid, outstanding), and the agent's portal on a phone with Pay Now. One tap to pay, and the downloads unlock on their own.">
+            <TwoSidedScreens business="payments" client="phone-portal-pay" />
+          </Figure>
           <Figure caption="Real ShootPortal screen: the ShootPortal studio view with a project pipeline and client activity (sample client data).">
             <ProductPreview view="studio" />
           </Figure>
           <p>
-            It&apos;s just as important to know what it doesn&apos;t do. Agents respond to shoot times you propose rather
-            than self-booking an open slot, there&apos;s no automatic photographer assignment or drive-time routing, no SMS
-            notifications, no property websites, and no Zillow Showcase delivery. If your business depends on agents
-            booking themselves into a dispatch calendar for a team of shooters, a platform built around that will fit
-            better.{" "}
+            Shoot times work by proposal: you pick a slot around light and your route, and the agent approves it in one
+            click or suggests another time. Confirmed shoots push to your Google Calendar.{" "}
             {ctx.studioMonthly ? (
               <>
                 ShootPortal is a flat subscription ({ctx.studioMonthly}/month
@@ -436,18 +491,19 @@ export const article: BlogArticle = {
               </>
             )}
           </p>
+          <AllInOnePlatform intro="Automation works best when everything it touches lives in one place. ShootPortal covers your website, booking, proposals, scheduling, photo editing, video review, payments, delivery, and listing marketing on one subscription." />
           <p>
             For a step-by-step list of which hand-offs ShootPortal performs automatically and which stay with you, see our{" "}
             <SiteLink href="/real-estate-photography-workflow-software">real estate photography workflow software</SiteLink> page.
           </p>
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Test the automation on one real listing"
+            title="Run your next listing on autopilot, under your brand"
             body={
               <>
                 Add your packages and travel-fee rule during setup, connect your own Stripe account, and send your next
-                agent the request link. Watch the preliminary estimate, deposit request, receipt, and download unlock
-                happen on their own, while you keep control of the shoot time and the final check.
+                agent the request link. Watch the instant estimate, branded emails, reminders, deposit request, receipt,
+                and download unlock happen on their own, while you keep control of the shoot time and the final check.
               </>
             }
           />
@@ -460,13 +516,13 @@ export const article: BlogArticle = {
     },
     {
       id: "choosing-software",
-      title: "Choosing automation software: real estate platforms, general CRMs, or Zapier glue",
+      title: "Choosing real estate photography automation software: platforms, CRMs, or Zapier",
       tocLabel: "Choosing software",
       body: () => (
         <>
           <p>
-            There are three realistic ways to automate a real estate media business, and each one is the right answer
-            for someone.
+            There are four realistic ways to automate a real estate media business. Here&apos;s how they compare, and
+            why we recommend one system that covers the whole job.
           </p>
           <h3>Real estate media platforms</h3>
           <p>
@@ -524,10 +580,10 @@ export const article: BlogArticle = {
                 "Tinkerers with unusual needs",
               ],
               [
-                "All-in-one workspace (e.g. ShootPortal)",
-                "Requests, estimates, scheduling, payments, review, and delivery on one project",
-                "Narrower feature set than specialist tools in some areas",
-                "Solo operators and small teams mixing listings with drone or video",
+                "All-in-one platform (ShootPortal)",
+                "Website, request form, estimates, scheduling, branded emails, reminders, photo editor, video review, payments, pay-to-unlock delivery, and listing marketing on one project; flat subscription, 0% of payments",
+                "Built for client-facing delivery rather than editor plugins",
+                "Real estate photographers, drone pilots, and videographers, solo or with a small team",
               ],
             ]}
             note="Editorial summary. Third-party features from each vendor's official pages, checked October 15, 2026; follow the links above to confirm."
@@ -570,6 +626,13 @@ export const article: BlogArticle = {
               your fuel costs, and ask one or two agents what&apos;s confusing.
             </li>
           </ul>
+          <ProductCallout title="One system of record, with automations you can read at a glance">
+            <p>
+              ShootPortal&apos;s automations are toggles and timing choices on one settings page, not a chain of zaps.
+              Every listing&apos;s estimate, shoot time, files, video comments, and balance live on the same project, so
+              there&apos;s never a second app to check, and nothing reaches the agent until you upload and send it.
+            </p>
+          </ProductCallout>
           <Callout tone="warning" title="Test with a real listing">
             <p>
               Before you switch everyone over, run one real job end to end with an agent you trust: request, estimate,
@@ -628,8 +691,9 @@ export const article: BlogArticle = {
           </p>
           <KeyTakeaways
             items={[
-              "Seven buckets of admin repeat on every listing; only the shoot itself is creative work.",
-              "Automate acknowledgments, preliminary pricing, reminders, payment requests, and download access.",
+              "Eight buckets of admin repeat on every listing; only the shoot itself is creative work.",
+              "Automate acknowledgments, preliminary pricing, branded emails, reminders, payment requests, and download access.",
+              "Let payment trigger the hand-off: receipt, download unlock, and Delivered status in one step.",
               "Keep first conversations, reshoots, and exceptions personal.",
               "Standardize packages, travel fees, and payment rules before choosing software.",
               "Prefer one system of record over a chain of connected apps, and test it on a real listing.",
@@ -679,12 +743,37 @@ export const article: BlogArticle = {
     {
       question: "Can ShootPortal let agents book their own time slot?",
       answerText:
-        "No. In ShootPortal you propose a shoot time and the client accepts, declines, or counter-proposes. Confirmed shoots push to your Google Calendar. If you need agents to self-book into open slots, look at real estate platforms built around self-scheduling.",
+        "In ShootPortal, agents request a shoot through your branded form with their preferred date, and you propose the exact time around light and your route. The agent approves it in one click or suggests another time, and confirmed shoots push to your Google Calendar.",
       answer: (
         <p>
-          No. In ShootPortal you propose a shoot time and the client accepts, declines, or counter-proposes, and
-          confirmed shoots push to your Google Calendar. If agents must self-book into open slots, compare the options in
-          our <BlogLink slug="best-real-estate-photography-booking-software">booking software guide</BlogLink>.
+          In ShootPortal, agents request a shoot through your branded form with their preferred date, and you propose
+          the exact time around light and your route. The agent approves it in one click or suggests another time, and
+          confirmed shoots push to your Google Calendar. For more on booking flows, see our{" "}
+          <BlogLink slug="best-real-estate-photography-booking-software">booking software guide</BlogLink>.
+        </p>
+      ),
+    },
+    {
+      question: "Can photo downloads unlock automatically when the agent pays?",
+      answerText:
+        "Yes. In ShootPortal you can keep downloads locked until the project is paid, as a business default or per project. When the agent pays online, the downloads unlock, the receipt email goes out, and the project can move to Delivered automatically.",
+      answer: (
+        <p>
+          Yes. In ShootPortal you can keep downloads locked until the project is paid, as a business default or per
+          project. When the agent pays online, the downloads unlock, the receipt email goes out, and the project can
+          move to Delivered automatically.
+        </p>
+      ),
+    },
+    {
+      question: "Can automated client emails carry my own branding?",
+      answerText:
+        "Yes. ShootPortal's automated emails, such as Proposal, Shoot Time, Deliverables, Payment Request, and Payment Receipt, use your logo and colors, have an editable subject and body, include open and click tracking, and can be sent from your own domain.",
+      answer: (
+        <p>
+          Yes. ShootPortal&apos;s automated emails, such as Proposal, Shoot Time, Deliverables, Payment Request, and
+          Payment Receipt, use your logo and colors, have an editable subject and body, include open and click tracking,
+          and can be sent from your own domain.
         </p>
       ),
     },
@@ -702,8 +791,8 @@ export const article: BlogArticle = {
   ],
   related: ["best-real-estate-photography-software", "photography-workflow-automation", "get-paid-before-delivering-real-estate-photos"],
   cta: {
-    title: "Let the routine listing admin run on rules you set",
-    body: "Preliminary estimates with travel fees, deposit requests on approval, receipts, reminders, and pay-to-download happen on their own. The estimate, shoot time, messages, files, and balance for every listing sit on one project, and the shoot and the agent relationship stay yours.",
+    title: "Automate every listing from request to paid delivery",
+    body: "Instant estimates with travel fees, branded emails, reminders, deposits on approval, receipts, and downloads that unlock when the agent pays all run on rules you set. Editing, video review, delivery, and listing marketing sit on the same project, and the agent only ever needs a link.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See the request-to-delivery flow",
   },

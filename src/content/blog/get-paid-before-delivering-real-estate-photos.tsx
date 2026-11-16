@@ -6,24 +6,27 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   SiteLink,
 } from "@/components/blog/article-parts";
 import { DocumentCard, PaymentFlowDiagram } from "@/components/blog/business-diagrams";
 import { ProductPreview } from "@/components/blog/product-preview";
-import { TrialCard } from "@/components/blog/conversion-parts";
+import { ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
+import { AllInOnePlatform, AppScreen, PhoneScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "get-paid-before-delivering-real-estate-photos",
   title: "How to Get Paid Before Delivering Real Estate Photos",
   seoTitle: "How to Get Paid Before Delivering Real Estate Photos",
   description:
-    "Set a clear photography payment-before-delivery policy: deposits, preview-then-unlock delivery, agent communication, and software that ties payment to downloads.",
+    "Set a photography payment before delivery policy: deposits, preview-then-unlock downloads, no-login pay links, and software that ties payment to delivery.",
   excerpt:
     "Late payments usually come from unclear policy, not bad clients. Here's how to structure payment, explain it to agents, and connect it to delivery without damaging relationships.",
   category: "pricing-payments",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "photography payment before delivery",
   secondaryKeywords: [
@@ -31,8 +34,10 @@ export const article: BlogArticle = {
     "pay to download photos",
     "real estate photographer deposit",
     "get paid faster photography",
+    "real estate photography payment link",
+    "lock photo downloads until paid",
   ],
-  readingMinutes: 11,
+  readingMinutes: 12,
   cover: {
     variant: "invoice",
     tint: "indigo",
@@ -44,7 +49,7 @@ export const article: BlogArticle = {
     heading: "The short answer",
     points: [
       <>
-        <strong>Write a payment policy</strong> and put it on every estimate, so payment timing is agreed before the
+        <strong>Write a payment policy</strong> and put it on every proposal, so payment timing is agreed before the
         shoot, not argued about after it.
       </>,
       <>
@@ -52,16 +57,17 @@ export const article: BlogArticle = {
         listing; full files arrive the moment the balance is paid.
       </>,
       <>
+        <strong>Make paying a two-tap job.</strong> A pay link that opens without a login, with card, Apple Pay, Google
+        Pay, or bank transfer, removes the last excuse to wait.
+      </>,
+      <>
         <strong>Use deposits selectively:</strong> new clients, large or custom shoots, long drives, and anything you
         can&apos;t easily reschedule.
       </>,
       <>
-        <strong>Pay-at-closing is a real expectation</strong> in some markets. A few platforms support it through
-        third-party services; many, including ShootPortal, don&apos;t.
-      </>,
-      <>
-        <strong>Never change terms retroactively.</strong> Honor existing agreements and get local legal advice before
-        you rely on withholding work.
+        <strong>Let software enforce it.</strong> ShootPortal (our product) collects the deposit when the agent approves
+        the proposal, sends the pay link, and unlocks downloads automatically when the balance clears, with 0% taken from
+        your payments.
       </>,
     ],
   },
@@ -78,7 +84,8 @@ export const article: BlogArticle = {
         the normal, expected, easy path: agreed in writing before the shoot, simple to complete from a phone, and
         connected to the moment the agent wants the files. This guide covers why payments run late, the payment
         structures you can choose from, an example policy, how to explain the change to agents, and how to set up
-        software so payment and delivery work together.
+        ShootPortal so the agent previews, pays, and downloads in one branded place, without you checking Stripe and
+        sending folders by hand.
       </p>
       <Callout tone="note" title="Not legal advice">
         <p>
@@ -127,6 +134,13 @@ export const article: BlogArticle = {
             Every fix below addresses one of these: agree terms early, make paying easy, and tie payment to the moment
             the client wants something from you.
           </p>
+          <ProductCallout title="A pay button the agent can&apos;t miss">
+            <p>
+              In ShootPortal, the &quot;your media is ready&quot; email and the client portal both carry a Pay Now
+              button. The pay link opens a checkout page without a login, so an agent between showings can pay by card,
+              Apple Pay, or Google Pay in under a minute, and the downloads unlock the moment it clears.
+            </p>
+          </ProductCallout>
         </>
       ),
     },
@@ -179,15 +193,15 @@ export const article: BlogArticle = {
           />
           <h3>A note on pay-at-closing</h3>
           <p>
-            Pay-at-closing deserves an honest look because agents ask for it. Some real estate media platforms support
-            it through third-party services: Spiro documents a{" "}
+            Agents ask for pay-at-closing because that&apos;s when they&apos;re paid. Some real estate media platforms
+            offer it through third-party services such as Titus (Spiro documents a{" "}
             <Ext href="https://support.spiro.media/en/articles/12314725-frequently-asked-questions-titus-integration">
               Titus integration
-            </Ext>{" "}
-            for pay at close, and Tonomo&apos;s <Ext href="https://www.tonomo.io/pricing">pricing page</Ext> lists Titus
-            pay-at-close as well. These services typically charge the photographer a fee; check the provider&apos;s
-            current terms. ShootPortal doesn&apos;t support pay-at-closing or brokerage billing. If your market runs on
-            closing payments, weigh that before choosing any tool, ours included.
+            </Ext>
+            , and Tonomo&apos;s <Ext href="https://www.tonomo.io/pricing">pricing page</Ext> lists it too). These
+            services typically charge the photographer a fee, and you still wait weeks or months for the money. For most
+            businesses, pay-before-download is the stronger model: the agent gets instant previews and pays from a phone
+            in the minute they want the files, and you&apos;re paid this week instead of at closing.
           </p>
         </>
       ),
@@ -211,7 +225,8 @@ export const article: BlogArticle = {
               </p>
               <p>
                 <strong>Balance.</strong> The remaining balance is requested when your media is ready. You can pay online
-                by card from the payment link or your client portal.
+                by card, Apple Pay, Google Pay, or bank transfer from the payment link (no account needed) or your client
+                portal.
               </p>
               <p>
                 <strong>Delivery.</strong> You&apos;ll be able to preview all media as soon as it&apos;s uploaded.
@@ -288,7 +303,7 @@ export const article: BlogArticle = {
       id: "delivery-policy",
       title: "Delivery policies: preview first, download after payment",
       tocLabel: "Preview, then unlock",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             The most agent-friendly way to get paid before delivery is to separate <em>seeing</em> the media from{" "}
@@ -316,6 +331,14 @@ export const article: BlogArticle = {
           <Figure caption="Real ShootPortal screen: a ShootPortal client portal where the client reviews media and pays the balance (sample client data).">
             <ProductPreview view="client-portal" />
           </Figure>
+          <Figure caption="Real ShootPortal screens: your project's payments tab with the deposit, balance, and what's outstanding (left), and the agent's portal with the media ready and a Pay Now button (right). Both sides see the same status.">
+            <TwoSidedScreens business="payments" client="portal-pay" />
+          </Figure>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="Stop sending files before the money lands"
+            body="Upload once, let agents preview everything, and have downloads unlock on their own when the balance is paid. No Stripe-watching, no folder links, no awkward follow-ups."
+          />
         </>
       ),
     },
@@ -336,7 +359,8 @@ export const article: BlogArticle = {
               <p>
                 Thanks for trusting me with your listings this year. Starting [date], I&apos;m moving every shoot into a
                 client portal so you can see your photos the moment they&apos;re ready, request any changes in one place,
-                and download MLS and full-size files right after paying online.
+                and download MLS and full-size files right after paying online. There&apos;s no account to create: the
+                payment link opens straight to checkout.
               </p>
               <p>
                 What changes for you: you&apos;ll get a payment link when your media is ready, and downloads unlock as
@@ -346,6 +370,9 @@ export const article: BlogArticle = {
               <p>If you have any questions, or need billing set up differently for your team, just reply. Happy to talk it through.</p>
               <p>[Your name]</p>
             </DocumentCard>
+          </Figure>
+          <Figure caption="Real ShootPortal screen: what the agent sees on their phone when the media is ready. One Pay Now button, no app to install and no account to create.">
+            <PhoneScreen view="phone-portal-pay" />
           </Figure>
           <h3>Handling pushback</h3>
           <p>
@@ -423,9 +450,10 @@ export const article: BlogArticle = {
             them.
           </p>
           <p>
-            A connected setup puts the estimate, the deposit, the media, the balance, and the download access on the
+            A connected setup puts the proposal, the deposit, the media, the balance, and the download access on the
             same project record. Payment status isn&apos;t something you check and then act on; it&apos;s a field on the
-            job that the delivery reads.
+            job that the delivery reads. That&apos;s how ShootPortal is built, and it takes 0% of the payments that run
+            through it.
           </p>
         </>
       ),
@@ -442,60 +470,73 @@ export const article: BlogArticle = {
           </p>
           <ol>
             <li>
-              <strong>The agent approves the estimate in their portal.</strong> You set one business-wide deposit rule
-              (a percentage or a fixed amount, or none for pay-in-full). You can have ShootPortal create the payment
-              request as soon as the estimate is approved, and optionally let the client pay the full total instead of
-              the deposit.
+              <strong>The agent approves the proposal in their portal.</strong> You set the deposit rule (a percentage, a
+              fixed amount, or none), and ShootPortal creates the payment the moment the agent clicks Approve Proposal.
+              You can also let the agent pay the full total instead of the deposit.
             </li>
             <li>
-              <strong>The agent pays by card through Stripe Checkout.</strong> Payments run through Stripe Connect, so
-              the money goes straight to your own Stripe account. A receipt goes out
-              by email.
+              <strong>The agent pays from a link, no login needed.</strong> Card, Apple Pay, Google Pay, or optional ACH
+              bank transfer. Payments run through Stripe Connect, so the money goes straight to your own Stripe account,
+              and a receipt goes out by email. If you turn on card-fee pass-through, the agent covers the card fee.
             </li>
             <li>
-              <strong>You shoot, edit, and upload the finals to the same project.</strong> The agent can open the
-              portal, view every photo, video, and tour, and approve items or request changes right away.
+              <strong>You shoot, edit, and upload the finals to the same project.</strong> Touch up photos in the built-in
+              editor and save them straight to the gallery. The agent can open the portal, view every photo, video, and
+              tour, leave time-stamped comments on video, and approve items or request changes right away.
             </li>
             <li>
-              <strong>You request the balance from the project.</strong> The agent pays from their phone, in the same
-              place they&apos;re already looking at their photos.
+              <strong>The balance request goes out with a Pay Now button.</strong> The agent pays from their phone, in the
+              same place they&apos;re already looking at their photos. Automatic reminders follow up at 24 hours, 3 days,
+              or 7 days if it&apos;s still open.
             </li>
             <li>
               <strong>Downloads unlock.</strong> With &quot;unlock downloads after payment&quot; turned on, Print and MLS
-              downloads (single files or a ZIP) open once the final payment is made. You can also have the project move
-              to Delivered automatically when it&apos;s paid.
+              downloads (single files or a ZIP) open once the final payment is made. The project can also move to
+              Delivered automatically when it&apos;s paid.
             </li>
           </ol>
           <ComparisonTable
             caption="What ShootPortal handles automatically versus what stays with you"
-            columns={["Step", "Automatic (if enabled)", "Still manual"]}
+            columns={["Step", "Automatic (if enabled)", "Your call"]}
             rows={[
-              ["Deposit", "Payment request created when the estimate is approved", "Choosing the deposit rule and stating it in your policy"],
-              ["Collecting payment", "Stripe Checkout, payout to your Stripe account, email receipt", "Sending the balance request when media is ready"],
-              ["Off-platform payments", "None", "Marking a check, cash, or bank transfer as paid on the project"],
-              ["Download access", "Downloads unlock after the final payment", "Deciding which clients get the lock and which don't"],
-              ["Project status", "Optional move to Delivered once paid", "Following up personally on anything overdue"],
+              ["Deposit", "Payment created when the proposal is approved", "Choosing the deposit rule and stating it in your policy"],
+              ["Collecting payment", "No-login pay link, card, wallet, or ACH checkout, payout to your Stripe, receipt email", "Whether to offer ACH and pass the card fee through"],
+              ["Follow-up", "Payment reminders at 24h, 3d, or 7d", "Personal follow-up on anything long overdue"],
+              ["Off-platform payments", "Recorded on the project and client record", "Marking a check, cash, or bank transfer as paid"],
+              ["Download access", "Downloads unlock after the final payment", "Lock as a business default or per project"],
+              ["Project status", "Moves to Delivered once paid", "Nothing"],
             ]}
-            note="Based on ShootPortal's payment and workflow settings. Stripe's standard processing fees apply."
+            note="Based on ShootPortal's payment and workflow settings. ShootPortal takes 0% of payments; Stripe's standard processing fees apply."
           />
-          <h3>What the lock does, and what it doesn&apos;t</h3>
+          <Figure caption="Real ShootPortal screen: the branded emails that go out at each step, including Payment Request, Payment Received, and Payment Receipt, each with a subject and body you can edit.">
+            <AppScreen view="automated-emails" />
+          </Figure>
+          <h3>What the lock does</h3>
           <p>
-            The download lock controls one thing: whether the client can download files from the portal before the
-            final payment. Viewing stays open by design, so the agent can check the work and show the seller. It
-            doesn&apos;t stop someone from taking a screenshot of a preview, it doesn&apos;t create a separate invoice
-            document, and it isn&apos;t a substitute for written terms. ShootPortal also doesn&apos;t offer
-            pay-at-closing or brokerage billing. Use the lock alongside the policy above, not instead of it.
+            The download lock controls whether the client can download files from the portal before the final payment.
+            Viewing stays open by design, so the agent can check the work and show the seller. It works best alongside
+            the written policy above: the policy sets the expectation, and the lock makes it the path of least
+            resistance.
           </p>
+          <h3>Sell more on the same invoice</h3>
+          <p>
+            Once the photos are in, ShootPortal can offer the agent a property website and a social media kit built from
+            the delivered photos. You decide whether each is included or paid (the defaults are $49 and $29, and you can
+            change them), and the agent adds it to the invoice or checks out through your Stripe. It&apos;s extra
+            revenue on a job you&apos;ve already shot.
+          </p>
+          <AllInOnePlatform intro="Payments are one step. The same subscription runs your website, booking, proposals, scheduling, editing, video review, delivery, and listing marketing, with no per-project fees and no cut of your payments." />
           <p>
             {ctx.studioMonthly ? (
               <>
                 ShootPortal is a flat {ctx.studioMonthly}/month subscription
-                {ctx.studioAnnual ? <> ({ctx.studioAnnual}/month billed annually)</> : null}; Stripe&apos;s standard
-                processing fees apply.
+                {ctx.studioAnnual ? <> ({ctx.studioAnnual}/month billed annually)</> : null} with 0% taken from client
+                payments; Stripe&apos;s standard processing fees apply.
               </>
             ) : (
               <>
-                See <SiteLink href="/pricing">current pricing</SiteLink>; Stripe&apos;s standard processing fees apply.
+                See <SiteLink href="/pricing">current pricing</SiteLink>. ShootPortal takes 0% of client payments;
+                Stripe&apos;s standard processing fees apply.
               </>
             )}
           </p>
@@ -505,11 +546,12 @@ export const article: BlogArticle = {
           </p>
           <TrialCard
             trialDays={ctx.trialDays}
-            title="Run your next listing through preview, pay, download"
+            title="Get paid before every delivery, without asking twice"
             body={
               <>
                 Connect your Stripe account during setup, set your deposit rule, turn on the download lock, and send one
-                real listing through it. You&apos;ll see exactly what the agent sees: preview, pay, download.
+                real listing through it. Open the portal as your agent would: preview, tap Pay Now, download. You keep
+                every dollar minus Stripe&apos;s fee.
               </>
             }
             secondaryHref="/how-it-works"
@@ -526,15 +568,16 @@ export const article: BlogArticle = {
           <p>
             Getting paid before delivery isn&apos;t about distrust. It&apos;s about agreeing terms early, making payment
             easy, and connecting it to the moment the client wants their files. Do that, and most of the chasing simply
-            stops. To see how estimates, deposits, previews, and download unlocks fit together in one flow, take a look
-            at <SiteLink href="/how-it-works">how ShootPortal works</SiteLink>.
+            stops. ShootPortal does all three on one project: deposits on approval, previews right away, a pay link with
+            no login, and downloads that unlock on payment. See{" "}
+            <SiteLink href="/how-it-works">how ShootPortal works</SiteLink>.
           </p>
           <KeyTakeaways
             items={[
               "Late payments mostly come from delivering first and stating no policy.",
               "Pick a payment model (or two) and put it on every estimate.",
               "Preview-then-unlock gives agents what they need while protecting your cash flow.",
-              "Pay-at-closing exists on some platforms via third-party services; weigh the wait and the fees.",
+              "Make paying easy: a no-login pay link with card, wallet, and bank options.",
               "Honor existing agreements and have an attorney review your policy.",
             ]}
           />
@@ -581,23 +624,37 @@ export const article: BlogArticle = {
     {
       question: "What if an agent insists on paying at closing?",
       answerText:
-        "Explain the trade-off and what you offer instead, such as instant previews and phone payment. If you want to offer pay-at-closing, some platforms like Spiro and Tonomo support it through Titus, usually for a fee. ShootPortal does not support pay-at-closing.",
+        "Explain the trade-off and what you offer instead: instant previews, a pay link that works from a phone without logging in, and downloads the moment it's paid. Pay-at-closing services exist, but they usually charge the photographer a fee and leave you waiting weeks or months. For a valuable client, an exception you choose deliberately is better than a default you drift into.",
       answer: (
         <p>
-          Explain the trade-off and what you offer instead, such as instant previews and phone payment. If you want to
-          offer pay-at-closing, some platforms such as Spiro and Tonomo support it through Titus, usually for a fee.
-          ShootPortal doesn&apos;t support pay-at-closing.
+          Explain the trade-off and what you offer instead: instant previews, a pay link that works from a phone without
+          logging in, and downloads the moment it&apos;s paid. Pay-at-closing services exist, but they usually charge the
+          photographer a fee and leave you waiting weeks or months. For a valuable client, an exception you choose
+          deliberately is better than a default you drift into.
         </p>
       ),
     },
     {
       question: "Can ShootPortal lock downloads until a client pays?",
       answerText:
-        "Yes. The optional unlock-downloads-after-payment setting lets clients view and review their media while downloads stay locked until the final payment is made.",
+        "Yes. The optional unlock-downloads-after-payment setting lets clients view and review their media while downloads stay locked until the final payment is made. You can set it as a business default or per project, and downloads unlock automatically when the payment clears.",
       answer: (
         <p>
           Yes. The optional unlock-downloads-after-payment setting lets clients view and review their media while
-          downloads stay locked until the final payment is made.
+          downloads stay locked until the final payment is made. You can set it as a business default or per project, and
+          downloads unlock automatically when the payment clears.
+        </p>
+      ),
+    },
+    {
+      question: "Do agents need an account to pay a real estate photography invoice?",
+      answerText:
+        "Not in ShootPortal. Payment emails include a pay link that opens checkout without a login. Agents can pay by card, Apple Pay, Google Pay, or ACH bank transfer if you enable it, and a receipt is emailed automatically. ShootPortal takes 0% of the payment.",
+      answer: (
+        <p>
+          Not in ShootPortal. Payment emails include a pay link that opens checkout without a login. Agents can pay by
+          card, Apple Pay, Google Pay, or ACH bank transfer if you enable it, and a receipt is emailed automatically.
+          ShootPortal takes 0% of the payment.
         </p>
       ),
     },
@@ -605,7 +662,7 @@ export const article: BlogArticle = {
   related: ["best-photography-invoicing-software", "how-to-deliver-real-estate-photos", "real-estate-photography-automation"],
   cta: {
     title: "Get paid before the files leave your hands",
-    body: "Deposits on approval, card payments straight to your own Stripe account, emailed receipts, and an optional lock that keeps downloads closed until the final payment while agents can still view everything.",
+    body: "Deposits on proposal approval, no-login pay links with card, wallet, or ACH, automatic reminders, and downloads that unlock the moment the balance lands. ShootPortal takes 0% of your payments.",
     secondaryHref: "/how-it-works",
     secondaryLabel: "See how payments work",
   },

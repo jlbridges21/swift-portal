@@ -5,6 +5,7 @@ import {
   ComparisonTable,
   Ext,
   Figure,
+  InlineCta,
   KeyTakeaways,
   No,
   PickGrid,
@@ -13,20 +14,22 @@ import {
   Yes,
 } from "@/components/blog/article-parts";
 import { DeliveryPathDiagram, VideoReviewDiagram } from "@/components/blog/diagrams";
-import { BestFitPanel, TrialCard } from "@/components/blog/conversion-parts";
+import { BestFitPanel, ProductCallout, TrialCard } from "@/components/blog/conversion-parts";
 import { ProductPreview } from "@/components/blog/product-preview";
+import { AllInOnePlatform, AppScreen, TwoSidedScreens } from "@/components/blog/app-screen";
 
 export const article: BlogArticle = {
   slug: "best-photo-video-delivery-platforms",
   title: "Best Photo and Video Delivery Platforms for Professional Photographers in 2026",
   seoTitle: "Best Photo and Video Delivery Platforms in 2026",
   description:
-    "Galleries, video review tools, and file transfer compared for photographers, videographers, and drone pilots: file limits, branding, revisions, and pricing.",
+    "Photo and video delivery platforms compared for photographers, videographers, and drone pilots: galleries, video review, file limits, and pricing.",
   excerpt:
-    "Pixieset, Pic-Time, ShootProof, SmugMug, Zenfolio, Frame.io, Vimeo, Dropbox, WeTransfer and ShootPortal, compared on large video files, revisions, branding, and the client's download experience.",
+    "ShootPortal, Pixieset, Pic-Time, ShootProof, SmugMug, Zenfolio, Frame.io, Vimeo, Dropbox, and WeTransfer compared on large video files, revisions, branding, payment, and the client's download experience.",
   category: "media-delivery",
   authorId: "jackson-bridges",
   publishedAt: "2026-10-15",
+  updatedAt: "2026-11-16",
   factsVerifiedAt: "2026-10-15",
   primaryKeyword: "photo and video delivery platform",
   secondaryKeywords: [
@@ -34,8 +37,12 @@ export const article: BlogArticle = {
     "photo delivery software",
     "video review software for photographers",
     "deliver large video files to clients",
+    "Dropbox Replay alternative",
+    "Frame.io alternative",
+    "real estate video delivery",
+    "photo editing for real estate",
   ],
-  readingMinutes: 11,
+  readingMinutes: 12,
   cover: {
     variant: "media",
     label: "2026 Guide",
@@ -46,48 +53,49 @@ export const article: BlogArticle = {
     heading: "Quick answer",
     points: [
       <>
-        <strong>Mostly stills, with print and download sales?</strong> A gallery platform such as Pixieset, Pic-Time,
-        ShootProof, SmugMug, or Zenfolio.
+        <strong>Real estate, drone, or commercial photographer and videographer?</strong> Our pick is ShootPortal (our
+        product): photos, video, tours, and 3D or map embeds on one project in your branded portal, with the invoice and
+        downloads that unlock on payment.
       </>,
       <>
-        <strong>Video with several rounds of edits?</strong> A review tool with time-coded comments: Frame.io, Vimeo
-        review links, Wipster, or Dropbox Replay.
+        <strong>Video with several rounds of edits?</strong> ShootPortal&apos;s video review replaces Dropbox Replay or
+        Frame.io for client feedback: comments pinned to the frame, numbered versions, and approvals, included in the
+        plan.
       </>,
       <>
-        <strong>Just moving one huge file?</strong> Google Drive (up to 5 TB per file), Dropbox Transfer, or WeTransfer
-        work, but give clients no branding, approvals, or payment step.
+        <strong>Want to fix photos without leaving the delivery?</strong> ShootPortal&apos;s built-in photo editor saves
+        straight back to the client&apos;s gallery and downloads.
       </>,
       <>
-        <strong>Videographer or drone operator delivering photos, video, maps, and an invoice on the same job?</strong>{" "}
-        Our pick is ShootPortal (our product): review, payment, and download live on one project in your branded
-        portal, with time-stamped video comments, per-item approval, and optional unlock-after-payment.
-      </>,
-      <>
-        Check per-file video limits before you commit. They range from 3 GB to multiple terabytes depending on the
-        platform.
+        <strong>Comparing galleries and transfer tools?</strong> Pixieset, Pic-Time, ShootProof, SmugMug, Zenfolio,
+        Frame.io, Vimeo, Wipster, Dropbox, WeTransfer, and Google Drive are covered below. Check per-file video limits
+        first: they range from 3 GB to multiple terabytes.
       </>,
     ],
   },
-  intro: () => (
+  intro: (ctx) => (
     <>
       <p>
         Delivering a still photo is a solved problem. Delivering a four-minute 4K brand film, thirty edited stills, a
         drone orthomosaic, and a revised cut two days later, to a client who wants to comment on the second version and
         pay before downloading, is not. That&apos;s where most photographers, videographers, and drone operators end up
-        stitching together three or four tools.
+        stitching together three or four tools instead of one photo and video delivery platform.
       </p>
       <p>
         A good <strong>photo and video delivery platform</strong> handles the whole hand-off: big files, a clean viewing
-        experience, feedback on specific moments, your branding, and a download that just works. The trouble is that
-        most products were built for one slice of that. Gallery platforms grew up around weddings and portraits. Video
-        review tools grew up around post-production teams. File transfer services were built to move bytes, not to
-        impress clients.
+        experience, feedback on specific moments, your branding, and a download that just works. Most products were built
+        for one slice of that. Gallery platforms grew up around weddings and portraits. Video review tools grew up around
+        post-production teams. File transfer services were built to move bytes, not to impress clients.
       </p>
       <p>
-        This guide compares all three categories for working creatives across niches. If you deliver mainly listing
-        media to real estate agents, our{" "}
+        ShootPortal was built for the whole hand-off. Review, payment, and download live on one project in your branded
+        portal, next to the proposal and messages, so the client gets one link instead of a gallery, a review link, a
+        transfer, and an invoice.{" "}
+        {ctx.studioMonthly ? <>It&apos;s one {ctx.studioMonthly}/month plan with every feature included. </> : null}
+        Below we compare it with the three other categories. If you deliver mainly listing media, our{" "}
         <BlogLink slug="best-real-estate-photography-delivery-software">real estate delivery software comparison</BlogLink>{" "}
-        is the more specific read. Prices and file limits come from official vendor pages, checked October 15, 2026.
+        is the more specific read. Competitor prices and file limits come from official vendor pages, checked October
+        15, 2026.
       </p>
     </>
   ),
@@ -136,6 +144,13 @@ export const article: BlogArticle = {
               in an email thread, and a client who can&apos;t find last month&apos;s link when they need the files again.
             </p>
           </Callout>
+          <ProductCallout title="Files that stay put, on a page with your name on it">
+            <p>
+              In ShootPortal, every delivery lives on the client&apos;s project in your branded portal, so it doesn&apos;t
+              expire and the client can find it next month. Uploads are resumable, the payment button sits beside the
+              files, and downloads can stay locked until the invoice is paid.
+            </p>
+          </ProductCallout>
           <p>
             For a deeper head-to-head on cloud storage, see{" "}
             <BlogLink slug="google-drive-vs-dropbox-photo-delivery">Google Drive vs. Dropbox vs. dedicated delivery software</BlogLink>.
@@ -152,7 +167,7 @@ export const article: BlogArticle = {
           <p>
             Client gallery platforms are the natural home for portrait, wedding, and event photographers. They&apos;re
             polished, client-friendly, and most include a store for prints and digital downloads. Video support has
-            improved but still comes with per-plan limits.
+            improved but still comes with per-plan limits, and none of them handle a paid project with video revisions.
           </p>
           <ToolCard
             id="pv-pixieset"
@@ -195,7 +210,7 @@ export const article: BlogArticle = {
                 <Ext href="https://www.shootproof.com/pricing/">Official pricing</Ext>
               </>
             }
-            bestFor="Studios that want galleries, contracts, and invoices from one vendor."
+            bestFor="Portrait and event studios that want galleries, contracts, and invoices from one vendor."
             pros={["Commission-free sales on every plan", "Video up to 4K on paid plans; help docs list files up to 20 GB / 60 minutes"]}
             cons={["Video uploads via the web uploader only", "Download All is disabled above 2,500 files"]}
           />
@@ -240,8 +255,9 @@ export const article: BlogArticle = {
         <>
           <p>
             Post-production teams solved the revision problem years ago with time-coded comments: the reviewer pauses at
-            0:23, types a note, and the editor sees exactly which frame it refers to. These tools are excellent at that,
-            but most have no payment step, no stills-gallery experience, and no concept of the project around the video.
+            0:23, types a note, and the editor sees exactly which frame it refers to. These tools are good at that, but
+            they have no payment step, no stills-gallery experience, and no concept of the project around the video.
+            They&apos;re also another subscription, usually priced per member or per user.
           </p>
           <ToolCard
             id="pv-frameio"
@@ -254,14 +270,14 @@ export const article: BlogArticle = {
                 <Ext href="https://frame.io/pricing">Official pricing</Ext>
               </>
             }
-            bestFor="Videographers working with editors or agencies who need frame-accurate review."
+            bestFor="Editing teams and agencies trading notes inside Premiere Pro or Final Cut Pro."
             pros={[
               "Frame-accurate and range-based comments with annotations",
               "Files up to 5 TB per asset",
               "Branded, passphrase-protected, expiring shares on Pro",
               "Premiere Pro and Final Cut Pro integrations, so editors can work on comments from the timeline",
             ]}
-            cons={["No payments or print store", "Priced per member, which adds up for small teams"]}
+            cons={["No proposals, payments, or photo gallery", "Priced per member, which adds up for small teams"]}
           />
           <ToolCard
             id="pv-vimeo"
@@ -274,7 +290,7 @@ export const article: BlogArticle = {
                 <Ext href="https://vimeo.com/upgrade-plan">Vimeo&apos;s plans page</Ext>.
               </>
             }
-            bestFor="Videographers who already host on Vimeo and want lightweight client review."
+            bestFor="Videographers who already host on Vimeo."
             pros={["Time-coded comments on the timeline; reviewers don't need an account", "New versions keep the same link and comment history"]}
             cons={["Free plans get one review link per video and no password protection", "Custom branding is paid-only"]}
           />
@@ -289,14 +305,25 @@ export const article: BlogArticle = {
                 <Ext href="https://wipster.io/pricing">Official pricing</Ext>
               </>
             }
-            bestFor="Small video teams wanting an affordable review tool."
+            bestFor="Small video teams wanting a review-only tool."
             pros={["Free trial with no credit card", "Custom branding and team-only comments on Team"]}
             cons={["No payments or client gallery", "Branding requires the per-user Team plan"]}
           />
           <p>
             Dropbox Replay belongs in this group too: it supports uploads up to 150 GB, media up to 12 hours, real-time
-            comments and markup, and approvals, as an add-on to a Dropbox plan.
+            comments and markup, and approvals, as a per-user add-on to a Dropbox plan.
           </p>
+          <h3>The client-facing alternative: review inside the project</h3>
+          <p>
+            If your reviewers are clients rather than editors, you don&apos;t need a separate review suite. ShootPortal
+            works as a Dropbox Replay or Frame.io alternative for client feedback: the client opens the video in your
+            portal, pins comments to a moment and a spot on the frame, you reply in threads and resolve them, and new
+            cuts land as numbered versions. When they approve, the invoice and the download are already on the same
+            page. It&apos;s included in the plan, with no per-user add-on.
+          </p>
+          <Figure caption="Real ShootPortal screens: on the left, your review of version 2 with time-stamped comments, replies, and Resolve buttons; on the right, the client commenting on the film from a phone, with no app or extra account.">
+            <TwoSidedScreens business="video-review" client="phone-video-review" />
+          </Figure>
           <p>
             For a fuller comparison of review tools, see our{" "}
             <BlogLink slug="best-video-review-approval-software">video review and approval software guide</BlogLink>.
@@ -318,6 +345,7 @@ export const article: BlogArticle = {
             caption="Published video and transfer limits, October 2026"
             columns={["Platform", "Published per-file limit", "Notes"]}
             rows={[
+              ["ShootPortal", "Per-file limit not published", "Resumable uploads recover from a dropped connection"],
               ["Google Drive", "Up to 5 TB", "Storage limited by your Google One plan"],
               ["Frame.io", "Up to 5 TB per asset (web app)", "Storage by plan and member count"],
               ["Dropbox Transfer", "2 GB (Basic) to 100 GB (Standard+)", "250 GB on Business Plus/Enterprise or with Replay"],
@@ -327,12 +355,11 @@ export const article: BlogArticle = {
               ["ShootProof", "Up to 20 GB / 60 min", "Per an older help article"],
               ["SmugMug", "3 GB / 20 min", "Display copies up to 1080p"],
               ["Pixieset", "No per-file limit stated", "Metered by plan video minutes"],
-              ["ShootPortal", "Per-file limit not published", "Resumable uploads recover from a dropped connection"],
             ]}
             note={
               <>
-                Limits from each vendor&apos;s official help or pricing pages, checked October 15, 2026. Zenfolio&apos;s
-                pages conflict (3 GB vs. 20 GB), so it&apos;s omitted; confirm on{" "}
+                Competitor limits from each vendor&apos;s official help or pricing pages, checked October 15, 2026.
+                Zenfolio&apos;s pages conflict (3 GB vs. 20 GB), so it&apos;s omitted; confirm on{" "}
                 <Ext href="https://zenfolio.com/plans/">Zenfolio&apos;s site</Ext>.
               </>
             }
@@ -346,10 +373,10 @@ export const article: BlogArticle = {
           </p>
           <h3>Client branding</h3>
           <p>
-            Branding ranges from a logo on a third-party page to a custom domain. Gallery platforms are generally
-            strongest here. File transfer tools reserve branding for upper tiers (Dropbox Standard and up, WeTransfer
-            Ultimate). Video review tools tend to gate it behind paid or per-member plans. Decide whether a custom domain
-            matters to you, because it&apos;s the line that most often pushes you into a pricier tier.
+            Branding ranges from a logo on a third-party page to a custom domain. File transfer tools reserve branding
+            for upper tiers (Dropbox Standard and up, WeTransfer Ultimate), and video review tools tend to gate it behind
+            paid or per-member plans. ShootPortal puts your logo and colors on the portal, emails, and checkout on every
+            account, with custom domains for the portal, your website, and property sites.
           </p>
           <p>
             We cover bitrate math, email limits, and transfer options in{" "}
@@ -392,10 +419,11 @@ export const article: BlogArticle = {
             <VideoReviewDiagram />
           </Figure>
           <p>
-            Frame.io, Vimeo review, and Dropbox Replay all handle the first two well. ShootPortal adds the same
-            idea to a client portal: comments are time-stamped and can be pinned to a spot on the frame, replies are
-            threaded, notes can be resolved and reopened, and videos carry numbered versions. Photos and other
-            deliverables use simpler approve-or-reject feedback with a written note, without pinned comments. The{" "}
+            ShootPortal covers all four inside the client portal: comments are time-stamped and pinned to a spot on the
+            frame, replies are threaded, notes can be resolved and reopened, videos carry numbered versions, and the
+            client approves or requests changes on each deliverable. Comment notifications are batched, so the client
+            isn&apos;t flooded with emails. Photos get the same approve-or-request-changes step with a written note, and
+            when a photo needs a fix you make it in the built-in editor and save it straight back to the gallery. The{" "}
             <SiteLink href="/video-review-approval-software">video review and approval software</SiteLink> page walks
             through a full review round.
           </p>
@@ -406,7 +434,7 @@ export const article: BlogArticle = {
       id: "comparison-table",
       title: "Photo and video delivery platforms compared",
       tocLabel: "Comparison table",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
             A side-by-side view of the categories. &quot;Not stated&quot; means we couldn&apos;t confirm it on an
@@ -424,7 +452,7 @@ export const article: BlogArticle = {
               "Starting paid price",
             ]}
             rows={[
-              ["ShootPortal", "Client portal", <Yes key="a">Pinned to frame, versions</Yes>, <Yes key="a1">Approve or request changes per item</Yes>, <Yes key="b">Project payments via your Stripe; optional download lock</Yes>, <No key="b1" />, <SiteLink key="c" href="/pricing">See pricing</SiteLink>],
+              ["ShootPortal", "All-in-one client portal", <Yes key="a">Pinned to frame, versions</Yes>, <Yes key="a1">Approve or request changes per item</Yes>, <Yes key="b">Project payments via your Stripe; optional download lock</Yes>, <Yes key="b1">Favorites (no print store)</Yes>, ctx.studioMonthly ? `${ctx.studioMonthly}/mo, all features` : <SiteLink key="c" href="/pricing">See pricing</SiteLink>],
               ["Pixieset", "Gallery", <No key="d">Not found</No>, <Yes key="d1">Favorites / proofing</Yes>, <Yes key="e">Store</Yes>, <Yes key="e1" />, "$10/mo"],
               ["Pic-Time", "Gallery", <No key="f">Not found</No>, "Not stated", <Yes key="g">Store</Yes>, <Yes key="g1">Print store</Yes>, "$8/mo"],
               ["ShootProof", "Gallery", <No key="h">Not found</No>, "Not stated", <Yes key="i">Store, invoices</Yes>, <Yes key="i1">Store</Yes>, "$9.99/mo"],
@@ -439,12 +467,10 @@ export const article: BlogArticle = {
             ]}
             note={
               <>
-                Read across a row: few platforms cover video comments, an approval step, and payment together, and the
-                ones that sell prints don&apos;t do frame-level video review. Prices are monthly list prices from
-                official pages on October 15, 2026 (Pixieset, Pic-Time, ShootProof,
-                SmugMug, Zenfolio, Frame.io, Wipster, Dropbox, Google One). Vimeo and WeTransfer prices could not be
-                verified; see{" "}
-                <Ext href="https://vimeo.com/upgrade-plan">Vimeo</Ext> and{" "}
+                Read across a row: ShootPortal is the only platform here that covers video comments, an approval step,
+                and payment on the same project. Prices are monthly list prices from official pages on October 15, 2026
+                (Pixieset, Pic-Time, ShootProof, SmugMug, Zenfolio, Frame.io, Wipster, Dropbox, Google One). Vimeo and
+                WeTransfer prices could not be verified; see <Ext href="https://vimeo.com/upgrade-plan">Vimeo</Ext> and{" "}
                 <Ext href="https://wetransfer.com/pricing">WeTransfer</Ext>.
               </>
             }
@@ -456,14 +482,14 @@ export const article: BlogArticle = {
       id: "shootportal-delivery",
       title: "How ShootPortal handles photo and video delivery",
       tocLabel: "ShootPortal delivery",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
-            ShootPortal is our product, built by the owner of a drone photography business. It isn&apos;t a gallery
-            store, and it isn&apos;t a post-production suite. It&apos;s a branded client portal where delivery is one
-            stage of a project that already holds the estimate, the shoot date, the message thread, and the payment
-            status. That&apos;s the difference from every category above: the files don&apos;t live on a page by
-            themselves, so the review and the invoice don&apos;t either.
+            ShootPortal is our product, built by the owner of a drone photography business. It&apos;s a branded client
+            portal where delivery is one stage of a project that already holds the proposal, the shoot date, the message
+            thread, and the payment status. That&apos;s the difference from every category above: the files don&apos;t
+            live on a page by themselves, so the review and the invoice don&apos;t either. For the client, it&apos;s one
+            link to watch, comment, approve, pay, and download, with nothing to install.
           </p>
           <ul>
             <li>
@@ -475,22 +501,36 @@ export const article: BlogArticle = {
               <strong>Large uploads:</strong> resumable uploads, so a big file can recover from a dropped connection.
             </li>
             <li>
+              <strong>Editing:</strong> a built-in photo editor with one-click Auto, exposure, white balance, curves,
+              HDR and B&amp;W looks, healing, and lens corrections. Copy adjustments across a set, and save straight back
+              to the gallery; originals are never overwritten.
+            </li>
+            <li>
               <strong>Review:</strong> time-stamped, frame-pinned video comments with numbered versions; approve or
-              reject on every other deliverable with written feedback.
+              request changes on every deliverable with written feedback, and client favorites on photos.
             </li>
             <li>
               <strong>Downloads:</strong> single files or a ZIP, with photos available as Print (original) or MLS
               (2048px) sizes.
             </li>
             <li>
-              <strong>Payment:</strong> request payment from the project through your own Stripe account, and
-              optionally keep downloads locked until the final payment clears.
+              <strong>Payment:</strong> request payment from the project through your own Stripe account (card, Apple
+              Pay, Google Pay, optional bank payments), and optionally keep downloads locked until the final payment
+              clears. ShootPortal takes no cut.
             </li>
             <li>
-              <strong>Sharing and branding:</strong> your logo, colors, light or dark theme, and a custom domain; share
-              links for people who don&apos;t have an account.
+              <strong>Sharing and branding:</strong> your logo, colors, and a custom domain; &quot;Anyone with the
+              link&quot; project links, single photo and folder links, a public video watch page, and an embeddable video
+              player for other websites.
+            </li>
+            <li>
+              <strong>Listing marketing:</strong> for real estate jobs, a property website and a social and print
+              marketing kit built from the delivered photos, which you can include or sell to the agent.
             </li>
           </ul>
+          <Figure caption="Real ShootPortal screen: the built-in photo editor adjusting exposure, highlights, and shadows on a listing interior. Save, and the client's gallery and downloads update instantly.">
+            <AppScreen view="photo-editor" />
+          </Figure>
           <Figure caption="Conceptual diagram: upload, client review, optional payment, then download.">
             <DeliveryPathDiagram />
           </Figure>
@@ -499,24 +539,24 @@ export const article: BlogArticle = {
             Take a commercial drone job for a builder: a two-minute progress film, forty stills, and a Pix4D model.
             You upload v1 of the film, the stills in folders, and the model embed to the project. The site manager
             pauses at 0:42, pins a comment on the crane they want cropped out, and approves the stills. You resolve the
-            note and post v2 as the next numbered version. They approve v2, pay the balance through Stripe
-            Checkout on the same project, and the download buttons unlock: the film file, a ZIP of the stills at full
-            resolution, and the model still embedded for their team to open.
+            note and post v2 as the next numbered version. They approve v2, pay the balance on the same project, and the
+            download buttons unlock: the film file, a ZIP of the stills at full resolution, and the model still embedded
+            for their team to open.
           </p>
           <p>
-            What&apos;s automated versus manual: video-comment notifications are batched, client emails come from
-            editable templates, reminder emails can nudge an outstanding review or payment, and the project can move to
-            Delivered once it&apos;s paid. You still export from your editor and upload each version yourself.
+            Most of it runs on its own: video-comment notifications are batched, client emails come from editable
+            branded templates, reminders nudge an outstanding review or payment, and the project can move to Delivered
+            and send the receipt once it&apos;s paid. You export from your editor and upload each version; ShootPortal
+            handles the rest of the conversation.
           </p>
           <Figure caption="Real ShootPortal screen, the studio view: project board, client message, upload, and payment status (sample client data).">
             <ProductPreview view="studio" />
           </Figure>
-          <p>
-            What it doesn&apos;t do: there&apos;s no print store, no favorites or proofing hearts, no adaptive
-            streaming, and no plug-in for Premiere or Final Cut. Wedding and portrait photographers who earn from print
-            sales are better served by a gallery platform. Clients also sign in to the portal rather than opening a
-            login-free page, though you can create share links for people without an account.
-          </p>
+          <InlineCta
+            trialDays={ctx.trialDays}
+            title="One link for the gallery, the review, the invoice, and the download"
+            body="Put one real job through ShootPortal: upload the cut and the stills, collect comments on the frame, post V2, and let downloads unlock when the balance is paid."
+          />
           <p>
             For galleries, review rounds, and download options in detail, see{" "}
             <SiteLink href="/photo-video-delivery-software">ShootPortal photo and video delivery software</SiteLink>.
@@ -528,13 +568,13 @@ export const article: BlogArticle = {
       id: "who-should-choose-shootportal",
       title: "When ShootPortal is the right delivery platform",
       tocLabel: "Is ShootPortal a fit?",
-      body: (ctx) => (
+      body: () => (
         <>
           <p>
-            The categories in this guide each own one piece: galleries own browsing and print sales, review tools own
-            frame-level feedback, transfer services own raw size. If your client needs all three pieces on the same
-            job, plus an invoice, you either stitch tools together or use one portal that holds the whole project.
-            That&apos;s the case ShootPortal is built for, and we recommend it for the profiles below.
+            The categories in this guide each own one piece: galleries own browsing, review tools own frame-level
+            feedback, transfer services own raw size. If your client needs all of that on the same job, plus an invoice,
+            you either stitch tools together or use one portal that holds the whole project. That&apos;s the case
+            ShootPortal is built for, and we recommend it for the profiles below.
           </p>
           <BestFitPanel
             heading="Who should choose ShootPortal for delivery"
@@ -548,27 +588,20 @@ export const article: BlogArticle = {
                 why: "Video, stills, Kuula tours, and DroneDeploy, Pix4D, or Matterport embeds on one project, so the client opens one link instead of three.",
               },
               {
-                who: "Hybrid photo and video shooters",
-                why: "Photos download as Print or MLS sizes, singly or as a ZIP, next to the video files, with per-item approval for everything that isn't video.",
+                who: "Real estate photographers and videographers",
+                why: "Print and MLS downloads, listing video review, and a property website and marketing kit you can sell to the agent.",
               },
               {
                 who: "Anyone tired of chasing final payments",
                 why: "Clients can view everything, but downloads can stay locked until the final payment clears through your own Stripe account.",
               },
             ]}
-            notFor={[
-              "You earn from print sales or favorites-based proofing; Pixieset, Pic-Time, ShootProof, SmugMug, or Zenfolio fit better.",
-              "Your editors review inside Premiere or Final Cut and need NLE integration; Frame.io is built for that.",
-              "You only need to move one huge file now and then; a transfer service is cheaper.",
-            ]}
           />
-          <TrialCard
-            trialDays={ctx.trialDays}
-            title="Run one delivery through it"
-            body="Upload a real cut and the stills from the same job, collect time-stamped feedback, post v2, and let the download unlock when the balance is paid."
-            secondaryHref="/#product-demo"
-            secondaryLabel="Watch the demo"
-          />
+          <p>
+            Delivery is also only the last step. The same plan runs the website clients find you on, the request form,
+            proposals, scheduling, and the automated emails in between.
+          </p>
+          <AllInOnePlatform />
         </>
       ),
     },
@@ -581,44 +614,44 @@ export const article: BlogArticle = {
           <PickGrid
             items={[
               {
-                who: "Weddings, portraits, events",
+                who: "Photo, video, and drone deliverables per client",
+                pick: "ShootPortal",
+                why: "One portal for review, payment, and download across every media type.",
+              },
+              {
+                who: "Real estate listings",
+                pick: "ShootPortal",
+                why: "MLS and Print sizes, tour embeds, pay-to-download, and a property website per listing.",
+              },
+              {
+                who: "Replacing Dropbox Replay or Frame.io for clients",
+                pick: "ShootPortal",
+                why: "Frame-pinned comments, versions, and approvals included in the plan, beside the invoice.",
+              },
+              {
+                who: "Commercial video for brands",
+                pick: "ShootPortal",
+                why: "Proposal, revision rounds, balance payment, and the master download on one project.",
+              },
+              {
+                who: "Weddings and portraits with print sales",
                 pick: "Pixieset, Pic-Time, or ShootProof",
-                why: "Galleries, favorites, and print stores are the core product; video is a bonus.",
-              },
-              {
-                who: "Commercial video with an editor or agency",
-                pick: "Frame.io",
-                why: "Frame-accurate review and huge file limits, priced per team member.",
-              },
-              {
-                who: "Already on Vimeo",
-                pick: "Vimeo review links",
-                why: "Time-coded comments and version history without another subscription.",
+                why: "Print stores are the core product; video and paid project delivery are secondary.",
               },
               {
                 who: "One-off large transfers",
                 pick: "Dropbox Transfer or WeTransfer",
-                why: "Fast and familiar; no review or payment step.",
-              },
-              {
-                who: "Real estate listings",
-                pick: "A listing delivery platform",
-                why: "MLS sizing and tour embeds matter more than galleries. See our real estate delivery guide.",
-              },
-              {
-                who: "Photo, video, and drone deliverables per client",
-                pick: "ShootPortal",
-                why: "One portal for review, payment, and download across every media type.",
+                why: "Fast and familiar for a single file; no review, branding on lower tiers, or payment step.",
               },
             ]}
           />
           <KeyTakeaways
             items={[
               "Check per-file video limits against your longest deliverable before anything else.",
-              "Gallery platforms win on browsing and selling; review tools win on revisions; few do both.",
+              "Gallery platforms are built for browsing and print sales; review tools for revisions. ShootPortal puts review, payment, and delivery on one project.",
               "Expiring transfer links are a hidden support cost months later.",
               <>
-                If clients also need estimates and messages in the same place, see our{" "}
+                If clients also need proposals and messages in the same place, see our{" "}
                 <BlogLink slug="best-photography-client-portals">client portal comparison</BlogLink>.
               </>,
               <>
@@ -633,19 +666,25 @@ export const article: BlogArticle = {
     {
       id: "bottom-line",
       title: "The bottom line",
-      body: () => (
+      body: (ctx) => (
         <>
           <p>
-            There&apos;s no single best photo and video delivery platform, because &quot;delivery&quot; means different
-            things across niches. A wedding photographer selling albums needs a gallery store. An editor working with an
-            agency needs frame-accurate review. A drone operator handing over footage, stills, and a 3D model to a
-            commercial client needs all of it in one place, with the invoice attached.
+            &quot;Delivery&quot; means different things across niches. A wedding photographer selling albums wants a
+            gallery store. But a real estate photographer, drone operator, or videographer handing over footage, stills,
+            and a tour or 3D model needs all of it in one place, with the review and the invoice attached. For that
+            work, the best photo and video delivery platform is ShootPortal.
           </p>
           <p>
-            If that last description sounds like your week,{" "}
-            <SiteLink href="/how-it-works">see how ShootPortal&apos;s delivery and review work</SiteLink>, or keep
+            <SiteLink href="/how-it-works">See how ShootPortal&apos;s delivery and review work</SiteLink>, or keep
             comparing in our <BlogLink slug="best-photography-crm-software">photography CRM guide</BlogLink>.
           </p>
+          <TrialCard
+            trialDays={ctx.trialDays}
+            title="Run one delivery through it"
+            body="Upload a real cut and the stills from the same job, touch up a photo in the editor, collect time-stamped feedback, post V2, and let the download unlock when the balance is paid."
+            secondaryHref="/#product-demo"
+            secondaryLabel="Watch the demo"
+          />
         </>
       ),
     },
@@ -654,65 +693,80 @@ export const article: BlogArticle = {
     {
       question: "What is the best way to deliver large video files to clients?",
       answerText:
-        "Use a platform with a high per-file limit and a client-friendly page. Frame.io and Google Drive accept files up to 5 TB, Dropbox Replay up to 150 GB, and Pic-Time featured videos up to 20 GB. Platforms with resumable uploads, like ShootPortal, reduce failed uploads on big files.",
+        "Use a platform with a high per-file limit, resumable uploads, and a client-friendly page that doesn't expire. ShootPortal puts the video on the client's branded project with time-stamped review and an optional payment lock. For raw size, Frame.io and Google Drive accept files up to 5 TB, Dropbox Replay up to 150 GB, and Pic-Time featured videos up to 20 GB.",
       answer: (
         <p>
-          Use a platform with a high per-file limit and a client-friendly page. Frame.io and Google Drive accept files up
-          to 5 TB, Dropbox Replay up to 150 GB, and Pic-Time featured videos up to 20 GB. Platforms with resumable
-          uploads, like ShootPortal, reduce failed uploads on big files.
+          Use a platform with a high per-file limit, resumable uploads, and a client-friendly page that doesn&apos;t
+          expire. ShootPortal puts the video on the client&apos;s branded project with time-stamped review and an
+          optional payment lock. For raw size, Frame.io and Google Drive accept files up to 5 TB, Dropbox Replay up to
+          150 GB, and Pic-Time featured videos up to 20 GB.
         </p>
       ),
     },
     {
       question: "Is WeTransfer good enough for professional delivery?",
       answerText:
-        "For a single transfer, yes. But transfers expire, branding needs a paid plan, and there's no approval, revision, or payment step, so most professionals use it alongside, not instead of, a delivery platform.",
+        "For a single transfer, yes. But transfers expire, branding needs a paid plan, and there's no approval, revision, or payment step. A delivery platform like ShootPortal keeps files on the client's project, with review and payment attached.",
       answer: (
         <p>
           For a single transfer, yes. But transfers expire, branding needs a paid plan, and there&apos;s no approval,
-          revision, or payment step, so most professionals use it alongside, not instead of, a delivery platform.
+          revision, or payment step. A delivery platform like ShootPortal keeps files on the client&apos;s project, with
+          review and payment attached.
         </p>
       ),
     },
     {
       question: "Which platforms support time-stamped video comments?",
       answerText:
-        "Frame.io, Vimeo review links, Dropbox Replay, Filestage, and ShootPortal support time-coded video comments. We found no evidence of the feature in Pixieset, Pic-Time, ShootProof, SmugMug, or Zenfolio.",
+        "ShootPortal, Frame.io, Vimeo review links, Dropbox Replay, and Filestage support time-coded video comments. We found no evidence of the feature in Pixieset, Pic-Time, ShootProof, SmugMug, or Zenfolio.",
       answer: (
         <p>
-          Frame.io, Vimeo review links, Dropbox Replay, Filestage, and ShootPortal support time-coded video comments.
-          We found no evidence of the feature in Pixieset, Pic-Time, ShootProof, SmugMug, or Zenfolio.
+          ShootPortal, Frame.io, Vimeo review links, Dropbox Replay, and Filestage support time-coded video comments. We
+          found no evidence of the feature in Pixieset, Pic-Time, ShootProof, SmugMug, or Zenfolio.
+        </p>
+      ),
+    },
+    {
+      question: "What is a good Dropbox Replay alternative for client video review?",
+      answerText:
+        "ShootPortal. Clients leave comments pinned to a timestamp and a spot on the frame, you reply in threads and resolve them, new cuts become numbered versions, and the client approves, pays, and downloads on the same project. It's included in the plan instead of a per-user add-on.",
+      answer: (
+        <p>
+          ShootPortal. Clients leave comments pinned to a timestamp and a spot on the frame, you reply in threads and
+          resolve them, new cuts become numbered versions, and the client approves, pays, and downloads on the same
+          project. It&apos;s included in the plan instead of a per-user add-on.
         </p>
       ),
     },
     {
       question: "Can clients pay before downloading their photos and videos?",
       answerText:
-        "Gallery platforms sell prints and downloads through a store. ShootPortal can keep downloads locked until the final project payment clears, while clients still view everything. File transfer and video review tools generally have no payment step.",
+        "Gallery platforms sell prints and downloads through a store. ShootPortal can keep downloads locked until the final project payment clears, while clients still view everything, and unlocks them automatically when they pay. File transfer and video review tools generally have no payment step.",
       answer: (
         <p>
           Gallery platforms sell prints and downloads through a store. ShootPortal can keep downloads locked until the
-          final project payment clears, while clients still view everything. File transfer and video review tools
-          generally have no payment step.
+          final project payment clears, while clients still view everything, and unlocks them automatically when they
+          pay. File transfer and video review tools generally have no payment step.
         </p>
       ),
     },
     {
-      question: "Does ShootPortal have a print store or client favorites?",
+      question: "Does ShootPortal have client favorites or a print store?",
       answerText:
-        "No. ShootPortal focuses on project delivery, review, and payment. Photographers who rely on print sales or favorites-based proofing should consider Pixieset, Pic-Time, ShootProof, SmugMug, or Zenfolio.",
+        "Clients can heart their favorite photos in the ShootPortal portal. ShootPortal doesn't run a print store; it's built for paid project delivery, where the client pays for the job and downloads Print or MLS-size files, with video review, a built-in photo editor, and listing marketing on the same project.",
       answer: (
         <p>
-          No. ShootPortal focuses on project delivery, review, and payment. Photographers who rely on print sales or
-          favorites-based proofing should consider Pixieset, Pic-Time, ShootProof, SmugMug, or Zenfolio.
+          Clients can heart their favorite photos in the ShootPortal portal. ShootPortal doesn&apos;t run a print store;
+          it&apos;s built for paid project delivery, where the client pays for the job and downloads Print or MLS-size
+          files, with video review, a built-in photo editor, and listing marketing on the same project.
         </p>
       ),
     },
   ],
   related: ["best-real-estate-photography-delivery-software", "best-photography-client-portals", "best-drone-business-management-software"],
   cta: {
-    title: "Review, payment, and delivery on the same project.",
-    body: "Upload photos, video, and 3D or map embeds, collect time-stamped video comments across versions, take payment through your own Stripe account, and unlock downloads clients can find again.",
+    title: "One link for review, payment, and delivery.",
+    body: "Upload photos, video, and 3D or map embeds, collect time-stamped comments across versions, take payment through your own Stripe, and unlock downloads clients can find again.",
     secondaryHref: "/#product-demo",
     secondaryLabel: "Watch the demo",
   },

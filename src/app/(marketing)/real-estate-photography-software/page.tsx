@@ -352,8 +352,8 @@ export default async function RealEstatePhotographySoftwarePage() {
           <div className="mt-10 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-6 text-sm leading-relaxed text-[#475569]">
             <p className="font-semibold text-[#0F172A]">Where another tool fits better</p>
             <p className="mt-1.5">
-              ShootPortal doesn&apos;t build single-property websites or flyers, deliver to Zillow Showcase, auto-dispatch photographers by drive
-              time, or handle e-signatures. If those are central to your business, compare options in our{" "}
+              ShootPortal builds property websites, social posts, and print flyers for every listing, but it doesn&apos;t deliver to Zillow Showcase,
+              auto-dispatch photographers by drive time, or handle e-signatures. If those are central to your business, compare options in our{" "}
               <Link href="/blog/best-real-estate-photography-software" className="font-medium text-[#4F46E5] underline underline-offset-2">
                 guide to the best real estate photography software
               </Link>{" "}
