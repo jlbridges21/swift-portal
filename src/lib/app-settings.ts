@@ -31,6 +31,7 @@ import { getPortalBrandFromSettings, PLATFORM_BUSINESS_DEFAULTS } from "@/lib/po
 import { brandingFieldsChanged, landingSettingsChanged, requireEntitlement } from "@/lib/entitlements";
 import { assertHowItWorksCount } from "@/lib/landing-content";
 import { normalizePortalLogoSizePx } from "@/lib/brand-logo-size";
+import { effectiveBusinessTimeZone } from "@/lib/business-timezone";
 import {
   buildDefaultWorkflowSettings,
   mergeWorkflowSettings,
@@ -431,7 +432,7 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
     }
   }
 
-  return {
+  const merged: AppSettings = {
     notifications,
     email: { ...DEFAULT_APP_SETTINGS.email, ...(stored.email ?? {}) },
     business: {
@@ -500,6 +501,12 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
       ...(stored.setupAcceptedDefaults ?? {}),
     },
   };
+  merged.workflow.businessDefaults.timezone = effectiveBusinessTimeZone({
+    mode: merged.workflow.businessDefaults.timezoneMode,
+    storedZone: merged.workflow.businessDefaults.timezone,
+    address: merged.business,
+  });
+  return merged;
 }
 
 /**

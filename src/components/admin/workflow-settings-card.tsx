@@ -18,6 +18,12 @@ import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { AppSettings } from "@/lib/app-settings";
 import {
+  COMMON_TIME_ZONES,
+  FALLBACK_TIMEZONE,
+  timeZoneDisplayName,
+  timeZoneFromAddress,
+} from "@/lib/business-timezone";
+import {
   REMINDER_TIMING_OPTIONS,
   WORKFLOW_STAGE_DEFINITIONS,
   type ReminderTiming,
@@ -244,9 +250,24 @@ function RowList({ children }: { children: ReactNode }) {
 interface WorkflowSettingsCardProps {
   workflow: AppSettings["workflow"];
   onChange: (workflow: AppSettings["workflow"]) => void;
+  /** Business address, so "Automatic" can name the zone it resolves to. */
+  business?: Pick<AppSettings["business"], "city" | "state" | "country">;
 }
 
-export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCardProps) {
+export function WorkflowSettingsCard({ workflow, onChange, business }: WorkflowSettingsCardProps) {
+  const addressZone = business ? timeZoneFromAddress(business) : null;
+  const autoZone = addressZone ?? (workflow.businessDefaults.timezoneMode === "auto" ? workflow.businessDefaults.timezone : null);
+  const timeZoneOptions = [
+    {
+      value: "auto",
+      label: `Automatic – ${timeZoneDisplayName(addressZone ?? autoZone ?? FALLBACK_TIMEZONE)}`,
+    },
+    ...COMMON_TIME_ZONES,
+    ...(workflow.businessDefaults.timezoneMode === "manual" &&
+    !COMMON_TIME_ZONES.some((z) => z.value === workflow.businessDefaults.timezone)
+      ? [{ value: workflow.businessDefaults.timezone, label: timeZoneDisplayName(workflow.businessDefaults.timezone) }]
+      : []),
+  ];
   const [open, setOpen] = useState<CategoryId | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const lastOpened = useRef<CategoryId | null>(null);
@@ -502,8 +523,28 @@ export function WorkflowSettingsCard({ workflow, onChange }: WorkflowSettingsCar
                   <Input id="wf-sched-window" type="number" min={1} value={workflow.businessDefaults.defaultSchedulingWindowDays} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, defaultSchedulingWindowDays: Number(e.target.value) || 1 } })} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="wf-timezone">Timezone</Label>
-                  <Input id="wf-timezone" value={workflow.businessDefaults.timezone} onChange={(e) => onChange({ ...workflow, businessDefaults: { ...workflow.businessDefaults, timezone: e.target.value } })} />
+                  <Label htmlFor="wf-timezone">Time zone</Label>
+                  <Select
+                    id="wf-timezone"
+                    value={workflow.businessDefaults.timezoneMode === "manual" ? workflow.businessDefaults.timezone : "auto"}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      onChange({
+                        ...workflow,
+                        businessDefaults:
+                          v === "auto"
+                            ? { ...workflow.businessDefaults, timezoneMode: "auto", timezone: addressZone ?? workflow.businessDefaults.timezone }
+                            : { ...workflow.businessDefaults, timezoneMode: "manual", timezone: v },
+                      });
+                    }}
+                    options={timeZoneOptions}
+                  />
+                  <p className="text-xs text-muted">
+                    Booking times, reminders and calendar events use this zone.{" "}
+                    {addressZone
+                      ? "Automatic follows your business address."
+                      : "Automatic follows your business address once it has a state or province."}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="wf-hours-start">Business hours start</Label>

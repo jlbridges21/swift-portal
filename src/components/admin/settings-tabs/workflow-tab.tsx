@@ -80,7 +80,7 @@ export function WorkflowTab() {
         <p className="mt-1 text-sm text-muted">What ShootPortal does for you at each stage.</p>
       </div>
 
-      <WorkflowSettingsCard workflow={settings.workflow} onChange={patchWorkflow} />
+      <WorkflowSettingsCard workflow={settings.workflow} onChange={patchWorkflow} business={settings.business} />
 
       <section
         id="settings-workflow-proposal-settings"

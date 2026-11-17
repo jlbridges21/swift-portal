@@ -1,5 +1,6 @@
 import type { ProjectStatus } from "@/lib/constants";
 import { getStatusOrder, normalizeStatus } from "@/lib/constants";
+import { FALLBACK_TIMEZONE, inferTimeZoneMode, type TimeZoneMode } from "@/lib/business-timezone";
 
 /** Workflow stage keys aligned with project status values */
 export type WorkflowStageKey =
@@ -253,7 +254,10 @@ export interface BusinessDefaultsSettings {
   defaultTurnaroundDays: number;
   defaultPaymentDueDays: number;
   defaultSchedulingWindowDays: number;
+  /** Effective IANA zone. In "auto" mode it is derived from the business address on every read. */
   timezone: string;
+  /** "auto" follows the business address; "manual" keeps the zone the owner picked. */
+  timezoneMode: TimeZoneMode;
   businessHoursStart: string;
   businessHoursEnd: string;
 }
@@ -385,7 +389,8 @@ export function buildDefaultWorkflowSettings(): WorkflowSettings {
       defaultTurnaroundDays: 5,
       defaultPaymentDueDays: 14,
       defaultSchedulingWindowDays: 30,
-      timezone: "America/New_York",
+      timezone: FALLBACK_TIMEZONE,
+      timezoneMode: "auto",
       businessHoursStart: "08:00",
       businessHoursEnd: "18:00",
     },
@@ -442,7 +447,11 @@ export function mergeWorkflowSettings(
     deliverables: { ...defaults.deliverables, ...(stored.deliverables ?? {}) },
     reminders: { ...defaults.reminders, ...(stored.reminders ?? {}) },
     messages,
-    businessDefaults: { ...defaults.businessDefaults, ...(stored.businessDefaults ?? {}) },
+    businessDefaults: {
+      ...defaults.businessDefaults,
+      ...(stored.businessDefaults ?? {}),
+      timezoneMode: inferTimeZoneMode(stored.businessDefaults?.timezoneMode, stored.businessDefaults?.timezone),
+    },
   };
 }
 
