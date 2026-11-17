@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AddressAutocomplete } from "@/components/forms/address-autocomplete";
 import { createClient } from "@/lib/supabase/client";
 import { BookingCard, FieldLabel, NativeSelect, Notice, PersonAvatar, ToggleRow } from "@/components/admin/booking/booking-ui";
 import { StaffAvailabilitySection } from "@/components/staff-account/staff-availability-section";
@@ -209,11 +210,11 @@ function ProfileSection({ data }: { data: StaffAccountData }) {
             <FieldLabel htmlFor="staff-base" hint="Instant Booking measures your drive time to each shoot from here.">
               Home base address
             </FieldLabel>
-            <Input
+            <AddressAutocomplete
               id="staff-base"
               value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              autoComplete="street-address"
+              onChange={setAddress}
+              onPick={(a) => setAddress(a.formatted)}
               placeholder="Leave blank to start from the studio"
               maxLength={300}
             />

@@ -10,6 +10,7 @@ import { Camera, ChevronDown, Crown, Loader2, Mail, Pencil, Search, Shield, Tras
 import { cn } from "@/lib/utils";
 import { SectionHeading } from "@/components/admin/settings-tabs/shared";
 import { PersonAvatar } from "@/components/admin/booking/booking-ui";
+import { AddressAutocomplete } from "@/components/forms/address-autocomplete";
 import type { StaffSeatSnapshot } from "@/lib/staff";
 import {
   STAFF_PERMISSION_GROUP_LABELS,
@@ -178,16 +179,19 @@ function ContactFieldsEditor({
       </div>
       <div>
         <Label htmlFor={`${idPrefix}-address`}>Home / base address (optional)</Label>
-        <Input
-          id={`${idPrefix}-address`}
-          value={value.baseAddress}
-          maxLength={300}
-          onChange={(e) => onChange({ ...value, baseAddress: e.target.value })}
-          placeholder="Where their day starts and ends"
-          autoComplete="street-address"
-          className="mt-1 h-11"
-        />
-        <p className="mt-1 text-xs text-muted">Used for drive times and assignments. Leave empty to use the business address.</p>
+        <div className="mt-1">
+          <AddressAutocomplete
+            id={`${idPrefix}-address`}
+            value={value.baseAddress}
+            maxLength={300}
+            onChange={(v) => onChange({ ...value, baseAddress: v })}
+            onPick={(a) => onChange({ ...value, baseAddress: a.formatted })}
+            placeholder="Start typing where their day starts and ends"
+          />
+        </div>
+        <p className="mt-1 text-xs text-muted">
+          Pick from the suggestions so drive times are accurate. Leave empty to use the business address.
+        </p>
       </div>
     </div>
   );
