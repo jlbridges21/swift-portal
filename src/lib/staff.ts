@@ -522,7 +522,7 @@ export async function listStaffMembers(
   const raw = await createServiceClient();
   let query = raw
     .from("profiles")
-    .select("id, email, full_name, role, disabled_at, created_at, staff_permissions")
+    .select("id, email, full_name, avatar_url, role, disabled_at, created_at, staff_permissions")
     .eq("business_id", businessId)
     .eq("role", "staff")
     .order("created_at", { ascending: true });
@@ -542,7 +542,7 @@ export async function listTeamMembers(
   const raw = await createServiceClient();
   let query = raw
     .from("profiles")
-    .select("id, email, full_name, role, disabled_at, created_at, staff_permissions")
+    .select("id, email, full_name, avatar_url, role, disabled_at, created_at, staff_permissions")
     .eq("business_id", businessId)
     .in("role", ["staff", "admin"])
     .order("created_at", { ascending: true });
