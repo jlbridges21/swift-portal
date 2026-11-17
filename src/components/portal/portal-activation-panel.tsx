@@ -3,7 +3,22 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Eye, EyeOff, KeyRound, Loader2, LogIn, Mail, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarClock,
+  CreditCard,
+  Download,
+  Eye,
+  EyeOff,
+  FileCheck2,
+  KeyRound,
+  LayoutDashboard,
+  Loader2,
+  LogIn,
+  Mail,
+  MessageSquare,
+  ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -125,6 +140,15 @@ export function PortalActivationPanel({
 
   if (mode === "none") return null;
 
+  const benefits = [
+    { icon: LayoutDashboard, title: "Track your whole project", body: "Every step, from booking to delivery." },
+    { icon: FileCheck2, title: "See your official proposal", body: "Review and approve it in one click." },
+    { icon: CreditCard, title: "Pay securely online", body: "Card or bank, with receipts saved." },
+    { icon: MessageSquare, title: `Message ${businessName}`, body: "One thread, no lost emails." },
+    { icon: CalendarClock, title: "Manage your appointment", body: "See the time, reschedule when allowed." },
+    { icon: Download, title: "Download your media", body: "Photos and videos the moment they're ready." },
+  ];
+
   if (mode === "signed_in") {
     return (
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
@@ -200,19 +224,65 @@ export function PortalActivationPanel({
     );
   }
 
+  const featured = context === "thank_you";
+
   return (
-    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-heading">
-          <KeyRound className="h-5 w-5 text-accent" aria-hidden />
-          {context === "activate" ? "Create your portal password" : "Want to track this project online?"}
-        </h2>
-        {optionalTag}
-      </div>
-      <p className="mt-2 text-sm text-muted">
-        Create a password to view status updates, approve your proposal, message {businessName}, and download your
-        media — all in one place.
-      </p>
+    <section
+      id="create-account"
+      className={
+        featured
+          ? "scroll-mt-24 overflow-hidden rounded-2xl border border-accent/30 bg-card shadow-md ring-1 ring-accent/10"
+          : "rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6"
+      }
+    >
+      <div className={featured ? "grid md:grid-cols-[1.1fr_1fr]" : undefined}>
+      {featured ? (
+        <div className="bg-gradient-to-br from-accent-subtle to-card p-5 sm:p-7">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent-foreground">
+            Free · takes 30 seconds
+          </span>
+          <h2 className="mt-3 text-xl font-bold tracking-tight text-heading sm:text-2xl">
+            Create your account to manage everything in one place
+          </h2>
+          <p className="mt-1.5 text-sm text-muted">
+            Set a password and your project portal with {businessName} is ready — no app to download.
+          </p>
+          <ul className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
+            {benefits.map((b) => (
+              <li key={b.title} className="flex items-start gap-2.5">
+                <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-card text-accent shadow-sm">
+                  <b.icon className="h-4 w-4" aria-hidden />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-heading">{b.title}</span>
+                  <span className="block text-xs text-muted">{b.body}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <div className={featured ? "p-5 sm:p-7" : undefined}>
+      {featured ? (
+        <h3 className="flex items-center gap-2 text-base font-semibold text-heading">
+          <KeyRound className="h-5 w-5 text-accent" aria-hidden /> Create your password
+        </h3>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-heading">
+              <KeyRound className="h-5 w-5 text-accent" aria-hidden />
+              {context === "activate" ? "Create your portal password" : "Want to track this project online?"}
+            </h2>
+            {optionalTag}
+          </div>
+          <p className="mt-2 text-sm text-muted">
+            Create a password to view status updates, approve your proposal, message {businessName}, and download your
+            media — all in one place.
+          </p>
+        </>
+      )}
+      {featured && maskedEmail ? <p className="mt-1 text-xs text-muted">Your account email: {maskedEmail}</p> : null}
       <form onSubmit={activate} className="mt-4 space-y-4">
         <div className="space-y-2">
           <Label htmlFor="activate-password">Create Password</Label>
@@ -254,15 +324,17 @@ export function PortalActivationPanel({
         {error ? <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
         <Button type="submit" variant="accent" size="lg" className="min-h-12 w-full" disabled={busy}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {busy ? "Creating your account..." : "Create Account & View My Project"}
+          {busy ? "Creating your account..." : featured ? "Create My Account" : "Create Account & View My Project"}
         </Button>
         <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted">
           <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
           {context === "thank_you"
-            ? "Skip this anytime — your request is already submitted."
+            ? "Your request is already submitted — this just gives you access."
             : "Only you choose your password."}
         </p>
       </form>
+      </div>
+      </div>
     </section>
   );
 }
