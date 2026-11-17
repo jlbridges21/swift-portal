@@ -70,7 +70,7 @@ export function SchedulePanel({
     setLoadingSlots(true);
     setPicked(null);
     const res = await bookingPost({ action: "availability", projectId, from: day, to: day, staff: userId, allTeam: true });
-    setSlots(res.ok ? (res.body.slots as Slot[]) : []);
+    setSlots(res.ok ? (res.body.slots as Slot[]).filter((s) => s.dayKey === day) : []);
     setLoadingSlots(false);
   }, [day, projectId, userId]);
 

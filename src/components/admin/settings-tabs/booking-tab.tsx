@@ -325,8 +325,8 @@ export function BookingTab() {
                   value={booking.startOfDayRule}
                   onChange={(v) => patch({ startOfDayRule: v as BookingSettings["startOfDayRule"] })}
                   options={[
-                    { value: "travel_before_hours", label: "Drive before hours; first shoot at opening" },
-                    { value: "travel_within_hours", label: "Drive within hours; first shoot after the drive" },
+                    { value: "travel_before_hours", label: "Drive before hours (shoot at opening)" },
+                    { value: "travel_within_hours", label: "Drive within working hours" },
                   ]}
                 />
               </div>
@@ -339,8 +339,8 @@ export function BookingTab() {
                   value={booking.endOfDayRule}
                   onChange={(v) => patch({ endOfDayRule: v as BookingSettings["endOfDayRule"] })}
                   options={[
-                    { value: "finish_by_close", label: "Last shoot finishes by closing time" },
-                    { value: "start_before_close", label: "Last shoot starts before closing (may run over)" },
+                    { value: "finish_by_close", label: "Finish by closing time" },
+                    { value: "start_before_close", label: "Start before closing (may run over)" },
                   ]}
                 />
               </div>
