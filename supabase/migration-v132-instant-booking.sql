@@ -75,17 +75,34 @@ COMMENT ON COLUMN shoot_proposals.conflict_override IS 'Admin override: confirme
 -- Double-booking protection. A confirmed appointment for one team member may not overlap
 -- another confirmed appointment for the same team member, buffers included. Legacy rows
 -- (no end_at or no assignee) and explicit admin overrides are excluded.
+--
+-- timestamptz ± interval is only STABLE in Postgres (day/month steps depend on the session
+-- time zone), so it can't sit in an index expression directly. Minute-only steps are
+-- time-zone independent, so this wrapper is genuinely IMMUTABLE.
+CREATE OR REPLACE FUNCTION shoot_block_range(
+  p_start TIMESTAMPTZ,
+  p_end TIMESTAMPTZ,
+  p_before_minutes INTEGER,
+  p_after_minutes INTEGER
+) RETURNS tstzrange
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+  SELECT tstzrange(
+    p_start - (p_before_minutes * INTERVAL '1 minute'),
+    p_end + (p_after_minutes * INTERVAL '1 minute'),
+    '[)'
+  )
+$$;
+
 ALTER TABLE shoot_proposals DROP CONSTRAINT IF EXISTS shoot_proposals_no_double_booking;
 ALTER TABLE shoot_proposals
   ADD CONSTRAINT shoot_proposals_no_double_booking
   EXCLUDE USING gist (
     business_id WITH =,
     assigned_user_id WITH =,
-    tstzrange(
-      proposed_at - make_interval(mins => buffer_before_minutes),
-      end_at + make_interval(mins => buffer_after_minutes),
-      '[)'
-    ) WITH &&
+    shoot_block_range(proposed_at, end_at, buffer_before_minutes, buffer_after_minutes) WITH &&
   )
   WHERE (
     status = 'confirmed'
