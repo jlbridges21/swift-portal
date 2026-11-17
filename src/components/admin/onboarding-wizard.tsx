@@ -176,7 +176,7 @@ export function OnboardingWizard({
   // Back from Google Calendar (Booking & calendar step).
   useEffect(() => {
     const gcal = search.get("gcal");
-    if (!gcal) return;
+    if (gcal !== "connected" && gcal !== "error") return;
     if (gcal === "connected") toast.success("Google Calendar connected");
     if (gcal === "error") toast.error("Google Calendar didn't connect. You can try again or do it later in Settings.");
     router.replace("/onboarding", { scroll: false });
