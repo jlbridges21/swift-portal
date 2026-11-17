@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { parseSurfaceMode } from "@/lib/brand-color";
 import { redirect } from "next/navigation";
 import { requireAdminPage } from "@/lib/admin-access";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
@@ -60,6 +61,10 @@ export default async function OnboardingPage() {
       logoUrl: settings.business.logoUrl,
       brandPrimaryColor: settings.business.brandPrimaryColor,
       brandAccentColor: settings.business.brandAccentColor,
+      surfaceMode: parseSurfaceMode(settings.business.surfaceMode),
+      country: settings.business.country ?? "",
+      timeZone: settings.workflow.businessDefaults.timezone,
+      timeZoneMode: settings.workflow.businessDefaults.timezoneMode,
     },
     landing: {
       headline: settings.landing.hero.headline,

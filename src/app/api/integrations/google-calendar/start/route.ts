@@ -54,10 +54,13 @@ export async function GET(request: Request) {
     returnOrigin = portalOrigin;
   }
 
+  // Setup wizard: come back to /onboarding instead of Settings.
+  const back = params.get("return");
   const state = signOAuthState({
     businessId: tenant.businessId,
     userId: profile.id,
     returnOrigin,
+    ...(back && /^\/onboarding(\?|$)/.test(back) ? { returnPath: back } : {}),
   });
   return NextResponse.redirect(googleAuthUrl(state));
 }
